@@ -18,3 +18,11 @@ yarn-error.log*
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Python local environment and caches
+.venv/
+__pycache__/
+
+# Exclude any working files created for the project
+data/**
+!data/README.md
