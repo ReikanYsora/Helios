@@ -9,7 +9,7 @@ import
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX
 } from './helios-engine';
-import { computePvPower } from './helios-sun';
+import { computePvPower, type PanelOrientation } from './helios-sun';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './helios-card-css';
 //Side-effect import: registers <helios-color-picker> and
@@ -1977,7 +1977,7 @@ export class HeliosCard extends LitElement
                 if (tMs <  nowMs)   continue;             //future only
                 if (tMs <  startMs) continue;
                 if (tMs >  endMsAbs) continue;
-                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0, this._pvPanelOrientation());
+                const pct = this._computePvPowerWeighted(series.times[i], lat, lon, series.cloud[i] ?? 0);
                 if (pct <= 0) continue;
                 predictedSamples.push({ t: series.times[i], v: pct * k * nativeFromW });
             }
@@ -2260,7 +2260,7 @@ export class HeliosCard extends LitElement
                 if (tMs < startMs || tMs > endMsAbs) continue;
                 if (tMs < nowMs) continue;   //past covered by Pass 1
                 const cloud = series.cloud[i] ?? 0;
-                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+                const pct   = this._computePvPowerWeighted(series.times[i], coords.lat, coords.lon, cloud);
                 if (pct <= 0) continue;
                 //pct × k = watts at this hour midpoint × 1h = Wh.
                 //Divide by 1000 to land in kWh.
@@ -2584,23 +2584,134 @@ export class HeliosCard extends LitElement
         return this.config?.['battery-power-invert'] === true;
     }
 
-    //Panel orientation derived from the editor config. Returns
-    //undefined when no tilt is set, which keeps the prediction model
-    //on the original horizontal-panel fast path. Setting tilt > 0
-    //enables the tilt/azimuth transposition in computePvPower so
-    //balcony / steeply-pitched roof installs stop seeing a flat-roof
-    //forecast that's wildly optimistic.
-    private _pvPanelOrientation(): { tiltDeg: number; azimuthDeg: number } | undefined
+    //Resolves the configured PV layout into a flat list of panel
+    //orientations + pre-normalised shares (sum to 1.0).
+    //
+    //Read order, first match wins:
+    //  1. `pv-arrays`: non-empty array, each entry parsed as
+    //     { tilt: 0–90, azimuth: 0–360, share: weight }. Missing
+    //     tilt defaults to 0 (horizontal fast path inside
+    //     computePvPower, no transposition applied for that entry).
+    //     Missing azimuth defaults to 180. Missing share triggers
+    //     equal-split with siblings. Entries with share ≤ 0 are
+    //     dropped. Shares are normalised so they sum to 1.0 before
+    //     the caller weights them, so 50/50, 60/60 and 1/1 all
+    //     produce the same forecast (forgives user typos).
+    //  2. Legacy `pv-tilt` + `pv-azimuth`: read as a single entry
+    //     with share = 1.0, but only when `pv-tilt` > 0 (matches the
+    //     historical behaviour where tilt = 0 / unset skipped the
+    //     transposition entirely).
+    //  3. Otherwise empty result, caller uses the horizontal-panel
+    //     fast path inside computePvPower.
+    private _pvArrays(): { orientations: PanelOrientation[]; shares: number[] }
     {
-        const rawTilt = this.config?.['pv-tilt'];
-        const tilt = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
-        if (!isFinite(tilt) || tilt <= 0) return undefined;
-        const rawAz = this.config?.['pv-azimuth'];
-        const az = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
-        return {
-            tiltDeg:    Math.max(0, Math.min(90, tilt)),
-            azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : 180
-        };
+        const out: PanelOrientation[] = [];
+        const sh: number[] = [];
+
+        const rawList = this.config?.['pv-arrays'];
+        if (Array.isArray(rawList) && rawList.length > 0)
+        {
+            for (const entry of rawList)
+            {
+                if (!entry || typeof entry !== 'object') continue;
+                const e = entry as Record<string, unknown>;
+
+                //Missing / blank tilt is the editor's "flat install" state,
+                //and matches the legacy `pv-tilt` default. Default to 0;
+                //computePvPower then takes the horizontal fast path for
+                //this entry, leaving every other entry's transposition
+                //intact.
+                const rawTilt = e['tilt'];
+                const tiltRaw = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
+                const tilt    = isFinite(tiltRaw) ? tiltRaw : 0;
+
+                const rawAz = e['azimuth'];
+                const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
+                const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : 180;
+
+                const rawShare = e['share'];
+                //undefined / null share means "equal split with siblings",
+                //flag it with NaN and fill in after we know the count of
+                //share-less entries.
+                let share: number;
+                if (rawShare === undefined || rawShare === null || rawShare === '')
+                {
+                    share = NaN;
+                }
+                else
+                {
+                    const s = typeof rawShare === 'number' ? rawShare : parseFloat(String(rawShare));
+                    if (!isFinite(s) || s <= 0) continue;
+                    share = s;
+                }
+
+                out.push({
+                    tiltDeg:    Math.max(0, Math.min(90, tilt)),
+                    azimuthDeg: azDeg
+                });
+                sh.push(share);
+            }
+
+            //Fill blank shares with the average of the explicit ones (or
+            //1.0 when every entry omitted a share). Keeps "no share field"
+            //behaving like equal-split even when mixed with explicit ones.
+            const explicit = sh.filter(s => isFinite(s));
+            const fillVal  = explicit.length > 0
+                ? explicit.reduce((a, b) => a + b, 0) / explicit.length
+                : 1;
+            for (let i = 0; i < sh.length; i++)
+            {
+                if (!isFinite(sh[i])) sh[i] = fillVal;
+            }
+        }
+
+        if (out.length === 0)
+        {
+            //Legacy single-orientation fallback.
+            const rawTilt = this.config?.['pv-tilt'];
+            const tilt    = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
+            if (isFinite(tilt) && tilt > 0)
+            {
+                const rawAz = this.config?.['pv-azimuth'];
+                const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
+                out.push({
+                    tiltDeg:    Math.max(0, Math.min(90, tilt)),
+                    azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : 180
+                });
+                sh.push(1);
+            }
+        }
+
+        //Normalise to 1.0 so callers can multiply directly without an
+        //extra divide per sample. Empty list stays empty → horizontal
+        //fast path in the caller.
+        const total = sh.reduce((a, b) => a + b, 0);
+        if (total > 0)
+        {
+            for (let i = 0; i < sh.length; i++) sh[i] /= total;
+        }
+
+        return { orientations: out, shares: sh };
+    }
+
+    //Forecast PV percentage at a single sample, summed across every
+    //configured array weighted by its share of the total kWp. Falls
+    //through to the horizontal-panel fast path inside computePvPower
+    //when no array is configured (returns the GHI-normalised value
+    //the legacy code used to produce).
+    private _computePvPowerWeighted(t: Date, lat: number, lon: number, cloudPct: number): number
+    {
+        const { orientations, shares } = this._pvArrays();
+        if (orientations.length === 0)
+        {
+            return computePvPower(t, lat, lon, cloudPct);
+        }
+        let acc = 0;
+        for (let i = 0; i < orientations.length; i++)
+        {
+            acc += computePvPower(t, lat, lon, cloudPct, orientations[i]) * shares[i];
+        }
+        return acc;
     }
 
     //One-time cleanup of the obsolete auto-calibration buffers (an
@@ -2822,7 +2933,7 @@ export class HeliosCard extends LitElement
                     if (d < bestDiff) { bestDiff = d; best = i; }
                 }
                 const cloud = series.cloud[best] ?? 0;
-                const pct   = computePvPower(this._selectedTime!, coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+                const pct   = this._computePvPowerWeighted(this._selectedTime!, coords.lat, coords.lon, cloud);
                 if (pct > 0)
                 {
                     //k is W per percent of STC, so pct × k is watts.
@@ -4015,7 +4126,7 @@ export class HeliosCard extends LitElement
                 const tMs = series.times[i].getTime();
                 if (tMs < startMs || tMs >= endMs) continue;
                 const cloud = series.cloud[i] ?? 0;
-                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+                const pct   = this._computePvPowerWeighted(series.times[i], coords.lat, coords.lon, cloud);
                 if (pct < 0) continue;
                 const watts = pct * k;
                 const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
@@ -4164,7 +4275,7 @@ export class HeliosCard extends LitElement
                 const binEnd   = binStart + HOUR_MS;
                 if (binEnd <= nowMs) continue;
                 const cloud = series.cloud[i] ?? 0;
-                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+                const pct   = this._computePvPowerWeighted(series.times[i], coords.lat, coords.lon, cloud);
                 if (pct < 0) continue;
                 const futureStart = Math.max(binStart, nowMs);
                 const fraction    = Math.min(1, (binEnd - futureStart) / HOUR_MS);
@@ -4485,7 +4596,7 @@ export class HeliosCard extends LitElement
                 const tMs = series.times[i].getTime();
                 if (tMs < tomorrowMs || tMs >= endMs) continue;
                 const cloud = series.cloud[i] ?? 0;
-                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+                const pct   = this._computePvPowerWeighted(series.times[i], coords.lat, coords.lon, cloud);
                 if (pct > 0 && k !== null)
                 {
                     const watts = pct * k;

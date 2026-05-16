@@ -87,6 +87,13 @@ export function getSunPosition(date: Date, lat: number, lon: number):
 //     behaviour, so every caller that doesn't care about orientation
 //     stays untouched.
 //  5. Map effective POA to % of STC and clamp to [0, 100].
+//Describes one co-oriented group of panels. computePvPower stays
+//deliberately single-orientation; installs with multiple arrays
+//(split-array roofs, roof + balcony combos, etc.) are handled by
+//the card-layer caller, which calls this function once per array
+//and sums the results weighted by each array's share of the total
+//kWp. Keeping the multi-array concern out of the pure-math module
+//means this file never has to know about the config schema.
 export interface PanelOrientation
 {
     tiltDeg:    number;   //0 = horizontal, 90 = vertical

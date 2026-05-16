@@ -460,6 +460,140 @@ export class HeliosCardEditor extends LitElement
         this._update(key, e.detail.value);
     }
 
+    //Reads the configured PV layout into the shape the editor's
+    //repeatable section consumes. Always returns at least one entry
+    //so the section always has a card to render:
+    //  - `pv-arrays` present → one editor entry per array.
+    //  - legacy `pv-tilt` / `pv-azimuth` present → one entry seeded
+    //    from those values, share defaulted to 100.
+    //  - nothing set → one entry with all-null fields (placeholders
+    //    show through).
+    //Field values are stored as `number | null`, where null means
+    //"empty input"; that maps directly to the input's value binding.
+    private _readPvArrays(): { tilt: number | null; azimuth: number | null; share: number | null }[]
+    {
+        const toNum = (v: unknown): number | null =>
+        {
+            if (v === undefined || v === null || v === '') return null;
+            const n = typeof v === 'number' ? v : parseFloat(String(v));
+            return isFinite(n) ? n : null;
+        };
+
+        const raw = this._cfg?.['pv-arrays'];
+        if (Array.isArray(raw) && raw.length > 0)
+        {
+            const out = raw.map(entry =>
+            {
+                const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+                return {
+                    tilt:    toNum(e['tilt']),
+                    azimuth: toNum(e['azimuth']),
+                    share:   toNum(e['share'])
+                };
+            });
+            return out.length > 0 ? out : [{ tilt: null, azimuth: null, share: null }];
+        }
+
+        const legacyTilt = toNum(this._cfg?.['pv-tilt']);
+        const legacyAz   = toNum(this._cfg?.['pv-azimuth']);
+        if (legacyTilt !== null || legacyAz !== null)
+        {
+            return [{ tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
+        }
+        return [{ tilt: null, azimuth: null, share: null }];
+    }
+
+    //Persists a list of array entries to the config under `pv-arrays`
+    //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
+    //event so configs converge to the new shape once the user touches
+    //the section. Null fields are dropped so a partially-filled card
+    //(e.g. tilt set but azimuth blank) still produces a sparse but
+    //valid YAML entry; the card-side reader applies sensible defaults.
+    private _writePvArrays(list: { tilt: number | null; azimuth: number | null; share: number | null }[]): void
+    {
+        const arrays = list.map(e =>
+        {
+            const o: Record<string, number> = {};
+            if (e.tilt    !== null) o['tilt']    = e.tilt;
+            if (e.azimuth !== null) o['azimuth'] = e.azimuth;
+            if (e.share   !== null) o['share']   = e.share;
+            return o;
+        });
+        const next = { ...this._cfg, 'pv-arrays': arrays } as HeliosConfig;
+        //Strip legacy keys when promoting to pv-arrays so a future
+        //read doesn't trip the "both shapes set" rule. Only deletes
+        //them when they're actually present, no need to dirty the
+        //config object otherwise.
+        if ('pv-tilt'    in (next as object)) delete (next as Record<string, unknown>)['pv-tilt'];
+        if ('pv-azimuth' in (next as object)) delete (next as Record<string, unknown>)['pv-azimuth'];
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
+        this._cfg = next;
+    }
+
+    //Updates a single field on entry `i` in the array list. Empty
+    //input clears the field to null (mirrors `_numField`); any other
+    //unparseable value is ignored so the previous typed value sticks.
+    private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share', e: Event): void
+    {
+        const list = this._readPvArrays();
+        if (i < 0 || i >= list.length) return;
+        const raw = (e.target as HTMLInputElement).value.trim();
+        if (raw === '')
+        {
+            list[i] = { ...list[i], [key]: null };
+        }
+        else
+        {
+            const v = parseFloat(raw);
+            if (!isFinite(v)) return;
+            list[i] = { ...list[i], [key]: v };
+        }
+        this._writePvArrays(list);
+    }
+
+    //Adds a new array entry below the existing ones. The new entry
+    //is left fully blank so all three inputs show their placeholders
+    //(tilt 0, azimuth 180, share = 100 / N). No mirror, no inherited
+    //tilt, no share re-balancing of existing entries: a blank row
+    //is the only thing the user expects when they click +Add.
+    //The engine reads a missing tilt as 0 (horizontal fast path),
+    //so a blank row doesn't break the forecast for partially
+    //configured layouts. Caps at 6 entries; the +Add button is
+    //hidden past that in the render.
+    private static readonly PV_ARRAYS_MAX = 6;
+
+    private _arrayAdd(): void
+    {
+        const list = this._readPvArrays();
+        if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
+        list.push({ tilt: null, azimuth: null, share: null });
+        this._writePvArrays(list);
+    }
+
+    //Removes entry `i`. The render disables this button when only
+    //one entry remains so the list never collapses to zero. After
+    //removal the remaining shares stay exactly as the user set
+    //them; auto-normalisation in the card-side reader handles the
+    //rest. The share placeholder updates to reflect the new entry
+    //count, so a remaining single entry with a null share visually
+    //reads as "100%" without needing to write 100 into the YAML.
+    private _arrayRemove(i: number): void
+    {
+        const list = this._readPvArrays();
+        if (i < 0 || i >= list.length || list.length <= 1) return;
+        list.splice(i, 1);
+        this._writePvArrays(list);
+    }
+
+    //Sum of declared shares across the editor's current view; used
+    //by the render to decide whether to surface the "auto-normalised"
+    //hint. Null shares count as 0, since the user hasn't typed a
+    //number there yet and there's no need to nag.
+    private _arraySharesSum(list: { share: number | null }[]): number
+    {
+        return list.reduce((a, e) => a + (e.share ?? 0), 0);
+    }
+
     //Format a numeric slider value for display alongside the input.
     //Integers stay integer; fractional values get 2 decimals.
     private _fmtNum(v: number, step: number): string
@@ -775,32 +909,82 @@ export class HeliosCardEditor extends LitElement
                     />
                 </label>
                 <div class="field-help">${t.editor.pvPeakPowerHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.pvTilt}</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="90"
-                        step="1"
-                        placeholder="0"
-                        .value="${c['pv-tilt'] != null ? String(c['pv-tilt']) : ''}"
-                        @change="${(e: Event) => this._numField('pv-tilt', e)}"
-                    />
-                </label>
-                <div class="field-help">${t.editor.pvTiltHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.pvAzimuth}</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="360"
-                        step="1"
-                        placeholder="180"
-                        .value="${c['pv-azimuth'] != null ? String(c['pv-azimuth']) : ''}"
-                        @change="${(e: Event) => this._numField('pv-azimuth', e)}"
-                    />
-                </label>
-                <div class="field-help">${t.editor.pvAzimuthHelp}</div>
+                ${(() => {
+                    const arrays   = this._readPvArrays();
+                    const sharesSum = this._arraySharesSum(arrays);
+                    //Hint shows only when the user has filled at least
+                    //two shares and they don't sum to 100 (±0.5 % to
+                    //accommodate the integer-split rounding the +Add
+                    //button emits). Quiet for the single-array case
+                    //and for the "all blank" initial state.
+                    const explicit = arrays.filter(a => a.share !== null).length;
+                    const showNormHint = explicit >= 2 && Math.abs(sharesSum - 100) > 0.5;
+                    return html`
+                        <div class="field-help">${t.editor.pvArraysHelp}</div>
+                        ${arrays.map((arr, i) => html`
+                            <div class="pv-array-card">
+                                <div class="pv-array-head">
+                                    <span class="pv-array-title">
+                                        ${t.editor.pvArrayTitle.replace('{n}', String(i + 1))}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        class="pv-array-remove"
+                                        aria-label="${t.editor.pvArrayRemove}: ${t.editor.pvArrayTitle.replace('{n}', String(i + 1))}"
+                                        ?disabled="${arrays.length <= 1}"
+                                        @click="${() => this._arrayRemove(i)}"
+                                    >${t.editor.pvArrayRemove}</button>
+                                </div>
+                                <label class="field">
+                                    <span class="label">${t.editor.pvArrayTilt}</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="90"
+                                        step="1"
+                                        placeholder="0"
+                                        .value="${arr.tilt !== null ? String(arr.tilt) : ''}"
+                                        @change="${(e: Event) => this._arrayField(i, 'tilt', e)}"
+                                    />
+                                </label>
+                                <label class="field">
+                                    <span class="label">${t.editor.pvArrayAzimuth}</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="360"
+                                        step="1"
+                                        placeholder="180"
+                                        .value="${arr.azimuth !== null ? String(arr.azimuth) : ''}"
+                                        @change="${(e: Event) => this._arrayField(i, 'azimuth', e)}"
+                                    />
+                                </label>
+                                <label class="field">
+                                    <span class="label">${t.editor.pvArrayShare}</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        placeholder="${arrays.length === 1 ? '100' : String(Math.round(100 / arrays.length))}"
+                                        .value="${arr.share !== null ? String(arr.share) : ''}"
+                                        @change="${(e: Event) => this._arrayField(i, 'share', e)}"
+                                    />
+                                </label>
+                            </div>
+                        `)}
+                        ${arrays.length < HeliosCardEditor.PV_ARRAYS_MAX ? html`
+                            <button
+                                type="button"
+                                class="pv-array-add"
+                                @click="${() => this._arrayAdd()}"
+                            >${t.editor.pvArrayAdd}</button>
+                        ` : nothing}
+                        ${showNormHint ? html`
+                            <div class="hint">${t.editor.pvArrayNormHint}</div>
+                        ` : nothing}
+                    `;
+                })()}
                 <label class="field">
                     <span class="label">${t.editor.pvColor}</span>
                     <helios-color-picker
@@ -1085,6 +1269,84 @@ export class HeliosCardEditor extends LitElement
             background: var(--secondary-background-color, rgba(0,0,0,0.05));
             padding: 1px 4px;
             border-radius: 3px;
+        }
+
+        /*  One bordered card per PV array entry. Same vertical stack
+            of label/input rows as the rest of the editor, just framed
+            so the user reads a multi-array config as discrete groups
+            rather than a tall undifferentiated list of number fields. */
+        .pv-array-card
+        {
+            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+            border-radius: 6px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: var(--card-background-color, #fff);
+        }
+
+        .pv-array-head
+        {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.08));
+            padding-bottom: 6px;
+        }
+
+        .pv-array-title
+        {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary-text-color, #212121);
+        }
+
+        /*  Borderless text buttons for add/remove so the cards stay
+            visually quiet. The +Add button gets the accent colour to
+            telegraph the affordance, Remove stays muted (destructive
+            actions don't need to shout; they're behind a disabled
+            state when there's only one card). */
+        .pv-array-add,
+        .pv-array-remove
+        {
+            background: transparent;
+            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            color: var(--primary-text-color, #212121);
+        }
+
+        .pv-array-add
+        {
+            color: var(--primary-color, #03a9f4);
+            border-color: var(--primary-color, #03a9f4);
+            align-self: flex-start;
+        }
+
+        .pv-array-remove:disabled
+        {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .pv-array-add:hover:not(:disabled),
+        .pv-array-remove:hover:not(:disabled)
+        {
+            background: var(--secondary-background-color, rgba(0,0,0,0.04));
+        }
+
+        /*  Mirror the focus-visible ring used on .swatch elsewhere
+            in the editor so keyboard users get a consistent indicator
+            on the new add/remove buttons. */
+        .pv-array-add:focus-visible,
+        .pv-array-remove:focus-visible
+        {
+            outline: 2px solid var(--primary-color, #03a9f4);
+            outline-offset: 2px;
         }
     `;
 }

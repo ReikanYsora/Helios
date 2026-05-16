@@ -54,8 +54,31 @@ export interface HeliosConfig
     //  pv-azimuth : compass bearing the panel faces, 0–360°
     //               clockwise from north (180 = south). Ignored when
     //               tilt is 0.
+    //Legacy single-orientation keys, superseded by `pv-arrays` below.
+    //They keep working forever for back-compat: when `pv-arrays` is
+    //absent or empty, the card reads these two as a single array
+    //entry with share = 100 %.
     'pv-tilt'?:               unknown;
     'pv-azimuth'?:            unknown;
+    //Multi-array PV layout. Optional list, each entry describes one
+    //group of co-oriented panels:
+    //  tilt    : 0–90°  (clamped). 0 = horizontal, 90 = vertical.
+    //  azimuth : 0–360° clockwise from north (180 = south). Wrapped
+    //            into range, defaults to 180 when missing.
+    //  share   : relative weight of this group within the total
+    //            installed kWp. Auto-normalised so the shares used
+    //            at compute time always sum to 1.0, so 50/50, 60/60
+    //            and 1/1 all produce the same forecast. Missing
+    //            shares are treated as equal-split with their
+    //            siblings. Entries with share ≤ 0 are dropped.
+    //When `pv-arrays` is present and non-empty, the legacy
+    //pv-tilt / pv-azimuth keys are ignored. Empty or absent →
+    //fall back to the legacy single-orientation path (or the
+    //horizontal-panel fast path when those are absent too).
+    //Useful for split-array roofs, roof + balcony combos, three-
+    //pitch roofs, and any other install where panels don't all
+    //face the same way.
+    'pv-arrays'?:             unknown;
     //Optional home-battery overlay. A single chip below the
     //home shows the battery State-of-Charge (%) and the live signed
     //power draw (positive while charging, negative while discharging),

@@ -111,14 +111,21 @@ export interface Translations
         //observation only.
         pvPeakPower:              string;
         pvPeakPowerHelp:          string;
-        //Panel orientation, optional. Tilt 0..90 (0 = horizontal, 90 =
-        //vertical / balcony). Azimuth 0..360 (clockwise from north,
-        //180 = south). Drives the Liu-Jordan transposition that
-        //decides how the predicted GHI lands on the panel plane.
-        pvTilt:                   string;
-        pvTiltHelp:               string;
-        pvAzimuth:                string;
-        pvAzimuthHelp:            string;
+        //Multi-array PV layout. Each array entry exposes its own
+        //tilt (0..90, 0 = horizontal, 90 = vertical / balcony),
+        //azimuth (0..360 clockwise from north, 180 = south), and
+        //share % of the total kWp. The card-side reader normalises
+        //the shares to sum to 1.0 at compute time, so the editor
+        //surfaces a small hint when the typed shares don't add to
+        //100. The "+ Add array" button is hidden past 6 entries.
+        pvArraysHelp:             string;
+        pvArrayTitle:             string;   //e.g. "Array {n}"
+        pvArrayTilt:              string;
+        pvArrayAzimuth:           string;
+        pvArrayShare:             string;
+        pvArrayAdd:               string;
+        pvArrayRemove:            string;
+        pvArrayNormHint:          string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;

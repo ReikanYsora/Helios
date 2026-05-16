@@ -95,8 +95,9 @@ Every option below is editable visually:
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | - | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
 | `pv-peak-kwp` | number | - | Optional. Installed peak power in kilowatts-peak. When set, drives the dotted clear-sky forecast line on the PV chart and paces the PV → home animated leader against your installation. Leave empty to hide the forecast (live observation + today's peak still display). |
-| `pv-tilt` | degrees | `0` | Optional. Tilt angle of your panels from horizontal: 0 for a flat install, 90 for fully vertical (e.g. balcony). When greater than 0, the forecast model switches from a horizontal-panel assumption to a Liu-Jordan transposition so steep-roof and balcony installs stop seeing a flat-roof prediction (typically a 3–4× overshoot). Leave at 0 to keep the legacy behaviour. |
-| `pv-azimuth` | degrees | `180` | Optional. Compass bearing your panels face, clockwise from north: 0 = north, 90 = east, 180 = south, 270 = west. Only used when `pv-tilt > 0`. |
+| `pv-arrays` | list | - | Optional. One entry per group of co-oriented panels. Each entry takes `tilt` (0–90°, 0 = horizontal, 90 = vertical), `azimuth` (0–360° clockwise from north: 0 = N, 90 = E, 180 = S, 270 = W) and `share` (this group's % of the total kWp). The forecast model evaluates each entry separately and weights the result by its share, so split-array installs - one row east + one row west, roof + balcony, three-pitch roofs, etc. - get a correct production curve instead of the single-orientation approximation. Shares are auto-normalised to sum to 100 % at compute time. See the example below the table. |
+| `pv-tilt` | degrees | `0` | *Legacy.* Tilt angle of your panels from horizontal: 0 for a flat install, 90 for fully vertical (e.g. balcony). When greater than 0, the forecast model switches from a horizontal-panel assumption to a Liu-Jordan transposition so steep-roof and balcony installs stop seeing a flat-roof prediction (typically a 3–4× overshoot). Superseded by `pv-arrays`; ignored when `pv-arrays` is set. |
+| `pv-azimuth` | degrees | `180` | *Legacy.* Compass bearing your panels face, clockwise from north. Only used when `pv-tilt > 0` and `pv-arrays` is unset. |
 | `pv-color` | hex | `#27B36B` | PV chip border + text + leader + dedicated graph. |
 | `battery-soc-entity` | entity_id | - | Optional. Battery State-of-Charge sensor (`%`, usually `device_class: battery`). Renders as a chip on the LEFT of the PV chip showing the live percentage. |
 | `battery-power-entity` | entity_id | - | Optional. Battery power sensor (W/kW). Signed: positive is interpreted as charging. Renders as a chip on the RIGHT of the PV chip showing the signed reading verbatim. |
@@ -107,6 +108,28 @@ Every option below is editable visually:
 | `home-longitude` | number | Home Assistant's home longitude | Optional override for the home longitude in decimal degrees. Only applied together with `home-latitude`; partial or out-of-range values are silently rejected and the card falls back to HA's configured home. |
 
 The PV entity picker filters to sensors that look like a power or energy reading (`device_class: power|energy` OR a unit in `W/kW/MW/Wh/kWh/MWh`). Both kinds work; the card auto-detects whether to display the entity's state directly (power sensor) or differentiate it on the fly (cumulative energy).
+
+### Multi-array PV layouts
+
+Use `pv-arrays` when your panels aren't all facing the same way. One YAML entry per orientation group:
+
+```yaml
+type: custom:helios-card
+pv-peak-kwp: 6.5
+pv-arrays:
+  - { tilt: 10, azimuth: 90,  share: 50 }   # one row tilted 10°, facing east
+  - { tilt: 10, azimuth: 270, share: 50 }   # one row tilted 10°, facing west
+```
+
+Other shapes work the same way: a roof + balcony combo, a three-pitch roof, or any asymmetric retrofit:
+
+```yaml
+pv-arrays:
+  - { tilt: 35, azimuth: 180, share: 70 }   # main south-facing roof
+  - { tilt: 90, azimuth: 90,  share: 30 }   # vertical balcony panels facing east
+```
+
+The visual editor exposes a repeatable "Array" section with `+ Add array` / `Remove`, so you can configure this without dropping to YAML. Shares are auto-normalised, so typing 50/50, 60/60 or 1/1 all produce the same forecast. Existing configs using only `pv-tilt` / `pv-azimuth` keep working unchanged.
 
 ---
 
