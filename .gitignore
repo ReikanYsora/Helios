@@ -18,3 +18,7 @@ yarn-error.log*
 
 # TypeScript build info
 *.tsbuildinfo
+
+AGENTS.md
+docs/**
+.vscode/**

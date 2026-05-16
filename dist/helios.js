@@ -29675,6 +29675,70 @@ async function fetchFloat32GeoTiff(url, rasterSize, signal) {
   }
   return out;
 }
+async function fetchFloat32GeoTiffWithNoData(url, rasterSize, signal) {
+  let resp;
+  try {
+    resp = await fetch(url, { signal });
+  } catch (_2) {
+    return null;
+  }
+  if (!resp.ok) return null;
+  let buf;
+  try {
+    buf = await resp.arrayBuffer();
+  } catch (_2) {
+    return null;
+  }
+  if (buf.byteLength < 200) return null;
+  let tiff;
+  try {
+    tiff = await fromArrayBuffer(buf);
+  } catch (_2) {
+    return null;
+  }
+  let image;
+  try {
+    image = await tiff.getImage();
+  } catch (_2) {
+    return null;
+  }
+  let noData = null;
+  try {
+    const anyImg = image;
+    if (typeof anyImg.getGDALNoData === "function") {
+      const raw2 = anyImg.getGDALNoData();
+      noData = typeof raw2 === "number" && Number.isFinite(raw2) ? raw2 : null;
+    }
+  } catch (_2) {
+    noData = null;
+  }
+  let rasters;
+  try {
+    rasters = await image.readRasters({
+      width: rasterSize,
+      height: rasterSize,
+      interleave: false,
+      samples: [0]
+    });
+  } catch (_2) {
+    return null;
+  }
+  let band;
+  if (Array.isArray(rasters)) {
+    if (rasters.length === 0) return null;
+    band = rasters[0];
+  } else {
+    band = rasters;
+  }
+  let data;
+  if (band instanceof Float32Array) {
+    data = band;
+  } else {
+    data = new Float32Array(band.length);
+    for (let i2 = 0; i2 < band.length; i2++) data[i2] = band[i2];
+  }
+  return { data, noData };
+}
 function subtractRasters(dsm, dtm) {
   const N2 = Math.min(dsm.length, dtm.length);
   const out = new Float32Array(N2);
@@ -29927,6 +29991,62 @@ const norwayKartverketNhm = {
     });
   }
 };
+function normaliseLocalNdsmRaster(band, noData) {
+  const hasNoData = noData !== null && Number.isFinite(noData);
+  for (let i2 = 0; i2 < band.length; i2++) {
+    const v2 = band[i2];
+    if (hasNoData && v2 === noData) {
+      band[i2] = NaN;
+      continue;
+    }
+    if (!Number.isFinite(v2)) {
+      band[i2] = NaN;
+      continue;
+    }
+    if (v2 < 0) {
+      band[i2] = 0;
+      continue;
+    }
+  }
+  return band;
+}
+function createLocalNdsmSource(cfg) {
+  const { url, minLat, maxLat, minLon, maxLon } = cfg;
+  return {
+    id: "local-ndsm",
+    name: "Local nDSM GeoTIFF",
+    covers(lat, lon) {
+      return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
+    },
+    async fetchShadowRegions(opts) {
+      const rasterSize = Math.min(
+        RASTER_DEFAULTS.maxRasterSize,
+        Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+      );
+      let band;
+      let noData;
+      try {
+        const r2 = await fetchFloat32GeoTiffWithNoData(url, rasterSize, opts.signal);
+        band = r2 ? r2.data : null;
+        noData = r2 ? r2.noData : null;
+      } catch (_2) {
+        return emptyResult();
+      }
+      if (!band || band.length < rasterSize * rasterSize) return emptyResult();
+      normaliseLocalNdsmRaster(band, noData);
+      return processHeightRaster(band, {
+        rasterSize,
+        minLat,
+        maxLat,
+        minLon,
+        maxLon,
+        homeLat: opts.homeLat,
+        homeLon: opts.homeLon,
+        cropRadiusMeters: opts.cropRadiusMeters
+      });
+    }
+  };
+}
 const LIDAR_SOURCES = [
   franceLidarHd,
   englandLidarComposite,
@@ -29939,6 +30059,51 @@ function findLidarSource(lat, lon) {
     if (src.covers(lat, lon)) return src;
   }
   return null;
+}
+function validateLocalNdsmConfig(cfg) {
+  if (!cfg) return null;
+  if (cfg["lidar-local-ndsm-enabled"] !== true) return null;
+  const rawUrl = cfg["lidar-local-ndsm-url"];
+  if (typeof rawUrl !== "string") return null;
+  const url = rawUrl.trim();
+  if (url.length === 0) return null;
+  const minLat = numFromCfg(cfg["lidar-local-ndsm-min-lat"]);
+  const maxLat = numFromCfg(cfg["lidar-local-ndsm-max-lat"]);
+  const minLon = numFromCfg(cfg["lidar-local-ndsm-min-lon"]);
+  const maxLon = numFromCfg(cfg["lidar-local-ndsm-max-lon"]);
+  if (minLat === null || maxLat === null || minLon === null || maxLon === null) return null;
+  if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) return null;
+  if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180) return null;
+  if (!(minLat < maxLat)) return null;
+  if (!(minLon < maxLon)) return null;
+  return { url, minLat, maxLat, minLon, maxLon };
+}
+function numFromCfg(v2) {
+  if (typeof v2 === "number" && Number.isFinite(v2)) return v2;
+  if (typeof v2 === "string") {
+    const s2 = v2.trim();
+    if (s2.length === 0) return null;
+    const n3 = Number(s2);
+    return Number.isFinite(n3) ? n3 : null;
+  }
+  return null;
+}
+let _warnedInvalidLocalNdsm = false;
+function resolveLidarSource(lat, lon, cfg) {
+  const localCfg = validateLocalNdsmConfig(cfg);
+  if (cfg && cfg["lidar-local-ndsm-enabled"] === true && localCfg === null) {
+    if (!_warnedInvalidLocalNdsm) {
+      _warnedInvalidLocalNdsm = true;
+      console.warn(
+        "[HELIOS] lidar-local-ndsm-enabled is true but the local nDSM config is incomplete or invalid; falling back to public LiDAR providers and the OpenFreeMap building-footprint mask. Required keys: lidar-local-ndsm-url plus the four lidar-local-ndsm-{min,max}-{lat,lon} bbox values in EPSG:4326."
+      );
+    }
+  }
+  if (localCfg) {
+    const local = createLocalNdsmSource(localCfg);
+    if (local.covers(lat, lon)) return local;
+  }
+  return findLidarSource(lat, lon);
 }
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
@@ -30331,6 +30496,22 @@ const _HeliosEngine = class _HeliosEngine {
   //based on whether a LiDAR provider covers the home.
   _shadowsEnabled() {
     return this.cfg["shadows-enabled"] !== false;
+  }
+  //String fingerprint of the YAML-only local nDSM config surface.
+  //Used to invalidate the cached LiDAR shadow fetch when the user
+  //enables/disables the local provider or edits its URL / bbox.
+  //Raw values are stringified deliberately: the validator in
+  //helios-lidar.ts owns type/range coercion, while the engine only
+  //needs a stable "did anything relevant change?" signal.
+  _localNdsmConfigKey() {
+    return JSON.stringify([
+      this.cfg["lidar-local-ndsm-enabled"],
+      this.cfg["lidar-local-ndsm-url"],
+      this.cfg["lidar-local-ndsm-min-lat"],
+      this.cfg["lidar-local-ndsm-max-lat"],
+      this.cfg["lidar-local-ndsm-min-lon"],
+      this.cfg["lidar-local-ndsm-max-lon"]
+    ]);
   }
   _shadowOpacity() {
     const raw2 = Number(this.cfg["shadow-opacity"]);
@@ -31251,8 +31432,16 @@ const _HeliosEngine = class _HeliosEngine {
   //    MapTiler footprints (or to no shadows if disabled).
   _ensureLidarFetched() {
     if (!this.map) return;
-    const provider = findLidarSource(this.homeLat, this.homeLon);
-    if (!provider || !this._shadowsEnabled()) {
+    if (!this._shadowsEnabled()) {
+      this._lidarShadowFeatures = null;
+      this._lidarShadowDiagnostics = null;
+      this._lidarShadowKey = "";
+      this._lidarShadowAbort?.abort();
+      this._lidarShadowAbort = void 0;
+      return;
+    }
+    const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
+    if (!provider) {
       this._lidarShadowFeatures = null;
       this._lidarShadowDiagnostics = null;
       this._lidarShadowKey = "";
@@ -32036,7 +32225,7 @@ const _HeliosEngine = class _HeliosEngine {
   //hemisphere is kept, the sun-arc orientation depends on it), and
   //the API key never leaves the card-level snapshot anyway.
   getStatsSnapshot() {
-    const provider = findLidarSource(this.homeLat, this.homeLon);
+    const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
     const shadowsOn = this._shadowsEnabled();
     const lidarFeatures = this._lidarShadowFeatures;
     const buildingsFootprints = this._buildingsData ? {
@@ -32104,6 +32293,7 @@ const _HeliosEngine = class _HeliosEngine {
     const prevPrecision = this._lidarPrecisionLevel();
     const prevShadowOpa = this._shadowOpacity();
     const prevShadowsOn = this._shadowsEnabled();
+    const prevLocalNdsm = this._localNdsmConfigKey();
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
@@ -32128,6 +32318,8 @@ const _HeliosEngine = class _HeliosEngine {
     const nextCluster = this._buildingClusterRadiusMeters();
     const nextOpacity = this._buildingOpacity();
     const nextColor = this._buildingColor();
+    const nextShadowsOn = this._shadowsEnabled();
+    const nextLocalNdsm = this._localNdsmConfigKey();
     if (nextRadius !== prevRadius || nextCluster !== prevCluster) {
       this._buildingsData = null;
       this._buildingsFetchKey = "";
@@ -32150,11 +32342,13 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
     const nextPrecision = this._lidarPrecisionLevel();
-    if (nextPrecision !== prevPrecision) {
+    if (nextPrecision !== prevPrecision || nextRadius !== prevRadius || nextLocalNdsm !== prevLocalNdsm) {
       this._lidarShadowKey = "";
       this._lidarShadowFeatures = null;
       this._lidarShadowDiagnostics = null;
-      this._ensureLidarFetched();
+      if (nextShadowsOn && nextShadowsOn === prevShadowsOn) {
+        this._ensureLidarFetched();
+      }
     }
     const nextShadowOpa = this._shadowOpacity();
     if (nextShadowOpa !== prevShadowOpa) {
@@ -32167,7 +32361,6 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     }
-    const nextShadowsOn = this._shadowsEnabled();
     if (nextShadowsOn !== prevShadowsOn) {
       if (nextShadowsOn) {
         this._ensureLidarFetched();

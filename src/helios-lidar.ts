@@ -80,6 +80,11 @@ import { englandLidarComposite } from './helios-lidar/providers/helios-lidar-uk'
 import { spainPnoaLidar }       from './helios-lidar/providers/helios-lidar-es';
 import { netherlandsAhn4 }      from './helios-lidar/providers/helios-lidar-nl';
 import { norwayKartverketNhm }  from './helios-lidar/providers/helios-lidar-no';
+import {
+    createLocalNdsmSource,
+    type LocalNdsmConfig
+} from './helios-lidar/helios-lidar-local-ndsm';
+import type { HeliosConfig } from './helios-engine';
 
 //Registered providers, ordered by preference. The first provider
 //whose covers() probe accepts the home position wins. Bbox checks
@@ -102,4 +107,98 @@ export function findLidarSource(lat: number, lon: number): LidarSource | null
         if (src.covers(lat, lon)) return src;
     }
     return null;
+}
+
+//Read the six `lidar-local-ndsm-*` keys off a HeliosConfig and either
+//return a fully-typed LocalNdsmConfig (when every required field is
+//valid) or null (when the provider is disabled, the URL is missing,
+//or any bbox value is missing / non-finite / out of EPSG:4326 range /
+//ordered wrong). Never throws; invalid local-provider config never
+//invalidates the rest of the card config.
+export function validateLocalNdsmConfig(cfg: HeliosConfig | undefined | null): LocalNdsmConfig | null
+{
+    if (!cfg) return null;
+    if (cfg['lidar-local-ndsm-enabled'] !== true) return null;
+
+    const rawUrl = cfg['lidar-local-ndsm-url'];
+    if (typeof rawUrl !== 'string') return null;
+    const url = rawUrl.trim();
+    if (url.length === 0) return null;
+
+    const minLat = numFromCfg(cfg['lidar-local-ndsm-min-lat']);
+    const maxLat = numFromCfg(cfg['lidar-local-ndsm-max-lat']);
+    const minLon = numFromCfg(cfg['lidar-local-ndsm-min-lon']);
+    const maxLon = numFromCfg(cfg['lidar-local-ndsm-max-lon']);
+    if (minLat === null || maxLat === null || minLon === null || maxLon === null) return null;
+
+    if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) return null;
+    if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180) return null;
+    if (!(minLat < maxLat)) return null;
+    if (!(minLon < maxLon)) return null;
+
+    return { url, minLat, maxLat, minLon, maxLon };
+}
+
+function numFromCfg(v: unknown): number | null
+{
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string')
+    {
+        const s = v.trim();
+        if (s.length === 0) return null;
+        const n = Number(s);
+        return Number.isFinite(n) ? n : null;
+    }
+    return null;
+}
+
+//One-shot warning latch. When the user enables the local provider
+//but leaves the config incomplete or invalid, log exactly once per
+//session so the silent fall-through is diagnosable without spamming
+//the console on every shadow refresh.
+let _warnedInvalidLocalNdsm = false;
+
+//Config-aware provider resolver. Behaviour:
+//
+//  1. When the local-nDSM config validates, construct a per-config
+//     LocalNdsmSource and return it if it covers (lat, lon). This
+//     takes precedence over any public provider that would otherwise
+//     match the same point.
+//  2. Otherwise (no local config, or local config does not cover the
+//     point) fall back to the existing static LIDAR_SOURCES chain
+//     via findLidarSource().
+//
+//findLidarSource() and the static LIDAR_SOURCES list are unchanged
+//and still exported for any caller that does not need config-aware
+//resolution.
+export function resolveLidarSource(
+    lat: number,
+    lon: number,
+    cfg: HeliosConfig | undefined | null
+): LidarSource | null
+{
+    const localCfg = validateLocalNdsmConfig(cfg);
+
+    if (cfg && cfg['lidar-local-ndsm-enabled'] === true && localCfg === null)
+    {
+        if (!_warnedInvalidLocalNdsm)
+        {
+            _warnedInvalidLocalNdsm = true;
+            console.warn(
+                '[HELIOS] lidar-local-ndsm-enabled is true but the local nDSM '
+              + 'config is incomplete or invalid; falling back to public LiDAR '
+              + 'providers and the OpenFreeMap building-footprint mask. '
+              + 'Required keys: lidar-local-ndsm-url plus the four '
+              + 'lidar-local-ndsm-{min,max}-{lat,lon} bbox values in EPSG:4326.'
+            );
+        }
+    }
+
+    if (localCfg)
+    {
+        const local = createLocalNdsmSource(localCfg);
+        if (local.covers(lat, lon)) return local;
+    }
+
+    return findLidarSource(lat, lon);
 }

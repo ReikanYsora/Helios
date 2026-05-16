@@ -689,10 +689,13 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   stacking). Output polygons are clipped Sutherland-Hodgman against
   the building visibility disc so cast shadows never extend past
   the rendered surroundings.
-* **helios-lidar.ts**, `LidarSource` interface + `LIDAR_SOURCES`
-  provider registry + `findLidarSource(lat, lon)` resolver. Adding
-  a country means dropping a new file under
-  `./helios-lidar/providers/`.
+* **helios-lidar.ts**, `LidarSource` interface + static public
+  `LIDAR_SOURCES` registry + `findLidarSource(lat, lon)` resolver,
+  plus the config-aware `resolveLidarSource(lat, lon, cfg)` seam used
+  by the engine. Public countries still register under
+  `./helios-lidar/providers/`; the generic local nDSM source is built
+  on demand from card config and conceptually prepended at resolution
+  time rather than registered globally.
 * **helios-lidar/helios-lidar-pipeline.ts**, the shared post-
   processing every provider routes through: classify cells above a
   height threshold (with optional circular crop), size-capped
@@ -710,6 +713,11 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   LiDAR support; its lazy-loaded codecs (pako, zstd, lerc, jpeg,
   lzw) are inlined into the single-file bundle by Vite
   `inlineDynamicImports`.
+* **helios-lidar/helios-lidar-local-ndsm.ts**, config-driven generic
+  local GeoTIFF provider. Consumes one browser-accessible precomputed
+  nDSM raster (height above ground in metres), normalises nodata /
+  non-finite / negative cells, and feeds the same shared pipeline as
+  the public providers. No region-specific runtime logic lives here.
 * **helios-lidar/providers/helios-lidar-fr.ts**, IGN LiDAR HD
   pipeline for metropolitan France + Corsica. One WMS round-trip
   on `IGNF_LIDAR-HD_MNH_*` (`image/x-bil;bits=32`), feeds the

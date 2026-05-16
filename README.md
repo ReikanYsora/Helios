@@ -90,6 +90,12 @@ Every option below is editable visually:
 | `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
 | `shadows-enabled` | boolean | `true` | Master toggle for cast ground shadows. When `false`, no shadows are projected. When `true`, the source is picked automatically: a LiDAR provider when one covers the home (buildings AND vegetation), OpenFreeMap building footprints otherwise (buildings only). All shadows are clipped to the building visibility radius for consistency with the rendered surroundings. See [LiDAR coverage](#lidar-coverage). |
 | `lidar-precision` | `'low' \| 'medium' \| 'high'` | `'medium'` | LiDAR raster size when a provider covers the home. Higher = finer shadow contours but a bigger payload. `low` 256², `medium` 512², `high` 1024² (close to IGN native sampling). No effect out of coverage. |
+| `lidar-local-ndsm-enabled` | boolean | `false` | Master opt-in for the generic local nDSM GeoTIFF provider. When `true` **and** every other `lidar-local-ndsm-*` key below is set and valid, Helios reads height-above-ground from a user-supplied local raster before trying the public providers. Invalid config disables only the local provider and falls through cleanly. |
+| `lidar-local-ndsm-url` | string | – | Browser-reachable URL of a single-band Float32 GeoTIFF/COG containing height **above ground** in metres (nDSM = DSM − DTM, pre-computed offline). Same-origin `/local/...` paths are recommended; cross-origin hosting requires CORS. A bare-earth DEM/DTM is **not** sufficient. |
+| `lidar-local-ndsm-min-lat` | number (deg) | – | Southern edge of the raster's geographic extent in EPSG:4326. Used both for the cheap `covers(lat, lon)` gate and as the raster's geographic frame at runtime. |
+| `lidar-local-ndsm-max-lat` | number (deg) | – | Northern edge of the raster's geographic extent in EPSG:4326. Must satisfy `min-lat < max-lat`. |
+| `lidar-local-ndsm-min-lon` | number (deg) | – | Western edge of the raster's geographic extent in EPSG:4326. |
+| `lidar-local-ndsm-max-lon` | number (deg) | – | Eastern edge of the raster's geographic extent in EPSG:4326. Must satisfy `min-lon < max-lon`. |
 | `shadow-opacity` | 0–1 | `0.32` | Opacity of the cast ground shadows. |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
@@ -148,6 +154,108 @@ If your country publishes a usable LiDAR HD endpoint (raw float heights via WMS 
 
 Out of coverage the card still renders shadows from OpenFreeMap building footprints, so the visual works worldwide, the LiDAR layer is a precision upgrade where available.
 
+If your area is not covered by any of the public providers above but you have access to LiDAR data, you can prepare your own raster and point Helios at it directly , see [Local nDSM GeoTIFF provider](#local-ndsm-geotiff-provider) below.
+
+---
+
+## Local nDSM GeoTIFF provider
+
+When no public LiDAR provider covers your area, you can still get true LiDAR-grade shadows (buildings AND vegetation) by preparing a local **nDSM** raster yourself and pointing Helios at it. The provider is generic: it carries no region-specific logic and is selected only when explicitly enabled, fully configured, and covering your home.
+
+### What is an nDSM?
+
+An **nDSM** is a *normalised Digital Surface Model* , a raster where each cell holds the **height above local ground** in metres:
+
+```
+nDSM = DSM (highest returns: buildings + trees) − DTM (bare-earth ground)
+```
+
+A cell value of `8.5` means "an object 8.5 m tall sits at this location". That's exactly the input the shared shadow pipeline expects (same contract as IGN's MNH product used by the French provider).
+
+### Why a DEM/DTM is not enough
+
+A bare-earth **DEM** or **DTM** describes terrain only , buildings and vegetation are filtered out by construction. Feeding a DEM into this provider will produce no useful object shadows. You need an nDSM (or a DSM/DTM pair, processed offline into an nDSM) for shadow casting to work.
+
+### Required raster format
+
+| Property | Requirement |
+| :--- | :--- |
+| Semantics | Height above ground, in metres (an nDSM) |
+| Bands | Single band |
+| Numeric type | Float32 strongly preferred (other numeric types are coerced) |
+| Container | GeoTIFF or COG |
+| CRS | EPSG:4326 (geographic lat/lon). The file's own CRS tag is **not** validated at runtime; the configured bbox is taken as the raster's geographic frame |
+| Nodata | GeoTIFF `GDAL_NODATA` tag is honoured when present (matching cells are skipped). Cells with `NaN` or negative values are clamped to `0` (valid ground) |
+| Extent | A small local extract centred on your home is strongly preferred over a regional file (see [Performance](#performance-guidance)) |
+
+### Home Assistant hosting
+
+Same-origin hosting under Home Assistant's built-in `/local/` path is the simplest and most reliable option. With Home Assistant's default config, files dropped under `<config>/www/` become available at `https://<your-ha>/local/...`:
+
+```
+<config>/www/helios/my-area-ndsm.tif
+                        ↓
+https://<your-ha>/local/helios/my-area-ndsm.tif
+```
+
+Cross-origin hosting works too, but the server has to send CORS headers (`Access-Control-Allow-Origin`) Helios can read; if the browser blocks the fetch, the provider falls back silently.
+
+### YAML configuration
+
+All six keys are required for the provider to activate. If any one is missing or invalid, Helios logs a single console warning per session and falls back to the public-provider chain (and then to OpenFreeMap footprints).
+
+```yaml
+type: custom:helios-card
+lidar-local-ndsm-enabled: true
+lidar-local-ndsm-url: /local/helios/my-area-ndsm.tif
+# Geographic extent of the raster, in EPSG:4326 degrees.
+# Replace these placeholders with the bbox your file actually covers.
+lidar-local-ndsm-min-lat: -34.10
+lidar-local-ndsm-max-lat: -33.90
+lidar-local-ndsm-min-lon: 150.90
+lidar-local-ndsm-max-lon: 151.10
+```
+
+The bbox is used for two things: a cheap synchronous coverage check around your home, and the geographic frame the pipeline uses when consuming the raster. Both axes must satisfy `min < max` and lie inside legal EPSG:4326 ranges (`-90..90`, `-180..180`).
+
+### Fallback behaviour
+
+The local provider sits **first** in the resolution chain:
+
+1. **Local nDSM**, when enabled, valid, and its bbox includes the home.
+2. **Public country LiDAR providers** (IGN FR, EA UK, IGN ES, PDOK NL, Kartverket NO) , unchanged.
+3. **OpenFreeMap building footprints** , whenever no LiDAR provider yields features.
+
+Failure modes are soft. A bad URL, decode error, empty raster, CORS rejection, or any other fetch failure resolves to "no LiDAR features" and the engine drops through to the building-footprint mask. The rest of the card keeps rendering normally.
+
+You can confirm which source is active via `window.heliosStats()` in the browser console; the local provider reports id `local-ndsm`.
+
+### Performance guidance
+
+The current GeoTIFF helper fetches the whole file before decoding, so file size matters:
+
+- **Crop to a small local extract** , a few hundred metres around your home is enough; the building-visibility radius (default 100 m, max 1000 m) is the relevant scale.
+- **Match resolution to need** , 1 m cell pitch is plenty for card-scale shadows; finer than 50 cm rarely adds visible detail and inflates the file.
+- **Keep it under ~10 MB** as a rough target. Larger files work but slow the first paint and use more memory.
+- **COG is accepted** as a container, but Helios does not yet exploit HTTP-range reads, so a COG buys you GIS-tool interoperability rather than partial-fetch savings today.
+
+### Example preparation workflow (NSW, Australia via ELVIS)
+
+This is **one example** of how to produce a suitable nDSM from open LiDAR data. Helios does **not** integrate with [ELVIS](https://elevation.fsdf.org.au/) directly, does not bundle NSW data, and has no NSW-specific code. The same shape of workflow applies to any LiDAR point cloud you can legally use; ELVIS is just a convenient public source.
+
+1. **Discover coverage** , browse [ELVIS](https://elevation.fsdf.org.au/) for your area of interest and download a classified LiDAR **point cloud** tile (LAS/LAZ). A bare-earth DEM alone is not sufficient.
+2. **Build a DSM** from the highest returns (e.g. `lasgrid`, `pdal pipeline` with `writers.gdal` `output_type=max`, or QGIS/ArcGIS DSM tools). 1 m cell pitch is a good default.
+3. **Build a DTM** from ground-classified returns only (classification `2`).
+4. **Align** the two rasters to identical extent, resolution, and CRS.
+5. **Subtract** `nDSM = DSM − DTM` (e.g. `gdal_calc.py -A dsm.tif -B dtm.tif --outfile=ndsm.tif --calc="A-B"`).
+6. **Clamp negatives** to `0` and preserve nodata separately from valid ground (Helios will also do this defensively at runtime).
+7. **Reproject to EPSG:4326** if your source is in a projected CRS (e.g. MGA / UTM): `gdalwarp -t_srs EPSG:4326 ndsm.tif ndsm-4326.tif`.
+8. **Export as Float32 COG**: `gdal_translate ndsm-4326.tif ndsm-cog.tif -of COG -co COMPRESS=DEFLATE -co PREDICTOR=3 -ot Float32`.
+9. **Host it** under `<config>/www/helios/` and reference it from the YAML as `/local/helios/ndsm-cog.tif`.
+10. **Record the bbox** of the exported file (`gdalinfo ndsm-cog.tif` → `Corner Coordinates`) and put it into the four `lidar-local-ndsm-*-lat`/`-lon` keys.
+
+The same steps work for any provider's LiDAR (state agencies, USGS 3DEP, local councils, etc.) , the runtime feature is intentionally generic.
+
 ---
 
 ## Technical stack
@@ -185,6 +293,7 @@ Source layout:
 | `src/helios-lidar.ts`       | `LidarSource` interface + provider registry |
 | `src/helios-lidar/helios-lidar-pipeline.ts` | Shared height-raster → shadow-polygon pipeline (flood fill + convex hull) |
 | `src/helios-lidar/helios-lidar-geotiff.ts`  | Float32 GeoTIFF fetch + decode + DSM-DTM math helpers |
+| `src/helios-lidar/helios-lidar-local-ndsm.ts` | Generic local nDSM GeoTIFF provider (config-driven, see [Local nDSM GeoTIFF provider](#local-ndsm-geotiff-provider)) |
 | `src/helios-lidar/providers/` | One file per country (`helios-lidar-fr.ts`, `-uk`, `-es`, `-nl`, `-no`) |
 | `src/helios-sun.ts`         | Solar position + Haurwitz / Kasten-Czeplak math |
 | `src/helios-weather.ts`     | Open-Meteo multi-model fetch + cache |

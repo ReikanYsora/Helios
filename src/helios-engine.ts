@@ -4,7 +4,12 @@ import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-s
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
 import { projectExtrusionShadows } from './helios-shadows';
-import { findLidarSource } from './helios-lidar';
+import { findLidarSource, resolveLidarSource } from './helios-lidar';
+//findLidarSource is re-exported from this module so external callers
+//(stats helpers, future debug surfaces) that historically used the
+//configless probe keep working. The engine itself now uses
+//resolveLidarSource so the local-nDSM provider is honoured.
+void findLidarSource;
 
 //Public types
 
@@ -126,7 +131,46 @@ export interface HeliosConfig
     'lidar-precision'?:       unknown;
     //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
     'shadow-opacity'?:         unknown;
+    //Optional generic local nDSM (normalised Digital Surface Model)
+    //GeoTIFF LiDAR provider. Lets a user point Helios at a single
+    //browser-accessible Float32 GeoTIFF/COG containing height above
+    //ground in metres, prepared offline. The provider is generic:
+    //it carries no region-specific behaviour and is selected only
+    //when explicitly enabled, fully configured, and covering the
+    //home. When unset or disabled, Helios falls back to the public
+    //provider chain and the OpenFreeMap building-footprint mask
+    //exactly as before.
+    //  lidar-local-ndsm-enabled : boolean, default false. Master
+    //                             opt-in for this provider.
+    //  lidar-local-ndsm-url     : string, optional. Browser-reachable
+    //                             URL of the nDSM GeoTIFF (same-origin
+    //                             /local/... is the recommended path).
+    //  lidar-local-ndsm-min-lat : number, optional. Southern edge of
+    //                             the raster's geographic extent in
+    //                             EPSG:4326 degrees.
+    //  lidar-local-ndsm-max-lat : number, optional. Northern edge.
+    //  lidar-local-ndsm-min-lon : number, optional. Western edge.
+    //  lidar-local-ndsm-max-lon : number, optional. Eastern edge.
+    //The four bbox keys describe the raster's geographic frame at
+    //runtime. They drive both the cheap covers(lat, lon) gate and
+    //the RasterGeo extent passed to processHeightRaster() once the
+    //file is decoded. Invalid or incomplete local-provider config
+    //disables only the local provider instance; the rest of the
+    //card config remains valid.
+    'lidar-local-ndsm-enabled'? : unknown;
+    'lidar-local-ndsm-url'?     : unknown;
+    'lidar-local-ndsm-min-lat'? : unknown;
+    'lidar-local-ndsm-max-lat'? : unknown;
+    'lidar-local-ndsm-min-lon'? : unknown;
+    'lidar-local-ndsm-max-lon'? : unknown;
 }
+
+//Default for the optional generic local nDSM LiDAR provider opt-in.
+//Exported so any future config-parsing or visual-editor code can use
+//the same fallback. All other local-nDSM keys are optional and have
+//no default; the provider is only considered configured when the
+//validator in helios-lidar.ts accepts every required field.
+export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
 //Default values for the building config, exposed so the visual
 //editor can render the matching placeholder / slider defaults.
@@ -1101,6 +1145,24 @@ export class HeliosEngine
     private _shadowsEnabled(): boolean
     {
         return this.cfg['shadows-enabled'] !== false;
+    }
+
+    //String fingerprint of the YAML-only local nDSM config surface.
+    //Used to invalidate the cached LiDAR shadow fetch when the user
+    //enables/disables the local provider or edits its URL / bbox.
+    //Raw values are stringified deliberately: the validator in
+    //helios-lidar.ts owns type/range coercion, while the engine only
+    //needs a stable "did anything relevant change?" signal.
+    private _localNdsmConfigKey(): string
+    {
+        return JSON.stringify([
+            this.cfg['lidar-local-ndsm-enabled'],
+            this.cfg['lidar-local-ndsm-url'],
+            this.cfg['lidar-local-ndsm-min-lat'],
+            this.cfg['lidar-local-ndsm-max-lat'],
+            this.cfg['lidar-local-ndsm-min-lon'],
+            this.cfg['lidar-local-ndsm-max-lon']
+        ]);
     }
 
     private _shadowOpacity(): number
@@ -2350,8 +2412,18 @@ export class HeliosEngine
     {
         if (!this.map) return;
 
-        const provider = findLidarSource(this.homeLat, this.homeLon);
-        if (!provider || !this._shadowsEnabled())
+        if (!this._shadowsEnabled())
+        {
+            this._lidarShadowFeatures    = null;
+            this._lidarShadowDiagnostics = null;
+            this._lidarShadowKey         = '';
+            this._lidarShadowAbort?.abort();
+            this._lidarShadowAbort       = undefined;
+            return;
+        }
+
+        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
+        if (!provider)
         {
             this._lidarShadowFeatures    = null;
             this._lidarShadowDiagnostics = null;
@@ -3623,7 +3695,7 @@ export class HeliosEngine
     //the API key never leaves the card-level snapshot anyway.
     public getStatsSnapshot(): Record<string, unknown>
     {
-        const provider = findLidarSource(this.homeLat, this.homeLon);
+        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
         const shadowsOn = this._shadowsEnabled();
         const lidarFeatures = this._lidarShadowFeatures;
         const buildingsFootprints = this._buildingsData
@@ -3703,6 +3775,7 @@ export class HeliosEngine
         const prevPrecision   = this._lidarPrecisionLevel();
         const prevShadowOpa   = this._shadowOpacity();
         const prevShadowsOn   = this._shadowsEnabled();
+        const prevLocalNdsm   = this._localNdsmConfigKey();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -3744,6 +3817,8 @@ export class HeliosEngine
         const nextCluster = this._buildingClusterRadiusMeters();
         const nextOpacity = this._buildingOpacity();
         const nextColor   = this._buildingColor();
+        const nextShadowsOn = this._shadowsEnabled();
+        const nextLocalNdsm = this._localNdsmConfigKey();
         if (nextRadius !== prevRadius || nextCluster !== prevCluster)
         {
             this._buildingsData     = null;
@@ -3776,16 +3851,23 @@ export class HeliosEngine
             }
         }
 
-        //LiDAR precision change invalidates the cached shadow features
-        //(fetch key includes the raster size) and triggers a refetch
-        //at the new sampling. _ensureLidarFetched handles the diff.
+        //LiDAR fetch inputs that affect which source is selected or
+        //what raster area gets requested invalidate the cached shadow
+        //features and trigger a refetch when shadows stay enabled:
+        //precision, visible radius, and the YAML-only local nDSM
+        //config surface.
         const nextPrecision = this._lidarPrecisionLevel();
-        if (nextPrecision !== prevPrecision)
+        if (nextPrecision !== prevPrecision
+         || nextRadius !== prevRadius
+         || nextLocalNdsm !== prevLocalNdsm)
         {
             this._lidarShadowKey         = '';
             this._lidarShadowFeatures    = null;
             this._lidarShadowDiagnostics = null;
-            this._ensureLidarFetched();
+            if (nextShadowsOn && nextShadowsOn === prevShadowsOn)
+            {
+                this._ensureLidarFetched();
+            }
         }
 
         //Shadow opacity is a paint-level update on the raster layer.
@@ -3805,7 +3887,6 @@ export class HeliosEngine
         //Master shadow toggle: when turning on, fetch LiDAR shadows
         //if a provider covers the home; when turning off, drop the
         //cached LiDAR features and clear the projected polygons.
-        const nextShadowsOn = this._shadowsEnabled();
         if (nextShadowsOn !== prevShadowsOn)
         {
             if (nextShadowsOn)
