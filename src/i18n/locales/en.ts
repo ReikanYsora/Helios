@@ -38,6 +38,10 @@ export const en: Translations = {
 
     editor:
     {
+        locationSection:    'Location',
+        homeLatitude:       'Home latitude *',
+        homeLongitude:      'Home longitude *',
+        locationHint:       'Override the home address used as the card\'s center. Leave both fields empty to use Home Assistant\'s configured home. The override is only applied when BOTH fields are set to valid coordinates; partial or out-of-range values silently fall back to the HA default.',
         mapSection:         'Map',
         mapStyle:           'Map style *',
         mapStyleHint:       'Three basemaps: Streets (sober, urban), Topo (contour lines and earth tones, better in hilly terrain), or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). 3D buildings and labels behave identically on Streets and Topo. The dark variant of the chosen style is used automatically when the card theme is set to dark.',

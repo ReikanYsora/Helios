@@ -28,6 +28,10 @@ export const es: Translations = {
 
     editor:
     {
+        locationSection:    'Ubicación',
+        homeLatitude:       'Latitud del hogar *',
+        homeLongitude:      'Longitud del hogar *',
+        locationHint:       'Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas; los valores parciales o fuera de rango se ignoran silenciosamente.',
         mapSection:         'Mapa',
         mapStyle:           'Estilo del mapa *',
         mapStyleHint:       'Tres mapas base: Calles (sobrio, urbano), Topo (líneas de nivel y tonos terrosos, ideal en terreno montañoso) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). Los edificios 3D y las etiquetas se comportan igual en Calles y Topo. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.',

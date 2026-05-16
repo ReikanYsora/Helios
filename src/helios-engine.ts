@@ -139,6 +139,16 @@ export interface HeliosConfig
     'lidar-precision'?:       unknown;
     //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
     'shadow-opacity'?:         unknown;
+    //Optional override for the home location. When BOTH home-latitude
+    //(-90..90) and home-longitude (-180..180) parse as finite numbers
+    //in range, they are used as the home coordinates instead of
+    //hass.config.{latitude, longitude}. If either is missing, NaN, or
+    //out of range, both are ignored and the card falls back to HA's
+    //configured home. The window.__heliosLocationOverride debug helper
+    //still wins over this config (it stays the developer escape hatch
+    //for one-off testing from the browser console).
+    'home-latitude'?:          unknown;
+    'home-longitude'?:         unknown;
 }
 
 //Default values for the building config, exposed so the visual

@@ -36,6 +36,10 @@ export const fr: Translations = {
 
     editor:
     {
+        locationSection:    'Localisation',
+        homeLatitude:       'Latitude du domicile *',
+        homeLongitude:      'Longitude du domicile *',
+        locationHint:       'Remplace l\'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n\'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides ; toute valeur partielle ou hors plage est ignorée silencieusement.',
         mapSection:         'Carte',
         mapStyle:           'Style de la carte *',
         mapStyleHint:       'Trois fonds de carte : Rues (sobre, urbain), Topo (lignes de niveau et tons terreux, idéal en zone vallonnée) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). Les bâtiments 3D et les libellés se comportent à l\'identique sur Rues et Topo. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.',

@@ -511,8 +511,47 @@ export class HeliosCardEditor extends LitElement
         const c = this._cfg;
         const t = this._t();
 
+        //Placeholders for the home lat/lon override fields. We surface
+        //HA's currently-configured home so the user instantly sees what
+        //they would be overriding, falling back to a neutral example
+        //(Amsterdam) when HA hasn't set one. Empty input means "use
+        //HA's home"; the placeholder is non-binding text only.
+        const haLat = this.hass?.config?.latitude;
+        const haLon = this.hass?.config?.longitude;
+        const latPlaceholder = typeof haLat === 'number' && isFinite(haLat)
+            ? String(haLat) : '52.379';
+        const lonPlaceholder = typeof haLon === 'number' && isFinite(haLon)
+            ? String(haLon) : '4.900';
+
         return html`
             <div class="editor">
+
+                <div class="section-title">${t.editor.locationSection}</div>
+                <label class="field">
+                    <span class="label">${t.editor.homeLatitude}</span>
+                    <input
+                        type="number"
+                        min="-90"
+                        max="90"
+                        step="any"
+                        placeholder="${latPlaceholder}"
+                        .value="${c['home-latitude'] != null ? String(c['home-latitude']) : ''}"
+                        @change="${(e: Event) => this._numField('home-latitude', e)}"
+                    />
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.homeLongitude}</span>
+                    <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="any"
+                        placeholder="${lonPlaceholder}"
+                        .value="${c['home-longitude'] != null ? String(c['home-longitude']) : ''}"
+                        @change="${(e: Event) => this._numField('home-longitude', e)}"
+                    />
+                </label>
+                <div class="hint">${t.editor.locationHint}</div>
 
                 <div class="section-title">${t.editor.mapSection}</div>
                 <label class="field">

@@ -28,6 +28,10 @@ export const pt: Translations = {
 
     editor:
     {
+        locationSection:    'Localização',
+        homeLatitude:       'Latitude de casa *',
+        homeLongitude:      'Longitude de casa *',
+        locationHint:       'Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas; valores parciais ou fora do intervalo são ignorados silenciosamente.',
         mapSection:         'Mapa',
         mapStyle:           'Estilo do mapa *',
         mapStyleHint:       'Três mapas base: Ruas (sóbrio, urbano), Topo (curvas de nível e tons terrosos, ideal em terreno montanhoso) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). Os edifícios 3D e as etiquetas comportam-se de forma idêntica em Ruas e Topo. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.',

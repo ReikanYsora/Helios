@@ -439,8 +439,11 @@ export class HeliosCard extends LitElement
     //Diagnostic snapshot returned to `window.heliosStats()`. Includes
     //the live config, the engine state snapshot when the engine is
     //up, and a small PV block summarising the most recent history
-    //fetch outcome. JSON-safe, no DOM references, no PII (engine
-    //snapshot already strips the home lat/lon).
+    //fetch outcome. JSON-safe, no DOM references, no PII: the engine
+    //snapshot strips its own hass.config-sourced lat/lon, and the loop
+    //below additionally omits the `home-latitude` / `home-longitude`
+    //card-config override so user-supplied home coordinates never leak
+    //into the diagnostics output either.
     public getStatsSnapshot(): {
         config: Record<string, unknown>;
         engine: Record<string, unknown> | null;
@@ -452,6 +455,9 @@ export class HeliosCard extends LitElement
         {
             for (const [k, v] of Object.entries(this.config))
             {
+                //Skip user-supplied home coordinates so the snapshot
+                //stays PII-free, matching the engine-side stripping.
+                if (k === 'home-latitude' || k === 'home-longitude') continue;
                 cfg[k] = v;
             }
         }
@@ -473,17 +479,33 @@ export class HeliosCard extends LitElement
     //debug helpers. Clears the cached home key so the next `updated()`
     //pass sees `identityChanged` and re-inits the engine against the
     //new coordinates, then schedules a re-render to trigger that pass.
+    //
+    //The visual editor does NOT route through here when the user edits
+    //`home-latitude` / `home-longitude`: it dispatches `config-changed`,
+    //HA calls `setConfig()`, Lit re-renders, and `updated()` notices
+    //that `_getHomeCoords()` now resolves to a different key. The
+    //engine re-init falls out of that natural identity-drift path.
     public invalidateLocation(): void
     {
         this._lastHomeKey = '';
         this.requestUpdate();
     }
 
-    //Resolves the home coordinates. Reads the debug override on
-    //`window.__heliosLocationOverride` first (set via the global
-    //`setHeliosLocation` helper), then falls back to HA's configured
-    //home at hass.config.{latitude,longitude}. Returns null only when
-    //neither source has a usable pair.
+    //Resolves the home coordinates. Three-tier precedence, in order:
+    //  1. `window.__heliosLocationOverride` , the debug helper set via
+    //     the global `setHeliosLocation()` console function. Highest
+    //     priority so a developer can always force a location regardless
+    //     of card config.
+    //  2. The card config keys `home-latitude` / `home-longitude`.
+    //     Applied only when BOTH parse as numbers (or numeric strings)
+    //     that are finite and in valid range (lat -90..90, lon
+    //     -180..180). Anything else , including missing, partial, the
+    //     empty string, booleans or arrays which `Number()` would
+    //     happily coerce to 0 , is silently rejected so a half-edited
+    //     YAML never warps the card to {0,0}.
+    //  3. Home Assistant's configured home at
+    //     hass.config.{latitude,longitude}.
+    //Returns null only when none of the three has a usable pair.
     private _getHomeCoords(): { lat: number; lon: number } | null
     {
         const w = window as unknown as { __heliosLocationOverride?: { lat: number; lon: number } };
@@ -493,10 +515,43 @@ export class HeliosCard extends LitElement
         {
             return { lat: o.lat, lon: o.lon };
         }
+
+        const cfgLat = this._parseConfigCoord(this.config?.['home-latitude']);
+        const cfgLon = this._parseConfigCoord(this.config?.['home-longitude']);
+        if (cfgLat !== null && cfgLon !== null
+            && cfgLat >= -90  && cfgLat <= 90
+            && cfgLon >= -180 && cfgLon <= 180)
+        {
+            return { lat: cfgLat, lon: cfgLon };
+        }
+
         const lat = this.hass?.config?.latitude;
         const lon = this.hass?.config?.longitude;
         if (typeof lat !== 'number' || typeof lon !== 'number') return null;
         return { lat, lon };
+    }
+
+    //Defensive parser for `home-latitude` / `home-longitude` raw values
+    //coming out of the card config. The config is typed `unknown`, so
+    //bare `Number()` is unsafe: `Number('')`, `Number(false)`, `Number([])`,
+    //`Number(null)` all return 0, which is a finite, in-range latitude
+    //(Atlantic Ocean off the Gulf of Guinea) and would silently win the
+    //range check in `_getHomeCoords`. Accept numbers as-is and parse
+    //strings that look like a decimal number; reject everything else.
+    private _parseConfigCoord(raw: unknown): number | null
+    {
+        if (typeof raw === 'number')
+        {
+            return isFinite(raw) ? raw : null;
+        }
+        if (typeof raw === 'string')
+        {
+            const trimmed = raw.trim();
+            if (trimmed === '') return null;
+            const n = Number(trimmed);
+            return isFinite(n) ? n : null;
+        }
+        return null;
     }
 
     //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.

@@ -28,6 +28,10 @@ export const de: Translations = {
 
     editor:
     {
+        locationSection:    'Standort',
+        homeLatitude:       'Breitengrad des Zuhauses *',
+        homeLongitude:      'Längengrad des Zuhauses *',
+        locationHint:       'Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten; unvollständige oder ungültige Werte werden ignoriert.',
         mapSection:         'Karte',
         mapStyle:           'Kartenstil *',
         mapStyleHint:       'Drei Basiskarten: Straßen (nüchtern, urban), Topo (Höhenlinien und Erdtöne, ideal in hügeligem Gelände) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). 3D-Gebäude und Beschriftungen verhalten sich auf Straßen und Topo identisch. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.',

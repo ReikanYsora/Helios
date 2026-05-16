@@ -28,6 +28,10 @@ export const it: Translations = {
 
     editor:
     {
+        locationSection:    'Posizione',
+        homeLatitude:       'Latitudine di casa *',
+        homeLongitude:      'Longitudine di casa *',
+        locationHint:       'Sovrascrive l\'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l\'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide; valori parziali o fuori intervallo vengono ignorati silenziosamente.',
         mapSection:         'Mappa',
         mapStyle:           'Stile della mappa *',
         mapStyleHint:       'Tre mappe di base: Strade (sobria, urbana), Topo (curve di livello e toni terrosi, ideale in terreno collinare) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). Gli edifici 3D e le etichette si comportano allo stesso modo su Strade e Topo. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.',

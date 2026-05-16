@@ -28,6 +28,10 @@ export const nl: Translations = {
 
     editor:
     {
+        locationSection:    'Locatie',
+        homeLatitude:       'Breedtegraad woning *',
+        homeLongitude:      'Lengtegraad woning *',
+        locationHint:       'Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten; gedeeltelijke of ongeldige waarden worden stilzwijgend genegeerd.',
         mapSection:         'Kaart',
         mapStyle:           'Kaartstijl *',
         mapStyleHint:       'Drie basiskaarten: Straten (sober, stedelijk), Topo (hoogtelijnen en aardse tinten, ideaal in heuvelachtig terrein) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). 3D-gebouwen en labels gedragen zich identiek op Straten en Topo. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.',

@@ -37,6 +37,10 @@ export const no: Translations = {
 
     editor:
     {
+        locationSection:    'Sted',
+        homeLatitude:       'Hjemmets breddegrad *',
+        homeLongitude:      'Hjemmets lengdegrad *',
+        locationHint:       'Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater; ufullstendige eller ugyldige verdier ignoreres stille.',
         mapSection:         'Kart',
         mapStyle:           'Kartstil *',
         mapStyleHint:       'Tre grunnkart: Gater (nøkternt, urbant), Topo (høydekoter og jordfargetoner, bedre i kupert terreng) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). 3D-bygninger og etiketter oppfører seg likt på Gater og Topo. Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.',

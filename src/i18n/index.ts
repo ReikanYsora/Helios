@@ -61,6 +61,14 @@ export interface Translations
 
     editor:
     {
+        //Optional override for the home location used as the card's
+        //center. When both fields are blank the card falls back to
+        //hass.config; when both are set to valid coords (lat -90..90,
+        //lon -180..180) they win over HA's configured home.
+        locationSection:          string;
+        homeLatitude:             string;
+        homeLongitude:            string;
+        locationHint:             string;
         mapSection:               string;
         mapStyle:                 string;
         mapStyleHint:             string;
