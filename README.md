@@ -179,6 +179,7 @@ The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jo
 | **GeoTIFF** | [geotiff.js](https://github.com/geotiffjs/geotiff.js) for parsing the Float32 LiDAR rasters from UK / ES / NL / NO providers |
 | **Weather data** | [Open-Meteo API](https://open-meteo.com/) (free, no key) |
 | **Solar math** | NOAA-validated (mean altitude error 0.30°, mean azimuth error 0.36°) |
+| **Offline prep tooling** | Python 3.12 + `uv` for LiDAR and future dataset-prep helpers |
 | **Build** | Vite 5 |
 
 ---
@@ -190,7 +191,27 @@ npm install
 npm run dev        # local dev server
 npm run typecheck  # strict TS
 npm run build      # produces dist/helios.js
+
+uv sync            # install Python helper-tool dependencies
+uv run python tools/lidar/make_test_ndsm.py
 ```
+
+The card itself stays TypeScript-first, but the offline dataset-prep
+helpers live in Python on purpose. A lot of the geospatial tooling we
+want to lean on already exists there, especially around raster / GDAL
+workflows, so using Python lets Helios plug into a mature ecosystem
+instead of rebuilding that surface in JavaScript. `uv` keeps that side
+lightweight: one lockfile, fast env creation, and a clean `uv run ...`
+entrypoint for one-off helper scripts without turning the repo into a
+heavy Python application.
+
+That tooling also has a dedicated layout now so future helpers can land
+without reshaping the repo each time. `tools/` is where helper scripts
+and their docs live, `data/` is the working area for local datasets and
+derived outputs, and both were set up to scale beyond the current LiDAR
+flow. The next planned use of that structure is GeoJSON preparation
+tooling, which can follow the same pattern instead of inventing a second
+workflow from scratch.
 
 Source layout:
 
@@ -209,6 +230,8 @@ Source layout:
 | `src/helios-sun.ts`         | Solar position + Haurwitz / Kasten-Czeplak math |
 | `src/helios-weather.ts`     | Open-Meteo multi-model fetch + cache |
 | `src/i18n/`                 | 8-locale strict-typed translations (en/fr/de/es/it/nl/pt/no) |
+| `tools/`                    | Python helper scripts for local data preparation workflows |
+| `data/`                     | Local working datasets and derived outputs used by helper tooling |
 
 ---
 
