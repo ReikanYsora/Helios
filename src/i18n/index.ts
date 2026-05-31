@@ -225,6 +225,16 @@ export interface Translations
         gridSourceTitle:          string;
         gridSourceAdd:            string;
         gridSourceRemove:         string;
+        //Combined signed grid-power entity: one sensor whose sign
+        //routes to the import (>=0) or export (<0) chip, superseding
+        //the two directional slots. The invert toggle flips the sign
+        //convention for meters that report feed-in as positive.
+        gridCombinedTitle:        string;
+        gridCombinedHint:         string;
+        gridInvertLabel:          string;
+        gridInvertStandard:       string;
+        gridInvertInverted:       string;
+        gridInvertHelp:           string;
         //Weather section. Hosts the optional solar-radiation entity
         //override: when wired to a physical W/m² sensor at the home
         //(typical Ecowitt / Davis / personal weather station), the

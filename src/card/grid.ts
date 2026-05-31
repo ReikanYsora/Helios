@@ -12,6 +12,15 @@
 //that changed MOST RECENTLY. No averaging, no summing: the last-
 //updated entity wins.
 //
+//grid-power-entity is the third wiring: a single COMBINED signed
+//sensor (Fronius P_Grid, Shelly EM, P1 net power, ...) whose sign
+//encodes the direction. When it is set it owns both chips and the
+//directional slots above are ignored: readCombined derives the net
+//signed watts (a power sensor's value, or a net-energy sensor's
+//signed slope), applies the optional grid-power-invert flip, then
+//routes a non-negative net to the IMPORT chip and a negative net to
+//the EXPORT chip so only the active direction is ever shown.
+//
 //Both live and past-scrub derivations share one bracketed-slope
 //helper. The bracket is chosen so that the time span across the two
 //samples is at least MIN_SLOPE_SPAN_MS, expanding outward when the
@@ -89,6 +98,12 @@ export interface GridHost
     //updated" entity when the slot has several entities wired.
     _gridImportLastDerived: Map<string, { watts: number; t: number }>;
     _gridExportLastDerived: Map<string, { watts: number; t: number }>;
+    //Combined signed grid-power slot (grid-power-entity). One buffer
+    //+ unit per wired source; the per-entity signed slopes / powers
+    //sum to the net grid watts, whose sign routes the value to the
+    //import (>=0) or export (<0) chip.
+    _gridCombinedSamples: Map<string, Sample[]>;
+    _gridCombinedUnits:   Map<string, string>;
 }
 
 
@@ -169,8 +184,26 @@ export function refreshGrid(host: GridHost): void
         return;
     }
 
+    //A combined signed entity, when wired, owns both chips and the
+    //two directional slots are ignored. Otherwise fall back to the
+    //independent import / export slots.
+    if (resolveEntities(host, 'combined').length > 0)
+    {
+        readCombined(host);
+        return;
+    }
+
     readSlot(host, 'import');
     readSlot(host, 'export');
+}
+
+
+//Config key backing each slot.
+function slotKey(slot: 'import' | 'export' | 'combined'): string
+{
+    if (slot === 'import') return 'grid-import-entity';
+    if (slot === 'export') return 'grid-export-entity';
+    return 'grid-power-entity';
 }
 
 
@@ -178,9 +211,9 @@ export function refreshGrid(host: GridHost): void
 //  - "sensor.foo"          (single entity)
 //  - ["sensor.foo", "sensor.bar"]  (multi-entity)
 //Empty / missing entities are silently dropped.
-function resolveEntities(host: GridHost, slot: 'import' | 'export'): string[]
+function resolveEntities(host: GridHost, slot: 'import' | 'export' | 'combined'): string[]
 {
-    const key = slot === 'import' ? 'grid-import-entity' : 'grid-export-entity';
+    const key = slotKey(slot);
     const raw = (host.config as Record<string, unknown> | undefined)?.[key];
     if (Array.isArray(raw))
     {
@@ -317,6 +350,110 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
 
     const outUnit = unitIsEnergy(unitForOutput) ? 'W' : (unitForOutput || 'W');
     applyValue(host, slot, bestWatts, outUnit);
+}
+
+
+//Read the combined signed grid-power slot. Each wired entity
+//contributes its signed live watts (a power sensor's value, or a
+//net-energy sensor's bracketed slope, both of which carry the
+//import / export sign); the contributions sum to the net grid power.
+//The optional grid-power-invert flips that sign once. A non-negative
+//net routes to the IMPORT chip (EXPORT hides), a negative net routes
+//to the EXPORT chip (IMPORT hides), so only the active direction
+//shows, never both at once.
+function readCombined(host: GridHost): void
+{
+    const entities = resolveEntities(host, 'combined');
+    const bufMap   = host._gridCombinedSamples;
+    const unitsMap = host._gridCombinedUnits;
+
+    //Drop buffers / units for entities removed from the config.
+    for (const key of Array.from(bufMap.keys()))   if (!entities.includes(key)) bufMap.delete(key);
+    for (const key of Array.from(unitsMap.keys())) if (!entities.includes(key)) unitsMap.delete(key);
+
+    let signedWatts = 0;
+    let sawAny      = false;
+    const nowMs     = Date.now();
+
+    for (const entity of entities)
+    {
+        //Same recorder backfill as the directional slots so the
+        //past-scrub bracket is populated even when the live state is
+        //slow to push.
+        ensureHistoryFetched(host, entity, bufMap);
+
+        const stateObj = host.hass.states?.[entity];
+        if (!stateObj) continue;
+        const raw  = stateObj.state;
+        const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
+        const num = parseNumericState(raw);
+        if (num === null) continue;
+
+        const u = unit.toLowerCase();
+        unitsMap.set(entity, u);
+
+        const stateTs = parseTimestamp(stateObj.last_updated)
+                     ?? parseTimestamp(stateObj.last_changed)
+                     ?? nowMs;
+
+        //Every form records a sample so the scrub path can re-derive
+        //the signed watts at a past instant from the same buffer.
+        recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
+
+        if (u === 'wh' || u === 'kwh' || u === 'mwh')
+        {
+            //Signed net-energy meter: its running total can fall while
+            //exporting, so the bracketed slope already carries the sign.
+            const out = bracketedSlopeWatts(bufMap.get(entity), u, nowMs, LIVE_SLOPE_LOOKBACK_MS);
+            if (out !== null)
+            {
+                signedWatts += out.watts;
+                sawAny = true;
+            }
+        }
+        else if (u === 'w' || u === 'kw' || u === 'mw')
+        {
+            //Signed power sensor: the value IS the signed watts.
+            signedWatts += pvNormalizeToWatts(num, unit);
+            sawAny = true;
+        }
+        else
+        {
+            //Unknown unit: forward the raw signed value untouched.
+            signedWatts += num;
+            sawAny = true;
+        }
+    }
+
+    if (!sawAny)
+    {
+        //No live derivation yet (states unavailable or buffers still
+        //warming). Leave the chips as-is rather than flashing a fake 0.
+        return;
+    }
+
+    if (gridPowerInvert(host.config)) signedWatts = -signedWatts;
+    applyCombinedSplit(host, signedWatts);
+}
+
+
+//Route a signed net-grid wattage to exactly one directional slot:
+//import when >= 0 (including the idle 0 W, so one chip stays visible
+//to signal the connection is alive), export when < 0. The opposite
+//slot is nulled so its chip hides.
+function applyCombinedSplit(host: GridHost, signedWatts: number): void
+{
+    if (signedWatts >= 0)
+    {
+        applyValue(host, 'import', signedWatts, 'W');
+        applyValue(host, 'export', null, '');
+    }
+    else
+    {
+        applyValue(host, 'import', null, '');
+        applyValue(host, 'export', -signedWatts, 'W');
+    }
 }
 
 
@@ -597,6 +734,42 @@ export function gridWattsAtTime(
         anyHit = true;
     }
     return anyHit ? total : null;
+}
+
+
+//True when the user wired a combined signed grid-power entity, which
+//then owns both chips and supersedes the separate import / export
+//slots. Used by the card to pick the right scrub derivation and by
+//the editor to collapse the directional pickers.
+export function isGridCombined(config: HeliosConfig | undefined): boolean
+{
+    const raw = (config as Record<string, unknown> | undefined)?.['grid-power-entity'];
+    if (Array.isArray(raw))
+    {
+        return (raw as unknown[]).some(s => typeof s === 'string' && s.trim() !== '');
+    }
+    return typeof raw === 'string' && raw.trim() !== '';
+}
+
+
+//Sign-convention flag for the combined slot. Default false means
+//positive = import; true flips it so positive = export.
+export function gridPowerInvert(config: HeliosConfig | undefined): boolean
+{
+    return (config as Record<string, unknown> | undefined)?.['grid-power-invert'] === true;
+}
+
+
+//Past-scrub derivation for the combined slot: the net signed watts
+//flowing at `targetMs`, summed across every wired source and flipped
+//by grid-power-invert. The caller splits the sign into the import /
+//export chips exactly as the live path does. Returns null when no
+//buffer can bracket the target.
+export function gridCombinedWattsAtTime(host: GridHost, targetMs: number): number | null
+{
+    const signed = gridWattsAtTime(host._gridCombinedSamples, host._gridCombinedUnits, targetMs);
+    if (signed === null) return null;
+    return gridPowerInvert(host.config) ? -signed : signed;
 }
 
 

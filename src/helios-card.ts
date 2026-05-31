@@ -71,7 +71,7 @@ import
     timelineWidthPct
 } from './card/timeline';
 import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
-import { refreshGrid, formatGridValue, gridWattsAtTime } from './card/grid';
+import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime } from './card/grid';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -406,6 +406,12 @@ export class HeliosCard extends LitElement
     //independently of the slot's overall normalised unit.
     _gridImportUnits: Map<string, string> = new Map();
     _gridExportUnits: Map<string, string> = new Map();
+    //Combined signed grid-power slot (grid-power-entity). When wired,
+    //refreshGrid derives the net signed watts from these buffers and
+    //routes the sign to the import / export chips; the directional
+    //slots above stay empty.
+    _gridCombinedSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
+    _gridCombinedUnits:   Map<string, string> = new Map();
     //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
     //when both are set.
     @state() _batterySocHistory: {
@@ -1396,14 +1402,40 @@ export class HeliosCard extends LitElement
         //quantises in the "wrong" direction by one Wh. A negative
         //IMPORT at scrub time is an EXPORT moment that the export
         //chip already reports; clamping to 0 keeps the slot honest.
-        const rawImport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
-            : this._gridImportValue;
-        const rawExport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
-            : this._gridExportValue;
-        const gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
-        const gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
+        //
+        //Combined mode (grid-power-entity) derives ONE signed net
+        //from a single buffer set and splits the sign across the two
+        //chips, exactly mirroring the live readCombined split: a
+        //non-negative net shows on import only, a negative net on
+        //export only. Live values already carry that split in
+        //_gridImportValue / _gridExportValue.
+        let gridImportDisplayWatts: number | null;
+        let gridExportDisplayWatts: number | null;
+        if (isGridCombined(this.config))
+        {
+            if (gridScrubTimeMs !== null)
+            {
+                const signed = gridCombinedWattsAtTime(this, gridScrubTimeMs);
+                gridImportDisplayWatts = signed === null ? null : (signed >= 0 ? signed : null);
+                gridExportDisplayWatts = signed === null ? null : (signed <  0 ? -signed : null);
+            }
+            else
+            {
+                gridImportDisplayWatts = this._gridImportValue;
+                gridExportDisplayWatts = this._gridExportValue;
+            }
+        }
+        else
+        {
+            const rawImport = gridScrubTimeMs !== null
+                ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
+                : this._gridImportValue;
+            const rawExport = gridScrubTimeMs !== null
+                ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
+                : this._gridExportValue;
+            gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
+            gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
+        }
         const gridImportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridImportUnit;
         const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridExportUnit;
 

@@ -986,6 +986,61 @@ export class HeliosCardEditor extends LitElement
         this._writeGridSources(slot, list);
     }
 
+    //Combined signed grid-power entity (grid-power-entity). A single
+    //picker rather than the multi-source list above: one signed
+    //sensor whose sign encodes the direction is the whole point, the
+    //array form (summed phases) stays a YAML-only power-user path.
+    //An array already in the config is collapsed to its first entry
+    //for display so the editor never silently drops the others.
+    private _readGridPowerEntity(): string
+    {
+        const raw = (this._cfg as Record<string, unknown> | undefined)?.['grid-power-entity'];
+        if (Array.isArray(raw))
+        {
+            const first = (raw as unknown[]).find(s => typeof s === 'string' && s.trim() !== '');
+            return typeof first === 'string' ? first.trim() : '';
+        }
+        return typeof raw === 'string' ? raw.trim() : '';
+    }
+
+    private _writeGridPowerEntity(value: string): void
+    {
+        if (!this._cfg) return;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        const trimmed = value.trim();
+        //Clearing the picker drops the combined slot entirely (and its
+        //sign flag with it) so the directional import / export pickers
+        //below reappear; the YAML stays clean of an empty key.
+        if (trimmed === '')
+        {
+            delete next['grid-power-entity'];
+            delete next['grid-power-invert'];
+        }
+        else
+        {
+            next['grid-power-entity'] = trimmed;
+        }
+        this._cfg = next as HeliosConfig;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+    }
+
+    private _readGridPowerInvert(): boolean
+    {
+        return (this._cfg as Record<string, unknown> | undefined)?.['grid-power-invert'] === true;
+    }
+
+    private _writeGridPowerInvert(invert: boolean): void
+    {
+        if (!this._cfg) return;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //Default (false) is the absent state, so we only persist the
+        //flag when the user picks the inverted convention.
+        if (invert) next['grid-power-invert'] = true;
+        else        delete next['grid-power-invert'];
+        this._cfg = next as HeliosConfig;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+    }
+
     private _renderGridSlot(slot: 'import' | 'export'): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
@@ -1039,6 +1094,71 @@ export class HeliosCardEditor extends LitElement
                         >+ ${t.editor.gridSourceAdd}</button>
                     ` : nothing}
                 `}
+            </div>
+        `;
+    }
+
+    //Combined signed-entity block at the top of the grid section. A
+    //single picker plus a sign-convention toggle; the toggle and its
+    //help only appear once an entity is wired so the empty state stays
+    //compact. When an entity is set the directional import / export
+    //blocks below are collapsed by the caller (the combined slot owns
+    //both chips).
+    private _renderGridCombined(): TemplateResult
+    {
+        const t      = pickTranslations(this.hass?.language);
+        const entity = this._readGridPowerEntity();
+        const invert = this._readGridPowerInvert();
+        return html`
+            <div class="grid-slot-block">
+                <div class="grid-slot-title">${t.editor.gridCombinedTitle}</div>
+                <div class="hint">${t.editor.gridCombinedHint}</div>
+                <div class="grid-source-row">
+                    <div class="grid-source-picker">
+                        ${this._pickerReady ? html`
+                            <ha-entity-picker
+                                allow-custom-entity
+                                .hass="${this.hass}"
+                                .value="${entity}"
+                                .includeDomains="${['sensor', 'input_number']}"
+                                @value-changed="${(e: CustomEvent) => this._writeGridPowerEntity(e.detail.value ?? '')}"
+                            ></ha-entity-picker>
+                        ` : html`
+                            <input
+                                type="text"
+                                .value="${entity}"
+                                placeholder="sensor.grid_power"
+                                @change="${(e: Event) => this._writeGridPowerEntity((e.target as HTMLInputElement).value)}"
+                            />
+                        `}
+                    </div>
+                    ${entity !== '' ? html`
+                        <button
+                            type="button"
+                            class="pv-array-remove"
+                            aria-label="${t.editor.gridSourceRemove}"
+                            @click="${() => this._writeGridPowerEntity('')}"
+                        >${t.editor.gridSourceRemove}</button>
+                    ` : nothing}
+                </div>
+                ${entity !== '' ? html`
+                    <div class="field">
+                        <span class="label">${t.editor.gridInvertLabel}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${(!invert) ? 'active' : ''}"
+                                @click="${() => this._writeGridPowerInvert(false)}"
+                            >${t.editor.gridInvertStandard}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${(invert) ? 'active' : ''}"
+                                @click="${() => this._writeGridPowerInvert(true)}"
+                            >${t.editor.gridInvertInverted}</button>
+                        </div>
+                    </div>
+                    <div class="field-help">${t.editor.gridInvertHelp}</div>
+                ` : nothing}
             </div>
         `;
     }
@@ -1522,8 +1642,11 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section" ?open="${this._openSection === 'grid'}" @toggle="${(e: Event) => this._onSectionToggle('grid', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.gridSection}</summary>
                     <div class="hint">${t.editor.gridHint}</div>
-                    ${this._renderGridSlot('import')}
-                    ${this._renderGridSlot('export')}
+                    ${this._renderGridCombined()}
+                    ${this._readGridPowerEntity() === '' ? html`
+                        ${this._renderGridSlot('import')}
+                        ${this._renderGridSlot('export')}
+                    ` : nothing}
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'shading'}" @toggle="${(e: Event) => this._onSectionToggle('shading', e)}">

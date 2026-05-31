@@ -5,6 +5,30 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## Unreleased
+
+### Combined signed grid entity
+
+- New `grid-power-entity` accepts a single signed sensor whose value
+  carries the flow direction (Fronius `P_Grid`, Shelly EM, P1 net
+  power, …) instead of two separate import / export meters. When it
+  is set it owns both chips and supersedes `grid-import-entity` /
+  `grid-export-entity`: a non-negative reading lights the IMPORT chip
+  (the EXPORT chip hides), a negative reading lights the EXPORT chip,
+  so only the active direction shows.
+- Works with a power sensor (W / kW / MW, the value IS the signed
+  watts) or a signed net-energy sensor (Wh / kWh / MWh whose total
+  falls while exporting, the bracketed slope IS the signed watts). A
+  list is summed, e.g. three signed per-phase sensors into one net.
+  The whole live + scrub derivation rides the existing per-entity
+  buffer / recorder-backfill machinery, so multi-tariff and combined
+  installs share the same slope path.
+- `grid-power-invert` flips the sign convention for meters that
+  report grid feed-in as positive (default: positive = import).
+- Editor grid section gains a combined-entity picker plus a sign
+  toggle; the directional import / export pickers collapse while a
+  combined entity is wired.
+
 ## v1.8.1
 
 > Point-fix release on top of v1.8.0. v1.8.0 is withdrawn from the

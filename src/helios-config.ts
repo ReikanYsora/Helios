@@ -167,6 +167,33 @@ export interface HeliosConfig
     //visual placement of the readouts is being reworked.
     'grid-import-entity'?:    unknown;
     'grid-export-entity'?:    unknown;
+    //Optional. Single COMBINED grid power/energy entity whose sign
+    //encodes the direction: many smart meters and inverters expose
+    //one signed sensor (Fronius P_Grid, Shelly EM, P1 net power,
+    //...) instead of two separate import / export indexes. When set,
+    //this entity drives BOTH chips: the card reads its sign and
+    //routes a positive value to the IMPORT chip and a negative value
+    //to the EXPORT chip (one direction at a time, the other chip is
+    //hidden). It takes precedence over grid-import-entity /
+    //grid-export-entity, which are ignored while it is configured.
+    //
+    //Accepts a power sensor (W / kW / MW, the value IS the signed
+    //watts) or a signed net-energy sensor (Wh / kWh / MWh whose
+    //running total can go down when exporting, the slope IS the
+    //signed watts). An array is summed (e.g. three signed per-phase
+    //power sensors -> net grid power).
+    //
+    //Default sign convention: positive = import (drawing from the
+    //grid), negative = export (feeding the grid), matching the most
+    //common meter / inverter convention. Flip it with
+    //grid-power-invert when the upstream sensor reports the opposite.
+    'grid-power-entity'?:     unknown;
+    //Optional boolean. When true, the combined grid-power-entity sign
+    //is flipped at ingest so a positive reading is treated as EXPORT
+    //and a negative reading as IMPORT. Use it when the meter reports
+    //grid feed-in as positive. Default false. Ignored when
+    //grid-power-entity is not set.
+    'grid-power-invert'?:     unknown;
     'date-format'?:           unknown;
     //'12h' | '24h'. Default: '24h'. Picks between locale-
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
