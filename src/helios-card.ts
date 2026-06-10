@@ -386,11 +386,6 @@ export class HeliosCard extends LitElement
     @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
     _pvCalibStatsFetchKey  = '';
     _pvCalibStatsFetching  = false;
-    //5-minute long-term-statistics series feeding the unified data source's past-production curve (5 days). Same contract as `_pvCalibStats`, just at a finer
-    //period. ~1.4k rows for 5 days.
-    @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
-    _pvTrainerStatsFetchKey  = '';
-    _pvTrainerStatsFetching  = false;
     //Recorder `change` series for the solar energy meter(s): the canonical past-production source for
     //the unified store + chip scrub. Reset-corrected, unit-normalised kWh per 5-minute bucket, the
     //same metric the HA Energy dashboard consumes. Replaces the client-side counter differentiation.
@@ -398,12 +393,9 @@ export class HeliosCard extends LitElement
     _pvChangeSeriesFetchKey  = '';
     _pvChangeSeriesFetching  = false;
     //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
-    //(`inverter-cutoff-soc-pct`). Reserved for future use after the shading-map trainer retirement. Null when the guard is
-    //off or no battery is configured. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
+    //(`inverter-cutoff-soc-pct`). Null when the guard is off or no battery is configured. Not reactive: pulled directly and we never
+    //need to re-render on a SoC sample change.
     _batteryHistory: { times: Date[]; values: number[] } | null = null;
-    //Rolling buffer of state samples. For cumulative-energy sensors this gives a "last minute" instantaneous rate, fresher than the historical fetch
-    //which only refreshes per timeline range.
-    _pvSampleBuffer: Array<{ t: number; v: number }> = [];
     //Home-battery state, populated when the HA Energy dashboard exposes at least one battery source (`stat_rate`,
     //`stat_energy_from`, `stat_energy_to` or `stat_soc`). Live readings; historical series lives in the *History fields
     //below. Units are kept alongside the values so the chip can format kW vs W without re-reading the state.
@@ -862,13 +854,10 @@ export class HeliosCard extends LitElement
         //from scratch instead of pulling from the cached fetch key.
         this._pvHistory                   = null;
         this._pvCalibStats                = null;
-        this._pvTrainerStats              = null;
         this._pvChangeSeries              = null;
         this._pvChangeSeriesFetchKey      = '';
-        this._pvSampleBuffer              = [];
         this._pvFetchKey                  = '';
         this._pvCalibStatsFetchKey        = '';
-        this._pvTrainerStatsFetchKey      = '';
         this._pvHistoryDiagnostics        = null;
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;

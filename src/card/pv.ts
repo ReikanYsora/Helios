@@ -44,12 +44,6 @@ export function resolvePvLiveEntity(defaults: EnergyDefaults): string
 const DEFAULT_PANEL_HEIGHT_M = 5;
 
 
-//Time + value pair stored in the rolling live-sample buffer used to derive an instantaneous rate from a cumulative energy entity.
-export interface PvSample
-{
-    t: number;
-    v: number;
-}
 
 //Fetched historical series, parallel times[] / values[] arrays so a binary or linear search can locate a sample by timestamp without re-allocating
 //wrapper objects.
@@ -86,7 +80,6 @@ export interface PvHost extends LoadingTrackerHost
     //value. The map is keyed by entity id; on single-source installs it carries a single entry that equals
     //`_pvHistory`. Empty map = aggregated only (single-source or pre-fetch boot window).
     _pvHistoryPerEntity:    Map<string, PvHistory>;
-    _pvSampleBuffer:        PvSample[];
     _pvFetchKey:            string;
     _pvFetching:            boolean;
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
@@ -103,12 +96,6 @@ export interface PvHost extends LoadingTrackerHost
     _pvCalibStats:          PvHistory | null;
     _pvCalibStatsFetchKey:  string;
     _pvCalibStatsFetching:  boolean;
-    //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same payload contract as `_pvCalibStats` but at a finer
-    //period for the trainer's 30-minute buckets. ~8.6k rows for 30 days. Null when statistics are unavailable; trainer then degrades to
-    //`_pvHistory`.
-    _pvTrainerStats:        PvHistory | null;
-    _pvTrainerStatsFetchKey: string;
-    _pvTrainerStatsFetching: boolean;
     //Recorder `change` series for the solar energy meter(s), 5-minute buckets over the store's past
     //window. This is the canonical past-production source for the unified store (timeline + dashboard
     //graph) and the chip scrub: the recorder hands back reset-corrected, unit-normalised kWh per
@@ -155,7 +142,6 @@ interface PvStatsCacheEntry
 
 const _pvHistoryCache:        Map<string, PvHistoryCacheEntry> = new Map();
 const _pvCalibStatsCache:     Map<string, PvStatsCacheEntry>   = new Map();
-const _pvTrainerStatsCache:   Map<string, PvStatsCacheEntry>   = new Map();
 
 
 function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): PvStatsCacheEntry | null
@@ -174,14 +160,13 @@ function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): Pv
 }
 
 
-//Wipe the three module-level PV caches. Called from the card's `resetDataCache()` hook so the editor's "reset" button actually drops the
+//Wipe the module-level PV caches. Called from the card's `resetDataCache()` hook so the editor's "reset" button actually drops the
 //cross-mount memo. Without this call the next refresh would short-circuit on a cache hit and re-populate the slot with the exact data
 //the user just asked to clear.
 export function clearPvModuleCaches(): void
 {
     _pvHistoryCache.clear();
     _pvCalibStatsCache.clear();
-    _pvTrainerStatsCache.clear();
 }
 
 
@@ -295,23 +280,9 @@ export function refreshPv(host: PvHost): void
             host._pvUnit = nextUnit;
         }
 
-        //Append the freshly-read state to the rolling buffer if the entity timestamp moved forward since last cycle. We trim entries older than 5 min
-        //so the buffer stays tiny even on entities that update many times per second.
         if (nextValue !== null)
         {
             const ts = liveTs || Date.now();
-            const buf = host._pvSampleBuffer;
-            const last = buf.length > 0 ? buf[buf.length - 1] : null;
-            if (!last || ts > last.t)
-            {
-                buf.push({ t: ts, v: nextValue });
-                const cutoff = Date.now() - 5 * 60 * 1000;
-                while (buf.length > 1 && buf[0].t < cutoff)
-                {
-                    buf.shift();
-                }
-            }
-
             //Extend `_pvHistory`'s tail with the live sample so the chart's right edge tracks the live state between hourly history
             //re-fetches. The history fetch is keyed by (entity, fetch-range) and `range.end` is pinned to the hourly weather grid,
             //so without this the plotted PV curve flatlines at the value captured at the last hour boundary even while the chip
@@ -356,11 +327,6 @@ export function refreshPv(host: PvHost): void
         if (host._pvCurrent !== null)
         {
             host._pvCurrent = null;
-        }
-        //Drop the buffer when the entity disappears so we don't serve stale samples after the user clears the config.
-        if (host._pvSampleBuffer.length > 0)
-        {
-            host._pvSampleBuffer = [];
         }
     }
 
@@ -430,7 +396,7 @@ export function refreshPv(host: PvHost): void
                 const calibIds     = sortedLive.length > 0 ? sortedLive : [entity];
                 const unitLow      = (host._pvUnit || '').toLowerCase();
                 const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
-                fetchPvStatistics(host, calibIds, calibStart, fetchEnd, 'hour', 'calib', calibKey, isCumulative);
+                fetchPvStatistics(host, calibIds, calibStart, fetchEnd, 'hour', calibKey, isCumulative);
             }
         }
     }
@@ -805,9 +771,7 @@ export async function fetchPvHistory(
 //magnitude reduction in payload size, which keeps the recorder responsive on installs whose PV entity reports several samples per second (Victron
 //Cerbo and friends).
 //
-//`role` selects the target slot: `'calib'` populates `host._pvCalibStats` for the 5-day forecast calibration, `'trainer'` populates
-//`host._pvTrainerStats` for the 30-day shading-map trainer. The two paths are independent so a slow trainer fetch does not delay the calibration
-//landing.
+//Populates `host._pvCalibStats` for the 5-day forecast calibration.
 //
 //Field selection depends on the entity unit. Power sensors carry the bucket mean. Cumulative-energy sensors (`Wh` / `kWh` / `MWh`) carry
 //their cumulative reading in the bucket `state` field. We ask for BOTH columns in the WS payload and let the parser prefer `mean` when
@@ -817,8 +781,8 @@ export async function fetchPvHistory(
 //
 //Anchoring: cumulative samples (taken from `state`) anchor at the bucket midpoint to match the power-sensor convention. The slight
 //attribution drift across the day boundary is absorbed by `calibration.ts:actualKwhForDay`'s guard widening.
-//Power samples (taken from `mean`) anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` and
-//`shadingTrainer.ts` matches the existing semantics. Buckets with both `mean` AND `state` null are dropped silently.
+//Power samples (taken from `mean`) anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` matches the
+//existing semantics. Buckets with both `mean` AND `state` null are dropped silently.
 //
 //Long-term statistics require the source entity to carry a `state_class` (`measurement`, `total`, or `total_increasing`) so HA tracks it. When the
 //entity is not LTS-tracked HA returns an empty array; we surface that as an empty `PvHistory` and let the consumer fall back to `_pvHistory`.
@@ -828,7 +792,6 @@ export async function fetchPvStatistics(
     start: Date,
     end: Date,
     period: '5minute' | 'hour' | 'day' | 'week' | 'month',
-    role: 'calib' | 'trainer',
     cacheKey: string = '',
     //Same `cumulative` flag as fetchPvHistory. For LTS this matters because cumulative entities populate the `state`
     //field with the bucket-end lifetime value, which mirrors the multi-source phantom-jump risk if one source comes
@@ -841,9 +804,9 @@ export async function fetchPvStatistics(
         return;
     }
 
-    const fetchingFlag    = role === 'calib' ? '_pvCalibStatsFetching'    : '_pvTrainerStatsFetching';
-    const targetSlot      = role === 'calib' ? '_pvCalibStats'            : '_pvTrainerStats';
-    const cache           = role === 'calib' ? _pvCalibStatsCache         : _pvTrainerStatsCache;
+    const fetchingFlag    = '_pvCalibStatsFetching' as const;
+    const targetSlot      = '_pvCalibStats' as const;
+    const cache           = _pvCalibStatsCache;
 
     host[fetchingFlag] = true;
     try
@@ -927,12 +890,12 @@ export async function fetchPvStatistics(
     {
         if (e instanceof WsTimeoutError)
         {
-            console.warn(`[HELIOS] PV ${role} statistics fetch timed out (${e.timeoutMs} ms), consumer degrades to raw _pvHistory.`);
+            console.warn(`[HELIOS] PV calib statistics fetch timed out (${e.timeoutMs} ms), consumer degrades to raw _pvHistory.`);
         }
         else
         {
             //LTS endpoint missing or entity not tracked. Surface an empty series so the consumer can degrade to `_pvHistory`.
-            console.warn(`[HELIOS] PV statistics fetch failed (${role}):`, e);
+            console.warn('[HELIOS] PV calib statistics fetch failed:', e);
         }
         host[targetSlot] = { times: [], values: [] };
     }

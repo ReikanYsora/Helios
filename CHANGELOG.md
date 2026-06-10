@@ -35,6 +35,19 @@ bucket instead of a fabricated 0.
 The watt curve is the bucket's kWh / bucket-duration, the canonical "power from energy" any HA
 template would compute, so where HA has a number Helios shows the same number.
 
+### Cleanup + data-interval control reframed (beta.4)
+
+With every measured series now sourced from the recorder `change` metric, the leftover client-side
+derivation state is gone: the PV rolling sample buffer (`_pvSampleBuffer`), the 5-minute trainer
+LTS slot (`_pvTrainerStats` + its cache + fetch) and the `fetchPvStatistics` `role` switch are
+removed (the function is calibration-only now).
+
+The data-interval control is reframed from "update frequency" to "graph detail". It no longer
+changes the data (always Home Assistant's 5-minute statistics now); it only controls how densely
+the curve is drawn, so it reads as a perf / smoothing lever alongside the display radius: 1 point
+per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
++ help updated in EN + FR.
+
 ### Grid import / export read the recorder `change` metric (#200)
 
 The grid past series (timeline curve, dashboard graph, scrub tooltip) drops the per-entity
