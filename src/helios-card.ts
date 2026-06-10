@@ -1634,22 +1634,20 @@ export class HeliosCard extends LitElement
         const batterySocText = showSocChip
             ? `${Math.round(activeBatterySoc!)} %`
             : '';
+        //Chip value uses HA's Energy Sources sign convention: discharge positive (the battery
+        //supplies power), charge negative (it consumes / stores). `activeBatteryPower` is the
+        //physical charge-positive net, so negate it for the displayed sign. The colour + leader flow
+        //below stay on the physical value so charging still reads pink + flows INTO the battery.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, activeBatteryPower!, activeBatteryUnit)
+            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit)
             : '';
 
-        //Charging / discharging direction drives the SVG arrow
-        //path direction on the PV↔Power leader. Sign comes straight
-        //from the entity (positive = charging by convention).
-        //Charging: arrow flows PV → Power (energy moving INTO the
-        //battery). Discharging: arrow flows Power → PV (energy
-        //moving OUT). The dashes flow at a speed proportional to
-        //|P|, saturating at the same ~5 kW threshold as the PV
-        //leader so all energy-flow streams read on the same scale.
-        //Battery direction sign: positive = charging (energy IN),
-        //negative = discharging (OUT). Drives the dual-tone leader
-        //color (pink for charging, teal for discharging, the HA
-        //Energy palette identity).
+        //Charging / discharging direction drives the SVG arrow path direction on the PV↔Power
+        //leader, off the PHYSICAL sign (positive = charging). Charging: arrow flows PV → Power
+        //(energy moving INTO the battery), dashes at a speed proportional to |P| saturating at the
+        //same ~5 kW threshold as the PV leader. The dual-tone leader colour tracks the physical
+        //direction too (battery-in tint charging, battery-out tint discharging), independent of the
+        //HA-sign flip applied to the chip text above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
         const batteryLeaderColor = batteryCharging
             ? 'var(--energy-battery-in-color, #f06292)'

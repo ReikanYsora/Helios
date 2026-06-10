@@ -58,10 +58,11 @@ on the same day). They now sum the recorder `change` buckets directly over each 
 the HA Energy dashboard to the watt-hour.
 
 The net battery daily total also adopts HA's Sources sign convention: discharge positive, charge
-negative (the battery row in HA reads "−0,21 kWh" on a day it net-charged). The radial badge value
-now matches HA sign-for-sign; the badge colour still tracks the physical direction (charge =
-battery-in tint, discharge = battery-out tint). The live battery chip on the map keeps the
-charge-positive power convention for now.
+negative (the battery row in HA reads "−0,21 kWh" on a day it net-charged). Every battery value
+now matches HA sign-for-sign: the radial badge daily + hover AND the live battery chip on the 3D
+map all read charge as negative, discharge as positive. The colour + leader-flow direction still
+track the physical direction (charge = battery-in tint, energy flowing into the battery), so the
+sign convention and the visual direction stay decoupled and consistent everywhere.
 
 ### Grid import / export read the recorder `change` metric (#200)
 
