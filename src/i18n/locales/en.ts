@@ -58,7 +58,7 @@ export const en: Translations = {
         autoRotateOff:      'Off',
         dataDisplaySection:           'Data display',
         displayUpdateFrequency:       'Update frequency',
-        displayUpdateFrequencyHelp:   'How often per hour every chart refreshes its values: 1 reads as a single point per hour (smooth curve, lowest CPU), 60 reads as one point per minute (precise curve, highest CPU). Default 4 = a value every 15 minutes, a balanced trade-off between visible precision and rendering cost. The forecast curve is unaffected: it always runs at the weather model\'s native hourly cadence.',
+        displayUpdateFrequencyHelp:   'How often per hour every chart refreshes its values: 1 reads as a single point per hour (smooth curve, lowest CPU), 12 reads as one point every 5 minutes (precise curve, highest CPU). Default 4 = a value every 15 minutes, a balanced trade-off between visible precision and rendering cost. The ceiling is 12 / h because 5 minutes is the finest resolution Home Assistant statistics carry. The forecast curve is unaffected: it always runs at the weather model\'s native hourly cadence.',
         installationSection: 'PV installation',
         installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Inverter max output (kW)',

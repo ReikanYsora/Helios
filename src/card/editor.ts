@@ -11,6 +11,9 @@ import
     DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
+    DEFAULT_DISPLAY_RADIUS_M,
+    MIN_DISPLAY_RADIUS_M,
+    MAX_DISPLAY_RADIUS_M,
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 
@@ -788,6 +791,21 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.showLabelsHint}</div>
+                <label class="field">
+                    <span class="label">${t.editor.displayRadius ?? 'Rayon d\'affichage'}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range"
+                            min="${MIN_DISPLAY_RADIUS_M}"
+                            max="${MAX_DISPLAY_RADIUS_M}"
+                            step="10"
+                            .value="${String(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M)}"
+                            @input="${(e: Event) => this._numSlider('display-radius', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M), 10)} m</span>
+                    </div>
+                </label>
+                <div class="hint">${t.editor.displayRadiusHelp ?? 'Distance autour de la maison dans laquelle les bâtiments, les cellules LiDAR et les ombres sont rendus. Baissez cette valeur (jusqu\'à 50 m) pour fluidifier l\'affichage sur un téléphone ancien ou lent ; montez-la (jusqu\'à 500 m) pour une vue plus large. Par défaut 200 m.'}</div>
                 <div class="field">
                     <span class="label">${t.editor.autoRotate}</span>
                     <div class="segmented-toggle">

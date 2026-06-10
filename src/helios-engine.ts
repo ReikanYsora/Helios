@@ -30,7 +30,8 @@ import
 {
     type HeliosConfig,
     type LidarPrecisionLevel,
-    DEFAULT_DISPLAY_RADIUS_M,
+    DISPLAY_FADE_DELTA_M,
+    displayRadiusM,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
@@ -38,7 +39,6 @@ import
     LIDAR_PRECISION_PITCH_MULT,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_OPACITY,
-    LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
 } from './helios-config';
 
 
@@ -3246,8 +3246,9 @@ export class HeliosEngine
         this._lidarViewLayer.setViewColor(rgb[0], rgb[1], rgb[2]);
     }
 
-    //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / DEFAULT_DISPLAY_RADIUS_M, both compile-time constants), no reason to
-    //push it on every slider tick. Called once from _initLidarViewLayer and that's it.
+    //Push the LiDAR view fade range to the GL layer. Called once from _initLidarViewLayer and again
+    //from updateConfig whenever the display radius changes, since the fade band is derived from the
+    //live radius rather than a compile-time constant.
     private _pushLidarViewFadeRange(): void
     {
         if (!this._lidarViewLayer)
@@ -3283,13 +3284,14 @@ export class HeliosEngine
         this._lidarViewLayer?.setAlphaFade(alpha);
     }
 
-    //Distance-based opacity fall-off bounds for the LiDAR view. Full opacity inside
-    //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth fade out at DEFAULT_DISPLAY_RADIUS_M. Both derive from
-    //the same shared display radius (see helios-config.ts) so buildings, raster shadows and the
-    //LiDAR overlay all stop at the same boundary.
+    //Distance-based opacity fall-off bounds for the LiDAR view. Full opacity up to one fade-band
+    //inside the display radius, smooth fade out at the radius itself. Derived from the live display
+    //radius so buildings, raster shadows and the LiDAR overlay all stop at the same boundary and the
+    //fade tracks a user-lowered radius instead of staying pinned to the 200 m default.
     private _lidarViewFadeRange(): [fullMeters: number, fadeMeters: number]
     {
-        return [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M];
+        const radius = this._buildingRadiusMeters();
+        return [Math.max(0, radius - DISPLAY_FADE_DELTA_M), radius];
     }
 
     private _lidarViewPointSizePx(): number
@@ -3363,14 +3365,13 @@ export class HeliosEngine
         }
     }
 
-    //Display radius is fixed at DEFAULT_DISPLAY_RADIUS_M (200 m), shared with the LiDAR overlay +
-    //raster shadow extent so the three layers stop at the same boundary. The editor no longer
-    //exposes a slider for it; the constant in helios-config.ts is the single source of truth so
-    //every consumer (basemap bbox, LiDAR fetch extent, projection clip, MapLibre bounds) stays in
-    //lockstep.
+    //Global display radius, shared by the basemap bbox, the building extent, the LiDAR overlay +
+    //raster shadow extent, the projection clip and the MapLibre bounds so every layer stops at the
+    //same boundary. Resolved from the `display-radius` editor slider (clamped 50-500 m, default 200);
+    //lowering it shrinks every layer's geometry in lockstep, the primary perf lever on old phones.
     private _buildingRadiusMeters(): number
     {
-        return DEFAULT_DISPLAY_RADIUS_M;
+        return displayRadiusM(this.cfg);
     }
 
     //Clamp MapLibre's camera bounds to a tight bbox around the home,
@@ -4146,19 +4147,20 @@ export class HeliosEngine
                         this._shadowCanvas.width  = rasterSize;
                         this._shadowCanvas.height = rasterSize;
                     }
-                    //Shadow raster fade matches the LiDAR view fade radii (full opacity inside
-                    //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, ramped to 0 at DEFAULT_DISPLAY_RADIUS_M) so the three
+                    //Shadow raster fade matches the LiDAR view fade radii (full opacity up to one
+                    //fade-band inside the display radius, ramped to 0 at the radius) so the three
                     //layers (buildings, LiDAR, shadow raster) share the same outer boundary and the shadow
-                    //disc no longer reads as a hard circular cut.
+                    //disc no longer reads as a hard circular cut. Both bounds track the live display radius.
                     const radiusM = this._buildingRadiusMeters();
+                    const [fullR, fadeR] = this._lidarViewFadeRange();
                     paintShadowRaster(
                         this.map,
                         this._shadowCanvas,
                         projected,
                         shadowBoundsCornersLL(this.homeLat, this.homeLon, radiusM),
                         radiusM,
-                        LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
-                        DEFAULT_DISPLAY_RADIUS_M,
+                        fullR,
+                        fadeR,
                     );
                 }
             }
@@ -5597,6 +5599,22 @@ export class HeliosEngine
             this._buildingsData     = null;
             this._buildingsFetchKey = '';
             this._addBuildings();
+            if (nextRadius !== prevRadius)
+            {
+                //The display radius also drives the camera bounds, the LiDAR raster extent and the
+                //LiDAR / shadow fade band. Re-clamp the bounds, re-push the fade range and invalidate
+                //the LiDAR shadow fetch so the whole rendered disc resizes in lockstep when the user
+                //drags the slider.
+                this._applyMapBounds();
+                this._pushLidarViewFadeRange();
+                this._lidarShadowKey          = '';
+                this._lidarShadowFailedKey    = '';
+                this._lidarShadowFailureCount = 0;
+                this._lidarShadowBackoffUntil = 0;
+                this._lidarShadowFeatures     = null;
+                this._lidarShadowDiagnostics  = null;
+                this._ensureLidarFetched();
+            }
         }
         else
         {

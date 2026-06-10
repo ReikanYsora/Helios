@@ -136,9 +136,13 @@ export interface HeliosConfig
     //Default: 100 (current behaviour, hugs the card edges at 8 px).
     //Below 100, the time-bar stays centred horizontally and the
     //chart cards shrink proportionally.
-    //Radius (m) around the home within which surrounding buildings are
-    //rendered. Buildings outside are not drawn at all. Default 100 m.
+    //Legacy per-layer building radius, retired in favour of `display-radius`. Kept in the type only
+    //so the editor's retired-key strip can still recognise + remove it on save.
     'building-radius'?:        unknown;
+    //Global display radius in metres: the single distance around the home within which buildings,
+    //LiDAR cells and raster shadows are rendered. Clamped to [50, 500], default 200. Lowering it is
+    //the primary perf lever on older phones (less geometry projected per frame).
+    'display-radius'?:         unknown;
     //Opacity 0..1 of the surrounding buildings; home stays at 1.0.
     //Default 0.25, a "ghost" surround that conveys urban context
     //without competing with the data overlays.
@@ -285,10 +289,17 @@ export const DEFAULT_GRID_EXPORT_COLOR_HEX: string = '#8353d1';  //--energy-grid
 //reason about what the user actually saw when comparing layers, and changes in one drifted out of
 //sync with the other. Now everything reads from DEFAULT_DISPLAY_RADIUS_M.
 //
-//200 m is tuned so the home cluster reads as "the buildings around my house" without dragging the
-//basemap + per-frame projection on mid-range phones. The LiDAR overlay fades to zero opacity at the
-//outer boundary, see DISPLAY_FADE_DELTA_M below.
+//200 m is the default: the home cluster reads as "the buildings around my house" without dragging
+//the basemap + per-frame projection on mid-range phones. The user can dial it down via the
+//`display-radius` editor slider on older / slower devices where rendering the full 200 m disc of
+//buildings + LiDAR cells + shadows is the bottleneck, or up for a wider survey. The LiDAR overlay
+//fades to zero opacity at the outer boundary, see DISPLAY_FADE_DELTA_M below.
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
+//Editor slider bounds for the global display radius. 50 m keeps the rendered disc tiny (the perf
+//floor for old phones); 500 m is the widest survey before the per-frame projection of building +
+//cell + shadow geometry starts to cost on mid-range hardware.
+export const MIN_DISPLAY_RADIUS_M = 50;
+export const MAX_DISPLAY_RADIUS_M = 500;
 //Width of the LiDAR fade band, measured INWARD from DEFAULT_DISPLAY_RADIUS_M. Cells whose distance
 //is in [DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M, DEFAULT_DISPLAY_RADIUS_M] smoothstep-fade
 //from full opacity down to zero. Buildings + raster shadows are binary at the display radius (no
@@ -321,6 +332,22 @@ export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined):
     const r = Math.round(n);
     if (r < MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
     if (r > MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    return r;
+}
+
+
+//Resolve the global display radius in metres from the `display-radius` config key, clamped to
+//[MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M], defaulting to DEFAULT_DISPLAY_RADIUS_M for missing /
+//invalid values. Single source of truth for the radius the engine renders buildings, LiDAR cells and
+//raster shadows within, so lowering it on an old phone shrinks every layer's geometry in lockstep.
+export function displayRadiusM(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['display-radius'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return DEFAULT_DISPLAY_RADIUS_M; }
+    const r = Math.round(n);
+    if (r < MIN_DISPLAY_RADIUS_M) { return MIN_DISPLAY_RADIUS_M; }
+    if (r > MAX_DISPLAY_RADIUS_M) { return MAX_DISPLAY_RADIUS_M; }
     return r;
 }
 

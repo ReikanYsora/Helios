@@ -39,7 +39,8 @@ export const VISUAL_CONFIG_KEYS = [
     //solar-radiation-entity, when set, feeds the engine sensor samples that override Open-Meteo for the live + past irradiance
     //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
     'solar-radiation-entity',
-    //building-radius / cluster-radius invalidate cache and refetch; opacity is a cheap paint-property update.
+    //display-radius / cluster-radius invalidate cache and refetch; opacity is a cheap paint-property update.
+    'display-radius',
     'building-cluster-radius',
     'building-opacity',
     //Timeline visibility + chart UX preferences.

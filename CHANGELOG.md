@@ -35,6 +35,18 @@ bucket instead of a fabricated 0.
 The watt curve is the bucket's kWh / bucket-duration, the canonical "power from energy" any HA
 template would compute, so where HA has a number Helios shows the same number.
 
+### Global display radius back as an editor slider (50-500 m)
+
+The display radius (the distance around the home within which buildings, LiDAR cells and raster
+shadows render) is configurable again from the visual editor, in the UI & map section above the
+auto-rotate toggle. v1.8.3 had collapsed it to a fixed 200 m constant; a user reported the full
+disc as the cause of slowdowns on older phones, so the slider returns as the primary perf lever:
+drop it toward 50 m to render less geometry per frame, raise it toward 500 m for a wider survey,
+default stays 200 m. The new `display-radius` config key feeds a single resolver (`displayRadiusM`)
+that every layer reads, so the basemap bbox, building extent, LiDAR overlay, shadow raster, camera
+bounds and the LiDAR fade band all resize in lockstep when the slider moves. Label + help are
+French for now; other locales fall back to an inline English default.
+
 ### Data-interval control capped at 12 / hour (5 minutes)
 
 The data-interval slider now ranges 1-12 buckets / hour instead of 1-60. 12 / hour = 5 minutes,

@@ -96,6 +96,11 @@ export interface Translations
         dataDisplaySection:           string;
         displayUpdateFrequency:       string;
         displayUpdateFrequencyHelp:   string;
+        //Global display radius slider (50-500 m). Optional: only the FR locale carries it for now,
+        //every other locale falls back to the inline default in the editor. Re-added in v1.8.4 as a
+        //perf lever for older phones (smaller rendered disc = less geometry projected per frame).
+        displayRadius?:               string;
+        displayRadiusHelp?:           string;
         //Single section for the user's PV install. Bundles the inverter cap, the per-row panel orientation, the inverter-cutoff
         //SoC guard and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy
         //dashboard equivalent.
