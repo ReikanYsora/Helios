@@ -238,6 +238,30 @@ export function wattsAtFromChangeSeries(
 }
 
 
+//Sum the recorder `change` over a single calendar day [dayStartMs, dayEndMs). Buckets are keyed on
+//their start, so this returns the exact kWh the recorder attributes to that day, the same number the
+//HA Energy dashboard's daily total shows, with no curve integration and no gap interpolation (which
+//is what made the integrated-curve daily totals drift a percent or two above HA). Returns null when
+//no bucket falls in the day so the caller can hide / fall back instead of showing a phantom zero.
+export function sumChangeForDay(
+    buckets:    ChangeBucket[] | null,
+    dayStartMs: number,
+    dayEndMs:   number,
+): number | null
+{
+    if (!buckets || buckets.length === 0) { return null; }
+    let sum    = 0;
+    let anyHit = false;
+    for (const b of buckets)
+    {
+        if (b.startMs < dayStartMs || b.startMs >= dayEndMs) { continue; }
+        sum   += b.kwh;
+        anyHit = true;
+    }
+    return anyHit ? sum : null;
+}
+
+
 function periodMs(period: StatPeriod): number
 {
     if (period === '5minute') { return 5 * 60_000; }

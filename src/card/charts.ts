@@ -18,7 +18,6 @@ import
 {
     pvCalibK,
     pvInverterMaxW,
-    pvNormalizeToWatts,
     computePvPowerWeighted,
     type PvHistory
 } from './pv';
@@ -26,6 +25,7 @@ import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { computeForecastCalibration } from './calibration';
 import { sliceForRange } from './unifiedStore';
+import { sumChangeForDay, type ChangeBucket } from './energy-stats';
 
 
 //Per-point forecast multiplier. Identity on calR today; kept as a single hook so a future
@@ -701,6 +701,10 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
+    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. Used to sum exact
+    //per-day produced kWh (sumChangeForDay) so the daily totals match the HA Energy dashboard to the
+    //watt-hour instead of drifting from the integrated, gap-interpolated curve.
+    readonly _pvChangeSeries: ChangeBucket[] | null;
     //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
     //source and the scrub tooltip can show a per-source breakdown next to the summed value. Single-source installs
     //carry a single entry equal to the aggregate; multi-source installs carry one entry per HA Energy source.
@@ -1533,105 +1537,27 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         return d.getTime();
     };
 
-    //Pass 1: past + today-so-far from the observed history. Combines two sources so days that fall outside the narrow raw window
-    //still get a value:
-    //  - `_pvHistory` (~2 days raw, finest resolution) covers today and yesterday.
-    //  - `_pvCalibStats` (5 days hourly stats) covers days 2-5 in the past so the per-day chips on the timeline keep showing real
-    //    figures instead of falling silently to zero.
-    //Days covered by `_pvHistory` are integrated from that slot only; the stats slot fills in days the raw window does not reach.
-    const unit = (host._pvUnit || '').toLowerCase();
-    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-
-    const rawHist = host._pvHistory;
-    const rawFirstMs = (rawHist && rawHist.times.length > 0) ? rawHist.times[0].getTime() : null;
-    const rawLastMs  = (rawHist && rawHist.times.length > 0) ? rawHist.times[rawHist.times.length - 1].getTime() : null;
-
-    const integrate = (
-        h:           PvHistory,
-        bucketGuard: (tMs: number) => boolean,
-    ): void =>
+    //Pass 1: past + today-so-far, summed directly from the recorder `change` buckets per day so each
+    //day's produced kWh matches the HA Energy dashboard to the watt-hour. No curve integration, no gap
+    //interpolation (which was inflating the totals a percent or two above HA). The change series spans
+    //the store's J-2 past window, which covers every past day the timeline can show.
+    const changeSeries = host._pvChangeSeries;
+    if (changeSeries && changeSeries.length > 0)
     {
-        if (isCumulativeEnergy)
+        const cursor = new Date(startMs);
+        cursor.setHours(0, 0, 0, 0);
+        while (cursor.getTime() < endMsAbs)
         {
-            //Cumulative energy sensor: difference consecutive
-            //samples and sum the deltas per day. Counter resets
-            //(dv < 0) are dropped, same convention the chart uses.
-            for (let i = 1; i < h.times.length; i++)
+            const ds   = cursor.getTime();
+            const next = new Date(cursor);
+            next.setDate(next.getDate() + 1);
+            const kwh = sumChangeForDay(changeSeries, ds, next.getTime());
+            if (kwh !== null)
             {
-                const tMs = h.times[i].getTime();
-                if (tMs < startMs || tMs > endMsAbs)
-                {
-                    continue;
-                }
-                if (!bucketGuard(tMs))
-                {
-                    continue;
-                }
-                const dv = h.values[i] - h.values[i - 1];
-                if (!isFinite(dv) || dv < 0)
-                {
-                    continue;
-                }
-                const kwh = unit === 'mwh' ? dv * 1000
-                          : unit === 'wh'  ? dv / 1000
-                          : dv;
-                const k = dayKey(tMs);
-                out.set(k, (out.get(k) ?? 0) + kwh);
+                out.set(ds, Math.max(0, kwh));
             }
+            cursor.setTime(next.getTime());
         }
-        else
-        {
-            //Power sensor: trapezoidal integration of the
-            //instantaneous reading over each consecutive pair.
-            //Skip gaps > 6 h (likely sensor outage, integrating
-            //across them would invent energy).
-            for (let i = 1; i < h.times.length; i++)
-            {
-                const tCurrMs = h.times[i].getTime();
-                if (tCurrMs < startMs || tCurrMs > endMsAbs)
-                {
-                    continue;
-                }
-                if (!bucketGuard(tCurrMs))
-                {
-                    continue;
-                }
-                const tPrevMs = h.times[i - 1].getTime();
-                const dtH = (tCurrMs - tPrevMs) / 3_600_000;
-                if (dtH <= 0 || dtH > 6)
-                {
-                    continue;
-                }
-                const wPrev = pvNormalizeToWatts(h.values[i - 1], host._pvUnit);
-                const wCurr = pvNormalizeToWatts(h.values[i],     host._pvUnit);
-                if (!isFinite(wPrev) || !isFinite(wCurr))
-                {
-                    continue;
-                }
-                const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
-                const k = dayKey(tCurrMs);
-                out.set(k, (out.get(k) ?? 0) + kwh);
-            }
-        }
-    };
-
-    if (rawHist && rawHist.times.length >= 2)
-    {
-        //Full integration over the raw slot; no gating, raw is authoritative for the days it covers.
-        integrate(rawHist, () => true);
-    }
-    const calib = host._pvCalibStats;
-    if (calib && calib.times.length >= 2)
-    {
-        //Stats slot fills the wider days only. A sample whose timestamp falls within the raw window is already counted; skip it.
-        integrate(calib, (tMs) =>
-        {
-            if (rawFirstMs === null || rawLastMs === null)
-            {
-                return true;
-            }
-            return tMs < rawFirstMs || tMs > rawLastMs;
-        });
     }
 
     //Pass 2: future + today-remainder from the forecast model.

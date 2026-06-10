@@ -48,6 +48,21 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Daily totals match the HA Energy dashboard exactly (#200, #216)
+
+The per-day produced kWh and the net battery kWh shown in the dashboard dive (radial badge, graph
+view, CoverFlow cards) and the timeline day-strip were computed by integrating the gap-interpolated
+power curve, which drifted a percent or two above the HA Energy dashboard (e.g. 14,2 vs 14,04 kWh
+on the same day). They now sum the recorder `change` buckets directly over each day
+(`sumChangeForDay`), with no curve integration and no interpolation, so every daily total matches
+the HA Energy dashboard to the watt-hour.
+
+The net battery daily total also adopts HA's Sources sign convention: discharge positive, charge
+negative (the battery row in HA reads "−0,21 kWh" on a day it net-charged). The radial badge value
+now matches HA sign-for-sign; the badge colour still tracks the physical direction (charge =
+battery-in tint, discharge = battery-out tint). The live battery chip on the map keeps the
+charge-positive power convention for now.
+
 ### Grid import / export read the recorder `change` metric (#200)
 
 The grid past series (timeline curve, dashboard graph, scrub tooltip) drops the per-entity

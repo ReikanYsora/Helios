@@ -29,6 +29,7 @@ import { getHomeCoords } from './init';
 import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
 import { sliceForDay, displayUpdateFrequencyPerHour } from './unifiedStore';
+import { sumChangeForDay } from './energy-stats';
 import { pvValueAtTime, interpAt, type ChartHost } from './charts';
 import { pvNormalizeToWatts, pvArrays } from './pv';
 import { lerpHexToward } from './format';
@@ -524,6 +525,13 @@ export interface RadialDayData
     cloudScaleMax:  number;
     sunRiseSet:     { sunrise: number | null; sunset: number | null };
     ratioPct:       number;
+    //Exact daily totals summed from the recorder `change` buckets for this day, NOT integrated from
+    //the gap-interpolated curve, so the badge matches the HA Energy dashboard to the watt-hour.
+    //prodDailyKwh is the produced kWh; battNetDailyKwh is the net battery energy in HA's Sources
+    //sign convention (discharge minus charge: negative when the battery net charged on the day).
+    //Null when the day carries no recorder buckets (future day, or data not yet fetched).
+    prodDailyKwh:    number | null;
+    battNetDailyKwh: number | null;
 }
 
 
@@ -557,6 +565,8 @@ function emptyRadialDayData(host: DashboardHost, cardOffset: number): RadialDayD
         cloudScaleMax:  100,
         sunRiseSet:     { sunrise: null, sunset: null },
         ratioPct:       0,
+        prodDailyKwh:    null,
+        battNetDailyKwh: null,
     };
 }
 
@@ -608,6 +618,16 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     const sunRiseSet = homeCoords ? findSunriseSunset(slice.dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
     const { ratioPct } = computeDailyIrradianceRatio(host, slice.dayStartMs);
 
+    //Exact daily totals from the recorder `change` buckets (no curve integration, no gap fill) so the
+    //badge matches the HA Energy dashboard. Battery net follows HA's Sources sign: discharge - charge,
+    //negative when the battery net charged on the day.
+    const prodDailyKwh = sumChangeForDay(host._pvChangeSeries, slice.dayStartMs, slice.dayEndMs);
+    const battCharge   = sumChangeForDay(host._batteryChargeChangeSeries,    slice.dayStartMs, slice.dayEndMs);
+    const battDischarge = sumChangeForDay(host._batteryDischargeChangeSeries, slice.dayStartMs, slice.dayEndMs);
+    const battNetDailyKwh = (battCharge === null && battDischarge === null)
+        ? null
+        : (battDischarge ?? 0) - (battCharge ?? 0);
+
     return {
         dayStartMs:     slice.dayStartMs,
         dayEndMs:       slice.dayEndMs,
@@ -625,6 +645,8 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
         cloudScaleMax,
         sunRiseSet,
         ratioPct,
+        prodDailyKwh,
+        battNetDailyKwh,
     };
 }
 
@@ -1309,8 +1331,11 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
     //ended the day fuller than it started, negative when it ended emptier).
     const irrDailyMean   = dailyMean(data.hourlyIrr);
     const cloudDailyMean = dailyMean(data.hourlyCloud);
-    const prodDailyKwh   = dailyEnergyKwh(data.hourlyProd);
-    const battDailyKwh   = dailyEnergyKwh(data.hourlyBatt);
+    //Exact recorder-change daily totals (computed in prepareRadialDayData) so the badge matches the
+    //HA Energy dashboard to the watt-hour. battNetDailyKwh is in HA's Sources sign: discharge - charge
+    //(negative when the battery net charged on the day).
+    const prodDailyKwh   = data.prodDailyKwh;
+    const battDailyKwh   = data.battNetDailyKwh;
 
     const irrValue = hoverActive
         ? (irrW === null ? '—' : formatWm2(host.hass, irrW))
@@ -1321,28 +1346,31 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
     const prodValue = hoverActive
         ? (prodW === null ? '—' : formatW(host.hass, prodW))
         : formatKwh(host.hass, prodDailyKwh);
-    //Battery sign convention while hovering: + while charging, − while discharging, 0 at idle.
-    //Daily aggregate uses the same sign convention applied to the net kWh (charge minus
-    //discharge over the day). Within ±0.5 W (instant) or ±0.05 kWh (daily) the battery reads as
-    //flat so the badge does not flicker a stray "+0" / "−0".
+    //Battery sign follows the HA Energy dashboard's Sources convention: discharge is positive (the
+    //battery supplies energy), charge is negative (it consumes / stores). So the badge number matches
+    //the HA "Batterie totale" figure sign-for-sign. The COLOUR still tracks the physical direction
+    //(charge = battery-in tint, discharge = battery-out tint) regardless of the sign. Within ±0.5 W
+    //(instant) or ±0.05 kWh (daily) the battery reads as flat so the badge does not flicker "+0"/"−0".
     let battValue: string;
     let battCls: string;
     if (hoverActive)
     {
+        //battW is charge-positive instantaneous net power; charging shows "−", discharging shows "+".
         battValue = battW === null ? '—'
                   : Math.abs(battW) < 0.5 ? formatW(host.hass, 0)
-                  : `${battW > 0 ? '+' : '−'} ${formatW(host.hass, Math.abs(battW))}`;
+                  : `${battW > 0 ? '−' : '+'} ${formatW(host.hass, Math.abs(battW))}`;
         battCls   = battW !== null && battW > 0.5  ? 'dash-radial-badge-batt-charge'
                   : battW !== null && battW < -0.5 ? 'dash-radial-badge-batt-discharge'
                   :                                  'dash-radial-badge-batt';
     }
     else
     {
+        //battDailyKwh is already in HA's sign (discharge - charge); print it directly.
         battValue = battDailyKwh === null ? '—'
                   : Math.abs(battDailyKwh) < 0.05 ? formatKwh(host.hass, 0)
                   : `${battDailyKwh > 0 ? '+' : '−'} ${formatKwh(host.hass, Math.abs(battDailyKwh))}`;
-        battCls   = battDailyKwh !== null && battDailyKwh > 0.05  ? 'dash-radial-badge-batt-charge'
-                  : battDailyKwh !== null && battDailyKwh < -0.05 ? 'dash-radial-badge-batt-discharge'
+        battCls   = battDailyKwh !== null && battDailyKwh < -0.05 ? 'dash-radial-badge-batt-charge'
+                  : battDailyKwh !== null && battDailyKwh > 0.05  ? 'dash-radial-badge-batt-discharge'
                   :                                                 'dash-radial-badge-batt';
     }
 
@@ -1420,7 +1448,9 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     //recipe against the pv-arrays modelled curve. The production chip on hover goes to HA-direct
     //(same contract as the 4-badge strip above); the forecast chip stays on the modelled series since
     //it has no Home Assistant source to read from.
-    const prodDailyKwh     = dailyEnergyKwh(hourlyProdPastOnly);
+    //Produced kWh from the exact recorder `change` buckets (matches HA to the watt-hour), forecast
+    //kWh from the modelled curve (no Home Assistant source to read from).
+    const prodDailyKwh     = sumChangeForDay(host._pvChangeSeries, data.dayStartMs, data.dayEndMs);
     const forecastDailyKwh = dailyEnergyKwh(data.hourlyForecast);
     const hoverMs          = hoverActive ? data.dayStartMs + (hoverHour as number) * HOUR_MS : 0;
     const prodW            = hoverActive ? chipScrubProductionW(host, hoverMs)              : null;

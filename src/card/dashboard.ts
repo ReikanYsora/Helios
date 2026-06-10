@@ -23,6 +23,7 @@ import { cloudCoverIcon } from './cloud-icons';
 import { hasPvConfigured } from './equipment';
 import { effectiveForecastRatio, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
+import { sumChangeForDay } from './energy-stats';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
 import { renderRadialDial, renderDashCardChipStrip, renderDashCardGraphView, prepareRadialDayData } from './dashboardRadial';
@@ -188,7 +189,6 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
     avgCloud:    number;
 }
 {
-    const HOUR_MS  = 3_600_000;
     const dayStart = new Date();
     dayStart.setHours(0, 0, 0, 0);
     dayStart.setDate(dayStart.getDate() + dayOffset);
@@ -216,62 +216,13 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
     }
     else if (dayOffset < 0)
     {
-        const calib = host._pvCalibStats;
-        if (calib && calib.times.length >= 2)
+        //Past day: sum the recorder `change` buckets over the day so the produced kWh matches the HA
+        //Energy dashboard exactly, no curve integration. The change series spans the store's J-2 past
+        //window, which covers every past day the CoverFlow can scroll to.
+        const kwh = sumChangeForDay(host._pvChangeSeries, dayStartMs, dayEndMs);
+        if (kwh !== null)
         {
-            const unit       = (host._pvUnit || '').toLowerCase();
-            const isCum      = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-            const energyF    = unit === 'wh' ? 1 / 1000 : unit === 'mwh' ? 1000 : 1;
-            if (isCum)
-            {
-                let first: number | null = null;
-                let last:  number | null = null;
-                for (let i = 0; i < calib.times.length; i++)
-                {
-                    const t = calib.times[i].getTime();
-                    if (t < dayStartMs || t >= dayEndMs)
-                    {
-                        continue;
-                    }
-                    if (first === null)
-                    {
-                        first = calib.values[i];
-                    }
-                    last = calib.values[i];
-                }
-                if (first !== null && last !== null)
-                {
-                    producedKwh = Math.max(0, (last - first) * energyF);
-                }
-            }
-            else
-            {
-                let prevT: number | null = null;
-                let prevW: number | null = null;
-                for (let i = 0; i < calib.times.length; i++)
-                {
-                    const t = calib.times[i].getTime();
-                    if (t < dayStartMs || t >= dayEndMs)
-                    {
-                        continue;
-                    }
-                    const w = pvNormalizeToWatts(calib.values[i], host._pvUnit);
-                    if (!isFinite(w))
-                    {
-                        continue;
-                    }
-                    if (prevT !== null && prevW !== null)
-                    {
-                        const dh = (t - prevT) / HOUR_MS;
-                        if (dh > 0 && dh <= 6)
-                        {
-                            producedKwh += ((prevW + w) / 2) / 1000 * dh;
-                        }
-                    }
-                    prevT = t;
-                    prevW = w;
-                }
-            }
+            producedKwh = Math.max(0, kwh);
         }
     }
 
