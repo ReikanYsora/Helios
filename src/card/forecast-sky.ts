@@ -1,0 +1,397 @@
+//Learned sky-residual correction for the PV forecast.
+//
+//The physical forecast (clear-sky × cloud × thermal × LiDAR shading) plus the 5-day scalar
+//calibration captures the AVERAGE production level, but it misses the SHAPE errors that depend on
+//where the sun sits in the sky: a tree the LiDAR raster never saw, foliage that grew since the scan,
+//a neighbour's roof the flood-fill clipped, or simply a LiDAR cell that was wrong. Those errors are
+//systematic and repeat every day at the same sun position, so they are learnable from the user's own
+//production history.
+//
+//This module derives, per (sun-azimuth, sun-altitude) cell, the RESIDUAL between what the user
+//actually produced and what the current model (LiDAR included) predicted, over a rolling multi-week
+//window. The residual is normalised to mean 1, so it carries only the SHAPE: the scalar calibration
+//keeps owning the overall level (level / shape decoupling). At forecast time the residual multiplies
+//the existing model output. Where the window has no data for a cell, the residual is 1, so the
+//forecast degrades to exactly today's behaviour, a brand-new install loses nothing on day 1 and the
+//correction phases in as production history accumulates.
+//
+//Why this beats the retired shadow-dome: it is a 2D map (not 3D az×alt×cloud), it carries no
+//localStorage and no per-frame projection (it is sampled only when the forecast is built, never
+//drawn), and it is recency-weighted so it tracks seasonal foliage + soiling instead of averaging a
+//year of stale data. LiDAR stays the cold-start prior (it already shades the base model the residual
+//multiplies) and the map only refines what the LiDAR got wrong.
+
+import type { HeliosConfig } from '../helios-config';
+import type { NdsmRaster } from '../engine/pv-shading';
+import { computePvPowerWeighted, pvCalibK } from './pv';
+import { getSunPosition } from '../engine/sun';
+import { fetchChangeSeries, type ChangeBucket } from './energy-stats';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+
+
+//Learning window. 60 days is long enough for the sun's sunrise / sunset azimuths to sweep a wide arc
+//and for the altitude band to cover a season's worth of midday heights, so the map fills out, while
+//staying inside Open-Meteo's 92-day past_days ceiling and the recorder's hourly-statistics retention.
+const LEARN_DAYS = 60;
+
+
+//Cell grid over the sky hemisphere. 10 deg azimuth × 5 deg altitude = 36 × 18 = 648 cells, of which
+//only the daytime arc band is ever visited. Coarse on purpose: a finer grid would fragment the
+//per-cell sample count and the residual would read as noise instead of a stable shading signature.
+const AZ_STEP_DEG  = 10;
+const ALT_STEP_DEG = 5;
+const N_AZ  = Math.round(360 / AZ_STEP_DEG);   //36
+const N_ALT = Math.round(90  / ALT_STEP_DEG);  //18
+
+//Recency half-life. A residual learned 30 days ago carries half the weight of one learned today, so
+//the map tracks the current canopy (leaves on / off) and soiling state instead of a stale annual
+//mean.
+const RECENCY_HALF_LIFE_MS = 30 * 24 * 3_600_000;
+
+//Confidence saturation. conf = 1 - exp(-weight / W0); W0 is the accumulated weight at which a cell is
+//~63 % trusted. Tuned so a handful of clear-day samples already pull the cell meaningfully off 1
+//while a single noisy sample stays mostly on the model.
+const CONF_W0 = 4;
+
+//Residual clamp. Beyond this the data is more likely a sensor fault / inverter clip than real
+//shading; clamping keeps one bad day from gutting the forecast at a sun position.
+const M_MIN = 0.3;
+const M_MAX = 1.6;
+
+//Per-hour model floor (kWh). Below this the predicted energy is so small (deep dusk, low winter sun)
+//that actual/model is dominated by quantisation + measurement noise, so the sample is dropped.
+const MODEL_KWH_FLOOR = 0.05;
+
+
+export interface SkyResidualMap
+{
+    nAz:  number;
+    nAlt: number;
+    //Residual per cell, normalised to a weighted mean of 1 across all visited cells. 1 where the
+    //cell was never visited (forecast unchanged there).
+    m:    Float32Array;
+    //Confidence per cell in [0, 1]; blends the residual toward 1 (the unchanged model) for thinly
+    //sampled cells.
+    conf: Float32Array;
+    //Diagnostics: total weighted samples + count of visited cells, surfaced through heliosStats so a
+    //power user can see how warmed-up the map is.
+    totalWeight:  number;
+    visitedCells: number;
+}
+
+
+//Inputs the build needs, decoupled from how they are fetched so the module stays a pure function.
+export interface SkyResidualInput
+{
+    config: HeliosConfig | undefined;
+    lat:    number;
+    lon:    number;
+    raster: NdsmRaster | null;
+    //Hourly produced-energy buckets (recorder `change`, period 'hour') over the learning window.
+    production: ChangeBucket[] | null;
+    //Hourly cloud-cover %, parallel arrays. cloudTimes aligns with cloud[]; the build matches each
+    //production bucket to the nearest cloud sample by time.
+    cloudTimes: number[];
+    cloud:      number[];
+}
+
+
+//Bilinear-ish lookup of the residual at an exact sun position, confidence-blended toward 1. Reads
+//the four surrounding cells and weights by both their confidence and the fractional position, so the
+//correction is smooth across cell boundaries instead of stepping. Returns 1 (no correction) for sun
+//below the horizon or an empty map.
+export function sampleSkyResidual(map: SkyResidualMap | null, azDeg: number, altDeg: number): number
+{
+    if (!map || altDeg <= 0) { return 1; }
+    let az = azDeg % 360;
+    if (az < 0) { az += 360; }
+    const alt = Math.max(0, Math.min(90 - 1e-3, altDeg));
+
+    const fAz  = az  / AZ_STEP_DEG;
+    const fAlt = alt / ALT_STEP_DEG;
+    const az0  = Math.floor(fAz);
+    const alt0 = Math.floor(fAlt);
+    const dAz  = fAz  - az0;
+    const dAlt = fAlt - alt0;
+
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i <= 1; i++)
+    {
+        for (let j = 0; j <= 1; j++)
+        {
+            const ai = (az0 + i) % map.nAz;       //azimuth wraps around 360
+            const aj = alt0 + j;
+            if (aj < 0 || aj >= map.nAlt) { continue; }
+            const idx = aj * map.nAz + ai;
+            //Cell contribution = effective multiplier (conf-blended toward 1) weighted by the
+            //bilinear corner weight. A cell with conf 0 contributes exactly 1 (no change).
+            const cellM = map.conf[idx] * map.m[idx] + (1 - map.conf[idx]) * 1;
+            const w = (i === 0 ? 1 - dAz : dAz) * (j === 0 ? 1 - dAlt : dAlt);
+            num += w * cellM;
+            den += w;
+        }
+    }
+    return den > 0 ? num / den : 1;
+}
+
+
+//Build the residual map from the production + cloud history. Returns null when there is not enough
+//signal to learn anything (no production buckets, no peak power configured), in which case the caller
+//keeps the unmodified forecast.
+export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | null
+{
+    const k = pvCalibK(input.config);
+    if (k === null) { return null; }
+    if (!input.production || input.production.length === 0) { return null; }
+    if (input.cloudTimes.length === 0) { return null; }
+
+    const nowMs = Date.now();
+    const sumW   = new Float64Array(N_AZ * N_ALT);
+    const sumWR  = new Float64Array(N_AZ * N_ALT);
+    let globalSumW  = 0;
+    let globalSumWR = 0;
+
+    for (const bucket of input.production)
+    {
+        const kwh = bucket.kwh;
+        if (!Number.isFinite(kwh) || kwh < 0) { continue; }
+        //Hour midpoint as the sample instant.
+        const mid = (bucket.startMs + bucket.endMs) / 2;
+        const sun = getSunPosition(new Date(mid), input.lat, input.lon);
+        if (sun.altitude <= 0) { continue; }
+
+        const cloud = nearestCloud(input.cloudTimes, input.cloud, mid);
+
+        //Model prediction for this hour, LiDAR included, in kWh (W at the midpoint × 1 h / 1000).
+        const wModel = computePvPowerWeighted(input.config, new Date(mid), input.lat, input.lon, cloud, {
+            raster: input.raster,
+        }) * k;
+        const modelKwh = wModel / 1000;
+        if (modelKwh < MODEL_KWH_FLOOR) { continue; }
+
+        const ratio = kwh / modelKwh;
+        if (!Number.isFinite(ratio) || ratio < 0) { continue; }
+
+        //Weight: recency (exp decay, 30-day half-life) × clearness (shading reads cleanest on a clear
+        //sky; a fully overcast hour still informs the cell, just less). Clamped so overcast keeps a
+        //small floor weight rather than dropping out entirely.
+        const ageMs   = Math.max(0, nowMs - mid);
+        const recency = Math.pow(0.5, ageMs / RECENCY_HALF_LIFE_MS);
+        const clear   = Math.max(0.1, 1 - cloud / 100);
+        const w       = recency * clear;
+        if (w <= 0) { continue; }
+
+        const azIdx  = Math.min(N_AZ - 1, Math.max(0, Math.floor(((sun.azimuth % 360 + 360) % 360) / AZ_STEP_DEG)));
+        const altIdx = Math.min(N_ALT - 1, Math.max(0, Math.floor(sun.altitude / ALT_STEP_DEG)));
+        const idx    = altIdx * N_AZ + azIdx;
+
+        sumW[idx]  += w;
+        sumWR[idx] += w * ratio;
+        globalSumW  += w;
+        globalSumWR += w * ratio;
+    }
+
+    if (globalSumW <= 0) { return null; }
+    //Global weighted-mean ratio = the level the scalar calibration already owns. Normalising each
+    //cell by it leaves only the SHAPE (how each sun position deviates from the average), mean 1.
+    const globalMean = globalSumWR / globalSumW;
+    if (!(globalMean > 0)) { return null; }
+
+    const m    = new Float32Array(N_AZ * N_ALT).fill(1);
+    const conf = new Float32Array(N_AZ * N_ALT);
+    let visited = 0;
+    for (let i = 0; i < m.length; i++)
+    {
+        if (sumW[i] <= 0) { continue; }
+        const cellMean = sumWR[i] / sumW[i];
+        const norm     = cellMean / globalMean;
+        m[i]    = Math.max(M_MIN, Math.min(M_MAX, norm));
+        conf[i] = 1 - Math.exp(-sumW[i] / CONF_W0);
+        visited++;
+    }
+
+    return { nAz: N_AZ, nAlt: N_ALT, m, conf, totalWeight: globalSumW, visitedCells: visited };
+}
+
+
+//Nearest cloud sample by time. The cloud history is hourly so a linear scan with an early break on
+//the sorted times stays cheap even over a 60-day window.
+function nearestCloud(times: number[], cloud: number[], tMs: number): number
+{
+    if (times.length === 0) { return 0; }
+    let best   = 0;
+    let bestDt = Infinity;
+    for (let i = 0; i < times.length; i++)
+    {
+        const dt = Math.abs(times[i] - tMs);
+        if (dt < bestDt) { bestDt = dt; best = i; }
+        else if (times[i] > tMs && dt > bestDt) { break; }
+    }
+    const v = cloud[best];
+    return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+}
+
+
+//-------------------------------------------------------------------------------------------------
+//Fetch orchestration + memoised build. The two histories (production from the recorder, cloud from
+//Open-Meteo) are fetched once per learning window and the residual map is rebuilt only when either
+//history changes, so the heavy per-sample model evaluation runs at most once per fetch, not on every
+//store rebuild.
+
+export interface SkyForecastHost extends LoadingTrackerHost
+{
+    readonly hass:   any;
+    readonly config: HeliosConfig | undefined;
+    readonly _energyDefaults: import('./energy-prefs').EnergyDefaults;
+    readonly _engine?: { getLidarRaster(): NdsmRaster | null };
+
+    _skyProdSeries:   ChangeBucket[] | null;
+    _skyProdFetchKey: string;
+    _skyProdFetching: boolean;
+    _skyCloudTimes:   number[];
+    _skyCloud:        number[];
+    _skyCloudFetchKey: string;
+    _skyCloudFetching: boolean;
+    _skyResidualMap:  SkyResidualMap | null;
+    _skyMapVersion:   string;
+    requestUpdate(): void;
+}
+
+
+//Module-level cache for the Open-Meteo cloud history, shared across every Helios card on the page so
+//an N-card dashboard fetches it once. Keyed on rounded coords + day so it refreshes daily.
+interface CloudHistEntry { ts: number; times: number[]; cloud: number[]; }
+const _cloudHistCache = new Map<string, CloudHistEntry>();
+const CLOUD_HIST_TTL_MS = 6 * 3_600_000;   //6 h: the past window barely changes within a session
+
+export function clearSkyForecastCache(): void
+{
+    _cloudHistCache.clear();
+}
+
+
+//Kick the two history fetches + rebuild the map when both have landed. Cheap to call every refresh
+//tick: the fetches are gated on a per-window key and the map rebuild is gated on a version hash.
+export function refreshSkyForecast(host: SkyForecastHost, lat: number, lon: number): void
+{
+    if (!host.hass?.callWS) { return; }
+    const energyIds = host._energyDefaults?.solarStatEnergyFroms ?? [];
+    if (energyIds.length === 0) { return; }
+
+    const today0 = new Date();
+    today0.setHours(0, 0, 0, 0);
+    const startMs = today0.getTime() - LEARN_DAYS * 24 * 3_600_000;
+    const endMs   = Date.now();
+
+    //Production history: hourly recorder `change` over the learning window (reset-corrected, exact).
+    const sortedIds = [...energyIds].sort();
+    const prodKey   = `${sortedIds.join(',')}|${startMs}`;
+    if (prodKey !== host._skyProdFetchKey && !host._skyProdFetching)
+    {
+        host._skyProdFetchKey = prodKey;
+        host._skyProdFetching = true;
+        beginLoadingPhase(host, 'sky-forecast');
+        void fetchChangeSeries(host.hass, sortedIds, startMs, endMs, 'hour')
+            .then((series) =>
+            {
+                if (series !== null) { host._skyProdSeries = series; }
+                host.requestUpdate();
+            })
+            .finally(() =>
+            {
+                host._skyProdFetching = false;
+                endLoadingPhase(host, 'sky-forecast');
+            });
+    }
+
+    //Cloud history: one Open-Meteo GET over the learning window.
+    const cloudKey = `${lat.toFixed(3)},${lon.toFixed(3)}|${LEARN_DAYS}`;
+    const cachedCloud = _cloudHistCache.get(cloudKey);
+    if (cachedCloud && Date.now() - cachedCloud.ts < CLOUD_HIST_TTL_MS)
+    {
+        if (host._skyCloudFetchKey !== cloudKey)
+        {
+            host._skyCloudFetchKey = cloudKey;
+            host._skyCloudTimes    = cachedCloud.times;
+            host._skyCloud         = cachedCloud.cloud;
+        }
+    }
+    else if (cloudKey !== host._skyCloudFetchKey && !host._skyCloudFetching)
+    {
+        host._skyCloudFetchKey = cloudKey;
+        host._skyCloudFetching = true;
+        void fetchCloudHistory(lat, lon, LEARN_DAYS)
+            .then((res) =>
+            {
+                if (res)
+                {
+                    host._skyCloudTimes = res.times;
+                    host._skyCloud      = res.cloud;
+                    _cloudHistCache.set(cloudKey, { ts: Date.now(), times: res.times, cloud: res.cloud });
+                    host.requestUpdate();
+                }
+            })
+            .finally(() => { host._skyCloudFetching = false; });
+    }
+
+    maybeRebuildSkyMap(host, lat, lon);
+}
+
+
+//Rebuild the residual map when the underlying histories changed. Version hash = production length +
+//cloud length + day, so the daily recency shift + any fresh fetch trips a rebuild and nothing else
+//does. The build itself runs ~LEARN_DAYS×24 model evaluations (a few ms), gated here so it never
+//runs on a plain clock tick.
+function maybeRebuildSkyMap(host: SkyForecastHost, lat: number, lon: number): void
+{
+    const prodLen  = host._skyProdSeries?.length ?? 0;
+    const cloudLen = host._skyCloudTimes.length;
+    if (prodLen === 0 || cloudLen === 0) { return; }
+    const todayKey = new Date().toDateString();
+    const version  = `${todayKey}|${prodLen}|${cloudLen}`;
+    if (version === host._skyMapVersion) { return; }
+    host._skyMapVersion = version;
+    host._skyResidualMap = buildSkyResidualMap({
+        config:     host.config,
+        lat,
+        lon,
+        raster:     host._engine?.getLidarRaster() ?? null,
+        production: host._skyProdSeries,
+        cloudTimes: host._skyCloudTimes,
+        cloud:      host._skyCloud,
+    });
+    host.requestUpdate();
+}
+
+
+//Open-Meteo cloud-cover history. One GET, single location, hourly `cloud_cover` over the past window.
+//Returns parallel epoch-ms times + percent arrays, or null on any failure (the caller keeps whatever
+//it had, the map just stays cold).
+async function fetchCloudHistory(lat: number, lon: number, days: number): Promise<{ times: number[]; cloud: number[] } | null>
+{
+    try
+    {
+        const url = 'https://api.open-meteo.com/v1/forecast'
+            + `?latitude=${lat.toFixed(4)}`
+            + `&longitude=${lon.toFixed(4)}`
+            + '&hourly=cloud_cover'
+            + `&past_days=${days}&forecast_days=1&timezone=UTC`;
+        const resp = await fetch(url);
+        if (!resp.ok) { return null; }
+        const j: any = await resp.json();
+        const timeStrs: string[] = j?.hourly?.time ?? [];
+        const cloudArr: number[] = j?.hourly?.cloud_cover ?? [];
+        if (timeStrs.length === 0 || cloudArr.length === 0) { return null; }
+        const times: number[] = new Array(timeStrs.length);
+        for (let i = 0; i < timeStrs.length; i++)
+        {
+            times[i] = new Date(timeStrs[i] + 'Z').getTime();
+        }
+        return { times, cloud: cloudArr };
+    }
+    catch (_)
+    {
+        return null;
+    }
+}

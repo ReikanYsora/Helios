@@ -48,6 +48,32 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Learned sky-residual forecast correction (replaces the shadow-map trainer)
+
+The v1.8.3 cycle retired the self-learning shadow-map, and the forecast lost the correction that
+captured the shading the LiDAR raster can't see (a tree the scan missed, foliage that grew, a
+neighbour's roof the flood-fill clipped, a wrong LiDAR cell). It comes back lighter and better, as
+a **learned sky-residual map** in `src/card/forecast-sky.ts`.
+
+The card derives, per (sun-azimuth, sun-altitude) cell, the residual between what the user actually
+produced and what the current model (LiDAR included) predicted, over a rolling 60-day window. The
+residual is normalised to mean 1, so it carries only the SHAPE (how each sun position deviates from
+the average); the 5-day scalar calibration keeps owning the overall level. At forecast time the
+residual multiplies the model output per hour, so the forecast converges to the user's real shading
+and biases. Where a cell has no history the residual is 1, so a cold install loses nothing on day 1
+and the correction phases in as production accumulates, weighted toward recent data (30-day
+half-life) so it tracks seasonal foliage and soiling instead of a stale annual mean.
+
+Why it beats the old shadow-dome: it is a 2D map (not 3D az×alt×cloud), carries no localStorage and
+no per-frame projection (sampled only when the forecast is built, never drawn), and is derived in
+memory from the recorder + Open-Meteo each session. LiDAR stays the cold-start prior, the learned
+map only refines what it got wrong, so installs with real obstacles (trees, neighbours) get a
+forecast no clear-sky model can match.
+
+Data: a 60-day hourly produced-energy series (recorder `change`, exact + reset-corrected) + a
+60-day hourly cloud history (one Open-Meteo GET, past_days 60). Both fetched once per session and
+cached.
+
 ### Daily totals match the HA Energy dashboard exactly (#200, #216)
 
 The per-day produced kWh and the net battery kWh shown in the dashboard dive (radial badge, graph

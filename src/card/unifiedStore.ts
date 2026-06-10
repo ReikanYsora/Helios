@@ -36,6 +36,8 @@ import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
 import { pvCalibK, pvInverterMaxW, computePvPowerWeighted } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
+import { sampleSkyResidual } from './forecast-sky';
+import { getSunPosition } from '../engine/sun';
 import { effectiveForecastRatio } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { getHomeCoords } from './init';
@@ -125,6 +127,10 @@ export interface UnifiedStoreHost
     readonly _gridImportChangeSeries: ChangeBucket[] | null;
     readonly _gridExportChangeSeries: ChangeBucket[] | null;
     readonly _engine?:                { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
+    //Learned sky-residual forecast correction (src/card/forecast-sky.ts). Multiplies the forecast per
+    //sun position so it converges to the user's real shading + biases. Null until the histories land,
+    //in which case the forecast stays on the physical + LiDAR + scalar-calibration path unchanged.
+    readonly _skyResidualMap:         import('./forecast-sky').SkyResidualMap | null;
 }
 
 
@@ -365,7 +371,13 @@ function buildForecast(
             }
         );
         const eff = effectiveForecastRatio(calR);
-        const w   = wRaw * k * eff;
+        //Learned sky-residual correction: multiplies the physical + LiDAR + scalar model by what the
+        //user's own production history says the model gets wrong at this exact sun position (a tree
+        //the LiDAR missed, foliage, a LiDAR cell error). 1 where the map has no data for the cell, so
+        //the forecast is unchanged on a cold install and converges as history accumulates.
+        const sun = getSunPosition(t, coords.lat, coords.lon);
+        const m   = sampleSkyResidual(host._skyResidualMap, sun.azimuth, sun.altitude);
+        const w   = wRaw * k * eff * m;
         if (Number.isFinite(w))
         {
             hourly[h] = Math.min(cap, Math.max(0, w));

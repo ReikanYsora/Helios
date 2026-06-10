@@ -88,6 +88,7 @@ import {
 } from './card/weatherMode';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
+import { refreshSkyForecast, clearSkyForecastCache } from './card/forecast-sky';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
@@ -392,6 +393,18 @@ export class HeliosCard extends LitElement
     @state() _pvChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
     _pvChangeSeriesFetchKey  = '';
     _pvChangeSeriesFetching  = false;
+    //Learned sky-residual forecast correction. The two histories (60-day hourly production from the
+    //recorder, 60-day hourly cloud from Open-Meteo) feed buildSkyResidualMap; the resulting map
+    //multiplies the forecast per sun position so it converges to the user's real shading + biases.
+    @state() _skyResidualMap: import('./card/forecast-sky').SkyResidualMap | null = null;
+    _skyProdSeries:    import('./card/energy-stats').ChangeBucket[] | null = null;
+    _skyProdFetchKey   = '';
+    _skyProdFetching   = false;
+    _skyCloudTimes:    number[] = [];
+    _skyCloud:         number[] = [];
+    _skyCloudFetchKey  = '';
+    _skyCloudFetching  = false;
+    _skyMapVersion     = '';
     //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
     //(`inverter-cutoff-soc-pct`). Null when the guard is off or no battery is configured. Not reactive: pulled directly and we never
     //need to re-render on a SoC sample change.
@@ -856,6 +869,13 @@ export class HeliosCard extends LitElement
         this._pvCalibStats                = null;
         this._pvChangeSeries              = null;
         this._pvChangeSeriesFetchKey      = '';
+        this._skyResidualMap              = null;
+        this._skyProdSeries               = null;
+        this._skyProdFetchKey             = '';
+        this._skyCloudTimes               = [];
+        this._skyCloud                    = [];
+        this._skyCloudFetchKey            = '';
+        this._skyMapVersion               = '';
         this._pvFetchKey                  = '';
         this._pvCalibStatsFetchKey        = '';
         this._pvHistoryDiagnostics        = null;
@@ -878,6 +898,7 @@ export class HeliosCard extends LitElement
         clearBatteryModuleCaches();
         clearRadiationModuleCaches();
         clearEnergyStatsCache();
+        clearSkyForecastCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.
@@ -1259,6 +1280,13 @@ export class HeliosCard extends LitElement
         refreshBattery(this);
         refreshGrid(this);
         refreshSolarRadiation(this);
+        //Learned sky-residual forecast correction. Kicks the 60-day production + cloud history fetches
+        //and rebuilds the residual map when they land; cheap (gated) on a no-op tick.
+        const skyCoords = getHomeCoords(this.config, this.hass);
+        if (skyCoords)
+        {
+            refreshSkyForecast(this, skyCoords.lat, skyCoords.lon);
+        }
     }
 
 
