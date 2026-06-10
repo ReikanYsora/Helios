@@ -72,7 +72,7 @@ import
 import { enterLidarView, exitLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
 import type { CardMode } from './card/card-mode';
 import { renderLoadingBanner, renderWeatherRateLimitBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
-import { refreshGrid, formatGridValue, gridWattsAtTime, clearGridModuleCaches } from './card/grid';
+import { refreshGrid, formatGridValue } from './card/grid';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -87,7 +87,7 @@ import {
     syncWeatherShaderState,
 } from './card/weatherMode';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
-import { clearEnergyStatsCache } from './card/energy-stats';
+import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
@@ -417,29 +417,15 @@ export class HeliosCard extends LitElement
     @state() _gridImportUnit:    string        = '';
     @state() _gridExportValue:   number | null = null;
     @state() _gridExportUnit:    string        = '';
-    //Rolling buffers used by refreshGrid when the wired entity is a
-    //cumulative energy sensor (Wh / kWh): we derive a live W value
-    //from the slope over the last ~5 min instead of surfacing the
-    //meter's running total to the chip.
-    //Per-entity rolling buffers keyed by entity_id. Multi-entity
-    //grid wires (heures pleines / creuses, peak / off-peak) keep one
-    //buffer per source.
-    _gridImportSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
-    _gridExportSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
-    //Last derived watts per entity, tagged with the wall-clock at
-    //which the underlying state changed. The chip displays the watts
-    //of whichever entity moved most recently, so HP / HC indexes
-    //don't fight each other when only one is currently incrementing.
-    _gridImportLastDerived: Map<string, { watts: number; t: number }> = new Map();
-    _gridExportLastDerived: Map<string, { watts: number; t: number }> = new Map();
-    //Unit per grid entity (kwh / wh / mwh / w / kw) so the
-    //past-scrub derivation can convert raw buffer values to watts
-    //independently of the slot's overall normalised unit.
-    _gridImportUnits: Map<string, string> = new Map();
-    _gridExportUnits: Map<string, string> = new Map();
-    //Combined signed grid-power slot driven by the HA Energy grid source's `stat_rate`. When wired, refreshGrid derives
-    //the net signed watts from these buffers and routes the sign to the import / export chips; the directional slots
-    //above stay empty.
+    //Recorder `change` series for the grid import / export energy meters: the canonical past-power
+    //source for the unified store + scrub. Reset-corrected, unit-normalised kWh per 5-minute bucket,
+    //the same metric the HA Energy dashboard consumes. Replaces the per-entity rolling slope buffers.
+    @state() _gridImportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    @state() _gridExportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    _gridImportChangeFetchKey = '';
+    _gridExportChangeFetchKey = '';
+    _gridImportChangeFetching = false;
+    _gridExportChangeFetching = false;
     //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
     //when both are set.
     @state() _batterySocHistory: {
@@ -452,6 +438,13 @@ export class HeliosCard extends LitElement
     } | null = null;
     _batteryFetchKey  = '';
     _batteryFetching  = false;
+    //Recorder `change` series for the battery charge (stat_energy_to) + discharge (stat_energy_from)
+    //meters: the canonical past-power source for the unified store + scrub. Net (charge - discharge)
+    //gives a structural sign so charging is never lost (#216).
+    @state() _batteryChargeChangeSeries:    import('./card/energy-stats').ChangeBucket[] | null = null;
+    @state() _batteryDischargeChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    _batteryChangeFetchKey = '';
+    _batteryChangeFetching = false;
     //Solar-radiation entity history, populated when
     //`solar-radiation-entity` is configured. We pull the recorder's
     //samples over the active timeline range and merge them with the
@@ -877,9 +870,16 @@ export class HeliosCard extends LitElement
         this._pvCalibStatsFetchKey        = '';
         this._pvTrainerStatsFetchKey      = '';
         this._pvHistoryDiagnostics        = null;
+        this._gridImportChangeSeries      = null;
+        this._gridExportChangeSeries      = null;
+        this._gridImportChangeFetchKey    = '';
+        this._gridExportChangeFetchKey    = '';
         this._batterySocHistory           = null;
         this._batteryPowerHistory         = null;
         this._batteryFetchKey             = '';
+        this._batteryChargeChangeSeries   = null;
+        this._batteryDischargeChangeSeries = null;
+        this._batteryChangeFetchKey       = '';
         this._batteryHistory              = null;
         this._solarRadiationHistory       = null;
         this._solarRadiationFetchKey      = '';
@@ -888,7 +888,6 @@ export class HeliosCard extends LitElement
         clearPvModuleCaches();
         clearBatteryModuleCaches();
         clearRadiationModuleCaches();
-        clearGridModuleCaches();
         clearEnergyStatsCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
@@ -1592,25 +1591,18 @@ export class HeliosCard extends LitElement
         const batteryScrubFuture = batteryScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
 
-        //Grid IN / OUT past-scrub: derive the watts from the rolling
-        //buffer around the scrub instant so the chip reflects what
-        //was actually flowing at that moment, not the live now. Skip
-        //in future scrub (no data) and in live mode (live values
-        //already in _gridImportValue / _gridExportValue).
+        //Grid IN / OUT past-scrub: read the average watts at the scrub instant from the recorder
+        //`change` series so the chip reflects what flowed at that moment, not live now. Skip in
+        //future scrub (no data) and in live mode (live values already in _gridImportValue /
+        //_gridExportValue).
         const gridScrubTimeMs = batteryScrubbing && !batteryScrubFuture
             ? this._selectedTime!.getTime()
             : null;
-        //Scrub path runs through gridWattsAtTime which sums slopes
-        //across every wired entity, the sum can dip below zero
-        //around the moment a tariff switches or when a meter
-        //quantises in the "wrong" direction by one Wh. A negative
-        //IMPORT at scrub time is an EXPORT moment that the export
-        //chip already reports; clamping to 0 keeps the slot honest.
         const rawImport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
+            ? wattsAtFromChangeSeries(this._gridImportChangeSeries, gridScrubTimeMs)
             : this._gridImportValue;
         const rawExport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
+            ? wattsAtFromChangeSeries(this._gridExportChangeSeries, gridScrubTimeMs)
             : this._gridExportValue;
         const gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
         const gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
@@ -1621,13 +1613,25 @@ export class HeliosCard extends LitElement
         const activeBatterySoc: number | null = batteryScrubbing
             ? batterySampleAtTime(this._batterySocHistory, this._selectedTime!)
             : this._batterySoc;
-        const activeBatteryPower: number | null = batteryScrubbing
-            ? batterySampleAtTime(this._batteryPowerHistory, this._selectedTime!)
-            : this._batteryPower;
-        //The power unit doesn't change between live and history
-        //samples (same entity, same configuration), so we read it
-        //from the live state cache regardless of mode.
-        const activeBatteryUnit = this._batteryPowerUnit;
+        //Battery power scrub: net the charge / discharge `change` series at the scrub instant
+        //(charge - discharge), structural sign. Live mode reads the live signed value.
+        let activeBatteryPower: number | null;
+        if (batteryScrubbing)
+        {
+            const tMs = this._selectedTime!.getTime();
+            const c   = wattsAtFromChangeSeries(this._batteryChargeChangeSeries, tMs);
+            const d   = wattsAtFromChangeSeries(this._batteryDischargeChangeSeries, tMs);
+            activeBatteryPower = (c === null && d === null)
+                ? null
+                : Math.max(0, c ?? 0) - Math.max(0, d ?? 0);
+        }
+        else
+        {
+            activeBatteryPower = this._batteryPower;
+        }
+        //The power unit is watts on both the live and scrub paths (the change series resolves to W,
+        //the live read normalises to W), so the chip formats consistently regardless of mode.
+        const activeBatteryUnit = batteryScrubbing ? 'W' : this._batteryPowerUnit;
 
         const showSocChip = (hasHomeCoords && layout !== null)
             && !batteryScrubFuture

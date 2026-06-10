@@ -9,6 +9,7 @@ import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+import { fetchChangeSeries, latestWattsFromChangeSeries, type ChangeBucket } from './energy-stats';
 
 
 //-----------------------------------------------------------------
@@ -101,6 +102,15 @@ export interface BatteryHost extends LoadingTrackerHost
     _batteryPowerHistory: BatteryHistory | null;
     _batteryFetchKey:     string;
     _batteryFetching:     boolean;
+    //Recorder `change` series for the battery charge (`stat_energy_to`) and discharge
+    //(`stat_energy_from`) energy meters, 5-minute buckets. These are SEPARATE directional meters,
+    //so the net power sign is structural (charge positive, discharge negative) instead of inferred
+    //from a single signed sensor, which is what fixes the "charge stuck at 0 W" bug. Null until the
+    //first fetch lands.
+    _batteryChargeChangeSeries:    ChangeBucket[] | null;
+    _batteryDischargeChangeSeries: ChangeBucket[] | null;
+    _batteryChangeFetchKey:        string;
+    _batteryChangeFetching:        boolean;
     //HA Energy daily-total alignment: when the user has battery
     //sources configured on the Energy dashboard, the card refresh
     //loop queries the recorder for today's net charge / discharge
@@ -185,34 +195,28 @@ export function refreshBattery(host: BatteryHost): void
             nextSoc = Math.max(0, Math.min(100, sum / count));
         }
     }
-    //Multi-bank power summation: every `power_config.stat_rate` (or its `stat_energy_from` / `stat_energy_to`
-    //fallback) declared on the HA Energy battery sources contributes to the chip. Sign-flips are applied per entity
-    //via the `invertedRateEntities` list before the sum so a mixed wiring (standard sign on bank A, inverted on bank
-    //B) still aggregates correctly. Single-bank installs go through the same loop and collapse to the single value.
+    //Live battery power, convention "positive = charging".
+    //  - When the HA Energy battery sources declare a signed power sensor (`power_config.stat_rate`),
+    //    sum its state across banks, real-time, exactly like the HA Energy live tile. Per-bank sign
+    //    inversion is honoured via the `invertedRateEntities` set.
+    //  - Otherwise the net comes from the two SEPARATE directional energy meters: the latest charge
+    //    bucket (stat_energy_to) minus the latest discharge bucket (stat_energy_from). Because charge
+    //    and discharge are distinct meters, the sign is structural and charging is never lost, which
+    //    is the fix for the "battery charge stuck at 0 W" bug.
     let nextPower: number | null = null;
     let nextUnit:  string        = '';
-    const powerEntities = host._energyDefaults.batteryStatRates.length > 0
-        ? host._energyDefaults.batteryStatRates
-        : host._energyDefaults.batteryStatEnergyFroms.length > 0
-            ? host._energyDefaults.batteryStatEnergyFroms
-            : host._energyDefaults.batteryStatEnergyTos;
-    if (powerEntities.length > 0)
+    const rateEntities = host._energyDefaults.batteryStatRates;
+    if (rateEntities.length > 0)
     {
         let sum = 0;
         let anyValid = false;
-        for (const id of powerEntities)
+        for (const id of rateEntities)
         {
             const so = host.hass.states?.[id];
             const v  = so ? parseFloat(so.state) : NaN;
-            if (!isFinite(v))
-            {
-                continue;
-            }
+            if (!isFinite(v)) { continue; }
             const unit  = String(so.attributes?.unit_of_measurement ?? '');
             const watts = pvNormalizeToWatts(v, unit);
-            //HA Energy `power_config.stat_rate_inverted` flips the sign so positive reads as charging. The dashboard
-            //carries the inversion flag alongside the entity id; apply it here so the chip + leader + scrub buffer all
-            //see the canonical "positive = charging" convention regardless of how the user wired the source.
             const inverted = host._energyDefaults.invertedRateEntities.includes(id);
             sum += inverted ? -watts : watts;
             anyValid = true;
@@ -220,6 +224,18 @@ export function refreshBattery(host: BatteryHost): void
         if (anyValid)
         {
             nextPower = sum;
+            nextUnit  = 'W';
+        }
+    }
+    else if (host._energyDefaults.batteryStatEnergyTos.length > 0
+          || host._energyDefaults.batteryStatEnergyFroms.length > 0)
+    {
+        const nowMs     = Date.now();
+        const chargeW   = latestWattsFromChangeSeries(host._batteryChargeChangeSeries, nowMs);
+        const dischargeW = latestWattsFromChangeSeries(host._batteryDischargeChangeSeries, nowMs);
+        if (chargeW !== null || dischargeW !== null)
+        {
+            nextPower = Math.max(0, chargeW ?? 0) - Math.max(0, dischargeW ?? 0);
             nextUnit  = 'W';
         }
     }
@@ -236,6 +252,11 @@ export function refreshBattery(host: BatteryHost): void
         host._batteryPowerUnit = nextUnit;
     }
 
+    //Past power series: recorder `change` on the two directional energy meters. Charge from
+    //stat_energy_to, discharge from stat_energy_from; the store + scrub net them (charge - discharge)
+    //so the sign is structural, no single-sensor inference. Fetched over the store's J-2 past window.
+    fetchBatteryChangeSeries(host);
+
     //History fetch, only when the (entities, range) tuple changed.
     //Without this guard we'd reissue the WS command on every Lit
     //cycle (e.g. every clock tick).
@@ -244,8 +265,9 @@ export function refreshBattery(host: BatteryHost): void
         return;
     }
 
-    //SoC + power entity arrays already resolved above for the live read; reused here so the history fetch and the
-    //live chip see exactly the same wiring.
+    //Entity arrays for the SoC history fetch. SoC stays on the raw / mean statistics path (it is a
+    //measurement, not an energy counter); power history is sourced from the change series above.
+    const powerEntities = host._energyDefaults.batteryStatRates;
     if (socEntities.length === 0 && powerEntities.length === 0)
     {
         return;
@@ -288,6 +310,44 @@ export function refreshBattery(host: BatteryHost): void
         return;
     }
     fetchBatteryHistory(host, sortedSoc, sortedPower, ltsStart, rawStart, host._timeRange.end, fetchKey);
+}
+
+
+//Fetch the recorder `change` series for the battery charge (stat_energy_to) + discharge
+//(stat_energy_from) energy meters over the store's J-2 past window. Gated on a per-host fetch key
+//so it reissues only when the entity set or window changes. Charge and discharge are fetched as
+//two independent series so the consumer can net them with a structural sign.
+function fetchBatteryChangeSeries(host: BatteryHost): void
+{
+    const chargeIds    = host._energyDefaults.batteryStatEnergyTos;
+    const dischargeIds = host._energyDefaults.batteryStatEnergyFroms;
+    if (chargeIds.length === 0 && dischargeIds.length === 0) { return; }
+    if (host._batteryChangeFetching) { return; }
+
+    const today0 = new Date();
+    today0.setHours(0, 0, 0, 0);
+    const startMs = today0.getTime() - 2 * 24 * 3_600_000;
+    const endMs   = Date.now();
+    const sortedCharge    = [...chargeIds].sort();
+    const sortedDischarge = [...dischargeIds].sort();
+    const key = `${sortedCharge.join(',')}|${sortedDischarge.join(',')}|${startMs}`;
+    if (key === host._batteryChangeFetchKey) { return; }
+    host._batteryChangeFetchKey = key;
+    host._batteryChangeFetching = true;
+    beginLoadingPhase(host, 'battery-history');
+    void Promise.all([
+        sortedCharge.length    > 0 ? fetchChangeSeries(host.hass, sortedCharge,    startMs, endMs, '5minute') : Promise.resolve(null),
+        sortedDischarge.length > 0 ? fetchChangeSeries(host.hass, sortedDischarge, startMs, endMs, '5minute') : Promise.resolve(null),
+    ]).then(([charge, discharge]) =>
+    {
+        if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
+        if (discharge !== null) { host._batteryDischargeChangeSeries = discharge; }
+        host.requestUpdate();
+    }).finally(() =>
+    {
+        host._batteryChangeFetching = false;
+        endLoadingPhase(host, 'battery-history');
+    });
 }
 
 

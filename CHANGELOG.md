@@ -35,6 +35,28 @@ bucket instead of a fabricated 0.
 The watt curve is the bucket's kWh / bucket-duration, the canonical "power from energy" any HA
 template would compute, so where HA has a number Helios shows the same number.
 
+### Grid import / export read the recorder `change` metric (#200)
+
+The grid past series (timeline curve, dashboard graph, scrub tooltip) drops the per-entity
+rolling slope buffers + the raw / LTS history backfill in favour of the recorder `change` metric
+on the directional energy meters: import from `stat_energy_from`, export from `stat_energy_to`.
+Import and export are separate meters, so each direction's watts come straight from its own
+meter with no sign inference and every surface reads the same buckets, which removes the
+cross-surface import inconsistency. Live "now" still prefers the signed `stat_rate` sensor read
+straight from the entity state (real-time, summed + split exactly like the HA Energy live tile);
+cumulative-only installs fall back to the average power of the latest completed 5-minute change
+bucket per direction. The whole per-entity buffer / bracketed-slope machinery is gone.
+
+### Battery charge / discharge from separate meters, structural sign (#216)
+
+The battery power series + live chip no longer infer the charge / discharge sign from a single
+signed sensor (which, on a cumulative-only install, fell back to reading the discharge energy
+meter as if it were power and never surfaced charging, the "charge stuck at 0 W" bug). Charge
+now comes from the `stat_energy_to` `change` series and discharge from `stat_energy_from`, two
+separate recorder meters, and the net is charge minus discharge so the sign is structural,
+charging can never be lost. Live "now" still prefers the signed `power_config.stat_rate` sensor
+when wired; otherwise it nets the latest charge / discharge change buckets.
+
 ### Global display radius back as an editor slider (50-500 m)
 
 The display radius (the distance around the home within which buildings, LiDAR cells and raster

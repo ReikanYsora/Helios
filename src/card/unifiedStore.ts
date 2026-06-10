@@ -34,7 +34,7 @@ import type { HeliosConfig } from '../helios-config';
 import { displayUpdateFrequencyPerHour } from '../helios-config';
 import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
-import { pvNormalizeToWatts, pvCalibK, pvInverterMaxW, computePvPowerWeighted } from './pv';
+import { pvCalibK, pvInverterMaxW, computePvPowerWeighted } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
 import { effectiveForecastRatio } from './charts';
 import { computeForecastCalibration } from './calibration';
@@ -115,13 +115,15 @@ export interface UnifiedStoreHost
     readonly _pvChangeSeries:         ChangeBucket[] | null;
     readonly _pvCalibStats:           PvHistory | null;
     readonly _pvUnit:                 string;
-    readonly _batteryPowerHistory:    { times: Date[]; values: number[] } | null;
-    readonly _batteryPowerUnit:       string;
+    //Recorder `change` series for the battery charge (stat_energy_to) + discharge (stat_energy_from)
+    //meters. buildBattery nets them (charge - discharge) so the sign is structural.
+    readonly _batteryChargeChangeSeries:    ChangeBucket[] | null;
+    readonly _batteryDischargeChangeSeries: ChangeBucket[] | null;
     readonly _batterySoc:             number | null;
-    readonly _gridImportSamples:      Map<string, Array<{ t: number; v: number }>>;
-    readonly _gridExportSamples:      Map<string, Array<{ t: number; v: number }>>;
-    readonly _gridImportUnits:        Map<string, string>;
-    readonly _gridExportUnits:        Map<string, string>;
+    //Recorder `change` series for the grid import / export energy meters, 5-minute buckets. Same
+    //contract as the production series: each direction's bucket kWh is converted to average watts.
+    readonly _gridImportChangeSeries: ChangeBucket[] | null;
+    readonly _gridExportChangeSeries: ChangeBucket[] | null;
     readonly _engine?:                { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
 }
 
@@ -375,27 +377,21 @@ function buildForecast(
 }
 
 
-function buildBattery(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
+//Battery net power per bucket, convention "positive = charging". Charge watts come from the
+//stat_energy_to `change` series, discharge from stat_energy_from; the net is charge - discharge.
+//Because the two directions are separate recorder meters, the sign is structural, charging is never
+//lost (the bug where a single signed sensor only ever surfaced discharge). Future buckets null.
+function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
+    const charge    = changeSeriesToWatts(host._batteryChargeChangeSeries,    storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
+    const discharge = changeSeriesToWatts(host._batteryDischargeChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const hist = host._batteryPowerHistory;
-    if (!hist || hist.times.length === 0) { return out; }
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    for (let i = 0; i < hist.times.length; i++)
+    for (let i = 0; i < p.bucketsTotal; i++)
     {
-        const tMs = hist.times[i].getTime();
-        if (tMs < storeStartMs || tMs >= storeEndMs || tMs > nowMs) { continue; }
-        const w = pvNormalizeToWatts(hist.values[i], host._batteryPowerUnit);
-        if (!Number.isFinite(w)) { continue; }
-        const h = bucketForMs(storeStartMs, tMs, p.stepMs, p.bucketsTotal);
-        if (h < 0) { continue; }
-        sums[h]   += w;
-        counts[h] += 1;
-    }
-    for (let h = 0; h < p.bucketsTotal; h++)
-    {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
+        const c = charge[i];
+        const d = discharge[i];
+        if (c === null && d === null) { continue; }
+        out[i] = Math.max(0, c ?? 0) - Math.max(0, d ?? 0);
     }
     const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
@@ -422,63 +418,26 @@ function buildBatterySoc(host: UnifiedStoreHost, storeStartMs: number, nowMs: nu
 }
 
 
-//Grid import / export: per-entity cumulative kWh meters get differentiated to W on adjacent pairs,
-//signed-W rare configs feed in directly. Per-entity contributions sum into the bucket.
-function buildGridSlope(
-    samplesByEntity: Map<string, Array<{ t: number; v: number }>>,
-    unitsByEntity:   Map<string, string>,
-    storeStartMs:    number,
-    storeEndMs:      number,
-    nowMs:           number,
-    p:               CadenceParams,
+//Grid import / export: average watts per bucket from the recorder `change` series on the
+//directional energy meter, exactly like the production series (kWh * 1000 / bucket-hours). Reset-
+//corrected + unit-normalised server-side, no client-side differentiation. Past gaps interpolated,
+//future buckets null.
+function buildGridChange(
+    series:       ChangeBucket[] | null,
+    storeStartMs: number,
+    stepMs:       number,
+    bucketsTotal: number,
+    nowMs:        number,
 ): (number | null)[]
 {
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    samplesByEntity.forEach((samples, entityId) =>
+    const out = changeSeriesToWatts(series, storeStartMs, stepMs, bucketsTotal, nowMs);
+    for (let i = 0; i < out.length; i++)
     {
-        const unit = (unitsByEntity.get(entityId) || '').toLowerCase();
-        const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-        const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
-        if (isCum)
-        {
-            for (let i = 1; i < samples.length; i++)
-            {
-                const t1  = samples[i].t;
-                const t0  = samples[i - 1].t;
-                const dtH = (t1 - t0) / HOUR_MS;
-                if (dtH <= 0 || dtH > 6) { continue; }
-                const dv = samples[i].v - samples[i - 1].v;
-                if (!Number.isFinite(dv) || dv < 0) { continue; }
-                if (t1 < storeStartMs || t1 >= storeEndMs || t1 > nowMs) { continue; }
-                const h = bucketForMs(storeStartMs, t1, p.stepMs, p.bucketsTotal);
-                if (h < 0) { continue; }
-                sums[h]   += (dv / dtH) * factor;
-                counts[h] += 1;
-            }
-        }
-        else
-        {
-            for (let i = 0; i < samples.length; i++)
-            {
-                const t = samples[i].t;
-                if (t < storeStartMs || t >= storeEndMs || t > nowMs) { continue; }
-                const w = samples[i].v;
-                if (!Number.isFinite(w) || w < 0) { continue; }
-                const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
-                if (h < 0) { continue; }
-                sums[h]   += w;
-                counts[h] += 1;
-            }
-        }
-    });
-    for (let h = 0; h < p.bucketsTotal; h++)
-    {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
+        const v = out[i];
+        if (v !== null && v < 0) { out[i] = 0; }
     }
-    const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
-    const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
+    const nowBucket = bucketForMs(storeStartMs, nowMs, stepMs, bucketsTotal);
+    const pastEnd   = Math.min(bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
     if (pastEnd > 0)
     {
         const pastSlice = out.slice(0, pastEnd);
@@ -504,11 +463,9 @@ function computeDataVersion(host: UnifiedStoreHost): string
     const pvHistLen     = host._pvHistory?.times.length   ?? 0;
     const pvCalibLen    = host._pvCalibStats?.times.length ?? 0;
     const pvChangeLen   = host._pvChangeSeries?.length ?? 0;
-    const battHistLen   = host._batteryPowerHistory?.times.length ?? 0;
-    let gridImpLen = 0;
-    host._gridImportSamples.forEach(arr => { gridImpLen += arr.length; });
-    let gridExpLen = 0;
-    host._gridExportSamples.forEach(arr => { gridExpLen += arr.length; });
+    const battHistLen   = (host._batteryChargeChangeSeries?.length ?? 0) + (host._batteryDischargeChangeSeries?.length ?? 0);
+    const gridImpLen = host._gridImportChangeSeries?.length ?? 0;
+    const gridExpLen = host._gridExportChangeSeries?.length ?? 0;
     const socLive = host._batterySoc ?? '';
     return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
 }
@@ -535,10 +492,10 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     //output, computed independently at weather cadence and resampled into the storage buckets.
     const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
     const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
-    const battery      = buildBattery(host, storeStartMs, storeEndMs, nowMs, p);
+    const battery      = buildBattery(host, storeStartMs, nowMs, p);
     const batterySoc   = buildBatterySoc(host, storeStartMs, nowMs, p);
-    const gridImport   = buildGridSlope(host._gridImportSamples, host._gridImportUnits, storeStartMs, storeEndMs, nowMs, p);
-    const gridExport   = buildGridSlope(host._gridExportSamples, host._gridExportUnits, storeStartMs, storeEndMs, nowMs, p);
+    const gridImport   = buildGridChange(host._gridImportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
+    const gridExport   = buildGridChange(host._gridExportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
     return {
         storeStartMs,
         storeEndMs,

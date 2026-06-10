@@ -79,12 +79,6 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //by the card on every Lit update cycle when the underlying source arrays change, sliced here per
     //card via the unifiedStore.sliceForDay helper.
     readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
-    //Per-entity grid sample buffers populated by refreshGrid (in grid.ts) so the dashboard's grid chart
-    //can read raw import / export samples for today's curve. Maps are keyed by HA entity id.
-    readonly _gridImportSamples: Map<string, Array<{ t: number; v: number }>>;
-    readonly _gridExportSamples: Map<string, Array<{ t: number; v: number }>>;
-    readonly _gridImportUnits:   Map<string, string>;
-    readonly _gridExportUnits:   Map<string, string>;
 }
 
 
