@@ -370,14 +370,22 @@ function buildForecast(
                 raster,
             }
         );
-        const eff = effectiveForecastRatio(calR);
-        //Learned sky-residual correction: multiplies the physical + LiDAR + scalar model by what the
-        //user's own production history says the model gets wrong at this exact sun position (a tree
-        //the LiDAR missed, foliage, a LiDAR cell error). 1 where the map has no data for the cell, so
-        //the forecast is unchanged on a cold install and converges as history accumulates.
-        const sun = getSunPosition(t, coords.lat, coords.lon);
-        const m   = sampleSkyResidual(host._skyResidualMap, sun.azimuth, sun.altitude);
-        const w   = wRaw * k * eff * m;
+        //Calibration ratio. When the learned sky map is warm, it REPLACES the 5-day scalar: it
+        //carries the level (the model's systematic over/under-prediction, unclamped) AND the shape
+        //(per-sun-position deviation: a tree the LiDAR missed, foliage, a wrong LiDAR cell), learned
+        //from the user's own production. A cold cell falls back to the map's global level; a brand-new
+        //install with no map at all keeps the legacy clamped scalar so day 1 loses nothing.
+        let ratio: number;
+        if (host._skyResidualMap)
+        {
+            const sun = getSunPosition(t, coords.lat, coords.lon);
+            ratio = sampleSkyResidual(host._skyResidualMap, sun.azimuth, sun.altitude);
+        }
+        else
+        {
+            ratio = effectiveForecastRatio(calR);
+        }
+        const w   = wRaw * k * ratio;
         if (Number.isFinite(w))
         {
             hourly[h] = Math.min(cap, Math.max(0, w));

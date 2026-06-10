@@ -7,13 +7,14 @@
 //systematic and repeat every day at the same sun position, so they are learnable from the user's own
 //production history.
 //
-//This module derives, per (sun-azimuth, sun-altitude) cell, the RESIDUAL between what the user
-//actually produced and what the current model (LiDAR included) predicted, over a rolling multi-week
-//window. The residual is normalised to mean 1, so it carries only the SHAPE: the scalar calibration
-//keeps owning the overall level (level / shape decoupling). At forecast time the residual multiplies
-//the existing model output. Where the window has no data for a cell, the residual is 1, so the
-//forecast degrades to exactly today's behaviour, a brand-new install loses nothing on day 1 and the
-//correction phases in as production history accumulates.
+//This module derives, per (sun-azimuth, sun-altitude) cell, the RATIO between what the user actually
+//produced and what the current model (LiDAR included) predicted, over a rolling multi-week window.
+//The ratio carries BOTH the level (the model's systematic over/under-prediction) AND the shape (how
+//each sun position deviates), because the dominant error is often the level and the old clamped
+//5-day scalar couldn't rattle a >50 % miss. At forecast time the ratio replaces that scalar entirely
+//when the map is warm: forecast = model × sky-ratio(sun position). A thinly-sampled cell falls back
+//to the global mean ratio (the learned overall level), and a brand-new install with no history at
+//all gets a null map so the caller keeps the legacy scalar-calibration path, losing nothing on day 1.
 //
 //Why this beats the retired shadow-dome: it is a 2D map (not 3D az×alt×cloud), it carries no
 //localStorage and no per-frame projection (it is sampled only when the forecast is built, never
@@ -53,10 +54,16 @@ const RECENCY_HALF_LIFE_MS = 30 * 24 * 3_600_000;
 //while a single noisy sample stays mostly on the model.
 const CONF_W0 = 4;
 
-//Residual clamp. Beyond this the data is more likely a sensor fault / inverter clip than real
-//shading; clamping keeps one bad day from gutting the forecast at a sun position.
-const M_MIN = 0.3;
-const M_MAX = 1.6;
+//Ratio clamp. Wider than the legacy scalar's [0.5, 1.5] because the learned ratio is trusted to
+//carry a real level error too (e.g. a 2x kWp misconfig), but still bounded so one sensor fault /
+//inverter clip can't drive the forecast to absurdity.
+const M_MIN = 0.2;
+const M_MAX = 2.5;
+
+//Minimum total weighted samples before the map is trusted at all. Below this a brand-new / barely-
+//run install would learn a noisy global level, so we return null and the caller keeps the legacy
+//5-day scalar calibration. ~a few clear-ish days of midday production clear this.
+const MIN_TOTAL_WEIGHT = 3;
 
 //Per-hour model floor (kWh). Below this the predicted energy is so small (deep dusk, low winter sun)
 //that actual/model is dominated by quantisation + measurement noise, so the sample is dropped.
@@ -67,12 +74,14 @@ export interface SkyResidualMap
 {
     nAz:  number;
     nAlt: number;
-    //Residual per cell, normalised to a weighted mean of 1 across all visited cells. 1 where the
-    //cell was never visited (forecast unchanged there).
+    //actual/model ratio per cell (level + shape), clamped to [M_MIN, M_MAX]. Equals globalRatio
+    //where the cell was never visited.
     m:    Float32Array;
-    //Confidence per cell in [0, 1]; blends the residual toward 1 (the unchanged model) for thinly
-    //sampled cells.
+    //Confidence per cell in [0, 1]; blends the cell ratio toward globalRatio for thinly sampled cells.
     conf: Float32Array;
+    //Weighted-mean actual/model over every sample = the learned overall level, the fallback for cold
+    //cells and the value the map applies in place of the legacy 5-day scalar.
+    globalRatio: number;
     //Diagnostics: total weighted samples + count of visited cells, surfaced through heliosStats so a
     //power user can see how warmed-up the map is.
     totalWeight:  number;
@@ -96,13 +105,15 @@ export interface SkyResidualInput
 }
 
 
-//Bilinear-ish lookup of the residual at an exact sun position, confidence-blended toward 1. Reads
-//the four surrounding cells and weights by both their confidence and the fractional position, so the
-//correction is smooth across cell boundaries instead of stepping. Returns 1 (no correction) for sun
-//below the horizon or an empty map.
-export function sampleSkyResidual(map: SkyResidualMap | null, azDeg: number, altDeg: number): number
+//Bilinear lookup of the actual/model ratio at an exact sun position, each cell confidence-blended
+//toward the global level so thin cells lean on the well-estimated overall ratio instead of noise.
+//Reads the four surrounding cells and weights by both the bilinear corner weight and (implicitly)
+//confidence, so the correction is smooth across cell boundaries. Returns the global ratio for the
+//rare exact-horizon case. The caller multiplies (model × k) by this, replacing the legacy scalar.
+export function sampleSkyResidual(map: SkyResidualMap, azDeg: number, altDeg: number): number
 {
-    if (!map || altDeg <= 0) { return 1; }
+    const g = map.globalRatio;
+    if (altDeg <= 0) { return g; }
     let az = azDeg % 360;
     if (az < 0) { az += 360; }
     const alt = Math.max(0, Math.min(90 - 1e-3, altDeg));
@@ -124,15 +135,15 @@ export function sampleSkyResidual(map: SkyResidualMap | null, azDeg: number, alt
             const aj = alt0 + j;
             if (aj < 0 || aj >= map.nAlt) { continue; }
             const idx = aj * map.nAz + ai;
-            //Cell contribution = effective multiplier (conf-blended toward 1) weighted by the
-            //bilinear corner weight. A cell with conf 0 contributes exactly 1 (no change).
-            const cellM = map.conf[idx] * map.m[idx] + (1 - map.conf[idx]) * 1;
+            //Cell value = its own ratio blended toward the global level by confidence. A cold cell
+            //(conf 0) contributes exactly the global ratio.
+            const cellM = map.conf[idx] * map.m[idx] + (1 - map.conf[idx]) * g;
             const w = (i === 0 ? 1 - dAz : dAz) * (j === 0 ? 1 - dAlt : dAlt);
             num += w * cellM;
             den += w;
         }
     }
-    return den > 0 ? num / den : 1;
+    return den > 0 ? num / den : g;
 }
 
 
@@ -192,26 +203,26 @@ export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | n
         globalSumWR += w * ratio;
     }
 
-    if (globalSumW <= 0) { return null; }
-    //Global weighted-mean ratio = the level the scalar calibration already owns. Normalising each
-    //cell by it leaves only the SHAPE (how each sun position deviates from the average), mean 1.
-    const globalMean = globalSumWR / globalSumW;
-    if (!(globalMean > 0)) { return null; }
+    if (globalSumW < MIN_TOTAL_WEIGHT) { return null; }
+    //Global weighted-mean actual/model = the learned overall level. This replaces the clamped 5-day
+    //scalar (it can carry a real level error the scalar's [0.5, 1.5] clamp couldn't), and is the
+    //fallback for cells with no / little data.
+    const globalRatio = Math.max(M_MIN, Math.min(M_MAX, globalSumWR / globalSumW));
+    if (!(globalRatio > 0)) { return null; }
 
-    const m    = new Float32Array(N_AZ * N_ALT).fill(1);
+    const m    = new Float32Array(N_AZ * N_ALT).fill(globalRatio);
     const conf = new Float32Array(N_AZ * N_ALT);
     let visited = 0;
     for (let i = 0; i < m.length; i++)
     {
         if (sumW[i] <= 0) { continue; }
         const cellMean = sumWR[i] / sumW[i];
-        const norm     = cellMean / globalMean;
-        m[i]    = Math.max(M_MIN, Math.min(M_MAX, norm));
+        m[i]    = Math.max(M_MIN, Math.min(M_MAX, cellMean));
         conf[i] = 1 - Math.exp(-sumW[i] / CONF_W0);
         visited++;
     }
 
-    return { nAz: N_AZ, nAlt: N_ALT, m, conf, totalWeight: globalSumW, visitedCells: visited };
+    return { nAz: N_AZ, nAlt: N_ALT, m, conf, globalRatio, totalWeight: globalSumW, visitedCells: visited };
 }
 
 

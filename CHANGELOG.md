@@ -48,6 +48,16 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Forecast: the learned map now carries the level too (beta.8)
+
+beta.7's sky map was shape-only (normalised to mean 1) and left the level to the clamped 5-day
+scalar [0.5, 1.5], so an install whose physical model was systematically off on the LEVEL (a kWp
+misconfig, a base-irradiance bias) kept a large forecast-vs-actual gap the scalar couldn't close.
+The map now learns the raw actual/model ratio per sun position, carrying both the level AND the
+shape, clamped wider [0.2, 2.5], and REPLACES the scalar when warm. Cold cells fall back to the
+learned global level; a brand-new install with no map keeps the legacy scalar so day 1 is
+unchanged. This applies to every forecast curve, including the past days shown in the CoverFlow.
+
 ### Learned sky-residual forecast correction (replaces the shadow-map trainer)
 
 The v1.8.3 cycle retired the self-learning shadow-map, and the forecast lost the correction that
