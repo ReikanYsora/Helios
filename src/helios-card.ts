@@ -87,6 +87,7 @@ import {
     syncWeatherShaderState,
 } from './card/weatherMode';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
+import { clearEnergyStatsCache } from './card/energy-stats';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
@@ -390,6 +391,12 @@ export class HeliosCard extends LitElement
     @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
     _pvTrainerStatsFetchKey  = '';
     _pvTrainerStatsFetching  = false;
+    //Recorder `change` series for the solar energy meter(s): the canonical past-production source for
+    //the unified store + chip scrub. Reset-corrected, unit-normalised kWh per 5-minute bucket, the
+    //same metric the HA Energy dashboard consumes. Replaces the client-side counter differentiation.
+    @state() _pvChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    _pvChangeSeriesFetchKey  = '';
+    _pvChangeSeriesFetching  = false;
     //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
     //(`inverter-cutoff-soc-pct`). Reserved for future use after the shading-map trainer retirement. Null when the guard is
     //off or no battery is configured. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
@@ -863,6 +870,8 @@ export class HeliosCard extends LitElement
         this._pvHistory                   = null;
         this._pvCalibStats                = null;
         this._pvTrainerStats              = null;
+        this._pvChangeSeries              = null;
+        this._pvChangeSeriesFetchKey      = '';
         this._pvSampleBuffer              = [];
         this._pvFetchKey                  = '';
         this._pvCalibStatsFetchKey        = '';
@@ -880,6 +889,7 @@ export class HeliosCard extends LitElement
         clearBatteryModuleCaches();
         clearRadiationModuleCaches();
         clearGridModuleCaches();
+        clearEnergyStatsCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.

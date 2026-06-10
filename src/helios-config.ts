@@ -300,10 +300,13 @@ export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 
 //Default and allowed range for the user-facing display update frequency (buckets per hour). 4 = a
 //bucket every 15 minutes, the sweet spot between visible curve precision and rebuild CPU cost. The
-//editor slider clamps to [1, 60] (1 = hourly, 60 = one per minute).
+//slider clamps to [1, 12]: 12 buckets / hour = 5 minutes, which is the recorder's finest statistics
+//period (HA has no statistics period shorter than 5 minutes). Asking for more than 12 / hour could
+//only interpolate the 5-minute buckets into cosmetic sub-buckets, no extra real data, so the ceiling
+//sits at the point where every step still maps to a distinct recorder bucket.
 export const DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR = 4;
 export const MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 1;
-export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 60;
+export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 12;
 
 //Resolve the bucket cadence (buckets per hour) the data source and every graph reads from. Reads
 //the user-facing config key, clamps to the allowed range, falls back to the default for missing /

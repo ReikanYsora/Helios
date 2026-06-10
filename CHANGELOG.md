@@ -5,6 +5,43 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.8.4 (in progress)
+
+> Data-correctness cycle. The v1.8.3 switch to the HA Energy dashboard as the single source of
+> truth surfaced a class of bugs where Helios rolled its own differentiation of the cumulative
+> energy counters instead of reading the same numbers HA does. v1.8.4 converges every measured
+> series onto the recorder's `change` metric so Helios matches the HA Energy dashboard to the
+> watt-hour, surface by surface.
+
+### Solar production reads the recorder `change` metric (#215, #220)
+
+The past-production series (timeline curve, dashboard graph, scrub tooltip) and the live chip
+no longer differentiate the raw solar counter client-side. They now read the recorder's
+pre-computed `change` per 5-minute bucket on the solar energy meter (`stat_energy_from`), the
+exact same data the HA Energy dashboard consumes. The recorder handles counter resets
+(total_increasing dropping to 0, daily-reset meters) and unit conversion (Wh / kWh / MWh ->
+kWh) natively, so:
+
+- a SolarEdge install that updates every 15 minutes no longer reads a flat 0 W (the old rolling
+  buffer trimmed to 5 minutes never caught two samples). #215
+- a daily-reset "production today" counter no longer paints a midnight spike or absurd totals
+  (e.g. 17 000 kWh). The recorder brackets the delta across the reset. #220
+
+Live "now" power prefers the HA Energy power sensor (`stat_rate`) read straight from the entity
+state, exactly like the HA Energy live tile, summed across split installs. On cumulative-only
+installs with no power sensor, the chip shows the average power of the latest completed 5-minute
+bucket instead of a fabricated 0.
+
+The watt curve is the bucket's kWh / bucket-duration, the canonical "power from energy" any HA
+template would compute, so where HA has a number Helios shows the same number.
+
+### Data-interval control capped at 12 / hour (5 minutes)
+
+The data-interval slider now ranges 1-12 buckets / hour instead of 1-60. 12 / hour = 5 minutes,
+the recorder's finest statistics period (HA has no statistics shorter than 5 minutes). Settings
+above 12 could only interpolate the 5-minute buckets into cosmetic sub-buckets with no extra
+real data, so the ceiling now sits where every step still maps to a distinct recorder bucket.
+
 ## v1.8.3
 
 > The biggest release of the v1.8.x line by a wide margin. v1.8.3

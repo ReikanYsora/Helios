@@ -26,6 +26,7 @@ import { pickTranslations } from '../i18n';
 export type LoadingPhaseId =
     | 'energy-prefs'
     | 'pv-history'
+    | 'pv-change-series'
     | 'battery-history'
     | 'grid-history'
     | 'solar-radiation'

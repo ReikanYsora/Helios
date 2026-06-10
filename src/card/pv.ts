@@ -13,8 +13,9 @@ import { computePvPower, getSunPosition, type PanelOrientation } from '../engine
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
 import { resolveBatteryEntities } from './battery';
-import { callWSWithTimeout, WsTimeoutError, scheduleIdle } from './ws-timeout';
+import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, type ChangeBucket } from './energy-stats';
 
 
 //Resolve the live PV entity from the HA Energy dashboard solar source. Prefers the optional `stat_rate` (signed W or kW)
@@ -108,6 +109,14 @@ export interface PvHost extends LoadingTrackerHost
     _pvTrainerStats:        PvHistory | null;
     _pvTrainerStatsFetchKey: string;
     _pvTrainerStatsFetching: boolean;
+    //Recorder `change` series for the solar energy meter(s), 5-minute buckets over the store's past
+    //window. This is the canonical past-production source for the unified store (timeline + dashboard
+    //graph) and the chip scrub: the recorder hands back reset-corrected, unit-normalised kWh per
+    //bucket, the same metric the HA Energy dashboard consumes, so the plotted production matches HA to
+    //the watt-hour without any client-side counter differentiation. Null until the first fetch lands.
+    _pvChangeSeries:         ChangeBucket[] | null;
+    _pvChangeSeriesFetchKey: string;
+    _pvChangeSeriesFetching: boolean;
 }
 
 
@@ -426,34 +435,34 @@ export function refreshPv(host: PvHost): void
         }
     }
 
-    //5-min LTS for the unified data source's past-production curve (5 days, matching the data
-    //source window). Same multi-source aggregation as the calib path so the curve sees total
-    //production rather than the first-entity share. Window scoped to the store's J-2 to J+2 span.
-    if (!host._pvTrainerStatsFetching)
+    //Past-production curve for the unified store (timeline + dashboard graph) + the chip scrub. Sourced
+    //from the recorder `change` metric on the solar ENERGY meter(s) (`stat_energy_from`), exactly like
+    //the HA Energy dashboard: the recorder returns reset-corrected, unit-normalised kWh per 5-minute
+    //bucket and the store divides by the bucket duration to get average watts. No client-side counter
+    //differentiation, so a 15-minute SolarEdge counter or a daily-reset meter is handled natively by
+    //the recorder instead of producing a flat-zero curve or a midnight spike.
+    const changeIds = host._energyDefaults.solarStatEnergyFroms;
+    if (changeIds.length > 0 && !host._pvChangeSeriesFetching)
     {
-        const trainerStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
-        const trainerKey   = `${fetchKeyPart}@5m|${trainerStart.getTime()}|${fetchEnd.getTime()}`;
-        if (trainerKey !== host._pvTrainerStatsFetchKey)
+        const seriesStart = new Date(today0.getTime() - 2 * 24 * HOUR_MS);
+        const sortedChange = [...changeIds].sort();
+        const changeKey    = `${sortedChange.join(',')}|${seriesStart.getTime()}|${fetchEnd.getTime()}`;
+        if (changeKey !== host._pvChangeSeriesFetchKey)
         {
-            host._pvTrainerStatsFetchKey = trainerKey;
-            const cachedTrainer = pvStatsCacheGet(_pvTrainerStatsCache, trainerKey);
-            if (cachedTrainer)
-            {
-                host._pvTrainerStats = cachedTrainer.stats;
-            }
-            else
-            {
-                //Defer to browser idle time so the user-facing fetches (calib stats + live state)
-                //land first and the chart paints quickly. The trainer 5-min stats then refine the
-                //past production curve once they arrive, no blocker for the initial chart render.
-                const trainerIds   = sortedLive.length > 0 ? sortedLive : [entity];
-                const unitLow      = (host._pvUnit || '').toLowerCase();
-                const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
-                scheduleIdle(() =>
+            host._pvChangeSeriesFetchKey = changeKey;
+            host._pvChangeSeriesFetching = true;
+            beginLoadingPhase(host, 'pv-change-series');
+            void fetchChangeSeries(host.hass, sortedChange, seriesStart.getTime(), fetchEnd.getTime(), '5minute')
+                .then((series) =>
                 {
-                    fetchPvStatistics(host, trainerIds, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey, isCumulative);
+                    if (series !== null) { host._pvChangeSeries = series; }
+                    host.requestUpdate();
+                })
+                .finally(() =>
+                {
+                    host._pvChangeSeriesFetching = false;
+                    endLoadingPhase(host, 'pv-change-series');
                 });
-            }
         }
     }
 }
@@ -964,35 +973,9 @@ function parseStatBoundary(raw: unknown): number | null
 //Locate the slot that brackets a scrub timestamp. Priority order:
 //  1. `_pvHistory` raw (~2 days, finest resolution)
 //  2. `_pvCalibStats` hourly (5 days), populated right after card mount and not deferred to idle
-//  3. `_pvTrainerStats` 5-min (30 days), idle-deferred so it lands a beat later
 //
-//The calibration slot sits between the raw and trainer ones intentionally: it lands FAST (no idle wait) and its hourly resolution is
-//plenty for chip-level accuracy. Without it, a user scrubbing the cursor before the trainer fetch has landed (the first second after
-//mount) sees nothing past the 2-day raw edge even though we already have data covering the chart's visible past.
-//
-//All three slots carry the same `{ times, values }` shape, in the same unit, so the caller treats them identically. Returns null when
-//none brackets the instant.
-function pickPvHistoryAt(host: PvHost, tMs: number): PvHistory | null
-{
-    const bracketed = (h: PvHistory | null): PvHistory | null =>
-    {
-        if (!h || h.times.length === 0)
-        {
-            return null;
-        }
-        const firstMs = h.times[0].getTime();
-        const lastMs  = h.times[h.times.length - 1].getTime();
-        //Allow a 60 s grace at the tail so a "live" scrub to "now" still resolves on a series whose last sample is a few seconds old.
-        if (tMs < firstMs || tMs > lastMs + 60_000)
-        {
-            return null;
-        }
-        return h;
-    };
-    return bracketed(host._pvHistory)
-        ?? bracketed(host._pvCalibStats)
-        ?? bracketed(host._pvTrainerStats);
-}
+//The scrub path now reads the recorder `change` series directly (see pvRateAtTime), so the old
+//multi-slot bracketing helper that walked _pvHistory / _pvCalibStats / _pvTrainerStats is gone.
 
 
 //Compute the production rate at an arbitrary historical time
@@ -1006,313 +989,55 @@ function pickPvHistoryAt(host: PvHost, tMs: number): PvHistory | null
 //(no production data exists there yet).
 export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 {
-    const tMs = time.getTime();
-
-    //Pick the slot that brackets the scrub timestamp. The raw `_pvHistory` window is bounded to the chart's visible past (~2 days), so any
-    //scrub older than that would return null without this fallback. `_pvTrainerStats` carries the same data at 5-min resolution over 30
-    //days, which is enough for chip-level accuracy when the cursor lands past the raw window.
-    const hist = pickPvHistoryAt(host, tMs);
-    if (!hist)
+    //Read the average power at the scrub instant from the recorder `change` series (5-minute
+    //buckets). The recorder already handled resets + unit conversion, so this is a single bucket
+    //lookup, no differentiation, no classification. Returns null when no bucket covers the instant
+    //(future scrub, or a gap in the recorder data), which hides the chip there, the right behaviour
+    //for the future half of the timeline. Watts are floored at zero so a net-meter quirk never
+    //surfaces as negative production.
+    const w = wattsAtFromChangeSeries(host._pvChangeSeries, time.getTime());
+    if (w === null)
     {
         return null;
     }
-
-    //Classification, same logic as currentPvRate. Repeated inline so each helper is self-contained.
-    const entity   = resolvePvLiveEntity(host._energyDefaults);
-    const stateObj = host.hass?.states?.[entity];
-    const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
-    const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
-    const u        = (host._pvUnit || '').trim();
-    const lu       = u.toLowerCase();
-
-    let isCumulative: boolean;
-    if (sc === 'total_increasing' || sc === 'total')
-    {
-        isCumulative = true;
-    }
-    else if (sc === 'measurement')
-    {
-        isCumulative = false;
-    }
-    else if (dc === 'energy')
-    {
-        isCumulative = true;
-    }
-    else if (dc === 'power')
-    {
-        isCumulative = false;
-    }
-    else isCumulative = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-
-    let rateUnit: string;
-    if (lu === 'wh')
-    {
-        rateUnit = 'W';
-    }
-    else if (lu === 'kwh')
-    {
-        rateUnit = 'kW';
-    }
-    else if (lu === 'mwh')
-    {
-        rateUnit = 'MW';
-    }
-    else
-    {
-        rateUnit = u ? `${u}/h` : '';
-    }
-
-    //Locate the index of the sample at or before `time`. Binary search over the monotonically ascending `times`
-    //array, called from the scrub tooltip on every Lit render; on 1 Hz Victron / Shelly installs `_pvHistory` can
-    //carry ~21,600 entries over a 6 h raw window, where the previous linear scan was the dominant cost on the
-    //tooltip path.
-    const len = hist.times.length;
-    let idx: number;
-    if (len === 0 || tMs < hist.times[0].getTime())
-    {
-        idx = 0;
-    }
-    else if (tMs >= hist.times[len - 1].getTime())
-    {
-        idx = len - 1;
-    }
-    else
-    {
-        let lo = 0;
-        let hi = len - 1;
-        while (hi - lo > 1)
-        {
-            const mid = (lo + hi) >> 1;
-            if (hist.times[mid].getTime() <= tMs)
-            {
-                lo = mid;
-            }
-            else
-            {
-                hi = mid;
-            }
-        }
-        idx = lo;
-    }
-    if (idx < 0)
-    {
-        idx = 0;
-    }
-
-    if (!isCumulative)
-    {
-        //Power sensor: just return the historical value, floored at zero so a net-meter sensor that briefly dipped negative at dusk doesn't surface
-        //as "-2 W of production" on the chip.
-        return { value: Math.max(0, hist.values[idx]), unit: u };
-    }
-
-    //Cumulative: differentiate around the located index.
-    let lo = idx;
-    let hi = idx + 1 < hist.times.length ? idx + 1 : idx;
-    if (lo === hi)
-    {
-        //At the boundary, fall back to the previous pair.
-        lo = Math.max(0, idx - 1);
-        hi = idx;
-    }
-    if (lo === hi)
-    {
-        //Single-sample history, no rate possible.
-        return { value: 0, unit: rateUnit };
-    }
-    const dtH = (hist.times[hi].getTime() - hist.times[lo].getTime()) / 3_600_000;
-    if (dtH <= 0)
-    {
-        return { value: 0, unit: rateUnit };
-    }
-    const dv = hist.values[hi] - hist.values[lo];
-    if (dv < 0)
-    {
-        //Counter reset between the two samples → no production
-        //(rate is meaningless across a midnight reset).
-        return { value: 0, unit: rateUnit };
-    }
-    return { value: dv / dtH, unit: rateUnit };
+    return { value: Math.max(0, w), unit: 'W' };
 }
 
 
-//Compute the instantaneous PV production rate for "now".
+//Compute the live "now" PV production rate, sourced exactly like the HA Energy live tile:
 //
-//  - Cumulative entity (state_class total_increasing|total,
-//    device_class energy, or unit Wh/kWh/MWh) → differentiate
-//    over the rolling sample buffer (which is filled live each
-//    Lit cycle), anchored on the sample closest to ~60 s ago
-//    so the readout reflects the last minute of production.
-//  - Instantaneous entity (anything else) → the entity's own
-//    state value already IS the rate.
+//  - When the solar source declares a power sensor (`stat_rate`), read its state directly, summed
+//    across every wired stat_rate for a split install. This is the real-time value HA itself shows.
+//  - Otherwise (cumulative-only install, e.g. SolarEdge with no power sensor) fall back to the
+//    average power of the latest completed 5-minute recorder `change` bucket. HA shows no live power
+//    at all in this case; the 5-minute average is the closest HA-consistent live read available, and
+//    it fixes the old "stuck at 0 W" failure where a 15-minute counter never filled the rolling
+//    buffer's 5-minute window.
 //
-//Returns null when no usable rate can be derived (no entity,
-//no buffer yet, counter reset). The caller falls back to the
-//raw current state in that case so the chip stays populated.
+//Returns null when neither source yields a value (no power sensor and no change series yet), so the
+//caller hides the chip rather than ever printing the lifetime cumulative total.
 export function currentPvRate(host: PvHost): PvRate | null
 {
-    if (host._pvCurrent === null)
+    const rates = host._energyDefaults.solarStatRates;
+    if (rates.length > 0)
     {
-        return null;
-    }
-
-    const entity   = resolvePvLiveEntity(host._energyDefaults);
-    const stateObj = host.hass?.states?.[entity];
-    const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
-    const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
-    const u        = (host._pvUnit || '').trim();
-    const lu       = u.toLowerCase();
-
-    //HA's classification taxonomy is authoritative when set;
-    //fall back to the unit string for entities (custom
-    //template sensors mostly) that omit state_class /
-    //device_class.
-    let isCumulative: boolean;
-    if (sc === 'total_increasing' || sc === 'total')
-    {
-        isCumulative = true;
-    }
-    else if (sc === 'measurement')
-    {
-        isCumulative = false;
-    }
-    else if (dc === 'energy')
-    {
-        isCumulative = true;
-    }
-    else if (dc === 'power')
-    {
-        isCumulative = false;
-    }
-    else
-    {
-        isCumulative = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-    }
-
-    if (!isCumulative)
-    {
-        //Instantaneous sensor, the live state IS the rate. Net-meter
-        //sensors can briefly read slightly negative around dawn / dusk
-        //or report a few watts of inverter standby at night; floor at
-        //zero so the chip never displays "-2 W of production".
-        return { value: Math.max(0, host._pvCurrent), unit: u };
-    }
-
-    //Choose the rate unit so the formatted readout reads as
-    //power, not as energy-per-something. When the source unit
-    //is unknown, append "/h" so the user still sees a sensible
-    //label (e.g. "12 units/h") instead of a bare number.
-    let rateUnit: string;
-    if (lu === 'wh')
-    {
-        rateUnit = 'W';
-    }
-    else if (lu === 'kwh')
-    {
-        rateUnit = 'kW';
-    }
-    else if (lu === 'mwh')
-    {
-        rateUnit = 'MW';
-    }
-    else
-    {
-        rateUnit = u ? `${u}/h` : '';
-    }
-
-    //Cumulative path: from this point on we MUST return a rate
-    //object, never null. Showing the raw cumulative state on
-    //the chip would be flat-out wrong for an "energy total"
-    //sensor (e.g. lifetime kWh). When no rate can be derived
-    //(entity static all night, no recent samples, no history),
-    //we default to 0, that's the truthful answer for a sensor
-    //that hasn't moved.
-
-    //Preferred path: use the rolling buffer of live samples. We
-    //walk back from the newest to find the sample closest to
-    //~60 s ago, that anchors the rate to a "last minute"
-    //window the user explicitly asked for. If the buffer
-    //doesn't cover a full minute (entity updates rarely), we
-    //fall back to the oldest available sample.
-    const buf = host._pvSampleBuffer;
-    if (buf.length >= 2)
-    {
-        const last = buf[buf.length - 1];
-        const target = last.t - 60_000;
-        let prev = buf[0];
-        for (const s of buf)
+        let sumW = 0;
+        let any  = false;
+        for (const id of rates)
         {
-            if (s.t <= target)
-            {
-                prev = s;
-            }
-            else
-            {
-                break;
-            }
+            const so = host.hass?.states?.[id];
+            if (!so) { continue; }
+            const v = parseFloat(so.state);
+            if (!isFinite(v)) { continue; }
+            sumW += pvNormalizeToWatts(v, String(so.attributes?.unit_of_measurement ?? ''));
+            any   = true;
         }
-        const dtH = (last.t - prev.t) / 3_600_000;
-        if (dtH > 0)
-        {
-            const dv = last.v - prev.v;
-            if (dv < 0)
-            {
-                //Counter reset (e.g. "energy today" flipping to
-                //0 at midnight), no meaningful rate. Drop the
-                //pre-reset samples so the next call works on a
-                //clean window.
-                host._pvSampleBuffer = [last];
-                return { value: 0, unit: rateUnit };
-            }
-            return { value: dv / dtH, unit: rateUnit };
-        }
+        if (any) { return { value: Math.max(0, sumW), unit: 'W' }; }
     }
 
-    //Static-entity heuristic: if the entity hasn't moved for
-    //a minute or more, the live state is the same as it was
-    //60 s ago by definition, production rate is zero. This
-    //resolves the "lifetime kWh sensor at night" case: the
-    //cumulative value sits unchanged for hours, so any rate
-    //we'd compute against the buffer's single sample would be
-    //meaningless; the truthful answer is 0 W.
-    const lastUpdatedMs = stateObj?.last_updated
-        ? new Date(stateObj.last_updated).getTime()
-        : null;
-    if (lastUpdatedMs !== null && Date.now() - lastUpdatedMs >= 60_000)
-    {
-        return { value: 0, unit: rateUnit };
-    }
-
-    //Cold-start: the buffer hasn't accumulated two samples
-    //yet (we just opened the dashboard) AND the entity has
-    //changed in the last minute (otherwise the static check
-    //above would have already returned). Diff the last two
-    //historical samples so the chip is populated immediately
-    //instead of waiting a full minute for a buffer to form.
-    const hist = host._pvHistory;
-    if (hist && hist.times.length >= 2)
-    {
-        const lastIdx = hist.times.length - 1;
-        const prevIdx = lastIdx - 1;
-        const dtH = (hist.times[lastIdx].getTime()
-                   - hist.times[prevIdx].getTime()) / 3_600_000;
-        if (dtH > 0)
-        {
-            const dv = hist.values[lastIdx] - hist.values[prevIdx];
-            if (dv < 0)
-            {
-                return { value: 0, unit: rateUnit };
-            }
-            return { value: dv / dtH, unit: rateUnit };
-        }
-    }
-
-    //Default for a cumulative entity with no derivable rate
-    //yet, better than misleading the user with the lifetime
-    //total. Will quickly transition to a real rate as soon as
-    //the buffer accumulates two samples (typically < 1 min on
-    //a healthy production sensor).
-    return { value: 0, unit: rateUnit };
+    const w = latestWattsFromChangeSeries(host._pvChangeSeries, Date.now());
+    if (w === null) { return null; }
+    return { value: Math.max(0, w), unit: 'W' };
 }
 
 

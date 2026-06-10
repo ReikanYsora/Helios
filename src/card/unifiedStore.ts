@@ -35,6 +35,7 @@ import { displayUpdateFrequencyPerHour } from '../helios-config';
 import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
 import { pvNormalizeToWatts, pvCalibK, pvInverterMaxW, computePvPowerWeighted } from './pv';
+import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
 import { effectiveForecastRatio } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { getHomeCoords } from './init';
@@ -109,11 +110,10 @@ export interface UnifiedStoreHost
     readonly hass:                    { language?: string; states?: Record<string, { state: string }>; config?: { latitude?: number; longitude?: number } } | undefined;
     readonly _chartSeries:            ChartSeries | null;
     readonly _pvHistory:              PvHistory | null;
+    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. The canonical past-
+    //production source: buildProduction converts each bucket's reset-corrected kWh to average watts.
+    readonly _pvChangeSeries:         ChangeBucket[] | null;
     readonly _pvCalibStats:           PvHistory | null;
-    //5-minute long-term-statistics series, 30-day rolling window. Primary past-production source
-    //(12 samples per hour vs the hourly calib stats), fetched on idle for the shading-map trainer.
-    //Null until the deferred fetch lands; the builder degrades to _pvCalibStats only.
-    readonly _pvTrainerStats:         PvHistory | null;
     readonly _pvUnit:                 string;
     readonly _batteryPowerHistory:    { times: Date[]; values: number[] } | null;
     readonly _batteryPowerUnit:       string;
@@ -278,108 +278,26 @@ function buildCloud(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: nu
 }
 
 
-//Production = past actual only, no model fallback. Reads the 5-min trainer LTS first, then hourly
-//calib as fallback, then the live tail from _pvHistory. For cumulative entities every source is
-//differentiated to instant W; for power entities the samples feed in directly. Past buckets without
-//a real sample are filled by linear interpolation between bracketing real samples; the data source
-//never blends a forecast value into a "real" series. Future buckets stay null.
-function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
+//Production = past actual only, no model fallback. Sourced from the recorder `change` metric on the
+//solar energy meter(s) (host._pvChangeSeries), the exact same data the HA Energy dashboard consumes:
+//each 5-minute bucket's reset-corrected, unit-normalised kWh is converted to its average watts
+//(kWh * 1000 / bucket-hours). No client-side counter differentiation, no unit-string classification,
+//so a 15-minute SolarEdge counter or a daily-reset meter is handled natively by the recorder.
+//
+//Store buckets are always >= the 5-minute source period (the data-interval control caps at 12 / hour
+//= 5 min), so each store bucket aggregates one or more whole source buckets and the conversion is
+//exact. Past gaps between source buckets are linearly interpolated so the curve stays continuous;
+//future buckets stay null so the forecast series owns the future half.
+function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    const unit  = (host._pvUnit || '').toLowerCase();
-    const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-
-    const ingestPower = (tMs: number, w: number): void =>
+    const out = changeSeriesToWatts(host._pvChangeSeries, _storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
+    //Production is never negative; a tiny negative recorder change (meter glitch) is noise, floor it.
+    for (let i = 0; i < out.length; i++)
     {
-        if (!Number.isFinite(w) || w < 0) { return; }
-        if (tMs < storeStartMs || tMs >= storeEndMs || tMs > nowMs) { return; }
-        const h = bucketForMs(storeStartMs, tMs, p.stepMs, p.bucketsTotal);
-        if (h < 0) { return; }
-        sums[h]   += w;
-        counts[h] += 1;
-    };
-
-    //LTS ingester: shared between the 5-min trainer and the hourly calib. For cumulative entities
-    //the values are bucket-end lifetime counters and we differentiate adjacent pairs to dv / dtH
-    //(with 6 h outage cap + monotonic reset guard). For power entities values are already
-    //bucket-mean watts and feed straight in.
-    const ingestLts = (lts: PvHistory): void =>
-    {
-        if (lts.times.length < 2) { return; }
-        if (isCum)
-        {
-            const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
-            let prevIdx = 0;
-            for (let i = 1; i < lts.times.length; i++)
-            {
-                const t1  = lts.times[i].getTime();
-                const t0  = lts.times[prevIdx].getTime();
-                const dtH = (t1 - t0) / HOUR_MS;
-                if (dtH <= 0 || dtH > 6) { prevIdx = i; continue; }
-                const dv = lts.values[i] - lts.values[prevIdx];
-                prevIdx = i;
-                if (dv < 0) { continue; }
-                ingestPower(t1, (dv / dtH) * factor);
-            }
-        }
-        else
-        {
-            for (let i = 0; i < lts.times.length; i++)
-            {
-                ingestPower(lts.times[i].getTime(), pvNormalizeToWatts(lts.values[i], host._pvUnit));
-            }
-        }
-    };
-
-    //Trainer first (5-min granularity, 30-day window): primary past source. Calib stats (hourly,
-    //5-day window) stay as fallback for the rare bucket the trainer doesn't cover.
-    if (host._pvTrainerStats) { ingestLts(host._pvTrainerStats); }
-    if (host._pvCalibStats)   { ingestLts(host._pvCalibStats); }
-
-    //Live tail from the push stream. For cumulative entities each push is a counter reading and we
-    //differentiate adjacent pairs with a 3-minute anchor so integer-Wh quantization noise doesn't
-    //paint fake spikes. Power entities feed in directly.
-    const hist = host._pvHistory;
-    if (hist && hist.times.length > 0)
-    {
-        if (isCum)
-        {
-            const MIN_DTH = 0.05; //3 minutes
-            const factor  = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
-            let prevIdx = 0;
-            for (let i = 1; i < hist.times.length; i++)
-            {
-                const t1  = hist.times[i].getTime();
-                const t0  = hist.times[prevIdx].getTime();
-                const dtH = (t1 - t0) / HOUR_MS;
-                if (dtH <= 0) { continue; }
-                if (dtH > 6) { prevIdx = i; continue; }
-                const dv = hist.values[i] - hist.values[prevIdx];
-                if (dv < 0) { prevIdx = i; continue; }
-                if (dtH < MIN_DTH) { continue; }
-                ingestPower(t1, (dv / dtH) * factor);
-                prevIdx = i;
-            }
-        }
-        else
-        {
-            for (let i = 0; i < hist.times.length; i++)
-            {
-                ingestPower(hist.times[i].getTime(), pvNormalizeToWatts(hist.values[i], host._pvUnit));
-            }
-        }
+        const v = out[i];
+        if (v !== null && v < 0) { out[i] = 0; }
     }
-    for (let h = 0; h < p.bucketsTotal; h++)
-    {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
-    }
-    //Restrict interpolation to the past half of the store. Past gaps between LTS samples get filled
-    //with a value that lives strictly between two real readings: the curve stays continuous AND
-    //honest. Future buckets stay null so the forecast series stays the only thing the dial draws on
-    //the future half.
-    const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
+    const nowBucket = bucketForMs(_storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
     if (pastEnd > 0)
     {
@@ -585,14 +503,14 @@ function computeDataVersion(host: UnifiedStoreHost): string
     const seriesLen     = host._chartSeries?.times.length ?? 0;
     const pvHistLen     = host._pvHistory?.times.length   ?? 0;
     const pvCalibLen    = host._pvCalibStats?.times.length ?? 0;
-    const pvTrainerLen  = host._pvTrainerStats?.times.length ?? 0;
+    const pvChangeLen   = host._pvChangeSeries?.length ?? 0;
     const battHistLen   = host._batteryPowerHistory?.times.length ?? 0;
     let gridImpLen = 0;
     host._gridImportSamples.forEach(arr => { gridImpLen += arr.length; });
     let gridExpLen = 0;
     host._gridExportSamples.forEach(arr => { gridExpLen += arr.length; });
     const socLive = host._batterySoc ?? '';
-    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvTrainerLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
+    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
 }
 
 
