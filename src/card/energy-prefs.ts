@@ -25,8 +25,8 @@ export interface EnergyDefaults
     gridStatEnergyFroms:    string[];
     //Grid export kWh meters per source (`stat_energy_to`). Same backfill pattern as the import side.
     gridStatEnergyTos:      string[];
-    //Battery live signed power sensors per source via `power_config.stat_rate`. Positive convention matches the source
-    //(charge positive, discharge negative). Helios applies the same split as the grid LIVE path.
+    //Battery live power sensors per source via `power_config` (any of its four slots). After the per-entity sign
+    //flips from `invertedRateEntities` are applied, the summed value is charge positive / discharge negative.
     batteryStatRates:       string[];
     //Battery discharge kWh meters (`stat_energy_from`). Drives the detail-panel `discharged today` headline via the
     //recorder `change` aggregation.
@@ -37,12 +37,12 @@ export interface EnergyDefaults
     //chip + vessel visualisation. Multi-bank weighting by capacity is no longer supported, HA Energy has no concept of
     //per-source capacity.
     batteryStatSocs:        string[];
-    //Entity ids whose raw value reads with the inverse sign convention from the rest of the card (the user wired the
-    //source through `power_config.stat_rate_inverted` instead of `stat_rate`, or through a directional slot whose
-    //meaning opposes the card's canonical sign: `stat_rate_from` for battery (power FROM the battery = discharging,
-    //negative under "positive = charging") and `stat_rate_to` for grid (power TO the grid = exporting, negative under
-    //"positive = import"). Consumers (refreshBattery, refreshGrid) flip the sign at sample time so the downstream
-    //chips / leaders / scrub buffers see the canonical convention.
+    //Entity ids whose raw value reads opposite to the card's canonical sign (battery: positive = charging, grid:
+    //positive = import). Which `power_config` slot lands here is flavor-dependent because HA's own conventions are:
+    //battery `stat_rate` is discharge-positive (flips) while grid `stat_rate` is import-positive (no flip), and the
+    //directional from/to slots flip on the side whose direction opposes the canonical sign. The full mapping lives
+    //in `collectPowerConfigRates`. Consumers (refreshBattery, refreshGrid, battery history aggregation) flip the
+    //sign at sample time so the downstream chips / leaders / scrub buffers see the canonical convention.
     invertedRateEntities:   string[];
 }
 
@@ -512,9 +512,13 @@ export function parseEnergyPrefs(prefs: {
 //Collect every live-power entity wired in a `power_config` block, each with the sign flip its slot needs to land on
 //the card's canonical convention (battery: positive = charging, grid: positive = import).
 //
-//The slot semantics mirror HA's energy-meter naming, "from the source" / "to the source":
-//  - `stat_rate` / `stat_rate_inverted`: ONE signed net sensor, already canonical (or wired flipped via HA Energy's
-//    own invert toggle).
+//The slot semantics mirror HA's energy-meter naming, "from the source" / "to the source". The sign of the single-
+//sensor slots is FLAVOR-DEPENDENT, per HA's own dialog copy (frontend en.json, battery/grid dialog):
+//  - `stat_rate` ("Standard"): ONE signed net sensor in HA's canonical sign. Grid: positive = importing, which
+//    matches the card. Battery: positive = DISCHARGING, the opposite of the card's charge-positive convention,
+//    so the battery flavor flips it.
+//  - `stat_rate_inverted` ("Inverted"): the mirror of Standard. Grid: positive = exporting (flip). Battery:
+//    positive = charging, already the card's convention (no flip).
 //  - `stat_rate_from`: unsigned power flowing FROM the source, i.e. battery discharge / grid import. Canonical sign:
 //    negative for battery (discharging), positive for grid (importing).
 //  - `stat_rate_to`: unsigned power flowing TO the source, i.e. battery charge / grid export. Canonical sign:
@@ -538,12 +542,12 @@ function collectPowerConfigRates(raw: unknown, flavor: 'grid' | 'battery'): Arra
     const direct = pickFirstString(pc['stat_rate']);
     if (direct)
     {
-        out.push({ entity: direct, inverted: false });
+        out.push({ entity: direct, inverted: flavor === 'battery' });
     }
     const flipped = pickFirstString(pc['stat_rate_inverted']);
     if (flipped)
     {
-        out.push({ entity: flipped, inverted: true });
+        out.push({ entity: flipped, inverted: flavor === 'grid' });
     }
     if (out.length > 0)
     {
