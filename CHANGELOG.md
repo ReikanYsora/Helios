@@ -48,6 +48,15 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Release prep: full i18n conformance + docs (beta.22)
+
+Two editor hints whose meaning changed this cycle were re-translated across all 63 locales: the
+graph-detail slider help no longer claims the forecast is unaffected (it now follows the slider since
+the sub-hourly change), and the inverter-cutoff help no longer names the retired shadow-map trainer
+(it describes the forecast learning that replaced it). README carries a v1.8.4 note, and the
+helios-lidar.org demo mock was updated to expose the recorder `change` metric per bucket so the demo
+card's production / grid / battery curves render with the v1.8.4 build.
+
 ### Release prep: hovered time in the tooltip, inverter-cutoff re-wired, dead code removed (beta.21)
 
 - The graph view's hover tooltip now leads with the clock time of the cursor, as a row inside the
