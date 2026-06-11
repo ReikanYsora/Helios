@@ -1371,6 +1371,9 @@ export interface PvWeightedContext
     airTempC?: number;
     windMs?:   number;
     raster?:   NdsmRaster | null;
+    //Global horizontal irradiance in W/m² (Open-Meteo shortwave / home sensor). Threaded into every
+    //array's computePvPower as the GHI base in place of the analytical Haurwitz × cloud magnitude.
+    ghiWm2?:   number;
 }
 
 
@@ -1386,8 +1389,9 @@ export function computePvPowerWeighted(
 ): number
 {
     const { orientations, shares, coords, heightsM } = pvArrays(config, lat);
-    const baseCtx = (ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN)))
-        ? { airTempC: ctx.airTempC, windMs: ctx.windMs }
+    const hasGhi  = ctx != null && ctx.ghiWm2 != null && ctx.ghiWm2 >= 0;
+    const baseCtx = (ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN) || hasGhi))
+        ? { airTempC: ctx.airTempC, windMs: ctx.windMs, ghiWm2: hasGhi ? ctx!.ghiWm2 : undefined }
         : undefined;
 
     //Defensive guard: pvArrays must keep its four output arrays in lockstep. If a future edit ever drifts that
@@ -1441,7 +1445,7 @@ export function computePvPowerWeighted(
             : false;
 
         const arrayCtx = (baseCtx || shaded)
-            ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, shading: shaded }
+            ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, ghiWm2: baseCtx?.ghiWm2, shading: shaded }
             : undefined;
         acc += computePvPower(t, arrayLat, arrayLon, cloudPct, orientations[i], arrayCtx) * shares[i];
     }

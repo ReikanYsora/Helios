@@ -48,6 +48,17 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Forecast: the learned map shares the forecast's GHI base (beta.9)
+
+The sky-residual map is learned by comparing real production against the physical model. That model
+now takes the Open-Meteo `shortwave_radiation` (GHI in W/m²) as its irradiance base instead of
+re-deriving clear-sky GHI from a Haurwitz fit scaled by cloud cover. The forecast curve already
+uses that same shortwave base, so learning and prediction now run on the identical irradiance
+input: the residual the map captures is purely the user's local shading and array biases, no longer
+contaminated by the gap between two different irradiance estimators. The cloud-history fetch was
+widened to pull `shortwave_radiation` alongside `cloud_cover` in the same single Open-Meteo GET, so
+there is no extra request.
+
 ### Forecast: the learned map now carries the level too (beta.8)
 
 beta.7's sky map was shape-only (normalised to mean 1) and left the level to the clamped 5-day

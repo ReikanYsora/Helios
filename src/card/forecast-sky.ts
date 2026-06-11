@@ -98,10 +98,13 @@ export interface SkyResidualInput
     raster: NdsmRaster | null;
     //Hourly produced-energy buckets (recorder `change`, period 'hour') over the learning window.
     production: ChangeBucket[] | null;
-    //Hourly cloud-cover %, parallel arrays. cloudTimes aligns with cloud[]; the build matches each
-    //production bucket to the nearest cloud sample by time.
+    //Hourly cloud-cover % + shortwave radiation (W/m²), parallel arrays on the same time grid
+    //(`cloudTimes`). The build matches each production bucket to the nearest sample by time. The
+    //shortwave is fed to the model as the GHI base so the build stays consistent with the forecast
+    //(which also uses the Open-Meteo shortwave), keeping the learned residual self-consistent.
     cloudTimes: number[];
     cloud:      number[];
+    shortwave:  number[];
 }
 
 
@@ -172,11 +175,15 @@ export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | n
         const sun = getSunPosition(new Date(mid), input.lat, input.lon);
         if (sun.altitude <= 0) { continue; }
 
-        const cloud = nearestCloud(input.cloudTimes, input.cloud, mid);
+        const ci    = nearestCloudIdx(input.cloudTimes, mid);
+        const cloud = ci >= 0 ? clampPct(input.cloud[ci]) : 0;
+        const ghi   = ci >= 0 ? input.shortwave[ci] : undefined;
 
-        //Model prediction for this hour, LiDAR included, in kWh (W at the midpoint × 1 h / 1000).
+        //Model prediction for this hour, LiDAR + Open-Meteo GHI base included, in kWh (W at the
+        //midpoint × 1 h / 1000). Same base as buildForecast so the residual stays self-consistent.
         const wModel = computePvPowerWeighted(input.config, new Date(mid), input.lat, input.lon, cloud, {
             raster: input.raster,
+            ghiWm2: (ghi != null && ghi >= 0) ? ghi : undefined,
         }) * k;
         const modelKwh = wModel / 1000;
         if (modelKwh < MODEL_KWH_FLOOR) { continue; }
@@ -226,11 +233,11 @@ export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | n
 }
 
 
-//Nearest cloud sample by time. The cloud history is hourly so a linear scan with an early break on
-//the sorted times stays cheap even over a 60-day window.
-function nearestCloud(times: number[], cloud: number[], tMs: number): number
+//Index of the nearest sample by time. The history is hourly so a linear scan with an early break on
+//the sorted times stays cheap even over a 60-day window. Returns -1 for an empty grid.
+function nearestCloudIdx(times: number[], tMs: number): number
 {
-    if (times.length === 0) { return 0; }
+    if (times.length === 0) { return -1; }
     let best   = 0;
     let bestDt = Infinity;
     for (let i = 0; i < times.length; i++)
@@ -239,7 +246,11 @@ function nearestCloud(times: number[], cloud: number[], tMs: number): number
         if (dt < bestDt) { bestDt = dt; best = i; }
         else if (times[i] > tMs && dt > bestDt) { break; }
     }
-    const v = cloud[best];
+    return best;
+}
+
+function clampPct(v: number): number
+{
     return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
 }
 
@@ -262,6 +273,7 @@ export interface SkyForecastHost extends LoadingTrackerHost
     _skyProdFetching: boolean;
     _skyCloudTimes:   number[];
     _skyCloud:        number[];
+    _skyShortwave:    number[];
     _skyCloudFetchKey: string;
     _skyCloudFetching: boolean;
     _skyResidualMap:  SkyResidualMap | null;
@@ -272,7 +284,7 @@ export interface SkyForecastHost extends LoadingTrackerHost
 
 //Module-level cache for the Open-Meteo cloud history, shared across every Helios card on the page so
 //an N-card dashboard fetches it once. Keyed on rounded coords + day so it refreshes daily.
-interface CloudHistEntry { ts: number; times: number[]; cloud: number[]; }
+interface CloudHistEntry { ts: number; times: number[]; cloud: number[]; shortwave: number[]; }
 const _cloudHistCache = new Map<string, CloudHistEntry>();
 const CLOUD_HIST_TTL_MS = 6 * 3_600_000;   //6 h: the past window barely changes within a session
 
@@ -326,6 +338,7 @@ export function refreshSkyForecast(host: SkyForecastHost, lat: number, lon: numb
             host._skyCloudFetchKey = cloudKey;
             host._skyCloudTimes    = cachedCloud.times;
             host._skyCloud         = cachedCloud.cloud;
+            host._skyShortwave     = cachedCloud.shortwave;
         }
     }
     else if (cloudKey !== host._skyCloudFetchKey && !host._skyCloudFetching)
@@ -339,7 +352,8 @@ export function refreshSkyForecast(host: SkyForecastHost, lat: number, lon: numb
                 {
                     host._skyCloudTimes = res.times;
                     host._skyCloud      = res.cloud;
-                    _cloudHistCache.set(cloudKey, { ts: Date.now(), times: res.times, cloud: res.cloud });
+                    host._skyShortwave  = res.shortwave;
+                    _cloudHistCache.set(cloudKey, { ts: Date.now(), times: res.times, cloud: res.cloud, shortwave: res.shortwave });
                     host.requestUpdate();
                 }
             })
@@ -371,35 +385,37 @@ function maybeRebuildSkyMap(host: SkyForecastHost, lat: number, lon: number): vo
         production: host._skyProdSeries,
         cloudTimes: host._skyCloudTimes,
         cloud:      host._skyCloud,
+        shortwave:  host._skyShortwave,
     });
     host.requestUpdate();
 }
 
 
-//Open-Meteo cloud-cover history. One GET, single location, hourly `cloud_cover` over the past window.
-//Returns parallel epoch-ms times + percent arrays, or null on any failure (the caller keeps whatever
-//it had, the map just stays cold).
-async function fetchCloudHistory(lat: number, lon: number, days: number): Promise<{ times: number[]; cloud: number[] } | null>
+//Open-Meteo weather history for the learning window. One GET, single location, hourly `cloud_cover`
+//+ `shortwave_radiation` over the past window. Returns parallel epoch-ms times + percent + W/m²
+//arrays, or null on any failure (the caller keeps whatever it had, the map just stays cold).
+async function fetchCloudHistory(lat: number, lon: number, days: number): Promise<{ times: number[]; cloud: number[]; shortwave: number[] } | null>
 {
     try
     {
         const url = 'https://api.open-meteo.com/v1/forecast'
             + `?latitude=${lat.toFixed(4)}`
             + `&longitude=${lon.toFixed(4)}`
-            + '&hourly=cloud_cover'
+            + '&hourly=cloud_cover,shortwave_radiation'
             + `&past_days=${days}&forecast_days=1&timezone=UTC`;
         const resp = await fetch(url);
         if (!resp.ok) { return null; }
         const j: any = await resp.json();
         const timeStrs: string[] = j?.hourly?.time ?? [];
         const cloudArr: number[] = j?.hourly?.cloud_cover ?? [];
+        const swArr:    number[] = j?.hourly?.shortwave_radiation ?? [];
         if (timeStrs.length === 0 || cloudArr.length === 0) { return null; }
         const times: number[] = new Array(timeStrs.length);
         for (let i = 0; i < timeStrs.length; i++)
         {
             times[i] = new Date(timeStrs[i] + 'Z').getTime();
         }
-        return { times, cloud: cloudArr };
+        return { times, cloud: cloudArr, shortwave: swArr };
     }
     catch (_)
     {

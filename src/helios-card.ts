@@ -402,6 +402,7 @@ export class HeliosCard extends LitElement
     _skyProdFetching   = false;
     _skyCloudTimes:    number[] = [];
     _skyCloud:         number[] = [];
+    _skyShortwave:     number[] = [];
     _skyCloudFetchKey  = '';
     _skyCloudFetching  = false;
     _skyMapVersion     = '';
@@ -874,6 +875,7 @@ export class HeliosCard extends LitElement
         this._skyProdFetchKey             = '';
         this._skyCloudTimes               = [];
         this._skyCloud                    = [];
+        this._skyShortwave                = [];
         this._skyCloudFetchKey            = '';
         this._skyMapVersion               = '';
         this._pvFetchKey                  = '';

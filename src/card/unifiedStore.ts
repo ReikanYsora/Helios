@@ -367,6 +367,9 @@ function buildForecast(
             {
                 airTempC: bestIdx >= 0 ? series.temperature?.[bestIdx] : undefined,
                 windMs:   bestIdx >= 0 ? series.windSpeed?.[bestIdx]   : undefined,
+                //Open-Meteo shortwave (or home sensor) GHI in W/m² as the irradiance base, so the
+                //forecast inherits the weather model's cloud physics instead of the analytical cubic.
+                ghiWm2:   bestIdx >= 0 ? series.irradiance?.[bestIdx]  : undefined,
                 raster,
             }
         );

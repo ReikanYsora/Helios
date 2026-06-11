@@ -135,6 +135,13 @@ export interface PvComputeContext
     airTempC?: number;
     windMs?:   number;
     shading?:  boolean;
+    //Measured / forecast global horizontal irradiance in W/m² (Open-Meteo shortwave_radiation, or a
+    //home radiation sensor). When provided and >= 0, it replaces the analytical Haurwitz clear-sky ×
+    //Kasten-Czeplak cloud magnitude as the GHI base, so the forecast inherits the weather model's own
+    //cloud physics instead of the cubic approximation. The direct / diffuse split for the tilt
+    //transposition still comes from the cloud factor below. Undefined keeps the legacy analytical base
+    //bit-for-bit.
+    ghiWm2?:   number;
 }
 
 export function computePvPower(
@@ -160,7 +167,11 @@ export function computePvPower(
     const cc     = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
     const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
 
-    const ghiEff = ghiClear * kCloud;
+    //GHI magnitude: prefer the supplied measured / forecast irradiance (Open-Meteo shortwave or a home
+    //sensor) when present, which already encodes the real cloud attenuation, and fall back to the
+    //analytical Haurwitz × Kasten-Czeplak otherwise. kCloud is still used below for the direct /
+    //diffuse split regardless of which magnitude won.
+    const ghiEff = (ctx?.ghiWm2 != null && ctx.ghiWm2 >= 0) ? ctx.ghiWm2 : ghiClear * kCloud;
 
     let poaEff: number;
 
