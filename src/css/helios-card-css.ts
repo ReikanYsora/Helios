@@ -1265,13 +1265,13 @@ export const heliosCardStyles = css`
     }
     .dash-radial-badge-batt-charge .dash-radial-badge-chip
     {
-        background: color-mix(in srgb, var(--energy-battery-in-color) 22%, transparent);
-        color: var(--energy-battery-in-color);
+        background: color-mix(in srgb, var(--energy-battery-in-color, #f06292) 22%, transparent);
+        color: var(--energy-battery-in-color, #f06292);
     }
     .dash-radial-badge-batt-discharge .dash-radial-badge-chip
     {
-        background: color-mix(in srgb, var(--energy-battery-out-color) 22%, transparent);
-        color: var(--energy-battery-out-color);
+        background: color-mix(in srgb, var(--energy-battery-out-color, #4db6ac) 22%, transparent);
+        color: var(--energy-battery-out-color, #4db6ac);
     }
     .dash-radial-badge-cloud .dash-radial-badge-chip
     {
@@ -1330,8 +1330,8 @@ export const heliosCardStyles = css`
     .dash-radial-dot-cloud         { fill: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.75)) 95%, transparent); }
     .dash-radial-dot-irr           { fill: var(--helios-sun-color, var(--amber-color, #f59e0b)); }
     .dash-radial-dot-prod          { fill: var(--energy-solar-color, #ff9800); }
-    .dash-radial-dot-batt-charge   { fill: var(--energy-battery-in-color); }
-    .dash-radial-dot-batt-discharge{ fill: var(--energy-battery-out-color); }
+    .dash-radial-dot-batt-charge   { fill: var(--energy-battery-in-color, #f06292); }
+    .dash-radial-dot-batt-discharge{ fill: var(--energy-battery-out-color, #4db6ac); }
 
     /*  Ring tracks (background of each ring). Same vocabulary across the three data rings, only the
         token differs so each ring picks up the right energy-palette colour. The dial track is
@@ -1347,7 +1347,7 @@ export const heliosCardStyles = css`
     }
     .dash-radial-batt-track
     {
-        stroke: color-mix(in srgb, var(--energy-battery-in-color) 10%, transparent);
+        stroke: color-mix(in srgb, var(--energy-battery-in-color, #f06292) 10%, transparent);
     }
     .dash-radial-dial-track
     {
@@ -1369,7 +1369,7 @@ export const heliosCardStyles = css`
     }
     .dash-radial-cloud-track-future { stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 12%, transparent); }
     .dash-radial-prod-track-future  { stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 14%, transparent); }
-    .dash-radial-batt-track-future  { stroke: color-mix(in srgb, var(--energy-battery-in-color) 10%, transparent); }
+    .dash-radial-batt-track-future  { stroke: color-mix(in srgb, var(--energy-battery-in-color, #f06292) 10%, transparent); }
 
     /*  Ring fills + future outlines. Past portions render as filled polygons (solid area below the
         curve), future portions as dashed outlines without fill. Same vocabulary on cloud /
@@ -1457,15 +1457,15 @@ export const heliosCardStyles = css`
         ring's two halves overlap at the inner edge baseline where the battery is at rest. */
     .dash-radial-batt-charge
     {
-        fill:   color-mix(in srgb, var(--energy-battery-in-color) 55%, transparent);
-        stroke: color-mix(in srgb, var(--energy-battery-in-color) 85%, transparent);
+        fill:   color-mix(in srgb, var(--energy-battery-in-color, #f06292) 55%, transparent);
+        stroke: color-mix(in srgb, var(--energy-battery-in-color, #f06292) 85%, transparent);
         stroke-width: 1.2;
         stroke-linejoin: round;
     }
     .dash-radial-batt-discharge
     {
-        fill:   color-mix(in srgb, var(--energy-battery-out-color) 55%, transparent);
-        stroke: color-mix(in srgb, var(--energy-battery-out-color) 85%, transparent);
+        fill:   color-mix(in srgb, var(--energy-battery-out-color, #4db6ac) 55%, transparent);
+        stroke: color-mix(in srgb, var(--energy-battery-out-color, #4db6ac) 85%, transparent);
         stroke-width: 1.2;
         stroke-linejoin: round;
     }

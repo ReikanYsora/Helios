@@ -48,6 +48,16 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Battery chip colour falls back to the HA Energy hexes (beta.14)
+
+The dashboard battery badge took its tint straight from `--energy-battery-in-color` /
+`--energy-battery-out-color` with no fallback. Those custom properties are defined by Home Assistant's
+Energy dashboard; on a theme or HA version where they aren't exposed to the card the value stayed
+correct (HA Sources sign, discharge +, charge −) but the colour resolved to nothing, so the chip read
+in the default text colour instead of pink (charge) / teal (discharge). Every battery colour
+reference now carries the HA hex as a fallback (`#f06292` in, `#4db6ac` out), matching the solar chip
+which already had `#ff9800`.
+
 ### Forecast: sub-hourly resolution so short shadows show up (beta.13)
 
 The forecast was computed once per hour and interpolated up to the display cadence, so a tree (or
