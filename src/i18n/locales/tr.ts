@@ -19,7 +19,6 @@ export const tr: Translations = {
         dayLabelDayBefore:    '2 gün önce',
         dayLabelTomorrow:     'Yarın',
         dayLabelDayAfter:     '2 gün sonra',
-        shadingDomeHint:      'Otomatik olarak öğrenilmiş gölgeleme kubbesi. Her hücre, aşağıda seçilen bulut örtüsü için o güneş konumundaki ortalama PV çıkışını gösterir. Helios bunu tahmine uygular, böylece gerçek gölgeler (saat 16:00\'da bir ağaç, kışın bir baca) otomatik olarak yakalanır.',
         loadingLabel:         'Veriler alınıyor...',
         weatherRateLimitTitle:   'OpenMeteo: istek limiti',
         weatherRateLimitMessage: 'Çok fazla istek, lütfen bekleyin',
@@ -31,7 +30,6 @@ export const tr: Translations = {
         dashViewRadialLabel:   'Dairesel görünüm',
         dashViewGraphLabel:    'Grafik görünümü',
         dashForecastLabel:     'Tahmin',
-        dashTimeLabel: 'Saat',
     },
 
     editor:

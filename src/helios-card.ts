@@ -406,6 +406,9 @@ export class HeliosCard extends LitElement
     _skyTemp:          number[] = [];
     _skyWind:          number[] = [];
     _skySnow:          number[] = [];
+    _skySoc:           import('./card/energy-stats').MeanBucket[] | null = null;
+    _skySocFetchKey    = '';
+    _skySocFetching    = false;
     //Per-orientation Open-Meteo GTI store (src/card/gti.ts). Shared by the forecast + the 60-day
     //learning so both transpose on the same anisotropic POA. Not @state: read directly when the store
     //rebuilds, the requestUpdate inside refreshTiltedIrradiance drives the re-render.
@@ -415,10 +418,6 @@ export class HeliosCard extends LitElement
     _skyCloudFetchKey  = '';
     _skyCloudFetching  = false;
     _skyMapVersion     = '';
-    //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
-    //(`inverter-cutoff-soc-pct`). Null when the guard is off or no battery is configured. Not reactive: pulled directly and we never
-    //need to re-render on a SoC sample change.
-    _batteryHistory: { times: Date[]; values: number[] } | null = null;
     //Home-battery state, populated when the HA Energy dashboard exposes at least one battery source (`stat_rate`,
     //`stat_energy_from`, `stat_energy_to` or `stat_soc`). Live readings; historical series lives in the *History fields
     //below. Units are kept alongside the values so the chip can format kW vs W without re-reading the state.
@@ -895,6 +894,8 @@ export class HeliosCard extends LitElement
         this._skyTemp                     = [];
         this._skyWind                     = [];
         this._skySnow                     = [];
+        this._skySoc                      = null;
+        this._skySocFetchKey              = '';
         this._gtiStore                    = null;
         this._gtiFetchKey                 = '';
         this._skyCloudFetchKey            = '';
@@ -912,7 +913,6 @@ export class HeliosCard extends LitElement
         this._batteryChargeChangeSeries   = null;
         this._batteryDischargeChangeSeries = null;
         this._batteryChangeFetchKey       = '';
-        this._batteryHistory              = null;
         this._solarRadiationHistory       = null;
         this._solarRadiationFetchKey      = '';
         //Drop the module-level caches too. Without these calls the per-LitElement state above is reset but the next refresh hits the

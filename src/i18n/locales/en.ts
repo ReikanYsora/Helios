@@ -24,7 +24,6 @@ export const en: Translations = {
         dayLabelDayBefore:    '2 days ago',
         dayLabelTomorrow:     'Tomorrow',
         dayLabelDayAfter:     'In 2 days',
-        shadingDomeHint:      'Auto-learned shading dome. Each cell shows the average PV output at that sun position, for the cloud cover chosen below. Helios applies it to the forecast so real shadows (a tree at 4 pm, a chimney in winter) are captured automatically.',
         loadingLabel:         'Fetching data...',
         weatherRateLimitTitle:   'OpenMeteo: rate limit',
         weatherRateLimitMessage: 'Too many requests, please wait',
@@ -36,7 +35,6 @@ export const en: Translations = {
         dashViewRadialLabel:   'Radial view',
         dashViewGraphLabel:    'Graph view',
         dashForecastLabel:     'Forecast',
-        dashTimeLabel: 'Time',
     },
 
     editor:
@@ -59,7 +57,7 @@ export const en: Translations = {
         autoRotateOff:      'Off',
         dataDisplaySection:           'Data display',
         displayUpdateFrequency:       'Graph detail',
-        displayUpdateFrequencyHelp:   'How many points per hour the graphs draw. The data itself is always Home Assistant\'s 5-minute statistics; this only controls how densely the curve is plotted: 1 = one point per hour (smoothest, lightest to render), 12 = one point every 5 minutes (full detail, heaviest). Default 4 = a point every 15 minutes. Lower it on older or slower devices to cut rendering cost. The forecast curve is unaffected: it always runs at the weather model\'s native hourly cadence.',
+        displayUpdateFrequencyHelp:   'How many points per hour the graphs draw. The data itself is always Home Assistant\'s 5-minute statistics; this only controls how densely the curve is plotted: 1 = one point per hour (smoothest, lightest to render), 12 = one point every 5 minutes (full detail, heaviest). Default 4 = a point every 15 minutes. Lower it on older or slower devices to cut rendering cost. The forecast curve follows the same cadence, so a finer setting also resolves short shadow dips (a tree clipping production for half an hour) that an hourly curve steps over.',
         installationSection: 'PV installation',
         installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Inverter max output (kW)',
@@ -91,7 +89,7 @@ export const en: Translations = {
         pvArrayTrackerHelp:     'Most residential installs are fixed: the panel stays at the configured tilt + azimuth. Pick a tracker type if your panels physically move to follow the sun. Dual-axis keeps the panel face pointed straight at the sun all day (peak output). Single-axis-horizontal keeps the configured azimuth but tilts up and down as the sun rises and sets. Single-axis-vertical keeps the configured tilt but rotates around the vertical axis to track sun azimuth.',
         pvArrayCoordsPlaceholder: 'optional',
         inverterCutoffSocPct:       'Inverter cutoff SoC (%)',
-        inverterCutoffSocPctHelp:   'Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the shading-map trainer skips every observation bucket where the battery SoC reached this value so the inverter-blocked production does not pollute the shading map with phantom shadow at those sun positions.',
+        inverterCutoffSocPctHelp:   'Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the forecast learning skips every hour where the battery SoC reached this value, so the inverter-blocked production does not teach the learned correction a false low output at those sun positions.',
         solarRadiationEntity:     'Solar radiation entity',
         solarRadiationEntityHelp: 'Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours stay on Open-Meteo since a sensor cannot carry future values.',
         buildingsSection:   'Building',

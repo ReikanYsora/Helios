@@ -19,7 +19,6 @@ export const uk: Translations = {
         dayLabelDayBefore:    '2 дні тому',
         dayLabelTomorrow:     'Завтра',
         dayLabelDayAfter:     'Через 2 дні',
-        shadingDomeHint:      'Автоматично вивчений купол затінення. Кожна комірка показує середнє ФВ виробництво в цьому положенні сонця для хмарності, вибраної нижче. Helios застосовує це до прогнозу, щоб реальні тіні (дерево о 16:00, димар взимку) автоматично враховувались.',
         loadingLabel:         'Отримання даних...',
         weatherRateLimitTitle:   'OpenMeteo: ліміт запитів',
         weatherRateLimitMessage: 'Забагато запитів, будь ласка зачекайте',
@@ -31,7 +30,6 @@ export const uk: Translations = {
         dashViewRadialLabel:   'Радіальний вигляд',
         dashViewGraphLabel:    'Графічний вигляд',
         dashForecastLabel:     'Прогноз',
-        dashTimeLabel: 'Час',
     },
 
     editor:

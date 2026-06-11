@@ -19,7 +19,6 @@ export const lv: Translations = {
         dayLabelDayBefore:    'Pirms 2 dienām',
         dayLabelTomorrow:     'Rīt',
         dayLabelDayAfter:     'Pēc 2 dienām',
-        shadingDomeHint:      'Automātiski apgūts ēnošanas kupols. Katra šūna parāda vidējo FV izvadi šajā saules pozīcijā izvēlētajam mākoņainības līmenim. Helios to piemēro prognozei, lai reālās ēnas (koks plkst. 16:00, dūmvads ziemā) tiktu uztvertas automātiski.',
         loadingLabel:         'Tiek ielādēti dati...',
         weatherRateLimitTitle:   'OpenMeteo: pieprasījumu ierobežojums',
         weatherRateLimitMessage: 'Pārāk daudz pieprasījumu, lūdzu uzgaidiet',
@@ -31,7 +30,6 @@ export const lv: Translations = {
         dashViewRadialLabel:   'Radiālais skats',
         dashViewGraphLabel:    'Grafika skats',
         dashForecastLabel:     'Prognoze',
-        dashTimeLabel: 'Laiks',
     },
 
     editor:

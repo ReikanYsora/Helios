@@ -19,7 +19,6 @@ export const hy: Translations = {
         dayLabelDayBefore:    '2 օր առաջ',
         dayLabelTomorrow:     'Վաղը',
         dayLabelDayAfter:     '2 օրից',
-        shadingDomeHint:      'Ինքնասովորած ստվերման գմբեթ։ Յուրաքանչյուր բջիջ ցույց է տալիս ՖՎ միջին արտադրությունը արևի այդ դիրքում, ստորև ընտրված ամպային ծածկույթի համար։ Helios-ը կիրառում է այն կանխատեսման մեջ, որպեսզի իրական ստվերները (ծառ ժամը 16:00, ծխնելույզ ձմռանը) ավտոմատ կերպով գրանցվեն։',
         loadingLabel:         'Տվյալները բեռնվում են...',
         weatherRateLimitTitle:   'OpenMeteo. հարցումների սահման',
         weatherRateLimitMessage: 'Չափազանց շատ հարցումներ, սպասեք',
@@ -31,7 +30,6 @@ export const hy: Translations = {
         dashViewRadialLabel:   'Շառավղային տեսք',
         dashViewGraphLabel:    'Գրաֆիկական տեսք',
         dashForecastLabel:     'Կանխատեսում',
-        dashTimeLabel: 'Ժամ',
     },
 
     editor:

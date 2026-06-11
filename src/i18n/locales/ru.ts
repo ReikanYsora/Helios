@@ -19,7 +19,6 @@ export const ru: Translations = {
         dayLabelDayBefore:    '2 дня назад',
         dayLabelTomorrow:     'Завтра',
         dayLabelDayAfter:     'Через 2 дня',
-        shadingDomeHint:      'Автоматически обученный купол затенения. Каждая ячейка показывает среднюю выработку PV в этом положении солнца для выбранной ниже облачности. Helios применяет это к прогнозу, чтобы реальные тени (дерево в 16:00, дымоход зимой) автоматически учитывались.',
         loadingLabel:         'Загрузка данных...',
         weatherRateLimitTitle:   'OpenMeteo: лимит запросов',
         weatherRateLimitMessage: 'Слишком много запросов, пожалуйста подождите',
@@ -31,7 +30,6 @@ export const ru: Translations = {
         dashViewRadialLabel:   'Радиальный вид',
         dashViewGraphLabel:    'Графический вид',
         dashForecastLabel:     'Прогноз',
-        dashTimeLabel: 'Время',
     },
 
     editor:

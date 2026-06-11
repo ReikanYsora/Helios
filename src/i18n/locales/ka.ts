@@ -19,7 +19,6 @@ export const ka: Translations = {
         dayLabelDayBefore:    '2 დღის წინ',
         dayLabelTomorrow:     'ხვალ',
         dayLabelDayAfter:     '2 დღეში',
-        shadingDomeHint:      'ავტომატურად ნასწავლი ჩრდილის გუმბათი. თითოეული უჯრედი აჩვენებს საშუალო PV გამოსავალს მზის ამ პოზიციაზე, ქვემოთ არჩეული ღრუბლების საფარისთვის. Helios აყენებს ამას პროგნოზზე ისე, რომ ნამდვილი ჩრდილები (ხე საღამოს 4-ზე, საკვამური ზამთარში) ავტომატურად დაიჭიროს.',
         loadingLabel:         'მონაცემები მოდის...',
         weatherRateLimitTitle:   'OpenMeteo: მოთხოვნის ლიმიტი',
         weatherRateLimitMessage: 'ძალიან ბევრი მოთხოვნა, გთხოვთ მოიცადოთ',
@@ -31,7 +30,6 @@ export const ka: Translations = {
         dashViewRadialLabel:   'რადიალური ხედი',
         dashViewGraphLabel:    'გრაფიკული ხედი',
         dashForecastLabel:     'პროგნოზი',
-        dashTimeLabel: 'დრო',
     },
 
     editor:

@@ -27,9 +27,9 @@ export interface WeatherCloudLayerOptions
 }
 
 
-//Per-band alpha multiplier applied on top of the shaped cloud density. Matches the dot-cloud
-//opacity tuning from beta.115 (20 / 40 / 60 %), gives growing visual weight from low to high so
-//a fully overcast stack reads as a heavy ceiling rather than three identical greys.
+//Per-band alpha multiplier applied on top of the shaped cloud density. 20 / 40 / 60 % gives growing
+//visual weight from low to high so a fully overcast stack reads as a heavy ceiling rather than three
+//identical greys.
 const BAND_OPACITY = [0.20, 0.40, 0.60] as const;
 
 
@@ -312,7 +312,7 @@ export class WeatherCloudLayer implements CustomLayerInterface
         //Premultiplied alpha matches MapLibre's framebuffer; the fragment shader already
         //multiplies u_color by alpha so the rgb channel carries the colour scaled by coverage.
         //Using SRC_ALPHA / ONE_MINUS_SRC_ALPHA against a premultiplied source would double-blend
-        //and saturate to flat colour, which was the beta.117 artefact.
+        //and saturate to flat colour.
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
 

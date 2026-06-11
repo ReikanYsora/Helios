@@ -19,7 +19,6 @@ export const ro: Translations = {
         dayLabelDayBefore:    'Acum 2 zile',
         dayLabelTomorrow:     'Mâine',
         dayLabelDayAfter:     'În 2 zile',
-        shadingDomeHint:      'Cupolă de umbrire învățată automat. Fiecare celulă afișează producția FV medie la acea poziție a soarelui, pentru gradul de nori ales mai jos. Helios o aplică prognozei astfel încât umbrele reale (un copac la ora 16:00, un horn iarna) să fie capturate automat.',
         loadingLabel:         'Se preiau datele...',
         weatherRateLimitTitle:   'OpenMeteo: limită de cereri',
         weatherRateLimitMessage: 'Prea multe cereri, vă rugăm așteptați',
@@ -31,7 +30,6 @@ export const ro: Translations = {
         dashViewRadialLabel:   'Vizualizare radială',
         dashViewGraphLabel:    'Vizualizare grafic',
         dashForecastLabel:     'Prognoză',
-        dashTimeLabel: 'Oră',
     },
 
     editor:

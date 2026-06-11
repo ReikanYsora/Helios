@@ -145,6 +145,94 @@ export async function fetchChangeSeries(
 }
 
 
+//One recorder mean bucket: the average of a measurement statistic (e.g. battery state-of-charge %)
+//over [startMs, endMs).
+export interface MeanBucket
+{
+    startMs: number;
+    endMs:   number;
+    mean:    number;
+}
+
+interface MeanCacheEntry { ts: number; result: MeanBucket[] | null; inflight?: Promise<MeanBucket[] | null>; }
+const _meanCache = new Map<string, MeanCacheEntry>();
+
+//Fetch the AVERAGED `mean` series for a set of statistic ids over [startMs, endMs] at the given period.
+//Unlike fetchChangeSeries (which SUMS energy), a state-of-charge is a level, so the per-source means
+//are AVERAGED per bucket. Used by the forecast learning to read the battery SoC over its 60-day window
+//and skip the hours where the inverter clamped PV output (battery full), which would otherwise teach
+//the sky-residual map a false low ratio at those sun positions. Returns null on empty ids / no hass /
+//rejection so the caller keeps whatever it had.
+export async function fetchMeanSeries(
+    hass:         any,
+    statisticIds: string[],
+    startMs:      number,
+    endMs:        number,
+    period:       StatPeriod = 'hour',
+): Promise<MeanBucket[] | null>
+{
+    if (statisticIds.length === 0) { return null; }
+    if (!hass?.callWS)             { return null; }
+    if (endMs <= startMs)          { return null; }
+
+    const cacheKey = `${period}|${startMs}|${endMs}|${[...statisticIds].sort().join('|')}`;
+    const nowMs    = Date.now();
+    const cached   = _meanCache.get(cacheKey);
+    if (cached)
+    {
+        if (cached.inflight)            { return cached.inflight; }
+        if (nowMs - cached.ts < TTL_MS) { return cached.result; }
+    }
+
+    const inflight: Promise<MeanBucket[] | null> = (async () =>
+    {
+        try
+        {
+            const result = await hass.callWS({
+                type:          'recorder/statistics_during_period',
+                start_time:    new Date(startMs).toISOString(),
+                end_time:      new Date(endMs).toISOString(),
+                statistic_ids: statisticIds,
+                period,
+                types:         ['mean'],
+            }) as Record<string, Array<{ start?: unknown; end?: unknown; mean?: number | null }>>;
+
+            //Average the per-source means per bucket: { sum, count } per start boundary, then divide.
+            const acc = new Map<number, { endMs: number; sum: number; count: number }>();
+            for (const id of statisticIds)
+            {
+                const buckets = result?.[id];
+                if (!Array.isArray(buckets)) { continue; }
+                for (const b of buckets)
+                {
+                    const startBoundary = parseStatBoundary(b?.start);
+                    if (startBoundary === null) { continue; }
+                    const m = typeof b?.mean === 'number' ? b.mean : null;
+                    if (m === null || !Number.isFinite(m)) { continue; }
+                    const endBoundary = parseStatBoundary(b?.end) ?? (startBoundary + periodMs(period));
+                    const existing = acc.get(startBoundary);
+                    if (existing) { existing.sum += m; existing.count += 1; }
+                    else          { acc.set(startBoundary, { endMs: endBoundary, sum: m, count: 1 }); }
+                }
+            }
+            if (acc.size === 0) { return null; }
+            return [...acc.entries()]
+                .map(([startMs, v]) => ({ startMs, endMs: v.endMs, mean: v.sum / v.count }))
+                .sort((a, b) => a.startMs - b.startMs);
+        }
+        catch (_)
+        {
+            return null;
+        }
+    })();
+
+    _meanCache.set(cacheKey, { ts: nowMs, result: null, inflight });
+    const settled = await inflight;
+    _meanCache.set(cacheKey, { ts: Date.now(), result: settled });
+    return settled;
+}
+
+
 //Project a change series onto the unified-store bucket grid as average watts. For each store
 //bucket, sum the kWh of every source bucket whose start falls inside it, then average-power =
 //summed-kWh * 1000 / bucket-duration-hours. Store buckets are always >= the source period (the

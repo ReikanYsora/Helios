@@ -21,7 +21,6 @@ export const fr: Translations = {
         dayLabelDayBefore:    'Avant-hier',
         dayLabelTomorrow:     'Demain',
         dayLabelDayAfter:     'Après-demain',
-        shadingDomeHint:      'Dôme d\'auto-apprentissage. Chaque cellule affiche la production PV moyenne à cette position du soleil pour le niveau de nuages ci-dessous. Helios l\'applique à la prévision pour que les ombres réelles (arbre à 16 h, cheminée en hiver) soient prises en compte automatiquement.',
         loadingLabel:         'Récupération des données...',
         weatherRateLimitTitle:   'OpenMeteo : limite de requêtes',
         weatherRateLimitMessage: 'Trop de requêtes, veuillez patienter',
@@ -33,7 +32,6 @@ export const fr: Translations = {
         dashViewRadialLabel:   'Vue radiale',
         dashViewGraphLabel:    'Vue graphique',
         dashForecastLabel:     'Prévision',
-        dashTimeLabel: 'Heure',
     },
 
     editor:
@@ -56,7 +54,7 @@ export const fr: Translations = {
         autoRotateOff:      'Désactivée',
         dataDisplaySection:           'Affichage des données',
         displayUpdateFrequency:       'Détail du graphique',
-        displayUpdateFrequencyHelp:   'Combien de points par heure les graphiques tracent. La donnée elle-même est toujours en 5 minutes (statistiques Home Assistant) ; ce réglage ne change que la densité de tracé de la courbe : 1 = un point par heure (le plus lisse, le plus léger à afficher), 12 = un point toutes les 5 minutes (détail maximal, le plus lourd). Par défaut 4 = un point toutes les 15 minutes. Baissez-le sur un appareil ancien ou lent pour réduire le coût d\'affichage. La courbe de prévision n\'est pas concernée : elle reste calée sur la cadence horaire native du modèle météo.',
+        displayUpdateFrequencyHelp:   'Combien de points par heure les graphiques tracent. La donnée elle-même est toujours en 5 minutes (statistiques Home Assistant) ; ce réglage ne change que la densité de tracé de la courbe : 1 = un point par heure (le plus lisse, le plus léger à afficher), 12 = un point toutes les 5 minutes (détail maximal, le plus lourd). Par défaut 4 = un point toutes les 15 minutes. Baissez-le sur un appareil ancien ou lent pour réduire le coût d\'affichage. La courbe de prévision suit la même cadence : un réglage plus fin fait donc ressortir les creux d\'ombre courts (un arbre qui coupe la production une demi-heure) qu\'une courbe horaire enjambe.',
         displayRadius:                'Rayon d\'affichage',
         displayRadiusHelp:            'Distance autour de la maison dans laquelle les bâtiments, les cellules LiDAR et les ombres sont rendus. Baissez cette valeur (jusqu\'à 50 m) pour fluidifier l\'affichage sur un téléphone ancien ou lent ; montez-la (jusqu\'à 500 m) pour une vue plus large. Par défaut 200 m.',
         installationSection: 'Installation photovoltaïque',
@@ -90,7 +88,7 @@ export const fr: Translations = {
         pvArrayTrackerHelp:     'La plupart des installations résidentielles sont fixes : le panneau reste à l\'inclinaison et l\'azimut configurés. Choisis un type de tracker si tes panneaux bougent physiquement pour suivre le soleil. Bi-axe garde la face du panneau pointée droit sur le soleil toute la journée (rendement maximum). Mono-axe horizontal garde l\'azimut configuré mais incline le panneau au lever et au coucher. Mono-axe vertical garde l\'inclinaison configurée mais tourne autour de l\'axe vertical pour suivre l\'azimut du soleil.',
         pvArrayCoordsPlaceholder: 'optionnel',
         inverterCutoffSocPct:       'Seuil de coupure onduleur (%)',
-        inverterCutoffSocPctHelp:   'Pourcentage à partir duquel votre onduleur hybride bloque la production PV une fois que la batterie atteint son plafond. Laissez vide pour désactiver. Quand renseigné, l\'apprentissage de la carte d\'ombrage ignore chaque créneau d\'observation où le SoC batterie a atteint cette valeur, pour ne pas polluer la carte avec des ombres fantômes aux positions solaires concernées.',
+        inverterCutoffSocPctHelp:   'Pourcentage à partir duquel votre onduleur hybride bloque la production PV une fois que la batterie atteint son plafond. Laissez vide pour désactiver. Quand renseigné, l\'apprentissage du forecast ignore chaque heure où le SoC batterie a atteint cette valeur, pour ne pas apprendre une fausse sous-production aux positions solaires concernées.',
         solarRadiationEntity:     'Entité d\'irradiance solaire',
         solarRadiationEntityHelp: 'Choisis un capteur qui remonte l\'irradiance solaire globale en W/m² (typiquement une station météo Ecowitt / Davis / perso). Quand il est défini, son état actuel et son historique recorder remplacent Open-Meteo pour les valeurs live + passées partout où elles apparaissent (nombre sur la pastille soleil, axe Y du graphique PV, coloration de l\'arc solaire). Les heures de prévision continuent d\'utiliser Open-Meteo, un capteur ne peut pas avoir de valeurs dans le futur.',
         buildingsSection:   'Bâtiment',

@@ -14,7 +14,6 @@ export const de: Translations = {
         dayLabelDayBefore:    'Vor 2 Tagen',
         dayLabelTomorrow:     'Morgen',
         dayLabelDayAfter:     'In 2 Tagen',
-        shadingDomeHint:      'Selbstgelernte Verschattungskuppel. Jede Zelle zeigt die durchschnittliche PV-Leistung an dieser Sonnenposition, für die unten gewählte Wolkendecke. Helios wendet sie auf die Prognose an, sodass reale Schatten (ein Baum um 16 Uhr, ein Schornstein im Winter) automatisch erfasst werden.',
         loadingLabel:         'Daten werden geladen...',
         weatherRateLimitTitle:   'OpenMeteo: Anfragelimit',
         weatherRateLimitMessage: 'Zu viele Anfragen, bitte warten Sie',
@@ -26,7 +25,6 @@ export const de: Translations = {
         dashViewRadialLabel:   'Radial-Ansicht',
         dashViewGraphLabel:    'Graph-Ansicht',
         dashForecastLabel:     'Prognose',
-        dashTimeLabel: 'Uhrzeit',
     },
 
     editor:

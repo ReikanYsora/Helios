@@ -18,7 +18,6 @@ export const he: Translations = {
         dayLabelDayBefore:    'לפני יומיים',
         dayLabelTomorrow:     'מחר',
         dayLabelDayAfter:     'בעוד יומיים',
-        shadingDomeHint:      'כיפת הצללה הנלמדת אוטומטית. כל תא מציג את הייצור הפוטו-וולטאי הממוצע באותו מיקום שמש, עבור כיסוי העננים שנבחר למטה. Helios מיישם זאת על התחזית כך שצללים אמיתיים (עץ בשעה 16:00, ארובה בחורף) נקלטים אוטומטית.',
         loadingLabel:         'טוען נתונים...',
         weatherRateLimitTitle:   'OpenMeteo: מגבלת בקשות',
         weatherRateLimitMessage: 'יותר מדי בקשות, נא להמתין',
@@ -30,7 +29,6 @@ export const he: Translations = {
         dashViewRadialLabel:   'תצוגה רדיאלית',
         dashViewGraphLabel:    'תצוגת גרף',
         dashForecastLabel:     'תחזית',
-        dashTimeLabel: 'שעה',
     },
 
     editor:

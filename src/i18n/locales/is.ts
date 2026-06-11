@@ -18,7 +18,6 @@ export const is_: Translations = {
         dayLabelDayBefore:    'Fyrir 2 dögum',
         dayLabelTomorrow:     'Á morgun',
         dayLabelDayAfter:     'Eftir 2 daga',
-        shadingDomeHint:      'Sjálflærð skyggingarhvelfing. Hver reitur sýnir meðaltal sólarframleiðslu við þessa sólarstöðu, fyrir skýjahuluna sem valin er fyrir neðan. Helios beitir þessu á spána þannig að raunverulegir skuggar (tré klukkan 16, strompur að vetri) eru sjálfkrafa fangaðir.',
         loadingLabel:         'Sæki gögn...',
         weatherRateLimitTitle:   'OpenMeteo: tíðnimörk',
         weatherRateLimitMessage: 'Of margar beiðnir, bíddu',
@@ -30,7 +29,6 @@ export const is_: Translations = {
         dashViewRadialLabel:   'Geislamiðjuð sýn',
         dashViewGraphLabel:    'Línuritssýn',
         dashForecastLabel:     'Spá',
-        dashTimeLabel: 'Tími',
     },
 
     editor:

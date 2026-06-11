@@ -680,9 +680,6 @@ export interface ChartHost
     //carries the same 5-day window with two orders of magnitude fewer rows on high-frequency installs. Null while the stats fetch is in
     //flight, or empty when the entity is not LTS-tracked, in both cases the consumer degrades to `_pvHistory`.
     readonly _pvCalibStats:   PvHistory | null;
-    //Optional companion battery SoC history, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
-    //Null when the guard is off or no battery is configured. The shading trainer reads it to skip buckets where SoC reached the cutoff.
-    readonly _batteryHistory: PvHistory | null;
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;

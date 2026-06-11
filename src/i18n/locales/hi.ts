@@ -19,7 +19,6 @@ export const hi: Translations = {
         dayLabelDayBefore:    '2 दिन पहले',
         dayLabelTomorrow:     'कल',
         dayLabelDayAfter:     '2 दिन बाद',
-        shadingDomeHint:      'स्वतः-सीखा हुआ छाया गुंबद। प्रत्येक सेल उस सूर्य स्थिति पर औसत PV आउटपुट दिखाता है, नीचे चुने गए बादल कवरेज के लिए। Helios इसे पूर्वानुमान पर लागू करता है ताकि वास्तविक छायाएँ (शाम 4 बजे एक पेड़, सर्दियों में एक चिमनी) स्वचालित रूप से कैप्चर हो जाएँ।',
         loadingLabel:         'डेटा लाया जा रहा है...',
         weatherRateLimitTitle:   'OpenMeteo: दर सीमा',
         weatherRateLimitMessage: 'बहुत अधिक अनुरोध, कृपया प्रतीक्षा करें',
@@ -31,7 +30,6 @@ export const hi: Translations = {
         dashViewRadialLabel:   'रेडियल दृश्य',
         dashViewGraphLabel:    'ग्राफ़ दृश्य',
         dashForecastLabel:     'पूर्वानुमान',
-        dashTimeLabel: 'समय',
     },
 
     editor:

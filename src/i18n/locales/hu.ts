@@ -19,7 +19,6 @@ export const hu: Translations = {
         dayLabelDayBefore:    '2 napja',
         dayLabelTomorrow:     'Holnap',
         dayLabelDayAfter:     '2 nap múlva',
-        shadingDomeHint:      'Automatikusan tanult árnyékolási kupola. Minden cella az adott napállásra vonatkozó átlagos PV-teljesítményt mutatja, az alábbi felhőzet beállítás mellett. A Helios ezt alkalmazza a előrejelzésre, így a valós árnyékok (egy fa délután 4-kor, egy kémény télen) automatikusan figyelembe vétetnek.',
         loadingLabel:         'Adatok lekérése...',
         weatherRateLimitTitle:   'OpenMeteo: kérelmi korlát',
         weatherRateLimitMessage: 'Túl sok kérelem, kérjük várjon',
@@ -31,7 +30,6 @@ export const hu: Translations = {
         dashViewRadialLabel:   'Radiális nézet',
         dashViewGraphLabel:    'Grafikon nézet',
         dashForecastLabel:     'Előrejelzés',
-        dashTimeLabel: 'Óra',
     },
 
     editor:

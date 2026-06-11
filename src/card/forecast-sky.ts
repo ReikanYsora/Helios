@@ -16,18 +16,18 @@
 //to the global mean ratio (the learned overall level), and a brand-new install with no history at
 //all gets a null map so the caller keeps the legacy scalar-calibration path, losing nothing on day 1.
 //
-//Why this beats the retired shadow-dome: it is a 2D map (not 3D az×alt×cloud), it carries no
-//localStorage and no per-frame projection (it is sampled only when the forecast is built, never
-//drawn), and it is recency-weighted so it tracks seasonal foliage + soiling instead of averaging a
-//year of stale data. LiDAR stays the cold-start prior (it already shades the base model the residual
-//multiplies) and the map only refines what the LiDAR got wrong.
+//The map is 2D (sun azimuth × altitude), carries no localStorage and no per-frame projection (it is
+//sampled only when the forecast is built, never drawn), and is recency-weighted so it tracks seasonal
+//foliage + soiling instead of averaging a year of stale data. LiDAR stays the cold-start prior (it
+//already shades the base model the residual multiplies) and the map only refines what the LiDAR got
+//wrong.
 
 import type { HeliosConfig } from '../helios-config';
 import type { NdsmRaster } from '../engine/pv-shading';
-import { computePvPowerWeighted, pvCalibK, snowCoverFactor } from './pv';
+import { computePvPowerWeighted, pvCalibK, snowCoverFactor, inverterCutoffSocPct, batterySocEntityForInhibit } from './pv';
 import { getSunPosition } from '../engine/sun';
 import { sampleGti } from './gti';
-import { fetchChangeSeries, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, fetchMeanSeries, type ChangeBucket, type MeanBucket } from './energy-stats';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
@@ -135,6 +135,13 @@ export interface SkyResidualInput
     //on it when present, exactly like the forecast, so the learned residual stays consistent with the
     //curve it corrects. Null leaves the learning on the transposition path.
     gtiStore:   import('./gti').GtiStore | null;
+    //Battery state-of-charge over the learning window (hourly mean %) + the inverter-cutoff threshold.
+    //When both are set, a production hour whose SoC reached the cutoff is DROPPED from the learning: the
+    //inverter clamped PV output because the battery was full, so the low production is curtailment, not
+    //shading, and learning from it would teach the map a false low ratio at that sun position. Null SoC
+    //or null cutoff disables the guard.
+    socSeries:  MeanBucket[] | null;
+    cutoffSoc:  number | null;
 }
 
 
@@ -204,6 +211,14 @@ export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | n
         const mid = (bucket.startMs + bucket.endMs) / 2;
         const sun = getSunPosition(new Date(mid), input.lat, input.lon);
         if (sun.altitude <= 0) { continue; }
+
+        //Inverter-cutoff guard: drop hours where the battery was full and the inverter clamped PV
+        //output, so the curtailed production isn't mistaken for shading at that sun position.
+        if (input.cutoffSoc !== null)
+        {
+            const soc = socAtMs(input.socSeries, mid);
+            if (soc !== null && soc >= input.cutoffSoc) { continue; }
+        }
 
         const ci    = nearestCloudIdx(input.cloudTimes, mid);
         const cloud = ci >= 0 ? clampPct(input.cloud[ci]) : 0;
@@ -354,6 +369,24 @@ function clampPct(v: number): number
     return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
 }
 
+//Battery SoC (%) at an instant from the hourly mean series: the bucket whose [start, end) contains
+//tMs, else the nearest by midpoint. Null when the series is empty / absent (guard then never fires).
+function socAtMs(series: MeanBucket[] | null, tMs: number): number | null
+{
+    if (!series || series.length === 0) { return null; }
+    let best = -1;
+    let bestDt = Infinity;
+    for (let i = 0; i < series.length; i++)
+    {
+        const b = series[i];
+        if (tMs >= b.startMs && tMs < b.endMs) { return b.mean; }
+        const dt = Math.abs((b.startMs + b.endMs) / 2 - tMs);
+        if (dt < bestDt) { bestDt = dt; best = i; }
+        else if (b.startMs > tMs && dt > bestDt) { break; }
+    }
+    return best >= 0 ? series[best].mean : null;
+}
+
 
 //-------------------------------------------------------------------------------------------------
 //Fetch orchestration + memoised build. The two histories (production from the recorder, cloud from
@@ -384,6 +417,11 @@ export interface SkyForecastHost extends LoadingTrackerHost
     _skySnow:         number[];
     _skyCloudFetchKey: string;
     _skyCloudFetching: boolean;
+    //60-day battery SoC mean series for the inverter-cutoff guard. Only fetched when the guard is armed
+    //(inverter-cutoff-soc-pct set AND a battery SoC sensor is wired); null otherwise.
+    _skySoc:          MeanBucket[] | null;
+    _skySocFetchKey:  string;
+    _skySocFetching:  boolean;
     _skyResidualMap:  SkyResidualMap | null;
     _skyMapVersion:   string;
     requestUpdate(): void;
@@ -434,6 +472,33 @@ export function refreshSkyForecast(host: SkyForecastHost, lat: number, lon: numb
                 host._skyProdFetching = false;
                 endLoadingPhase(host, 'sky-forecast');
             });
+    }
+
+    //Battery SoC history for the inverter-cutoff guard. batterySocEntityForInhibit returns the SoC
+    //entity only when the guard is armed (cutoff percent set AND a SoC source wired), so installs
+    //without it pay nothing.
+    const socEntity = batterySocEntityForInhibit(host.config, host._energyDefaults);
+    if (socEntity !== null)
+    {
+        const socKey = `${socEntity}|${startMs}`;
+        if (socKey !== host._skySocFetchKey && !host._skySocFetching)
+        {
+            host._skySocFetchKey = socKey;
+            host._skySocFetching = true;
+            void fetchMeanSeries(host.hass, [socEntity], startMs, endMs, 'hour')
+                .then((series) =>
+                {
+                    if (series !== null) { host._skySoc = series; }
+                    host.requestUpdate();
+                })
+                .finally(() => { host._skySocFetching = false; });
+        }
+    }
+    else if (host._skySoc !== null)
+    {
+        //Guard disarmed since the last fetch: drop the stale SoC so the map stops filtering.
+        host._skySoc = null;
+        host._skySocFetchKey = '';
     }
 
     //Cloud history: one Open-Meteo GET over the learning window.
@@ -495,7 +560,9 @@ function maybeRebuildSkyMap(host: SkyForecastHost, lat: number, lon: number): vo
     //GTI marker in the hash so a fresh per-orientation fetch landing AFTER the histories trips a rebuild
     //(the learning must re-run on the same POA the forecast now uses).
     const gtiLen   = host._gtiStore ? host._gtiStore.byKey.size : 0;
-    const version  = `${todayKey}|${prodLen}|${cloudLen}|${gtiLen}`;
+    //SoC marker so arming the cutoff guard (or its history landing) re-runs the learning with the filter.
+    const socLen   = host._skySoc?.length ?? 0;
+    const version  = `${todayKey}|${prodLen}|${cloudLen}|${gtiLen}|${socLen}`;
     if (version === host._skyMapVersion) { return; }
     host._skyMapVersion = version;
     host._skyResidualMap = buildSkyResidualMap({
@@ -513,6 +580,8 @@ function maybeRebuildSkyMap(host: SkyForecastHost, lat: number, lon: number): vo
         wind:       host._skyWind,
         snow:       host._skySnow,
         gtiStore:   host._gtiStore,
+        socSeries:  host._skySoc,
+        cutoffSoc:  inverterCutoffSocPct(host.config),
     });
     host.requestUpdate();
 }

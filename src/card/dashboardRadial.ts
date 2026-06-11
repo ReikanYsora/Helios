@@ -1430,10 +1430,6 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
 
     const prodLabel     = t.detail.radialProductionLabel ?? 'Production';
     const forecastLabel = t.detail.dashForecastLabel     ?? 'Forecast';
-    const timeLabel     = t.detail.dashTimeLabel         ?? 'Time';
-    //Hovered clock time so the user can read WHICH hour the production / forecast values belong to. Only
-    //meaningful while the cursor is parked; the daily-total view (no hover) shows a placeholder.
-    const timeValue     = hoverActive ? formatHoverClock(hoverHour as number, host.hass) : '—';
 
     //Build a "past-actual only" production array. computeHourlyProduction in prepareRadialDayData
     //returns hourlyProd as "past actual buckets + future forecast values" so the radial dial can
@@ -1638,15 +1634,6 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     } : undefined;
 
     return html`
-        <div class="dash-radial-chip-strip dash-radial-chip-strip-solo">
-            <ha-card class="dash-radial-badge dash-radial-badge-time">
-                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:clock-outline"></ha-icon></span>
-                <span class="dash-radial-badge-stack">
-                    <span class="dash-radial-badge-label">${timeLabel}</span>
-                    <span class="dash-radial-badge-value">${timeValue}</span>
-                </span>
-            </ha-card>
-        </div>
         <div class="dash-radial-chip-strip dash-radial-chip-strip-pair">
             <ha-card class="dash-radial-badge dash-radial-badge-prod">
                 <span class="dash-radial-badge-chip"><ha-icon icon="mdi:solar-power"></ha-icon></span>
@@ -1718,6 +1705,10 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                      ha-card-style background uses HA theme tokens so it follows light / dark themes
                      automatically. pointer-events: none keeps hover on the SVG. -->
                 <div class="dash-graph-hover-tooltip" style="left:${(hoverX / W * 100).toFixed(2)}%">
+                    <span class="dash-graph-hover-tooltip-row dash-graph-hover-tooltip-row-time">
+                        <ha-icon icon="mdi:clock-outline" class="dash-graph-hover-tooltip-icon"></ha-icon>
+                        <span class="dash-graph-hover-tooltip-value">${formatHoverClock(hoverHour as number, host.hass)}</span>
+                    </span>
                     ${hoverProdW !== null ? html`
                         <span class="dash-graph-hover-tooltip-row">
                             <ha-icon icon="mdi:solar-power" class="dash-graph-hover-tooltip-icon dash-graph-hover-tooltip-icon-prod"></ha-icon>

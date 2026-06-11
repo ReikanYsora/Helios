@@ -14,7 +14,6 @@ export const it: Translations = {
         dayLabelDayBefore:    '2 giorni fa',
         dayLabelTomorrow:     'Domani',
         dayLabelDayAfter:     'Tra 2 giorni',
-        shadingDomeHint:      'Cupola di ombreggiamento autoappresa. Ogni cella mostra l\'output PV medio in quella posizione del sole, per la copertura nuvolosa scelta sotto. Helios la applica alla previsione in modo che le ombre reali (un albero alle 16, un camino in inverno) vengano catturate automaticamente.',
         loadingLabel:           'Recupero dei dati...',
         weatherRateLimitTitle:   'OpenMeteo: limite di richieste',
         weatherRateLimitMessage: 'Troppe richieste, attendere',
@@ -26,7 +25,6 @@ export const it: Translations = {
         dashViewRadialLabel:    'Vista radiale',
         dashViewGraphLabel:     'Vista grafico',
         dashForecastLabel:      'Previsione',
-        dashTimeLabel: 'Ora',
     },
 
     editor:

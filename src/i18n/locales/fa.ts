@@ -19,7 +19,6 @@ export const fa: Translations = {
         dayLabelDayBefore:    '2 روز پیش',
         dayLabelTomorrow:     'فردا',
         dayLabelDayAfter:     '2 روز دیگر',
-        shadingDomeHint:      'گنبد سایه‌اندازی خودآموز. هر سلول میانگین خروجی PV در آن موقعیت خورشید را برای پوشش ابر انتخاب‌شده در پایین نشان می‌دهد. Helios آن را به پیش‌بینی اعمال می‌کند تا سایه‌های واقعی (یک درخت در ساعت ۴ بعدازظهر، یک دودکش در زمستان) به‌طور خودکار ثبت شوند.',
         loadingLabel:         'در حال دریافت داده‌ها...',
         weatherRateLimitTitle:   'OpenMeteo: محدودیت درخواست',
         weatherRateLimitMessage: 'درخواست‌های بیش‌از‌حد، لطفاً صبر کنید',
@@ -31,7 +30,6 @@ export const fa: Translations = {
         dashViewRadialLabel:   'نمای شعاعی',
         dashViewGraphLabel:    'نمای نموداری',
         dashForecastLabel:     'پیش‌بینی',
-        dashTimeLabel: 'ساعت',
     },
 
     editor:

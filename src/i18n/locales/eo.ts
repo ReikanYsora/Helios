@@ -19,7 +19,6 @@ export const eo: Translations = {
         dayLabelDayBefore:    'Antaŭ 2 tagoj',
         dayLabelTomorrow:     'Morgaŭ',
         dayLabelDayAfter:     'Post 2 tagoj',
-        shadingDomeHint:      'Aŭtomate lernita ombra kupolo. Ĉiu ĉelo montras la mezan PV-eligon ĉe tiu sunpozicio, por la nuba kovrado elektita sube. Helios aplikas ĝin al la prognozo, do realaj ombroj (arbo je la 16-a, kameno vintre) estas kaptitaj aŭtomate.',
         loadingLabel:         'Prenas datumojn...',
         weatherRateLimitTitle:   'OpenMeteo: limigo de petoj',
         weatherRateLimitMessage: 'Tro multaj petoj, bonvolu atendi',
@@ -31,7 +30,6 @@ export const eo: Translations = {
         dashViewRadialLabel:   'Radia vido',
         dashViewGraphLabel:    'Grafika vido',
         dashForecastLabel:     'Prognozo',
-        dashTimeLabel: 'Horo',
     },
 
     editor:

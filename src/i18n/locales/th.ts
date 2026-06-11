@@ -18,7 +18,6 @@ export const th: Translations = {
         dayLabelDayBefore:    '2 วันก่อน',
         dayLabelTomorrow:     'พรุ่งนี้',
         dayLabelDayAfter:     'อีก 2 วัน',
-        shadingDomeHint:      'โดมการบังแดดที่เรียนรู้อัตโนมัติ แต่ละเซลล์แสดงเอาต์พุต PV เฉลี่ยที่ตำแหน่งดวงอาทิตย์นั้น สำหรับการปกคลุมเมฆที่เลือกด้านล่าง Helios นำไปใช้กับการพยากรณ์เพื่อให้เงาจริง (ต้นไม้เวลา 16:00 น. ปล่องไฟในฤดูหนาว) ถูกบันทึกอัตโนมัติ',
         loadingLabel:         'กำลังดึงข้อมูล...',
         weatherRateLimitTitle:   'OpenMeteo: ขีดจำกัดคำขอ',
         weatherRateLimitMessage: 'คำขอมากเกินไป โปรดรอ',
@@ -30,7 +29,6 @@ export const th: Translations = {
         dashViewRadialLabel:   'มุมมองแบบรัศมี',
         dashViewGraphLabel:    'มุมมองกราฟ',
         dashForecastLabel:     'พยากรณ์',
-        dashTimeLabel: 'เวลา',
     },
 
     editor:

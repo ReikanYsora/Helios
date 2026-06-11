@@ -18,7 +18,6 @@ export const ml: Translations = {
         dayLabelDayBefore:    '2 ദിവസം മുമ്പ്',
         dayLabelTomorrow:     'നാളെ',
         dayLabelDayAfter:     '2 ദിവസത്തിനുള്ളിൽ',
-        shadingDomeHint:      'സ്വയം-പഠിച്ച ഷാഡിംഗ് ഡോം. ഓരോ സെല്ലും ആ സൂര്യ സ്ഥാനത്തെ ശരാശരി PV ഔട്ട്പുട്ട് കാണിക്കുന്നു, താഴെ തിരഞ്ഞെടുത്ത മേഘ പരിമിതിക്ക്. യഥാർത്ഥ നിഴലുകൾ (4 PM-ന് ഒരു മരം, ശൈത്യകാലത്ത് ഒരു ചിമ്മിനി) സ്വയമേവ പിടിച്ചെടുക്കപ്പെടാൻ Helios ഇത് പ്രവചനത്തിൽ പ്രയോഗിക്കുന്നു.',
         loadingLabel:         'ഡാറ്റ ലഭ്യമാക്കുന്നു...',
         weatherRateLimitTitle:   'OpenMeteo: നിരക്ക് പരിധി',
         weatherRateLimitMessage: 'വളരെ കൂടുതൽ അഭ്യർത്ഥനകൾ, ദയവായി കാത്തിരിക്കുക',
@@ -30,7 +29,6 @@ export const ml: Translations = {
         dashViewRadialLabel:   'റേഡിയൽ കാഴ്ച',
         dashViewGraphLabel:    'ഗ്രാഫ് കാഴ്ച',
         dashForecastLabel:     'പ്രവചനം',
-        dashTimeLabel: 'സമയം',
     },
 
     editor:

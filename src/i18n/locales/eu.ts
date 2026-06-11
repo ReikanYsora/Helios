@@ -19,7 +19,6 @@ export const eu: Translations = {
         dayLabelDayBefore:    'Duela 2 egun',
         dayLabelTomorrow:     'Bihar',
         dayLabelDayAfter:     '2 egun barru',
-        shadingDomeHint:      'Auto-ikasitako itzal-kupula. Gelaxka bakoitzak eguzkiaren posizio horretako batez besteko PV irteera erakusten du, behean aukeratutako hodei estaldura kontuan hartuta. Heliosek aurreikuspenari aplikatzen dio, eta horrela benetako itzalak (zuhaitz bat 16:00etan, tximinia bat neguan) automatikoki harrapatzen dira.',
         loadingLabel:         'Datuak eskuratzen...',
         weatherRateLimitTitle:   'OpenMeteo: eskaeren muga',
         weatherRateLimitMessage: 'Eskaera gehiegi, itxaron mesedez',
@@ -31,7 +30,6 @@ export const eu: Translations = {
         dashViewRadialLabel:   'Bista erradiala',
         dashViewGraphLabel:    'Grafiko bista',
         dashForecastLabel:     'Aurreikuspena',
-        dashTimeLabel: 'Ordua',
     },
 
     editor:

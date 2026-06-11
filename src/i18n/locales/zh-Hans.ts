@@ -18,7 +18,6 @@ export const zhHans: Translations = {
         dayLabelDayBefore:    '2 天前',
         dayLabelTomorrow:     '明天',
         dayLabelDayAfter:     '2 天后',
-        shadingDomeHint:      '自动学习的阴影穹顶。每个单元格显示在该太阳位置和下方所选云量下的平均光伏输出。Helios 将其应用于预测,以便真实阴影(下午 4 点的树木、冬季的烟囱)被自动捕获。',
         loadingLabel:         '正在获取数据...',
         weatherRateLimitTitle:   'OpenMeteo:请求限制',
         weatherRateLimitMessage: '请求过多,请稍候',
@@ -30,7 +29,6 @@ export const zhHans: Translations = {
         dashViewRadialLabel:   '径向视图',
         dashViewGraphLabel:    '图表视图',
         dashForecastLabel:     '预测',
-        dashTimeLabel: '时间',
     },
 
     editor:

@@ -18,7 +18,6 @@ export const id: Translations = {
         dayLabelDayBefore:    '2 hari lalu',
         dayLabelTomorrow:     'Besok',
         dayLabelDayAfter:     'Dalam 2 hari',
-        shadingDomeHint:      'Kubah penaungan yang dipelajari otomatis. Setiap sel menampilkan output PV rata-rata pada posisi matahari tersebut, untuk tingkat awan yang dipilih di bawah. Helios menerapkannya pada prakiraan sehingga bayangan nyata (pohon pukul 16:00, cerobong asap di musim dingin) ditangkap secara otomatis.',
         loadingLabel:         'Mengambil data...',
         weatherRateLimitTitle:   'OpenMeteo: batas permintaan',
         weatherRateLimitMessage: 'Terlalu banyak permintaan, harap tunggu',
@@ -30,7 +29,6 @@ export const id: Translations = {
         dashViewRadialLabel:   'Tampilan radial',
         dashViewGraphLabel:    'Tampilan grafik',
         dashForecastLabel:     'Prakiraan',
-        dashTimeLabel: 'Waktu',
     },
 
     editor:

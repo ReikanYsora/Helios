@@ -35,9 +35,6 @@ export interface Translations
         dayLabelDayBefore?:     string; //'2 days ago'
         dayLabelTomorrow?:      string; //'Tomorrow'
         dayLabelDayAfter?:      string; //'In 2 days'
-        //Explanation block shown above the cloud-cover slider on the Shading Dome view, so the user
-        //understands what the dome represents without having to dig into docs.
-        shadingDomeHint?:       string; //'Each cell shows what the sun delivers from that sky position...'
         //Label inside the top-of-card loading banner, visible while the first hydration wave of
         //data fetches is still in flight.
         loadingLabel?:          string; //'Fetching data...'
@@ -64,9 +61,6 @@ export interface Translations
         //Mini-card label above the graph view's forecast value (kWh predicted for the day, OR the
         //hovered hour's instantaneous W when the user parks the cursor on the chart).
         dashForecastLabel?:     string; //'Forecast'
-        //Mini-card label above the graph view's hovered clock time (shown only while the cursor is
-        //parked on the chart, so the user knows which hour the production / forecast values belong to).
-        dashTimeLabel?:         string; //'Time'
     };
 
     editor:
@@ -166,7 +160,7 @@ export interface Translations
         pvArrayTrackerSingleV:    string;
         pvArrayTrackerHelp:       string;
         //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
-        //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
+        //the forecast learning drops every hour where the SoC reached this value so the inverter-blocked production doesn't
         //train as phantom shadow.
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;

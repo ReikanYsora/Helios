@@ -19,7 +19,6 @@ export const sl: Translations = {
         dayLabelDayBefore:    'Pred 2 dnevoma',
         dayLabelTomorrow:     'Jutri',
         dayLabelDayAfter:     'Čez 2 dni',
-        shadingDomeHint:      'Samodejno naučena kupola senčenja. Vsaka celica prikazuje povprečno FN izhodno moč na tej položaju sonca za stopnjo oblačnosti, izbrano spodaj. Helios jo uporabi na napovedi, tako da so resnične sence (drevo ob 16. uri, dimnik pozimi) zajete samodejno.',
         loadingLabel:         'Pridobivanje podatkov...',
         weatherRateLimitTitle:   'OpenMeteo: omejitev zahtev',
         weatherRateLimitMessage: 'Preveč zahtev, prosimo počakajte',
@@ -31,7 +30,6 @@ export const sl: Translations = {
         dashViewRadialLabel:   'Radialni pogled',
         dashViewGraphLabel:    'Grafični pogled',
         dashForecastLabel:     'Napoved',
-        dashTimeLabel: 'Čas',
     },
 
     editor:

@@ -19,7 +19,6 @@ export const lt: Translations = {
         dayLabelDayBefore:    'Prieš 2 dienas',
         dayLabelTomorrow:     'Rytoj',
         dayLabelDayAfter:     'Po 2 dienų',
-        shadingDomeHint:      'Automatiškai išmokyta šešėliavimo kupolė. Kiekvienas langelis rodo vidutinę FV išvestį esant tai saulės padėčiai, debesuotumui, pasirinktam žemiau. Helios pritaiko tai prognozei, kad tikri šešėliai (medis 16 val., kaminas žiemą) būtų užfiksuoti automatiškai.',
         loadingLabel:         'Gaunami duomenys...',
         weatherRateLimitTitle:   'OpenMeteo: užklausų riba',
         weatherRateLimitMessage: 'Per daug užklausų, palaukite',
@@ -31,7 +30,6 @@ export const lt: Translations = {
         dashViewRadialLabel:   'Radialinis rodinys',
         dashViewGraphLabel:    'Grafiko rodinys',
         dashForecastLabel:     'Prognozė',
-        dashTimeLabel: 'Laikas',
     },
 
     editor:

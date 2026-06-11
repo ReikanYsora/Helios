@@ -18,7 +18,6 @@ export const ko: Translations = {
         dayLabelDayBefore:    '2일 전',
         dayLabelTomorrow:     '내일',
         dayLabelDayAfter:     '2일 후',
-        shadingDomeHint:      '자동 학습 음영 돔. 각 셀은 아래에서 선택한 구름량에 대해 해당 태양 위치에서의 평균 PV 출력을 표시합니다. Helios는 이를 예보에 적용하여 실제 그림자(오후 4시의 나무, 겨울의 굴뚝)가 자동으로 반영되도록 합니다.',
         loadingLabel:         '데이터 가져오는 중...',
         weatherRateLimitTitle:   'OpenMeteo: 요청 제한',
         weatherRateLimitMessage: '요청이 너무 많습니다. 잠시 기다려 주세요',
@@ -30,7 +29,6 @@ export const ko: Translations = {
         dashViewRadialLabel:   '방사형 보기',
         dashViewGraphLabel:    '그래프 보기',
         dashForecastLabel:     '예보',
-        dashTimeLabel: '시간',
     },
 
     editor:

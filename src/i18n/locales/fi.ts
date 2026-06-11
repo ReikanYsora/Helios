@@ -18,7 +18,6 @@ export const fi: Translations = {
         dayLabelDayBefore:    '2 päivää sitten',
         dayLabelTomorrow:     'Huomenna',
         dayLabelDayAfter:     '2 päivän päästä',
-        shadingDomeHint:      'Itseopittu varjostuskupoli. Jokainen solu näyttää keskimääräisen PV-tuotannon kyseisessä auringon asennossa, alla valitulla pilvipeitteellä. Helios soveltaa sitä ennusteeseen, joten todelliset varjot (puu klo 16, savupiippu talvella) tallentuvat automaattisesti.',
         loadingLabel:         'Haetaan tietoja...',
         weatherRateLimitTitle:   'OpenMeteo: pyyntöraja',
         weatherRateLimitMessage: 'Liikaa pyyntöjä, odota hetki',
@@ -30,7 +29,6 @@ export const fi: Translations = {
         dashViewRadialLabel:   'Radiaalinäkymä',
         dashViewGraphLabel:    'Kaavionäkymä',
         dashForecastLabel:     'Ennuste',
-        dashTimeLabel: 'Aika',
     },
 
     editor:

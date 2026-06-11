@@ -19,7 +19,6 @@ export const ta: Translations = {
         dayLabelDayBefore:    '2 நாட்களுக்கு முன்',
         dayLabelTomorrow:     'நாளை',
         dayLabelDayAfter:     '2 நாட்களில்',
-        shadingDomeHint:      'தானாக கற்றுக்கொண்ட நிழல் குவிமாடம். ஒவ்வொரு கட்டமும் கீழே தேர்ந்தெடுக்கப்பட்ட மேக மறைப்புக்கு அந்த சூரிய நிலையில் சராசரி PV வெளியீட்டைக் காட்டுகிறது. உண்மையான நிழல்கள் (மாலை 4 மணிக்கு ஒரு மரம், குளிர்காலத்தில் ஒரு புகைபோக்கி) தானாகவே பிடிக்கப்படுவதற்காக Helios அதை முன்னறிவிப்பில் பயன்படுத்துகிறது.',
         loadingLabel:         'தரவை பெறுகிறது...',
         weatherRateLimitTitle:   'OpenMeteo: கோரிக்கை வரம்பு',
         weatherRateLimitMessage: 'அதிக கோரிக்கைகள், தயவுசெய்து காத்திருக்கவும்',
@@ -31,7 +30,6 @@ export const ta: Translations = {
         dashViewRadialLabel:   'வட்ட காட்சி',
         dashViewGraphLabel:    'வரைபட காட்சி',
         dashForecastLabel:     'முன்னறிவிப்பு',
-        dashTimeLabel: 'நேரம்',
     },
 
     editor:

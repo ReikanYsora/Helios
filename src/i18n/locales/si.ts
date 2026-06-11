@@ -18,7 +18,6 @@ export const si: Translations = {
         dayLabelDayBefore:    'දින 2කට පෙර',
         dayLabelTomorrow:     'හෙට',
         dayLabelDayAfter:     'දින 2කින්',
-        shadingDomeHint:      'ස්වයංක්‍රීයව ඉගෙනගත් සෙවණ ගුම්බය. එක් එක් කොටුව, පහත තෝරාගත් වළාකුළු ආවරණය සඳහා එම හිරු පිහිටුමේ සාමාන්‍ය PV ප්‍රතිදානය පෙන්වයි. සැබෑ සෙවණැලි (පස්වරු 4ට ගසක්, ශීත සමයේ දුම් කුට්ටමක්) ස්වයංක්‍රීයව හසුකරගත හැකි වන පරිදි Helios එය පුරෝකථනයට යොදනු ලබයි.',
         loadingLabel:         'දත්ත ලබාගනිමින්...',
         weatherRateLimitTitle:   'OpenMeteo: අයැදුම් සීමාව',
         weatherRateLimitMessage: 'ඉතා බොහෝ අයැදුම්, කරුණාකර රැඳී සිටින්න',
@@ -30,7 +29,6 @@ export const si: Translations = {
         dashViewRadialLabel:   'රේඩියල් දසුන',
         dashViewGraphLabel:    'ප්‍රස්තාර දසුන',
         dashForecastLabel:     'පුරෝකථනය',
-        dashTimeLabel: 'වේලාව',
     },
 
     editor:

@@ -20,7 +20,6 @@ export const ur: Translations = {
         dayLabelDayBefore:    '2 دن پہلے',
         dayLabelTomorrow:     'کل',
         dayLabelDayAfter:     '2 دن بعد',
-        shadingDomeHint:      'خود بخود سیکھا ہوا سایہ گنبد۔ ہر سیل اس سورج کی پوزیشن پر اوسط PV آؤٹ پٹ دکھاتا ہے، نیچے منتخب کردہ بادل کی کوریج کے لیے۔ Helios اسے پیشین گوئی پر لاگو کرتا ہے تاکہ حقیقی سائے (شام 4 بجے ایک درخت، سردیوں میں ایک چمنی) خود بخود قبضے میں آ جائیں۔',
         loadingLabel:         'ڈیٹا حاصل کیا جا رہا ہے...',
         weatherRateLimitTitle:   'OpenMeteo: درخواست کی حد',
         weatherRateLimitMessage: 'بہت زیادہ درخواستیں، براہ کرم انتظار کریں',
@@ -32,7 +31,6 @@ export const ur: Translations = {
         dashViewRadialLabel:   'ریڈیل منظر',
         dashViewGraphLabel:    'گراف منظر',
         dashForecastLabel:     'پیشین گوئی',
-        dashTimeLabel: 'وقت',
     },
 
     editor:

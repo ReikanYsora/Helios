@@ -16,7 +16,6 @@ export const cs: Translations = {
         dayLabelDayBefore:    'Předevčírem',
         dayLabelTomorrow:     'Zítra',
         dayLabelDayAfter:     'Pozítří',
-        shadingDomeHint:      'Samoučící se stínicí kupole. Každá buňka ukazuje průměrný výstup FV při této pozici slunce pro oblačnost zvolenou níže. Helios ji aplikuje na předpověď, takže skutečné stíny (strom v 16 h, komín v zimě) se zachycují automaticky.',
         loadingLabel:         'Načítání dat...',
         weatherRateLimitTitle:   'OpenMeteo: limit požadavků',
         weatherRateLimitMessage: 'Příliš mnoho požadavků, počkejte prosím',
@@ -28,7 +27,6 @@ export const cs: Translations = {
         dashViewRadialLabel:   'Radiální zobrazení',
         dashViewGraphLabel:    'Grafové zobrazení',
         dashForecastLabel:     'Předpověď',
-        dashTimeLabel: 'Čas',
     },
 
     editor:

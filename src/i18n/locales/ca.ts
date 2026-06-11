@@ -18,7 +18,6 @@ export const ca: Translations = {
         dayLabelDayBefore:    'Fa 2 dies',
         dayLabelTomorrow:     'Demà',
         dayLabelDayAfter:     'D\'aquí a 2 dies',
-        shadingDomeHint:      'Cúpula d\'ombrejat autoapresa. Cada cel·la mostra la sortida PV mitjana en aquesta posició solar, per a la cobertura de núvols escollida a sota. Helios l\'aplica a la previsió perquè les ombres reals (un arbre a les 16 h, una xemeneia a l\'hivern) es capturin automàticament.',
         loadingLabel:         'Obtenint dades...',
         weatherRateLimitTitle:   'OpenMeteo: límit de peticions',
         weatherRateLimitMessage: 'Massa peticions, espereu si us plau',
@@ -30,7 +29,6 @@ export const ca: Translations = {
         dashViewRadialLabel:   'Vista radial',
         dashViewGraphLabel:    'Vista gràfica',
         dashForecastLabel:     'Previsió',
-        dashTimeLabel: 'Hora',
     },
 
     editor:

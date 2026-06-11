@@ -19,7 +19,6 @@ export const bg: Translations = {
         dayLabelDayBefore:    'Завчера',
         dayLabelTomorrow:     'Утре',
         dayLabelDayAfter:     'Вдругиден',
-        shadingDomeHint:      'Самообучаваща се сенчеста купола. Всяка клетка показва средната мощност на ФВ при тази позиция на слънцето, за избраната облачност по-долу. Helios я прилага към прогнозата, така че реалните сенки (дърво в 16 ч., комин през зимата) се улавят автоматично.',
         loadingLabel:         'Извличане на данни...',
         weatherRateLimitTitle:   'OpenMeteo: лимит на заявките',
         weatherRateLimitMessage: 'Твърде много заявки, моля изчакайте',
@@ -31,7 +30,6 @@ export const bg: Translations = {
         dashViewRadialLabel:   'Радиален изглед',
         dashViewGraphLabel:    'Графичен изглед',
         dashForecastLabel:     'Прогноза',
-        dashTimeLabel: 'Час',
     },
 
     editor:

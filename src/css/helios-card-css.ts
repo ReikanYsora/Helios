@@ -788,25 +788,6 @@ export const heliosCardStyles = css`
     {
         grid-template-columns: 1fr 1fr;
     }
-    /*  Full-width single badge (the graph view's hovered-time chip, sat above the prod / forecast
-        pair). Overrides the responsive 4-column rule so it always spans the whole strip. */
-    .dash-radial-chip-strip.dash-radial-chip-strip-solo
-    {
-        grid-template-columns: 1fr;
-        margin-bottom: 8px;
-    }
-    @container (min-width: 640px)
-    {
-        .dash-radial-chip-strip.dash-radial-chip-strip-solo
-        {
-            grid-template-columns: 1fr;
-        }
-    }
-    .dash-radial-badge-time .dash-radial-badge-chip
-    {
-        background: color-mix(in srgb, var(--state-icon-color, var(--primary-text-color, #ffffff)) 16%, transparent);
-        color: var(--state-icon-color, var(--primary-text-color, #ffffff));
-    }
     @container (min-width: 640px)
     {
         .dash-radial-chip-strip.dash-radial-chip-strip-pair

@@ -48,6 +48,21 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Release prep: hovered time in the tooltip, inverter-cutoff re-wired, dead code removed (beta.21)
+
+- The graph view's hover tooltip now leads with the clock time of the cursor, as a row inside the
+  tooltip (not a separate badge), so you can read which hour the production / forecast values are for.
+- The `inverter-cutoff-soc-pct` guard, orphaned when the self-learning shadow-map was retired, is
+  re-wired into the sky-residual forecast learning. When the guard is armed, the learning fetches the
+  battery SoC over its 60-day window and drops the hours where the SoC reached the cutoff, so the
+  inverter clamping PV output on a full battery no longer teaches the map a false low output at those
+  sun positions.
+- Dead code removed: the unused `fetchPvHistory` raw-history path (~120 lines, superseded by the
+  recorder `change` series) and its `_batteryHistory` companion, plus two dead i18n keys
+  (`shadingDomeHint`, a leftover hover-time label) across all 63 locales. Stale comments referencing
+  the removed shadow-dome / trainer and old beta build numbers were cleaned up, and the editor help
+  for the graph-detail slider + the inverter-cutoff guard now describe current behaviour.
+
 ### Background Open-Meteo fetches wait for the critical weather (beta.20)
 
 The forecast work added over this cycle fans out several `api.open-meteo.com` requests at load: the

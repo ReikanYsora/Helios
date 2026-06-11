@@ -20,7 +20,6 @@ export const no: Translations = {
         dayLabelDayBefore:    '2 dager siden',
         dayLabelTomorrow:     'I morgen',
         dayLabelDayAfter:     'Om 2 dager',
-        shadingDomeHint:      'Selvlært skyggekuppel. Hver celle viser den gjennomsnittlige PV-utgangen i den solposisjonen for skydekket som er valgt nedenfor. Helios bruker dette på prognosen slik at reelle skygger (et tre kl. 16, en pipe om vinteren) fanges automatisk.',
         loadingLabel:         'Henter data...',
         weatherRateLimitTitle:   'OpenMeteo: forespørselsgrense',
         weatherRateLimitMessage: 'For mange forespørsler, vennligst vent',
@@ -32,7 +31,6 @@ export const no: Translations = {
         dashViewRadialLabel:   'Radial visning',
         dashViewGraphLabel:    'Grafvisning',
         dashForecastLabel:     'Prognose',
-        dashTimeLabel: 'Tid',
     },
 
     editor:

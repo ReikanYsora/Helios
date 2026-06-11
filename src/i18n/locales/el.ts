@@ -19,7 +19,6 @@ export const el: Translations = {
         dayLabelDayBefore:    'Προχθές',
         dayLabelTomorrow:     'Αύριο',
         dayLabelDayAfter:     'Μεθαύριο',
-        shadingDomeHint:      'Αυτοδιδάγμενος θόλος σκιάς. Κάθε κελί δείχνει τη μέση παραγωγή Φ/Β σε αυτή τη θέση του ήλιου, για τη νέφωση που επιλέγεται παρακάτω. Ο Helios το εφαρμόζει στην πρόβλεψη ώστε οι πραγματικές σκιές (ένα δέντρο στις 16:00, μια καμινάδα τον χειμώνα) να καταγράφονται αυτόματα.',
         loadingLabel:         'Λήψη δεδομένων...',
         weatherRateLimitTitle:   'OpenMeteo: όριο αιτημάτων',
         weatherRateLimitMessage: 'Πάρα πολλά αιτήματα, παρακαλώ περιμένετε',
@@ -31,7 +30,6 @@ export const el: Translations = {
         dashViewRadialLabel:   'Ακτινική προβολή',
         dashViewGraphLabel:    'Προβολή γραφήματος',
         dashForecastLabel:     'Πρόβλεψη',
-        dashTimeLabel: 'Ώρα',
     },
 
     editor:

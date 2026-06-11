@@ -19,7 +19,6 @@ export const cy: Translations = {
         dayLabelDayBefore:    '2 ddiwrnod yn ôl',
         dayLabelTomorrow:     'Yfory',
         dayLabelDayAfter:     'Mewn 2 ddiwrnod',
-        shadingDomeHint:      'Cromen gysgodol hunan-ddysgu. Mae pob cell yn dangos y cynnyrch PV cyfartalog yn safle\'r haul honno, ar gyfer y gorchudd cwmwl a ddewiswyd isod. Mae Helios yn ei chymhwyso i\'r rhagolwg fel bod cysgodion go iawn (coeden am 16:00, simnai yn y gaeaf) yn cael eu dal yn awtomatig.',
         loadingLabel:         'Yn nôl data...',
         weatherRateLimitTitle:   'OpenMeteo: terfyn cyfradd',
         weatherRateLimitMessage: 'Gormod o geisiadau, arhoswch os gwelwch yn dda',
@@ -31,7 +30,6 @@ export const cy: Translations = {
         dashViewRadialLabel:   'Golwg radiol',
         dashViewGraphLabel:    'Golwg graff',
         dashForecastLabel:     'Rhagolwg',
-        dashTimeLabel: 'Amser',
     },
 
     editor:

@@ -19,7 +19,6 @@ export const sr: Translations = {
         dayLabelDayBefore:    'Пре 2 дана',
         dayLabelTomorrow:     'Сутра',
         dayLabelDayAfter:     'За 2 дана',
-        shadingDomeHint:      'Аутоматски научена купола сенчења. Свака ћелија приказује просечну ФВ снагу на тој позицији сунца за облачност изабрану испод. Helios је примењује на прогнозу тако да се стварне сенке (дрво у 16 часова, димњак зими) аутоматски обухватају.',
         loadingLabel:         'Преузимање података...',
         weatherRateLimitTitle:   'OpenMeteo: ограничење захтева',
         weatherRateLimitMessage: 'Превише захтева, молимо сачекајте',
@@ -31,7 +30,6 @@ export const sr: Translations = {
         dashViewRadialLabel:   'Радијални приказ',
         dashViewGraphLabel:    'Графички приказ',
         dashForecastLabel:     'Прогноза',
-        dashTimeLabel: 'Сат',
     },
 
     editor:

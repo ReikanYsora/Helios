@@ -18,7 +18,6 @@ export const vi: Translations = {
         dayLabelDayBefore:    '2 ngày trước',
         dayLabelTomorrow:     'Ngày mai',
         dayLabelDayAfter:     'Trong 2 ngày',
-        shadingDomeHint:      'Vòm che bóng tự học. Mỗi ô hiển thị sản lượng PV trung bình tại vị trí mặt trời đó, đối với độ phủ mây được chọn bên dưới. Helios áp dụng nó vào dự báo để các bóng thực (cây vào lúc 4 giờ chiều, ống khói vào mùa đông) được ghi lại tự động.',
         loadingLabel:         'Đang lấy dữ liệu...',
         weatherRateLimitTitle:   'OpenMeteo: giới hạn yêu cầu',
         weatherRateLimitMessage: 'Quá nhiều yêu cầu, vui lòng đợi',
@@ -30,7 +29,6 @@ export const vi: Translations = {
         dashViewRadialLabel:   'Chế độ xem hướng tâm',
         dashViewGraphLabel:    'Chế độ xem biểu đồ',
         dashForecastLabel:     'Dự báo',
-        dashTimeLabel: 'Giờ',
     },
 
     editor:

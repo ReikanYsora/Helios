@@ -19,7 +19,6 @@ export const te: Translations = {
         dayLabelDayBefore:    '2 రోజుల క్రితం',
         dayLabelTomorrow:     'రేపు',
         dayLabelDayAfter:     '2 రోజులలో',
-        shadingDomeHint:      'స్వయంగా-నేర్చుకున్న నీడ గుమ్మటం. ప్రతి సెల్ క్రింద ఎంపిక చేయబడిన మేఘ కవరేజ్ కోసం ఆ సూర్య స్థానంలో సగటు PV ఉత్పత్తిని చూపిస్తుంది. నిజమైన నీడలు (సాయంత్రం 4 గంటలకు ఒక చెట్టు, శీతాకాలంలో ఒక చిమ్నీ) స్వయంచాలకంగా క్యాప్చర్ చేయబడేలా Helios దీనిని అంచనాకు వర్తింపజేస్తుంది.',
         loadingLabel:         'డేటాను పొందుతోంది...',
         weatherRateLimitTitle:   'OpenMeteo: రేటు పరిమితి',
         weatherRateLimitMessage: 'చాలా అభ్యర్థనలు, దయచేసి వేచి ఉండండి',
@@ -31,7 +30,6 @@ export const te: Translations = {
         dashViewRadialLabel:   'వృత్తాకార వీక్షణ',
         dashViewGraphLabel:    'గ్రాఫ్ వీక్షణ',
         dashForecastLabel:     'అంచనా',
-        dashTimeLabel: 'సమయం',
     },
 
     editor:

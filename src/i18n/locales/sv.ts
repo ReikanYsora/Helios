@@ -17,7 +17,6 @@ export const sv: Translations = {
         dayLabelDayBefore:    'För 2 dagar sedan',
         dayLabelTomorrow:     'Imorgon',
         dayLabelDayAfter:     'Om 2 dagar',
-        shadingDomeHint:      'Självlärd skuggkupol. Varje cell visar den genomsnittliga PV-utgången i den solpositionen för molntäcket som valts nedan. Helios tillämpar det på prognosen så att verkliga skuggor (ett träd kl 16, en skorsten på vintern) fångas automatiskt.',
         loadingLabel:         'Hämtar data...',
         weatherRateLimitTitle:   'OpenMeteo: förfrågningsgräns',
         weatherRateLimitMessage: 'För många förfrågningar, vänligen vänta',
@@ -29,7 +28,6 @@ export const sv: Translations = {
         dashViewRadialLabel:   'Radial vy',
         dashViewGraphLabel:    'Grafvy',
         dashForecastLabel:     'Prognos',
-        dashTimeLabel: 'Tid',
     },
 
     editor:

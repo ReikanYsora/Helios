@@ -19,7 +19,6 @@ export const sk: Translations = {
         dayLabelDayBefore:    'Pred 2 dňami',
         dayLabelTomorrow:     'Zajtra',
         dayLabelDayAfter:     'O 2 dni',
-        shadingDomeHint:      'Automaticky naučená tieniaca kupola. Každá bunka zobrazuje priemerný FV výstup v danej polohe slnka pre úroveň oblačnosti vybranú nižšie. Helios ju aplikuje na predpoveď tak, aby skutočné tiene (strom o 16:00, komín v zime) boli zachytené automaticky.',
         loadingLabel:         'Načítavajú sa údaje...',
         weatherRateLimitTitle:   'OpenMeteo: limit požiadaviek',
         weatherRateLimitMessage: 'Príliš veľa požiadaviek, prosím počkajte',
@@ -31,7 +30,6 @@ export const sk: Translations = {
         dashViewRadialLabel:   'Radiálne zobrazenie',
         dashViewGraphLabel:    'Grafické zobrazenie',
         dashForecastLabel:     'Predpoveď',
-        dashTimeLabel: 'Čas',
     },
 
     editor:

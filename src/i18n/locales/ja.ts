@@ -18,7 +18,6 @@ export const ja: Translations = {
         dayLabelDayBefore:    '2日前',
         dayLabelTomorrow:     '明日',
         dayLabelDayAfter:     '2日後',
-        shadingDomeHint:      '自動学習された遮光ドーム。各セルはその太陽位置での平均PV出力を、下で選択された雲量に基づいて表示します。Heliosはこれを予測に適用するため、実際の影（午後4時の木、冬の煙突）が自動的に捕捉されます。',
         loadingLabel:           'データを取得しています...',
         weatherRateLimitTitle:   'OpenMeteo: レート制限',
         weatherRateLimitMessage: 'リクエストが多すぎます。お待ちください',
@@ -30,7 +29,6 @@ export const ja: Translations = {
         dashViewRadialLabel:    'ラジアル表示',
         dashViewGraphLabel:     'グラフ表示',
         dashForecastLabel:      '予測',
-        dashTimeLabel: '時刻',
     },
 
     editor:

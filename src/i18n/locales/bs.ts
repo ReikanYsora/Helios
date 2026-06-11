@@ -19,7 +19,6 @@ export const bs: Translations = {
         dayLabelDayBefore:    'Prekjučer',
         dayLabelTomorrow:     'Sutra',
         dayLabelDayAfter:     'Prekosutra',
-        shadingDomeHint:      'Samonaučena kupola zasjenjenja. Svaka ćelija prikazuje prosječni PV izlaz za taj položaj sunca, za oblačnost odabranu ispod. Helios je primjenjuje na prognozu tako da se stvarne sjene (drvo u 16h, dimnjak zimi) automatski hvataju.',
         loadingLabel:         'Preuzimanje podataka...',
         weatherRateLimitTitle:   'OpenMeteo: ograničenje zahtjeva',
         weatherRateLimitMessage: 'Previše zahtjeva, molimo pričekajte',
@@ -31,7 +30,6 @@ export const bs: Translations = {
         dashViewRadialLabel:   'Radijalni prikaz',
         dashViewGraphLabel:    'Grafički prikaz',
         dashForecastLabel:     'Prognoza',
-        dashTimeLabel: 'Sat',
     },
 
     editor:

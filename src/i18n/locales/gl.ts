@@ -18,7 +18,6 @@ export const gl: Translations = {
         dayLabelDayBefore:    'Hai 2 días',
         dayLabelTomorrow:     'Mañá',
         dayLabelDayAfter:     'En 2 días',
-        shadingDomeHint:      'Cúpula de sombreado autoaprendida. Cada cela mostra a saída PV media nesa posición do sol, para a cobertura de nubes escollida abaixo. Helios aplícaa á previsión para que as sombras reais (unha árbore ás 16 h, unha cheminea no inverno) se capturen automaticamente.',
         loadingLabel:         'Obtendo datos...',
         weatherRateLimitTitle:   'OpenMeteo: límite de solicitudes',
         weatherRateLimitMessage: 'Demasiadas solicitudes, agarde por favor',
@@ -30,7 +29,6 @@ export const gl: Translations = {
         dashViewRadialLabel:   'Vista radial',
         dashViewGraphLabel:    'Vista gráfica',
         dashForecastLabel:     'Previsión',
-        dashTimeLabel: 'Hora',
     },
 
     editor:

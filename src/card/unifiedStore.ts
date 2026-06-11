@@ -504,9 +504,7 @@ function computeDataVersion(host: UnifiedStoreHost): string
 
 
 //Top-level builder. Resolves the cadence from the user config, then runs each per-metric pass in
-//dependency order. Pure function of the host snapshot: same input -> same output, no side effects
-//on the host except shadingTrainer.trainShadingMap which advances the shading map state
-//intentionally on every build.
+//dependency order. Pure function of the host snapshot: same input -> same output, no side effects.
 export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
 {
     const bucketsPerHour = displayUpdateFrequencyPerHour(host.config);

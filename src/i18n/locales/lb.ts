@@ -17,7 +17,6 @@ export const lb: Translations = {
         dayLabelDayBefore:    'Virun 2 Deeg',
         dayLabelTomorrow:     'Muer',
         dayLabelDayAfter:     'An 2 Deeg',
-        shadingDomeHint:      'Automatesch geléiert Verschattungskuppel. All Zell weist déi duerchschnëttlech PV-Ausgang bei där Sonneposition, fir d\'Wollekendecken déi hei drënner gewielt ass. Helios applizéiert et op d\'Prognose, esou datt real Schied (e Bam um 16:00 Auer, e Kamin am Wanter) automatesch erfaasst ginn.',
         loadingLabel:           'Donnéeën gi gelueden...',
         weatherRateLimitTitle:   'OpenMeteo: Ufroeleimitt',
         weatherRateLimitMessage: 'Ze vill Ufroen, w.e.g. waart',
@@ -29,7 +28,6 @@ export const lb: Translations = {
         dashViewRadialLabel:    'Radialvue',
         dashViewGraphLabel:     'Grafikvue',
         dashForecastLabel:      'Prognose',
-        dashTimeLabel: 'Zäit',
     },
 
     editor:

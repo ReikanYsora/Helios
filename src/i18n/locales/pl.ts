@@ -17,7 +17,6 @@ export const pl: Translations = {
         dayLabelDayBefore:    '2 dni temu',
         dayLabelTomorrow:     'Jutro',
         dayLabelDayAfter:     'Za 2 dni',
-        shadingDomeHint:      'Automatycznie wyuczona kopuła zacieniania. Każda komórka pokazuje średnią produkcję PV w tej pozycji słońca dla zachmurzenia wybranego poniżej. Helios stosuje to do prognozy, dzięki czemu rzeczywiste cienie (drzewo o godz. 16, komin zimą) są wychwytywane automatycznie.',
         loadingLabel:         'Pobieranie danych...',
         weatherRateLimitTitle:   'OpenMeteo: limit zapytań',
         weatherRateLimitMessage: 'Zbyt wiele zapytań, proszę czekać',
@@ -29,7 +28,6 @@ export const pl: Translations = {
         dashViewRadialLabel:   'Widok radialny',
         dashViewGraphLabel:    'Widok wykresu',
         dashForecastLabel:     'Prognoza',
-        dashTimeLabel: 'Godzina',
     },
 
     editor:

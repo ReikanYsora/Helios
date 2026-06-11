@@ -19,7 +19,6 @@ export const hr: Translations = {
         dayLabelDayBefore:    'Prije 2 dana',
         dayLabelTomorrow:     'Sutra',
         dayLabelDayAfter:     'Za 2 dana',
-        shadingDomeHint:      'Automatski naučena kupola sjenčanja. Svaka ćelija prikazuje prosječnu FN izlaznu snagu na toj poziciji sunca, za pokrivenost oblacima odabranu ispod. Helios je primjenjuje na prognozu kako bi se stvarne sjene (drvo u 16 sati, dimnjak zimi) automatski uhvatile.',
         loadingLabel:         'Dohvaćanje podataka...',
         weatherRateLimitTitle:   'OpenMeteo: ograničenje zahtjeva',
         weatherRateLimitMessage: 'Previše zahtjeva, pričekajte',
@@ -31,7 +30,6 @@ export const hr: Translations = {
         dashViewRadialLabel:   'Radijalni prikaz',
         dashViewGraphLabel:    'Grafički prikaz',
         dashForecastLabel:     'Prognoza',
-        dashTimeLabel: 'Sat',
     },
 
     editor:

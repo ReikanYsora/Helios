@@ -19,7 +19,6 @@ export const ar: Translations = {
         dayLabelDayBefore:    'أول أمس',
         dayLabelTomorrow:     'غداً',
         dayLabelDayAfter:     'بعد غد',
-        shadingDomeHint:      'قبة تظليل ذاتية التعلم. تعرض كل خلية متوسط إنتاج الكهروضوئية في موقع الشمس هذا، للغطاء السحابي المحدد أدناه. يطبقها هيليوس على التنبؤ بحيث يتم التقاط الظلال الحقيقية (شجرة الساعة 4 مساءً، مدخنة في الشتاء) تلقائياً.',
         loadingLabel:         'جارٍ جلب البيانات...',
         weatherRateLimitTitle:   'OpenMeteo: حد الطلبات',
         weatherRateLimitMessage: 'طلبات كثيرة جداً، يرجى الانتظار',
@@ -31,7 +30,6 @@ export const ar: Translations = {
         dashViewRadialLabel:   'العرض الدائري',
         dashViewGraphLabel:    'عرض الرسم البياني',
         dashForecastLabel:     'التوقعات',
-        dashTimeLabel: 'الوقت',
     },
 
     editor:
