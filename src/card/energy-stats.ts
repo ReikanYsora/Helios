@@ -186,89 +186,103 @@ export function changeSeriesToWatts(
 }
 
 
-//Resolve the most recent non-null watts value at or before `nowMs` from a change series, for the
-//live chip on cumulative-only installs (no stat_rate power sensor). Returns the average power of
-//the last completed source bucket. Null when no bucket covers the recent window.
-//Trailing window for the live power read. Reading the single latest 5-minute bucket breaks for a
-//sensor that only reports its cumulative energy every N minutes (SolarEdge: every 15): the recorder
-//then attributes the whole N-minute delta to ONE 5-minute bucket and leaves the others at zero, so the
-//latest bucket reads either 0 (empty) or ~N/5 times the true power (the one that caught the jump).
-//Averaging over a window at least as wide as the report interval captures exactly one delta over the
-//real elapsed time, so kWh / hours = the true average power regardless of how the recorder bucketed it.
-//15 min covers the common 15-minute meters; if that window is all-zero (a slower meter, or a reporting
-//gap) we keep walking back to MAX so a real value still surfaces instead of a false 0.
-const LIVE_AVG_WINDOW_MS = 15 * 60_000;
-const LIVE_AVG_MAX_MS    = 60 * 60_000;
+//Deriving live power from a recorder `change` series has to cope with two very different meters:
+//  - a FINE meter (Shelly, P1, Victron) whose counter advances every few seconds, so essentially
+//    every 5-minute recorder bucket carries energy. The latest bucket alone is the responsive,
+//    correct read, exactly as before.
+//  - a COARSE meter (SolarEdge: every 15 min) whose counter only advances on its report, so the
+//    recorder lands the whole 15-minute delta in ONE 5-minute bucket and zeroes the other two. The
+//    latest bucket then reads 0 two-thirds of the time and ~3x the true power one-third, the bug the
+//    Pi4 / SolarEdge tester saw.
+//We distinguish them by the density of non-zero buckets in a recent probe window: a dense window is a
+//fine meter (read the latest bucket directly, no smoothing, no behaviour change), a sparse window is a
+//coarse meter (average the whole probe window so the lone delta is spread over its real interval). So
+//the coarse-meter fix never touches a fine-meter install.
+const COARSE_PROBE_MS = 15 * 60_000;   //recent span we judge density over + average a coarse meter across
+const DENSE_FRACTION  = 0.6;           //>= this share of probe buckets non-zero => fine meter, read direct
 
+//Average power (W) over the buckets overlapping [loMs, hiMs), pro-rating straddling buckets. Returns
+//{ kwh, ms, nonZero, total } so the caller can both compute the average AND judge meter density.
+function probeChangeWindow(buckets: ChangeBucket[], loMs: number, hiMs: number): { kwh: number; ms: number; nonZero: number; total: number }
+{
+    let kwh = 0;
+    let ms  = 0;
+    let nonZero = 0;
+    let total   = 0;
+    for (const b of buckets)
+    {
+        if (b.endMs <= loMs || b.startMs >= hiMs) { continue; }
+        const span = b.endMs - b.startMs;
+        if (span <= 0) { continue; }
+        const ov = Math.min(b.endMs, hiMs) - Math.max(b.startMs, loMs);
+        if (ov <= 0) { continue; }
+        kwh += b.kwh * (ov / span);
+        ms  += ov;
+        total++;
+        if (b.kwh > 0) { nonZero++; }
+    }
+    return { kwh, ms, nonZero, total };
+}
+
+function wattsFromBucket(b: ChangeBucket): number
+{
+    const dt = b.endMs - b.startMs;
+    return dt > 0 ? Math.max(0, (b.kwh * 1000) / (dt / HOUR_MS)) : 0;
+}
+
+
+//Live power for the chip on cumulative-only installs (no stat_rate). Fine meter: latest completed
+//bucket. Coarse meter: average of the recent probe window. Null only when no completed bucket exists.
 export function latestWattsFromChangeSeries(
     buckets: ChangeBucket[] | null,
     nowMs:   number,
 ): number | null
 {
     if (!buckets || buckets.length === 0) { return null; }
-    //Accumulate completed buckets (end <= now, never a half-filled in-progress bucket) from the end
-    //until the covered span reaches the base window AND at least one bucket carried real energy. The
-    //average over that span = total kWh / total hours, immune to how a coarse meter's delta landed.
-    let accKwh = 0;
-    let accMs  = 0;
-    let sawData = false;
+    //Most recent COMPLETED bucket (end <= now, never a half-filled in-progress one).
+    let lastIdx = -1;
     for (let i = buckets.length - 1; i >= 0; i--)
     {
-        const b = buckets[i];
-        if (b.endMs > nowMs) { continue; }
-        const dt = b.endMs - b.startMs;
-        if (dt <= 0) { continue; }
-        accKwh += b.kwh;
-        accMs  += dt;
-        if (b.kwh > 0) { sawData = true; }
-        if (accMs >= LIVE_AVG_WINDOW_MS && sawData) { break; }
-        if (accMs >= LIVE_AVG_MAX_MS) { break; }
+        if (buckets[i].endMs <= nowMs) { lastIdx = i; break; }
     }
-    if (accMs <= 0) { return null; }
-    return Math.max(0, (accKwh * 1000) / (accMs / HOUR_MS));
-}
+    if (lastIdx < 0) { return null; }
+    const lastEnd = buckets[lastIdx].endMs;
 
-
-//Sample the average watts at an arbitrary instant from a change series, for the scrub tooltip.
-//Locates the source bucket containing `tMs` and returns its average power. Null when no bucket
-//covers the instant (future scrub, or a gap in the recorder data).
-//Average power (W) over [lo, hi), pro-rating any bucket that straddles a window edge. Returns null
-//when the window carries no real energy, so the caller can widen and retry instead of reading a false 0.
-function windowedWattsFromChangeSeries(buckets: ChangeBucket[], loMs: number, hiMs: number): number | null
-{
-    let accKwh  = 0;
-    let accMs   = 0;
-    let sawData = false;
-    for (const b of buckets)
+    const probe = probeChangeWindow(buckets, lastEnd - COARSE_PROBE_MS, lastEnd);
+    if (probe.total === 0) { return wattsFromBucket(buckets[lastIdx]); }
+    const dense = probe.nonZero >= Math.ceil(probe.total * DENSE_FRACTION);
+    if (dense)
     {
-        if (b.endMs <= loMs || b.startMs >= hiMs) { continue; }
-        const span = b.endMs - b.startMs;
-        if (span <= 0) { continue; }
-        const ov = Math.min(b.endMs, hiMs) - Math.max(b.startMs, loMs);   //overlap with the window
-        if (ov <= 0) { continue; }
-        accKwh += b.kwh * (ov / span);
-        accMs  += ov;
-        if (b.kwh > 0) { sawData = true; }
+        //Fine meter: the latest bucket is the responsive, correct read (0 immediately on a real dip).
+        return wattsFromBucket(buckets[lastIdx]);
     }
-    if (accMs <= 0 || !sawData) { return null; }
-    return Math.max(0, (accKwh * 1000) / (accMs / HOUR_MS));
+    //Coarse meter: spread the sparse delta over the probe span -> true average power.
+    return probe.ms > 0 ? Math.max(0, (probe.kwh * 1000) / (probe.ms / HOUR_MS)) : 0;
 }
 
+
+//Average watts at an arbitrary past instant, for the scrub tooltip. Same fine / coarse split centred
+//on tMs. Null only when no bucket covers the probe window (future scrub, gap before the data starts).
 export function wattsAtFromChangeSeries(
     buckets: ChangeBucket[] | null,
     tMs:     number,
 ): number | null
 {
     if (!buckets || buckets.length === 0) { return null; }
-    //Average over a window centred on tMs rather than reading the single bucket that contains it: for a
-    //meter reporting every N minutes the recorder lands the whole delta in one 5-minute bucket and zeroes
-    //the rest, so a single-bucket read alternates 0 / ~N-times-true. A centred window spans the report
-    //interval and yields the true average; widen to MAX before giving up so a slow meter still reads.
-    const half = LIVE_AVG_WINDOW_MS / 2;
-    const base = windowedWattsFromChangeSeries(buckets, tMs - half, tMs + half);
-    if (base !== null) { return base; }
-    const wide = LIVE_AVG_MAX_MS / 2;
-    return windowedWattsFromChangeSeries(buckets, tMs - wide, tMs + wide);
+    const half  = COARSE_PROBE_MS / 2;
+    const probe = probeChangeWindow(buckets, tMs - half, tMs + half);
+    if (probe.total === 0) { return null; }
+    const dense = probe.nonZero >= Math.ceil(probe.total * DENSE_FRACTION);
+    if (dense)
+    {
+        //Fine meter: read the bucket that actually contains tMs.
+        for (const b of buckets)
+        {
+            if (tMs >= b.startMs && tMs < b.endMs) { return wattsFromBucket(b); }
+        }
+    }
+    //Coarse meter (or tMs between buckets): average the probe window.
+    return probe.ms > 0 ? Math.max(0, (probe.kwh * 1000) / (probe.ms / HOUR_MS)) : 0;
 }
 
 
