@@ -48,6 +48,18 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Background Open-Meteo fetches wait for the critical weather (beta.20)
+
+The forecast work added over this cycle fans out several `api.open-meteo.com` requests at load: the
+engine weather fetch (which the timeline, clouds, irradiance and forecast all depend on), plus the
+60-day cloud history and one `global_tilted_irradiance` request per array orientation. Against the
+browser's ~6-connections-per-host limit and Open-Meteo's rate limits, that burst could starve or 429
+the critical weather fetch itself, so on some loads `onWeatherUpdate` never fired and the card showed
+no weather and no forecast. The per-orientation GTI and the 60-day histories are now DEFERRED until
+the engine weather has landed (`_chartSeries` populated), so the weather fetch runs alone at load and
+the refinements follow once it is in. Pairs with the timeline seed (beta.19): the timeline draws
+immediately and the weather fills in without the background fetches competing for it.
+
 ### Timeline renders from the first frame, not after the weather push (beta.19)
 
 The bottom time-bar is gated on `_timeRange`, which was only ever set by the engine's

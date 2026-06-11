@@ -1304,10 +1304,16 @@ export class HeliosCard extends LitElement
         refreshBattery(this);
         refreshGrid(this);
         refreshSolarRadiation(this);
-        //Learned sky-residual forecast correction. Kicks the 60-day production + cloud history fetches
-        //and rebuilds the residual map when they land; cheap (gated) on a no-op tick.
+        //Background forecast refinements (per-orientation GTI, 60-day cloud + production history). These
+        //are DEFERRED until the critical engine weather has landed (_chartSeries populated). At load
+        //several api.open-meteo.com requests would otherwise fire at once and, against the browser's
+        //~6-connection-per-host limit plus Open-Meteo's rate limits, could starve or 429 the weather
+        //fetch itself, leaving the card with no weather and no forecast. Weather first, refinements after.
+        //onWeatherUpdate moves _timeRange when it lands, which re-trips this refresh chain, so the gated
+        //fetches fire on the very next pass once weather is in.
         const skyCoords = getHomeCoords(this.config, this.hass);
-        if (skyCoords)
+        const weatherReady = (this._chartSeries?.times.length ?? 0) > 0;
+        if (skyCoords && weatherReady)
         {
             //GTI must refresh before the sky map rebuilds: the learning reads _gtiStore, so landing it
             //first means the very next maybeRebuildSkyMap picks up the anisotropic POA in the same pass.
