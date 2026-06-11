@@ -70,6 +70,16 @@ const MIN_TOTAL_WEIGHT = 3;
 //that actual/model is dominated by quantisation + measurement noise, so the sample is dropped.
 const MODEL_KWH_FLOOR = 0.05;
 
+//Leading-edge smoothing. At a fixed time of day the sun's (az, alt) drifts with the season, so the
+//cells the FUTURE forecast samples sit just beyond what the history has observed at that hour and
+//carry few samples. A confident shading feature learned in the cell the sun has just swept past
+//should bleed one cell forward so the future forecast inherits it instead of falling back to the
+//global ratio. SMOOTH_CONF_KEEP: cells at / above this confidence are left untouched so sharp,
+//well-sampled features are not blurred. SMOOTH_NEIGHBOR_W: how strongly a confident neighbour's ratio
+//pulls a thin cell off the global fallback.
+const SMOOTH_CONF_KEEP  = 0.6;
+const SMOOTH_NEIGHBOR_W = 0.6;
+
 
 export interface SkyResidualMap
 {
@@ -256,7 +266,50 @@ export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | n
         visited++;
     }
 
-    return { nAz: N_AZ, nAlt: N_ALT, m, conf, globalRatio, totalWeight: globalSumW, visitedCells: visited };
+    //Leading-edge smoothing pass. ONLY thin cells (conf < SMOOTH_CONF_KEEP) that sit next to a
+    //confident neighbour are touched: they adopt a confidence-weighted blend of that neighbour's
+    //learned ratio and gain a fraction of its confidence, so a recently-emerged shading dip reaches the
+    //leading-edge sun positions the future forecast samples. Confident cells are copied through
+    //untouched (sharp features preserved), and a thin cell with no confident neighbour is left to lean
+    //on the global ratio (isolated noise is never amplified).
+    const mS    = m.slice();
+    const confS = conf.slice();
+    for (let aj = 0; aj < N_ALT; aj++)
+    {
+        for (let ai = 0; ai < N_AZ; ai++)
+        {
+            const idx      = aj * N_AZ + ai;
+            const selfConf = conf[idx];
+            if (selfConf >= SMOOTH_CONF_KEEP) { continue; }
+
+            let num = 0;
+            let den = 0;
+            let bestNbConf = 0;
+            for (let dAlt = -1; dAlt <= 1; dAlt++)
+            {
+                const nj = aj + dAlt;
+                if (nj < 0 || nj >= N_ALT) { continue; }
+                for (let dAz = -1; dAz <= 1; dAz++)
+                {
+                    if (dAlt === 0 && dAz === 0) { continue; }
+                    const ni   = (ai + dAz + N_AZ) % N_AZ;   //azimuth wraps around 360
+                    const nIdx = nj * N_AZ + ni;
+                    const c    = conf[nIdx];
+                    num += c * m[nIdx];
+                    den += c;
+                    if (c > bestNbConf) { bestNbConf = c; }
+                }
+            }
+            if (den <= 0 || bestNbConf <= 0) { continue; }   //no confident neighbour: leave as-is
+
+            const nbM    = num / den;
+            const nbPull = SMOOTH_NEIGHBOR_W * bestNbConf;
+            mS[idx]      = (selfConf * m[idx] + nbPull * nbM) / (selfConf + nbPull);
+            confS[idx]   = Math.min(1, selfConf + nbPull);
+        }
+    }
+
+    return { nAz: N_AZ, nAlt: N_ALT, m: mS, conf: confS, globalRatio, totalWeight: globalSumW, visitedCells: visited };
 }
 
 

@@ -11,21 +11,15 @@
 import { html, TemplateResult } from 'lit';
 import { pickTranslations } from '../i18n';
 import type { HeliosEngine } from '../helios-engine';
-import
-{
-    pvCalibK,
-    pvNormalizeToWatts,
-    pvInverterMaxW,
-    computePvPowerWeighted
-} from './pv';
+import { pvNormalizeToWatts } from './pv';
 import type { BatteryHost } from './battery';
 import { cloudCoverIcon } from './cloud-icons';
 import { hasPvConfigured } from './equipment';
-import { effectiveForecastRatio, type ChartHost } from './charts';
+import { type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { sumChangeForDay } from './energy-stats';
+import { integrateForecastKwh, forecastCumulativeForDay } from './unifiedStore';
 import type { SunScene } from './overlays';
-import { getHomeCoords } from './init';
 import { renderRadialDial, renderDashCardChipStrip, renderDashCardGraphView, prepareRadialDayData } from './dashboardRadial';
 
 
@@ -83,47 +77,15 @@ export interface DashboardHost extends ChartHost, BatteryHost
 }
 
 
-//Day-integrated kWh forecast with the per-step `effectiveForecastRatio` blended in. The same recipe the timeline day-strip chips use:
-//for each forecast sample, compute the raw model output (pct × k), then multiply by the (shading-map per-(sun×cloud) auto-learned
-//ratio when confident, scalar 5-day calibration as fallback). Used by the dashboard's "→ X kWh affiné" headline so the dashboard's
-//refined figure matches the timeline chips and the in-card refined value at every scrub instant.
+//Day-integrated CORRECTED forecast kWh (the "→ X kWh affiné" headline). Reads the unified store's
+//`forecast` series, the single forecast pipeline (LiDAR + GTI + thermal + snow + learned sky-residual
+//map), so the dashboard figure equals the timeline curve and the day-strip chips to the watt-hour.
+//No local model loop here. Returns null when the store isn't built yet or no bucket carried a value.
 export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, dayEndMs: number): number | null
 {
-    const k      = pvCalibK(host.config);
-    const series = host._chartSeries;
-    const coords = getHomeCoords(host.config, host.hass);
-    if (k === null || k <= 0 || !series || !coords)
-    {
-        return null;
-    }
-    const raster = host._engine?.getLidarRaster() ?? null;
-    const cal    = computeForecastCalibration(host);
-    const calR   = cal?.ratio ?? 1;
-    const capW   = pvInverterMaxW(host.config);
-    let kwh = 0;
-    let any = false;
-    for (let i = 0; i < series.times.length; i++)
-    {
-        const tMs = series.times[i].getTime();
-        if (tMs < dayStartMs || tMs >= dayEndMs)
-        {
-            continue;
-        }
-        const cloud = series.cloud[i] ?? 0;
-        const pct = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
-            airTempC: series.temperature[i],
-            windMs:   series.windSpeed[i],
-            raster,
-        });
-        if (pct < 0)
-        {
-            continue;
-        }
-        const ratio = effectiveForecastRatio(calR);
-        kwh += Math.min(capW, pct * k * ratio) / 1000;
-        any = true;
-    }
-    return any ? kwh : null;
+    const store = host._unifiedStore;
+    if (!store) { return null; }
+    return integrateForecastKwh(store, dayStartMs, dayEndMs, false);
 }
 
 
@@ -226,42 +188,28 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
         }
     }
 
-    //Forecast + cloud average
+    //Forecast (raw / "PRÉVU") + cloud average, both from the unified store so they match the timeline.
+    //forecastKwh is the uncorrected physical model integral; the corrected "affiné" figure comes from
+    //computeRefinedDailyKwh below. Cloud is averaged weighted by the raw forecast watts so daylight
+    //hours dominate the glyph (a cloudy midnight doesn't skew it).
     let forecastKwh = 0;
     let cloudSum    = 0;
     let cloudWeight = 0;
-    const series = host._chartSeries;
-    const coords = getHomeCoords(host.config, host.hass);
-    const k      = pvCalibK(host.config);
-    if (series && coords)
+    const store = host._unifiedStore;
+    if (store)
     {
-        const raster = host._engine?.getLidarRaster() ?? null;
-        const capW   = pvInverterMaxW(host.config);
-        for (let i = 0; i < series.times.length; i++)
+        const rawKwh = integrateForecastKwh(store, dayStartMs, dayEndMs, true);
+        forecastKwh  = rawKwh ?? 0;
+        for (let i = 0; i < store.bucketsTotal; i++)
         {
-            const tMs = series.times[i].getTime();
-            if (tMs < dayStartMs || tMs >= dayEndMs)
-            {
-                continue;
-            }
-            const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            });
-            if (pct > 0 && k !== null)
-            {
-                const watts = Math.min(capW, pct * k);
-                forecastKwh += watts / 1000;
-                cloudSum    += cloud * pct;
-                cloudWeight += pct;
-            }
-            else
-            {
-                cloudSum    += cloud;
-                cloudWeight += 1;
-            }
+            const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
+            if (mid < dayStartMs || mid >= dayEndMs) { continue; }
+            const cloud = store.cloud[i];
+            if (cloud === null || !isFinite(cloud)) { continue; }
+            const w = store.forecastRaw[i];
+            const weight = (w !== null && isFinite(w) && w > 0) ? w : 1;
+            cloudSum    += cloud * weight;
+            cloudWeight += weight;
         }
     }
     const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
@@ -708,43 +656,13 @@ export function computeTodayCumulative(host: DashboardHost): {
         pastEndMs = nowMs;
     }
 
-    //Predicted: integrate the forecast model hour by hour over the
-    //whole day (no "now" filter). Each forecast sample contributes
-    //the full hour bin (`pct * k / 1000` kWh). Skipped silently
-    //when peak power isn't configured.
-    const predictedSamples: Array<{ tMs: number; kwh: number }> = [];
-    predictedSamples.push({ tMs: startMs, kwh: 0 });
-    let predictedKwh = 0;
-
-    const k      = pvCalibK(host.config);
-    const series = host._chartSeries;
-    const coords = getHomeCoords(host.config, host.hass);
-    if (k !== null && k > 0 && series && coords)
-    {
-        const raster = host._engine?.getLidarRaster() ?? null;
-        const capW   = pvInverterMaxW(host.config);
-        for (let i = 0; i < series.times.length; i++)
-        {
-            const tMs = series.times[i].getTime();
-            if (tMs < startMs || tMs >= endMs)
-            {
-                continue;
-            }
-            const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
-            const cloud  = series.cloud[i] ?? 0;
-            const pct    = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            });
-            if (pct < 0)
-            {
-                continue;
-            }
-            predictedKwh += Math.min(capW, pct * k) / 1000;
-            predictedSamples.push({ tMs: binEnd, kwh: predictedKwh });
-        }
-    }
+    //Predicted: running cumulative of the unified store's CORRECTED forecast over the whole day (no
+    //"now" filter), so the curve matches the timeline's dotted forecast and the headline "affiné" total
+    //to the watt-hour. No local model loop.
+    const store = host._unifiedStore;
+    const predictedSamples = store
+        ? forecastCumulativeForDay(store, startMs, endMs)
+        : [{ tMs: startMs, kwh: 0 }];
 
     let maxKwh = 0;
     for (const s of actualSamples)    if (s.kwh > maxKwh)

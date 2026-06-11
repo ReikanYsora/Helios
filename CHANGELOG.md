@@ -48,6 +48,33 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Forecast: one pipeline for every visual + the learned map reaches the future (beta.12)
+
+Two fixes that together close the "the tree shadow shows on past days but never on future days"
+report.
+
+**One forecast, computed once.** The forecast was being recomputed in SIX places (the timeline curve,
+the scrub tooltip, the live PV chip, the dashboard headline, the CoverFlow day cards, the day-strip
+chips), and the five outside the timeline had drifted: they used the old 5-day scalar calibration
+instead of the learned sky-residual map, and several didn't even pass the Open-Meteo GHI / GTI / snow
+inputs. So the same day could read differently depending on which widget you looked at. Now the
+unified store is the single forecast pipeline: it emits the corrected `forecast` (LiDAR + GTI +
+thermal + snow + learned map) AND a `forecastRaw` (same physics, no learned correction) in one pass,
+and every visual reads those series. The dashboard's "PRÉVU" is the raw integral, "affiné" the
+corrected integral, and they now match the timeline curve, the tooltip and the chips to the
+watt-hour. Net deletion of five duplicate model loops.
+
+**The learned map now reaches the future.** The sky-residual map is binned by the sun's position
+(azimuth, altitude). At a fixed time of day the sun drifts across that grid with the season, so the
+cells the FUTURE forecast samples sit at the leading edge of what the history has observed and carry
+few samples, where the map fell back to the global ratio and erased any learned shading. A recently
+grown tree that shades, say, 15:30-17:00 would therefore show in the past forecast (well-sampled
+cells) but fade out in the future (thin leading-edge cells). A confidence-weighted neighbour pass now
+lets a thin cell adopt the learned ratio of its well-sampled neighbour, the cell the sun has just
+swept past, so the correction bleeds one cell forward and the future forecast inherits it. Confident
+cells are left untouched (sharp features preserved) and a thin cell with no confident neighbour still
+leans on the global ratio (isolated noise is never amplified).
+
 ### Forecast: anisotropic GTI base + winter snow-cover derate (beta.11)
 
 Two more inputs from the same Open-Meteo source, both aimed at the prediction.

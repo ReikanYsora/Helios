@@ -14,17 +14,10 @@ import
     DEFAULT_PV_COLOR_HEX
 } from '../helios-config';
 import { formatDate, formatLocalisedNumber, lerpHexToward } from './format';
-import
-{
-    pvCalibK,
-    pvInverterMaxW,
-    computePvPowerWeighted,
-    type PvHistory
-} from './pv';
+import { type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
-import { computeForecastCalibration } from './calibration';
-import { sliceForRange } from './unifiedStore';
+import { sliceForRange, valueAt } from './unifiedStore';
 import { sumChangeForDay, type ChangeBucket } from './energy-stats';
 
 
@@ -422,49 +415,16 @@ export function pvValueAtTime(
         return { value: NaN, unit: displayUnit, isPredicted: false };
     }
 
-    //Forecast for future hours. Reuses the per-array PV power model + thermal / shading hooks the chart already feeds, plus the 5-day rolling
-    //calibration ratio so the tooltip's forecast value matches the "refined" headline number on the dashboard, plus the optional inverter PMax clip
-    //so the reading never exceeds what the user's hardware can deliver.
-    const series = host._chartSeries;
-    const k      = pvCalibK(host.config);
-    const cal    = computeForecastCalibration(host);
-    const calR   = cal ? cal.ratio : 1;
-    const capW    = pvInverterMaxW(host.config);
-    if (k !== null && series && coords && series.times.length >= 2)
+    //Forecast for future hours: read the unified store's CORRECTED forecast at the cursor instant, the
+    //same series the dotted timeline curve draws and the dashboard "affiné" headline integrates, so the
+    //tooltip never disagrees with the line it sits on. The store value is already cap-clipped and
+    //correction-applied, no local model loop here.
+    const store = host._unifiedStore;
+    if (store)
     {
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let i = 1; i < series.times.length; i++)
+        const w = valueAt(store.forecast, store, targetMs);
+        if (w !== null && w > 0)
         {
-            const t1 = series.times[i].getTime();
-            if (targetMs > t1)
-            {
-                continue;
-            }
-            const t0 = series.times[i - 1].getTime();
-            if (targetMs < t0)
-            {
-                break;
-            }
-            const cloud0 = series.cloud[i - 1] ?? 0;
-            const cloud1 = series.cloud[i] ?? 0;
-            const eff0   = effectiveForecastRatio(calR);
-            const eff1   = effectiveForecastRatio(calR);
-            const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, cloud0, {
-                airTempC: series.temperature[i - 1],
-                windMs:   series.windSpeed[i - 1],
-                raster,
-            }) * k * eff0);
-            const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud1, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            }) * k * eff1);
-            const dt = t1 - t0;
-            if (dt <= 0)
-            {
-                return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
-            }
-            const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
             return { value: Math.max(0, w) * nativeFromW, unit: displayUnit, isPredicted: true };
         }
     }
@@ -1567,52 +1527,24 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         }
     }
 
-    //Pass 2: future + today-remainder from the forecast model.
-    //Skipped silently when peak power is unset (no model, no
-    //forecast, only past observation contributes). Forecast kWh
-    //is multiplied by the 5-day rolling calibration ratio so the
-    //per-day chips match the "refined" dashboard headline + the
-    //dotted forecast curve next to them, then clipped at the
-    //inverter PMax so a bright midday hour can't push the daily
-    //total above what the hardware would actually deliver.
-    const k        = pvCalibK(host.config);   //W per percent of STC
-    const series   = host._chartSeries;
-    const coords   = getHomeCoords(host.config, host.hass);
-    const cal      = computeForecastCalibration(host);
-    const calR     = cal ? cal.ratio : 1;
-    const capW     = pvInverterMaxW(host.config);
-    if (k !== null && k > 0 && series && coords)
+    //Pass 2: future + today-remainder from the unified store's CORRECTED forecast, the same series the
+    //dotted timeline curve draws and the dashboard "affiné" headline integrates, so the per-day chips
+    //agree with the curve next to them. Only buckets at / after "now" contribute (past is Pass 1's real
+    //production); the store forecast is already cap-clipped and correction-applied.
+    const store = host._unifiedStore;
+    if (store)
     {
-        //Index hourly forecast samples by hour-floor ms so we can integrate them by 1-hour rectangles per day. The series timestamps are already at
-        //hour boundaries from the engine's resampling.
-        const nowMs  = Date.now();
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let i = 0; i < series.times.length; i++)
+        const nowMs = Date.now();
+        const stepH = store.stepMs / 3_600_000;   //bucket length in hours
+        for (let i = 0; i < store.bucketsTotal; i++)
         {
-            const tMs   = series.times[i].getTime();
-            if (tMs < startMs || tMs > endMsAbs)
-            {
-                continue;
-            }
-            if (tMs < nowMs) continue;   //past covered by Pass 1
-            const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            });
-            if (pct <= 0)
-            {
-                continue;
-            }
-            //pct × k = watts at this hour midpoint × 1h = Wh.
-            //Divide by 1000 to land in kWh; clip first so the
-            //daily total honours the inverter cap.
-            const eff   = effectiveForecastRatio(calR);
-            const watts = Math.min(capW, pct * k * eff);
-            const kwh   = watts / 1000;
-            const dk    = dayKey(tMs);
-            out.set(dk, (out.get(dk) ?? 0) + kwh);
+            const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
+            if (mid < startMs || mid > endMsAbs) { continue; }
+            if (mid < nowMs) { continue; }   //past covered by Pass 1
+            const w = store.forecast[i];
+            if (w === null || !isFinite(w) || w <= 0) { continue; }
+            const dk = dayKey(mid);
+            out.set(dk, (out.get(dk) ?? 0) + w * stepH / 1000);
         }
     }
 

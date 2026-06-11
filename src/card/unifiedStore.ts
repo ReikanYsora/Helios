@@ -98,6 +98,9 @@ export interface UnifiedDataStore
     cloud:        (number | null)[];
     production:   (number | null)[];
     forecast:     (number | null)[];
+    //Pure physical-model forecast (no learned sky-residual ratio). The "PRÉVU" raw figure; `forecast`
+    //is the same pipeline × the learned correction (the "affiné" figure + the timeline curve).
+    forecastRaw:  (number | null)[];
     battery:      (number | null)[];
     batterySoc:   (number | null)[];
     gridImport:   (number | null)[];
@@ -332,21 +335,24 @@ function buildForecast(
     storeStartMs: number,
     storeEndMs: number,
     p: CadenceParams,
-): (number | null)[]
+): { forecast: (number | null)[]; forecastRaw: (number | null)[] }
 {
-    const empty = new Array<number | null>(p.bucketsTotal).fill(null);
+    const empty = () => new Array<number | null>(p.bucketsTotal).fill(null);
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
-    if (!series || !coords) { return empty; }
+    if (!series || !coords) { return { forecast: empty(), forecastRaw: empty() }; }
     const k = pvCalibK(host.config);
-    if (k === null) { return empty; }
+    if (k === null) { return { forecast: empty(), forecastRaw: empty() }; }
     const cap     = pvInverterMaxW(host.config);
     const cal     = computeForecastCalibration(host as any);
     const calR    = cal ? cal.ratio : 1;
     const raster  = host._engine?.getLidarRaster() ?? null;
 
     //Hourly inner loop: one bucket per hour of the 5-day window, matching the weather model cadence.
-    const hourly = new Array<number | null>(FORECAST_BUCKETS_TOTAL).fill(null);
+    //`hourly` is the corrected forecast (model × learned ratio); `hourlyRaw` is the pure physical model
+    //(no learned ratio) so the dashboard can show "PRÉVU" (raw) vs "affiné" (corrected) from one pass.
+    const hourly    = new Array<number | null>(FORECAST_BUCKETS_TOTAL).fill(null);
+    const hourlyRaw = new Array<number | null>(FORECAST_BUCKETS_TOTAL).fill(null);
     for (let h = 0; h < FORECAST_BUCKETS_TOTAL; h++)
     {
         const mid = storeStartMs + h * FORECAST_STEP_MS + FORECAST_STEP_MS / 2;
@@ -404,15 +410,24 @@ function buildForecast(
             bestIdx >= 0 ? series.snowDepth?.[bestIdx]   : undefined,
             bestIdx >= 0 ? series.temperature?.[bestIdx] : undefined,
         );
-        const w   = wRaw * k * ratio * snowF;
+        //Raw = pure physics (LiDAR + thermal + GTI + snow), no learned ratio. Corrected = × ratio.
+        const rawW = wRaw * k * snowF;
+        if (Number.isFinite(rawW))
+        {
+            hourlyRaw[h] = Math.min(cap, Math.max(0, rawW));
+        }
+        const w = rawW * ratio;
         if (Number.isFinite(w))
         {
             hourly[h] = Math.min(cap, Math.max(0, w));
         }
     }
-    //Resample the hourly forecast to the storage cadence. resampleLinear is a no-op when bucketsTotal
+    //Resample both hourly forecasts to the storage cadence. resampleLinear is a no-op when bucketsTotal
     //matches FORECAST_BUCKETS_TOTAL (cadence = 1/h), otherwise linearly interpolates between hours.
-    return resampleLinear(hourly, p.bucketsTotal);
+    return {
+        forecast:    resampleLinear(hourly,    p.bucketsTotal),
+        forecastRaw: resampleLinear(hourlyRaw, p.bucketsTotal),
+    };
 }
 
 
@@ -530,7 +545,9 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     //Production reads ONLY real sensor samples and interpolates between them. Forecast is the model
     //output, computed independently at weather cadence and resampled into the storage buckets.
     const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
-    const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
+    const fc           = buildForecast(host, storeStartMs, storeEndMs, p);
+    const forecast     = fc.forecast;
+    const forecastRaw  = fc.forecastRaw;
     const battery      = buildBattery(host, storeStartMs, nowMs, p);
     const batterySoc   = buildBatterySoc(host, storeStartMs, nowMs, p);
     const gridImport   = buildGridChange(host._gridImportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
@@ -548,6 +565,7 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
         cloud,
         production,
         forecast,
+        forecastRaw,
         battery,
         batterySoc,
         gridImport,
@@ -598,6 +616,52 @@ export function dayBucketRange(store: UnifiedDataStore, dayOffset: number): { st
     const startBucket = Math.max(0, bucketForMs(store.storeStartMs, dayStartMs, store.stepMs, store.bucketsTotal));
     const endBucket   = Math.min(store.bucketsTotal, startBucket + store.bucketsPerDay);
     return { start: startBucket, end: endBucket };
+}
+
+
+//Integrate the forecast series (watts per bucket) over [dayStartMs, dayEndMs) into kWh, at the store
+//cadence: each non-null bucket contributes watts × stepHours / 1000. The single source for every
+//forecast kWh figure (dashboard headline, CoverFlow cards, day-strip chips) so they all match the
+//timeline curve exactly. `raw` selects the uncorrected physical model (the "PRÉVU" figure) over the
+//learned-corrected forecast (the "affiné" figure). Returns null when no bucket in range carried a value.
+export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number, raw = false): number | null
+{
+    const series = raw ? store.forecastRaw : store.forecast;
+    const stepH  = store.stepMs / HOUR_MS;
+    let kwh = 0;
+    let any = false;
+    for (let i = 0; i < store.bucketsTotal; i++)
+    {
+        const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
+        if (mid < dayStartMs || mid >= dayEndMs) { continue; }
+        const v = series[i];
+        if (v === null || !isFinite(v)) { continue; }
+        kwh += v * stepH / 1000;
+        any = true;
+    }
+    return any ? kwh : null;
+}
+
+
+//Cumulative forecast kWh samples across [dayStartMs, dayEndMs), one point per store bucket, for the
+//dashboard's running intraday forecast curve. Same integration as integrateForecastKwh so the curve's
+//endpoint equals the headline total. Always seeded with a 0 point at dayStartMs.
+export function forecastCumulativeForDay(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): Array<{ tMs: number; kwh: number }>
+{
+    const stepH = store.stepMs / HOUR_MS;
+    const out: Array<{ tMs: number; kwh: number }> = [{ tMs: dayStartMs, kwh: 0 }];
+    let kwh = 0;
+    for (let i = 0; i < store.bucketsTotal; i++)
+    {
+        const bucketStart = store.storeStartMs + i * store.stepMs;
+        const mid         = bucketStart + 0.5 * store.stepMs;
+        if (mid < dayStartMs || mid >= dayEndMs) { continue; }
+        const v = store.forecast[i];
+        if (v === null || !isFinite(v)) { continue; }
+        kwh += v * stepH / 1000;
+        out.push({ tMs: bucketStart + store.stepMs, kwh });
+    }
+    return out;
 }
 
 

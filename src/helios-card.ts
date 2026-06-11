@@ -18,8 +18,6 @@ import
     pvRateAtTime,
     pvNormalizeToWatts,
     pvCalibK,
-    pvInverterMaxW,
-    computePvPowerWeighted,
     formatPvValue,
     resolvePvLiveEntity,
     clearPvModuleCaches
@@ -33,7 +31,6 @@ import
     clearBatteryModuleCaches
 } from './card/battery';
 import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
-import { computeForecastCalibration } from './card/calibration';
 import
 {
     renderChart,
@@ -90,7 +87,7 @@ import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
 import { refreshSkyForecast, clearSkyForecastCache } from './card/forecast-sky';
 import { refreshTiltedIrradiance, clearGtiCache } from './card/gti';
-import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
+import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
     computeConfigSig,
@@ -1533,48 +1530,17 @@ export class HeliosCard extends LitElement
                 : (this._pvCurrent !== null ? currentPvRate(this) : null))
             : null;
 
-        //Predicted PV at the scrub instant when scrubbing into the
-        //future. Uses the same kWp × computePvPower(t, lat, lon, cloud)
-        //path the chart's dotted forecast line uses. Falls back to
-        //null when peak power is unset or no weather is available
-        //yet, in which case the chip stays hidden as before.
+        //Predicted PV at the scrub instant when scrubbing into the future. Reads the unified store's
+        //corrected forecast at that instant, the exact series the dotted timeline curve draws and the
+        //dashboard "affiné" headline integrates, so the chip never disagrees with the line it sits on.
+        //Stays null (chip hidden) when the store isn't built or the instant has no forecast.
         let pvPredictedRate: { value: number; unit: string } | null = null;
-        if (pvScrubFuture && pvEntityId !== '' && layout !== null)
+        if (pvScrubFuture && pvEntityId !== '' && layout !== null && this._unifiedStore)
         {
-            const k      = pvCalibK(this.config);
-            const coords = getHomeCoords(this.config, this.hass);
-            const series = this._chartSeries;
-            if (k !== null && coords && series && series.times.length > 0)
+            const w = valueAt(this._unifiedStore.forecast, this._unifiedStore, this._selectedTime!.getTime());
+            if (w !== null && w > 0)
             {
-                //Pick the series sample closest to _selectedTime.
-                const targetMs = this._selectedTime!.getTime();
-                let best = 0;
-                let bestDiff = Math.abs(series.times[0].getTime() - targetMs);
-                for (let i = 1; i < series.times.length; i++)
-                {
-                    const d = Math.abs(series.times[i].getTime() - targetMs);
-                    if (d < bestDiff) { bestDiff = d; best = i; }
-                }
-                const cloud = series.cloud[best] ?? 0;
-                const pct   = computePvPowerWeighted(this.config, this._selectedTime!, coords.lat, coords.lon, cloud, {
-                    airTempC: series.temperature[best],
-                    windMs:   series.windSpeed[best],
-                    raster:   this._engine?.getLidarRaster() ?? null,
-                });
-                if (pct > 0)
-                {
-                    //k is W per percent of STC, so pct × k is watts.
-                    //Apply the 5-day rolling calibration ratio so the
-                    //chip agrees with the dotted forecast curve + the
-                    //tooltip value at the same scrub instant; clip at
-                    //the inverter's PMax so a bright forecast hour
-                    //doesn't overshoot the install's hardware ceiling.
-                    //Infinity cap = no clipping.
-                    const cal  = computeForecastCalibration(this);
-                    const calR = cal ? cal.ratio : 1;
-                    const w    = Math.min(pvInverterMaxW(this.config), pct * k * calR);
-                    pvPredictedRate = { value: w, unit: 'W' };
-                }
+                pvPredictedRate = { value: w, unit: 'W' };
             }
         }
 
