@@ -20,7 +20,7 @@
 import { pvNormalizeToWatts } from './pv';
 import type { EnergyDefaults } from './energy-prefs';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
-import { fetchChangeSeries, latestWattsFromChangeSeries, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 
 
 export interface GridHost extends LoadingTrackerHost
@@ -85,9 +85,10 @@ export function refreshGrid(host: GridHost): void
 
 
 //Fetch the recorder `change` series for a direction's energy meters over the store's past window
-//(2 days back to now), gated on a per-host fetch key so it reissues only when the entity set or
-//window changes. The window matches the unified store's J-2 origin so the timeline + dashboard
-//graph have a real sample for every past bucket.
+//(2 days back to now), gated on a per-host fetch key that re-arms every CHANGE_REFRESH_MS (and on
+//entity-set / window changes) so the series keeps tracking newly committed recorder buckets. The
+//window matches the unified store's J-2 origin so the timeline + dashboard graph have a real
+//sample for every past bucket.
 function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 {
     const ed = host._energyDefaults;
@@ -102,9 +103,12 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
     const startMs = today0.getTime() - 2 * 24 * 3_600_000;
-    const endMs   = Date.now();
+    //Same re-arm scheme as fetchBatteryChangeSeries: the rounded end anchor in the key re-issues
+    //the fetch once per CHANGE_REFRESH_MS, so a cumulative-only grid wiring keeps a live chip and
+    //a fresh past curve instead of freezing at mount-time data until midnight.
+    const endMs   = changeRefreshAnchorMs();
     const sorted  = [...ids].sort();
-    const key     = `${sorted.join(',')}|${startMs}`;
+    const key     = `${sorted.join(',')}|${startMs}|${endMs}`;
 
     const prevKey = slot === 'import' ? host._gridImportChangeFetchKey : host._gridExportChangeFetchKey;
     if (key === prevKey) { return; }
