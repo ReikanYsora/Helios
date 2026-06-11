@@ -33,6 +33,7 @@ export const fr: Translations = {
         dashViewRadialLabel:   'Vue radiale',
         dashViewGraphLabel:    'Vue graphique',
         dashForecastLabel:     'Prévision',
+        dashTimeLabel:         'Heure',
     },
 
     editor:

@@ -64,6 +64,9 @@ export interface Translations
         //Mini-card label above the graph view's forecast value (kWh predicted for the day, OR the
         //hovered hour's instantaneous W when the user parks the cursor on the chart).
         dashForecastLabel?:     string; //'Forecast'
+        //Mini-card label above the graph view's hovered clock time (shown only while the cursor is
+        //parked on the chart, so the user knows which hour the production / forecast values belong to).
+        dashTimeLabel?:         string; //'Time'
     };
 
     editor:
