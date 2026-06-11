@@ -685,6 +685,11 @@ export interface ChartSeries
     times:        Date[];
     irradiance:   number[];
     cloud:        number[];
+    //Hourly horizontal beam + diffuse radiation (W/m²), -1 where the
+    //model didn't decompose. Feed the tilt transposition with the real
+    //direct / diffuse split. Consumers that don't transpose ignore them.
+    directRad:    number[];
+    diffuseRad:   number[];
     //Hourly ambient temperature (°C) and 10-metre wind speed (m/s).
     //NaN where the model didn't supply a value. Consumers that
     //don't care about thermal derating ignore these fields.

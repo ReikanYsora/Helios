@@ -48,6 +48,24 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Forecast: real direct / diffuse split for the tilt transposition (beta.10)
+
+A tilted array does not see the GHI directly: the beam component is projected onto the panel normal
+(it gains on a panel aimed at the sun, loses on one aimed away) while the diffuse sky component is
+transposed isotropically. The accuracy of that projection hinges on knowing how much of the GHI
+arrives as a collimated beam vs scattered sky. Until now Helios derived that split from a cubic of
+the cloud-cover factor (`kCloud`), a rough stand-in for a proper clearness decomposition that drifts
+badly under broken cloud, exactly when a tilted array's output is hardest to predict.
+
+The model now pulls Open-Meteo's `direct_radiation` + `diffuse_radiation` (horizontal plane,
+alongside `shortwave_radiation` in the same single GET) and uses their ratio as the real beam
+fraction. The magnitude stays owned by the GHI base (so a home irradiance sensor still wins on
+level), only the split is taken from the measured decomposition: `directPoa` ends up equal to the
+real DNI projected onto the panel. This sharpens every tilted-array forecast, most visibly on
+split-orientation installs (East + West strings) and on partly-cloudy days. Applied identically to
+the forecast curve and to the 60-day learning pass so the sky-residual map stays self-consistent.
+Hours the provider doesn't decompose fall back to the legacy cloud-fraction path per-hour.
+
 ### Forecast: the learned map shares the forecast's GHI base (beta.9)
 
 The sky-residual map is learned by comparing real production against the physical model. That model

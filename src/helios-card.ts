@@ -403,6 +403,8 @@ export class HeliosCard extends LitElement
     _skyCloudTimes:    number[] = [];
     _skyCloud:         number[] = [];
     _skyShortwave:     number[] = [];
+    _skyDirect:        number[] = [];
+    _skyDiffuse:       number[] = [];
     _skyCloudFetchKey  = '';
     _skyCloudFetching  = false;
     _skyMapVersion     = '';
@@ -520,6 +522,9 @@ export class HeliosCard extends LitElement
         times:        Date[];
         irradiance:   number[];
         cloud:        number[];
+        //Hourly horizontal beam + diffuse radiation in W/m², -1 where the model didn't decompose. Feed the PV tilt transposition's direct / diffuse split.
+        directRad:    number[];
+        diffuseRad:   number[];
         //Hourly ambient temperature in °C + wind speed in m/s, NaN-padded where the model didn't return a value. Both arrays mirror the `times`
         //length and feed the PV prediction's thermal-derating term.
         temperature:  number[];
@@ -876,6 +881,8 @@ export class HeliosCard extends LitElement
         this._skyCloudTimes               = [];
         this._skyCloud                    = [];
         this._skyShortwave                = [];
+        this._skyDirect                   = [];
+        this._skyDiffuse                  = [];
         this._skyCloudFetchKey            = '';
         this._skyMapVersion               = '';
         this._pvFetchKey                  = '';

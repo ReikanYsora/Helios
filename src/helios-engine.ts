@@ -5395,6 +5395,11 @@ export class HeliosEngine
         times:        Date[];
         irradiance:   number[];
         cloud:        number[];
+        //Per-hour horizontal beam + diffuse radiation in W/m², -1 where the model didn't supply them.
+        //Surfaced so the predictor in card/pv.ts can transpose a tilted array on the real direct / diffuse
+        //split instead of the cloud-derived fraction.
+        directRad:    number[];
+        diffuseRad:   number[];
         //Per-hour ambient temperature in °C and 10-metre wind speed in m/s, NaN-padded where the model didn't supply a value. Surfaced so the
         //predictor in card/pv.ts can apply the thermal-derating factor without each caller having to re-derive the alignment between the weather hour
         //and the timeline cursor.
@@ -5433,10 +5438,18 @@ export class HeliosEngine
 
         const cloud = home.times.map((_, i) => home.cloudCover[i] ?? 0);
 
+        //Beam + diffuse pass straight through from the model with the -1 sentinel preserved: unlike the
+        //GHI above there is no sensor / Haurwitz fallback, so a hour the provider didn't decompose reads
+        //-1 and the transposition reverts to the cloud-derived split for that hour only.
+        const directRad  = home.times.map((_, i) => home.directRad[i]  ?? -1);
+        const diffuseRad = home.times.map((_, i) => home.diffuseRad[i] ?? -1);
+
         return {
             times:       home.times.slice(),
             irradiance,
             cloud,
+            directRad,
+            diffuseRad,
             temperature: home.temperature.slice(),
             windSpeed:   home.windSpeed.slice(),
         };

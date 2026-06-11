@@ -138,10 +138,17 @@ export interface PvComputeContext
     //Measured / forecast global horizontal irradiance in W/m² (Open-Meteo shortwave_radiation, or a
     //home radiation sensor). When provided and >= 0, it replaces the analytical Haurwitz clear-sky ×
     //Kasten-Czeplak cloud magnitude as the GHI base, so the forecast inherits the weather model's own
-    //cloud physics instead of the cubic approximation. The direct / diffuse split for the tilt
-    //transposition still comes from the cloud factor below. Undefined keeps the legacy analytical base
+    //cloud physics instead of the cubic approximation. Undefined keeps the legacy analytical base
     //bit-for-bit.
     ghiWm2?:   number;
+    //Measured / forecast beam + diffuse irradiance on the HORIZONTAL plane in W/m² (Open-Meteo
+    //direct_radiation + diffuse_radiation). When BOTH are provided and >= 0 they replace the analytical
+    //cloud-derived direct / diffuse split in the tilt transposition: the beam term is the real DNI
+    //projected onto the panel, the diffuse term the real sky diffuse, so a tilted array under broken
+    //cloud no longer rides the crude kCloud → direct-fraction cubic. Ignored on a horizontal panel
+    //(GHI already is the plane-of-array value there) and when either is missing.
+    directWm2?:  number;
+    diffuseWm2?: number;
 }
 
 export function computePvPower(
@@ -215,20 +222,38 @@ export function computePvPower(
         const cosTheta = Math.sin(altR) * Math.cos(beta)
                        + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
 
-        //Direct fraction from the cloud-attenuation factor. kCloud
-        //spans ~0.25 (overcast) to 1.0 (clear sky), mapped to a
-        //direct fraction of 0 → 0.85. Loose approximation of a
-        //proper clearness-index decomposition (Erbs, Reindl); good
-        //enough at the hourly resolution the card runs at.
-        const directFraction  = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
-        const diffuseFraction = 1 - directFraction;
-
         //Beam transposition ratio R_b = cos(θi) / cos(zenith). Clamp
         //the denominator at sin(5°) so the ratio doesn't blow up at
         //sunrise / sunset (the beam component is tiny there anyway).
         const Rb = cosTheta > 0
             ? Math.max(0, cosTheta) / Math.max(0.087, cosZ)
             : 0;
+
+        //Direct / diffuse split. The SPLIT (which fraction of the GHI arrives as a collimated beam vs
+        //isotropic sky) drives the transposition gain on a tilted panel; the magnitude stays owned by
+        //ghiEff so the sensor-priority GHI base above is respected. Prefer the measured / forecast
+        //decomposition (Open-Meteo direct + diffuse radiation on the horizontal plane) when BOTH are
+        //supplied: their ratio is the real beam fraction, far better than the kCloud cubic for a tilted
+        //array under broken cloud. Fall back to the cloud-derived fraction when either is missing
+        //(sensor-only GHI, Haurwitz path).
+        const hasSplit = ctx?.directWm2 != null && ctx.directWm2 >= 0
+                      && ctx?.diffuseWm2 != null && ctx.diffuseWm2 >= 0
+                      && (ctx.directWm2 + ctx.diffuseWm2) > 0;
+
+        let directFraction: number;
+        if (hasSplit)
+        {
+            directFraction = ctx!.directWm2! / (ctx!.directWm2! + ctx!.diffuseWm2!);
+        }
+        else
+        {
+            //kCloud spans ~0.25 (overcast) to 1.0 (clear sky), mapped to
+            //a direct fraction of 0 → 0.85. Loose approximation of a
+            //proper clearness-index decomposition (Erbs, Reindl); good
+            //enough at the hourly resolution the card runs at.
+            directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
+        }
+        const diffuseFraction = 1 - directFraction;
 
         //Shading: the LiDAR raycast told us a building or tree is
         //sitting between the panel and the sun. The direct beam is

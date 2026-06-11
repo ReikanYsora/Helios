@@ -370,6 +370,10 @@ function buildForecast(
                 //Open-Meteo shortwave (or home sensor) GHI in W/m² as the irradiance base, so the
                 //forecast inherits the weather model's cloud physics instead of the analytical cubic.
                 ghiWm2:   bestIdx >= 0 ? series.irradiance?.[bestIdx]  : undefined,
+                //Open-Meteo beam + diffuse on the horizontal plane, so a tilted array transposes on the
+                //real direct / diffuse split instead of the cloud-derived fraction.
+                directWm2:  bestIdx >= 0 ? series.directRad?.[bestIdx]  : undefined,
+                diffuseWm2: bestIdx >= 0 ? series.diffuseRad?.[bestIdx] : undefined,
                 raster,
             }
         );

@@ -1374,6 +1374,11 @@ export interface PvWeightedContext
     //Global horizontal irradiance in W/m² (Open-Meteo shortwave / home sensor). Threaded into every
     //array's computePvPower as the GHI base in place of the analytical Haurwitz × cloud magnitude.
     ghiWm2?:   number;
+    //Beam + diffuse irradiance on the horizontal plane in W/m² (Open-Meteo direct + diffuse radiation).
+    //Threaded into every array so the tilt transposition runs on the real decomposition instead of the
+    //cloud-derived split. Both must be present for the split to engage (see computePvPower).
+    directWm2?:  number;
+    diffuseWm2?: number;
 }
 
 
@@ -1389,9 +1394,16 @@ export function computePvPowerWeighted(
 ): number
 {
     const { orientations, shares, coords, heightsM } = pvArrays(config, lat);
-    const hasGhi  = ctx != null && ctx.ghiWm2 != null && ctx.ghiWm2 >= 0;
-    const baseCtx = (ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN) || hasGhi))
-        ? { airTempC: ctx.airTempC, windMs: ctx.windMs, ghiWm2: hasGhi ? ctx!.ghiWm2 : undefined }
+    const hasGhi   = ctx != null && ctx.ghiWm2 != null && ctx.ghiWm2 >= 0;
+    const hasSplit = ctx != null && ctx.directWm2 != null && ctx.directWm2 >= 0 && ctx.diffuseWm2 != null && ctx.diffuseWm2 >= 0;
+    const baseCtx  = (ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN) || hasGhi || hasSplit))
+        ? {
+            airTempC:   ctx.airTempC,
+            windMs:     ctx.windMs,
+            ghiWm2:     hasGhi   ? ctx!.ghiWm2     : undefined,
+            directWm2:  hasSplit ? ctx!.directWm2  : undefined,
+            diffuseWm2: hasSplit ? ctx!.diffuseWm2 : undefined,
+        }
         : undefined;
 
     //Defensive guard: pvArrays must keep its four output arrays in lockstep. If a future edit ever drifts that
@@ -1445,7 +1457,7 @@ export function computePvPowerWeighted(
             : false;
 
         const arrayCtx = (baseCtx || shaded)
-            ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, ghiWm2: baseCtx?.ghiWm2, shading: shaded }
+            ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, ghiWm2: baseCtx?.ghiWm2, directWm2: baseCtx?.directWm2, diffuseWm2: baseCtx?.diffuseWm2, shading: shaded }
             : undefined;
         acc += computePvPower(t, arrayLat, arrayLon, cloudPct, orientations[i], arrayCtx) * shares[i];
     }
