@@ -189,52 +189,86 @@ export function changeSeriesToWatts(
 //Resolve the most recent non-null watts value at or before `nowMs` from a change series, for the
 //live chip on cumulative-only installs (no stat_rate power sensor). Returns the average power of
 //the last completed source bucket. Null when no bucket covers the recent window.
+//Trailing window for the live power read. Reading the single latest 5-minute bucket breaks for a
+//sensor that only reports its cumulative energy every N minutes (SolarEdge: every 15): the recorder
+//then attributes the whole N-minute delta to ONE 5-minute bucket and leaves the others at zero, so the
+//latest bucket reads either 0 (empty) or ~N/5 times the true power (the one that caught the jump).
+//Averaging over a window at least as wide as the report interval captures exactly one delta over the
+//real elapsed time, so kWh / hours = the true average power regardless of how the recorder bucketed it.
+//15 min covers the common 15-minute meters; if that window is all-zero (a slower meter, or a reporting
+//gap) we keep walking back to MAX so a real value still surfaces instead of a false 0.
+const LIVE_AVG_WINDOW_MS = 15 * 60_000;
+const LIVE_AVG_MAX_MS    = 60 * 60_000;
+
 export function latestWattsFromChangeSeries(
     buckets: ChangeBucket[] | null,
     nowMs:   number,
 ): number | null
 {
     if (!buckets || buckets.length === 0) { return null; }
-    //Walk from the end to the first bucket that has fully completed (end <= now) so we never read a
-    //half-filled in-progress bucket as a dip.
+    //Accumulate completed buckets (end <= now, never a half-filled in-progress bucket) from the end
+    //until the covered span reaches the base window AND at least one bucket carried real energy. The
+    //average over that span = total kWh / total hours, immune to how a coarse meter's delta landed.
+    let accKwh = 0;
+    let accMs  = 0;
+    let sawData = false;
     for (let i = buckets.length - 1; i >= 0; i--)
     {
         const b = buckets[i];
         if (b.endMs > nowMs) { continue; }
-        const dtH = (b.endMs - b.startMs) / HOUR_MS;
-        if (dtH <= 0) { continue; }
-        return (b.kwh * 1000) / dtH;
+        const dt = b.endMs - b.startMs;
+        if (dt <= 0) { continue; }
+        accKwh += b.kwh;
+        accMs  += dt;
+        if (b.kwh > 0) { sawData = true; }
+        if (accMs >= LIVE_AVG_WINDOW_MS && sawData) { break; }
+        if (accMs >= LIVE_AVG_MAX_MS) { break; }
     }
-    return null;
+    if (accMs <= 0) { return null; }
+    return Math.max(0, (accKwh * 1000) / (accMs / HOUR_MS));
 }
 
 
 //Sample the average watts at an arbitrary instant from a change series, for the scrub tooltip.
 //Locates the source bucket containing `tMs` and returns its average power. Null when no bucket
 //covers the instant (future scrub, or a gap in the recorder data).
+//Average power (W) over [lo, hi), pro-rating any bucket that straddles a window edge. Returns null
+//when the window carries no real energy, so the caller can widen and retry instead of reading a false 0.
+function windowedWattsFromChangeSeries(buckets: ChangeBucket[], loMs: number, hiMs: number): number | null
+{
+    let accKwh  = 0;
+    let accMs   = 0;
+    let sawData = false;
+    for (const b of buckets)
+    {
+        if (b.endMs <= loMs || b.startMs >= hiMs) { continue; }
+        const span = b.endMs - b.startMs;
+        if (span <= 0) { continue; }
+        const ov = Math.min(b.endMs, hiMs) - Math.max(b.startMs, loMs);   //overlap with the window
+        if (ov <= 0) { continue; }
+        accKwh += b.kwh * (ov / span);
+        accMs  += ov;
+        if (b.kwh > 0) { sawData = true; }
+    }
+    if (accMs <= 0 || !sawData) { return null; }
+    return Math.max(0, (accKwh * 1000) / (accMs / HOUR_MS));
+}
+
 export function wattsAtFromChangeSeries(
     buckets: ChangeBucket[] | null,
     tMs:     number,
 ): number | null
 {
     if (!buckets || buckets.length === 0) { return null; }
-    //Binary search for the bucket whose [start, end) contains tMs.
-    let lo = 0;
-    let hi = buckets.length - 1;
-    while (lo <= hi)
-    {
-        const mid = (lo + hi) >> 1;
-        const b = buckets[mid];
-        if (tMs < b.startMs)      { hi = mid - 1; }
-        else if (tMs >= b.endMs)  { lo = mid + 1; }
-        else
-        {
-            const dtH = (b.endMs - b.startMs) / HOUR_MS;
-            if (dtH <= 0) { return null; }
-            return (b.kwh * 1000) / dtH;
-        }
-    }
-    return null;
+    //Average over a window centred on tMs rather than reading the single bucket that contains it: for a
+    //meter reporting every N minutes the recorder lands the whole delta in one 5-minute bucket and zeroes
+    //the rest, so a single-bucket read alternates 0 / ~N-times-true. A centred window spans the report
+    //interval and yields the true average; widen to MAX before giving up so a slow meter still reads.
+    const half = LIVE_AVG_WINDOW_MS / 2;
+    const base = windowedWattsFromChangeSeries(buckets, tMs - half, tMs + half);
+    if (base !== null) { return base; }
+    const wide = LIVE_AVG_MAX_MS / 2;
+    return windowedWattsFromChangeSeries(buckets, tMs - wide, tMs + wide);
 }
 
 

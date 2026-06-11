@@ -48,6 +48,20 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Live chips read a windowed average, fixing 15-minute meters (beta.15)
+
+A meter that only reports its cumulative energy every N minutes (SolarEdge: every 15) made the live
+chips flicker between 0 and a wildly wrong value. The recorder buckets `change` every 5 minutes, so a
+15-minute meter lands its whole delta in ONE 5-minute bucket and leaves the other two at zero. The
+live read (`latestWattsFromChangeSeries`) took the single latest bucket, so two-thirds of the time it
+saw 0 W and one-third it saw ~3× the real power. It now averages over a trailing 15-minute window
+(widening to 60 min if that span is empty), which captures exactly one report over the real elapsed
+time, so kWh / hours is the true average power no matter how the recorder bucketed it. Same fix for
+the scrub-tooltip read (`wattsAtFromChangeSeries`, centred window). This corrects the live solar,
+battery charge / discharge and grid import / export chips together, since all four derive power from
+the same recorder `change` series. Installs with a real power sensor (`stat_rate`) are unaffected,
+they read it directly.
+
 ### Battery chip colour falls back to the HA Energy hexes (beta.14)
 
 The dashboard battery badge took its tint straight from `--energy-battery-in-color` /
