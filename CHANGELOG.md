@@ -48,6 +48,17 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Timeline renders from the first frame, not after the weather push (beta.19)
+
+The bottom time-bar is gated on `_timeRange`, which was only ever set by the engine's
+`onWeatherUpdate` callback (or a day rollover). That callback fires when the Open-Meteo weather lands,
+but an aborted or rate-limited fetch can return without firing it, and the load now fans out several
+Open-Meteo requests at once (weather, 60-day production + cloud history, per-orientation GTI), so on a
+slow or throttled connection the first weather push could be delayed or skipped, leaving the whole
+timeline blank until the next day rollover. The card now seeds `_timeRange` from the engine's
+synthetic-fallback window the instant the engine spawns, so the time-bar renders immediately and the
+first real weather update simply upgrades it to the data-derived window.
+
 ### Dashboard CoverFlow: hover time in the graph tooltip (beta.17, beta.18)
 
 The graph view's hover tooltip now carries the clock time. Hovering the production / forecast chart

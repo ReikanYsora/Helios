@@ -478,6 +478,16 @@ export function initEngineNow(host: InitHost): void
             host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
             host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);
+            //Seed the timeline window from the engine's synthetic fallback immediately, so the time-bar
+            //renders from the first frame instead of staying hidden until the first weather push lands.
+            //That push can be delayed or skipped on a slow / rate-limited load (an aborted fetch returns
+            //without firing onWeatherUpdate, and the load now fans out several Open-Meteo requests), which
+            //left the whole timeline blank until the next day rollover. onWeatherUpdate upgrades this to
+            //the real data-derived window the moment weather arrives.
+            if (!host._timeRange)
+            {
+                host._timeRange = host._engine.getTimelineRange();
+            }
             host._initInflight = false;
         };
 
