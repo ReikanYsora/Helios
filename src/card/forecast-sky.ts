@@ -24,8 +24,9 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { NdsmRaster } from '../engine/pv-shading';
-import { computePvPowerWeighted, pvCalibK } from './pv';
+import { computePvPowerWeighted, pvCalibK, snowCoverFactor } from './pv';
 import { getSunPosition } from '../engine/sun';
+import { sampleGti } from './gti';
 import { fetchChangeSeries, type ChangeBucket } from './energy-stats';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
@@ -108,6 +109,17 @@ export interface SkyResidualInput
     shortwave:  number[];
     direct:     number[];
     diffuse:    number[];
+    //Air temperature (°C), 10 m wind (m/s) and ground snow depth (m) on the same `cloudTimes` grid. The
+    //model eval passes temp + wind for thermal derating and applies the snow-cover derate, so the
+    //learning runs the SAME physics as the forecast and the residual carries only the local shading /
+    //bias, not a thermal or snow offset the forecast also applies.
+    temp:       number[];
+    wind:       number[];
+    snow:       number[];
+    //Per-orientation Open-Meteo GTI store (src/card/gti.ts). The model eval below transposes each array
+    //on it when present, exactly like the forecast, so the learned residual stays consistent with the
+    //curve it corrects. Null leaves the learning on the transposition path.
+    gtiStore:   import('./gti').GtiStore | null;
 }
 
 
@@ -183,16 +195,23 @@ export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | n
         const ghi   = ci >= 0 ? input.shortwave[ci] : undefined;
         const dir   = ci >= 0 ? input.direct[ci]    : undefined;
         const dif   = ci >= 0 ? input.diffuse[ci]   : undefined;
+        const temp  = ci >= 0 ? input.temp[ci]      : undefined;
+        const wind  = ci >= 0 ? input.wind[ci]      : undefined;
+        const snow  = ci >= 0 ? input.snow[ci]      : undefined;
 
-        //Model prediction for this hour, LiDAR + Open-Meteo GHI base + direct / diffuse split included,
-        //in kWh (W at the midpoint × 1 h / 1000). Same base as buildForecast so the residual stays
-        //self-consistent.
+        //Model prediction for this hour, running the SAME physics as buildForecast: LiDAR + Open-Meteo
+        //GHI base + direct / diffuse split + per-orientation GTI + thermal derating + snow-cover derate,
+        //in kWh (W at the midpoint × 1 h / 1000). Keeping the eval identical means the residual the map
+        //learns is purely the local shading / bias, not a thermal or snow offset the forecast re-applies.
         const wModel = computePvPowerWeighted(input.config, new Date(mid), input.lat, input.lon, cloud, {
-            raster:     input.raster,
-            ghiWm2:     (ghi != null && ghi >= 0) ? ghi : undefined,
-            directWm2:  (dir != null && dir >= 0) ? dir : undefined,
-            diffuseWm2: (dif != null && dif >= 0) ? dif : undefined,
-        }) * k;
+            raster:       input.raster,
+            airTempC:     (temp != null && isFinite(temp)) ? temp : undefined,
+            windMs:       (wind != null && isFinite(wind)) ? wind : undefined,
+            ghiWm2:       (ghi != null && ghi >= 0) ? ghi : undefined,
+            directWm2:    (dir != null && dir >= 0) ? dir : undefined,
+            diffuseWm2:   (dif != null && dif >= 0) ? dif : undefined,
+            tiltedPoaWm2: input.gtiStore ? (tilt, az) => sampleGti(input.gtiStore, tilt, az, mid) : undefined,
+        }) * k * snowCoverFactor(snow, temp);
         const modelKwh = wModel / 1000;
         if (modelKwh < MODEL_KWH_FLOOR) { continue; }
 
@@ -275,6 +294,9 @@ export interface SkyForecastHost extends LoadingTrackerHost
     readonly config: HeliosConfig | undefined;
     readonly _energyDefaults: import('./energy-prefs').EnergyDefaults;
     readonly _engine?: { getLidarRaster(): NdsmRaster | null };
+    //Per-orientation Open-Meteo GTI store, shared with the forecast so the learning transposes on the
+    //same anisotropic POA. Null leaves the learning on the transposition path.
+    readonly _gtiStore: import('./gti').GtiStore | null;
 
     _skyProdSeries:   ChangeBucket[] | null;
     _skyProdFetchKey: string;
@@ -284,6 +306,9 @@ export interface SkyForecastHost extends LoadingTrackerHost
     _skyShortwave:    number[];
     _skyDirect:       number[];
     _skyDiffuse:      number[];
+    _skyTemp:         number[];
+    _skyWind:         number[];
+    _skySnow:         number[];
     _skyCloudFetchKey: string;
     _skyCloudFetching: boolean;
     _skyResidualMap:  SkyResidualMap | null;
@@ -294,7 +319,7 @@ export interface SkyForecastHost extends LoadingTrackerHost
 
 //Module-level cache for the Open-Meteo cloud history, shared across every Helios card on the page so
 //an N-card dashboard fetches it once. Keyed on rounded coords + day so it refreshes daily.
-interface CloudHistEntry { ts: number; times: number[]; cloud: number[]; shortwave: number[]; direct: number[]; diffuse: number[]; }
+interface CloudHistEntry { ts: number; times: number[]; cloud: number[]; shortwave: number[]; direct: number[]; diffuse: number[]; temp: number[]; wind: number[]; snow: number[]; }
 const _cloudHistCache = new Map<string, CloudHistEntry>();
 const CLOUD_HIST_TTL_MS = 6 * 3_600_000;   //6 h: the past window barely changes within a session
 
@@ -351,6 +376,9 @@ export function refreshSkyForecast(host: SkyForecastHost, lat: number, lon: numb
             host._skyShortwave     = cachedCloud.shortwave;
             host._skyDirect        = cachedCloud.direct;
             host._skyDiffuse       = cachedCloud.diffuse;
+            host._skyTemp          = cachedCloud.temp;
+            host._skyWind          = cachedCloud.wind;
+            host._skySnow          = cachedCloud.snow;
         }
     }
     else if (cloudKey !== host._skyCloudFetchKey && !host._skyCloudFetching)
@@ -367,7 +395,10 @@ export function refreshSkyForecast(host: SkyForecastHost, lat: number, lon: numb
                     host._skyShortwave  = res.shortwave;
                     host._skyDirect     = res.direct;
                     host._skyDiffuse    = res.diffuse;
-                    _cloudHistCache.set(cloudKey, { ts: Date.now(), times: res.times, cloud: res.cloud, shortwave: res.shortwave, direct: res.direct, diffuse: res.diffuse });
+                    host._skyTemp       = res.temp;
+                    host._skyWind       = res.wind;
+                    host._skySnow       = res.snow;
+                    _cloudHistCache.set(cloudKey, { ts: Date.now(), times: res.times, cloud: res.cloud, shortwave: res.shortwave, direct: res.direct, diffuse: res.diffuse, temp: res.temp, wind: res.wind, snow: res.snow });
                     host.requestUpdate();
                 }
             })
@@ -388,7 +419,10 @@ function maybeRebuildSkyMap(host: SkyForecastHost, lat: number, lon: number): vo
     const cloudLen = host._skyCloudTimes.length;
     if (prodLen === 0 || cloudLen === 0) { return; }
     const todayKey = new Date().toDateString();
-    const version  = `${todayKey}|${prodLen}|${cloudLen}`;
+    //GTI marker in the hash so a fresh per-orientation fetch landing AFTER the histories trips a rebuild
+    //(the learning must re-run on the same POA the forecast now uses).
+    const gtiLen   = host._gtiStore ? host._gtiStore.byKey.size : 0;
+    const version  = `${todayKey}|${prodLen}|${cloudLen}|${gtiLen}`;
     if (version === host._skyMapVersion) { return; }
     host._skyMapVersion = version;
     host._skyResidualMap = buildSkyResidualMap({
@@ -402,6 +436,10 @@ function maybeRebuildSkyMap(host: SkyForecastHost, lat: number, lon: number): vo
         shortwave:  host._skyShortwave,
         direct:     host._skyDirect,
         diffuse:    host._skyDiffuse,
+        temp:       host._skyTemp,
+        wind:       host._skyWind,
+        snow:       host._skySnow,
+        gtiStore:   host._gtiStore,
     });
     host.requestUpdate();
 }
@@ -410,14 +448,14 @@ function maybeRebuildSkyMap(host: SkyForecastHost, lat: number, lon: number): vo
 //Open-Meteo weather history for the learning window. One GET, single location, hourly `cloud_cover`
 //+ `shortwave_radiation` over the past window. Returns parallel epoch-ms times + percent + W/m²
 //arrays, or null on any failure (the caller keeps whatever it had, the map just stays cold).
-async function fetchCloudHistory(lat: number, lon: number, days: number): Promise<{ times: number[]; cloud: number[]; shortwave: number[]; direct: number[]; diffuse: number[] } | null>
+async function fetchCloudHistory(lat: number, lon: number, days: number): Promise<{ times: number[]; cloud: number[]; shortwave: number[]; direct: number[]; diffuse: number[]; temp: number[]; wind: number[]; snow: number[] } | null>
 {
     try
     {
         const url = 'https://api.open-meteo.com/v1/forecast'
             + `?latitude=${lat.toFixed(4)}`
             + `&longitude=${lon.toFixed(4)}`
-            + '&hourly=cloud_cover,shortwave_radiation,direct_radiation,diffuse_radiation'
+            + '&hourly=cloud_cover,shortwave_radiation,direct_radiation,diffuse_radiation,temperature_2m,wind_speed_10m,snow_depth'
             + `&past_days=${days}&forecast_days=1&timezone=UTC`;
         const resp = await fetch(url);
         if (!resp.ok) { return null; }
@@ -427,13 +465,16 @@ async function fetchCloudHistory(lat: number, lon: number, days: number): Promis
         const swArr:    number[] = j?.hourly?.shortwave_radiation ?? [];
         const dirArr:   number[] = j?.hourly?.direct_radiation ?? [];
         const difArr:   number[] = j?.hourly?.diffuse_radiation ?? [];
+        const tempArr:  number[] = j?.hourly?.temperature_2m ?? [];
+        const windArr:  number[] = j?.hourly?.wind_speed_10m ?? [];
+        const snowArr:  number[] = j?.hourly?.snow_depth ?? [];
         if (timeStrs.length === 0 || cloudArr.length === 0) { return null; }
         const times: number[] = new Array(timeStrs.length);
         for (let i = 0; i < timeStrs.length; i++)
         {
             times[i] = new Date(timeStrs[i] + 'Z').getTime();
         }
-        return { times, cloud: cloudArr, shortwave: swArr, direct: dirArr, diffuse: difArr };
+        return { times, cloud: cloudArr, shortwave: swArr, direct: dirArr, diffuse: difArr, temp: tempArr, wind: windArr, snow: snowArr };
     }
     catch (_)
     {

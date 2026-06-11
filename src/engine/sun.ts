@@ -149,6 +149,13 @@ export interface PvComputeContext
     //(GHI already is the plane-of-array value there) and when either is missing.
     directWm2?:  number;
     diffuseWm2?: number;
+    //Plane-of-array irradiance in W/m² straight from Open-Meteo's `global_tilted_irradiance` for THIS
+    //panel's tilt + azimuth (see card/gti.ts). When provided and >= 0 on a tilted panel it REPLACES the
+    //isotropic Liu-Jordan transposition below: Open-Meteo computes the POA with an anisotropic
+    //(Perez-family) sky model, better than our isotropic diffuse assumption, especially off the
+    //equator-facing direction. LiDAR shading still carves the beam out (estimated from the diffuse +
+    //ground terms) so a shaded array keeps only the sky + ground POA. Undefined keeps the transposition.
+    poaWm2?:     number;
 }
 
 export function computePvPower(
@@ -265,7 +272,26 @@ export function computePvPower(
         const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
         const groundPoa  = ghiEff * 0.2             * (1 - Math.cos(beta)) / 2;
 
-        poaEff = directPoa + diffusePoa + groundPoa;
+        //Open-Meteo GTI base, when available for this orientation, replaces the isotropic transposition
+        //above with the model's anisotropic POA. LiDAR shading still removes the beam: GTI is the TOTAL
+        //plane-of-array, so we carve out the beam it implies (GTI minus our sky + ground estimate) and
+        //keep only the diffuse + ground sky when the array is shaded.
+        if (ctx?.poaWm2 != null && ctx.poaWm2 >= 0)
+        {
+            if (ctx.shading)
+            {
+                const skyGround = Math.min(ctx.poaWm2, diffusePoa + groundPoa);
+                poaEff = skyGround;
+            }
+            else
+            {
+                poaEff = ctx.poaWm2;
+            }
+        }
+        else
+        {
+            poaEff = directPoa + diffusePoa + groundPoa;
+        }
     }
 
     //Thermal derating: warmer cells produce less. Only applied when the caller passes a finite air temperature, otherwise the multiplier stays at 1

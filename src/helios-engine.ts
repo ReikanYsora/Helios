@@ -5400,6 +5400,8 @@ export class HeliosEngine
         //split instead of the cloud-derived fraction.
         directRad:    number[];
         diffuseRad:   number[];
+        //Per-hour ground snow depth in metres, NaN where the model didn't supply it. Feeds the winter snow-cover derate on the PV output.
+        snowDepth:    number[];
         //Per-hour ambient temperature in °C and 10-metre wind speed in m/s, NaN-padded where the model didn't supply a value. Surfaced so the
         //predictor in card/pv.ts can apply the thermal-derating factor without each caller having to re-derive the alignment between the weather hour
         //and the timeline cursor.
@@ -5450,6 +5452,7 @@ export class HeliosEngine
             cloud,
             directRad,
             diffuseRad,
+            snowDepth:   home.snowDepth.slice(),
             temperature: home.temperature.slice(),
             windSpeed:   home.windSpeed.slice(),
         };

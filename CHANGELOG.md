@@ -48,6 +48,34 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Forecast: anisotropic GTI base + winter snow-cover derate (beta.11)
+
+Two more inputs from the same Open-Meteo source, both aimed at the prediction.
+
+**Anisotropic plane-of-array (GTI).** Our tilt transposition assumed an ISOTROPIC sky: every patch of
+sky contributes equally to a tilted panel. The real sky is brighter in a halo around the sun and
+along the horizon, which a tilted panel sees differently depending on where it aims. Open-Meteo
+computes the plane-of-array irradiance with an anisotropic (Perez-family) model for a given tilt +
+azimuth, so the card now pulls `global_tilted_irradiance` per configured array orientation and uses
+it as the POA base, replacing the isotropic transposition where available. Open-Meteo accepts one
+tilt/azimuth per request, so a multi-orientation install fetches one series per distinct orientation,
+in parallel, over the same [J-60, J+2] window the forecast and the 60-day learning both read (one
+fetch feeds both). LiDAR shading still carves the beam out of the GTI so a shaded array keeps only
+the sky + ground POA. Arrays with no GTI series (fetch failed, tracker-mounted) stay on the
+transposition. The fetch is a silent background refinement: the card renders on the transposition
+until GTI lands, it never gates the loading banner.
+
+**Snow-cover derate.** Ground snow lying with sub-freezing air means the array is most likely buried
+and producing near zero whatever the irradiance says, a winter blind spot the model had no way to
+see. The card now reads `snow_depth` and applies a temperature-gated derate: fully covered at / below
+freezing, easing back to clear by +4 °C as the snow sheds off the tilted glass. Applied identically
+to the forecast and the 60-day learning, so a snow day no longer teaches the sky-residual map a false
+low ratio at winter sun positions.
+
+While wiring the learning's model eval to match the forecast for these two, it also gained the air
+temperature + wind it was missing, so the thermal derating now runs on both sides instead of being
+silently absorbed (and then double-counted) by the residual.
+
 ### Forecast: real direct / diffuse split for the tilt transposition (beta.10)
 
 A tilted array does not see the GHI directly: the beam component is projected onto the panel normal

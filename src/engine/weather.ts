@@ -21,6 +21,11 @@ export interface SampleHourly
     //them leave -1, and the transposition falls back to the legacy cloud-fraction path.
     directRad:   number[];
     diffuseRad:  number[];
+    //Snow depth on the ground in METRES, hourly. NaN-padded when missing. A proxy for snow lying on the
+    //panels: combined with the air temperature it drives a winter cover derate (see snowCoverFactor in
+    //card/pv.ts), since ground snow with sub-freezing air means the array is likely covered and
+    //producing near zero regardless of irradiance.
+    snowDepth:   number[];
     //2-metre air temperature in °C, hourly. Used by the PV thermal derating model to estimate cell temperature alongside the irradiance term.
     //NaN-padded when a hour is missing.
     temperature: number[];
@@ -221,6 +226,7 @@ interface CachedPayload
         shortwave:   number[];
         directRad?:   number[];   //optional: older caches predate the direct / diffuse fetch
         diffuseRad?:  number[];
+        snowDepth?:   number[];   //optional: older caches predate the snow-depth fetch
         temperature?: number[];   //optional: older caches predate this field
         windSpeed?:   number[];
     };
@@ -303,6 +309,7 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             //(via the ?? [] fallthrough on read), so the tilt split falls back to the cloud-derived path.
             directRad:   p.directRad   ?? [],
             diffuseRad:  p.diffuseRad  ?? [],
+            snowDepth:   p.snowDepth   ?? [],
             //Older caches predate the temperature + wind fetch; treat
             //missing arrays as "no data" so the thermal derating
             //multiplier falls back to 1 and the prediction reduces
@@ -336,6 +343,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 shortwave:   data.shortwave,
                 directRad:   data.directRad,
                 diffuseRad:  data.diffuseRad,
+                snowDepth:   data.snowDepth,
                 temperature: data.temperature,
                 windSpeed:   data.windSpeed,
             }
@@ -362,6 +370,8 @@ const HOURLY_VARS = [
     //the time cursor. Feed the tilt transposition with the real direct / diffuse decomposition.
     'direct_radiation_instant',
     'diffuse_radiation_instant',
+    //Ground snow depth (metres). Drives the winter snow-cover derate on the PV output.
+    'snow_depth',
     'cloud_cover',
     'cloud_cover_low',
     'cloud_cover_mid',
@@ -557,6 +567,7 @@ export async function fetchHomePointData(
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
                 directRad:   fillShortwave(readSeries(row, 'direct_radiation_instant',  models)),
                 diffuseRad:  fillShortwave(readSeries(row, 'diffuse_radiation_instant', models)),
+                snowDepth:   fillNaN(readSeries(row, 'snow_depth', models)),
                 temperature: fillNaN(readSeries(row, 'temperature_2m',  models)),
                 windSpeed:   fillNaN(readSeries(row, 'wind_speed_10m',  models)),
             };

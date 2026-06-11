@@ -89,6 +89,7 @@ import {
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
 import { refreshSkyForecast, clearSkyForecastCache } from './card/forecast-sky';
+import { refreshTiltedIrradiance, clearGtiCache } from './card/gti';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
@@ -405,6 +406,15 @@ export class HeliosCard extends LitElement
     _skyShortwave:     number[] = [];
     _skyDirect:        number[] = [];
     _skyDiffuse:       number[] = [];
+    _skyTemp:          number[] = [];
+    _skyWind:          number[] = [];
+    _skySnow:          number[] = [];
+    //Per-orientation Open-Meteo GTI store (src/card/gti.ts). Shared by the forecast + the 60-day
+    //learning so both transpose on the same anisotropic POA. Not @state: read directly when the store
+    //rebuilds, the requestUpdate inside refreshTiltedIrradiance drives the re-render.
+    _gtiStore:         import('./card/gti').GtiStore | null = null;
+    _gtiFetchKey       = '';
+    _gtiFetching       = false;
     _skyCloudFetchKey  = '';
     _skyCloudFetching  = false;
     _skyMapVersion     = '';
@@ -525,6 +535,8 @@ export class HeliosCard extends LitElement
         //Hourly horizontal beam + diffuse radiation in W/m², -1 where the model didn't decompose. Feed the PV tilt transposition's direct / diffuse split.
         directRad:    number[];
         diffuseRad:   number[];
+        //Hourly ground snow depth in metres, NaN where unknown. Feeds the winter snow-cover derate.
+        snowDepth:    number[];
         //Hourly ambient temperature in °C + wind speed in m/s, NaN-padded where the model didn't return a value. Both arrays mirror the `times`
         //length and feed the PV prediction's thermal-derating term.
         temperature:  number[];
@@ -883,6 +895,11 @@ export class HeliosCard extends LitElement
         this._skyShortwave                = [];
         this._skyDirect                   = [];
         this._skyDiffuse                  = [];
+        this._skyTemp                     = [];
+        this._skyWind                     = [];
+        this._skySnow                     = [];
+        this._gtiStore                    = null;
+        this._gtiFetchKey                 = '';
         this._skyCloudFetchKey            = '';
         this._skyMapVersion               = '';
         this._pvFetchKey                  = '';
@@ -908,6 +925,7 @@ export class HeliosCard extends LitElement
         clearRadiationModuleCaches();
         clearEnergyStatsCache();
         clearSkyForecastCache();
+        clearGtiCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.
@@ -1294,6 +1312,9 @@ export class HeliosCard extends LitElement
         const skyCoords = getHomeCoords(this.config, this.hass);
         if (skyCoords)
         {
+            //GTI must refresh before the sky map rebuilds: the learning reads _gtiStore, so landing it
+            //first means the very next maybeRebuildSkyMap picks up the anisotropic POA in the same pass.
+            refreshTiltedIrradiance(this, skyCoords.lat, skyCoords.lon);
             refreshSkyForecast(this, skyCoords.lat, skyCoords.lon);
         }
     }

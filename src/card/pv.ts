@@ -1379,6 +1379,35 @@ export interface PvWeightedContext
     //cloud-derived split. Both must be present for the split to engage (see computePvPower).
     directWm2?:  number;
     diffuseWm2?: number;
+    //Per-orientation Open-Meteo GTI resolver (see card/gti.ts). Called once per fixed array with its
+    //tilt + azimuth; a finite return replaces that array's transposition with the model's anisotropic
+    //POA. Returns undefined when no GTI series covers the orientation, so the array stays on the
+    //transposition path. Closes over the bucket time on the caller side.
+    tiltedPoaWm2?: (tiltDeg: number, azimuthDeg: number) => number | undefined;
+}
+
+
+//Snow-cover derate in [SNOW_MIN_FACTOR, 1]. Ground snow lying with sub-freezing air means the array
+//is most likely buried and producing near zero whatever the irradiance says; as the air warms the snow
+//slides off the tilted glass and production returns. The ramp is temperature-gated rather than
+//depth-gated past the threshold: 5 cm vs 50 cm of ground snow both fully cover a panel, what decides
+//recovery is whether it is cold enough to stay. Below SNOW_COVER_M of ground snow the factor is 1
+//(a dusting does not cover the array). Air temp unknown is treated as cold (snow present, assume
+//covered) so we never optimistically un-derate a snow day.
+const SNOW_COVER_M     = 0.01;   //1 cm of ground snow: below this, no meaningful panel cover
+const SNOW_MELT_LO_C   = 0;      //at / below freezing the snow stays, panel fully covered
+const SNOW_MELT_HI_C   = 4;      //by +4 °C the snow has shed off the tilted glass, panel clear
+const SNOW_MIN_FACTOR  = 0.1;    //a covered panel still leaks a little light through thin / patchy snow
+
+export function snowCoverFactor(snowDepthM: number | null | undefined, airTempC: number | null | undefined): number
+{
+    if (snowDepthM == null || !isFinite(snowDepthM) || snowDepthM < SNOW_COVER_M)
+    {
+        return 1;
+    }
+    const t = (airTempC == null || !isFinite(airTempC)) ? SNOW_MELT_LO_C : airTempC;
+    const melt = Math.max(0, Math.min(1, (t - SNOW_MELT_LO_C) / (SNOW_MELT_HI_C - SNOW_MELT_LO_C)));
+    return SNOW_MIN_FACTOR + (1 - SNOW_MIN_FACTOR) * melt;
 }
 
 
@@ -1456,8 +1485,14 @@ export function computePvPowerWeighted(
                 sun.altitude, sun.azimuth)
             : false;
 
-        const arrayCtx = (baseCtx || shaded)
-            ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, ghiWm2: baseCtx?.ghiWm2, directWm2: baseCtx?.directWm2, diffuseWm2: baseCtx?.diffuseWm2, shading: shaded }
+        //GTI base for this orientation, when the resolver has a series for it. Skipped for tracker
+        //arrays (no fixed plane for a single tilt / azimuth GTI request to represent).
+        const gtiPoa = (ctx?.tiltedPoaWm2 && !orientations[i].tracker)
+            ? ctx.tiltedPoaWm2(orientations[i].tiltDeg, orientations[i].azimuthDeg)
+            : undefined;
+
+        const arrayCtx = (baseCtx || shaded || gtiPoa != null)
+            ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, ghiWm2: baseCtx?.ghiWm2, directWm2: baseCtx?.directWm2, diffuseWm2: baseCtx?.diffuseWm2, poaWm2: gtiPoa, shading: shaded }
             : undefined;
         acc += computePvPower(t, arrayLat, arrayLon, cloudPct, orientations[i], arrayCtx) * shares[i];
     }

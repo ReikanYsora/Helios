@@ -34,9 +34,10 @@ import type { HeliosConfig } from '../helios-config';
 import { displayUpdateFrequencyPerHour } from '../helios-config';
 import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
-import { pvCalibK, pvInverterMaxW, computePvPowerWeighted } from './pv';
+import { pvCalibK, pvInverterMaxW, computePvPowerWeighted, snowCoverFactor } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
 import { sampleSkyResidual } from './forecast-sky';
+import { sampleGti } from './gti';
 import { getSunPosition } from '../engine/sun';
 import { effectiveForecastRatio } from './charts';
 import { computeForecastCalibration } from './calibration';
@@ -131,6 +132,10 @@ export interface UnifiedStoreHost
     //sun position so it converges to the user's real shading + biases. Null until the histories land,
     //in which case the forecast stays on the physical + LiDAR + scalar-calibration path unchanged.
     readonly _skyResidualMap:         import('./forecast-sky').SkyResidualMap | null;
+    //Per-orientation Open-Meteo GTI store (src/card/gti.ts). When present, buildForecast transposes each
+    //array on the model's anisotropic plane-of-array irradiance instead of our isotropic Liu-Jordan.
+    //Null until the per-orientation fetches land, in which case the transposition path is used.
+    readonly _gtiStore:               import('./gti').GtiStore | null;
 }
 
 
@@ -374,6 +379,8 @@ function buildForecast(
                 //real direct / diffuse split instead of the cloud-derived fraction.
                 directWm2:  bestIdx >= 0 ? series.directRad?.[bestIdx]  : undefined,
                 diffuseWm2: bestIdx >= 0 ? series.diffuseRad?.[bestIdx] : undefined,
+                //Open-Meteo anisotropic POA per orientation; replaces the transposition where available.
+                tiltedPoaWm2: host._gtiStore ? (tilt, az) => sampleGti(host._gtiStore, tilt, az, mid) : undefined,
                 raster,
             }
         );
@@ -392,7 +399,12 @@ function buildForecast(
         {
             ratio = effectiveForecastRatio(calR);
         }
-        const w   = wRaw * k * ratio;
+        //Winter snow-cover derate: ground snow with cold air means the panels are likely buried.
+        const snowF = snowCoverFactor(
+            bestIdx >= 0 ? series.snowDepth?.[bestIdx]   : undefined,
+            bestIdx >= 0 ? series.temperature?.[bestIdx] : undefined,
+        );
+        const w   = wRaw * k * ratio * snowF;
         if (Number.isFinite(w))
         {
             hourly[h] = Math.min(cap, Math.max(0, w));

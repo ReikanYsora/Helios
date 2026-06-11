@@ -690,6 +690,8 @@ export interface ChartSeries
     //direct / diffuse split. Consumers that don't transpose ignore them.
     directRad:    number[];
     diffuseRad:   number[];
+    //Hourly ground snow depth (m), NaN where unknown. Feeds the winter snow-cover derate.
+    snowDepth:    number[];
     //Hourly ambient temperature (°C) and 10-metre wind speed (m/s).
     //NaN where the model didn't supply a value. Consumers that
     //don't care about thermal derating ignore these fields.
