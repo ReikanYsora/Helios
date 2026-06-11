@@ -5,7 +5,7 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
-## v1.8.4 (in progress)
+## v1.8.4 (2026-06-11)
 
 > Data-correctness cycle. The v1.8.3 switch to the HA Energy dashboard as the single source of
 > truth surfaced a class of bugs where Helios rolled its own differentiation of the cumulative
