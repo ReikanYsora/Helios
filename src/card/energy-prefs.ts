@@ -38,10 +38,11 @@ export interface EnergyDefaults
     //per-source capacity.
     batteryStatSocs:        string[];
     //Entity ids whose raw value reads with the inverse sign convention from the rest of the card (the user wired the
-    //source through `power_config.stat_rate_inverted` instead of `stat_rate`, or through `stat_rate_from` for grid /
-    //`stat_rate_to` for battery, where the slot's directional meaning flips the sign vs the card's "positive = charging
-    /// positive = import" convention). Consumers (refreshBattery, refreshGrid) flip the sign at sample time so the
-    //downstream chips / leaders / scrub buffers see the canonical convention.
+    //source through `power_config.stat_rate_inverted` instead of `stat_rate`, or through a directional slot whose
+    //meaning opposes the card's canonical sign: `stat_rate_from` for battery (power FROM the battery = discharging,
+    //negative under "positive = charging") and `stat_rate_to` for grid (power TO the grid = exporting, negative under
+    //"positive = import"). Consumers (refreshBattery, refreshGrid) flip the sign at sample time so the downstream
+    //chips / leaders / scrub buffers see the canonical convention.
     invertedRateEntities:   string[];
 }
 
@@ -463,8 +464,7 @@ export function parseEnergyPrefs(prefs: {
             }
             else
             {
-                const slot = pickPowerConfigRate(src['power_config']);
-                if (slot)
+                for (const slot of collectPowerConfigRates(src['power_config'], 'grid'))
                 {
                     out.gridStatRates.push(slot.entity);
                     if (slot.inverted)
@@ -491,8 +491,11 @@ export function parseEnergyPrefs(prefs: {
             {
                 out.batteryStatSocs.push(soc);
             }
-            const slot = pickPowerConfigRate(src['power_config']);
-            if (slot)
+            //NOTE: a battery source can ALSO carry a top-level `stat_rate` (HA 2026 materialises a combined
+            //"net power" statistic for its power-flow view when both directional slots are wired). It is
+            //deliberately not read here: the directional pair below already nets to the same value, and
+            //summing both would double-count.
+            for (const slot of collectPowerConfigRates(src['power_config'], 'battery'))
             {
                 out.batteryStatRates.push(slot.entity);
                 if (slot.inverted)
@@ -506,37 +509,57 @@ export function parseEnergyPrefs(prefs: {
 }
 
 
-//Resolve a `power_config` slot. Returns `{ entity, inverted }` so the consumer can flip the sign at sample time when
-//the user wired the source through `stat_rate_inverted` (HA Energy's own UI toggle). Returns null when the block is
-//absent or none of the slots carry a usable entity id.
-function pickPowerConfigRate(raw: unknown): { entity: string; inverted: boolean } | null
+//Collect every live-power entity wired in a `power_config` block, each with the sign flip its slot needs to land on
+//the card's canonical convention (battery: positive = charging, grid: positive = import).
+//
+//The slot semantics mirror HA's energy-meter naming, "from the source" / "to the source":
+//  - `stat_rate` / `stat_rate_inverted`: ONE signed net sensor, already canonical (or wired flipped via HA Energy's
+//    own invert toggle).
+//  - `stat_rate_from`: unsigned power flowing FROM the source, i.e. battery discharge / grid import. Canonical sign:
+//    negative for battery (discharging), positive for grid (importing).
+//  - `stat_rate_to`: unsigned power flowing TO the source, i.e. battery charge / grid export. Canonical sign:
+//    positive for battery (charging), negative for grid (exporting).
+//
+//A source can carry BOTH directional slots at once (separate charge + discharge wattmeters, e.g. a Zendure exposes
+//import and export power as two entities). Reading only one of the pair, which is what this helper did before, shows
+//0 W whenever the other direction is active and the wrong sign the rest of the time, so every populated slot lands
+//in the list and the consumer sums them.
+function collectPowerConfigRates(raw: unknown, flavor: 'grid' | 'battery'): Array<{ entity: string; inverted: boolean }>
 {
     if (!raw || typeof raw !== 'object')
     {
-        return null;
+        return [];
     }
-    const pc = raw as Record<string, unknown>;
+    const pc  = raw as Record<string, unknown>;
+    const out: Array<{ entity: string; inverted: boolean }> = [];
+    //Net slots first, and EXCLUSIVE of the directional pair: a signed net sensor already carries
+    //both directions, so summing it together with from/to would double-count. Matches the strict
+    //priority the previous single-slot resolver had.
     const direct = pickFirstString(pc['stat_rate']);
     if (direct)
     {
-        return { entity: direct, inverted: false };
+        out.push({ entity: direct, inverted: false });
     }
-    const inverted = pickFirstString(pc['stat_rate_inverted']);
-    if (inverted)
+    const flipped = pickFirstString(pc['stat_rate_inverted']);
+    if (flipped)
     {
-        return { entity: inverted, inverted: true };
+        out.push({ entity: flipped, inverted: true });
+    }
+    if (out.length > 0)
+    {
+        return out;
     }
     const fromEntity = pickFirstString(pc['stat_rate_from']);
     if (fromEntity)
     {
-        return { entity: fromEntity, inverted: false };
+        out.push({ entity: fromEntity, inverted: flavor === 'battery' });
     }
     const toEntity = pickFirstString(pc['stat_rate_to']);
     if (toEntity)
     {
-        return { entity: toEntity, inverted: false };
+        out.push({ entity: toEntity, inverted: flavor === 'grid' });
     }
-    return null;
+    return out;
 }
 
 
