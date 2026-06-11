@@ -30,6 +30,7 @@ export const th: Translations = {
         dashViewRadialLabel:   'มุมมองแบบรัศมี',
         dashViewGraphLabel:    'มุมมองกราฟ',
         dashForecastLabel:     'พยากรณ์',
+        dashTimeLabel: 'เวลา',
     },
 
     editor:

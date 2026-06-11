@@ -30,6 +30,7 @@ export const ja: Translations = {
         dashViewRadialLabel:    'ラジアル表示',
         dashViewGraphLabel:     'グラフ表示',
         dashForecastLabel:      '予測',
+        dashTimeLabel: '時刻',
     },
 
     editor:

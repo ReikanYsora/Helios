@@ -31,6 +31,7 @@ export const ptBR: Translations = {
         dashViewRadialLabel:   'Vista radial',
         dashViewGraphLabel:    'Vista de gráfico',
         dashForecastLabel:     'Previsão',
+        dashTimeLabel: 'Hora',
     },
 
     editor:

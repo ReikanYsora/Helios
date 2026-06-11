@@ -31,6 +31,7 @@ export const eo: Translations = {
         dashViewRadialLabel:   'Radia vido',
         dashViewGraphLabel:    'Grafika vido',
         dashForecastLabel:     'Prognozo',
+        dashTimeLabel: 'Horo',
     },
 
     editor:

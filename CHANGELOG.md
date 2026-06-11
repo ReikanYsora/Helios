@@ -48,21 +48,15 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
-### Dashboard CoverFlow: hover time + round hour ring (beta.17)
-
-Two CoverFlow display fixes from beta testing.
+### Dashboard CoverFlow: hover time in the graph tooltip (beta.17, beta.18)
 
 The graph view's hover tooltip now carries the clock time. Hovering the production / forecast chart
 shows the values for that point, but there was no way to tell WHICH hour they belonged to: a clock
-mini-card now sits above the production / forecast pair and shows the hovered time.
+mini-card now sits above the production / forecast pair and shows the hovered time, plus the
+`dashTimeLabel` string is translated across every locale.
 
-The radial dial's hour numbers sat on an ellipse instead of the ring on some layouts. The SVG draws
-its rings as a circle inscribed in `min(92 % width, 100 % height)`, but the HTML overlay that carries
-the hour numbers was a percentage box that `max-height` clamped to a non-square rectangle whenever the
-dial area was wider than tall, so the numbers traced a horizontally-stretched oval off the ring. The
-overlay now sizes itself to the exact inscribed square via container-query units
-(`min(92cqi, 100cqb)`), the same expression the SVG resolves, so the numbers sit on the ring at every
-aspect ratio (with a graceful fallback to the old box on browsers without container units).
+(beta.18 backs out the beta.17 attempt at fixing the radial dial's elliptical hour ring: it relied on
+a query-container on the dial wrap, which is being re-approached without touching layout containment.)
 
 ### Live chips handle meters that only report every 15 minutes (beta.15)
 

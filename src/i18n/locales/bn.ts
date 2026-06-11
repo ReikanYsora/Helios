@@ -31,6 +31,7 @@ export const bn: Translations = {
         dashViewRadialLabel:   'রেডিয়াল ভিউ',
         dashViewGraphLabel:    'গ্রাফ ভিউ',
         dashForecastLabel:     'পূর্বাভাস',
+        dashTimeLabel: 'সময়',
     },
 
     editor:

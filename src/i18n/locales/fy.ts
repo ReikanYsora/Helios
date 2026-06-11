@@ -29,6 +29,7 @@ export const fy: Translations = {
         dashViewRadialLabel:   'Radiale werjefte',
         dashViewGraphLabel:    'Grafyske werjefte',
         dashForecastLabel:     'Foarsizzing',
+        dashTimeLabel: 'Tiid',
     },
 
     editor:

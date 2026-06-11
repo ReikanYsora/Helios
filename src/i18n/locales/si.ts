@@ -30,6 +30,7 @@ export const si: Translations = {
         dashViewRadialLabel:   'රේඩියල් දසුන',
         dashViewGraphLabel:    'ප්‍රස්තාර දසුන',
         dashForecastLabel:     'පුරෝකථනය',
+        dashTimeLabel: 'වේලාව',
     },
 
     editor:

@@ -31,6 +31,7 @@ export const el: Translations = {
         dashViewRadialLabel:   'Ακτινική προβολή',
         dashViewGraphLabel:    'Προβολή γραφήματος',
         dashForecastLabel:     'Πρόβλεψη',
+        dashTimeLabel: 'Ώρα',
     },
 
     editor:

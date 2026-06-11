@@ -31,6 +31,7 @@ export const lt: Translations = {
         dashViewRadialLabel:   'Radialinis rodinys',
         dashViewGraphLabel:    'Grafiko rodinys',
         dashForecastLabel:     'Prognozė',
+        dashTimeLabel: 'Laikas',
     },
 
     editor:

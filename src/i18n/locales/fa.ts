@@ -31,6 +31,7 @@ export const fa: Translations = {
         dashViewRadialLabel:   'نمای شعاعی',
         dashViewGraphLabel:    'نمای نموداری',
         dashForecastLabel:     'پیش‌بینی',
+        dashTimeLabel: 'ساعت',
     },
 
     editor:

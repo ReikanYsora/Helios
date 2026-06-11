@@ -30,6 +30,7 @@ export const zhHant: Translations = {
         dashViewRadialLabel:   '徑向視圖',
         dashViewGraphLabel:    '圖表視圖',
         dashForecastLabel:     '預測',
+        dashTimeLabel: '時間',
     },
 
     editor:

@@ -30,6 +30,7 @@ export const nb: Translations = {
         dashViewRadialLabel:   'Radial visning',
         dashViewGraphLabel:    'Grafvisning',
         dashForecastLabel:     'Prognose',
+        dashTimeLabel: 'Tid',
     },
 
     editor:

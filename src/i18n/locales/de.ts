@@ -26,6 +26,7 @@ export const de: Translations = {
         dashViewRadialLabel:   'Radial-Ansicht',
         dashViewGraphLabel:    'Graph-Ansicht',
         dashForecastLabel:     'Prognose',
+        dashTimeLabel: 'Uhrzeit',
     },
 
     editor:

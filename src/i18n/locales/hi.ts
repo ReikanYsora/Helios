@@ -31,6 +31,7 @@ export const hi: Translations = {
         dashViewRadialLabel:   'रेडियल दृश्य',
         dashViewGraphLabel:    'ग्राफ़ दृश्य',
         dashForecastLabel:     'पूर्वानुमान',
+        dashTimeLabel: 'समय',
     },
 
     editor:

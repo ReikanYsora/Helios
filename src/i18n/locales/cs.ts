@@ -28,6 +28,7 @@ export const cs: Translations = {
         dashViewRadialLabel:   'Radiální zobrazení',
         dashViewGraphLabel:    'Grafové zobrazení',
         dashForecastLabel:     'Předpověď',
+        dashTimeLabel: 'Čas',
     },
 
     editor:

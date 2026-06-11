@@ -31,6 +31,7 @@ export const enGB: Translations = {
         dashViewRadialLabel:   'Radial view',
         dashViewGraphLabel:    'Graph view',
         dashForecastLabel:     'Forecast',
+        dashTimeLabel: 'Time',
     },
 
     editor:

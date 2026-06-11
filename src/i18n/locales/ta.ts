@@ -31,6 +31,7 @@ export const ta: Translations = {
         dashViewRadialLabel:   'வட்ட காட்சி',
         dashViewGraphLabel:    'வரைபட காட்சி',
         dashForecastLabel:     'முன்னறிவிப்பு',
+        dashTimeLabel: 'நேரம்',
     },
 
     editor:

@@ -31,6 +31,7 @@ export const lv: Translations = {
         dashViewRadialLabel:   'Radiālais skats',
         dashViewGraphLabel:    'Grafika skats',
         dashForecastLabel:     'Prognoze',
+        dashTimeLabel: 'Laiks',
     },
 
     editor:

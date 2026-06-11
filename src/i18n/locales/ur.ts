@@ -32,6 +32,7 @@ export const ur: Translations = {
         dashViewRadialLabel:   'ریڈیل منظر',
         dashViewGraphLabel:    'گراف منظر',
         dashForecastLabel:     'پیشین گوئی',
+        dashTimeLabel: 'وقت',
     },
 
     editor:

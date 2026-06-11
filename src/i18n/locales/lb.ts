@@ -29,6 +29,7 @@ export const lb: Translations = {
         dashViewRadialLabel:    'Radialvue',
         dashViewGraphLabel:     'Grafikvue',
         dashForecastLabel:      'Prognose',
+        dashTimeLabel: 'Zäit',
     },
 
     editor:

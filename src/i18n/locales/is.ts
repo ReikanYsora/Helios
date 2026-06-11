@@ -30,6 +30,7 @@ export const is_: Translations = {
         dashViewRadialLabel:   'Geislamiðjuð sýn',
         dashViewGraphLabel:    'Línuritssýn',
         dashForecastLabel:     'Spá',
+        dashTimeLabel: 'Tími',
     },
 
     editor:

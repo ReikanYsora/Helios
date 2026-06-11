@@ -30,6 +30,7 @@ export const gsw: Translations = {
         dashViewRadialLabel:    'Radial-Aasicht',
         dashViewGraphLabel:     'Graph-Aasicht',
         dashForecastLabel:      'Prognose',
+        dashTimeLabel: 'Zyt',
     },
 
     editor:

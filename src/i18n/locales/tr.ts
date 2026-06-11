@@ -31,6 +31,7 @@ export const tr: Translations = {
         dashViewRadialLabel:   'Dairesel görünüm',
         dashViewGraphLabel:    'Grafik görünümü',
         dashForecastLabel:     'Tahmin',
+        dashTimeLabel: 'Saat',
     },
 
     editor:

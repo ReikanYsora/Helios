@@ -1034,11 +1034,6 @@ export const heliosCardStyles = css`
         height: auto;
         width: auto;
         overflow: hidden;
-        /*  Query container so the hour-label overlay can size itself to the SAME inscribed square the
-            SVG circle occupies, via min(92cqi, 100cqb) = min(92 % width, 100 % height). Without this the
-            overlay's percentage box went elliptical whenever the wrap was wider than tall (max-height
-            clamped the overlay to a non-square rectangle while the SVG still inscribed its circle). */
-        container-type: size;
     }
     /*  Badge strip: a transparent CSS grid containing four HA-tile-card-style badges (Irradiance,
         Cloud, Production, Battery in dial-radius order). The grid switches between 2 columns and
@@ -1528,20 +1523,12 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 50%;
         left: 50%;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 2;
-        /*  Fallback for browsers without container query units: the original width-primary box. Reads
-            as a slightly squashed circle on a wider-than-tall wrap but never disappears. */
         width: min(100%, 92%);
         aspect-ratio: 1 / 1;
         max-height: 100%;
-        /*  Preferred: the exact inscribed square the SVG circle occupies, so the hour numbers always
-            sit ON the ring at any wrap aspect ratio. min(92cqi, 100cqb) == min(92 % width, 100 %
-            height), the same expression the SVG resolves via width + max-height + preserveAspectRatio.
-            When supported, setting both width AND height makes aspect-ratio above a no-op. */
-        width: min(92cqi, 100cqb);
-        height: min(92cqi, 100cqb);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 2;
     }
     .dash-radial-hour-label
     {

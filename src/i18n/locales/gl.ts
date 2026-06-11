@@ -30,6 +30,7 @@ export const gl: Translations = {
         dashViewRadialLabel:   'Vista radial',
         dashViewGraphLabel:    'Vista gráfica',
         dashForecastLabel:     'Previsión',
+        dashTimeLabel: 'Hora',
     },
 
     editor:

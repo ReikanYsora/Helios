@@ -31,6 +31,7 @@ export const ka: Translations = {
         dashViewRadialLabel:   'რადიალური ხედი',
         dashViewGraphLabel:    'გრაფიკული ხედი',
         dashForecastLabel:     'პროგნოზი',
+        dashTimeLabel: 'დრო',
     },
 
     editor:

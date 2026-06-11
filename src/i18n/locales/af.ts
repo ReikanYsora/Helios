@@ -29,6 +29,7 @@ export const af: Translations = {
         dashViewRadialLabel:   'Radiale aansig',
         dashViewGraphLabel:    'Grafiek-aansig',
         dashForecastLabel:     'Voorspelling',
+        dashTimeLabel: 'Tyd',
     },
 
     editor:

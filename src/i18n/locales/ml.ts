@@ -30,6 +30,7 @@ export const ml: Translations = {
         dashViewRadialLabel:   'റേഡിയൽ കാഴ്ച',
         dashViewGraphLabel:    'ഗ്രാഫ് കാഴ്ച',
         dashForecastLabel:     'പ്രവചനം',
+        dashTimeLabel: 'സമയം',
     },
 
     editor:

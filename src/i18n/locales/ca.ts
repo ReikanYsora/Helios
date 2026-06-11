@@ -30,6 +30,7 @@ export const ca: Translations = {
         dashViewRadialLabel:   'Vista radial',
         dashViewGraphLabel:    'Vista gràfica',
         dashForecastLabel:     'Previsió',
+        dashTimeLabel: 'Hora',
     },
 
     editor:

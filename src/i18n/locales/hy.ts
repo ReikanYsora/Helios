@@ -31,6 +31,7 @@ export const hy: Translations = {
         dashViewRadialLabel:   'Շառավղային տեսք',
         dashViewGraphLabel:    'Գրաֆիկական տեսք',
         dashForecastLabel:     'Կանխատեսում',
+        dashTimeLabel: 'Ժամ',
     },
 
     editor:

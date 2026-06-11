@@ -30,6 +30,7 @@ export const vi: Translations = {
         dashViewRadialLabel:   'Chế độ xem hướng tâm',
         dashViewGraphLabel:    'Chế độ xem biểu đồ',
         dashForecastLabel:     'Dự báo',
+        dashTimeLabel: 'Giờ',
     },
 
     editor:

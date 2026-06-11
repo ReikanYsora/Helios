@@ -30,6 +30,7 @@ export const fi: Translations = {
         dashViewRadialLabel:   'Radiaalinäkymä',
         dashViewGraphLabel:    'Kaavionäkymä',
         dashForecastLabel:     'Ennuste',
+        dashTimeLabel: 'Aika',
     },
 
     editor:

@@ -31,6 +31,7 @@ export const hr: Translations = {
         dashViewRadialLabel:   'Radijalni prikaz',
         dashViewGraphLabel:    'Grafički prikaz',
         dashForecastLabel:     'Prognoza',
+        dashTimeLabel: 'Sat',
     },
 
     editor:

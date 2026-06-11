@@ -31,6 +31,7 @@ export const ar: Translations = {
         dashViewRadialLabel:   'العرض الدائري',
         dashViewGraphLabel:    'عرض الرسم البياني',
         dashForecastLabel:     'التوقعات',
+        dashTimeLabel: 'الوقت',
     },
 
     editor:

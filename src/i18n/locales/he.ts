@@ -30,6 +30,7 @@ export const he: Translations = {
         dashViewRadialLabel:   'תצוגה רדיאלית',
         dashViewGraphLabel:    'תצוגת גרף',
         dashForecastLabel:     'תחזית',
+        dashTimeLabel: 'שעה',
     },
 
     editor:

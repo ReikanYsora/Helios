@@ -31,6 +31,7 @@ export const te: Translations = {
         dashViewRadialLabel:   'వృత్తాకార వీక్షణ',
         dashViewGraphLabel:    'గ్రాఫ్ వీక్షణ',
         dashForecastLabel:     'అంచనా',
+        dashTimeLabel: 'సమయం',
     },
 
     editor:

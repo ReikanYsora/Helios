@@ -30,6 +30,7 @@ export const ko: Translations = {
         dashViewRadialLabel:   '방사형 보기',
         dashViewGraphLabel:    '그래프 보기',
         dashForecastLabel:     '예보',
+        dashTimeLabel: '시간',
     },
 
     editor:

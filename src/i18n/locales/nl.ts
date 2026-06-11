@@ -26,6 +26,7 @@ export const nl: Translations = {
         dashViewRadialLabel:    'Radiale weergave',
         dashViewGraphLabel:     'Grafiekweergave',
         dashForecastLabel:      'Voorspelling',
+        dashTimeLabel: 'Tijd',
     },
 
     editor:

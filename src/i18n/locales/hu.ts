@@ -31,6 +31,7 @@ export const hu: Translations = {
         dashViewRadialLabel:   'Radiális nézet',
         dashViewGraphLabel:    'Grafikon nézet',
         dashForecastLabel:     'Előrejelzés',
+        dashTimeLabel: 'Óra',
     },
 
     editor:

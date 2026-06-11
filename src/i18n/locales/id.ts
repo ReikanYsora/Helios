@@ -30,6 +30,7 @@ export const id: Translations = {
         dashViewRadialLabel:   'Tampilan radial',
         dashViewGraphLabel:    'Tampilan grafik',
         dashForecastLabel:     'Prakiraan',
+        dashTimeLabel: 'Waktu',
     },
 
     editor:

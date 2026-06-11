@@ -31,6 +31,7 @@ export const es419: Translations = {
         dashViewRadialLabel:   'Vista radial',
         dashViewGraphLabel:    'Vista gráfica',
         dashForecastLabel:     'Pronóstico',
+        dashTimeLabel: 'Hora',
     },
 
     editor:

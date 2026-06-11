@@ -29,6 +29,7 @@ export const sv: Translations = {
         dashViewRadialLabel:   'Radial vy',
         dashViewGraphLabel:    'Grafvy',
         dashForecastLabel:     'Prognos',
+        dashTimeLabel: 'Tid',
     },
 
     editor:

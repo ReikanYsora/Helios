@@ -31,6 +31,7 @@ export const eu: Translations = {
         dashViewRadialLabel:   'Bista erradiala',
         dashViewGraphLabel:    'Grafiko bista',
         dashForecastLabel:     'Aurreikuspena',
+        dashTimeLabel: 'Ordua',
     },
 
     editor:

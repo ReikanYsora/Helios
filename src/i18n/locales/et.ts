@@ -31,6 +31,7 @@ export const et: Translations = {
         dashViewRadialLabel:   'Radiaalvaade',
         dashViewGraphLabel:    'Graafikuvaade',
         dashForecastLabel:     'Prognoos',
+        dashTimeLabel: 'Kellaaeg',
     },
 
     editor:

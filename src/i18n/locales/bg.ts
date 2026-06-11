@@ -31,6 +31,7 @@ export const bg: Translations = {
         dashViewRadialLabel:   'Радиален изглед',
         dashViewGraphLabel:    'Графичен изглед',
         dashForecastLabel:     'Прогноза',
+        dashTimeLabel: 'Час',
     },
 
     editor:

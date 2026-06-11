@@ -31,6 +31,7 @@ export const cy: Translations = {
         dashViewRadialLabel:   'Golwg radiol',
         dashViewGraphLabel:    'Golwg graff',
         dashForecastLabel:     'Rhagolwg',
+        dashTimeLabel: 'Amser',
     },
 
     editor:

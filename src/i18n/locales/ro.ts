@@ -31,6 +31,7 @@ export const ro: Translations = {
         dashViewRadialLabel:   'Vizualizare radială',
         dashViewGraphLabel:    'Vizualizare grafic',
         dashForecastLabel:     'Prognoză',
+        dashTimeLabel: 'Oră',
     },
 
     editor:
