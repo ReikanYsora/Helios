@@ -15,7 +15,7 @@ import { formatLocalisedNumber } from './format';
 import { resolveBatteryEntities } from './battery';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
-import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 
 
 //Resolve the live PV entity from the HA Energy dashboard solar source. Prefers the optional `stat_rate` (signed W or kW)
@@ -401,7 +401,11 @@ export function refreshPv(host: PvHost): void
     {
         const seriesStart = new Date(today0.getTime() - 2 * 24 * HOUR_MS);
         const sortedChange = [...changeIds].sort();
-        const changeKey    = `${sortedChange.join(',')}|${seriesStart.getTime()}|${fetchEnd.getTime()}`;
+        //The refresh anchor re-arms the gate once per CHANGE_REFRESH_MS. fetchEnd alone (timeline
+        //range end) only moves when the engine shifts the time range (a weather refresh landing,
+        //the midnight rollover), far too coarse on its own: it froze the past curve and the
+        //cumulative-only live-chip fallback at mount-time data for hours.
+        const changeKey    = `${sortedChange.join(',')}|${seriesStart.getTime()}|${fetchEnd.getTime()}|${changeRefreshAnchorMs()}`;
         if (changeKey !== host._pvChangeSeriesFetchKey)
         {
             host._pvChangeSeriesFetchKey = changeKey;

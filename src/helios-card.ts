@@ -1664,12 +1664,41 @@ export class HeliosCard extends LitElement
         const batterySocText = showSocChip
             ? `${Math.round(activeBatterySoc!)} %`
             : '';
-        //Chip value uses HA's Energy Sources sign convention: discharge positive (the battery
-        //supplies power), charge negative (it consumes / stores). `activeBatteryPower` is the
-        //physical charge-positive net, so negate it for the displayed sign. The colour + leader flow
-        //below stay on the physical value so charging still reads pink + flows INTO the battery.
+        //Chip value uses the battery-centric physical sign: charge positive (+ = energy flowing
+        //INTO the battery), discharge negative. This is the same convention as every other battery
+        //surface in the card (unified store, scrub buffers, leader direction) but the OPPOSITE of
+        //HA's "Power sources" graph, which draws the battery source-centric (positive when it
+        //supplies the home). On a standalone chip the physical read is the intuitive one: testers
+        //consistently parsed "−" while charging as a wiring bug.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit)
+            ? formatBatteryPower(this.hass, activeBatteryPower!, activeBatteryUnit)
+            : '';
+
+        //Home consumption chip. Same client-side derivation as the official "Now" view's Power
+        //usage header (`hui-power-sankey-card._computePowerData`):
+        //  used_total = from_grid + solar + from_battery - to_grid - to_battery
+        //expressed here over the card's already scrub-aware per-family values, so the chip shows
+        //the same number HA shows live AND follows the timeline scrub like every other chip.
+        //Families contribute only when they have a reading; with nothing wired the chip hides.
+        //Clamped at zero: a small negative is meter skew, not physical negative consumption.
+        const usagePvW = (!pvScrubFuture && pvActiveRate !== null)
+            ? pvNormalizeToWatts(pvActiveRate.value, pvActiveRate.unit)
+            : null;
+        const usageGridW = (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null)
+            ? (gridImportDisplayWatts ?? 0) - (gridExportDisplayWatts ?? 0)
+            : null;
+        //activeBatteryPower is charge-positive, so it SUBTRACTS: charging is consumption that
+        //never reaches the home, discharging (negative) adds supply.
+        const usageBatteryW = showPowerChip ? activeBatteryPower! : null;
+        const homeUsageWatts = (usagePvW === null && usageGridW === null && usageBatteryW === null)
+            ? null
+            : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0));
+        const showHomeUsageChip = hasHomeCoords
+            && layout !== null
+            && !batteryScrubFuture
+            && homeUsageWatts !== null;
+        const homeUsageText = showHomeUsageChip
+            ? formatGridValue(homeUsageWatts, 'W')
             : '';
 
         //Charging / discharging direction drives the SVG arrow path direction on the PV↔Power
@@ -2755,6 +2784,21 @@ export class HeliosCard extends LitElement
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                     >
                         <ha-icon icon="mdi:home"></ha-icon>
+                    </div>
+                ` : nothing}
+
+                <!--  Home consumption chip, docked to the right of
+                      the home pill. Value mirrors the official
+                      Energy "Now" header (Power usage), same
+                      client-side formula over the same HA Energy
+                      sources, so the two surfaces always agree.     -->
+                ${showHomeUsageChip && !this._detailMode ? html`
+                    <div
+                        class="home-usage-label"
+                        style="left:${layout!.homeUsageLabel.x}px; top:${layout!.homeUsageLabel.y}px"
+                    >
+                        <ha-icon icon="mdi:home-lightning-bolt"></ha-icon>
+                        <span>${homeUsageText}</span>
                     </div>
                 ` : nothing}
 

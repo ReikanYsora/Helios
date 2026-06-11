@@ -65,6 +65,7 @@ export interface LabelLayout
     batteryPowerLabel: { x: number; y: number };
     gridImportLabel:   { x: number; y: number };
     gridExportLabel:   { x: number; y: number };
+    homeUsageLabel:    { x: number; y: number };
     ringEdge:          { x: number; y: number };
     home:              { x: number; y: number };
     //Projected screen position of the home roof top (home lat/lon at
@@ -179,6 +180,7 @@ function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
         && pointEq(a.batteryPowerLabel, b.batteryPowerLabel)
         && pointEq(a.gridImportLabel,   b.gridImportLabel)
         && pointEq(a.gridExportLabel,   b.gridExportLabel)
+        && pointEq(a.homeUsageLabel,    b.homeUsageLabel)
         && pointEq(a.ringEdge,          b.ringEdge)
         && pointEq(a.home,              b.home)
         //homeAnchorPoints is a long SVG points string; direct

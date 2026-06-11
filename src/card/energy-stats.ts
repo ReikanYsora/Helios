@@ -21,6 +21,23 @@
 const HOUR_MS = 3_600_000;
 
 
+//Re-fetch cadence for the change-series gates in pv.ts / grid.ts / battery.ts. The recorder
+//commits a new 5-minute statistics bucket every 5 minutes; re-arming the per-host fetch gate once
+//a minute keeps the cumulative-only live chips within ~1 min of the freshest committed bucket
+//without WS spam. Callers fold floor(now / CHANGE_REFRESH_MS) into their fetch key so the gate
+//re-arms on this boundary instead of only when the window origin shifts at midnight.
+export const CHANGE_REFRESH_MS = 60_000;
+
+//"Now" rounded down to the refresh boundary, the single anchor every change-series fetch gate
+//folds into its key (and battery / grid also pass as the fetch end). One helper instead of three
+//hand-rolled roundings so the call sites cannot drift apart, and so every card on a dashboard
+//computes the identical anchor and shares one cache entry per interval.
+export function changeRefreshAnchorMs(): number
+{
+    return Math.floor(Date.now() / CHANGE_REFRESH_MS) * CHANGE_REFRESH_MS;
+}
+
+
 //One recorder change bucket: the energy delta in kWh over [startMs, endMs). Already reset-
 //corrected and unit-normalised by the recorder.
 export interface ChangeBucket
@@ -39,17 +56,34 @@ export type StatPeriod = '5minute' | 'hour' | 'day';
 
 
 //Module-level cache shared across every Helios card on the page so an N-card dashboard hits the
-//recorder once per (window | period | statIds) tuple. TTL undershoots the card's 30 s tick so the
-//cached series survives the whole interval between refreshes; inflight requests dedup so concurrent
-//cards never race two parallel calls.
+//recorder once per (window | period | statIds) tuple. TTL undershoots CHANGE_REFRESH_MS by a few
+//seconds: within one re-arm interval every card lands on the same key and shares one recorder hit,
+//and the rounded end anchor in the callers' keys guarantees nobody is ever served data older than
+//one interval. Inflight requests dedup so concurrent cards never race two parallel calls.
 interface CacheEntry
 {
     ts:        number;
     result:    ChangeBucket[] | null;
     inflight?: Promise<ChangeBucket[] | null>;
 }
-const TTL_MS = 25_000;
+const TTL_MS = CHANGE_REFRESH_MS - 5_000;
 const _cache = new Map<string, CacheEntry>();
+
+//Drop every settled entry past its TTL. The re-arm scheme retires a (window | period | statIds)
+//key every CHANGE_REFRESH_MS, so without eviction the map gains an entry (with its full parsed
+//bucket array) per series per minute for the lifetime of the page: hundreds of MB per day on an
+//always-on wall-mounted dashboard. Called on every fetch; the map never holds more than a few
+//live entries so the sweep is O(handful).
+function pruneExpired(cache: Map<string, { ts: number; inflight?: unknown }>, nowMs: number): void
+{
+    for (const [key, e] of cache)
+    {
+        if (!e.inflight && nowMs - e.ts > TTL_MS)
+        {
+            cache.delete(key);
+        }
+    }
+}
 
 export function clearEnergyStatsCache(): void
 {
@@ -77,6 +111,7 @@ export async function fetchChangeSeries(
 
     const cacheKey = `${period}|${startMs}|${endMs}|${[...statisticIds].sort().join('|')}`;
     const nowMs    = Date.now();
+    pruneExpired(_cache, nowMs);
     const cached   = _cache.get(cacheKey);
     if (cached)
     {
@@ -177,6 +212,7 @@ export async function fetchMeanSeries(
 
     const cacheKey = `${period}|${startMs}|${endMs}|${[...statisticIds].sort().join('|')}`;
     const nowMs    = Date.now();
+    pruneExpired(_meanCache, nowMs);
     const cached   = _meanCache.get(cacheKey);
     if (cached)
     {

@@ -4471,6 +4471,7 @@ export class HeliosEngine
         batteryPowerLabel: { x: number; y: number };
         gridImportLabel:   { x: number; y: number };
         gridExportLabel:   { x: number; y: number };
+        homeUsageLabel:    { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
         //Projected screen position of the home building's roof top
@@ -4675,6 +4676,7 @@ export class HeliosEngine
             batteryPowerLabel: { x: batteryXRight,  y: batteryPowerY},
             gridImportLabel:   { x: gridXLeft,      y: gridImportY  },
             gridExportLabel:   { x: gridXLeft,      y: gridExportY  },
+            homeUsageLabel:    { x: home.x + 22,    y: clusterY     },
             ringEdge:          { x: ringEdgeX,      y: ringEdgeY    },
             home:              { x: home.x,         y: clusterY     },
             homeRoof:          { x: home.x,         y: roofY        },

@@ -9,7 +9,7 @@ import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
-import { fetchChangeSeries, latestWattsFromChangeSeries, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 
 
 //-----------------------------------------------------------------
@@ -315,8 +315,9 @@ export function refreshBattery(host: BatteryHost): void
 
 //Fetch the recorder `change` series for the battery charge (stat_energy_to) + discharge
 //(stat_energy_from) energy meters over the store's J-2 past window. Gated on a per-host fetch key
-//so it reissues only when the entity set or window changes. Charge and discharge are fetched as
-//two independent series so the consumer can net them with a structural sign.
+//that re-arms every CHANGE_REFRESH_MS (and on entity-set / window changes), so the series keeps
+//tracking newly committed recorder buckets during the session. Charge and discharge are fetched
+//as two independent series so the consumer can net them with a structural sign.
 function fetchBatteryChangeSeries(host: BatteryHost): void
 {
     const chargeIds    = host._energyDefaults.batteryStatEnergyTos;
@@ -327,10 +328,16 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
     const startMs = today0.getTime() - 2 * 24 * 3_600_000;
-    const endMs   = Date.now();
+    //End anchor rounded down to the refresh boundary. Folding it into the fetch key re-arms the
+    //gate once per CHANGE_REFRESH_MS, so the live-chip fallback and the past curve keep tracking
+    //newly committed recorder buckets (a startMs-only key froze the series at mount-time data
+    //until midnight: a battery idle at page load showed 0 W for the rest of the day). Rounding
+    //also lands every card on the same energy-stats cache key, so an N-card dashboard still hits
+    //the recorder once per interval.
+    const endMs   = changeRefreshAnchorMs();
     const sortedCharge    = [...chargeIds].sort();
     const sortedDischarge = [...dischargeIds].sort();
-    const key = `${sortedCharge.join(',')}|${sortedDischarge.join(',')}|${startMs}`;
+    const key = `${sortedCharge.join(',')}|${sortedDischarge.join(',')}|${startMs}|${endMs}`;
     if (key === host._batteryChangeFetchKey) { return; }
     host._batteryChangeFetchKey = key;
     host._batteryChangeFetching = true;
