@@ -70,6 +70,11 @@ const MIN_TOTAL_WEIGHT = 3;
 //that actual/model is dominated by quantisation + measurement noise, so the sample is dropped.
 const MODEL_KWH_FLOOR = 0.05;
 
+//Sub-samples per learning hour. The production history is hourly (recorder retention caps the 60-day
+//window at hourly stats), but the model is evaluated at this many instants across each hour so its
+//shading reflects the same sub-hourly geometry the forecast resolves. 4 = one per 15 min.
+const LEARN_SUBSAMPLES = 4;
+
 //Leading-edge smoothing. At a fixed time of day the sun's (az, alt) drifts with the season, so the
 //cells the FUTURE forecast samples sit just beyond what the history has observed at that hour and
 //carry few samples. A confident shading feature learned in the cell the sun has just swept past
@@ -210,19 +215,34 @@ export function buildSkyResidualMap(input: SkyResidualInput): SkyResidualMap | n
         const snow  = ci >= 0 ? input.snow[ci]      : undefined;
 
         //Model prediction for this hour, running the SAME physics as buildForecast: LiDAR + Open-Meteo
-        //GHI base + direct / diffuse split + per-orientation GTI + thermal derating + snow-cover derate,
-        //in kWh (W at the midpoint × 1 h / 1000). Keeping the eval identical means the residual the map
-        //learns is purely the local shading / bias, not a thermal or snow offset the forecast re-applies.
-        const wModel = computePvPowerWeighted(input.config, new Date(mid), input.lat, input.lon, cloud, {
+        //GHI base + direct / diffuse split + per-orientation GTI + thermal derating + snow-cover derate.
+        //The model power is averaged over LEARN_SUBSAMPLES sub-instants spanning the hour (the weather is
+        //hourly so only the sun position + LiDAR shading vary), so modelKwh reflects the FRACTION of the
+        //hour the array is actually shaded, matching the sub-hourly forecast. Without this the hourly
+        //midpoint either hits or misses a short shadow, and the residual would absorb a shadow the
+        //sub-hourly forecast also resolves geometrically, double-counting it.
+        const baseCtx = {
             raster:       input.raster,
             airTempC:     (temp != null && isFinite(temp)) ? temp : undefined,
             windMs:       (wind != null && isFinite(wind)) ? wind : undefined,
             ghiWm2:       (ghi != null && ghi >= 0) ? ghi : undefined,
             directWm2:    (dir != null && dir >= 0) ? dir : undefined,
             diffuseWm2:   (dif != null && dif >= 0) ? dif : undefined,
-            tiltedPoaWm2: input.gtiStore ? (tilt, az) => sampleGti(input.gtiStore, tilt, az, mid) : undefined,
-        }) * k * snowCoverFactor(snow, temp);
-        const modelKwh = wModel / 1000;
+        };
+        let wSum = 0;
+        let wN   = 0;
+        for (let s = 0; s < LEARN_SUBSAMPLES; s++)
+        {
+            const subT = bucket.startMs + (s + 0.5) * (bucket.endMs - bucket.startMs) / LEARN_SUBSAMPLES;
+            if (getSunPosition(new Date(subT), input.lat, input.lon).altitude <= 0) { continue; }
+            wSum += computePvPowerWeighted(input.config, new Date(subT), input.lat, input.lon, cloud, {
+                ...baseCtx,
+                tiltedPoaWm2: input.gtiStore ? (tilt, az) => sampleGti(input.gtiStore, tilt, az, subT) : undefined,
+            });
+            wN++;
+        }
+        if (wN === 0) { continue; }
+        const modelKwh = (wSum / wN) * k * snowCoverFactor(snow, temp) / 1000;
         if (modelKwh < MODEL_KWH_FLOOR) { continue; }
 
         const ratio = kwh / modelKwh;

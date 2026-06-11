@@ -48,6 +48,22 @@ the curve is drawn, so it reads as a perf / smoothing lever alongside the displa
 per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
 + help updated in EN + FR.
 
+### Forecast: sub-hourly resolution so short shadows show up (beta.13)
+
+The forecast was computed once per hour and interpolated up to the display cadence, so a tree (or
+chimney, mast) that clips production for 30-45 minutes was stepped right over: the hourly sample
+either landed in the shadow or missed it, and the curve never showed the dip cleanly. The forecast
+now runs at the STORE cadence (the "graph detail" slider, default every 15 minutes), so the LiDAR
+shading and the sun position are sampled every bucket and a short shadow is resolved. The hourly
+Open-Meteo weather is interpolated between samples so the magnitude stays smooth (no stair-steps), and
+the per-orientation GTI is interpolated the same way. Set the slider finer for sharper shadows,
+coarser to fall back to the old hourly behaviour.
+
+The 60-day learning pass evaluates its model at four instants per hour to match: the recorder only
+keeps hourly stats that far back, but sampling the model sub-hourly means the learned residual sees
+the same fraction-of-the-hour shading the forecast resolves, so it doesn't double-count a shadow the
+sub-hourly forecast already draws geometrically.
+
 ### Forecast: one pipeline for every visual + the learned map reaches the future (beta.12)
 
 Two fixes that together close the "the tree shadow shows on past days but never on future days"

@@ -55,24 +55,35 @@ export function orientationKey(tiltDeg: number, azimuthDeg: number): string
 }
 
 
-//Nearest-sample GTI lookup for one orientation at a given time. Returns undefined when the store has
-//no series for this orientation or it carries no data, so the caller falls back to our own
-//transposition for that array / hour cleanly.
+//GTI lookup for one orientation at a given time, linearly interpolated between the two bracketing
+//hourly samples so a sub-hourly forecast bucket reads a smooth POA instead of an hourly stair-step.
+//Returns undefined when the store has no series for this orientation, it carries no data, or both
+//bracketing samples are invalid, so the caller falls back to our own transposition cleanly.
 export function sampleGti(store: GtiStore | null, tiltDeg: number, azimuthDeg: number, tMs: number): number | undefined
 {
     if (!store) { return undefined; }
     const s = store.byKey.get(orientationKey(tiltDeg, azimuthDeg));
     if (!s || s.times.length === 0) { return undefined; }
-    let best   = 0;
-    let bestDt = Infinity;
+
+    //Bracket tMs: i1 = first sample at or after tMs, i0 its predecessor.
+    let i1 = s.times.length - 1;
     for (let i = 0; i < s.times.length; i++)
     {
-        const dt = Math.abs(s.times[i] - tMs);
-        if (dt < bestDt) { bestDt = dt; best = i; }
-        else if (s.times[i] > tMs && dt > bestDt) { break; }
+        if (s.times[i] >= tMs) { i1 = i; break; }
     }
-    const v = s.poa[best];
-    return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : undefined;
+    const i0 = Math.max(0, i1 - 1);
+    const v0 = s.poa[i0];
+    const v1 = s.poa[i1];
+    const b0 = !(typeof v0 === 'number' && isFinite(v0) && v0 >= 0);
+    const b1 = !(typeof v1 === 'number' && isFinite(v1) && v1 >= 0);
+    if (b0 && b1) { return undefined; }
+    if (b0) { return v1; }
+    if (b1) { return v0; }
+    const t0 = s.times[i0];
+    const t1 = s.times[i1];
+    if (t1 <= t0) { return v1; }
+    const f = Math.max(0, Math.min(1, (tMs - t0) / (t1 - t0)));
+    return v0 + (v1 - v0) * f;
 }
 
 

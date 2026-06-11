@@ -56,14 +56,6 @@ export const STORE_DAYS_PAST  = 2;
 export const STORE_DAYS_AHEAD = 2;
 export const STORE_DAYS       = STORE_DAYS_PAST + 1 + STORE_DAYS_AHEAD;
 
-//Forecast inner-loop cadence. Locked to one bucket per hour matching the Open-Meteo weather grid;
-//the computed hourly values are then linearly interpolated into the storage cadence at the end of
-//buildForecast. Higher rates would only fabricate intermediate values without adding any signal.
-const FORECAST_BUCKETS_PER_HOUR = 1;
-const FORECAST_BUCKETS_PER_DAY  = 24 * FORECAST_BUCKETS_PER_HOUR;
-const FORECAST_BUCKETS_TOTAL    = STORE_DAYS * FORECAST_BUCKETS_PER_DAY;
-const FORECAST_STEP_MS          = HOUR_MS / FORECAST_BUCKETS_PER_HOUR;
-
 
 //Per-build cadence bundle. Derived from the user config once at the top of buildUnifiedStore and
 //threaded through every per-metric builder so the bucket arithmetic stays consistent across passes.
@@ -190,38 +182,6 @@ function interpolateNullGaps(arr: (number | null)[]): void
 }
 
 
-//Resample a length-srcLen series to a length-dstLen series using linear interpolation between
-//bracketing source buckets. Both arrays sit on the same time window. Null source buckets stay null
-//in the dst when both bracketing values are null. dstLen == srcLen returns a copy.
-function resampleLinear(src: ReadonlyArray<number | null>, dstLen: number): (number | null)[]
-{
-    const srcLen = src.length;
-    if (dstLen === srcLen)
-    {
-        return src.slice() as (number | null)[];
-    }
-    const out = new Array<number | null>(dstLen).fill(null);
-    if (srcLen === 0)
-    {
-        return out;
-    }
-    for (let j = 0; j < dstLen; j++)
-    {
-        const srcF = (j + 0.5) * srcLen / dstLen - 0.5;
-        const i0 = Math.max(0, Math.min(srcLen - 1, Math.floor(srcF)));
-        const i1 = Math.max(0, Math.min(srcLen - 1, i0 + 1));
-        const v0 = src[i0];
-        const v1 = src[i1];
-        if (v0 === null && v1 === null) { continue; }
-        if (v0 === null) { out[j] = v1; continue; }
-        if (v1 === null) { out[j] = v0; continue; }
-        const f = Math.max(0, Math.min(1, srcF - i0));
-        out[j] = v0 + (v1 - v0) * f;
-    }
-    return out;
-}
-
-
 //Midnight (local time) of the J-2 day. Used as the store origin so every per-day slice lines up on
 //calendar day boundaries.
 function storeOriginMs(): number
@@ -325,11 +285,10 @@ function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEn
 }
 
 
-//Forecast = computePvPowerWeighted × pvCalibK × effectiveForecastRatio at every weather-grid bucket
-//(one per hour, matching Open-Meteo). The hourly array is then linearly resampled to the storage
-//cadence so the curve drops straight into the per-bucket consumer alongside the other series.
-//Trains the shading map once per build so the map carries every fresh observation that landed
-//between the previous build and this one.
+//Forecast = computePvPowerWeighted × pvCalibK × (learned sky-residual ratio, or the 5-day scalar when
+//the map is cold) × snow-cover derate, at every STORE bucket. Runs at the display cadence so a fine
+//"graph detail" setting resolves short shadow dips; the hourly Open-Meteo weather is interpolated
+//between samples to keep the magnitude smooth. Emits the corrected forecast + the raw physical model.
 function buildForecast(
     host: UnifiedStoreHost,
     storeStartMs: number,
@@ -348,53 +307,53 @@ function buildForecast(
     const calR    = cal ? cal.ratio : 1;
     const raster  = host._engine?.getLidarRaster() ?? null;
 
-    //Hourly inner loop: one bucket per hour of the 5-day window, matching the weather model cadence.
-    //`hourly` is the corrected forecast (model × learned ratio); `hourlyRaw` is the pure physical model
-    //(no learned ratio) so the dashboard can show "PRÉVU" (raw) vs "affiné" (corrected) from one pass.
-    const hourly    = new Array<number | null>(FORECAST_BUCKETS_TOTAL).fill(null);
-    const hourlyRaw = new Array<number | null>(FORECAST_BUCKETS_TOTAL).fill(null);
-    for (let h = 0; h < FORECAST_BUCKETS_TOTAL; h++)
+    //Inner loop runs at the STORE cadence (the "graph detail" slider, default 4/h = 15 min) instead of
+    //a fixed hourly pass. The LiDAR shading + sun position are then sampled every bucket, so a short
+    //shadow (a tree clipping production for 30-45 min) is resolved instead of being stepped over by an
+    //hourly midpoint. The hourly Open-Meteo weather is interpolated between samples so the magnitude
+    //stays smooth at any cadence (no hourly stair-steps). `hourly` is the corrected forecast (model ×
+    //learned ratio); `hourlyRaw` is the pure physical model (no learned ratio) for the "PRÉVU" figure.
+    const hourly    = new Array<number | null>(p.bucketsTotal).fill(null);
+    const hourlyRaw = new Array<number | null>(p.bucketsTotal).fill(null);
+    const times     = series.times;
+    let wi = 0;   //moving cursor into the hourly weather series; bucket midpoints are ascending
+    for (let h = 0; h < p.bucketsTotal; h++)
     {
-        const mid = storeStartMs + h * FORECAST_STEP_MS + FORECAST_STEP_MS / 2;
+        const mid = storeStartMs + h * p.stepMs + p.stepMs / 2;
         if (mid < storeStartMs || mid >= storeEndMs) { continue; }
-        //Cloud lookup: pick the chartSeries sample closest to the bucket midpoint. The data source's
-        //cloud series already holds the same information in the storage cadence but referencing
-        //chartSeries directly here keeps buildForecast independent of buildCloud.
-        let bestIdx = -1;
-        let bestDt  = Infinity;
-        for (let i = 0; i < series.times.length; i++)
-        {
-            const dt = Math.abs(series.times[i].getTime() - mid);
-            if (dt < bestDt) { bestDt = dt; bestIdx = i; }
-        }
-        const cc = bestIdx >= 0 ? (series.cloud[bestIdx] ?? 0) : 0;
-        const t  = new Date(mid);
-        const wRaw = computePvPowerWeighted(
-            host.config,
-            t,
-            coords.lat,
-            coords.lon,
-            cc,
-            {
-                airTempC: bestIdx >= 0 ? series.temperature?.[bestIdx] : undefined,
-                windMs:   bestIdx >= 0 ? series.windSpeed?.[bestIdx]   : undefined,
-                //Open-Meteo shortwave (or home sensor) GHI in W/m² as the irradiance base, so the
-                //forecast inherits the weather model's cloud physics instead of the analytical cubic.
-                ghiWm2:   bestIdx >= 0 ? series.irradiance?.[bestIdx]  : undefined,
-                //Open-Meteo beam + diffuse on the horizontal plane, so a tilted array transposes on the
-                //real direct / diffuse split instead of the cloud-derived fraction.
-                directWm2:  bestIdx >= 0 ? series.directRad?.[bestIdx]  : undefined,
-                diffuseWm2: bestIdx >= 0 ? series.diffuseRad?.[bestIdx] : undefined,
-                //Open-Meteo anisotropic POA per orientation; replaces the transposition where available.
-                tiltedPoaWm2: host._gtiStore ? (tilt, az) => sampleGti(host._gtiStore, tilt, az, mid) : undefined,
-                raster,
-            }
-        );
-        //Calibration ratio. When the learned sky map is warm, it REPLACES the 5-day scalar: it
-        //carries the level (the model's systematic over/under-prediction, unclamped) AND the shape
-        //(per-sun-position deviation: a tree the LiDAR missed, foliage, a wrong LiDAR cell), learned
-        //from the user's own production. A cold cell falls back to the map's global level; a brand-new
-        //install with no map at all keeps the legacy clamped scalar so day 1 loses nothing.
+        if (times.length === 0) { continue; }
+
+        //Bracket the bucket midpoint between two hourly weather samples and interpolate each field.
+        while (wi < times.length - 1 && times[wi + 1].getTime() <= mid) { wi++; }
+        const i0 = wi;
+        const i1 = Math.min(times.length - 1, wi + 1);
+        const t0 = times[i0].getTime();
+        const t1 = times[i1].getTime();
+        const f  = (t1 > t0) ? Math.max(0, Math.min(1, (mid - t0) / (t1 - t0))) : 0;
+
+        const cc   = lerpPlain(series.cloud[i0],       series.cloud[i1],       f);
+        const ghi  = lerpPlain(series.irradiance[i0],  series.irradiance[i1],  f);
+        const dir  = lerpRad(series.directRad?.[i0],   series.directRad?.[i1],  f);
+        const dif  = lerpRad(series.diffuseRad?.[i0],  series.diffuseRad?.[i1], f);
+        const temp = lerpFinite(series.temperature?.[i0], series.temperature?.[i1], f);
+        const wind = lerpFinite(series.windSpeed?.[i0],   series.windSpeed?.[i1],   f);
+        const snow = lerpFinite(series.snowDepth?.[i0],   series.snowDepth?.[i1],   f);
+
+        const t = new Date(mid);
+        const wRaw = computePvPowerWeighted(host.config, t, coords.lat, coords.lon, cc, {
+            airTempC:     temp,
+            windMs:       wind,
+            //Open-Meteo shortwave (or home sensor) GHI as the irradiance base; beam + diffuse drive the
+            //real direct / diffuse split; per-orientation GTI replaces the transposition where available.
+            ghiWm2:       ghi,
+            directWm2:    dir,
+            diffuseWm2:   dif,
+            tiltedPoaWm2: host._gtiStore ? (tilt, az) => sampleGti(host._gtiStore, tilt, az, mid) : undefined,
+            raster,
+        });
+        //Calibration ratio. When the learned sky map is warm it REPLACES the 5-day scalar, carrying the
+        //level AND the per-sun-position shape (a tree the LiDAR missed, foliage, a wrong cell). A cold
+        //cell falls back to the map's global level; no map at all keeps the legacy clamped scalar.
         let ratio: number;
         if (host._skyResidualMap)
         {
@@ -405,13 +364,9 @@ function buildForecast(
         {
             ratio = effectiveForecastRatio(calR);
         }
-        //Winter snow-cover derate: ground snow with cold air means the panels are likely buried.
-        const snowF = snowCoverFactor(
-            bestIdx >= 0 ? series.snowDepth?.[bestIdx]   : undefined,
-            bestIdx >= 0 ? series.temperature?.[bestIdx] : undefined,
-        );
         //Raw = pure physics (LiDAR + thermal + GTI + snow), no learned ratio. Corrected = × ratio.
-        const rawW = wRaw * k * snowF;
+        const snowF = snowCoverFactor(snow, temp);
+        const rawW  = wRaw * k * snowF;
         if (Number.isFinite(rawW))
         {
             hourlyRaw[h] = Math.min(cap, Math.max(0, rawW));
@@ -422,12 +377,35 @@ function buildForecast(
             hourly[h] = Math.min(cap, Math.max(0, w));
         }
     }
-    //Resample both hourly forecasts to the storage cadence. resampleLinear is a no-op when bucketsTotal
-    //matches FORECAST_BUCKETS_TOTAL (cadence = 1/h), otherwise linearly interpolates between hours.
-    return {
-        forecast:    resampleLinear(hourly,    p.bucketsTotal),
-        forecastRaw: resampleLinear(hourlyRaw, p.bucketsTotal),
-    };
+    return { forecast: hourly, forecastRaw: hourlyRaw };
+}
+
+
+//Interpolate a weather field between two bracketing hourly samples. lerpPlain assumes both sides are
+//valid numbers (cloud / irradiance always are in the chart series). lerpRad guards the -1 "no data"
+//sentinel on the radiation fields, lerpFinite the NaN padding on temp / wind / snow: if one side is
+//missing take the other, if both return undefined so the model context falls back.
+function lerpPlain(a: number, b: number, f: number): number
+{
+    return a + (b - a) * f;
+}
+function lerpRad(a: number | undefined, b: number | undefined, f: number): number | undefined
+{
+    const ba = !(typeof a === 'number' && isFinite(a) && a >= 0);
+    const bb = !(typeof b === 'number' && isFinite(b) && b >= 0);
+    if (ba && bb) { return undefined; }
+    if (ba) { return b; }
+    if (bb) { return a; }
+    return a! + (b! - a!) * f;
+}
+function lerpFinite(a: number | undefined, b: number | undefined, f: number): number | undefined
+{
+    const ba = !(typeof a === 'number' && isFinite(a));
+    const bb = !(typeof b === 'number' && isFinite(b));
+    if (ba && bb) { return undefined; }
+    if (ba) { return b; }
+    if (bb) { return a; }
+    return a! + (b! - a!) * f;
 }
 
 
@@ -543,7 +521,7 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
     const cloud        = buildCloud(host, storeStartMs, storeEndMs, p);
     //Production reads ONLY real sensor samples and interpolates between them. Forecast is the model
-    //output, computed independently at weather cadence and resampled into the storage buckets.
+    //output, computed at the store cadence with the hourly weather interpolated between samples.
     const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
     const fc           = buildForecast(host, storeStartMs, storeEndMs, p);
     const forecast     = fc.forecast;
