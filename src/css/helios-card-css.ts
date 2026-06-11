@@ -247,6 +247,7 @@ export const heliosCardStyles = css`
     .grid-leader-svg,
     .grid-import-label,
     .grid-export-label,
+    .home-usage-label,
     .home-pill
     {
         transition: opacity 0.35s ease;
@@ -270,6 +271,7 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .grid-leader-svg,
     ha-card.overlay-masked .grid-import-label,
     ha-card.overlay-masked .grid-export-label,
+    ha-card.overlay-masked .home-usage-label,
     ha-card.overlay-masked .home-pill
     {
         will-change: opacity;
@@ -296,7 +298,8 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .battery-pct-label,
     ha-card.overlay-masked .grid-leader-svg,
     ha-card.overlay-masked .grid-import-label,
-    ha-card.overlay-masked .grid-export-label
+    ha-card.overlay-masked .grid-export-label,
+    ha-card.overlay-masked .home-usage-label
     {
         opacity: 0;
         pointer-events: none;
@@ -2988,7 +2991,8 @@ export const heliosCardStyles = css`
         consumption blue for import, return purple for export. Both
         chips live in the LEFT column of the home cluster. */
     .grid-import-label,
-    .grid-export-label
+    .grid-export-label,
+    .home-usage-label
     {
         position: absolute;
         transform: translate(-50%, -50%);
@@ -3021,8 +3025,19 @@ export const heliosCardStyles = css`
     {
         border: 2px solid var(--energy-grid-return-color, #8353d1);
     }
+    /*  Home consumption chip carries the home cluster's family signature (HA primary colour, same
+        as the home pill + drop leader) so it reads as the home node's own readout, not as a fifth
+        energy source. Left-edge anchored (translate Y only): the layout x is the chip's LEFT edge
+        docked against the home pill's right side, so growing value text expands AWAY from the
+        pill instead of pushing into it. */
+    .home-usage-label
+    {
+        border: 2px solid var(--primary-color, #03a9f4);
+        transform: translate(0, -50%);
+    }
     .grid-import-label ha-icon,
-    .grid-export-label ha-icon
+    .grid-export-label ha-icon,
+    .home-usage-label ha-icon
     {
         --mdc-icon-size: 16px;
         color: inherit;
@@ -3515,6 +3530,7 @@ export const heliosCardStyles = css`
         .battery-pct-label,
         .grid-import-label,
         .grid-export-label,
+        .home-usage-label,
         .solar-pct-label
         {
             font-size: var(--ha-font-size-m, 14px);
@@ -3524,6 +3540,7 @@ export const heliosCardStyles = css`
         .battery-pct-label ha-icon,
         .grid-import-label ha-icon,
         .grid-export-label ha-icon,
+        .home-usage-label ha-icon,
         .solar-pct-label ha-icon
         {
             --mdc-icon-size: 18px;
