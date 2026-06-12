@@ -27,7 +27,7 @@ export type LoadingPhaseId =
     | 'energy-prefs'
     | 'pv-history'
     | 'pv-change-series'
-    | 'sky-forecast'
+    | 'solar-forecast'
     | 'battery-history'
     | 'grid-history'
     | 'solar-radiation'

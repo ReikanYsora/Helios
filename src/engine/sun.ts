@@ -118,17 +118,15 @@ export interface PanelOrientation
 //Optional context that refines the PV estimate. Every field is opt-in: caller passes only what it knows. Empty context preserves the original
 //Haurwitz / Liu-Jordan output exactly.
 //
-//  airTempC + windMs , feed the Sandia-style cell temperature model
-//    (see pv-thermal.ts). When airTempC is finite the result is
-//    multiplied by the thermal derating factor at the computed cell
-//    temperature.
+//  airTempC + windMs , retained on the context so existing callers keep compiling; they no longer
+//    affect the output (the cell-temperature derating that consumed them lived in the card's own PV
+//    forecast, which is gone now that the forecast is read from HA).
 //
 //  shading , a boolean from the caller-side LiDAR raycast
 //    (isPanelShaded in pv-shading.ts). When true, the direct-beam
 //    component is zeroed; diffuse + ground-reflected terms are
 //    kept (a tree blocks the sun ray but not the upper hemisphere
 //    of diffuse sky).
-import { cellTemperatureC, thermalDerating } from './pv-thermal';
 
 export interface PvComputeContext
 {
@@ -294,15 +292,8 @@ export function computePvPower(
         }
     }
 
-    //Thermal derating: warmer cells produce less. Only applied when the caller passes a finite air temperature, otherwise the multiplier stays at 1
-    //and the legacy callers see the original output bit-for-bit.
-    let pStc = Math.max(0, poaEff / 1000);    //0..1+ of STC
-
-    if (ctx && isFinite(ctx.airTempC ?? NaN))
-    {
-        const tCell = cellTemperatureC(ctx.airTempC!, poaEff, ctx.windMs ?? 0);
-        pStc *= thermalDerating(tCell);
-    }
+    //Normalise the plane-of-array irradiance against STC (1000 W/m²) and clamp to a 0-100 % figure.
+    const pStc = Math.max(0, poaEff / 1000);    //0..1+ of STC
 
     return Math.max(0, Math.min(100, pStc * 100));
 }

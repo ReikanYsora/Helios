@@ -16,22 +16,19 @@ export interface SampleHourly
     weatherCode: number[];
     shortwave:   number[];
     //Beam (direct) + diffuse shortwave radiation on the horizontal plane in W/m², hourly. Same -1 "no
-    //data" sentinel as shortwave. Feed the PV tilt transposition so a sloped array runs on the real
-    //direct / diffuse decomposition rather than the cloud-derived split. Providers that don't return
-    //them leave -1, and the transposition falls back to the legacy cloud-fraction path.
+    //data" sentinel as shortwave. No longer fetched from Open-Meteo (the card's own PV forecast that
+    //consumed the split is gone, the forecast now comes from HA), so these stay all -1; the fields are
+    //kept so the cache + chart-series plumbing that threads them does not have to change.
     directRad:   number[];
     diffuseRad:  number[];
-    //Snow depth on the ground in METRES, hourly. NaN-padded when missing. A proxy for snow lying on the
-    //panels: combined with the air temperature it drives a winter cover derate (see snowCoverFactor in
-    //card/pv.ts), since ground snow with sub-freezing air means the array is likely covered and
-    //producing near zero regardless of irradiance.
+    //Snow depth on the ground in METRES, hourly. NaN-padded. No longer fetched (fed only the old
+    //forecast snow-cover derate); kept for the cache + chart-series plumbing.
     snowDepth:   number[];
-    //2-metre air temperature in °C, hourly. Used by the PV thermal derating model to estimate cell temperature alongside the irradiance term.
-    //NaN-padded when a hour is missing.
+    //2-metre air temperature in °C, hourly. No longer fetched (fed only the old forecast thermal
+    //derating); kept for the cache + chart-series plumbing. NaN-padded.
     temperature: number[];
-    //10-metre wind speed in m/s, hourly. Same cadence as
-    //temperature; feeds the convective cooling term in the cell
-    //temperature estimate. NaN-padded when missing.
+    //10-metre wind speed in m/s, hourly. No longer fetched (fed only the old forecast cell-cooling
+    //term); kept for the cache + chart-series plumbing. NaN-padded.
     windSpeed:   number[];
 }
 
@@ -364,24 +361,17 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //  - keep the total `cloud_cover` for visual rendering
 //  - detect the well-known "fog spike" failure mode of low-layer
 //    parametrisations.
+//shortwave_radiation_instant powers the live irradiance chip and the sun-arc colouring; the cloud
+//variables power the cloud overlay and the weather glyphs. The PV forecast is now read natively from
+//HA's Energy dashboard, so the radiation split (direct / diffuse), snow depth, air temperature and
+//wind speed that only fed the card's old physical forecast are no longer requested.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
-    //Beam + diffuse on the horizontal plane, same instant cadence as shortwave so all three line up on
-    //the time cursor. Feed the tilt transposition with the real direct / diffuse decomposition.
-    'direct_radiation_instant',
-    'diffuse_radiation_instant',
-    //Ground snow depth (metres). Drives the winter snow-cover derate on the PV output.
-    'snow_depth',
     'cloud_cover',
     'cloud_cover_low',
     'cloud_cover_mid',
     'cloud_cover_high',
     'weather_code',
-    //Drive the PV thermal-derating model in pv-thermal.ts. Cell temperature climbs above STC under sun and is cooled by wind, so the engine pulls
-    //both alongside cloud + irradiance. Providers that don't return them leave the multiplier at 1, and the prediction falls back to the legacy "cool
-    //cell" assumption.
-    'temperature_2m',
-    'wind_speed_10m',
 ];
 
 //Multi-model responses suffix the variable key with the model name

@@ -2,27 +2,23 @@
 //decide which rings to draw and whether the graph view is even useful to expose. Read off the host
 //snapshot only, no side effects, safe to call on every render.
 
-import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
 
 export interface EquipmentHost
 {
-    readonly config:          HeliosConfig | undefined;
     readonly _energyDefaults: EnergyDefaults;
 }
 
 
 //True when the user has at least one HA Energy solar source wired (live stat_rate OR cumulative
-//stat_energy_from) OR a per-array forecast config in `pv-arrays`. False when the dashboard would
-//draw an empty production ring + empty forecast curve, in which case the radial layout drops the
-//production ring entirely and the view toggle hides itself.
+//stat_energy_from). PV is resolved exclusively from the HA Energy dashboard now: there is no
+//per-card PV config. False when the dashboard would draw an empty production ring, in which case
+//the radial layout drops the production ring entirely and the view toggle hides itself.
 export function hasPvConfigured(host: EquipmentHost): boolean
 {
     const ed = host._energyDefaults;
     if (ed.solarStatRates.length > 0) { return true; }
     if (ed.solarStatEnergyFroms.length > 0) { return true; }
-    const arrays = host.config?.['pv-arrays'];
-    if (Array.isArray(arrays) && arrays.length > 0) { return true; }
     return false;
 }
 

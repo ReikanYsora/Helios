@@ -23,56 +23,6 @@ export interface HeliosConfig
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
     'show-labels'?:           unknown;
-    //Inverter clipping cap in kW (kilowatts of AC). Optional; when
-    //set, the forecast tops out at this value so an oversized DC
-    //array hooked to a smaller inverter (e.g. 6.4 kWp panels behind a
-    //5 kW inverter, a common European pairing) doesn't show a peak
-    //above what the user's hardware can actually deliver. Affects
-    //only the predicted curve / chips / day-strip kWh totals; live
-    //observation is unaffected (the inverter already does its own
-    //clipping in hardware, the entity reports the clipped value).
-    'pv-inverter-max-kw'?:    unknown;
-    //Panel orientation. Optional; when unset the prediction model
-    //assumes horizontal panels (0° tilt) and the orientation maths is
-    //bypassed, preserving the original behaviour. Setting `pv-tilt`
-    //above 0 enables the Liu-Jordan transposition that splits GHI
-    //into direct + diffuse + ground-reflected components on the
-    //panel plane, which matters a lot for vertical balcony installs
-    //and roofs far from horizontal.
-    //  pv-tilt    : tilt angle from horizontal, 0–90°.
-    //  pv-azimuth : compass bearing the panel faces, 0–360°
-    //               clockwise from north (180 = south). Ignored when
-    //               tilt is 0.
-    //Legacy single-orientation keys, superseded by `pv-arrays` below.
-    //They keep working forever for back-compat: when `pv-arrays` is
-    //absent or empty, the card reads these two as a single array
-    //entry with share = 100 %.
-    'pv-tilt'?:               unknown;
-    'pv-azimuth'?:            unknown;
-    //Multi-array PV layout. Optional list, each entry describes one
-    //group of co-oriented panels:
-    //  tilt     : 0–90°  (clamped). 0 = horizontal, 90 = vertical.
-    //  azimuth  : 0–360° clockwise from north (180 = south). Wrapped
-    //             into range, defaults to 180 when missing.
-    //  peak-kwp : installed peak power of THIS string in kWp.
-    //             Preferred over `share`: each user enters the real
-    //             nameplate for each string, the total kWp is just
-    //             the sum, and the weighting is derived
-    //             automatically. When any entry carries a
-    //             peak-kwp, the top-level `pv-peak-kwp` is ignored.
-    //  share    : legacy relative weight, in [0, 1] or any positive
-    //             scale. Auto-normalised so the shares used at
-    //             compute time always sum to 1.0. Only consulted
-    //             when NO entry carries a `peak-kwp`. Kept for
-    //             back-compat; existing configs work unchanged.
-    //When `pv-arrays` is present and non-empty, the legacy
-    //pv-tilt / pv-azimuth keys are ignored. Empty or absent →
-    //fall back to the legacy single-orientation path (or the
-    //horizontal-panel fast path when those are absent too).
-    //Useful for split-array roofs, roof + balcony combos, three-
-    //pitch roofs, and any other install where panels don't all
-    //face the same way.
-    'pv-arrays'?:             unknown;
     //Display update frequency, in buckets per hour. Controls both the storage cadence of the unified
     //data source (production / cloud / irradiance / battery / grid) and the rendering cadence of every
     //graph that reads from it (radial dial, dashboard chart, timeline today). Range 1-60. Default 4 =
@@ -84,13 +34,6 @@ export interface HeliosConfig
     //signed power draw (positive charging, negative discharging), mirroring the PV chip above the home. Battery
     //entities (SoC, power, per-bank sign inversion, multi-bank aggregation) are resolved exclusively from the HA
     //Energy dashboard, no per-card entity slot.
-    //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops
-    //feeding the battery and clamps PV output (almost no production from the panels even when the sun is up). When
-    //set AND HA Energy has at least one battery SoC source declared, calibration consumers can skip observation buckets
-    //where the SoC reached or exceeded this value. Without the skip those zero-production buckets get interpreted as
-    //true zeros and pollute the rolling calibration ratio. Threshold varies per inverter model (some cut at 95, some
-    //at 98, some at 100); the user configures their own. Leave unset to feed every bucket into the calibration.
-    'inverter-cutoff-soc-pct'?: unknown;
     //Grid import / export wiring is resolved exclusively from the HA Energy dashboard global settings: every grid
     //source's `stat_energy_from` feeds the IMPORT scrub buffer, every `stat_energy_to` feeds the EXPORT scrub
     //buffer, and the optional `stat_rate` / `power_config.stat_rate` overrides the live chip with HA's own

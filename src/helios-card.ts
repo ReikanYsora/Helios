@@ -17,7 +17,6 @@ import
     currentPvRate,
     pvRateAtTime,
     pvNormalizeToWatts,
-    pvCalibK,
     formatPvValue,
     resolvePvLiveEntity,
     clearPvModuleCaches
@@ -85,8 +84,7 @@ import {
 } from './card/weatherMode';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
-import { refreshSkyForecast, clearSkyForecastCache } from './card/forecast-sky';
-import { refreshTiltedIrradiance, clearGtiCache } from './card/gti';
+import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
@@ -391,33 +389,12 @@ export class HeliosCard extends LitElement
     @state() _pvChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
     _pvChangeSeriesFetchKey  = '';
     _pvChangeSeriesFetching  = false;
-    //Learned sky-residual forecast correction. The two histories (60-day hourly production from the
-    //recorder, 60-day hourly cloud from Open-Meteo) feed buildSkyResidualMap; the resulting map
-    //multiplies the forecast per sun position so it converges to the user's real shading + biases.
-    @state() _skyResidualMap: import('./card/forecast-sky').SkyResidualMap | null = null;
-    _skyProdSeries:    import('./card/energy-stats').ChangeBucket[] | null = null;
-    _skyProdFetchKey   = '';
-    _skyProdFetching   = false;
-    _skyCloudTimes:    number[] = [];
-    _skyCloud:         number[] = [];
-    _skyShortwave:     number[] = [];
-    _skyDirect:        number[] = [];
-    _skyDiffuse:       number[] = [];
-    _skyTemp:          number[] = [];
-    _skyWind:          number[] = [];
-    _skySnow:          number[] = [];
-    _skySoc:           import('./card/energy-stats').MeanBucket[] | null = null;
-    _skySocFetchKey    = '';
-    _skySocFetching    = false;
-    //Per-orientation Open-Meteo GTI store (src/card/gti.ts). Shared by the forecast + the 60-day
-    //learning so both transpose on the same anisotropic POA. Not @state: read directly when the store
-    //rebuilds, the requestUpdate inside refreshTiltedIrradiance drives the re-render.
-    _gtiStore:         import('./card/gti').GtiStore | null = null;
-    _gtiFetchKey       = '';
-    _gtiFetching       = false;
-    _skyCloudFetchKey  = '';
-    _skyCloudFetching  = false;
-    _skyMapVersion     = '';
+    //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries.
+    //The unified store reads this into its forecast series. Empty when no forecast source is configured.
+    @state() _haSolarForecast: SolarForecastPoint[] = [];
+    _haSolarForecastLoaded    = false;
+    _haSolarForecastFetching  = false;
+    _haSolarForecastFetchedAt = 0;
     //Home-battery state, populated when the HA Energy dashboard exposes at least one battery source (`stat_rate`,
     //`stat_energy_from`, `stat_energy_to` or `stat_soc`). Live readings; historical series lives in the *History fields
     //below. Units are kept alongside the values so the chip can format kW vs W without re-reading the state.
@@ -507,9 +484,6 @@ export class HeliosCard extends LitElement
     @state() _haGridExportTodayKwh:   number | null = null;
     @state() _haBatteryChargedKwh:    number | null = null;
     @state() _haBatteryDischargedKwh: number | null = null;
-    //Projected screen-space positions of each configured PV array
-    //marker. Refreshed on every map transform via projectPvArray
-    //Markers(); the SVG overlay renders one lollipop per entry.
     //Hover state on the home hitbox. Drives a sun-coloured glow halo around the home silhouette so the user reads the focal building as interactive
     //before clicking.
     @state() _homeHover = false;
@@ -756,9 +730,10 @@ export class HeliosCard extends LitElement
               `The Helios card no longer reads its PV, grid and battery entities from the card YAML. `
             + `The following key${detected.length > 1 ? 's are' : ' is'} silently ignored: ${detected.map(k => '`' + k + '`').join(', ')}. `
             + `Helios now resolves these directly from the official Home Assistant Energy dashboard `
-            + `(Settings → Dashboards → Energy → your sources). The PV install configuration (peak kWp, `
-            + `panel tilt and azimuth via \`pv-arrays\`, optional inverter cap, LiDAR providers, visual options) `
-            + `still lives in the card YAML, only the entity slots were retired.`;
+            + `(Settings → Dashboards → Energy → your sources). The PV forecast is also read from the `
+            + `Energy dashboard's configured solar forecast now, so the card no longer carries any PV `
+            + `install configuration. LiDAR providers and visual options still live in the card YAML, `
+            + `only the entity slots and the forecast config were retired.`;
         try
         {
             this.hass.callService('persistent_notification', 'create', {
@@ -850,8 +825,7 @@ export class HeliosCard extends LitElement
             {
                 entityConfigured: resolvePvLiveEntity(this._energyDefaults) !== '',
                 unit:             this._pvUnit || null,
-                lastHistory:      this._pvHistoryDiagnostics,
-                calibrationK:     pvCalibK(this.config)
+                lastHistory:      this._pvHistoryDiagnostics
             }
         };
     }
@@ -883,23 +857,10 @@ export class HeliosCard extends LitElement
         this._pvCalibStats                = null;
         this._pvChangeSeries              = null;
         this._pvChangeSeriesFetchKey      = '';
-        this._skyResidualMap              = null;
-        this._skyProdSeries               = null;
-        this._skyProdFetchKey             = '';
-        this._skyCloudTimes               = [];
-        this._skyCloud                    = [];
-        this._skyShortwave                = [];
-        this._skyDirect                   = [];
-        this._skyDiffuse                  = [];
-        this._skyTemp                     = [];
-        this._skyWind                     = [];
-        this._skySnow                     = [];
-        this._skySoc                      = null;
-        this._skySocFetchKey              = '';
-        this._gtiStore                    = null;
-        this._gtiFetchKey                 = '';
-        this._skyCloudFetchKey            = '';
-        this._skyMapVersion               = '';
+        this._haSolarForecast             = [];
+        this._haSolarForecastLoaded       = false;
+        this._haSolarForecastFetching     = false;
+        this._haSolarForecastFetchedAt    = 0;
         this._pvFetchKey                  = '';
         this._pvCalibStatsFetchKey        = '';
         this._pvHistoryDiagnostics        = null;
@@ -921,8 +882,6 @@ export class HeliosCard extends LitElement
         clearBatteryModuleCaches();
         clearRadiationModuleCaches();
         clearEnergyStatsCache();
-        clearSkyForecastCache();
-        clearGtiCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.
@@ -1304,22 +1263,12 @@ export class HeliosCard extends LitElement
         refreshBattery(this);
         refreshGrid(this);
         refreshSolarRadiation(this);
-        //Background forecast refinements (per-orientation GTI, 60-day cloud + production history). These
-        //are DEFERRED until the critical engine weather has landed (_chartSeries populated). At load
-        //several api.open-meteo.com requests would otherwise fire at once and, against the browser's
-        //~6-connection-per-host limit plus Open-Meteo's rate limits, could starve or 429 the weather
-        //fetch itself, leaving the card with no weather and no forecast. Weather first, refinements after.
-        //onWeatherUpdate moves _timeRange when it lands, which re-trips this refresh chain, so the gated
-        //fetches fire on the very next pass once weather is in.
-        const skyCoords = getHomeCoords(this.config, this.hass);
-        const weatherReady = (this._chartSeries?.times.length ?? 0) > 0;
-        if (skyCoords && weatherReady)
-        {
-            //GTI must refresh before the sky map rebuilds: the learning reads _gtiStore, so landing it
-            //first means the very next maybeRebuildSkyMap picks up the anisotropic POA in the same pass.
-            refreshTiltedIrradiance(this, skyCoords.lat, skyCoords.lon);
-            refreshSkyForecast(this, skyCoords.lat, skyCoords.lon);
-        }
+        //Solar forecast: read natively from HA's Energy dashboard (energy/solar_forecast). Defensive and
+        //non-fatal, the same contract as the weather + energy fetchers; when no forecast source is
+        //configured the call returns empty and the forecast curve simply does not render. Refreshed here
+        //on the refresh chain (which energy-prefs changes also re-trip), so a freshly configured forecast
+        //source lands on the next pass.
+        fetchHaSolarForecast(this);
     }
 
 
@@ -1575,10 +1524,10 @@ export class HeliosCard extends LitElement
         const pvWattsNow = (pvRate !== null)
             ? pvNormalizeToWatts(pvRate.value, pvRate.unit)
             : 0;
-        const pvCalibKVal = pvCalibK(this.config);
-        const pvPeakRefW  = (pvCalibKVal !== null && pvCalibKVal > 0)
-            ? pvCalibKVal * 100
-            : 5000;
+        //PV leader flow speed saturates at a 5 kW reference (a typical residential peak). The
+        //install nameplate is no longer configured on the card, so we use a fixed reference rather
+        //than a per-install peak.
+        const pvPeakRefW  = 5000;
         const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
         const pvIdle         = !(pvWattsNow > 0);
         //Animation duration of the leader-line dash flow, fast when

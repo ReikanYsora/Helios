@@ -25,17 +25,8 @@ import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './l
 //DEFAULT_*_COLOR_HEX constants in helios-config.ts, with no per-card override.
 export const VISUAL_CONFIG_KEYS = [
     'show-labels',
-    //PV layout, every change must reach the engine so the per-array forecast geometry, the predicted curve and the calibration ratio
-    //recompute against the new tilt / azimuth / kWp / inverter cap.
-    'pv-arrays',
-    'pv-tilt',
-    'pv-azimuth',
-    'pv-inverter-max-kw',
     //map-style triggers a MapLibre setStyle(), the engine reloads the cloud disc, buildings and labels on the resulting `style.load`.
     'map-style',
-    //Inverter-cutoff guard: when set, downstream calibration consumers can skip buckets where SoC reached the cutoff so the
-    //inverter-blocked production does not pollute the 5-day calibration ratio.
-    'inverter-cutoff-soc-pct',
     //solar-radiation-entity, when set, feeds the engine sensor samples that override Open-Meteo for the live + past irradiance
     //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
     'solar-radiation-entity',

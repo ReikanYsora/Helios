@@ -44,6 +44,11 @@ export interface EnergyDefaults
     //"positive = import"). Consumers (refreshBattery, refreshGrid) flip the sign at sample time so the downstream
     //chips / leaders / scrub buffers see the canonical convention.
     invertedRateEntities:   string[];
+    //Config entry ids the user selected as solar-forecast providers on the Energy dashboard's solar sources
+    //(`config_entry_solar_forecast`). One of these may be a Helios-Forecast entry; the forecast reader probes them with
+    //the `helios_forecast/series` websocket to pull the richer detail curve, and falls back to HA's generic
+    //`energy/solar_forecast` otherwise.
+    solarForecastEntryIds:  string[];
 }
 
 
@@ -59,6 +64,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     batteryStatEnergyTos:   [],
     batteryStatSocs:        [],
     invertedRateEntities:   [],
+    solarForecastEntryIds:  [],
 };
 
 
@@ -421,6 +427,7 @@ export function parseEnergyPrefs(prefs: {
         batteryStatEnergyTos:   [],
         batteryStatSocs:        [],
         invertedRateEntities:   [],
+        solarForecastEntryIds:  [],
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -443,6 +450,22 @@ export function parseEnergyPrefs(prefs: {
             if (rate)
             {
                 out.solarStatRates.push(rate);
+            }
+            //Forecast provider config entries the user attached to this solar source. May be a string or a list.
+            const fc = src['config_entry_solar_forecast'];
+            if (Array.isArray(fc))
+            {
+                for (const id of fc)
+                {
+                    if (typeof id === 'string' && id.trim() !== '' && !out.solarForecastEntryIds.includes(id.trim()))
+                    {
+                        out.solarForecastEntryIds.push(id.trim());
+                    }
+                }
+            }
+            else if (typeof fc === 'string' && fc.trim() !== '' && !out.solarForecastEntryIds.includes(fc.trim()))
+            {
+                out.solarForecastEntryIds.push(fc.trim());
             }
         }
         else if (type === 'grid')

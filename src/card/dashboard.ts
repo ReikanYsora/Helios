@@ -16,9 +16,7 @@ import type { BatteryHost } from './battery';
 import { cloudCoverIcon } from './cloud-icons';
 import { hasPvConfigured } from './equipment';
 import { type ChartHost } from './charts';
-import { computeForecastCalibration } from './calibration';
-import { sumChangeForDay } from './energy-stats';
-import { integrateForecastKwh, forecastCumulativeForDay } from './unifiedStore';
+import { forecastCumulativeForDay } from './unifiedStore';
 import type { SunScene } from './overlays';
 import { renderRadialDial, renderDashCardChipStrip, renderDashCardGraphView, prepareRadialDayData } from './dashboardRadial';
 
@@ -77,18 +75,6 @@ export interface DashboardHost extends ChartHost, BatteryHost
 }
 
 
-//Day-integrated CORRECTED forecast kWh (the "→ X kWh affiné" headline). Reads the unified store's
-//`forecast` series, the single forecast pipeline (LiDAR + GTI + thermal + snow + learned sky-residual
-//map), so the dashboard figure equals the timeline curve and the day-strip chips to the watt-hour.
-//No local model loop here. Returns null when the store isn't built yet or no bucket carried a value.
-export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, dayEndMs: number): number | null
-{
-    const store = host._unifiedStore;
-    if (!store) { return null; }
-    return integrateForecastKwh(store, dayStartMs, dayEndMs, false);
-}
-
-
 export function renderDashboard(host: DashboardHost): TemplateResult
 {
     //CoverFlow skeleton: 5 cards on a 3D perspective stage. Offsets [-2..+2] map to (avant-hier, hier, today,
@@ -131,25 +117,10 @@ function clampDayOffset(offset: number): number
 }
 
 
-//Per-day stats for the CoverFlow cards. Returns the produced kWh (from HA Energy / LTS recorder), the forecast
-//kWh + refined forecast kWh (via the 5-day calibration ratio), and a weighted average cloud coverage used by
-//the bandeau weather glyph.
-//
-//Production:
-//  - today (offset 0): prefer `_haSolarTodayKwh` (recorder day total). Fallback to integration of `_pvHistory`.
-//  - past (offset < 0): integrate `_pvCalibStats` (hourly LTS) over the day window. Power entities use a
-//    trapezoidal mean over the hourly samples, cumulative entities use the first-to-last delta within the day.
-//  - future (offset > 0): zero (no production data yet).
-//Forecast:
-//  - any day: walk `_chartSeries` over the day window, multiply each step by `pvCalibK` to get watts, sum to kWh.
-//Refined forecast:
-//  - `computeRefinedDailyKwh` (calibration ratio + shading map) when calibration is available, else null.
-function computeDayStats(host: DashboardHost, dayOffset: number): {
-    producedKwh: number;
-    forecastKwh: number;
-    refinedKwh:  number | null;
-    avgCloud:    number;
-}
+//Weighted average cloud coverage for one CoverFlow day, used by the bandeau weather glyph. Cloud is
+//weighted by the forecast watts (sourced from HA) so daylight hours dominate the glyph and a cloudy
+//midnight does not skew it. Falls back to an unweighted average when no forecast is configured.
+function computeDayAvgCloud(host: DashboardHost, dayOffset: number): number
 {
     const dayStart = new Date();
     dayStart.setHours(0, 0, 0, 0);
@@ -159,68 +130,23 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
     const dayStartMs = dayStart.getTime();
     const dayEndMs   = dayEnd.getTime();
 
-    //Production
-    let producedKwh = 0;
-    if (dayOffset === 0)
-    {
-        const haKwh = host._haSolarTodayKwh ?? null;
-        if (haKwh !== null)
-        {
-            producedKwh = Math.max(0, haKwh);
-        }
-        else
-        {
-            const cum = computeTodayCumulative(host);
-            producedKwh = cum.actualSamples.length > 0
-                ? Math.max(0, cum.actualSamples[cum.actualSamples.length - 1].kwh)
-                : 0;
-        }
-    }
-    else if (dayOffset < 0)
-    {
-        //Past day: sum the recorder `change` buckets over the day so the produced kWh matches the HA
-        //Energy dashboard exactly, no curve integration. The change series spans the store's J-2 past
-        //window, which covers every past day the CoverFlow can scroll to.
-        const kwh = sumChangeForDay(host._pvChangeSeries, dayStartMs, dayEndMs);
-        if (kwh !== null)
-        {
-            producedKwh = Math.max(0, kwh);
-        }
-    }
+    const store = host._unifiedStore;
+    if (!store) { return 0; }
 
-    //Forecast (raw / "PRÉVU") + cloud average, both from the unified store so they match the timeline.
-    //forecastKwh is the uncorrected physical model integral; the corrected "affiné" figure comes from
-    //computeRefinedDailyKwh below. Cloud is averaged weighted by the raw forecast watts so daylight
-    //hours dominate the glyph (a cloudy midnight doesn't skew it).
-    let forecastKwh = 0;
     let cloudSum    = 0;
     let cloudWeight = 0;
-    const store = host._unifiedStore;
-    if (store)
+    for (let i = 0; i < store.bucketsTotal; i++)
     {
-        const rawKwh = integrateForecastKwh(store, dayStartMs, dayEndMs, true);
-        forecastKwh  = rawKwh ?? 0;
-        for (let i = 0; i < store.bucketsTotal; i++)
-        {
-            const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
-            if (mid < dayStartMs || mid >= dayEndMs) { continue; }
-            const cloud = store.cloud[i];
-            if (cloud === null || !isFinite(cloud)) { continue; }
-            const w = store.forecastRaw[i];
-            const weight = (w !== null && isFinite(w) && w > 0) ? w : 1;
-            cloudSum    += cloud * weight;
-            cloudWeight += weight;
-        }
+        const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
+        if (mid < dayStartMs || mid >= dayEndMs) { continue; }
+        const cloud = store.cloud[i];
+        if (cloud === null || !isFinite(cloud)) { continue; }
+        const w = store.forecast[i];
+        const weight = (w !== null && isFinite(w) && w > 0) ? w : 1;
+        cloudSum    += cloud * weight;
+        cloudWeight += weight;
     }
-    const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
-
-    //Refined forecast
-    const calibration = computeForecastCalibration(host);
-    const refinedKwh  = calibration !== null
-        ? computeRefinedDailyKwh(host, dayStartMs, dayEndMs)
-        : null;
-
-    return { producedKwh, forecastKwh, refinedKwh, avgCloud };
+    return cloudWeight > 0 ? cloudSum / cloudWeight : 0;
 }
 
 
@@ -312,9 +238,8 @@ function renderCoverflowCard(
 
     const t = pickTranslations(host.hass?.language);
 
-    //Per-day stats for the production / forecast block.
-    const stats = computeDayStats(host, cardOffset);
-    const weatherIcon = cloudCoverIcon(stats.avgCloud);
+    //Weather glyph for the card bandeau, from the day's weighted average cloud cover.
+    const weatherIcon = cloudCoverIcon(computeDayAvgCloud(host, cardOffset));
 
     //Shared per-card data bundle, computed once and threaded into both the radial dial and the
     //top chip strip so the hourly aggregation only runs once per card per render.

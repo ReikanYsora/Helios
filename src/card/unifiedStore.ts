@@ -8,9 +8,9 @@
 //Cadence: a single user-facing knob (`display-update-frequency-per-hour`, 1-60, default 4) controls
 //both the storage cadence of the data source and the rendering cadence of every graph that reads
 //from it. Higher values give more precise curves at the cost of CPU per rebuild + memory per
-//series. The forecast curve is the lone exception: it runs internally at the weather model's native
-//hourly cadence (no point computing the predicted W per minute when the cloud-cover input only
-//refreshes once an hour), then gets interpolated into the storage cadence at the end of the build.
+//series. The forecast curve is the lone exception: it is sourced from Home Assistant's Energy
+//dashboard at the forecast source's native hourly cadence, then read into the storage buckets as a
+//stepped hourly curve (each store bucket reads the wh of the HA forecast hour it falls inside).
 //
 //Window: J-2 to J+2 = 5 days × (24 × bucketsPerHour) buckets per series. Origin: storeStartMs =
 //midnight (local time) of (today - 2 days), so bucket 0 sits at the J-2 day start.
@@ -20,7 +20,7 @@
 //  - irradiance W/m² (weather model, interpolated between hourly samples)
 //  - cloud %        (weather model, interpolated between hourly samples)
 //  - production W   (PV LTS + raw history, interpolated between samples, no forecast mixed in)
-//  - forecast W     (computePvPowerWeighted × calibration × shading map, hourly then resampled)
+//  - forecast W     (HA Energy dashboard solar forecast, hourly, read as a stepped curve)
 //  - battery W      (signed, history-driven, interpolated between samples)
 //  - batterySoc %   (live observation only at the current bucket)
 //  - gridImport W   (slope of cumulative kWh meter, interpolated between samples)
@@ -34,14 +34,8 @@ import type { HeliosConfig } from '../helios-config';
 import { displayUpdateFrequencyPerHour } from '../helios-config';
 import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
-import { pvCalibK, pvInverterMaxW, computePvPowerWeighted, snowCoverFactor } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
-import { sampleSkyResidual } from './forecast-sky';
-import { sampleGti } from './gti';
-import { getSunPosition } from '../engine/sun';
-import { effectiveForecastRatio } from './charts';
-import { computeForecastCalibration } from './calibration';
-import { getHomeCoords } from './init';
+import { forecastWattsAt, type SolarForecastPoint } from './energy-forecast';
 
 //Re-export for graph consumers that want to query the user-configured cadence directly (e.g. the
 //SVG path builders that walk bucketsPerHour at render time).
@@ -89,10 +83,9 @@ export interface UnifiedDataStore
     irradiance:   (number | null)[];
     cloud:        (number | null)[];
     production:   (number | null)[];
+    //Solar forecast watts, sourced from HA's Energy dashboard (energy/solar_forecast). All-null when no
+    //forecast source is configured, in which case no forecast curve or label renders.
     forecast:     (number | null)[];
-    //Pure physical-model forecast (no learned sky-residual ratio). The "PRÉVU" raw figure; `forecast`
-    //is the same pipeline × the learned correction (the "affiné" figure + the timeline curve).
-    forecastRaw:  (number | null)[];
     battery:      (number | null)[];
     batterySoc:   (number | null)[];
     gridImport:   (number | null)[];
@@ -123,14 +116,10 @@ export interface UnifiedStoreHost
     readonly _gridImportChangeSeries: ChangeBucket[] | null;
     readonly _gridExportChangeSeries: ChangeBucket[] | null;
     readonly _engine?:                { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
-    //Learned sky-residual forecast correction (src/card/forecast-sky.ts). Multiplies the forecast per
-    //sun position so it converges to the user's real shading + biases. Null until the histories land,
-    //in which case the forecast stays on the physical + LiDAR + scalar-calibration path unchanged.
-    readonly _skyResidualMap:         import('./forecast-sky').SkyResidualMap | null;
-    //Per-orientation Open-Meteo GTI store (src/card/gti.ts). When present, buildForecast transposes each
-    //array on the model's anisotropic plane-of-array irradiance instead of our isotropic Liu-Jordan.
-    //Null until the per-orientation fetches land, in which case the transposition path is used.
-    readonly _gtiStore:               import('./gti').GtiStore | null;
+    //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries and
+    //sorted by time. Empty when no forecast source is configured, in which case the forecast series is
+    //left all-null and no curve renders.
+    readonly _haSolarForecast:        ReadonlyArray<SolarForecastPoint>;
 }
 
 
@@ -285,127 +274,23 @@ function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEn
 }
 
 
-//Forecast = computePvPowerWeighted × pvCalibK × (learned sky-residual ratio, or the 5-day scalar when
-//the map is cold) × snow-cover derate, at every STORE bucket. Runs at the display cadence so a fine
-//"graph detail" setting resolves short shadow dips; the hourly Open-Meteo weather is interpolated
-//between samples to keep the magnitude smooth. Emits the corrected forecast + the raw physical model.
-function buildForecast(
-    host: UnifiedStoreHost,
-    storeStartMs: number,
-    storeEndMs: number,
-    p: CadenceParams,
-): { forecast: (number | null)[]; forecastRaw: (number | null)[] }
+//Forecast = the HA Energy dashboard's own solar forecast (energy/solar_forecast), aligned to the store
+//buckets. The HA forecast is hourly watt-hours; each store bucket reads the wh of the HA forecast hour
+//its midpoint falls inside (a stepped hourly curve, exactly the magnitude the Energy dashboard draws).
+//Returns an all-null array when no forecast source is configured, so no curve and no label render.
+function buildForecast(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
 {
-    const empty = () => new Array<number | null>(p.bucketsTotal).fill(null);
-    const series = host._chartSeries;
-    const coords = getHomeCoords(host.config, host.hass);
-    if (!series || !coords) { return { forecast: empty(), forecastRaw: empty() }; }
-    const k = pvCalibK(host.config);
-    if (k === null) { return { forecast: empty(), forecastRaw: empty() }; }
-    const cap     = pvInverterMaxW(host.config);
-    const cal     = computeForecastCalibration(host as any);
-    const calR    = cal ? cal.ratio : 1;
-    const raster  = host._engine?.getLidarRaster() ?? null;
-
-    //Inner loop runs at the STORE cadence (the "graph detail" slider, default 4/h = 15 min) instead of
-    //a fixed hourly pass. The LiDAR shading + sun position are then sampled every bucket, so a short
-    //shadow (a tree clipping production for 30-45 min) is resolved instead of being stepped over by an
-    //hourly midpoint. The hourly Open-Meteo weather is interpolated between samples so the magnitude
-    //stays smooth at any cadence (no hourly stair-steps). `hourly` is the corrected forecast (model ×
-    //learned ratio); `hourlyRaw` is the pure physical model (no learned ratio) for the "PRÉVU" figure.
-    const hourly    = new Array<number | null>(p.bucketsTotal).fill(null);
-    const hourlyRaw = new Array<number | null>(p.bucketsTotal).fill(null);
-    const times     = series.times;
-    let wi = 0;   //moving cursor into the hourly weather series; bucket midpoints are ascending
+    const out = new Array<number | null>(p.bucketsTotal).fill(null);
+    const forecast = host._haSolarForecast;
+    if (!forecast || forecast.length === 0) { return out; }
     for (let h = 0; h < p.bucketsTotal; h++)
     {
         const mid = storeStartMs + h * p.stepMs + p.stepMs / 2;
         if (mid < storeStartMs || mid >= storeEndMs) { continue; }
-        if (times.length === 0) { continue; }
-
-        //Bracket the bucket midpoint between two hourly weather samples and interpolate each field.
-        while (wi < times.length - 1 && times[wi + 1].getTime() <= mid) { wi++; }
-        const i0 = wi;
-        const i1 = Math.min(times.length - 1, wi + 1);
-        const t0 = times[i0].getTime();
-        const t1 = times[i1].getTime();
-        const f  = (t1 > t0) ? Math.max(0, Math.min(1, (mid - t0) / (t1 - t0))) : 0;
-
-        const cc   = lerpPlain(series.cloud[i0],       series.cloud[i1],       f);
-        const ghi  = lerpPlain(series.irradiance[i0],  series.irradiance[i1],  f);
-        const dir  = lerpRad(series.directRad?.[i0],   series.directRad?.[i1],  f);
-        const dif  = lerpRad(series.diffuseRad?.[i0],  series.diffuseRad?.[i1], f);
-        const temp = lerpFinite(series.temperature?.[i0], series.temperature?.[i1], f);
-        const wind = lerpFinite(series.windSpeed?.[i0],   series.windSpeed?.[i1],   f);
-        const snow = lerpFinite(series.snowDepth?.[i0],   series.snowDepth?.[i1],   f);
-
-        const t = new Date(mid);
-        const wRaw = computePvPowerWeighted(host.config, t, coords.lat, coords.lon, cc, {
-            airTempC:     temp,
-            windMs:       wind,
-            //Open-Meteo shortwave (or home sensor) GHI as the irradiance base; beam + diffuse drive the
-            //real direct / diffuse split; per-orientation GTI replaces the transposition where available.
-            ghiWm2:       ghi,
-            directWm2:    dir,
-            diffuseWm2:   dif,
-            tiltedPoaWm2: host._gtiStore ? (tilt, az) => sampleGti(host._gtiStore, tilt, az, mid) : undefined,
-            raster,
-        });
-        //Calibration ratio. When the learned sky map is warm it REPLACES the 5-day scalar, carrying the
-        //level AND the per-sun-position shape (a tree the LiDAR missed, foliage, a wrong cell). A cold
-        //cell falls back to the map's global level; no map at all keeps the legacy clamped scalar.
-        let ratio: number;
-        if (host._skyResidualMap)
-        {
-            const sun = getSunPosition(t, coords.lat, coords.lon);
-            ratio = sampleSkyResidual(host._skyResidualMap, sun.azimuth, sun.altitude);
-        }
-        else
-        {
-            ratio = effectiveForecastRatio(calR);
-        }
-        //Raw = pure physics (LiDAR + thermal + GTI + snow), no learned ratio. Corrected = × ratio.
-        const snowF = snowCoverFactor(snow, temp);
-        const rawW  = wRaw * k * snowF;
-        if (Number.isFinite(rawW))
-        {
-            hourlyRaw[h] = Math.min(cap, Math.max(0, rawW));
-        }
-        const w = rawW * ratio;
-        if (Number.isFinite(w))
-        {
-            hourly[h] = Math.min(cap, Math.max(0, w));
-        }
+        const w = forecastWattsAt(forecast, mid);
+        if (w !== null && Number.isFinite(w)) { out[h] = Math.max(0, w); }
     }
-    return { forecast: hourly, forecastRaw: hourlyRaw };
-}
-
-
-//Interpolate a weather field between two bracketing hourly samples. lerpPlain assumes both sides are
-//valid numbers (cloud / irradiance always are in the chart series). lerpRad guards the -1 "no data"
-//sentinel on the radiation fields, lerpFinite the NaN padding on temp / wind / snow: if one side is
-//missing take the other, if both return undefined so the model context falls back.
-function lerpPlain(a: number, b: number, f: number): number
-{
-    return a + (b - a) * f;
-}
-function lerpRad(a: number | undefined, b: number | undefined, f: number): number | undefined
-{
-    const ba = !(typeof a === 'number' && isFinite(a) && a >= 0);
-    const bb = !(typeof b === 'number' && isFinite(b) && b >= 0);
-    if (ba && bb) { return undefined; }
-    if (ba) { return b; }
-    if (bb) { return a; }
-    return a! + (b! - a!) * f;
-}
-function lerpFinite(a: number | undefined, b: number | undefined, f: number): number | undefined
-{
-    const ba = !(typeof a === 'number' && isFinite(a));
-    const bb = !(typeof b === 'number' && isFinite(b));
-    if (ba && bb) { return undefined; }
-    if (ba) { return b; }
-    if (bb) { return a; }
-    return a! + (b! - a!) * f;
+    return out;
 }
 
 
@@ -499,7 +384,8 @@ function computeDataVersion(host: UnifiedStoreHost): string
     const gridImpLen = host._gridImportChangeSeries?.length ?? 0;
     const gridExpLen = host._gridExportChangeSeries?.length ?? 0;
     const socLive = host._batterySoc ?? '';
-    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
+    const forecastLen = host._haSolarForecast?.length ?? 0;
+    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}|f${forecastLen}`;
 }
 
 
@@ -518,12 +404,10 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
     const cloud        = buildCloud(host, storeStartMs, storeEndMs, p);
-    //Production reads ONLY real sensor samples and interpolates between them. Forecast is the model
-    //output, computed at the store cadence with the hourly weather interpolated between samples.
+    //Production reads ONLY real sensor samples and interpolates between them. Forecast is read from
+    //the HA Energy dashboard's configured solar forecast, aligned to the store cadence.
     const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
-    const fc           = buildForecast(host, storeStartMs, storeEndMs, p);
-    const forecast     = fc.forecast;
-    const forecastRaw  = fc.forecastRaw;
+    const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
     const battery      = buildBattery(host, storeStartMs, nowMs, p);
     const batterySoc   = buildBatterySoc(host, storeStartMs, nowMs, p);
     const gridImport   = buildGridChange(host._gridImportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
@@ -541,7 +425,6 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
         cloud,
         production,
         forecast,
-        forecastRaw,
         battery,
         batterySoc,
         gridImport,
@@ -598,11 +481,11 @@ export function dayBucketRange(store: UnifiedDataStore, dayOffset: number): { st
 //Integrate the forecast series (watts per bucket) over [dayStartMs, dayEndMs) into kWh, at the store
 //cadence: each non-null bucket contributes watts × stepHours / 1000. The single source for every
 //forecast kWh figure (dashboard headline, CoverFlow cards, day-strip chips) so they all match the
-//timeline curve exactly. `raw` selects the uncorrected physical model (the "PRÉVU" figure) over the
-//learned-corrected forecast (the "affiné" figure). Returns null when no bucket in range carried a value.
-export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number, raw = false): number | null
+//timeline curve exactly. Returns null when no bucket in range carried a value (e.g. no HA forecast
+//source configured).
+export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): number | null
 {
-    const series = raw ? store.forecastRaw : store.forecast;
+    const series = store.forecast;
     const stepH  = store.stepMs / HOUR_MS;
     let kwh = 0;
     let any = false;
