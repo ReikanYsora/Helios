@@ -15,7 +15,7 @@
 //projection matrix directly. Only finite cells are uploaded; NaNs are
 //dropped at build-time rather than discarded in the shader.
 
-import maplibregl from 'maplibre-gl';
+import maplibregl from '../maplibre';
 import type {
     CustomLayerInterface,
     CustomRenderMethodInput,
