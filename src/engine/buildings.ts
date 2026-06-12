@@ -347,7 +347,17 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
             //same `render_height`.
             if (geojson.geometry.type === 'Polygon')
             {
-                features.push(geojson);
+                //Rebuild as a plain feature. @mapbox/vector-tile's toGeoJSON returns
+                //null-prototype `properties`, and maplibre's worker serializer reads
+                //`input.constructor._classRegistryKey`, which throws on a null-proto
+                //object. The spread + a fresh geometry give a normal prototype (as the
+                //MultiPolygon branch below does), so a lone Polygon building, e.g. a
+                //small freshly-mapped shed, doesn't blow up the whole buildings source.
+                features.push({
+                    type:       'Feature',
+                    geometry:   { type: 'Polygon', coordinates: geojson.geometry.coordinates as number[][][] },
+                    properties: { ...(geojson.properties ?? {}) }
+                });
             }
             else if (geojson.geometry.type === 'MultiPolygon')
             {
