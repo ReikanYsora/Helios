@@ -1613,14 +1613,13 @@ export class HeliosCard extends LitElement
         const batterySocText = showSocChip
             ? `${Math.round(activeBatterySoc!)} %`
             : '';
-        //Chip value uses the battery-centric physical sign: charge positive (+ = energy flowing
-        //INTO the battery), discharge negative. This is the same convention as every other battery
-        //surface in the card (unified store, scrub buffers, leader direction) but the OPPOSITE of
-        //HA's "Power sources" graph, which draws the battery source-centric (positive when it
-        //supplies the home). On a standalone chip the physical read is the intuitive one: testers
-        //consistently parsed "−" while charging as a wiring bug.
+        //Chip value uses HA's "Power sources" sign convention: discharge positive (the battery
+        //supplies the home), charge negative. activeBatteryPower is the physical charge-positive
+        //net, so it is negated for the displayed sign, keeping the chip coherent with the HA Energy
+        //dashboard. The colour + leader direction below stay on the physical sign, so charging still
+        //reads battery-in (pink) and flows INTO the battery.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, activeBatteryPower!, activeBatteryUnit)
+            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit)
             : '';
 
         //Home consumption chip. Same client-side derivation as the official "Now" view's Power
