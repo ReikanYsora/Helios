@@ -2785,7 +2785,7 @@ export class HeliosCard extends LitElement
                           centre of the cluster with no drop-leader, the chips
                           dock straight against its border.                -->
                     <div
-                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''}"
+                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this._homeHover ? 'is-hovered' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                     >
                         <ha-icon icon="mdi:home"></ha-icon>

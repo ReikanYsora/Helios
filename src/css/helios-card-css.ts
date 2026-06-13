@@ -237,7 +237,6 @@ export const heliosCardStyles = css`
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
-    .home-drop-leader-svg,
     .solar-svg,
     .solar-pct-label,
     .pv-home-leader-svg,
@@ -261,7 +260,6 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .overlay-top-left,
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
-    ha-card.overlay-masked .home-drop-leader-svg,
     ha-card.overlay-masked .solar-svg,
     ha-card.overlay-masked .solar-pct-label,
     ha-card.overlay-masked .pv-home-leader-svg,
@@ -289,7 +287,6 @@ export const heliosCardStyles = css`
         controls exactly when the fade kicks in either direction. */
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
-    ha-card.overlay-masked .home-drop-leader-svg,
     ha-card.overlay-masked .solar-svg,
     ha-card.overlay-masked .solar-pct-label,
     ha-card.overlay-masked .pv-home-leader-svg,
@@ -3236,6 +3233,15 @@ export const heliosCardStyles = css`
         pointer-events: none;
         box-shadow: 0 1px 3px var(--shadow-color);
         color: var(--primary-color, #03a9f4);
+        /*  Keep the mask fade AND ease the hover glow in/out. */
+        transition: opacity 0.35s ease, box-shadow 0.2s ease;
+    }
+    /*  Very light glow on home hover: a soft halo in the primary colour,
+        the hover state is driven from the hitbox by the card. */
+    .home-pill.is-hovered
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 7px 1px color-mix(in srgb, var(--primary-color, #03a9f4) 28%, transparent);
     }
     .home-pill ha-icon
     {
@@ -3263,30 +3269,10 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
         letter-spacing: -0.2px;
-    }
-
-    /*  Solid drop-leader from the home pill down to the projected
-        ground at the home position. Length covers the CLUSTER_LIFT_PX
-        gap between the cluster Y and the basemap-projected home.x/y.
-        Sits in its own SVG layer below the pill (z 5) so the pill
-        crowns the leader visually.                                   */
-    .home-drop-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-        overflow: visible;
-    }
-    .home-drop-leader-line
-    {
-        stroke: var(--primary-color, #03a9f4);
-        stroke-width: 1;
-        stroke-linecap: round;
-        fill: none;
-        opacity: 0.85;
+        /*  Phantom space below the value so the centred icon + value block
+            sits a touch higher in the circle (raises the visible content by
+            half this margin without changing the pill size). */
+        margin-bottom: 8px;
     }
 
     .solar-svg-back        { z-index: 4; }
