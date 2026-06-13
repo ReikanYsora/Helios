@@ -49,11 +49,6 @@ export interface EnergyDefaults
     //the `helios_forecast/series` websocket to pull the richer detail curve, and falls back to HA's generic
     //`energy/solar_forecast` otherwise.
     solarForecastEntryIds:  string[];
-    //CO2-signal entity the user wired into the Energy dashboard (Electricity Maps / co2signal integration). Its state is
-    //the grid's fossil-fuel percentage (0-100); the card derives live low-carbon power from it as
-    //`grid import x (1 - fossil/100)`. Null when no such integration is configured, which is the gate for hiding the
-    //low-carbon chip. Sourced from `energy/info`, not `energy/get_prefs`.
-    co2SignalEntity:        string | null;
 }
 
 
@@ -70,7 +65,6 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     batteryStatSocs:        [],
     invertedRateEntities:   [],
     solarForecastEntryIds:  [],
-    co2SignalEntity:        null,
 };
 
 
@@ -84,6 +78,38 @@ export interface EnergyPrefsHost extends LoadingTrackerHost
     _energyDefaultsLoaded: boolean;
     _energyPrefsUnsub?: () => void;
     requestUpdate(): void;
+}
+
+
+//Find the co2signal / Electricity Maps "grid fossil-fuel percentage" sensor in the entity registry, mirroring HA's own
+//Energy dashboard: the integration's percentage sensor is the fossil-fuel share Helios derives the low-carbon split
+//from. Returns null when the integration is not present, which is the gate for hiding the low-carbon chip.
+export function findCo2SignalEntity(hass: any): string | null
+{
+    const entities = hass?.entities;
+    if (!entities || typeof entities !== 'object')
+    {
+        return null;
+    }
+    for (const ent of Object.values(entities) as Array<{ entity_id?: string; platform?: string }>)
+    {
+        if (!ent || (ent.platform !== 'co2signal' && ent.platform !== 'electricity_maps'))
+        {
+            continue;
+        }
+        const id = ent.entity_id;
+        if (!id)
+        {
+            continue;
+        }
+        //The integration exposes a g/kWh CO2-intensity sensor AND a % fossil-fuel sensor; the percentage one is the
+        //fossil share we want.
+        if (hass.states?.[id]?.attributes?.unit_of_measurement === '%')
+        {
+            return id;
+        }
+    }
+    return null;
 }
 
 
@@ -102,19 +128,6 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
             energy_sources?: Array<Record<string, unknown>>;
         };
         const next = parseEnergyPrefs(prefs);
-        //CO2-signal entity (grid fossil-fuel %) lives in `energy/info`, not `get_prefs`. Best-effort: a
-        //missing field, a reject, or an older core that lacks the command just leaves the low-carbon chip
-        //hidden. Folded into the same parse snapshot so the consumer reads one coherent object.
-        try
-        {
-            const info = await host.hass.callWS({ type: 'energy/info' }) as { co2signal_entity?: string | null };
-            const co2 = typeof info?.co2signal_entity === 'string' ? info.co2signal_entity.trim() : '';
-            next.co2SignalEntity = co2 !== '' ? co2 : null;
-        }
-        catch (_)
-        {
-            next.co2SignalEntity = null;
-        }
         host._energyDefaults       = next;
         host._energyDefaultsLoaded = true;
         host.requestUpdate();
@@ -447,7 +460,6 @@ export function parseEnergyPrefs(prefs: {
         batteryStatSocs:        [],
         invertedRateEntities:   [],
         solarForecastEntryIds:  [],
-        co2SignalEntity:        null,
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 

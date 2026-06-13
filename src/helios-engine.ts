@@ -4613,10 +4613,12 @@ export class HeliosEngine
         //The whole cluster centres on the home pill (the projected home
         //point) rather than floating above the roof: the home reads as
         //the hub the chips orbit, with no drop-leader tethering a high
-        //cluster back down to the building. liftScale still feeds the
-        //per-chip spread below so a kiosk canvas breathes, but the
-        //centre row sits on the home itself.
-        const clusterY = home.y;
+        //cluster back down to the building. A modest lift raises the
+        //group slightly off the ground point so it sits over the
+        //building body rather than its base; liftScale lets a kiosk
+        //canvas breathe.
+        const CLUSTER_LIFT_PX = 28 * liftScale;
+        const clusterY = home.y - CLUSTER_LIFT_PX;
         const pvX = home.x;
         const pvY = clusterY - PV_CHIP_OFFSET_PX * liftScale;
         //Battery column on the RIGHT: SoC on top, Power on the bottom.

@@ -74,6 +74,7 @@ import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
     refreshHaDailyTotals,
+    findCo2SignalEntity,
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
@@ -332,11 +333,11 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
     //Outer radius of the central "home pill" icon, the circular
-    //node painted at layout.home. The pill is 48 px wide with a 2 px
-    //border (=> outermost radius 24 px); a 26 px leader nudge leaves
+    //node painted at layout.home. The pill is 52 px wide with a 2 px
+    //border (=> outermost radius 26 px); a 28 px leader nudge leaves
     //the hairline just OUTSIDE the pill so the leader visibly docks
     //against the disc edge instead of slicing through it.
-    private static readonly HOME_PILL_RADIUS_PX = 26;
+    private static readonly HOME_PILL_RADIUS_PX = 28;
     //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
@@ -475,6 +476,12 @@ export class HeliosCard extends LitElement
     //in the card YAML / editor is empty.
     @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
     _energyPrefsUnsub?: () => void;
+    //Memoised co2signal / Electricity Maps fossil-fuel-% entity, resolved from the entity registry for the
+    //low-carbon chip. Re-scanned only when the registry object identity changes (rare), so the per-render
+    //cost stays near zero while the lookup still survives a cold load where the registry lands after the
+    //first subscribe.
+    private _co2SignalEntity: string | null = null;
+    private _co2EntitiesRef: unknown = undefined;
     //HA Energy daily-total alignment cache populated by `refreshHaDailyTotals()` against the recorder. Five headline
     //figures: PV produced today, grid imported today, grid exported today, battery charged today, battery discharged
     //today. Null while no HA stat is configured or the recorder call has not yet landed, the consumer chips collapse
@@ -1730,12 +1737,12 @@ export class HeliosCard extends LitElement
             const sx = chipX + dirH * chipNudgePx;
             const sy = chipY;
             //Land the vertical leg at ~25 % of the home pill width
-            //(12 px) on the chip's side of centre, so two leaders
+            //(13 px) on the chip's side of centre, so two leaders
             //meeting on the same row do NOT collide on the pill's
             //central axis. Vertical leg then docks against the pill
             //border at the matching circle intersection.
-            const HOME_PILL_VISIBLE_RADIUS = 24;
-            const HOME_PILL_QUARTER_X      = 12;
+            const HOME_PILL_VISIBLE_RADIUS = 26;
+            const HOME_PILL_QUARTER_X      = 13;
             const ex = homeX - dirH * HOME_PILL_QUARTER_X;
             //The vertical leg crosses the pill outline at
             //y = home.y ± sqrt(R² - offsetX²).
@@ -1813,7 +1820,15 @@ export class HeliosCard extends LitElement
         //low-carbon power is the import scaled by that share. It only exists while importing (low-carbon
         //energy rides IN on the grid), so the chip + its leader hide on export, on idle, and whenever the
         //co2signal integration is not wired into the Energy dashboard.
-        const co2Entity        = this._energyDefaults.co2SignalEntity;
+        //Resolve (and cache) the co2signal entity off the entity registry, re-scanning only when the
+        //registry identity changes so a cold load that fills the registry after the first subscribe still
+        //lights the chip up.
+        if (this.hass?.entities !== this._co2EntitiesRef)
+        {
+            this._co2EntitiesRef  = this.hass?.entities;
+            this._co2SignalEntity = findCo2SignalEntity(this.hass);
+        }
+        const co2Entity        = this._co2SignalEntity;
         const fossilRaw        = co2Entity ? this.hass?.states?.[co2Entity]?.state : undefined;
         const fossilPct        = (fossilRaw !== undefined && fossilRaw !== null) ? parseFloat(String(fossilRaw)) : NaN;
         const lowCarbonShare   = Number.isFinite(fossilPct) ? Math.max(0, Math.min(1, 1 - fossilPct / 100)) : null;

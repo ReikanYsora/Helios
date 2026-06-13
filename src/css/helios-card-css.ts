@@ -3221,8 +3221,8 @@ export const heliosCardStyles = css`
     .home-pill
     {
         position: absolute;
-        width:  48px;
-        height: 48px;
+        width:  52px;
+        height: 52px;
         transform: translate(-50%, -50%);
         background: var(--card-background-color, #ffffff);
         border: 2px solid var(--primary-color, #03a9f4);
