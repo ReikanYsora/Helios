@@ -4469,9 +4469,7 @@ export class HeliosEngine
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
-        gridImportLabel:   { x: number; y: number };
-        gridExportLabel:   { x: number; y: number };
-        homeUsageLabel:    { x: number; y: number };
+        gridLabel:         { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
         //Projected screen position of the home building's roof top
@@ -4619,10 +4617,10 @@ export class HeliosEngine
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
         const batterySocY       = clusterY - CHIP_STACK_GAP_PX / 2;
         const batteryPowerY     = clusterY + CHIP_STACK_GAP_PX / 2;
-        //Grid column on the left.
+        //Grid column on the left. Import and export are merged into a
+        //single chip, so it sits on the cluster's centre row (clusterY),
+        //exactly between where the two separate chips used to stack.
         const gridXLeft         = home.x - CHIP_SIDE_X_OFFSET_PX;
-        const gridImportY       = clusterY - CHIP_STACK_GAP_PX / 2;
-        const gridExportY       = clusterY + CHIP_STACK_GAP_PX / 2;
 
         //PV home-anchor ground disc, expressed as a polygon. We
         //sample N points on a horizontal circle of radius
@@ -4674,9 +4672,7 @@ export class HeliosEngine
             pvLabel:           { x: pvX,            y: pvY          },
             batterySocLabel:   { x: batteryXRight,  y: batterySocY  },
             batteryPowerLabel: { x: batteryXRight,  y: batteryPowerY},
-            gridImportLabel:   { x: gridXLeft,      y: gridImportY  },
-            gridExportLabel:   { x: gridXLeft,      y: gridExportY  },
-            homeUsageLabel:    { x: home.x + 22,    y: clusterY     },
+            gridLabel:         { x: gridXLeft,      y: clusterY     },
             ringEdge:          { x: ringEdgeX,      y: ringEdgeY    },
             home:              { x: home.x,         y: clusterY     },
             homeRoof:          { x: home.x,         y: roofY        },

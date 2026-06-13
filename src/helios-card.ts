@@ -331,12 +331,11 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
     //Outer radius of the central "home pill" icon, the circular
-    //node painted at layout.home. The pill itself is 28 px wide
-    //with a 2 px border (=> outermost radius 16 px); a 18 px
-    //leader nudge leaves the hairline just OUTSIDE the pill so the
-    //leader visibly docks against the disc edge instead of slicing
-    //through it.
-    private static readonly HOME_PILL_RADIUS_PX = 18;
+    //node painted at layout.home. The pill is 56 px wide with a 2 px
+    //border (=> outermost radius 26 px); a 28 px leader nudge leaves
+    //the hairline just OUTSIDE the pill so the leader visibly docks
+    //against the disc edge instead of slicing through it.
+    private static readonly HOME_PILL_RADIUS_PX = 28;
     //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
@@ -1727,14 +1726,13 @@ export class HeliosCard extends LitElement
             const dirV = homeY > chipY ? 1 : -1;
             const sx = chipX + dirH * chipNudgePx;
             const sy = chipY;
-            //Land the vertical leg at 25 % of the home pill width
-            //(7 px = 28 / 4) on the chip's side of centre, so the
-            //two leaders meeting on the same row do NOT collide on
-            //the pill's central axis. Vertical leg then docks
-            //against the pill border at the matching circle
-            //intersection.
-            const HOME_PILL_VISIBLE_RADIUS = 16;
-            const HOME_PILL_QUARTER_X      = 7;
+            //Land the vertical leg at ~25 % of the home pill width
+            //(13 px) on the chip's side of centre, so two leaders
+            //meeting on the same row do NOT collide on the pill's
+            //central axis. Vertical leg then docks against the pill
+            //border at the matching circle intersection.
+            const HOME_PILL_VISIBLE_RADIUS = 26;
+            const HOME_PILL_QUARTER_X      = 13;
             const ex = homeX - dirH * HOME_PILL_QUARTER_X;
             //The vertical leg crosses the pill outline at
             //y = home.y ± sqrt(R² - offsetX²).
@@ -1755,8 +1753,7 @@ export class HeliosCard extends LitElement
         const socLeaderPath        = buildLPathToHome(layout?.batterySocLabel.x   ?? 0, layout?.batterySocLabel.y   ?? 0, 22);
         const powerLeaderPath      = buildLPathToHome(layout?.batteryPowerLabel.x ?? 0, layout?.batteryPowerLabel.y ?? 0, 22);
         const powerArrowPath       = powerLeaderPath;
-        const gridImportLeaderPath = buildLPathToHome(layout?.gridImportLabel.x   ?? 0, layout?.gridImportLabel.y   ?? 0, 22);
-        const gridExportLeaderPath = buildLPathToHome(layout?.gridExportLabel.x   ?? 0, layout?.gridExportLabel.y   ?? 0, 22);
+        const gridLeaderPath       = buildLPathToHome(layout?.gridLabel.x         ?? 0, layout?.gridLabel.y         ?? 0, 22);
 
         //Grid bead cadence, frequency (= 1 / dur) is proportional to
         //live power so the perceived bead speed tracks the chip
@@ -1793,6 +1790,22 @@ export class HeliosCard extends LitElement
             : proportionalBeadDur(importWattsAbs, GRID_BEAD_IMPORT_CAP_W);
         const gridExportBeadDur = exportWattsAbs < GRID_BEAD_IDLE_W ? null
             : proportionalBeadDur(exportWattsAbs, GRID_BEAD_EXPORT_CAP_W);
+        //Merged grid chip: import and export live in one two-line pill, but
+        //the single leader can only show one direction at a time. The
+        //dominant flow wins, the larger of the two display values drives
+        //the leader colour AND the bead travel direction (and on the rare
+        //both-active tick, the bigger number decides). Scrub-aware display
+        //watts feed the choice so it tracks the timeline like the chip text.
+        //Ties (including the idle 0/0 case) fall to import, a neutral
+        //consumption-blue resting state.
+        const gridImporting    = (gridImportDisplayWatts ?? 0) >= (gridExportDisplayWatts ?? 0);
+        const gridLeaderColor  = gridImporting
+            ? 'var(--energy-grid-consumption-color, #488fc2)'
+            : 'var(--energy-grid-return-color, #8353d1)';
+        //Bead cadence comes from the dominant side; null (no bead) when that
+        //side sits below the idle threshold, so an idle grid shows the chip
+        //and a static leader with no misleading motion.
+        const gridBeadDur      = gridImporting ? gridImportBeadDur : gridExportBeadDur;
 
         //Solar-arc overlay, sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2367,61 +2380,50 @@ export class HeliosCard extends LitElement
                     ` : nothing}
                 ` : nothing}
 
-                <!--  Grid Import / Export column on the LEFT side of
-                      the home. Import = HA energy consumption blue,
-                      Export = HA energy return purple. Same straight
-                      hairline leader vocabulary as the battery
-                      column on the right. Renders only when the
-                      matching entity is configured AND has a finite
-                      reading.                                       -->
-                ${hasHomeCoords && layout !== null && gridImportDisplayWatts !== null && !batteryScrubFuture ? html`
+                <!--  Grid chip on the LEFT of the home: import and
+                      export merged into one two-line pill sitting on
+                      the cluster's centre row, exactly between where
+                      the two separate chips used to stack. Row 1 reads
+                      grid → home (import), row 2 reads home → grid
+                      (export). Both rows always render (0 W on the
+                      idle side) so the pill keeps a fixed height. A
+                      single leader to the home carries the dominant
+                      flow's colour and bead direction.               -->
+                ${hasHomeCoords && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
-                        <path class="grid-import-leader-line" d="${gridImportLeaderPath}" />
-                        <!--  Moving bead, same vocabulary as the PV
-                              leader: a small disc rides the leader
-                              from the home pill out to the grid chip
-                              at a fixed cadence. Direction = OUT from
-                              home for IMPORT? No, semantically the
-                              import flows FROM the grid INTO the home,
-                              so the bead travels chip → home. -->
-                        ${gridImportBeadDur !== null ? svg`
-                            <circle class="grid-import-leader-bead" r="3">
-                                <animateMotion dur="${gridImportBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               path="${gridImportLeaderPath}" />
+                        <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d="${gridLeaderPath}" />
+                        <!--  Single bead on the dominant flow. Import
+                              flows grid → home (default traversal),
+                              export flows home → grid (keyPoints 1;0
+                              reverses it). Dropped when the dominant
+                              side is idle, no misleading motion.     -->
+                        ${gridBeadDur !== null ? (gridImporting ? svg`
+                            <circle class="grid-leader-bead" r="3" style="fill:${gridLeaderColor}">
+                                <animateMotion dur="${gridBeadDur.toFixed(2)}s" repeatCount="indefinite"
+                                               path="${gridLeaderPath}" />
                             </circle>
-                        ` : nothing}
-                    </svg>
-                    <div
-                        class="grid-import-label"
-                        style="left:${layout!.gridImportLabel.x}px; top:${layout!.gridImportLabel.y}px"
-                    >
-                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
-                        <span>${formatGridValue(gridImportDisplayWatts, gridImportDisplayUnit)}</span>
-                    </div>
-                ` : nothing}
-                ${hasHomeCoords && layout !== null && gridExportDisplayWatts !== null && !batteryScrubFuture ? html`
-                    <svg class="grid-leader-svg">
-                        <path class="grid-export-leader-line" d="${gridExportLeaderPath}" />
-                        <!--  Export bead: travels FROM the home OUT to
-                              the grid chip, matching the semantic
-                              direction (energy leaving the home).
-                              keyPoints 1->0 reverses the animateMotion
-                              traversal so the bead starts at the home
-                              end of the path and ends at the chip.  -->
-                        ${gridExportBeadDur !== null ? svg`
-                            <circle class="grid-export-leader-bead" r="3">
-                                <animateMotion dur="${gridExportBeadDur.toFixed(2)}s" repeatCount="indefinite"
+                        ` : svg`
+                            <circle class="grid-leader-bead" r="3" style="fill:${gridLeaderColor}">
+                                <animateMotion dur="${gridBeadDur.toFixed(2)}s" repeatCount="indefinite"
                                                keyPoints="1;0" keyTimes="0;1"
-                                               path="${gridExportLeaderPath}" />
+                                               path="${gridLeaderPath}" />
                             </circle>
-                        ` : nothing}
+                        `) : nothing}
                     </svg>
                     <div
-                        class="grid-export-label"
-                        style="left:${layout!.gridExportLabel.x}px; top:${layout!.gridExportLabel.y}px"
+                        class="grid-label"
+                        style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
                     >
-                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
-                        <span>${formatGridValue(gridExportDisplayWatts, gridExportDisplayUnit)}</span>
+                        <div class="grid-label-row">
+                            <ha-icon icon="mdi:transmission-tower"></ha-icon>
+                            <ha-icon class="grid-row-arrow" icon="mdi:arrow-right"></ha-icon>
+                            <span>${formatGridValue(gridImportDisplayWatts ?? 0, gridImportDisplayUnit)}</span>
+                        </div>
+                        <div class="grid-label-row">
+                            <span>${formatGridValue(gridExportDisplayWatts ?? 0, gridExportDisplayUnit)}</span>
+                            <ha-icon class="grid-row-arrow" icon="mdi:arrow-right"></ha-icon>
+                            <ha-icon icon="mdi:transmission-tower"></ha-icon>
+                        </div>
                     </div>
                 ` : nothing}
 
@@ -2724,29 +2726,23 @@ export class HeliosCard extends LitElement
                           family signature of the home cluster.        -->
                     <svg class="home-drop-leader-svg">
                         <line class="home-drop-leader-line"
-                              x1="${layout!.home.x}" y1="${layout!.home.y + 14}"
+                              x1="${layout!.home.x}" y1="${layout!.home.y + 28}"
                               x2="${layout!.homeRoof.x}" y2="${layout!.homeRoof.y}" />
                     </svg>
+                    <!--  Home pill, enlarged to host two stacked lines:
+                          the home glyph on top and the live home
+                          consumption below. The value mirrors the
+                          official Energy "Now" header (Power usage),
+                          same client-side formula over the same HA
+                          Energy sources, so the two surfaces always
+                          agree. The separate consumption chip is gone,
+                          its readout lives inside the hub now.        -->
                     <div
-                        class="home-pill"
+                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                     >
                         <ha-icon icon="mdi:home"></ha-icon>
-                    </div>
-                ` : nothing}
-
-                <!--  Home consumption chip, docked to the right of
-                      the home pill. Value mirrors the official
-                      Energy "Now" header (Power usage), same
-                      client-side formula over the same HA Energy
-                      sources, so the two surfaces always agree.     -->
-                ${showHomeUsageChip && !this._detailMode ? html`
-                    <div
-                        class="home-usage-label"
-                        style="left:${layout!.homeUsageLabel.x}px; top:${layout!.homeUsageLabel.y}px"
-                    >
-                        <ha-icon icon="mdi:home-lightning-bolt"></ha-icon>
-                        <span>${homeUsageText}</span>
+                        ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}
                     </div>
                 ` : nothing}
 

@@ -245,9 +245,7 @@ export const heliosCardStyles = css`
     .battery-leader-svg,
     .battery-pct-label,
     .grid-leader-svg,
-    .grid-import-label,
-    .grid-export-label,
-    .home-usage-label,
+    .grid-label,
     .home-pill
     {
         transition: opacity 0.35s ease;
@@ -269,9 +267,7 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .battery-leader-svg,
     ha-card.overlay-masked .battery-pct-label,
     ha-card.overlay-masked .grid-leader-svg,
-    ha-card.overlay-masked .grid-import-label,
-    ha-card.overlay-masked .grid-export-label,
-    ha-card.overlay-masked .home-usage-label,
+    ha-card.overlay-masked .grid-label,
     ha-card.overlay-masked .home-pill
     {
         will-change: opacity;
@@ -297,9 +293,7 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .battery-leader-svg,
     ha-card.overlay-masked .battery-pct-label,
     ha-card.overlay-masked .grid-leader-svg,
-    ha-card.overlay-masked .grid-import-label,
-    ha-card.overlay-masked .grid-export-label,
-    ha-card.overlay-masked .home-usage-label
+    ha-card.overlay-masked .grid-label
     {
         opacity: 0;
         pointer-events: none;
@@ -2915,7 +2909,7 @@ export const heliosCardStyles = css`
         align-items: center;
         justify-content: center;
         gap: 4px;
-        min-width: 56px;
+        min-width: 76px;
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
@@ -2963,7 +2957,7 @@ export const heliosCardStyles = css`
         align-items: center;
         justify-content: center;
         gap: 4px;
-        min-width: 56px;
+        min-width: 76px;
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
@@ -2986,28 +2980,30 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Grid import / export chips, same compact pill recipe as the
-        battery chips but tinted in the HA Energy grid colours:
-        consumption blue for import, return purple for export. Both
-        chips live in the LEFT column of the home cluster. */
-    .grid-import-label,
-    .grid-export-label,
-    .home-usage-label
+    /*  Merged grid chip: import + export in one two-line pill on the
+        LEFT of the home cluster, twice as tall as the single-line
+        chips. The border + text colour follow the dominant flow via
+        the inline --grid-leader-color the renderer sets (consumption
+        blue while importing, return purple while exporting). The
+        column stacks the two rows; each row is a small inline-flex of
+        tower + arrow + value, mirrored on the export row. */
+    .grid-label
     {
         position: absolute;
         transform: translate(-50%, -50%);
         pointer-events: none;
         z-index: 8;
         display: inline-flex;
-        align-items: center;
+        flex-direction: column;
         justify-content: center;
-        gap: 4px;
-        min-width: 56px;
+        gap: 3px;
+        min-width: 92px;
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color: var(--primary-text-color, #212121);
-        border-radius: 999px;
-        padding: 3px 10px;
+        border: 2px solid var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
+        border-radius: 14px;
+        padding: 5px 10px;
         font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         line-height: 1.2;
@@ -3017,32 +3013,32 @@ export const heliosCardStyles = css`
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
     }
-    .grid-import-label
+    /*  One flow row. The import row reads left to right (tower, arrow,
+        value); the export row is mirrored in the markup (value, arrow,
+        tower), so both arrows still point right while the direction is
+        carried by the tower's side. Centred so the mirror stays
+        symmetric. */
+    .grid-label-row
     {
-        border: 2px solid var(--energy-grid-consumption-color, #488fc2);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
     }
-    .grid-export-label
+    .grid-label-row ha-icon
     {
-        border: 2px solid var(--energy-grid-return-color, #8353d1);
-    }
-    /*  Home consumption chip carries the home cluster's family signature (HA primary colour, same
-        as the home pill + drop leader) so it reads as the home node's own readout, not as a fifth
-        energy source. Left-edge anchored (translate Y only): the layout x is the chip's LEFT edge
-        docked against the home pill's right side, so growing value text expands AWAY from the
-        pill instead of pushing into it. */
-    .home-usage-label
-    {
-        border: 2px solid var(--primary-color, #03a9f4);
-        transform: translate(0, -50%);
-    }
-    .grid-import-label ha-icon,
-    .grid-export-label ha-icon,
-    .home-usage-label ha-icon
-    {
-        --mdc-icon-size: 16px;
+        --mdc-icon-size: 15px;
         color: inherit;
         display: inline-flex;
         align-items: center;
+        flex-shrink: 0;
+    }
+    /*  Direction arrow reads a touch lighter than the tower so the
+        tower stays the row's anchor glyph. */
+    .grid-label-row .grid-row-arrow
+    {
+        --mdc-icon-size: 13px;
+        opacity: 0.75;
     }
 
     .grid-leader-svg
@@ -3054,22 +3050,15 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 5;
     }
-    .grid-import-leader-line
+    /*  Single grid leader. Stroke + bead fill come from the inline
+        --grid-leader-color the renderer resolves to the dominant flow,
+        so one path serves both import (blue) and export (purple). */
+    .grid-leader-line
     {
-        stroke: var(--energy-grid-consumption-color, #488fc2);
         stroke-width: 1;
         stroke-linecap: round;
         fill: none;
     }
-    .grid-export-leader-line
-    {
-        stroke: var(--energy-grid-return-color, #8353d1);
-        stroke-width: 1;
-        stroke-linecap: round;
-        fill: none;
-    }
-    .grid-import-leader-bead { fill: var(--energy-grid-consumption-color, #488fc2); }
-    .grid-export-leader-bead { fill: var(--energy-grid-return-color, #8353d1); }
 
     /*  PV → home leader. Vertical dashed line from the PV chip's
         bottom edge down to the home marker, painted in the configured
@@ -3192,15 +3181,17 @@ export const heliosCardStyles = css`
     .home-pill
     {
         position: absolute;
-        width:  28px;
-        height: 28px;
+        width:  56px;
+        height: 56px;
         transform: translate(-50%, -50%);
         background: var(--card-background-color, #ffffff);
         border: 2px solid var(--primary-color, #03a9f4);
         border-radius: 50%;
         display: inline-flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 1px;
         z-index: 9;
         pointer-events: none;
         box-shadow: 0 1px 3px var(--shadow-color);
@@ -3208,10 +3199,29 @@ export const heliosCardStyles = css`
     }
     .home-pill ha-icon
     {
-        --mdc-icon-size: 18px;
+        --mdc-icon-size: 22px;
         color: inherit;
         display: inline-flex;
         align-items: center;
+    }
+    /*  With the consumption line present the home glyph shrinks a
+        touch so both lines breathe inside the circle. */
+    .home-pill.has-usage ha-icon
+    {
+        --mdc-icon-size: 18px;
+    }
+    /*  Live home consumption, second line inside the hub. Smaller +
+        tabular so the digits sit steady under the glyph; regular text
+        ink so the value stays readable against the card background. */
+    .home-pill-usage
+    {
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--primary-text-color, #212121);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        letter-spacing: -0.2px;
     }
 
     /*  Solid drop-leader from the home pill down to the projected
@@ -3528,9 +3538,7 @@ export const heliosCardStyles = css`
     {
         .pv-pct-label,
         .battery-pct-label,
-        .grid-import-label,
-        .grid-export-label,
-        .home-usage-label,
+        .grid-label,
         .solar-pct-label
         {
             font-size: var(--ha-font-size-m, 14px);
@@ -3538,9 +3546,7 @@ export const heliosCardStyles = css`
         }
         .pv-pct-label ha-icon,
         .battery-pct-label ha-icon,
-        .grid-import-label ha-icon,
-        .grid-export-label ha-icon,
-        .home-usage-label ha-icon,
+        .grid-label-row ha-icon,
         .solar-pct-label ha-icon
         {
             --mdc-icon-size: 18px;
