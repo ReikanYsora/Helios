@@ -93,6 +93,10 @@ export interface Translations
         dataDisplaySection:           string;
         displayUpdateFrequency:       string;
         displayUpdateFrequencyHelp:   string;
+        //Decimal-precision slider (0-3) for every value readout. Optional: locales fall back to the
+        //inline English default in the editor until they carry the key.
+        valueDecimals?:               string;
+        valueDecimalsHelp?:           string;
         //Global display radius slider (50-500 m). Optional: only the FR locale carries it for now,
         //every other locale falls back to the inline default in the editor. Re-added in v1.8.4 as a
         //perf lever for older phones (smaller rendered disc = less geometry projected per frame).

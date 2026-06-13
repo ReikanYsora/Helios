@@ -9,7 +9,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
-import { formatLocalisedNumber } from './format';
+import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } from './format';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
@@ -776,38 +776,23 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 //"4500 W". Energy units (kWh / Wh) keep their native unit and
 //get a single decimal, daily totals usually sit in the 0–50 kWh
 //band where one decimal is the right amount of precision.
-export function formatPvValue(hass: any, value: number, unit: string): string
+export function formatPvValue(hass: any, value: number, unit: string, decimals: number): string
 {
-    const u = (unit || '').trim();
+    const u  = (unit || '').trim();
     const lu = u.toLowerCase();
 
-    if (lu === 'w' && Math.abs(value) >= 1000)
+    //Power sources always print in kW, energy sources in kWh, both at the configured precision, so
+    //the PV chip reads uniform with every other readout regardless of the sensor's native unit.
+    if (lu === 'w' || lu === 'kw' || lu === 'mw')
     {
-        return `${formatLocalisedNumber(hass, value / 1000, 2)} kW`;
+        return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals);
     }
-    if (lu === 'w')
+    if (lu === 'wh' || lu === 'kwh' || lu === 'mwh')
     {
-        return `${formatLocalisedNumber(hass, value, 0, true)} W`;
+        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals);
     }
-    if (lu === 'kw')
-    {
-        return `${formatLocalisedNumber(hass, value, 2)} kW`;
-    }
-    if (lu === 'wh')
-    {
-        if (Math.abs(value) >= 1000)
-        {
-            return `${formatLocalisedNumber(hass, value / 1000, 1)} kWh`;
-        }
-        return `${formatLocalisedNumber(hass, value, 0, true)} Wh`;
-    }
-    if (lu === 'kwh' || lu === 'mwh')
-    {
-        return `${formatLocalisedNumber(hass, value, 1)} ${u}`;
-    }
-    //Fallback for arbitrary units, keep one decimal of precision and let the entity's own unit string carry through.
-    const formatted = Math.abs(value) >= 100
-        ? formatLocalisedNumber(hass, value, 0, true)
-        : formatLocalisedNumber(hass, value, 1);
+    //Fallback for arbitrary units: keep the entity's own unit string but still honour the global
+    //decimal setting so the precision tracks everything else.
+    const formatted = formatLocalisedNumber(hass, value, decimals);
     return u ? `${formatted} ${u}` : formatted;
 }

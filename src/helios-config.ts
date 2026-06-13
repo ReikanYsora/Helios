@@ -279,6 +279,28 @@ export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined):
 }
 
 
+//Default and allowed range for the number of decimal places every value readout prints. Power is
+//shown in kW, energy in kWh, and this single setting drives the precision on all of them so the
+//chips stay visually uniform. 1 decimal is the residential sweet spot; the slider clamps to [0, 3].
+export const DEFAULT_VALUE_DECIMALS = 1;
+export const MIN_VALUE_DECIMALS     = 0;
+export const MAX_VALUE_DECIMALS     = 3;
+
+//Resolve the decimal-place count the chips format to, from the `value-decimals` config key, clamped
+//to [0, 3] and defaulting for missing / invalid values. Single source of truth so every readout
+//(grid, battery, PV, home hub) prints the same precision.
+export function valueDecimals(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['value-decimals'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return DEFAULT_VALUE_DECIMALS; }
+    const r = Math.round(n);
+    if (r < MIN_VALUE_DECIMALS) { return MIN_VALUE_DECIMALS; }
+    if (r > MAX_VALUE_DECIMALS) { return MAX_VALUE_DECIMALS; }
+    return r;
+}
+
+
 //Resolve the global display radius in metres from the `display-radius` config key, clamped to
 //[MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M], defaulting to DEFAULT_DISPLAY_RADIUS_M for missing /
 //invalid values. Single source of truth for the radius the engine renders buildings, LiDAR cells and

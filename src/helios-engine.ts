@@ -4470,6 +4470,7 @@ export class HeliosEngine
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
         gridLabel:         { x: number; y: number };
+        lowCarbonLabel:    { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
         //Projected screen position of the home building's roof top
@@ -4609,18 +4610,27 @@ export class HeliosEngine
         //of a static lift from the ground home position) keeps the
         //home pill + chips visually attached to the building no
         //matter how the user resizes the card.
-        const CLUSTER_ABOVE_ROOF_PX = 28 * liftScale;
-        const clusterY = roofY - CLUSTER_ABOVE_ROOF_PX;
+        //The whole cluster centres on the home pill (the projected home
+        //point) rather than floating above the roof: the home reads as
+        //the hub the chips orbit, with no drop-leader tethering a high
+        //cluster back down to the building. liftScale still feeds the
+        //per-chip spread below so a kiosk canvas breathes, but the
+        //centre row sits on the home itself.
+        const clusterY = home.y;
         const pvX = home.x;
         const pvY = clusterY - PV_CHIP_OFFSET_PX * liftScale;
-        //Battery column on the right.
+        //Battery column on the RIGHT: SoC on top, Power on the bottom.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
         const batterySocY       = clusterY - CHIP_STACK_GAP_PX / 2;
         const batteryPowerY     = clusterY + CHIP_STACK_GAP_PX / 2;
-        //Grid column on the left. Import and export are merged into a
-        //single chip, so it sits on the cluster's centre row (clusterY),
-        //exactly between where the two separate chips used to stack.
+        //Left column: low-carbon on top, grid on the bottom. The grid
+        //chip drops to the bottom row (mirroring battery Power on the
+        //right) and the low-carbon chip takes the top row (mirroring
+        //battery SoC), feeding a straight vertical leader DOWN into the
+        //grid chip since it sits directly above it.
         const gridXLeft         = home.x - CHIP_SIDE_X_OFFSET_PX;
+        const gridY             = clusterY + CHIP_STACK_GAP_PX / 2;
+        const lowCarbonY        = clusterY - CHIP_STACK_GAP_PX / 2;
 
         //PV home-anchor ground disc, expressed as a polygon. We
         //sample N points on a horizontal circle of radius
@@ -4672,7 +4682,8 @@ export class HeliosEngine
             pvLabel:           { x: pvX,            y: pvY          },
             batterySocLabel:   { x: batteryXRight,  y: batterySocY  },
             batteryPowerLabel: { x: batteryXRight,  y: batteryPowerY},
-            gridLabel:         { x: gridXLeft,      y: clusterY     },
+            gridLabel:         { x: gridXLeft,      y: gridY        },
+            lowCarbonLabel:    { x: gridXLeft,      y: lowCarbonY   },
             ringEdge:          { x: ringEdgeX,      y: ringEdgeY    },
             home:              { x: home.x,         y: clusterY     },
             homeRoof:          { x: home.x,         y: roofY        },

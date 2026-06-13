@@ -58,6 +58,8 @@ export const en: Translations = {
         dataDisplaySection:           'Data display',
         displayUpdateFrequency:       'Graph detail',
         displayUpdateFrequencyHelp:   'How many points per hour the graphs draw. The data itself is always Home Assistant\'s 5-minute statistics; this only controls how densely the curve is plotted: 1 = one point per hour (smoothest, lightest to render), 12 = one point every 5 minutes (full detail, heaviest). Default 4 = a point every 15 minutes. Lower it on older or slower devices to cut rendering cost. The forecast curve follows the same cadence, so a finer setting also resolves short shadow dips (a tree clipping production for half an hour) that an hourly curve steps over.',
+        valueDecimals:                'Decimals',
+        valueDecimalsHelp:            'Number of decimals shown on every value readout. Power is always shown in kW and energy in kWh; this sets the precision for all of them so the chips read uniform. 0 to 3, default 1.',
         installationSection: 'PV installation',
         installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Inverter max output (kW)',

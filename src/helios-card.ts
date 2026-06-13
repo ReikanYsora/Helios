@@ -6,7 +6,8 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_LIDAR_VIEW_OPACITY
+    DEFAULT_LIDAR_VIEW_OPACITY,
+    valueDecimals
 } from './helios-config';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
@@ -331,11 +332,11 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
     //Outer radius of the central "home pill" icon, the circular
-    //node painted at layout.home. The pill is 44 px wide with a 2 px
-    //border (=> outermost radius 22 px); a 24 px leader nudge leaves
+    //node painted at layout.home. The pill is 48 px wide with a 2 px
+    //border (=> outermost radius 24 px); a 26 px leader nudge leaves
     //the hairline just OUTSIDE the pill so the leader visibly docks
     //against the disc edge instead of slicing through it.
-    private static readonly HOME_PILL_RADIUS_PX = 24;
+    private static readonly HOME_PILL_RADIUS_PX = 26;
     //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
@@ -1507,8 +1508,10 @@ export class HeliosCard extends LitElement
             && pvActiveRate !== null
             && (!pvScrubFuture || isPvPredicted);
 
+        //User-configured decimal precision, applied uniformly to every chip readout (kW / kWh).
+        const valueDec = valueDecimals(this.config);
         const pvDisplayValue = showPvLabel
-            ? (isPvPredicted ? '≈ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit)
+            ? (isPvPredicted ? '≈ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec)
             : '';
 
         //PV → home animated leader. Same vocabulary as the existing
@@ -1618,7 +1621,7 @@ export class HeliosCard extends LitElement
         //dashboard. The colour + leader direction below stay on the physical sign, so charging still
         //reads battery-in (pink) and flows INTO the battery.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit)
+            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec)
             : '';
 
         //Home consumption chip. Same client-side derivation as the official "Now" view's Power
@@ -1645,7 +1648,7 @@ export class HeliosCard extends LitElement
             && !batteryScrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
-            ? formatGridValue(homeUsageWatts, 'W')
+            ? formatGridValue(this.hass, homeUsageWatts, 'W', valueDec)
             : '';
 
         //Charging / discharging direction drives the SVG arrow path direction on the PV↔Power
@@ -1727,12 +1730,12 @@ export class HeliosCard extends LitElement
             const sx = chipX + dirH * chipNudgePx;
             const sy = chipY;
             //Land the vertical leg at ~25 % of the home pill width
-            //(11 px) on the chip's side of centre, so two leaders
+            //(12 px) on the chip's side of centre, so two leaders
             //meeting on the same row do NOT collide on the pill's
             //central axis. Vertical leg then docks against the pill
             //border at the matching circle intersection.
-            const HOME_PILL_VISIBLE_RADIUS = 22;
-            const HOME_PILL_QUARTER_X      = 11;
+            const HOME_PILL_VISIBLE_RADIUS = 24;
+            const HOME_PILL_QUARTER_X      = 12;
             const ex = homeX - dirH * HOME_PILL_QUARTER_X;
             //The vertical leg crosses the pill outline at
             //y = home.y ± sqrt(R² - offsetX²).
@@ -1790,22 +1793,44 @@ export class HeliosCard extends LitElement
             : proportionalBeadDur(importWattsAbs, GRID_BEAD_IMPORT_CAP_W);
         const gridExportBeadDur = exportWattsAbs < GRID_BEAD_IDLE_W ? null
             : proportionalBeadDur(exportWattsAbs, GRID_BEAD_EXPORT_CAP_W);
-        //Merged grid chip: import and export live in one two-line pill, but
-        //the single leader can only show one direction at a time. The
-        //dominant flow wins, the larger of the two display values drives
-        //the leader colour AND the bead travel direction (and on the rare
-        //both-active tick, the bigger number decides). Scrub-aware display
-        //watts feed the choice so it tracks the timeline like the chip text.
-        //Ties (including the idle 0/0 case) fall to import, a neutral
-        //consumption-blue resting state.
+        //Single grid chip shows the ACTIVE flow only. The larger of the two
+        //display values wins: it drives the chip colour, the value, the icon
+        //AND the leader bead direction (and on the rare both-active tick, the
+        //bigger number decides). Scrub-aware display watts feed the choice so
+        //it tracks the timeline like the chip text. Ties (including the idle
+        //0/0 case) fall to import, a neutral consumption-blue resting state.
         const gridImporting    = (gridImportDisplayWatts ?? 0) >= (gridExportDisplayWatts ?? 0);
         const gridLeaderColor  = gridImporting
             ? 'var(--energy-grid-consumption-color, #488fc2)'
             : 'var(--energy-grid-return-color, #8353d1)';
-        //Bead cadence comes from the dominant side; null (no bead) when that
+        //Bead cadence comes from the active side; null (no bead) when that
         //side sits below the idle threshold, so an idle grid shows the chip
         //and a static leader with no misleading motion.
         const gridBeadDur      = gridImporting ? gridImportBeadDur : gridExportBeadDur;
+
+        //Low-carbon (non-fossil) inflow. The HA co2signal entity reports the grid's fossil-fuel
+        //percentage (0-100); the low-carbon share of the current import is (100 - fossil)/100, and the
+        //low-carbon power is the import scaled by that share. It only exists while importing (low-carbon
+        //energy rides IN on the grid), so the chip + its leader hide on export, on idle, and whenever the
+        //co2signal integration is not wired into the Energy dashboard.
+        const co2Entity        = this._energyDefaults.co2SignalEntity;
+        const fossilRaw        = co2Entity ? this.hass?.states?.[co2Entity]?.state : undefined;
+        const fossilPct        = (fossilRaw !== undefined && fossilRaw !== null) ? parseFloat(String(fossilRaw)) : NaN;
+        const lowCarbonShare   = Number.isFinite(fossilPct) ? Math.max(0, Math.min(1, 1 - fossilPct / 100)) : null;
+        const lowCarbonWatts   = (lowCarbonShare !== null && gridImporting && gridImportDisplayWatts !== null && gridImportDisplayWatts > 0)
+            ? gridImportDisplayWatts * lowCarbonShare
+            : null;
+        const showLowCarbon    = hasHomeCoords && layout !== null && !batteryScrubFuture && lowCarbonWatts !== null;
+        //Straight vertical leader from the low-carbon chip DOWN into the grid chip directly below it (no
+        //L bend, the two share the left column's x). Each end is nudged ~16 px off the chip centre so the
+        //line meets the pill edges instead of running under the chip bodies.
+        const lowCarbonLeaderPath = layout
+            ? `M ${layout.lowCarbonLabel.x.toFixed(1)},${(layout.lowCarbonLabel.y + 16).toFixed(1)} L ${layout.gridLabel.x.toFixed(1)},${(layout.gridLabel.y - 16).toFixed(1)}`
+            : '';
+        const lowCarbonBeadDur = (lowCarbonWatts === null || lowCarbonWatts < GRID_BEAD_IDLE_W)
+            ? null
+            : proportionalBeadDur(lowCarbonWatts, GRID_BEAD_IMPORT_CAP_W);
+        const lowCarbonColor   = 'var(--energy-non-fossil-color, #0f9d58)';
 
         //Solar-arc overlay, sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2415,7 +2440,33 @@ export class HeliosCard extends LitElement
                         style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
                     >
                         <ha-icon icon="${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}"></ha-icon>
-                        <span>${formatGridValue(gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit)}</span>
+                        <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec)}</span>
+                    </div>
+                ` : nothing}
+
+                <!--  Low-carbon (non-fossil) chip, top of the LEFT
+                      column. Shows the live non-fossil share of the
+                      grid import in kW, derived from HA's co2signal
+                      entity. Its leader runs STRAIGHT DOWN into the grid
+                      chip below (the low-carbon energy arrives via the
+                      grid), bead travelling low-carbon → grid. Hidden
+                      unless importing AND the integration is wired.    -->
+                ${showLowCarbon ? html`
+                    <svg class="low-carbon-leader-svg">
+                        <path class="low-carbon-leader-line" style="stroke:${lowCarbonColor}" d="${lowCarbonLeaderPath}" />
+                        ${lowCarbonBeadDur !== null ? svg`
+                            <circle class="low-carbon-leader-bead" r="3" style="fill:${lowCarbonColor}">
+                                <animateMotion dur="${lowCarbonBeadDur.toFixed(2)}s" repeatCount="indefinite"
+                                               path="${lowCarbonLeaderPath}" />
+                            </circle>
+                        ` : nothing}
+                    </svg>
+                    <div
+                        class="low-carbon-label"
+                        style="left:${layout!.lowCarbonLabel.x}px; top:${layout!.lowCarbonLabel.y}px; --low-carbon-color:${lowCarbonColor}"
+                    >
+                        <ha-icon icon="mdi:leaf"></ha-icon>
+                        <span>${formatGridValue(this.hass, lowCarbonWatts!, 'W', valueDec)}</span>
                     </div>
                 ` : nothing}
 
@@ -2710,25 +2761,14 @@ export class HeliosCard extends LitElement
                       Energy distribution card uses for its central
                       home node.                                       -->
                 ${hasHomeCoords && layout !== null && !this._detailMode ? html`
-                    <!--  Solid drop-leader from the home pill DOWN to
-                          the projected ground at the home (lat, lon).
-                          Same vocabulary as the other home-anchored
-                          leaders (stroke-width 2, round caps), painted
-                          in the HA primary colour so it reads as the
-                          family signature of the home cluster.        -->
-                    <svg class="home-drop-leader-svg">
-                        <line class="home-drop-leader-line"
-                              x1="${layout!.home.x}" y1="${layout!.home.y + 22}"
-                              x2="${layout!.homeRoof.x}" y2="${layout!.homeRoof.y}" />
-                    </svg>
-                    <!--  Home pill, enlarged to host two stacked lines:
-                          the home glyph on top and the live home
-                          consumption below. The value mirrors the
-                          official Energy "Now" header (Power usage),
-                          same client-side formula over the same HA
-                          Energy sources, so the two surfaces always
-                          agree. The separate consumption chip is gone,
-                          its readout lives inside the hub now.        -->
+                    <!--  Home pill, the hub the whole chip cluster orbits.
+                          Hosts two stacked lines: the home glyph on top and
+                          the live home consumption below. The value mirrors
+                          the official Energy "Now" header (Power usage), same
+                          client-side formula over the same HA Energy sources,
+                          so the two surfaces always agree. It sits at the
+                          centre of the cluster with no drop-leader, the chips
+                          dock straight against its border.                -->
                     <div
                         class="home-pill ${showHomeUsageChip ? 'has-usage' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"

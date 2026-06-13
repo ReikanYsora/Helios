@@ -246,6 +246,8 @@ export const heliosCardStyles = css`
     .battery-pct-label,
     .grid-leader-svg,
     .grid-label,
+    .low-carbon-leader-svg,
+    .low-carbon-label,
     .home-pill
     {
         transition: opacity 0.35s ease;
@@ -268,6 +270,8 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .battery-pct-label,
     ha-card.overlay-masked .grid-leader-svg,
     ha-card.overlay-masked .grid-label,
+    ha-card.overlay-masked .low-carbon-leader-svg,
+    ha-card.overlay-masked .low-carbon-label,
     ha-card.overlay-masked .home-pill
     {
         will-change: opacity;
@@ -293,7 +297,9 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .battery-leader-svg,
     ha-card.overlay-masked .battery-pct-label,
     ha-card.overlay-masked .grid-leader-svg,
-    ha-card.overlay-masked .grid-label
+    ha-card.overlay-masked .grid-label,
+    ha-card.overlay-masked .low-carbon-leader-svg,
+    ha-card.overlay-masked .low-carbon-label
     {
         opacity: 0;
         pointer-events: none;
@@ -3039,6 +3045,61 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
+    /*  Low-carbon chip: same single-line pill recipe as the others,
+        tinted in HA's non-fossil green. Sits at the top of the left
+        column and feeds the grid chip below it. */
+    .low-carbon-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 8;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-width: 76px;
+        box-sizing: border-box;
+        background: var(--card-background-color, #ffffff);
+        color: var(--primary-text-color, #212121);
+        border: 2px solid var(--low-carbon-color, var(--energy-non-fossil-color, #0f9d58));
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px var(--shadow-color);
+        white-space: nowrap;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+    }
+    .low-carbon-label ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    /*  Low-carbon → grid leader: a straight vertical hairline (no L,
+        the two chips share the column x). Stroke + bead fill come from
+        the inline --low-carbon-color. */
+    .low-carbon-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+    .low-carbon-leader-line
+    {
+        stroke-width: 1;
+        stroke-linecap: round;
+        fill: none;
+    }
+
     /*  PV → home leader. Vertical dashed line from the PV chip's
         bottom edge down to the home marker, painted in the configured
         PV colour. Same dash vocabulary as the battery leader so the
@@ -3160,8 +3221,8 @@ export const heliosCardStyles = css`
     .home-pill
     {
         position: absolute;
-        width:  44px;
-        height: 44px;
+        width:  48px;
+        height: 48px;
         transform: translate(-50%, -50%);
         background: var(--card-background-color, #ffffff);
         border: 2px solid var(--primary-color, #03a9f4);
@@ -3519,6 +3580,7 @@ export const heliosCardStyles = css`
         .pv-pct-label,
         .battery-pct-label,
         .grid-label,
+        .low-carbon-label,
         .solar-pct-label
         {
             font-size: var(--ha-font-size-m, 14px);
@@ -3527,6 +3589,7 @@ export const heliosCardStyles = css`
         .pv-pct-label ha-icon,
         .battery-pct-label ha-icon,
         .grid-label ha-icon,
+        .low-carbon-label ha-icon,
         .solar-pct-label ha-icon
         {
             --mdc-icon-size: 18px;

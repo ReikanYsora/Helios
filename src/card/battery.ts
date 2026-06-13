@@ -4,7 +4,7 @@
 //`stat_soc` keys per source); Helios picks the first entry of each list and reads from it. Multi-source aggregation is no longer done in the
 //card, the HA Energy dashboard already publishes the aggregate values where applicable.
 
-import { formatLocalisedNumber } from './format';
+import { formatPowerKw } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
@@ -712,29 +712,11 @@ export function batterySampleAtTime(
 }
 
 
-//Format a signed battery power value for the chip. Mirrors formatPvValue's W ↔ kW switching but always prefixes a sign so the user can tell charging
-//from discharging at a glance.
-export function formatBatteryPower(hass: any, value: number, unit: string): string
+//Format a signed battery power value for the chip. Always prints in kW at the configured precision,
+//with an explicit + / − sign so the user can tell charging from discharging at a glance.
+export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number): string
 {
-    const lu = (unit || '').trim().toLowerCase();
-    const sign = value > 0 ? '+' : (value < 0 ? '−' : '');
-    const abs  = Math.abs(value);
-
-    if (lu === 'w' && abs >= 1000)
-    {
-        return `${sign}${formatLocalisedNumber(hass, abs / 1000, 2)} kW`;
-    }
-    if (lu === 'w')
-    {
-        return `${sign}${formatLocalisedNumber(hass, abs, 0, true)} W`;
-    }
-    if (lu === 'kw')
-    {
-        return `${sign}${formatLocalisedNumber(hass, abs, 2)} kW`;
-    }
-    //Unknown unit, format the value with one decimal of precision and keep the configured entity's own unit string. Still locale-aware so the decimal
-    //mark matches the rest of the card.
-    return `${sign}${formatLocalisedNumber(hass, abs, 1)}${unit ? ' ' + unit : ''}`;
+    return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals, true);
 }
 
 

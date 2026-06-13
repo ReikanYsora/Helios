@@ -38,6 +38,43 @@ export function formatLocalisedNumber(
 }
 
 
+//Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every
+//chip prints the same unit and precision regardless of the source sensor's native unit. Input is
+//watts. `signed` prefixes an explicit + / − (the card's figure-dash) so battery charge reads apart
+//from discharge at a glance; unsigned just formats the value.
+export function formatPowerKw(hass: any, watts: number, decimals: number, signed: boolean = false): string
+{
+    if (signed)
+    {
+        const sign = watts > 0 ? '+' : (watts < 0 ? '−' : '');
+        return `${sign}${formatLocalisedNumber(hass, Math.abs(watts) / 1000, decimals)} kW`;
+    }
+    return `${formatLocalisedNumber(hass, watts / 1000, decimals)} kW`;
+}
+
+
+//Uniform energy readout: always kilowatt-hours, locale-aware, with the caller's decimal count.
+//Input is already in kWh.
+export function formatEnergyKwh(hass: any, kwh: number, decimals: number): string
+{
+    return `${formatLocalisedNumber(hass, kwh, decimals)} kWh`;
+}
+
+
+//Normalise an energy value + unit string to kilowatt-hours. Mirrors pvNormalizeToWatts on the power
+//side: Wh / kWh / MWh fold to kWh; an unknown unit is treated as already kWh so the caller still
+//prints a finite number rather than dropping the readout.
+export function energyToKwh(value: number, unit: string): number
+{
+    switch ((unit || '').trim().toLowerCase())
+    {
+        case 'wh':  return value / 1000;
+        case 'mwh': return value * 1000;
+        default:    return value;
+    }
+}
+
+
 //Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged,
 //1 = pure black). Multiplicative on each channel, keeps the
 //hue intact, just lowers the value. Used to derive the slightly

@@ -18,6 +18,7 @@
 //direction.
 
 import { pvNormalizeToWatts } from './pv';
+import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } from './format';
 import type { EnergyDefaults } from './energy-prefs';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
@@ -221,24 +222,21 @@ function parseNumericState(raw: unknown): number | null
 }
 
 
-//Display helper that formats the grid chip value + unit. Watts get the same "round to integer when
-//>100, one decimal otherwise" treatment as the PV chip; kWh keeps two decimals. Returns the empty
-//string when the value is null so callers can collapse the chip.
-export function formatGridValue(value: number | null, unit: string): string
+//Display helper that formats the grid chip value. Power sources print in kW, energy sources in kWh,
+//both at the configured decimal precision and locale-aware, so the grid readout matches every other
+//chip. Returns the empty string when the value is null so callers can collapse the chip.
+export function formatGridValue(hass: any, value: number | null, unit: string, decimals: number): string
 {
     if (value === null) { return ''; }
     const u = unit.toLowerCase();
     if (u === 'w' || u === 'kw' || u === 'mw')
     {
-        const w = pvNormalizeToWatts(value, unit);
-        if (Math.abs(w) >= 1000) { return `${(w / 1000).toFixed(1)} kW`; }
-        if (Math.abs(w) >= 100)  { return `${Math.round(w)} W`; }
-        return `${w.toFixed(1)} W`;
+        return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals);
     }
     if (u === 'wh' || u === 'kwh' || u === 'mwh')
     {
-        return `${value.toFixed(2)} ${unit}`;
+        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals);
     }
-    //Unknown unit: show the raw value + whatever unit HA reported.
-    return unit ? `${value} ${unit}` : String(value);
+    //Unknown unit: show the raw value at the configured precision + whatever unit HA reported.
+    return unit ? `${formatLocalisedNumber(hass, value, decimals)} ${unit}` : String(value);
 }

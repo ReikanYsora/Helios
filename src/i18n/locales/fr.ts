@@ -55,6 +55,8 @@ export const fr: Translations = {
         dataDisplaySection:           'Affichage des données',
         displayUpdateFrequency:       'Détail du graphique',
         displayUpdateFrequencyHelp:   'Combien de points par heure les graphiques tracent. La donnée elle-même est toujours en 5 minutes (statistiques Home Assistant) ; ce réglage ne change que la densité de tracé de la courbe : 1 = un point par heure (le plus lisse, le plus léger), 12 = un point toutes les 5 minutes (détail maximal, le plus lourd). Par défaut 4 = un point toutes les 15 minutes. Baissez-le sur un appareil ancien ou lent pour réduire le coût d\'affichage. La courbe de prévision suit la même cadence : un réglage plus fin fait donc ressortir les creux d\'ombre courts (un arbre qui coupe la production une demi-heure) qu\'une courbe horaire enjambe.',
+        valueDecimals:                'Décimales',
+        valueDecimalsHelp:            'Nombre de décimales affichées sur chaque valeur. La puissance est toujours en kW et l\'énergie en kWh ; ce réglage fixe la précision de toutes pour que les chips restent uniformes. De 0 à 3, par défaut 1.',
         displayRadius:                'Rayon d\'affichage',
         displayRadiusHelp:            'Distance autour de la maison dans laquelle les bâtiments, les cellules LiDAR et les ombres sont rendus. Baissez cette valeur (jusqu\'à 50 m) pour fluidifier l\'affichage sur un téléphone ancien ou lent ; montez-la (jusqu\'à 500 m) pour une vue plus large. Par défaut 200 m.',
         installationSection: 'Installation photovoltaïque',

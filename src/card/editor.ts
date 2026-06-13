@@ -14,6 +14,9 @@ import
     DEFAULT_DISPLAY_RADIUS_M,
     MIN_DISPLAY_RADIUS_M,
     MAX_DISPLAY_RADIUS_M,
+    DEFAULT_VALUE_DECIMALS,
+    MIN_VALUE_DECIMALS,
+    MAX_VALUE_DECIMALS,
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 
@@ -611,6 +614,21 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
+                <label class="field">
+                    <span class="label">${t.editor.valueDecimals ?? 'Value decimals'}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range"
+                            min="${MIN_VALUE_DECIMALS}"
+                            max="${MAX_VALUE_DECIMALS}"
+                            step="1"
+                            .value="${String(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS)}"
+                            @input="${(e: Event) => this._numSlider('value-decimals', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS), 1)}</span>
+                    </div>
+                </label>
+                <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'installation'}" @toggle="${(e: Event) => this._onSectionToggle('installation', e)}">
