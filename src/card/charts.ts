@@ -400,10 +400,46 @@ export function pvValueAtTime(
         const calib = host._pvCalibStats;
         if (calib && calib.times.length >= 2 && targetMs <= lastObsMs)
         {
-            const v = interpAt(calib.times, calib.values, targetMs);
-            if (isFinite(v))
+            if (isCumulative)
             {
-                return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
+                //_pvCalibStats carries the meter's cumulative `state` (kWh) per hourly LTS bucket for
+                //energy sensors, NOT power, the same contract dashboard.ts relies on when it baseline-
+                //subtracts these samples for the daily-kWh total. So differentiate the bracketing pair
+                //into average power, exactly like the raw-history branch above, instead of reading the
+                //cumulative value straight through (which mislabels a kWh reading as kW and inflates the
+                //scrub readout ~1000x once the cursor falls past the raw 6 h window).
+                for (let i = 1; i < calib.times.length; i++)
+                {
+                    const t1 = calib.times[i].getTime();
+                    if (targetMs > t1)
+                    {
+                        continue;
+                    }
+                    const t0 = calib.times[i - 1].getTime();
+                    if (targetMs < t0)
+                    {
+                        break;
+                    }
+                    const dtH = (t1 - t0) / 3_600_000;
+                    if (dtH <= 0 || dtH > 6)
+                    {
+                        break;
+                    }
+                    const dv = calib.values[i] - calib.values[i - 1];
+                    if (!isFinite(dv) || dv < 0)
+                    {
+                        break;
+                    }
+                    return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
+                }
+            }
+            else
+            {
+                const v = interpAt(calib.times, calib.values, targetMs);
+                if (isFinite(v))
+                {
+                    return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
+                }
             }
         }
     }
