@@ -2980,13 +2980,12 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Merged grid chip: import + export in one two-line pill on the
-        LEFT of the home cluster, twice as tall as the single-line
-        chips. The border + text colour follow the dominant flow via
-        the inline --grid-leader-color the renderer sets (consumption
-        blue while importing, return purple while exporting). The
-        column stacks the two rows; each row is a small inline-flex of
-        tower + arrow + value, mirrored on the export row. */
+    /*  Grid chip: same compact single-line pill recipe as the PV and
+        battery chips, so its text stays crisp under camera rotation.
+        It shows the active flow only; the border follows the inline
+        --grid-leader-color the renderer resolves (consumption blue
+        while importing, return purple while exporting), the icon +
+        value flip with it. */
     .grid-label
     {
         position: absolute;
@@ -2994,16 +2993,16 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 8;
         display: inline-flex;
-        flex-direction: column;
+        align-items: center;
         justify-content: center;
-        gap: 3px;
-        min-width: 92px;
+        gap: 4px;
+        min-width: 76px;
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color: var(--primary-text-color, #212121);
         border: 2px solid var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
-        border-radius: 14px;
-        padding: 5px 10px;
+        border-radius: 999px;
+        padding: 3px 10px;
         font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         line-height: 1.2;
@@ -3013,32 +3012,12 @@ export const heliosCardStyles = css`
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
     }
-    /*  One flow row. The import row reads left to right (tower, arrow,
-        value); the export row is mirrored in the markup (value, arrow,
-        tower), so both arrows still point right while the direction is
-        carried by the tower's side. Centred so the mirror stays
-        symmetric. */
-    .grid-label-row
+    .grid-label ha-icon
     {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-    }
-    .grid-label-row ha-icon
-    {
-        --mdc-icon-size: 15px;
+        --mdc-icon-size: 16px;
         color: inherit;
         display: inline-flex;
         align-items: center;
-        flex-shrink: 0;
-    }
-    /*  Direction arrow reads a touch lighter than the tower so the
-        tower stays the row's anchor glyph. */
-    .grid-label-row .grid-row-arrow
-    {
-        --mdc-icon-size: 13px;
-        opacity: 0.75;
     }
 
     .grid-leader-svg
@@ -3181,8 +3160,8 @@ export const heliosCardStyles = css`
     .home-pill
     {
         position: absolute;
-        width:  56px;
-        height: 56px;
+        width:  44px;
+        height: 44px;
         transform: translate(-50%, -50%);
         background: var(--card-background-color, #ffffff);
         border: 2px solid var(--primary-color, #03a9f4);
@@ -3191,7 +3170,7 @@ export const heliosCardStyles = css`
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 1px;
+        gap: 0px;
         z-index: 9;
         pointer-events: none;
         box-shadow: 0 1px 3px var(--shadow-color);
@@ -3199,25 +3178,26 @@ export const heliosCardStyles = css`
     }
     .home-pill ha-icon
     {
-        --mdc-icon-size: 22px;
+        --mdc-icon-size: 20px;
         color: inherit;
         display: inline-flex;
         align-items: center;
     }
-    /*  With the consumption line present the home glyph shrinks a
-        touch so both lines breathe inside the circle. */
+    /*  With the consumption line present the home glyph shrinks so both
+        lines breathe inside the circle. */
     .home-pill.has-usage ha-icon
     {
-        --mdc-icon-size: 18px;
+        --mdc-icon-size: 15px;
     }
-    /*  Live home consumption, second line inside the hub. Smaller +
-        tabular so the digits sit steady under the glyph; regular text
-        ink so the value stays readable against the card background. */
+    /*  Live home consumption, second line inside the hub. Same text
+        size as the surrounding chips so the cluster reads uniform;
+        tabular figures keep the digits steady, regular text ink keeps
+        it readable against the card background. */
     .home-pill-usage
     {
-        font-size: 9px;
+        font-size: var(--ha-font-size-s, 12px);
         font-weight: 700;
-        line-height: 1;
+        line-height: 1.1;
         color: var(--primary-text-color, #212121);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
@@ -3546,7 +3526,7 @@ export const heliosCardStyles = css`
         }
         .pv-pct-label ha-icon,
         .battery-pct-label ha-icon,
-        .grid-label-row ha-icon,
+        .grid-label ha-icon,
         .solar-pct-label ha-icon
         {
             --mdc-icon-size: 18px;

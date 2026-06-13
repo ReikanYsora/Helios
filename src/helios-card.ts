@@ -331,11 +331,11 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
     //Outer radius of the central "home pill" icon, the circular
-    //node painted at layout.home. The pill is 56 px wide with a 2 px
-    //border (=> outermost radius 26 px); a 28 px leader nudge leaves
+    //node painted at layout.home. The pill is 44 px wide with a 2 px
+    //border (=> outermost radius 22 px); a 24 px leader nudge leaves
     //the hairline just OUTSIDE the pill so the leader visibly docks
     //against the disc edge instead of slicing through it.
-    private static readonly HOME_PILL_RADIUS_PX = 28;
+    private static readonly HOME_PILL_RADIUS_PX = 24;
     //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
@@ -1727,12 +1727,12 @@ export class HeliosCard extends LitElement
             const sx = chipX + dirH * chipNudgePx;
             const sy = chipY;
             //Land the vertical leg at ~25 % of the home pill width
-            //(13 px) on the chip's side of centre, so two leaders
+            //(11 px) on the chip's side of centre, so two leaders
             //meeting on the same row do NOT collide on the pill's
             //central axis. Vertical leg then docks against the pill
             //border at the matching circle intersection.
-            const HOME_PILL_VISIBLE_RADIUS = 26;
-            const HOME_PILL_QUARTER_X      = 13;
+            const HOME_PILL_VISIBLE_RADIUS = 22;
+            const HOME_PILL_QUARTER_X      = 11;
             const ex = homeX - dirH * HOME_PILL_QUARTER_X;
             //The vertical leg crosses the pill outline at
             //y = home.y ± sqrt(R² - offsetX²).
@@ -2380,23 +2380,23 @@ export class HeliosCard extends LitElement
                     ` : nothing}
                 ` : nothing}
 
-                <!--  Grid chip on the LEFT of the home: import and
-                      export merged into one two-line pill sitting on
-                      the cluster's centre row, exactly between where
-                      the two separate chips used to stack. Row 1 reads
-                      grid → home (import), row 2 reads home → grid
-                      (export). Both rows always render (0 W on the
-                      idle side) so the pill keeps a fixed height. A
-                      single leader to the home carries the dominant
-                      flow's colour and bead direction.               -->
+                <!--  Grid chip on the LEFT of the home, sitting on the
+                      cluster's centre row. A single normal-size pill
+                      that shows the ACTIVE flow only: when importing it
+                      reads consumption blue with the import value and a
+                      grid → home bead, when exporting it flips to return
+                      purple with the export value and a home → grid
+                      bead. The dominant side wins when both are live.
+                      Same compact recipe as the other chips so the text
+                      stays crisp under camera rotation.               -->
                 ${hasHomeCoords && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d="${gridLeaderPath}" />
-                        <!--  Single bead on the dominant flow. Import
+                        <!--  Single bead on the active flow. Import
                               flows grid → home (default traversal),
                               export flows home → grid (keyPoints 1;0
-                              reverses it). Dropped when the dominant
-                              side is idle, no misleading motion.     -->
+                              reverses it). Dropped when the active side
+                              is idle, no misleading motion.           -->
                         ${gridBeadDur !== null ? (gridImporting ? svg`
                             <circle class="grid-leader-bead" r="3" style="fill:${gridLeaderColor}">
                                 <animateMotion dur="${gridBeadDur.toFixed(2)}s" repeatCount="indefinite"
@@ -2414,16 +2414,8 @@ export class HeliosCard extends LitElement
                         class="grid-label"
                         style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
                     >
-                        <div class="grid-label-row">
-                            <ha-icon icon="mdi:transmission-tower"></ha-icon>
-                            <ha-icon class="grid-row-arrow" icon="mdi:arrow-right"></ha-icon>
-                            <span>${formatGridValue(gridImportDisplayWatts ?? 0, gridImportDisplayUnit)}</span>
-                        </div>
-                        <div class="grid-label-row">
-                            <span>${formatGridValue(gridExportDisplayWatts ?? 0, gridExportDisplayUnit)}</span>
-                            <ha-icon class="grid-row-arrow" icon="mdi:arrow-right"></ha-icon>
-                            <ha-icon icon="mdi:transmission-tower"></ha-icon>
-                        </div>
+                        <ha-icon icon="${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}"></ha-icon>
+                        <span>${formatGridValue(gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit)}</span>
                     </div>
                 ` : nothing}
 
@@ -2726,7 +2718,7 @@ export class HeliosCard extends LitElement
                           family signature of the home cluster.        -->
                     <svg class="home-drop-leader-svg">
                         <line class="home-drop-leader-line"
-                              x1="${layout!.home.x}" y1="${layout!.home.y + 28}"
+                              x1="${layout!.home.x}" y1="${layout!.home.y + 22}"
                               x2="${layout!.homeRoof.x}" y2="${layout!.homeRoof.y}" />
                     </svg>
                     <!--  Home pill, enlarged to host two stacked lines:
