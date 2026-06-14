@@ -2143,10 +2143,6 @@ export class HeliosCard extends LitElement
                     const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar   : undefined;
                     const onLayer    = this._onModeLayer;
                     const onWeather  = this._onModeWeather;
-                    //Live cloud-cover icon for the cloud-dome button:
-                    //sun, partly-cloudy, cloudy or pouring depending on
-                    //the current home reading. The user reads the sky
-                    //state at a glance without opening the dome.
                     //Camera lock chip sits top-left. Tapping the chip flips the lock state and asks the engine to persist the new
                     //pose (bearing + pitch + lock flag) to localStorage so the next reload restores it. No tooltip, no title, no
                     //localised label, the open/closed padlock glyph already carries the meaning and a tooltip on a touchscreen is

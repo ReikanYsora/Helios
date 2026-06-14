@@ -19,18 +19,11 @@ var ae,se=Object.create,le=Object.defineProperty,ue=Object.getOwnPropertyDescrip
             cards side by side in a grid view. See issue #33. */
         container-type: inline-size;
         container-name: helios-card;
-        /*  Card frame: pull the radius + border + shadow straight off
-            the HA card design tokens so Helios matches whatever the
-            user's frontend theme has set for every other dashboard
-            card. Hard-coded fallbacks mirror the HA default theme:
-            12 px radius, 1 px divider hairline, the standard 2-band
-            elevation shadow.                                          */
+        /*  Border + shadow come from <ha-card> itself (same --ha-card-*
+            tokens), so we don't restyle the frame; doing so only diverged
+            from the user's theme. border-radius stays because the
+            overflow:hidden above clips the full-bleed map to it. */
         border-radius: var(--ha-card-border-radius, 12px);
-        border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-        box-shadow: var(--ha-card-box-shadow,
-                        0 2px 1px -1px rgba(0, 0, 0, 0.2),
-                        0 1px 1px 0 rgba(0, 0, 0, 0.14),
-                        0 1px 3px 0 rgba(0, 0, 0, 0.12));
         font-family: var(--ha-font-family-body, 'Roboto', sans-serif);
         height:     100%;
         width:      100%;
@@ -3285,38 +3278,6 @@ var ae,se=Object.create,le=Object.defineProperty,ue=Object.getOwnPropertyDescrip
         disc still passes in front of / behind the home cluster
         depending on camera bearing. */
     .solar-ray-svg        { z-index: 7;  }
-
-    /*  Cloud-cover dome overlay: a celestial hemisphere centred
-        on the home, sliced into three horizontal bands (low / mid
-        / high cloud) whose per-band opacity scales with the live
-        cover percentage. Same fade-in / fade-out CSS rules as the
-        and same currentColor + opacity-driven look so the bands
-        feel like "filling water" inside a glass hemisphere. */
-    .cloud-dome-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 12;
-        color: var(--helios-cloud-color, var(--primary-text-color, var(--secondary-text-color, #727272)));
-        transition: opacity 240ms ease-out;
-    }
-    .cloud-dome-disc
-    {
-        transition: opacity 240ms ease-out;
-    }
-    .cloud-dome-disc-ring
-    {
-        stroke-dasharray: 4 4;
-    }
-    /*  Light theme tweak: the dome discs paint at a darker tint so
-        they read against a bright basemap. */
-    ha-card.theme-light .cloud-dome-svg
-    {
-        color: var(--helios-cloud-color, #4d4d4d);
-    }
 
     /*  Arc, first pass paints a dark outline for legibility on
         light basemaps; second pass paints the configured sun
