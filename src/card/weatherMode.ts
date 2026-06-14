@@ -153,19 +153,6 @@ export function startWeatherFadeLoop(host: WeatherModeHost): void
 }
 
 
-export function weatherFadeAlpha(host: WeatherModeHost): number
-{
-    const now = performance.now();
-    if (host._weatherFadeInStartMs !== null)
-    {
-        return Math.max(0, Math.min(1, (now - host._weatherFadeInStartMs) / WEATHER_FADE_IN_MS));
-    }
-    if (host._weatherFadeOutStartMs !== null)
-    {
-        return 1 - Math.max(0, Math.min(1, (now - host._weatherFadeOutStartMs) / WEATHER_FADE_OUT_MS));
-    }
-    return host._weatherOverlayVisible ? 1 : 0;
-}
 
 
 //Push any band-visibility / time-index changes coming from the card into the engine so the

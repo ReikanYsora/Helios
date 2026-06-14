@@ -118,24 +118,3 @@ export function callWSWithTimeout<T = unknown>(
 }
 
 
-//Schedule a callback to run when the browser is idle, with a
-//conservative timeout fallback. Used to defer expensive non-critical
-//fetches (the 5-min trainer stats) until the user-facing
-//work has landed and the main thread has a moment to breathe. See
-
-//
-//Safari and some embedded browsers don't expose
-//`requestIdleCallback`; we fall back to a 1 s timeout so the work
-//still lands within a reasonable budget.
-export function scheduleIdle(cb: () => void, fallbackMs: number = 1_000): void
-{
-    const w = globalThis as typeof globalThis & {
-        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-    };
-    if (typeof w.requestIdleCallback === 'function')
-    {
-        w.requestIdleCallback(cb, { timeout: fallbackMs * 2 });
-        return;
-    }
-    setTimeout(cb, fallbackMs);
-}

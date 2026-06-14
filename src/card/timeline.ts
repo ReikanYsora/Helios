@@ -216,13 +216,5 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
 }
 
 
-//Drop scrubbed mode and snap the card back to live. The engine's selected-time hook is cleared so the next render pulls the present moment instead of
-//the cached scrub instant.
-export function resetToLive(host: TimelineHost): void
-{
-    host._selectedTime = null;
-    host._isLiveMode   = true;
-    host._engine?.setSelectedTime(null);
-}
 
 
