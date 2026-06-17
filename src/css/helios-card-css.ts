@@ -970,12 +970,19 @@ export const heliosCardStyles = css`
     {
         display: inline-flex;
         align-items: center;
-        color: var(--chart-accent, var(--primary-text-color, #212121));
+        /*  Same chip frame as the period selector (card surface + shadow + radius) so the two header
+            controls read as one family. */
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: var(--card-background-color, #ffffff);
+        box-shadow: 0 1px 3px var(--shadow-color);
+        /*  Icon in the text ink (black), not the accent colour. */
+        color: var(--primary-text-color, #212121);
         pointer-events: none;
     }
     .tb-chart-indicator ha-icon
     {
-        --mdc-icon-size: 20px;
+        --mdc-icon-size: 18px;
         color: inherit;
         display: block;
         animation: tb-chart-indicator-fade 250ms ease;

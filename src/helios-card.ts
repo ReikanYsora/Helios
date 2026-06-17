@@ -746,7 +746,7 @@ export class HeliosCard extends LitElement
         };
         const icon = icons[this._chartTarget] ?? 'mdi:chart-line';
         return html`
-            <div class="tb-chart-indicator" style="--chart-accent:${chartAccentColor(this)}">
+            <div class="tb-chart-indicator">
                 ${keyed(this._chartTarget, html`<ha-icon icon="${icon}"></ha-icon>`)}
             </div>
         `;
