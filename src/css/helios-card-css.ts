@@ -83,11 +83,6 @@ export const heliosCardStyles = css`
             works under both.                                          */
         position: absolute;
         inset: 0;
-        /*  Give the map its OWN rounded clip (matching the card radius) so the rectangular MapLibre
-            canvas can't leave a 1 px sliver outside the border's inner curve at the corners. Belt-and-
-            braces with the <ha-card> overflow clip above; together they keep the corner seam clean. */
-        border-radius: var(--ha-card-border-radius, 12px);
-        overflow: hidden;
     }
 
     /*  Force-hide the MapLibre attribution rail. attributionControl
@@ -1827,21 +1822,31 @@ export const heliosCardStyles = css`
     .home-pill
     {
         position: absolute;
-        width:  52px;
-        height: 52px;
         transform: translate(-50%, -50%);
-        background: var(--card-background-color, #ffffff);
-        border: 2px solid var(--primary-color, #03a9f4);
-        border-radius: 50%;
+        z-index: 9;
         display: inline-flex;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
         justify-content: center;
-        gap: 0px;
-        z-index: 9;
+        gap: 4px;
+        /*  Horizontal stadium, like the other chips and the HA card: the home glyph and the live usage
+            sit side by side. min-width / height match the leader dock half-extents (38 / 14 px) so the
+            chip leaders meet the visible pill edge. */
+        min-width: 76px;
+        height: 28px;
+        box-sizing: border-box;
+        padding: 0 10px;
+        background: var(--card-background-color, #ffffff);
+        color: var(--primary-color, #03a9f4);
+        border: 2px solid var(--primary-color, #03a9f4);
+        border-radius: 999px;
         pointer-events: none;
         box-shadow: 0 1px 3px var(--shadow-color);
-        color: var(--primary-color, #03a9f4);
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
         /*  Keep the mask fade AND ease the hover glow in/out. */
         transition: opacity 0.35s ease, box-shadow 0.2s ease;
     }
@@ -1854,16 +1859,10 @@ export const heliosCardStyles = css`
     }
     .home-pill ha-icon
     {
-        --mdc-icon-size: 20px;
+        --mdc-icon-size: 16px;
         color: inherit;
         display: inline-flex;
         align-items: center;
-    }
-    /*  With the consumption line present the home glyph shrinks so both
-        lines breathe inside the circle. */
-    .home-pill.has-usage ha-icon
-    {
-        --mdc-icon-size: 15px;
     }
     /*  Live home consumption, second line inside the hub. Same text
         size as the surrounding chips so the cluster reads uniform;

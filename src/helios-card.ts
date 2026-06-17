@@ -337,7 +337,10 @@ export class HeliosCard extends LitElement
     //border (=> outermost radius 26 px); a 28 px leader nudge leaves
     //the hairline just OUTSIDE the pill so the leader visibly docks
     //against the disc edge instead of slicing through it.
-    private static readonly HOME_PILL_RADIUS_PX = 28;
+    //Home pill is a horizontal stadium (like the other chips + the HA card), not a circle. Half-extents
+    //of its outline; leaders dock against this stadium so they all meet the same focal energy node.
+    private static readonly HOME_PILL_HALF_WIDTH_PX  = 38;
+    private static readonly HOME_PILL_HALF_HEIGHT_PX = 14;
     //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
@@ -1436,18 +1439,31 @@ export class HeliosCard extends LitElement
     //All chip leaders (PV, battery, grid) dock against this single
     //pill so the home reads as the focal energy node, mirroring HA's
     //own Energy distribution card.
-    private _nudgeToHomeCircle(
+    //Nearest point on the home pill's stadium outline to (chipX, chipY): the straight top/bottom edge
+    //over the middle, the rounded end-cap arc beyond it. Ported from the HA card so the leaders dock to
+    //the horizontal pill, not a circle.
+    private _nudgeToHomePill(
         chipX: number, chipY: number,
         homeX: number, homeY: number,
     ): { x: number; y: number }
     {
-        const dx = chipX - homeX;
+        const halfW = HeliosCard.HOME_PILL_HALF_WIDTH_PX;
+        const halfH = HeliosCard.HOME_PILL_HALF_HEIGHT_PX;
+        const ex = chipX - homeX;
+        const ey = chipY - homeY;
+        //Width of the straight middle (between the two end-cap semicircles).
+        const straightHalfW = Math.max(0, halfW - halfH);
+        if (Math.abs(ex) <= straightHalfW)
+        {
+            //Over the straight middle: dock on the nearest top / bottom edge.
+            return { x: chipX, y: homeY + (ey >= 0 ? 1 : -1) * halfH };
+        }
+        //Over an end cap: dock on the matching semicircle arc.
+        const cornerX = homeX + (ex >= 0 ? 1 : -1) * straightHalfW;
+        const dx = chipX - cornerX;
         const dy = chipY - homeY;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        return {
-            x: homeX + (dx / len) * HeliosCard.HOME_PILL_RADIUS_PX,
-            y: homeY + (dy / len) * HeliosCard.HOME_PILL_RADIUS_PX,
-        };
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        return { x: cornerX + (halfH * dx) / dist, y: homeY + (halfH * dy) / dist };
     }
 
 
@@ -1791,22 +1807,13 @@ export class HeliosCard extends LitElement
             const dirV = homeY > chipY ? 1 : -1;
             const sx = chipX + dirH * chipNudgePx;
             const sy = chipY;
-            //Land the vertical leg at ~25 % of the home pill width
-            //(13 px) on the chip's side of centre, so two leaders
-            //meeting on the same row do NOT collide on the pill's
-            //central axis. Vertical leg then docks against the pill
-            //border at the matching circle intersection.
-            const HOME_PILL_VISIBLE_RADIUS = 26;
-            const HOME_PILL_QUARTER_X      = 13;
+            //Land the vertical leg ~13 px on the chip's side of centre so two leaders meeting on the
+            //same row don't collide on the pill's central axis. On the horizontal stadium that x sits
+            //over the flat top / bottom edge, so the leg docks at the pill's half-height (the straight
+            //edge), not a circle arc.
+            const HOME_PILL_QUARTER_X = 13;
             const ex = homeX - dirH * HOME_PILL_QUARTER_X;
-            //The vertical leg crosses the pill outline at
-            //y = home.y ± sqrt(R² - offsetX²).
-            const yIntersect = Math.sqrt(
-                Math.max(0,
-                    HOME_PILL_VISIBLE_RADIUS * HOME_PILL_VISIBLE_RADIUS
-                    - HOME_PILL_QUARTER_X    * HOME_PILL_QUARTER_X)
-            );
-            const ey = homeY - dirV * yIntersect;
+            const ey = homeY - dirV * HeliosCard.HOME_PILL_HALF_HEIGHT_PX;
             //Fillet radius, clamped so the curve fits inside both
             //legs of the L.
             const FILLET_R = 12;
@@ -2350,7 +2357,7 @@ export class HeliosCard extends LitElement
                     //border via a fixed radius nudge.
                     const pvX1 = layout!.pvLabel.x;
                     const pvY1 = layout!.pvLabel.y + PV_HALF_HEIGHT_PX;
-                    const pvHomeEnd = this._nudgeToHomeCircle(
+                    const pvHomeEnd = this._nudgeToHomePill(
                         pvX1, pvY1,
                         layout!.home.x, layout!.home.y,
                     );
