@@ -82,7 +82,10 @@ export const heliosCardStyles = css`
             so the old percentage path worked there, the absolute path
             works under both.                                          */
         position: absolute;
-        inset: 0;
+        /*  Bleed 1 px under the <ha-card> border (the card's overflow:hidden re-clips the map to the
+            rounded shape) so the map covers the 1 px anti-alias seam at the rounded corners where the
+            black backdrop would otherwise peek between the inner-clipped map and the border. */
+        inset: -1px;
     }
 
     /*  Force-hide the MapLibre attribution rail. attributionControl
@@ -949,16 +952,47 @@ export const heliosCardStyles = css`
         font-weight: var(--ha-font-weight-medium, 500);
     }
 
-    /*  Rolling-period selector: a compact text segmented control floating at the top-right of the
-        timeline. Same on-primary active recipe as the mode bar so the two controls read as one family.
-        Absolutely positioned (out of the time-bar's flex flow) so it overlays the chart corner instead
-        of stealing a band of height. */
+    /*  Header row sitting just ABOVE the timeline chart: the active-target indicator on the left and the
+        rolling-period selector on the right, at the same height. pointer-events: none so the band itself
+        stays transparent to map rotation; the interactive children re-enable events. */
+    .tb-header
+    {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 2px 4px;
+        pointer-events: none;
+    }
+    /*  Active-target indicator (mirror of HA's chart-indicator): the icon of whatever the timeline chart
+        currently shows, tinted with the active accent. Keyed so it fades in on each re-target. */
+    .tb-chart-indicator
+    {
+        display: inline-flex;
+        align-items: center;
+        color: var(--chart-accent, var(--primary-text-color, #212121));
+        pointer-events: none;
+    }
+    .tb-chart-indicator ha-icon
+    {
+        --mdc-icon-size: 20px;
+        color: inherit;
+        display: block;
+        animation: tb-chart-indicator-fade 250ms ease;
+    }
+    @keyframes tb-chart-indicator-fade
+    {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce)
+    {
+        .tb-chart-indicator ha-icon { animation: none; }
+    }
+    /*  Rolling-period selector: a compact text segmented control on the right of the header row. Same
+        on-primary active recipe as the mode bar so the two controls read as one family. */
     .tb-period-selector
     {
-        position: absolute;
-        top: 4px;
-        right: 4px;
-        z-index: 5;
         display: inline-flex;
         gap: 2px;
         padding: 2px;

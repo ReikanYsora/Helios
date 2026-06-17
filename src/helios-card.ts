@@ -733,6 +733,25 @@ export class HeliosCard extends LitElement
         }
     };
 
+    //Active-target indicator on the left of the timeline header: the icon of whatever the re-targetable
+    //chart currently shows, tinted with the active accent. Mirror of the HA card's chart-indicator. Keyed
+    //on the target so the glyph fades in on each re-target.
+    private _renderChartIndicator(): TemplateResult
+    {
+        const icons: Record<ChartTarget, string> = {
+            production: 'mdi:solar-power',
+            grid:       'mdi:transmission-tower',
+            battery:    'mdi:battery',
+            irradiance: 'mdi:white-balance-sunny',
+        };
+        const icon = icons[this._chartTarget] ?? 'mdi:chart-line';
+        return html`
+            <div class="tb-chart-indicator" style="--chart-accent:${chartAccentColor(this)}">
+                ${keyed(this._chartTarget, html`<ha-icon icon="${icon}"></ha-icon>`)}
+            </div>
+        `;
+    }
+
     //Compact rolling-period selector on the timeline: four presets (today, the configured default span,
     //the last 7 days, the last 30 days). The active preset is highlighted by matching the live span.
     //Pointer-down is swallowed so tapping a preset never starts a timeline scrub on the parent .time-bar.
@@ -2092,10 +2111,14 @@ export class HeliosCard extends LitElement
                         class="time-bar"
                         @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
                     >
-                        <!--  Rolling-period selector: a compact segmented control aligned to the right
-                              of the timeline. Swallows its own pointer-down so tapping a preset never
-                              starts a scrub on the parent .time-bar.  -->
-                        ${this._renderPeriodSelector()}
+                        <!--  Header row just above the chart: the active-target indicator on the left
+                              (what the timeline currently shows) and the rolling-period selector on the
+                              right, at the same height. The selector swallows its own pointer-down so
+                              tapping a preset never starts a scrub on the parent .time-bar.  -->
+                        <div class="tb-header">
+                            ${this._renderChartIndicator()}
+                            ${this._renderPeriodSelector()}
+                        </div>
 
                         <!--  Optional PV production graph, only
                               rendered when the HA Energy dashboard

@@ -2392,25 +2392,10 @@ export class HeliosEngine
         //End at the midnight after the last future day so the axis spans futureDays full days plus today.
         const visibleEndMs   = today0.getTime() + (futureDays + 1) * 24 * 3_600_000;
 
-        //Open-Meteo path: snap the start to the first live weather sample at or after the window start so
-        //the cloud / irradiance / forecast traces line up with real samples. The end stays at the
-        //configured window edge regardless of how far the payload reaches (the forecast trace simply
-        //stops where its data does).
-        const home = this._homeHourlyData;
-        if (home && home.times.length)
-        {
-            const t = home.times;
-            let startIdx = 0;
-            for (let i = 0; i < t.length; i++)
-            {
-                if (t[i].getTime() >= visibleStartMs) { startIdx = i; break; }
-            }
-            return { start: t[startIdx], end: new Date(visibleEndMs) };
-        }
-
-        //Fallback when the Open-Meteo fetch failed (offline, CORS, 502, etc.). The timeline still renders
-        //so the user can scrub PV history / battery curves and read the live state; we just lose the
-        //cloud / irradiance / forecast traces.
+        //The window is exactly the configured span. The Open-Meteo cloud / irradiance traces may not
+        //reach the far past (the payload covers a limited number of days) and the forecast stops where its
+        //data ends, but the axis + the recorder-backed production / grid / battery curves span the whole
+        //window, so a 30-day period really shows 30 days instead of snapping back to the weather payload.
         return { start: new Date(visibleStartMs), end: new Date(visibleEndMs) };
     }
 
