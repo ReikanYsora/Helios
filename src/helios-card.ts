@@ -1,5 +1,6 @@
 import { LitElement, html, svg, PropertyValues, TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { keyed } from 'lit/directives/keyed.js';
 import { HeliosEngine } from './helios-engine';
 import
 {
@@ -38,6 +39,7 @@ import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiat
 import
 {
     renderBottomChart,
+    chartAccentColor,
     type ChartTarget,
     renderTimelineTicks,
     renderTimelineDayLabels,
@@ -2107,10 +2109,11 @@ export class HeliosCard extends LitElement
                               cursors. The day-label strip sits below so it never covers the curves.  -->
                         <div
                             class="tb-chart-card"
+                            style="--chart-accent:${chartAccentColor(this)}"
                             @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
                             @pointerleave="${() => handleChartHoverLeave(this)}"
                         >
-                            ${renderBottomChart(this)}
+                            ${keyed(this._chartTarget, renderBottomChart(this))}
                             ${renderTimelineNightZones(this)}
                             ${renderTimelineFutureMask(this)}
                             ${renderTimelineTicks(this)}

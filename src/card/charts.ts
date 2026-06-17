@@ -518,8 +518,17 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const atMs = startMs + (pct / 100) * rangeMs;
 
     const irrV = series ? interpAt(series.times, series.irradiance, atMs) : NaN;
-    const cldV = series ? interpAt(series.times, series.cloud,      atMs) : NaN;
     const pv   = pvValueAtTime(host, atMs);
+
+    //Active chart target: the tooltip rows follow whatever the re-targetable chart is showing, the same
+    //chip <-> chart <-> tooltip coupling as the HA card. Grid / battery values are read from the unified
+    //store at the cursor instant (watts; kw() formats to kW). valueAt may return null -> coerce to NaN.
+    const target   = host._chartTarget ?? 'production';
+    const store    = host._unifiedStore;
+    const gridImpW = store ? (valueAt(store.gridImport, store, atMs) ?? NaN) : NaN;
+    const gridExpW = store ? (valueAt(store.gridExport, store, atMs) ?? NaN) : NaN;
+    const battW    = store ? (valueAt(store.battery,    store, atMs) ?? NaN) : NaN;
+    const kw = (w: number): string => `${formatLocalisedNumber(host.hass, w / 1000, 1)} kW`;
 
     //Per-entity breakdown rows for multi-source installs (LBDG_'s feature). Each row carries the friendly name from
     //hass.states + a colour pastille derived by hue-rotating the theme PV colour, so the chip ↔ row visual link
@@ -637,43 +646,67 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                         <span class="tb-hover-tooltip-live-chip-label">${liveLabel}</span>
                     </span>
                 </div>
-                ${showProduction && dayKwhText ? html`
-                    <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>
-                        <span class="tb-hover-tooltip-value">${dayKwhText}</span>
-                    </div>
+                ${target === 'production' ? html`
+                    ${showProduction && dayKwhText ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${dayKwhText}</span>
+                        </div>
+                    ` : nothing}
+                    ${showForecast && dayKwhText ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:crystal-ball"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${dayKwhText}</span>
+                        </div>
+                    ` : nothing}
+                    ${hasPv ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
+                        </div>
+                    ` : nothing}
+                    ${perEntityRows.map(prow => html`
+                        <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                            <span class="tb-hover-tooltip-dot" style="background:${pvSourceColor(prow.colorIdx, perEntityIds.length)}"></span>
+                            <span class="tb-hover-tooltip-sublabel">${prow.label}</span>
+                            <span class="tb-hover-tooltip-value">${prow.valueText}</span>
+                        </div>
+                    `)}
                 ` : nothing}
-                ${showForecast && dayKwhText ? html`
-                    <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:crystal-ball"></ha-icon>
-                        <span class="tb-hover-tooltip-value">${dayKwhText}</span>
-                    </div>
+                ${target === 'grid' ? html`
+                    ${isFinite(gridImpW) && gridImpW >= 1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:transmission-tower-export"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${kw(gridImpW)}</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(gridExpW) && gridExpW >= 1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:transmission-tower-import"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${kw(gridExpW)}</span>
+                        </div>
+                    ` : nothing}
                 ` : nothing}
-                ${isFinite(irrV) ? html`
+                ${target === 'battery' ? html`
+                    ${isFinite(battW) && battW >= 1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:battery-arrow-up"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${kw(battW)}</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(battW) && battW <= -1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:battery-arrow-down"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${kw(-battW)}</span>
+                        </div>
+                    ` : nothing}
+                ` : nothing}
+                ${target === 'irradiance' && isFinite(irrV) ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny"></ha-icon>
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
                     </div>
                 ` : nothing}
-                ${isFinite(cldV) ? html`
-                    <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline"></ha-icon>
-                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
-                    </div>
-                ` : nothing}
-                ${hasPv ? html`
-                    <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power"></ha-icon>
-                        <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
-                    </div>
-                ` : nothing}
-                ${perEntityRows.map(row => html`
-                    <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
-                        <span class="tb-hover-tooltip-dot" style="background:${pvSourceColor(row.colorIdx, perEntityIds.length)}"></span>
-                        <span class="tb-hover-tooltip-sublabel">${row.label}</span>
-                        <span class="tb-hover-tooltip-value">${row.valueText}</span>
-                    </div>
-                `)}
             </div>
         </div>
     `;
@@ -1355,6 +1388,47 @@ export function renderBottomChart(host: ChartHost): TemplateResult
         return renderPvChart(host);
     }
     return renderTargetChart(host, target);
+}
+
+
+//Accent colour for the active chart target: the colour the chart border and the active chip share, so
+//re-targeting reads as one coupled gesture (same as the HA card). Production / irradiance are fixed;
+//grid / battery take the dominant side over the visible window.
+export function chartAccentColor(host: ChartHost): string
+{
+    const target = host._chartTarget ?? 'production';
+    if (target === 'production') { return DEFAULT_PV_COLOR_HEX; }
+    if (target === 'irradiance') { return DEFAULT_SUN_COLOR_HEX; }
+    const store = host._unifiedStore;
+    const range = host._timeRange;
+    if (!store || !range)
+    {
+        return target === 'grid' ? DEFAULT_GRID_IMPORT_COLOR_HEX : DEFAULT_BATTERY_OUT_COLOR_HEX;
+    }
+    const startMs = range.start.getTime();
+    const endMs   = range.end.getTime();
+    const sumArr = (arr: ReadonlyArray<number | null>, map?: (v: number) => number): number =>
+    {
+        let s = 0;
+        for (let i = 0; i < arr.length; i++)
+        {
+            const raw = arr[i];
+            if (raw === null || !isFinite(raw)) { continue; }
+            const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
+            if (tMs < startMs || tMs > endMs) { continue; }
+            s += map ? map(raw) : raw;
+        }
+        return s;
+    };
+    if (target === 'grid')
+    {
+        return sumArr(store.gridImport) >= sumArr(store.gridExport)
+            ? DEFAULT_GRID_IMPORT_COLOR_HEX
+            : DEFAULT_GRID_EXPORT_COLOR_HEX;
+    }
+    return sumArr(store.battery, v => Math.max(0, v)) >= sumArr(store.battery, v => Math.max(0, -v))
+        ? DEFAULT_BATTERY_IN_COLOR_HEX
+        : DEFAULT_BATTERY_OUT_COLOR_HEX;
 }
 
 

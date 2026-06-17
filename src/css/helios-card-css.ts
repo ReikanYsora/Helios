@@ -368,12 +368,12 @@ export const heliosCardStyles = css`
     {
         position: relative;
         background: var(--card-background-color, #ffffff);
-        /*  Theme-aware ink border so the chart cards stand out
-            against the basemap on both palettes. The 0.55 alpha
-            keeps the stroke visible without dominating the chart
-            content underneath. */
-        border: 2px solid rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.55);
-        border-radius: 8px;
+        /*  HA-style card frame: a thin 1 px stroke in the active chart accent, softened to 60 % so it
+            reads as a subtle frame rather than the heavy ink box it used to be. Mirrors the HA
+            energy-solar-overview timeline border (the standalone carried the same non-HA heavy border). */
+        border: var(--ha-border-width-sm, 1px) solid
+            color-mix(in srgb, var(--chart-accent, var(--primary-text-color, #212121)) 60%, transparent);
+        border-radius: var(--ha-border-radius-lg, 8px);
         box-shadow: 0 1px 3px var(--shadow-color);
         /*  Height scales with the card's container width (cqw =
             container-query width). 36 px floor on a small grid tile,
@@ -383,16 +383,24 @@ export const heliosCardStyles = css`
         height: clamp(36px, 8cqw, 72px);
         overflow: hidden;
     }
-    ha-card.theme-dark .tb-chart-card
-    {
-        border-color: rgba(255, 255, 255, 0.55);
-    }
-
     .hc-chart-svg
     {
         display: block;
         width: 100%;
         height: 100%;
+        /*  Grow the curve up from the baseline when the chart target changes (the SVG is keyed on the
+            target so it re-mounts and replays), matching HA's own graph cards' 500 ms grow. */
+        transform-origin: bottom;
+        animation: hc-chart-grow 500ms ease-out;
+    }
+    @keyframes hc-chart-grow
+    {
+        from { transform: scaleY(0); }
+        to   { transform: scaleY(1); }
+    }
+    @media (prefers-reduced-motion: reduce)
+    {
+        .hc-chart-svg { animation: none; }
     }
 
     /*  Stroke-only outline on top of the filled area so peaks read
@@ -893,22 +901,15 @@ export const heliosCardStyles = css`
             where the row sits vertically. */
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
-        /*  Theme-aware ink border matching the chart cards above so
-            the timeline + day-strip stack reads as one outlined
-            instrument. */
-        border: 2px solid rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.55);
-        /*  Compact radius (matches the chart cards stacked above) so
-            the strip reads as a low-key axis rather than a pill chip. */
-        border-radius: 8px;
+        /*  HA-style subtle frame (1 px divider), matching the chart card above so the timeline +
+            day-strip stack reads as one instrument without the old heavy ink box. */
+        border: var(--ha-border-width-sm, 1px) solid
+            var(--divider-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.12));
+        border-radius: var(--ha-border-radius-lg, 8px);
         box-shadow: 0 1px 2px var(--shadow-color);
         overflow: hidden;
         pointer-events: none;
     }
-    ha-card.theme-dark .tb-day-strip
-    {
-        border-color: rgba(255, 255, 255, 0.55);
-    }
-
     /*  Adaptive timeline label, point-positioned on its model fraction. The inline left anchors the
         fraction; the translate pulls the label back by half its own width so the text sits centred over
         the fraction rather than to its right. */
