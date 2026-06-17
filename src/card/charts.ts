@@ -11,7 +11,11 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX
+    DEFAULT_PV_COLOR_HEX,
+    DEFAULT_GRID_IMPORT_COLOR_HEX,
+    DEFAULT_GRID_EXPORT_COLOR_HEX,
+    DEFAULT_BATTERY_IN_COLOR_HEX,
+    DEFAULT_BATTERY_OUT_COLOR_HEX
 } from '../helios-config';
 import { formatLocalisedNumber, lerpHexToward } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
@@ -696,6 +700,12 @@ export interface ChartSeries
     windSpeed:    number[];
 }
 
+//Re-targetable bottom-chart target: the single series-set the one chart draws at a time. 'production'
+//(+ dashed forecast + per-source breakdown) is the default; 'grid' / 'battery' draw their two-direction
+//flows (accent = the dominant side over the window); 'irradiance' draws the W/m² curve on a fixed
+//0..1000 scale. Cloud is intentionally NOT a target, it lives in weather mode.
+export type ChartTarget = 'production' | 'grid' | 'battery' | 'irradiance';
+
 //Structural surface the host card exposes to this module. The `_chartHoverPct` field is intentionally writable: hover handlers defined here mutate it
 //on pointermove / pointerleave, exactly like the dashboard's `_dashChartHoverTs`. All other fields stay read-only.
 export interface ChartHost
@@ -740,6 +750,8 @@ export interface ChartHost
     //timeline + radial + dashboard charts read from. Null only between mount and the first build,
     //the chart degrades to an empty curve until then.
     readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
+    //Active bottom-chart target. Drives which series renderBottomChart draws; defaults to 'production'.
+    readonly _chartTarget?: ChartTarget;
 }
 
 
@@ -1328,6 +1340,160 @@ export function renderPvChart(host: ChartHost): TemplateResult
         ${showHover && isFinite(hoverY) ? html`
             <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverY / H * 100).toFixed(2)}%; background: ${pvColor};"></div>
         ` : nothing}
+    `;
+}
+
+
+//Re-targetable bottom chart. Production keeps its dedicated renderer (forecast + per-source breakdown +
+//native-unit scaling); grid / battery / irradiance go through the generic renderer below. One chart, the
+//active target decides what it shows, matching the HA energy-solar-overview card.
+export function renderBottomChart(host: ChartHost): TemplateResult
+{
+    const target = host._chartTarget ?? 'production';
+    if (target === 'production')
+    {
+        return renderPvChart(host);
+    }
+    return renderTargetChart(host, target);
+}
+
+
+//Generic chart for the non-production targets, all read from the unified store. Grid + battery draw two
+//directional series each (accent = the dominant side over the window); irradiance draws one curve on a
+//fixed 0..1000 W/m² scale. Power series stay in watts (the tooltip formats to kW), so no per-entity
+//native-unit handling here, that stays in renderPvChart for production only.
+function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'production'>): TemplateResult
+{
+    const store = host._unifiedStore;
+    const range = host._timeRange;
+    const W = 1000;
+    const H = 100;
+    if (!store || !range)
+    {
+        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+    }
+    const startMs  = range.start.getTime();
+    const endMsAbs = range.end.getTime();
+    const rangeMs  = endMsAbs - startMs;
+    if (rangeMs <= 0)
+    {
+        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+    }
+    const xOf = (tMs: number): number => ((tMs - startMs) / rangeMs) * W;
+
+    //Map a store series (aligned on the store buckets) to visible-range points, dropping nulls and
+    //clipping to the timeline window. Bucket centre matches sliceForRange so curves line up with the
+    //production chart's day separators.
+    const toPts = (arr: ReadonlyArray<number | null>, map?: (v: number) => number): Array<{ t: number; v: number }> =>
+    {
+        const out: Array<{ t: number; v: number }> = [];
+        for (let i = 0; i < arr.length; i++)
+        {
+            const raw = arr[i];
+            if (raw === null || !isFinite(raw)) { continue; }
+            const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
+            if (tMs < startMs || tMs > endMsAbs) { continue; }
+            out.push({ t: tMs, v: map ? map(raw) : raw });
+        }
+        return out;
+    };
+    const sum = (pts: Array<{ v: number }>): number => pts.reduce((a, p) => a + p.v, 0);
+
+    type Line = { pts: Array<{ t: number; v: number }>; color: string };
+    let series: Line[];
+    let fixedMax = 0;
+    if (target === 'grid')
+    {
+        const imp = toPts(store.gridImport);
+        const exp = toPts(store.gridExport);
+        series = [
+            { pts: imp, color: DEFAULT_GRID_IMPORT_COLOR_HEX },
+            { pts: exp, color: DEFAULT_GRID_EXPORT_COLOR_HEX },
+        ];
+    }
+    else if (target === 'battery')
+    {
+        //Store battery is signed net power (charge - discharge). Split into two non-negative curves so
+        //charging and discharging read as distinct flows, each zero while the other is active.
+        const charge    = toPts(store.battery, v => Math.max(0, v));
+        const discharge = toPts(store.battery, v => Math.max(0, -v));
+        series = [
+            { pts: charge,    color: DEFAULT_BATTERY_IN_COLOR_HEX },
+            { pts: discharge, color: DEFAULT_BATTERY_OUT_COLOR_HEX },
+        ];
+    }
+    else
+    {
+        series   = [{ pts: toPts(store.irradiance), color: DEFAULT_SUN_COLOR_HEX }];
+        fixedMax = 1000;
+    }
+
+    //Y scale: fixed for irradiance, else auto to the running max across both series (min 1 to avoid a
+    //flat-line divide-by-zero on an all-zero window).
+    let yMax = fixedMax;
+    if (yMax <= 0)
+    {
+        yMax = 1;
+        for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
+    }
+    const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * H;
+
+    const drawn = series.map(s =>
+    {
+        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, total: sum(s.pts) }; }
+        const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
+        const x0 = xOf(s.pts[0].t);
+        const xN = xOf(s.pts[s.pts.length - 1].t);
+        return {
+            area:  `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
+            line:  `M ${pp.join(' L ')}`,
+            color: s.color,
+            total: sum(s.pts),
+        };
+    });
+
+    //Day separators from the shared timeline model (bounded, empty on wide spans).
+    const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
+
+    //Hover guide + one dot per series, interpolated at the hover instant.
+    const hoverPct = host._chartHoverPct;
+    let hoverX     = 0;
+    let showHover  = false;
+    const hoverDots: Array<{ y: number; color: string }> = [];
+    if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
+    {
+        hoverX = (hoverPct / 100) * W;
+        const hoverMs = startMs + (hoverPct / 100) * rangeMs;
+        for (const s of series)
+        {
+            if (s.pts.length < 1) { continue; }
+            const v = interpAt(s.pts.map(p => new Date(p.t)), s.pts.map(p => p.v), hoverMs);
+            if (isFinite(v))
+            {
+                hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
+                showHover = true;
+            }
+        }
+    }
+
+    return html`
+        <svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+            ${dayXs.map(x => svg`
+                <line class="hc-day-sep" x1="${x.toFixed(2)}" y1="0" x2="${x.toFixed(2)}" y2="${H}"></line>
+            `)}
+            ${drawn.map(d => d.area ? svg`
+                <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
+            ` : nothing)}
+            ${drawn.map(d => d.line ? svg`
+                <path class="hc-chart-line" d="${d.line}" stroke="${d.color}"></path>
+            ` : nothing)}
+            ${showHover ? svg`
+                <line class="hc-hover-guide" x1="${hoverX.toFixed(2)}" y1="0" x2="${hoverX.toFixed(2)}" y2="${H}"></line>
+            ` : nothing}
+        </svg>
+        ${hoverDots.map(d => html`
+            <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(d.y / H * 100).toFixed(2)}%; background: ${d.color};"></div>
+        `)}
     `;
 }
 

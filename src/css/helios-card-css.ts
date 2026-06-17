@@ -1511,6 +1511,27 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
+    /*  Re-targetable-chart chips: clicking one points the single bottom chart at that metric. The base
+        chips are display-only (pointer-events: none); the [role="button"] selector both re-enables the
+        events and out-specifies the base rule regardless of source order. */
+    .pv-pct-label[role="button"],
+    .battery-pct-label[role="button"],
+    .grid-label[role="button"],
+    .solar-pct-label[role="button"]
+    {
+        pointer-events: auto;
+        cursor: pointer;
+    }
+    /*  Active target: a ring in the HA primary colour so the user sees which metric the chart is
+        showing. (The richer per-metric glow is a later polish pass.) */
+    .pv-pct-label.is-chart-active,
+    .battery-pct-label.is-chart-active,
+    .grid-label.is-chart-active,
+    .solar-pct-label.is-chart-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color), 0 0 0 2px var(--primary-color, #03a9f4);
+    }
+
     /*  Predicted PV chip, shown when scrubbing into the future. The
         value comes from the kWp × clear-sky model, not a measured
         reading, so we semi-transparency the whole chip and rely on

@@ -37,8 +37,8 @@ import
 import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
 import
 {
-    renderChart,
-    renderPvChart,
+    renderBottomChart,
+    type ChartTarget,
     renderTimelineTicks,
     renderTimelineDayLabels,
     renderTimelineNightZones,
@@ -497,6 +497,9 @@ export class HeliosCard extends LitElement
     //outside the cards; drives the hover guide line, the per-curve
     //dots and the tooltip chip rendered above the cards.
     @state() _chartHoverPct: number | null = null;
+    //Active bottom-chart target. The single re-targetable chart draws this series-set; chips re-point it
+    //(production by default, then grid / battery / irradiance). Cloud is weather-mode only, never a target.
+    @state() _chartTarget: ChartTarget = 'production';
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -714,6 +717,16 @@ export class HeliosCard extends LitElement
         this._periodFutureDays = futureDays;
         this._applyPeriod();
     }
+
+    //Chip -> bottom-chart re-targeting. Points the single re-targetable chart at the clicked metric.
+    //No-op when already on that target so tapping the active chip doesn't churn a re-render.
+    private _setChartTarget = (target: ChartTarget): void =>
+    {
+        if (this._chartTarget !== target)
+        {
+            this._chartTarget = target;
+        }
+    };
 
     //Compact rolling-period selector on the timeline: four presets (today, the configured default span,
     //the last 7 days, the last 30 days). The active preset is highlighted by matching the live span.
@@ -2086,30 +2099,18 @@ export class HeliosCard extends LitElement
                               area and the PV area visually balance
                               each other.  -->
                         ${renderTimelineHoverTooltip(this)}
-                        ${pvEntityId ? html`
-                            <div
-                                class="tb-chart-card tb-pv-card"
-                                @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
-                                @pointerleave="${() => handleChartHoverLeave(this)}"
-                            >
-                                ${renderPvChart(this)}
-                                ${renderTimelineNightZones(this)}
-                                ${renderTimelineFutureMask(this)}
-                                ${renderTimelineTicks(this)}
-                            </div>
-                        ` : nothing}
 
-                        <!--  Chart card: hosts the area chart, the dotted day separators, the
-                              night-zone diagonal hatch overlay (one rect per sunset, next
-                              sunrise window) and the live + scrub cursors as HTML overlays.
-                              Day-label chip row sits as a sibling block below so the chips
-                              never cover the curves they describe.  -->
+                        <!--  Single re-targetable bottom chart: the active _chartTarget picks the series
+                              (production + dashed forecast + per-source breakdown by default; grid /
+                              battery / irradiance once a chip re-targets it). Hosts the dotted day
+                              separators, the night-zone hatch, the future mask and the live + scrub
+                              cursors. The day-label strip sits below so it never covers the curves.  -->
                         <div
                             class="tb-chart-card"
                             @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
                             @pointerleave="${() => handleChartHoverLeave(this)}"
                         >
-                            ${renderChart(this)}
+                            ${renderBottomChart(this)}
                             ${renderTimelineNightZones(this)}
                             ${renderTimelineFutureMask(this)}
                             ${renderTimelineTicks(this)}
@@ -2385,8 +2386,11 @@ export class HeliosCard extends LitElement
 
                 ${showPvLabel ? html`
                     <div
-                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''}"
+                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${this._chartTarget === 'production' ? 'is-chart-active' : ''}"
                         style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
+                        role="button"
+                        tabindex="0"
+                        @click=${() => this._setChartTarget('production')}
                     >
                         <ha-icon icon="mdi:solar-power"></ha-icon>
                         <span>${pvDisplayValue}</span>
@@ -2440,8 +2444,11 @@ export class HeliosCard extends LitElement
                     </svg>
                     ${showSocChip ? html`
                         <div
-                            class="battery-pct-label"
+                            class="battery-pct-label ${this._chartTarget === 'battery' ? 'is-chart-active' : ''}"
                             style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
+                            role="button"
+                            tabindex="0"
+                            @click=${() => this._setChartTarget('battery')}
                         >
                             <ha-icon icon="mdi:battery"></ha-icon>
                             <span>${batterySocText}</span>
@@ -2449,8 +2456,11 @@ export class HeliosCard extends LitElement
                     ` : nothing}
                     ${showPowerChip ? html`
                         <div
-                            class="battery-pct-label"
+                            class="battery-pct-label ${this._chartTarget === 'battery' ? 'is-chart-active' : ''}"
                             style="left:${layout!.batteryPowerLabel.x}px; top:${layout!.batteryPowerLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
+                            role="button"
+                            tabindex="0"
+                            @click=${() => this._setChartTarget('battery')}
                         >
                             <ha-icon icon="mdi:lightning-bolt"></ha-icon>
                             <span>${batteryPowerText}</span>
@@ -2489,8 +2499,11 @@ export class HeliosCard extends LitElement
                         `) : nothing}
                     </svg>
                     <div
-                        class="grid-label"
+                        class="grid-label ${this._chartTarget === 'grid' ? 'is-chart-active' : ''}"
                         style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
+                        role="button"
+                        tabindex="0"
+                        @click=${() => this._setChartTarget('grid')}
                     >
                         <ha-icon icon="${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}"></ha-icon>
                         <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec)}</span>
@@ -2735,8 +2748,11 @@ export class HeliosCard extends LitElement
                       sits on top of the sun glyph as well.  -->
                 ${showSunLabel ? html`
                     <div
-                        class="solar-pct-label"
+                        class="solar-pct-label ${this._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
                         style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px"
+                        role="button"
+                        tabindex="0"
+                        @click=${() => this._setChartTarget('irradiance')}
                     >
                         <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
                         <span>${sunWm2Round} W/m²</span>
