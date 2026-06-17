@@ -1528,15 +1528,31 @@ export const heliosCardStyles = css`
     {
         pointer-events: auto;
         cursor: pointer;
+        /*  Stop the chip's card-background from bleeding under the coloured 2px border at the rounded
+            ends (clips it to the padding box, inside the border). */
+        background-clip: padding-box;
     }
-    /*  Active target: a ring in the HA primary colour so the user sees which metric the chart is
-        showing. (The richer per-metric glow is a later polish pass.) */
-    .pv-pct-label.is-chart-active,
-    .battery-pct-label.is-chart-active,
-    .grid-label.is-chart-active,
+    /*  Active target: a soft 12 px halo in the chip's OWN metric colour at 70 %, the same recipe as the
+        HA card's chips, so the active chip <-> chart coupling reads at a glance (was a flat primary ring). */
+    .pv-pct-label.is-chart-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--pv-leader-color, var(--energy-solar-color, #ff9800)) 70%, transparent);
+    }
+    .battery-pct-label.is-chart-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac)) 70%, transparent);
+    }
+    .grid-label.is-chart-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2)) 70%, transparent);
+    }
     .solar-pct-label.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color), 0 0 0 2px var(--primary-color, #03a9f4);
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #ffc107)) 70%, transparent);
     }
 
     /*  Predicted PV chip, shown when scrubbing into the future. The
@@ -1837,6 +1853,7 @@ export const heliosCardStyles = css`
         box-sizing: border-box;
         padding: 0 10px;
         background: var(--card-background-color, #ffffff);
+        background-clip: padding-box;
         color: var(--primary-color, #03a9f4);
         border: 2px solid var(--primary-color, #03a9f4);
         border-radius: 999px;
@@ -1860,7 +1877,8 @@ export const heliosCardStyles = css`
     .home-pill ha-icon
     {
         --mdc-icon-size: 16px;
-        color: inherit;
+        /*  Home glyph in the text ink (black), not the blue pill border colour. */
+        color: var(--primary-text-color, #212121);
         display: inline-flex;
         align-items: center;
     }
@@ -1877,10 +1895,6 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
         letter-spacing: -0.2px;
-        /*  Phantom space below the value so the centred icon + value block
-            sits a touch higher in the circle (raises the visible content by
-            half this margin without changing the pill size). */
-        margin-bottom: 8px;
     }
 
     .solar-svg-back        { z-index: 4; }
