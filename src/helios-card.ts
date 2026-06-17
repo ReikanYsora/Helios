@@ -509,6 +509,10 @@ export class HeliosCard extends LitElement
         times:        Date[];
         irradiance:   number[];
         cloud:        number[];
+        //Hourly low / mid / high cloud cover in %, for the timeline's cloud target (three altitude bands).
+        cloudLow:     number[];
+        cloudMid:     number[];
+        cloudHigh:    number[];
         //Hourly horizontal beam + diffuse radiation in W/m², -1 where the model didn't decompose. Feed the PV tilt transposition's direct / diffuse split.
         directRad:    number[];
         diffuseRad:   number[];
@@ -743,6 +747,7 @@ export class HeliosCard extends LitElement
             grid:       'mdi:transmission-tower',
             battery:    'mdi:battery',
             irradiance: 'mdi:white-balance-sunny',
+            cloud:      'mdi:cloud',
         };
         const icon = icons[this._chartTarget] ?? 'mdi:chart-line';
         return html`
@@ -2789,6 +2794,23 @@ export class HeliosCard extends LitElement
                     >
                         <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
                         <span>${sunWm2Round} W/m²</span>
+                    </div>
+                ` : nothing}
+
+                <!--  Cloud chip: a standalone pill on the sun -> home line (1/3 of the way), showing the
+                      live cloud cover with a dynamic cloud glyph. Unlike the HA card it does NOT enter
+                      weather mode: clicking it re-targets the timeline chart to the cloud cover (three
+                      altitude-band curves), the same chip <-> chart coupling as the other chips.  -->
+                ${showSunLabel && layout !== null && this._cloudCover >= 0 ? html`
+                    <div
+                        class="cloud-chip ${this._chartTarget === 'cloud' ? 'is-chart-active' : ''}"
+                        style="left:${(sunScene!.sun.x + (layout!.home.x - sunScene!.sun.x) / 3).toFixed(1)}px; top:${(sunScene!.sun.y + (layout!.home.y - sunScene!.sun.y) / 3).toFixed(1)}px"
+                        role="button"
+                        tabindex="0"
+                        @click=${() => this._setChartTarget('cloud')}
+                    >
+                        <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
+                        <span>${Math.round(this._cloudCover)} %</span>
                     </div>
                 ` : nothing}
 

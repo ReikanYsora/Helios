@@ -518,6 +518,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const atMs = startMs + (pct / 100) * rangeMs;
 
     const irrV = series ? interpAt(series.times, series.irradiance, atMs) : NaN;
+    const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
+    const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
+    const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
     const pv   = pvValueAtTime(host, atMs);
 
     //Active chart target: the tooltip rows follow whatever the re-targetable chart is showing, the same
@@ -707,6 +710,26 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
                     </div>
                 ` : nothing}
+                ${target === 'cloud' ? html`
+                    ${isFinite(cloudLowV) ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:format-vertical-align-bottom"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(cloudMidV) ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:format-vertical-align-center"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudMidV)))} %</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(cloudHighV) ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:format-vertical-align-top"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudHighV)))} %</span>
+                        </div>
+                    ` : nothing}
+                ` : nothing}
             </div>
         </div>
     `;
@@ -719,6 +742,10 @@ export interface ChartSeries
     times:        Date[];
     irradiance:   number[];
     cloud:        number[];
+    //Hourly low / mid / high cloud cover (%), for the timeline's cloud target (three altitude bands).
+    cloudLow:     number[];
+    cloudMid:     number[];
+    cloudHigh:    number[];
     //Hourly horizontal beam + diffuse radiation (W/m²), -1 where the
     //model didn't decompose. Feed the tilt transposition with the real
     //direct / diffuse split. Consumers that don't transpose ignore them.
@@ -737,7 +764,7 @@ export interface ChartSeries
 //(+ dashed forecast + per-source breakdown) is the default; 'grid' / 'battery' draw their two-direction
 //flows (accent = the dominant side over the window); 'irradiance' draws the W/m² curve on a fixed
 //0..1000 scale. Cloud is intentionally NOT a target, it lives in weather mode.
-export type ChartTarget = 'production' | 'grid' | 'battery' | 'irradiance';
+export type ChartTarget = 'production' | 'grid' | 'battery' | 'irradiance' | 'cloud';
 
 //Structural surface the host card exposes to this module. The `_chartHoverPct` field is intentionally writable: hover handlers defined here mutate it
 //on pointermove / pointerleave, exactly like the dashboard's `_dashChartHoverTs`. All other fields stay read-only.
@@ -1399,6 +1426,7 @@ export function chartAccentColor(host: ChartHost): string
     const target = host._chartTarget ?? 'production';
     if (target === 'production') { return DEFAULT_PV_COLOR_HEX; }
     if (target === 'irradiance') { return DEFAULT_SUN_COLOR_HEX; }
+    if (target === 'cloud')      { return DEFAULT_CLOUD_COLOR_HEX; }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
@@ -1495,6 +1523,32 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             { pts: charge,    color: DEFAULT_BATTERY_IN_COLOR_HEX },
             { pts: discharge, color: DEFAULT_BATTERY_OUT_COLOR_HEX },
         ];
+    }
+    else if (target === 'cloud')
+    {
+        //Cloud-cover bands read from the hourly weather series (not the bucketed store): low / mid / high
+        //altitude layers on a fixed 0..100 % scale, in light -> dark cloud-grey shades.
+        const cs = host._chartSeries;
+        const csPts = (arr: ReadonlyArray<number>): Array<{ t: number; v: number }> =>
+        {
+            if (!cs) { return []; }
+            const out: Array<{ t: number; v: number }> = [];
+            for (let i = 0; i < cs.times.length; i++)
+            {
+                const tMs = cs.times[i].getTime();
+                if (tMs < startMs || tMs > endMsAbs) { continue; }
+                const v = arr[i];
+                if (v === undefined || !isFinite(v)) { continue; }
+                out.push({ t: tMs, v });
+            }
+            return out;
+        };
+        series = [
+            { pts: csPts(cs?.cloudLow  ?? []), color: lerpHexToward(DEFAULT_CLOUD_COLOR_HEX, '#ffffff', 0.35) },
+            { pts: csPts(cs?.cloudMid  ?? []), color: DEFAULT_CLOUD_COLOR_HEX },
+            { pts: csPts(cs?.cloudHigh ?? []), color: lerpHexToward(DEFAULT_CLOUD_COLOR_HEX, '#000000', 0.30) },
+        ];
+        fixedMax = 100;
     }
     else
     {

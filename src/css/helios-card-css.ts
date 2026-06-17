@@ -290,7 +290,8 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .grid-leader-svg,
     ha-card.overlay-masked .grid-label,
     ha-card.overlay-masked .low-carbon-leader-svg,
-    ha-card.overlay-masked .low-carbon-label
+    ha-card.overlay-masked .low-carbon-label,
+    ha-card.overlay-masked .cloud-chip
     {
         opacity: 0;
         pointer-events: none;
@@ -2007,6 +2008,44 @@ export const heliosCardStyles = css`
     {
         from { stroke-dashoffset: 0;  }
         to   { stroke-dashoffset: -10; }
+    }
+
+    /*  Cloud chip on the sun -> home line: a stadium pill in cloud grey showing the live cover, clickable
+        to re-target the timeline chart to the cloud bands. Same recipe + active glow as the other chips. */
+    .cloud-chip
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        z-index: 11;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        pointer-events: auto;
+        cursor: pointer;
+        background: var(--card-background-color, #ffffff);
+        background-clip: padding-box;
+        color: var(--primary-text-color, #212121);
+        border: 2px solid var(--secondary-text-color, #727272);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        box-shadow: 0 1px 3px var(--shadow-color);
+    }
+    .cloud-chip ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    .cloud-chip.is-chart-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--secondary-text-color, #727272) 70%, transparent);
     }
 
     /*  Solar ray bead, small filled disc travelling sun -> PV chip

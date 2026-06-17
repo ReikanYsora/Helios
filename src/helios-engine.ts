@@ -5381,6 +5381,11 @@ export class HeliosEngine
         times:        Date[];
         irradiance:   number[];
         cloud:        number[];
+        //Per-hour low / mid / high cloud cover in %, from Open-Meteo cloud_cover_low/mid/high. Surfaced
+        //so the timeline's cloud target draws the three altitude bands as separate curves.
+        cloudLow:     number[];
+        cloudMid:     number[];
+        cloudHigh:    number[];
         //Per-hour horizontal beam + diffuse radiation in W/m², -1 where the model didn't supply them.
         //Surfaced so the predictor in card/pv.ts can transpose a tilted array on the real direct / diffuse
         //split instead of the cloud-derived fraction.
@@ -5424,7 +5429,10 @@ export class HeliosEngine
             return pct * 10;
         });
 
-        const cloud = home.times.map((_, i) => home.cloudCover[i] ?? 0);
+        const cloud     = home.times.map((_, i) => home.cloudCover[i] ?? 0);
+        const cloudLow  = home.times.map((_, i) => home.cloudLow[i]  ?? 0);
+        const cloudMid  = home.times.map((_, i) => home.cloudMid[i]  ?? 0);
+        const cloudHigh = home.times.map((_, i) => home.cloudHigh[i] ?? 0);
 
         //Beam + diffuse pass straight through from the model with the -1 sentinel preserved: unlike the
         //GHI above there is no sensor / Haurwitz fallback, so a hour the provider didn't decompose reads
@@ -5436,6 +5444,9 @@ export class HeliosEngine
             times:       home.times.slice(),
             irradiance,
             cloud,
+            cloudLow,
+            cloudMid,
+            cloudHigh,
             directRad,
             diffuseRad,
             snowDepth:   home.snowDepth.slice(),
