@@ -63,6 +63,17 @@ export interface Translations
         dashForecastLabel?:     string; //'Forecast'
     };
 
+    //In-card rolling-period selector shown on the timeline (Today / Default / 7 d / 30 d). Optional so
+    //locales add it when ready; the renderer falls back to English when a key is absent.
+    period?:
+    {
+        rangeLabel?:    string; //'Time range' (aria-label on the selector group)
+        today?:         string; //'Today'
+        configDefault?: string; //'Default' (returns to the configured span)
+        last7Days?:     string; //'7 d'
+        last30Days?:    string; //'30 d'
+    };
+
     editor:
     {
         //Optional override for the home location used as the card's

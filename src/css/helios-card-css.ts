@@ -942,6 +942,56 @@ export const heliosCardStyles = css`
         font-weight: var(--ha-font-weight-medium, 500);
     }
 
+    /*  Rolling-period selector: a compact text segmented control floating at the top-right of the
+        timeline. Same on-primary active recipe as the mode bar so the two controls read as one family.
+        Absolutely positioned (out of the time-bar's flex flow) so it overlays the chart corner instead
+        of stealing a band of height. */
+    .tb-period-selector
+    {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        z-index: 5;
+        display: inline-flex;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 8px;
+        background: var(--card-background-color, #ffffff);
+        box-shadow: 0 1px 3px var(--shadow-color);
+        pointer-events: auto;
+    }
+    .tb-period-seg
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        border: 0;
+        outline: 0;
+        cursor: pointer;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--secondary-text-color, #727272);
+        font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, Roboto, "Helvetica Neue", Arial, sans-serif));
+        font-size: clamp(9px, 6cqw, 11px);
+        line-height: 16px;
+        letter-spacing: 0;
+        font-weight: var(--ha-font-weight-medium, 500);
+        white-space: nowrap;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.15s, color 0.15s;
+    }
+    .tb-period-seg:hover
+    {
+        background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
+        color: var(--primary-text-color, #212121);
+    }
+    .tb-period-seg.is-on
+    {
+        background: var(--primary-color, #03a9f4);
+        color: var(--text-on-primary-color, #ffffff);
+    }
+    .tb-period-seg.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
+
     /*  Vertical separator at each between-day boundary. Dotted
         1 px line matching the chart's own day separators
         (.hc-day-sep: stroke 0.30 alpha, dasharray 1.5 / 2.5), so

@@ -37,6 +37,15 @@ export const en: Translations = {
         dashForecastLabel:     'Forecast',
     },
 
+    period:
+    {
+        rangeLabel:    'Time range',
+        today:         'Today',
+        configDefault: 'Default',
+        last7Days:     '7 d',
+        last30Days:    '30 d',
+    },
+
     editor:
     {
         locationSection:    'Location',

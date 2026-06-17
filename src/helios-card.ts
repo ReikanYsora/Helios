@@ -687,8 +687,66 @@ export class HeliosCard extends LitElement
         this._engine?.setPeriodDays(this._periodPastDays, this._periodFutureDays);
         this._unifiedStore = null;
         const tr = this._engine?.getTimelineRange();
-        if (tr) { this._timeRange = tr; }
+        if (tr)
+        {
+            this._timeRange = tr;
+            //If the scrub cursor now sits outside the new window, snap back to live so the scene + chips
+            //don't stay frozen on an instant the user can no longer reach on the bar.
+            if (this._selectedTime
+                && (this._selectedTime.getTime() < tr.start.getTime()
+                 || this._selectedTime.getTime() > tr.end.getTime()))
+            {
+                this._exitScrubMode();
+            }
+        }
         this.requestUpdate();
+    }
+
+    //In-card period selector -> set the active rolling window and re-apply it. No-op when the span is
+    //already active so tapping the current preset doesn't churn a needless store rebuild.
+    private _setPeriod(pastDays: number, futureDays: number): void
+    {
+        if (this._periodPastDays === pastDays && this._periodFutureDays === futureDays)
+        {
+            return;
+        }
+        this._periodPastDays   = pastDays;
+        this._periodFutureDays = futureDays;
+        this._applyPeriod();
+    }
+
+    //Compact rolling-period selector on the timeline: four presets (today, the configured default span,
+    //the last 7 days, the last 30 days). The active preset is highlighted by matching the live span.
+    //Pointer-down is swallowed so tapping a preset never starts a timeline scrub on the parent .time-bar.
+    private _renderPeriodSelector(): TemplateResult
+    {
+        const t       = pickTranslations(this.hass?.language);
+        const past    = this._periodPastDays;
+        const future  = this._periodFutureDays;
+        const cfgPast = periodPastDays(this.config);
+        const cfgFut  = periodFutureDays(this.config);
+        const presets: { label: string; past: number; future: number }[] = [
+            { label: t.period?.today         ?? 'Today',   past: 0,       future: 0      },
+            { label: t.period?.configDefault ?? 'Default', past: cfgPast, future: cfgFut },
+            { label: t.period?.last7Days     ?? '7 d',     past: 6,       future: 1      },
+            { label: t.period?.last30Days    ?? '30 d',    past: 29,      future: 1      },
+        ];
+        return html`
+            <div
+                class="tb-period-selector"
+                role="group"
+                aria-label="${t.period?.rangeLabel ?? 'Time range'}"
+                @pointerdown="${(e: Event) => e.stopPropagation()}"
+            >
+                ${presets.map(p => html`
+                    <button
+                        type="button"
+                        class="tb-period-seg ${past === p.past && future === p.future ? 'is-on' : ''}"
+                        @click="${() => this._setPeriod(p.past, p.future)}"
+                    >${p.label}</button>
+                `)}
+            </div>
+        `;
     }
 
     //Retired YAML entity keys. The card reads these entirely from the HA Energy dashboard global settings; any value
@@ -2012,6 +2070,11 @@ export class HeliosCard extends LitElement
                         class="time-bar"
                         @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
                     >
+                        <!--  Rolling-period selector: a compact segmented control aligned to the right
+                              of the timeline. Swallows its own pointer-down so tapping a preset never
+                              starts a scrub on the parent .time-bar.  -->
+                        ${this._renderPeriodSelector()}
+
                         <!--  Optional PV production graph, only
                               rendered when the HA Energy dashboard
                               exposes a solar source. Same chip
