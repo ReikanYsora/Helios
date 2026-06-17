@@ -38,7 +38,6 @@ export interface AutoRotateHost
 {
     readonly map?:         MapLibreMap;
     readonly cfg:          HeliosConfig;
-    readonly _detailMode:  boolean;
 
     _autoRotateRaf?:           number;
     _autoRotateLastFrame:      number;
@@ -103,7 +102,6 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
         }
         if (autoRotateEnabled
             && !cameraLocked
-            && !host._detailMode
             && sinceUser >= AUTO_ROTATE_INACTIVITY_MS)
         {
             //Negative delta: bearing decreases, camera rotates counter-clockwise around the up axis as seen from above, map content drifts clockwise

@@ -10,7 +10,6 @@ import { LidarViewLayer } from './engine/lidar-view-layer';
 import { WeatherCloudLayer } from './engine/weather-cloud-layer';
 import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
-import { setDetailMode as _setDetailMode } from './engine/detail-mode';
 import { CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG } from './engine/camera-bounds';
 import
 {
@@ -4317,27 +4316,11 @@ export class HeliosEngine
         });
     }
 
-    _detailMode          = false;
-    //In-flight detail-mode dive tween. Cancelled on every fresh setDetailMode call so a rapid click-exit-click can't stack two animations driving the
-    //same camera.
-    _detailDiveRaf?: number;
-    //Pre-dive pose snapshot, captured at the moment setDetailMode(true) fires so the symmetric exit
-    //transition restores EXACTLY the pose the user was on before opening the dashboard. Without this
-    //the exit ended at the hemisphere-aware default (CAMERA_PITCH_REST_DEG + initial bearing), which
-    //quietly broke users who had a camera-locked pose dialled in and now had to repoint manually
-    //every time they closed the dashboard. Undefined when no dive is in flight.
-    _detailEntryPitch?:   number;
-    _detailEntryBearing?: number;
-    //Wall-clock timestamp until which fresh user gestures are
-    //ignored. Bumped on detail-mode exit; the card reads it via
-    //isUserGestureSuppressed() to filter timeline scrubs the same
-    //way the canvas drag-rotate handler does.
+    //Wall-clock timestamp until which fresh user gestures are ignored. The card
+    //reads it via isUserGestureSuppressed() to filter timeline scrubs the same
+    //way the canvas drag-rotate handler does. Reserved for view transitions that
+    //need a post-animation input cooldown.
     _postExitCooldownUntil = 0;
-
-    public setDetailMode(on: boolean): void
-    {
-        _setDetailMode(this, on);
-    }
 
     //Wipe every cached Open-Meteo payload from localStorage, drop
     //the engine's in-memory weather snapshot, and trigger a fresh
@@ -4422,11 +4405,6 @@ export class HeliosEngine
     public isUserGestureSuppressed(): boolean
     {
         return Date.now() < this._postExitCooldownUntil;
-    }
-
-    public isDetailMode(): boolean
-    {
-        return this._detailMode;
     }
 
     //Compute the screen-space layout of the on-map readout chips and the leader lines that tie them to the home / on-ground ring.
@@ -5754,11 +5732,6 @@ export class HeliosEngine
         {
             cancelAnimationFrame(this._autoRotateRaf);
             this._autoRotateRaf = undefined;
-        }
-        if (this._detailDiveRaf !== undefined)
-        {
-            cancelAnimationFrame(this._detailDiveRaf);
-            this._detailDiveRaf = undefined;
         }
         //Cancel the LiDAR-View exposure pipeline. The idle callback can
         //fire AFTER cleanup, and the chunked rAF loop captures `this`

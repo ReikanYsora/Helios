@@ -45,12 +45,6 @@ import
 } from './card/charts';
 import
 {
-    renderDashboard,
-    handleHomeClick,
-    handleDashGlobalKey
-} from './card/dashboard';
-import
-{
     buildArcSegments,
     flowDuration,
     type ArcSegment,
@@ -494,12 +488,6 @@ export class HeliosCard extends LitElement
     //Hover state on the home hitbox. Drives a sun-coloured glow halo around the home silhouette so the user reads the focal building as interactive
     //before clicking.
     @state() _homeHover = false;
-    //Hover state for the radial dial in the dashboard. Hour fraction in [0..24) when the cursor sits
-    //over the SVG, null otherwise. Front card only, the rear cards never wire pointer handlers.
-    @state() _dashRadialHoverHour: number | null = null;
-    //Mouse wheel accumulator for the dashboard radial dial day-navigation gesture. Not a @state on
-    //purpose: every wheel event mutates this slot and a @state would re-render on every tick.
-    _dashRadialWheelAcc: number = 0;
     //Hover position on the timeline chart cards, expressed as a
     //percent of the visible time range. Null when the pointer is
     //outside the cards; drives the hover guide line, the per-curve
@@ -559,27 +547,6 @@ export class HeliosCard extends LitElement
     //for the helpers that mutate these.
     @state() _loadingPhases:       ReadonlyMap<LoadingPhaseId, LoadingPhaseState> = new Map();
     @state() _loadingHasCompleted: boolean = false;
-    //True while the home is "focused": the existing overlay HUD is
-    //hidden, the camera is eased to a closer / more pitched pose,
-    //and a detail dashboard panel takes over. Toggled by clicking
-    //the home hitbox (off → on) or clicking anywhere on the panel
-    //(on → off). Engine.setDetailMode drives the camera lerp;
-    //CSS class .detail-active on ha-card fades out every overlay.
-    @state() _detailMode    = false;
-    //CoverFlow active day offset (0 = today, ±1 = ±1 day, etc.). Reset to 0 every time the dashboard opens via
-    //`handleHomeClick`. Swipe gesture state captured between pointerdown / pointerup so the dashboard renderer
-    //can navigate the stack without a stateful child component.
-    @state() _dashDayOffset:        number       = 0;
-    _dashSwipeStartX:               number | null = null;
-    _dashSwipeStartTime:            number       = 0;
-    //Enter / exit animation phase. Lasts 1 s; controls a class on the stage that drives the staged keyframe
-    //animations per card.
-    @state() _dashAnimPhase:        'idle' | 'entering' | 'exiting' = 'idle';
-    _dashAnimTimer?:                number;
-    //Shared view mode across every CoverFlow card. Flipped from the bandeau toggle on the front card,
-    //the change applies to every card simultaneously. Radial default surfaces the chip strip + sundial
-    //layout; the graph alternative trades the dial for the multi-day production curve.
-    @state() _dashViewMode:         'radial' | 'graph' = 'radial';
     //Unified 5-day data store. Populated after the initial weather + PV + battery + grid fetches
     //land, rebuilt every time any of those refresh, sliced / interpolated by the radial dial, the
     //graph view AND the main UI timeline. Live numeric chips deliberately stay on the direct
@@ -950,19 +917,11 @@ export class HeliosCard extends LitElement
     //HA dashboard edit-mode wrapping cycle.
     private _connectSettleTimer: number | undefined;
 
-    //Bound document-level keydown reference so the listener can be added at connect time and removed at
-    //disconnect time without leaking a fresh closure on every mount.
-    private _onDashGlobalKey = (e: KeyboardEvent) => handleDashGlobalKey(this, e);
-
     public connectedCallback(): void
     {
         super.connectedCallback();
         _liveCards.add(this);
         this._connectedAt = performance.now();
-        if (typeof document !== 'undefined')
-        {
-            document.addEventListener('keydown', this._onDashGlobalKey);
-        }
         //Reset the daily-totals kickoff flag so a remount re-fires `refreshHaDailyTotals` the moment the HA Energy
         //defaults snapshot lands again. The early kickoff was the load-bearing piece of the previous boot overlay,
         //and it stays around as a perf win even after the overlay was removed.
@@ -1014,7 +973,6 @@ export class HeliosCard extends LitElement
         if (typeof document !== 'undefined')
         {
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
-            document.removeEventListener('keydown', this._onDashGlobalKey);
         }
         unsubscribeEnergyPrefs(this);
         if (this._lidarFadeRaf !== undefined)
@@ -1135,19 +1093,6 @@ export class HeliosCard extends LitElement
             refreshHaDailyTotals(this);
         }
 
-        //Toggle the is-scrollable class on the FRONT CoverFlow card after each render so the bottom-fade
-        //mask only shows when the card actually overflows. Done here rather than inside the render
-        //function because Lit's render path runs before layout, scrollHeight/clientHeight are only valid
-        //after the browser has flushed layout.
-        if (this._detailMode)
-        {
-            const front = this.shadowRoot?.querySelector('.dash-cf-card-front') as HTMLElement | null;
-            if (front)
-            {
-                const overflows = front.scrollHeight > front.clientHeight + 1;
-                front.classList.toggle('is-scrollable', overflows);
-            }
-        }
 
         if (!this.hass?.config || !this.config)
         {
@@ -1212,8 +1157,8 @@ export class HeliosCard extends LitElement
                 }, CONNECT_SETTLE_MS - sinceConnect + 16);
                 return;
             }
-            //Reset mode flags on identity change. Mode state lives on the card (`_cardMode`,
-            //`_detailMode`) and survives the engine respawn, but the engine's corresponding active
+            //Reset mode flags on identity change. Mode state lives on the card (`_cardMode`)
+            //and survives the engine respawn, but the engine's corresponding active
             //flags reset to false on every fresh instance. Without this reset, a card that was in
             //LiDAR mode at the previous home would carry the `is-on` chrome over to the new home while
             //the new engine quietly skips the LiDAR fetch, the user then clicks the LiDAR button
@@ -1226,7 +1171,6 @@ export class HeliosCard extends LitElement
                 this._overlayMaskActive  = false;
                 this._lidarLayerActive   = false;
                 this._weatherOverlayVisible = false;
-                this._detailMode         = false;
                 //New home means a fresh hydration wave, surface the loading banner again.
                 this._loadingPhases       = new Map();
                 this._loadingHasCompleted = false;
@@ -1997,16 +1941,14 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
-        //ha-card classes: theme + detail (dashboard dive) + one mode-* class derived directly from
-        //_cardMode + an overlay-masked class for the chip / leader / arc / timeline hide rules. The
-        //mask LAGS the _cardMode flip on lidar -> base so the HUD does not pop back through the still-
-        //visible dot cloud (see _handleCardModeChange + the LiDAR fade loop completion handler), AND
-        //is unconditionally ON while detail mode is on so the same chip + timeline transitions fire
-        //when the user opens / closes the dashboard via a home click. The weather mode is an
+        //ha-card classes: theme + one mode-* class derived directly from _cardMode + an overlay-masked
+        //class for the chip / leader / arc / timeline hide rules. The mask LAGS the _cardMode flip on
+        //lidar -> base so the HUD does not pop back through the still-visible dot cloud (see
+        //_handleCardModeChange + the LiDAR fade loop completion handler). The weather mode is an
         //exception: chips / leaders / arcs hide but the BOTTOM TIMELINE STAYS VISIBLE so the user
         //can scrub through the day and the weather overlay tracks the cursor. CSS opts the timeline
         //out of the mask via a `mode-weather` exception (see helios-card-css.ts).
-        const overlayMasked = this._overlayMaskActive || this._detailMode;
+        const overlayMasked = this._overlayMaskActive;
         //camera-locked drives the CSS rule that swaps the MapLibre grab cursor for the default
         //arrow when the user has the camera pinned: drag pan + rotate are both disabled in that
         //state so the open-hand cursor was misleading. Re-evaluated every render so the cursor
@@ -2014,7 +1956,6 @@ export class HeliosCard extends LitElement
         const cameraLocked = this._isCameraLocked();
         const cardClasses = [
             cardThemeClass,
-            this._detailMode  ? 'detail-active'  : '',
             `mode-${this._cardMode}`,
             overlayMasked     ? 'overlay-masked' : '',
             cameraLocked      ? 'camera-locked'  : '',
@@ -2720,7 +2661,7 @@ export class HeliosCard extends LitElement
                       shadow filter for the bloom. The opacity is
                       flipped via a class so the appearance / fade is
                       a pure CSS transition, no per-frame work.  -->
-                ${hasHomeCoords && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
+                ${hasHomeCoords && this._homeSilhouettes.length > 0 ? (() => {
                     const sunColor = DEFAULT_SUN_COLOR_HEX;
                     const silhouettePts = this._getSilhouettePoints();
                     //Static hover-only halo. The earlier pulse-on-bead-
@@ -2735,7 +2676,6 @@ export class HeliosCard extends LitElement
                     return html`
                         <svg class="${glowClasses}"
                              style="--helios-sun-color:${sunColor};--pv-leader-color:${pvColor};--pv-flow-duration:${pvFlowDuration}s"
-                             @click="${(e: Event) => handleHomeClick(this, e)}"
                              @mouseenter="${this._onHomeEnter}"
                              @mouseleave="${this._onHomeLeave}">
                             ${silhouettePts.map(sil => sil === null ? nothing : svg`
@@ -2749,17 +2689,16 @@ export class HeliosCard extends LitElement
                     `;
                 })() : nothing}
 
-                <!--  Home hitbox, an invisible circular click target
+                <!--  Home hitbox, an invisible circular hover target
                       centred on the home's projected screen position.
-                      Visible (interactive) only when the map layout is
-                      ready AND we're not already in detail mode.
-                      Clicking it eases the camera into the detail
-                      pose and triggers the dashboard overlay.  -->
-                ${hasHomeCoords && layout !== null && !this._detailMode ? html`
+                      Drives the sun-coloured hover glow on the home
+                      silhouette. Rendered once the map layout is ready.
+                      The click action is intentionally unbound for now
+                      (the home interaction is being redesigned).  -->
+                ${hasHomeCoords && layout !== null ? html`
                     <div
                         class="home-hitbox ${this._loadingHasCompleted ? '' : 'is-loading'}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
-                        @click="${(e: Event) => handleHomeClick(this, e)}"
                         @mouseenter="${this._onHomeEnter}"
                         @mouseleave="${this._onHomeLeave}"
                     ></div>
@@ -2771,7 +2710,7 @@ export class HeliosCard extends LitElement
                       a single energy hub, the same vocabulary HA's
                       Energy distribution card uses for its central
                       home node.                                       -->
-                ${hasHomeCoords && layout !== null && !this._detailMode ? html`
+                ${hasHomeCoords && layout !== null ? html`
                     <!--  Home pill, the hub the whole chip cluster orbits.
                           Hosts two stacked lines: the home glyph on top and
                           the live home consumption below. The value mirrors
@@ -2789,16 +2728,6 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-
-                <!--  Detail dashboard overlay, takes over the card
-                      while _detailMode is on. The CSS class
-                      .detail-active on ha-card fades out every
-                      pre-existing overlay so the panel reads as
-                      the sole content while open. Dismissal goes
-                      through a dedicated close button in the corner
-                      rather than a content click, otherwise every
-                      internal scroll / tap would close the panel.  -->
-                ${this._detailMode ? renderDashboard(this) : nothing}
 
                 <!--  Weather overlay. Full-card HTML overlay above the MapLibre canvas, painted
                       with a per-altitude cloud-cover raster sampled from the multi-point Open-
