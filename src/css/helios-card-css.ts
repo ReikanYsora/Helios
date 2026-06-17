@@ -375,17 +375,25 @@ export const heliosCardStyles = css`
     /*  Chart card, bordered white panel hosting the area chart,
         day-label chips on the midline, dotted day separators and
         the live + scrub HTML cursor overlays. */
-    .tb-chart-card
+    /*  Chart + day-label footer composite. The frame (accent stroke, radius, shadow) lives here so the
+        chart and its footer read as ONE instrument with a hairline divider between them, mirroring the
+        HA energy-solar-overview timeline card where the footer is the bottom band of the same surface
+        rather than a second floating card. overflow:hidden clips both children to the rounded corners. */
+    .tb-chart-stack
     {
         position: relative;
         background: var(--card-background-color, #ffffff);
         /*  HA-style card frame: a thin 1 px stroke in the active chart accent, softened to 60 % so it
-            reads as a subtle frame rather than the heavy ink box it used to be. Mirrors the HA
-            energy-solar-overview timeline border (the standalone carried the same non-HA heavy border). */
+            reads as a subtle frame rather than the heavy ink box it used to be. */
         border: var(--ha-border-width-sm, 1px) solid
             color-mix(in srgb, var(--chart-accent, var(--primary-text-color, #212121)) 60%, transparent);
         border-radius: var(--ha-border-radius-lg, 8px);
         box-shadow: 0 1px 3px var(--shadow-color);
+        overflow: hidden;
+    }
+    .tb-chart-card
+    {
+        position: relative;
         /*  Height scales with the card's container width (cqw =
             container-query width). 36 px floor on a small grid tile,
             72 px ceiling on a fullscreen kiosk. Both timeline charts
@@ -912,19 +920,12 @@ export const heliosCardStyles = css`
     {
         position: relative;
         height: 22px;
-        /*  border-box so the 22 px height includes the 2 px border,
-            inner content area is exactly 18 px. The cell's
-            line-height matches that 18 px so the text line box fills
-            the cell with no leftover space, no ambiguity about
-            where the row sits vertically. */
         box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
-        /*  HA-style subtle frame (1 px divider), matching the chart card above so the timeline +
-            day-strip stack reads as one instrument without the old heavy ink box. */
-        border: var(--ha-border-width-sm, 1px) solid
+        /*  Footer band of the chart stack: the frame lives on .tb-chart-stack, so here we only draw the
+            hairline that separates the labels from the chart above. Matches the HA timeline-footer
+            (solid surface inherited from the stack + a single top divider), no second floating card. */
+        border-top: var(--ha-border-width-sm, 1px) solid
             var(--divider-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.12));
-        border-radius: var(--ha-border-radius-lg, 8px);
-        box-shadow: 0 1px 2px var(--shadow-color);
         overflow: hidden;
         pointer-events: none;
     }

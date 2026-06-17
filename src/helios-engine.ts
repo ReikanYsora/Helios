@@ -374,6 +374,11 @@ const CLOUD_CIRCLE_SEGMENTS     = 128;
 //below the shelf. Adjusting this single constant slides the whole
 //cluster up or down without disturbing its internal geometry.
 const PV_CHIP_OFFSET_PX         = 70;
+//Height (metres) above the home that the camera target is framed on. The top map
+//padding is sized to this point's on-screen projection so the house sits lower with
+//headroom above for the solar arc. Also fixes very-tall-building framing (the roof
+//no longer pushes the home off the top of the viewport). Mirrors the HA card.
+const CAMERA_TARGET_HEIGHT_M    = 10;
 
 
 //Solar-arc parameters. The arc traces the sun's full 24h trajectory across the local sky, projected onto the screen via the same camera matrices
@@ -842,6 +847,9 @@ export class HeliosEngine
         maxBoundsSouth: number | null;
         maxBoundsEast:  number | null;
         maxBoundsNorth: number | null;
+        //Camera-target top padding at enter time, so the exit animates straight back to the
+        //framed-above-house point in lock-step with the zoom-in rather than snapping at moveend.
+        paddingTop:     number;
     } | null = null;
     //Pending setTimeout that re-tightens the zoom envelope after an exit's easeTo lands. Held as a
     //handle so a rapid UI -> Weather -> UI -> Weather sequence can CANCEL a stale tighten before it
@@ -858,6 +866,41 @@ export class HeliosEngine
     //     out of frame. The pre-enter lock state is captured so the exit restores it verbatim.
     //  3. easeTo carries the pose change on a 1200 ms cubic easing so the transition reads as a
     //     deliberate "stepping back" rather than a jump cut.
+    //Camera-target padding state. _appliedPaddingTop is the last padding we pushed (also the
+    //re-entrancy ledger the weather enter/exit pre-set); the last pitch/zoom gate the recompute so
+    //bearing-only rotation never moves the target and setPadding's own moveend can't loop.
+    private _appliedPaddingTop = -1;
+    private _lastPaddingPitch  = -1;
+    private _lastPaddingZoom    = -1;
+    private _applyingPadding    = false;
+
+    //Frame a point CAMERA_TARGET_HEIGHT_M above the home: size the MapLibre top padding to that
+    //height's on-screen projection so the house sits lower with headroom above for the arc. Called
+    //only on moveend (never frame-by-frame) so it can't interrupt the programmatic weather eases.
+    //Gated on pitch/zoom (the only inputs) so rotation never moves it; collapses to ~0 top-down.
+    private _applyCameraTargetPadding(): void
+    {
+        if (!this.map || this._applyingPadding) { return; }
+        const pitch = this.map.getPitch();
+        const zoom  = this.map.getZoom();
+        if (Math.abs(pitch - this._lastPaddingPitch) < 0.5
+         && Math.abs(zoom  - this._lastPaddingZoom)  < 0.01)
+        {
+            return;
+        }
+        this._lastPaddingPitch = pitch;
+        this._lastPaddingZoom  = zoom;
+        const ground   = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+        const elevated = this._projectScenePoint(this.homeLon, this.homeLat, CAMERA_TARGET_HEIGHT_M);
+        if (!ground || !elevated) { return; }
+        const targetTop = Math.max(0, Math.round((ground.y - elevated.y) * 2));
+        if (Math.abs(targetTop - this._appliedPaddingTop) <= 1) { return; }
+        this._appliedPaddingTop = targetTop;
+        this._applyingPadding   = true;
+        try { this.map.setPadding({ top: targetTop, bottom: 0, left: 0, right: 0 }); }
+        finally { this._applyingPadding = false; }
+    }
+
     public enterWeatherCamera(): void
     {
         if (!this.map) { return; }
@@ -884,6 +927,7 @@ export class HeliosEngine
             maxBoundsSouth: mb ? mb.getSouth() : null,
             maxBoundsEast:  mb ? mb.getEast()  : null,
             maxBoundsNorth: mb ? mb.getNorth() : null,
+            paddingTop:     this._appliedPaddingTop > 0 ? this._appliedPaddingTop : 0,
         };
         //Clear the maxBounds clamp BEFORE the easeTo. _applyMapBounds at boot installs a tight
         //bbox (~2 x building-radius around the home) so the user can't pan past the rendered
@@ -903,11 +947,16 @@ export class HeliosEngine
         //restore the original on exit so the user's preference comes back exactly as it was.
         if (!prevLocked) { this.setCameraLocked(true); }
         this.map.stop();
+        //Animate the camera-target padding back to zero alongside the dezoom so the top-down weather
+        //view is centred (the moveend handler would otherwise snap it at the end). _appliedPaddingTop
+        //is pre-set so the settling moveend recompute stays a no-op.
+        this._appliedPaddingTop = 0;
         this.map.easeTo({
             center:   [this.homeLon, this.homeLat],
             bearing:  0,
             pitch:    0,
             zoom:     11,
+            padding:  { top: 0, bottom: 0, left: 0, right: 0 },
             duration: 1200,
         });
     }
@@ -919,11 +968,16 @@ export class HeliosEngine
         if (!pose) { return; }
         this._preWeatherPose = null;
         this.map.stop();
+        //Restore the camera-target padding in lock-step with the zoom-in so the view animates
+        //straight back to the framed-above-house point, with no end-of-ease snap. _appliedPaddingTop
+        //is pre-set so the settling moveend recompute is a no-op.
+        this._appliedPaddingTop = pose.paddingTop;
         this.map.easeTo({
             center:   pose.center,
             bearing:  pose.bearing,
             pitch:    pose.pitch,
             zoom:     pose.zoom,
+            padding:  { top: pose.paddingTop, bottom: 0, left: 0, right: 0 },
             duration: 1200,
         });
         //Restore the rotation-lock state the user had before entering. setCameraLocked also writes
@@ -1514,6 +1568,7 @@ export class HeliosEngine
     private _mapStyleLoadHandler?: () => void;
     private _mapLoadHandler?:      () => void;
     private _mapMoveHandler?:      () => void;
+    private _mapMoveEndHandler?:   () => void;
     //Stored ref to the styleimagemissing handler so cleanup() can map.off() it. Anonymous lambda inlined in the original registration
     //meant the closure (which pins `this`) survived past cleanup whenever MapLibre's own map.remove() didn't fan out to listener
     //teardown, the iOS Safari path defensive-cleanup is wired around.
@@ -1961,6 +2016,16 @@ export class HeliosEngine
             this.onMapTransform?.();
         };
         this.map.on('move', this._mapMoveHandler);
+
+        //Re-aim the camera target only once the camera settles (moveend), never frame-by-frame:
+        //setPadding mid-`move` would interrupt the programmatic weather eases. The target depends on
+        //pitch/zoom only, so bearing-only rotation leaves it untouched.
+        this._mapMoveEndHandler = () =>
+        {
+            this._invalidateProjCache();
+            this._applyCameraTargetPadding();
+        };
+        this.map.on('moveend', this._mapMoveEndHandler);
 
         //Auto-rotation pause is bumped ONLY by the single-pointer
         //drag-rotate handler below (onDown / onMove). Wheel zoom,
@@ -5844,6 +5909,10 @@ export class HeliosEngine
                 {
                     this.map.off('move',               this._mapMoveHandler);
                 }
+                if (this._mapMoveEndHandler)
+                {
+                    this.map.off('moveend',            this._mapMoveEndHandler);
+                }
                 if (this._mapErrorHandler)
                 {
                     this.map.off('error',              this._mapErrorHandler);
@@ -5929,6 +5998,7 @@ export class HeliosEngine
         this._mapStyleLoadHandler   = undefined;
         this._mapLoadHandler        = undefined;
         this._mapMoveHandler        = undefined;
+        this._mapMoveEndHandler     = undefined;
         this._mapErrorHandler       = undefined;
         this._mapStyleImageMissingHandler = undefined;
         this._webglLostHandler      = undefined;

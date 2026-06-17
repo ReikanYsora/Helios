@@ -2143,17 +2143,21 @@ export class HeliosCard extends LitElement
                               separators, the night-zone hatch, the future mask and the live + scrub
                               cursors. The day-label strip sits below so it never covers the curves.  -->
                         <div
-                            class="tb-chart-card"
+                            class="tb-chart-stack"
                             style="--chart-accent:${chartAccentColor(this)}"
-                            @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
-                            @pointerleave="${() => handleChartHoverLeave(this)}"
                         >
-                            ${keyed(this._chartTarget, renderBottomChart(this))}
-                            ${renderTimelineNightZones(this)}
-                            ${renderTimelineFutureMask(this)}
-                            ${renderTimelineTicks(this)}
+                            <div
+                                class="tb-chart-card"
+                                @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
+                                @pointerleave="${() => handleChartHoverLeave(this)}"
+                            >
+                                ${keyed(this._chartTarget, renderBottomChart(this))}
+                                ${renderTimelineNightZones(this)}
+                                ${renderTimelineFutureMask(this)}
+                                ${renderTimelineTicks(this)}
+                            </div>
+                            ${renderTimelineDayLabels(this)}
                         </div>
-                        ${renderTimelineDayLabels(this)}
                     </div>
                 ` : nothing}
 
