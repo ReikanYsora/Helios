@@ -909,59 +909,37 @@ export const heliosCardStyles = css`
         border-color: rgba(255, 255, 255, 0.55);
     }
 
-    .tb-day-strip-cell
+    /*  Adaptive timeline label, point-positioned on its model fraction. The inline left anchors the
+        fraction; the translate pulls the label back by half its own width so the text sits centred over
+        the fraction rather than to its right. */
+    .tb-day-strip-date
     {
         position: absolute;
         top: 0;
         bottom: 0;
+        transform: translateX(-50%);
         display: inline-flex;
-        flex-direction: row;
-        align-items: baseline;
-        justify-content: center;
-        /*  Tight inline spacing so the date glyph and the kWh
-            annotation read as one compact group on a narrow phone
-            cell rather than two widely-separated pieces. */
-        gap: 1px;
+        align-items: center;
         padding: 0 1px;
         box-sizing: border-box;
         color: var(--primary-text-color, #212121);
-        /*  Inherit the HA frontend font stack rather than letting
-            the cell fall back to the OS default. Different OS fonts
-            ship italic and bold variants with different vertical
-            metrics, so on a host that did not propagate the Roboto
-            stack down to this depth, the date (bold) and the
-            forecast kWh (italic) ended up sitting on different
-            baselines and the cell read as misaligned. */
+        /*  Inherit the HA frontend font stack rather than the OS default so the label's vertical metrics
+            match the chart cards stacked above. */
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, Roboto, "Helvetica Neue", Arial, sans-serif));
         font-size: clamp(9px, 7cqw, 11px);
         line-height: 18px;
         letter-spacing: 0;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: clip;
         z-index: 2;
         font-weight: var(--ha-font-weight-normal, 400);
     }
 
-    .tb-day-strip-cell.is-today
+    /*  Today's label in the day view carries a touch more weight so it reads as the present alongside
+        the now-cursor. */
+    .tb-day-strip-date.is-today
     {
         font-weight: var(--ha-font-weight-medium, 500);
-    }
-    /*  Active day during scrub / hover gets a faint brand-blue tint
-        and bumps the label to a slightly heavier weight so the user
-        reads "I am on this day" at a glance. Tint uses --primary-color
-        at 16 % alpha for both light and dark themes, sitting just
-        above the strip's own --card-background-color. */
-    .tb-day-strip-cell.is-active
-    {
-        background: color-mix(in srgb, var(--primary-color, #03a9f4) 16%, transparent);
-        font-weight: 600;
-    }
-
-    .tb-day-strip-date
-    {
-        font-weight: inherit;
     }
 
     /*  Vertical separator at each between-day boundary. Dotted
@@ -2096,7 +2074,7 @@ export const heliosCardStyles = css`
         {
             --mdc-icon-size: 18px;
         }
-        .tb-day-strip-cell
+        .tb-day-strip-date
         {
             font-size: clamp(8px, 5.5cqw, var(--ha-font-size-s, 12px));
         }

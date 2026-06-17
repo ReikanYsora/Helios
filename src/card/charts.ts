@@ -13,7 +13,8 @@ import
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX
 } from '../helios-config';
-import { formatDate, formatLocalisedNumber, lerpHexToward } from './format';
+import { formatLocalisedNumber, lerpHexToward } from './format';
+import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
@@ -925,41 +926,13 @@ export function renderChart(host: ChartHost): TemplateResult
         showHover = isFinite(hoverYIrr) || isFinite(hoverYCld);
     }
 
-    //Day-boundary X positions in viewBox units (midnight of each
-    //local day inside the time range). Drawn as faint dotted
-    //vertical lines spanning the full chart height, same role
-    //as the day chips on the midline, just visual separators.
-    const startMsAbs = range.start.getTime();
-    const endMsAbs   = range.end.getTime();
-    const dayXs: number[] = [];
-    const dCursor = new Date(range.start);
-    dCursor.setHours(0, 0, 0, 0);
-    while (dCursor.getTime() <= endMsAbs)
-    {
-        const next = new Date(dCursor);
-        next.setDate(next.getDate() + 1);
-        if (dCursor.getTime() > startMsAbs && dCursor.getTime() < endMsAbs)
-        {
-            dayXs.push(xOf(dCursor));
-        }
-        dCursor.setTime(next.getTime());
-    }
-
-    //Hour-boundary X positions, used to draw small vertical
-    //ticks centred on the midline (one per hour). Midnights are
-    //skipped, those already get a full-height day separator.
-    const hourXs: number[] = [];
-    const hCursor = new Date(range.start);
-    hCursor.setMinutes(0, 0, 0);
-    hCursor.setHours(hCursor.getHours() + 1);
-    while (hCursor.getTime() <= endMsAbs)
-    {
-        if (hCursor.getTime() > startMsAbs && hCursor.getHours() !== 0)
-        {
-            hourXs.push(xOf(hCursor));
-        }
-        hCursor.setHours(hCursor.getHours() + 1);
-    }
+    //Adaptive gridlines from the shared timeline model. Midnight day boundaries draw as full-height
+    //faint lines (only while individual days still read clearly, <= 40 days); the small midline hour
+    //ticks only make sense on the intraday span, wider spans rely on the day boundaries + footer
+    //labels. Both lists are bounded (<= 40 / <= 7) so a wide window never renders hundreds of lines.
+    const model  = buildTimelineModel(range.start, range.end);
+    const dayXs  = model.dayBoundaries.map(frac => frac * W);
+    const hourXs = model.kind === 'intraday' ? model.separators.map(s => s.frac * W) : [];
     const HOUR_TICK_HALF = 3;
 
     return html`
@@ -1061,21 +1034,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
         ? lerpHexToward(pvColor, '#ffffff', 0.55)
         : lerpHexToward(pvColor, '#000000', 0.35);
 
-    //Day-boundary X positions, same computation as the main chart so the dotted separators line up across the two.
+    //Day-boundary X positions from the shared timeline model, same source as the weather chart so the
+    //dotted separators line up across the two. Bounded to <= 40 entries; empty on wide spans.
     const endMsAbs = range.end.getTime();
-    const dayXs: number[] = [];
-    const dCursor = new Date(range.start);
-    dCursor.setHours(0, 0, 0, 0);
-    while (dCursor.getTime() <= endMsAbs)
-    {
-        const next = new Date(dCursor);
-        next.setDate(next.getDate() + 1);
-        if (dCursor.getTime() > startMs && dCursor.getTime() < endMsAbs)
-        {
-            dayXs.push(((dCursor.getTime() - startMs) / rangeMs) * W);
-        }
-        dCursor.setTime(next.getTime());
-    }
+    const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
 
     //Single-source read: the unified data source (src/card/unifiedStore.ts) carries the production
     //series for the full J-2 to J+2 window in watts, interpolated linearly between real samples,
@@ -1400,11 +1362,11 @@ export function renderTimelineTicks(host: ChartHost): TemplateResult
 }
 
 
-//Day labels rendered as small white chips overlaying the chart
-//card on its midline (between the irradiance and cloud halves).
-//Same chip styling as the on-map cloud and W/m² readouts, so all
-//three feel like the same family. Each chip is centred on the
-//middle of its day's segment in the time range.
+//Adaptive timeline labels overlaying the chart-card footer line. The shared timeline model picks the
+//granularity from the visible span (hours for a single day, weekday names for a week, day + short month
+//for a month-plus, month names beyond that) and thins the count, so a wide window stays legible instead
+//of stamping one chip per day. Each label sits at its model fraction; in the day view today's label is
+//emphasised, matching the now-cursor. Separators draw the matching boundary lines.
 export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 {
     if (!host._timeRange)
@@ -1413,93 +1375,28 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     }
 
     const { start, end } = host._timeRange;
-    const rangeMs = end.getTime() - start.getTime();
-    const now     = new Date();
-    const toPct   = (d: Date): number =>
-        Math.max(0, Math.min(100, (d.getTime() - start.getTime()) / rangeMs * 100));
+    const model  = buildTimelineModel(start, end);
+    //Drop entries hugging the window edges so they never collide with the card corners.
+    const labels = model.labels.filter(s => s.frac > 0.02 && s.frac < 0.98);
+    const seps   = model.separators.filter(s => s.frac > 0.02 && s.frac < 0.98);
 
-    const today0 = new Date(now);
+    const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
-
-    //Active day during hover or scrub. The strip cell matching the
-    //pointer's day-bucket gets a faint brand-blue tint so the user
-    //reads "I am on this day" at a glance. Falls back to null when
-    //no hover or scrub is active, leaving every cell at rest.
-    const hoverPctRef = host._chartHoverPct;
-    let activeDayKey: number | null = null;
-    if (hoverPctRef !== null && hoverPctRef >= 0 && hoverPctRef <= 100)
-    {
-        const hoverMs   = start.getTime() + (hoverPctRef / 100) * rangeMs;
-        const hoverDate = new Date(hoverMs);
-        hoverDate.setHours(0, 0, 0, 0);
-        activeDayKey = hoverDate.getTime();
-    }
-
-    //Build the per-day cells + the vertical separators between
-    //them. Cells use absolute positioning over the strip so each
-    //label sits at the geometric centre of its day's segment, even
-    //when the first or last day is only partially visible. The
-    //separator list collects the right edge of each day except the
-    //last (no separator at the strip's outer right edge).
-    type Cell = { isToday: boolean; isActive: boolean; centrePct: number; widthPct: number; label: string };
-    const cells: Cell[] = [];
-    const sepPcts: number[] = [];
-    const cursor = new Date(start);
-    cursor.setHours(0, 0, 0, 0);
-
-    while (cursor.getTime() <= end.getTime())
-    {
-        const next = new Date(cursor);
-        next.setDate(next.getDate() + 1);
-
-        const segStart = Math.max(start.getTime(), cursor.getTime());
-        const segEnd   = Math.min(end.getTime(),   next.getTime());
-
-        if (segEnd > segStart)
-        {
-            const pStart   = toPct(new Date(segStart));
-            const pEnd     = toPct(new Date(segEnd));
-            const w        = pEnd - pStart;
-            const dayDelta = Math.round((cursor.getTime() - today0.getTime()) / 86_400_000);
-            const isToday  = dayDelta === 0;
-            const isActive = activeDayKey !== null && cursor.getTime() === activeDayKey;
-
-            const label    = formatDate(cursor, host.hass);
-
-            cells.push({
-                isToday,
-                isActive,
-                centrePct: pStart + w / 2,
-                widthPct:  w,
-                label,
-            });
-            //Right edge of the day; becomes a separator unless
-            //this day is the last one visible. We record it
-            //unconditionally and trim after the loop.
-            sepPcts.push(pEnd);
-        }
-
-        cursor.setTime(next.getTime());
-    }
-    //The final entry is the right edge of the strip (not a
-    //between-day boundary), drop it.
-    if (sepPcts.length > 0)
-    {
-        sepPcts.pop();
-    }
+    //Emphasise today only in the day view, where each label names one calendar day; on the wider spans
+    //the now-cursor already marks the present and a single highlighted weekday/month would read oddly.
+    const isTodayLabel = (d: Date): boolean =>
+        model.kind === 'days' && d.getTime() === today0.getTime();
 
     return html`
         <div class="tb-day-strip">
-            ${cells.map(c => html`
-                <div
-                    class="tb-day-strip-cell ${c.isToday ? 'is-today' : ''} ${c.isActive ? 'is-active' : ''}"
-                    style="left:${(c.centrePct - c.widthPct / 2).toFixed(2)}%; width:${c.widthPct.toFixed(2)}%"
-                >
-                    <span class="tb-day-strip-date">${c.label}</span>
-                </div>
+            ${seps.map(s => html`
+                <div class="tb-day-strip-sep" style="left:${(s.frac * 100).toFixed(2)}%"></div>
             `)}
-            ${sepPcts.map(p => html`
-                <div class="tb-day-strip-sep" style="left:${p.toFixed(2)}%"></div>
+            ${labels.map(s => html`
+                <span
+                    class="tb-day-strip-date ${isTodayLabel(s.date) ? 'is-today' : ''}"
+                    style="left:${(s.frac * 100).toFixed(2)}%"
+                >${formatTimelineLabel(model.kind, s.date, host.hass)}</span>
             `)}
         </div>
     `;
