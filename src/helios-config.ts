@@ -72,6 +72,13 @@ export interface HeliosConfig
     //suppressed, so the camera stays at the configured (or default)
     //bearing + pitch forever. Default false.
     'camera-locked'?:          unknown;
+    //Rolling-window period. The visible timeline and the unified data store span `period-past-days`
+    //days of history before today through `period-future-days` days of forecast after today, both
+    //counted from local midnight and inclusive of today. Defaults reproduce the historical -2 / +2
+    //day window. The in-card period selector overrides these at runtime; the config keys only set the
+    //initial span. Past clamps to [0, 30], future to [0, 14] (Open-Meteo forecasts ~16 days ahead).
+    'period-past-days'?:       unknown;
+    'period-future-days'?:     unknown;
     //Timeline visibility toggle. Default: true. When false the whole
     //time-bar (chart card, day labels, scrub cursors) is hidden so
     //the card focuses on the live scene only.
@@ -361,3 +368,42 @@ export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = DEFAULT_DISPLAY_RADIUS_M - DISPL
 
 
 //Timeline defaults. Exposed so the editor placeholders + sliders land on the same values the runtime falls back to when the config key is absent.
+
+//Rolling-window period (days of history before today / days of forecast after today, both inclusive
+//of today). Defaults reproduce the historical -2 / +2 day window. These are the FALLBACK span used
+//when the in-card period selector has not overridden it; the selector writes runtime state on the
+//card, the config keys only seed the initial window. Past clamps to [0, 30], future to [0, 14]
+//(Open-Meteo publishes ~16 forecast days; 14 keeps a safety margin against short-payload days).
+export const DEFAULT_PERIOD_PAST_DAYS   = 2;
+export const DEFAULT_PERIOD_FUTURE_DAYS = 2;
+export const MIN_PERIOD_PAST_DAYS       = 0;
+export const MAX_PERIOD_PAST_DAYS       = 30;
+export const MIN_PERIOD_FUTURE_DAYS     = 0;
+export const MAX_PERIOD_FUTURE_DAYS     = 14;
+
+//Resolve the configured number of past days from the `period-past-days` key, clamped to
+//[MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS] and defaulting for missing / invalid values. Single
+//source of truth shared by the card's initial window seed and the editor placeholder.
+export function periodPastDays(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['period-past-days'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return DEFAULT_PERIOD_PAST_DAYS; }
+    const r = Math.round(n);
+    if (r < MIN_PERIOD_PAST_DAYS) { return MIN_PERIOD_PAST_DAYS; }
+    if (r > MAX_PERIOD_PAST_DAYS) { return MAX_PERIOD_PAST_DAYS; }
+    return r;
+}
+
+//Resolve the configured number of forecast days from the `period-future-days` key, clamped to
+//[MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS] and defaulting for missing / invalid values.
+export function periodFutureDays(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['period-future-days'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return DEFAULT_PERIOD_FUTURE_DAYS; }
+    const r = Math.round(n);
+    if (r < MIN_PERIOD_FUTURE_DAYS) { return MIN_PERIOD_FUTURE_DAYS; }
+    if (r > MAX_PERIOD_FUTURE_DAYS) { return MAX_PERIOD_FUTURE_DAYS; }
+    return r;
+}

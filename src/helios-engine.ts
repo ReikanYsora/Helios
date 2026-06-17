@@ -38,6 +38,8 @@ import
     LIDAR_PRECISION_PITCH_MULT,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_OPACITY,
+    periodPastDays,
+    periodFutureDays,
 } from './helios-config';
 
 
@@ -2362,44 +2364,54 @@ export class HeliosEngine
         return this._getTimeRange();
     }
 
-    //Visible timeline window. The Open-Meteo payload now stretches
-    //7 past days so the dashboard forecast calibration has enough
-    //room to average ratios, but the timeline UI itself clips to
-    //the last 2 past days so the slider stays as scrubbable as
-    //before. Calibration consumers reach the full payload through
-    //`getTimelineSeries()`, which returns every hourly sample.
+    //Active rolling-window span, in days of history / forecast around today. Undefined until the card
+    //pushes the resolved values via setPeriodDays() (config default or the in-card period selector
+    //override); _getTimeRange falls back to the config keys so the window is correct before the first push.
+    private _periodPastDays?:   number;
+    private _periodFutureDays?: number;
+
+    //Card -> engine: set the active rolling window. The card owns the source of truth (config seed +
+    //runtime selector); the engine just renders whatever span it is handed.
+    public setPeriodDays(pastDays: number, futureDays: number): void
+    {
+        this._periodPastDays   = pastDays;
+        this._periodFutureDays = futureDays;
+    }
+
+    //Visible timeline window: pastDays of history before today through futureDays of forecast after
+    //today, both counted from local midnight and inclusive of today. The Open-Meteo payload may stretch
+    //further (extra past days feed the forecast calibration via `getTimelineSeries()`), but the visible
+    //axis is clipped to the configured span.
     private _getTimeRange(): { start: Date; end: Date } | null
     {
-        const TIMELINE_PAST_DAYS    = 2;
-        const TIMELINE_FORECAST_DAYS = 3;
-        const home = this._homeHourlyData;
+        const pastDays   = this._periodPastDays   ?? periodPastDays(this.cfg);
+        const futureDays = this._periodFutureDays ?? periodFutureDays(this.cfg);
+        const today0 = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const visibleStartMs = today0.getTime() - pastDays * 24 * 3_600_000;
+        //End at the midnight after the last future day so the axis spans futureDays full days plus today.
+        const visibleEndMs   = today0.getTime() + (futureDays + 1) * 24 * 3_600_000;
 
-        //Open-Meteo path: derive the visible window from the live weather samples when they are available.
-        //First sample at or after `today - past_days`, last available sample as the end.
+        //Open-Meteo path: snap the start to the first live weather sample at or after the window start so
+        //the cloud / irradiance / forecast traces line up with real samples. The end stays at the
+        //configured window edge regardless of how far the payload reaches (the forecast trace simply
+        //stops where its data does).
+        const home = this._homeHourlyData;
         if (home && home.times.length)
         {
             const t = home.times;
-            const last = t[t.length - 1];
-            const today0 = new Date();
-            today0.setHours(0, 0, 0, 0);
-            const visibleStartMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
             let startIdx = 0;
             for (let i = 0; i < t.length; i++)
             {
                 if (t[i].getTime() >= visibleStartMs) { startIdx = i; break; }
             }
-            return { start: t[startIdx], end: last };
+            return { start: t[startIdx], end: new Date(visibleEndMs) };
         }
 
-        //Fallback when the Open-Meteo fetch failed (offline, CORS, 502, etc.). The timeline still has to
-        //render so the user can scrub PV history / battery curves and read the live state; we just lose
-        //the cloud / irradiance / forecast traces. Synthetic window: today midnight minus PAST_DAYS to
-        //today midnight plus FORECAST_DAYS.
-        const today0 = new Date();
-        today0.setHours(0, 0, 0, 0);
-        const startMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
-        const endMs   = today0.getTime() + TIMELINE_FORECAST_DAYS * 24 * 3_600_000;
-        return { start: new Date(startMs), end: new Date(endMs) };
+        //Fallback when the Open-Meteo fetch failed (offline, CORS, 502, etc.). The timeline still renders
+        //so the user can scrub PV history / battery curves and read the live state; we just lose the
+        //cloud / irradiance / forecast traces.
+        return { start: new Date(visibleStartMs), end: new Date(visibleEndMs) };
     }
 
     //Resolve the configured cloud colour, falling back to the design
