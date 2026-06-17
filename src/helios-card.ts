@@ -757,8 +757,8 @@ export class HeliosCard extends LitElement
         `;
     }
 
-    //Compact rolling-period selector on the timeline: four presets (today, the configured default span,
-    //the last 7 days, the last 30 days). The active preset is highlighted by matching the live span.
+    //Compact rolling-period selector on the timeline: three presets (today, the configured default span,
+    //the last 7 days). The active preset is highlighted by matching the live span.
     //Pointer-down is swallowed so tapping a preset never starts a timeline scrub on the parent .time-bar.
     private _renderPeriodSelector(): TemplateResult
     {
@@ -771,7 +771,6 @@ export class HeliosCard extends LitElement
             { label: t.period?.today         ?? 'Today',   past: 0,       future: 0      },
             { label: t.period?.configDefault ?? 'Default', past: cfgPast, future: cfgFut },
             { label: t.period?.last7Days     ?? '7 d',     past: 6,       future: 1      },
-            { label: t.period?.last30Days    ?? '30 d',    past: 29,      future: 1      },
         ];
         return html`
             <div

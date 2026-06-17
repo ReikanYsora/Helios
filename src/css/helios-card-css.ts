@@ -841,17 +841,14 @@ export const heliosCardStyles = css`
 
     /*  Night-zone overlays. One absolutely-positioned div per
         sunset, next sunrise window, inserted as a sibling of the
-        chart SVG inside the chart card. CSS diagonal hatching
+        chart SVG inside the chart card. A solid low-alpha wash
         sits on top of the curves but below the live + scrub
         cursors (z-index 4), so dusk and dawn read as "this slice
-        is night" without obscuring the curve shape underneath.
-        Repeating linear gradients render at the device pixel grid
-        regardless of the chart SVG's preserveAspectRatio=none, so
-        the stripes stay diagonal across any card width.            */
+        is night" without obscuring the curve shape underneath.     */
     /*  Future-mask wash, sits on top of the curves and night zones
         and stretches from "now" to the right edge of the card. The
         wash uses the card background colour at moderate alpha so it
-        lightens the curves AND the night-zone hatches in a single
+        lightens the curves AND the night-zone washes in a single
         pass without redoubling on overlapping regions. Cursors sit
         at z-index 4 and stay fully opaque.                          */
     .hc-future-mask
@@ -880,33 +877,14 @@ export const heliosCardStyles = css`
         bottom: 0;
         pointer-events: none;
         z-index: 3;
-        /*  Hatch + sunset/sunrise edges share the exact same RGBA
-            (rgba(0, 0, 0, 0.07) light, rgba(255, 255, 255, 0.10)
-            dark) so the boundary line reads as the densest part of
-            the same hatch rather than as a separate marker. Alpha
-            dropped relative to earlier iterations: too much density
-            obscured the curves the user came to read.              */
-        background-image: repeating-linear-gradient(
-            45deg,
-            rgba(0, 0, 0, 0.12) 0,
-            rgba(0, 0, 0, 0.12) 1.5px,
-            transparent         1.5px,
-            transparent         6px
-        );
-        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.12),
-                    inset -1px 0 0 0 rgba(0, 0, 0, 0.12);
+        /*  Solid low-alpha wash marking the night slice: a touch darker than the card in light themes,
+            a touch lighter in dark themes. No diagonal hatch and no edge border, so dusk/dawn read as
+            one soft band that stays calm and keeps the curves underneath fully legible.              */
+        background: rgba(0, 0, 0, 0.06);
     }
     ha-card.theme-dark .hc-night-zone
     {
-        background-image: repeating-linear-gradient(
-            45deg,
-            rgba(255, 255, 255, 0.18) 0,
-            rgba(255, 255, 255, 0.18) 1.5px,
-            transparent              1.5px,
-            transparent              6px
-        );
-        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.18),
-                    inset -1px 0 0 0 rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.08);
     }
 
 

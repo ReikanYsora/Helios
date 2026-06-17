@@ -200,14 +200,13 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
 
 
 //Night-zone overlays for a chart card. Renders one absolutely-
-//positioned div per night interval, filled with a diagonal hatch
-//pattern. The divs are inserted inside the chart card so they
+//positioned div per night interval, filled with a solid low-alpha
+//wash. The divs are inserted inside the chart card so they
 //inherit the card's relative positioning + overflow clipping;
 //z-index lifts them above the SVG curves (which paint as flow
 //content) but stays below the live + scrub cursors (z-index 4).
 //The result reads as "this stretch of timeline is night", with
-//the underlying curves still legible through the low-alpha
-//diagonals.
+//the underlying curves still legible through the low-alpha wash.
 export function renderTimelineNightZones(host: ChartHost): TemplateResult
 {
     const intervals = computeNightIntervals(host);

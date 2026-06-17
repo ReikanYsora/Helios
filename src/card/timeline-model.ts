@@ -134,9 +134,15 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
         labelMode   = 'centered';
     }
 
+    //Day labels are short (weekday names) and read clearly even across a full week, so the 'days' kind
+    //gets a generous budget that keeps one label + one separator PER DAY rather than thinning to every
+    //other day (which made the 7-day view look like it was dropping days). The 'days' kind already caps
+    //at ~14 days upstream, so 16 effectively means "never thin a day view". Other kinds keep the
+    //standard budget so wide week/month spans still collapse to a readable tick count.
+    const tickBudget = kind === 'days' ? Math.max(maxTicks, 16) : maxTicks;
     const thin = <T>(arr: T[]): T[] =>
     {
-        const stride = Math.max(1, Math.ceil(arr.length / maxTicks));
+        const stride = Math.max(1, Math.ceil(arr.length / tickBudget));
         return arr.filter((_, i) => i % stride === 0);
     };
 
