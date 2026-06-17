@@ -30,6 +30,12 @@ export const heliosCardStyles = css`
         position: relative;
         overflow: hidden;
         background: #000;
+        /*  Clip the black map backdrop to the PADDING box so it stops INSIDE the <ha-card> border
+            instead of bleeding under it. Without this, background-clip defaults to border-box and the
+            black fills the rounded-corner gap between the (inner-clipped) map and the border, painting a
+            dark thick corner that doesn't match HA's subtle card frame. Same fix as the dashboard
+            integration; same padding-box pattern used on the chips / mode bar. */
+        background-clip: padding-box;
         /*  Container query host so the fullscreen / kiosk breakpoint
             rules at the bottom of this stylesheet can react to the
             card's own width without depending on the viewport size,
@@ -77,6 +83,11 @@ export const heliosCardStyles = css`
             works under both.                                          */
         position: absolute;
         inset: 0;
+        /*  Give the map its OWN rounded clip (matching the card radius) so the rectangular MapLibre
+            canvas can't leave a 1 px sliver outside the border's inner curve at the corners. Belt-and-
+            braces with the <ha-card> overflow clip above; together they keep the corner seam clean. */
+        border-radius: var(--ha-card-border-radius, 12px);
+        overflow: hidden;
     }
 
     /*  Force-hide the MapLibre attribution rail. attributionControl
