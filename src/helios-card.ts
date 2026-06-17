@@ -7,6 +7,10 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_LIDAR_VIEW_OPACITY,
+    DEFAULT_PERIOD_PAST_DAYS,
+    DEFAULT_PERIOD_FUTURE_DAYS,
+    periodPastDays,
+    periodFutureDays,
     valueDecimals
 } from './helios-config';
 import { pickTranslations } from './i18n';
@@ -510,6 +514,13 @@ export class HeliosCard extends LitElement
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
+    //Active rolling-window span (days of history / forecast around today). Seeded from the config
+    //period keys in setConfig, pushed to the engine via setPeriodDays() and read by buildUnifiedStore.
+    //The in-card period selector overrides these at runtime through _setPeriod(); they are the single
+    //runtime source of truth for the window. Not @state: changes go through _applyPeriod() which
+    //requests an update explicitly after dropping the cached store + window.
+    _periodPastDays   = DEFAULT_PERIOD_PAST_DAYS;
+    _periodFutureDays = DEFAULT_PERIOD_FUTURE_DAYS;
     //True while the engine is fetching the LiDAR shadow payload from the upstream provider and rasterising it for the image source. Drives the
     //spinner chip pinned top-right of the map so the user knows the shadow layer they're about to see is still computing.
     @state() _shadowBusy    = false;
@@ -650,7 +661,34 @@ export class HeliosCard extends LitElement
             throw new Error('Invalid HELIOS configuration');
         }
         this.config = { ...config };
+        //Seed the rolling-window span from the config period keys. A change (e.g. an editor edit of
+        //period-past-days) re-applies it without respawning the engine: the period follows the camera
+        //pattern (pushed via a dedicated engine setter, NOT in VISUAL_CONFIG_KEYS) so editing it never
+        //tears down the WebGL context.
+        const past   = periodPastDays(this.config);
+        const future = periodFutureDays(this.config);
+        if (past !== this._periodPastDays || future !== this._periodFutureDays)
+        {
+            this._periodPastDays   = past;
+            this._periodFutureDays = future;
+            this._applyPeriod();
+        }
         this._warnIfLegacyEntityKeys(config);
+    }
+
+    //Apply the active rolling-window span to the engine, store and timeline. Called when the config
+    //period keys change (setConfig) and, later, when the in-card period selector picks a new span. The
+    //engine has no period source of its own beyond the config fallback, so we push the resolved values,
+    //then drop the cached unified store + window so the next render rebuilds them against the new span.
+    //Safe before the engine exists (the setter / range read are guarded; the engine reads the config
+    //fallback on its first build).
+    private _applyPeriod(): void
+    {
+        this._engine?.setPeriodDays(this._periodPastDays, this._periodFutureDays);
+        this._unifiedStore = null;
+        const tr = this._engine?.getTimelineRange();
+        if (tr) { this._timeRange = tr; }
+        this.requestUpdate();
     }
 
     //Retired YAML entity keys. The card reads these entirely from the HA Energy dashboard global settings; any value

@@ -98,6 +98,10 @@ export interface UnifiedDataStore
 export interface UnifiedStoreHost
 {
     readonly config:                  HeliosConfig | undefined;
+    //Active rolling-window span in days (history before today / forecast after today). Owned by the
+    //card (config seed + runtime period selector); buildUnifiedStore builds exactly this many days.
+    readonly _periodPastDays:         number;
+    readonly _periodFutureDays:       number;
     readonly hass:                    { language?: string; states?: Record<string, { state: string }>; config?: { latitude?: number; longitude?: number } } | undefined;
     readonly _chartSeries:            ChartSeries | null;
     readonly _pvHistory:              PvHistory | null;
@@ -171,13 +175,13 @@ function interpolateNullGaps(arr: (number | null)[]): void
 }
 
 
-//Midnight (local time) of the J-2 day. Used as the store origin so every per-day slice lines up on
-//calendar day boundaries.
-function storeOriginMs(): number
+//Midnight (local time) of the first day in the rolling window (today - daysPast). Used as the store
+//origin so every bucket lines up on calendar day boundaries.
+function storeOriginMs(daysPast: number): number
 {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    return d.getTime() - STORE_DAYS_PAST * DAY_MS;
+    return d.getTime() - daysPast * DAY_MS;
 }
 
 
@@ -395,12 +399,17 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
 {
     const bucketsPerHour = displayUpdateFrequencyPerHour(host.config);
     const bucketsPerDay  = 24 * bucketsPerHour;
-    const bucketsTotal   = STORE_DAYS * bucketsPerDay;
+    //Rolling-window span from the card's active period (config seed or runtime selector override). The
+    //store holds exactly daysPast history + today + daysFuture forecast days.
+    const daysPast   = host._periodPastDays;
+    const daysFuture = host._periodFutureDays;
+    const storeDays  = daysPast + 1 + daysFuture;
+    const bucketsTotal   = storeDays * bucketsPerDay;
     const stepMs         = HOUR_MS / bucketsPerHour;
     const p: CadenceParams = { bucketsPerHour, bucketsPerDay, bucketsTotal, stepMs };
 
-    const storeStartMs = storeOriginMs();
-    const storeEndMs   = storeStartMs + STORE_DAYS * DAY_MS;
+    const storeStartMs = storeOriginMs(daysPast);
+    const storeEndMs   = storeStartMs + storeDays * DAY_MS;
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
     const cloud        = buildCloud(host, storeStartMs, storeEndMs, p);
