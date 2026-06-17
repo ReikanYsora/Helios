@@ -2797,14 +2797,19 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Cloud chip: a standalone pill on the sun -> home line (1/3 of the way), showing the
-                      live cloud cover with a dynamic cloud glyph. Unlike the HA card it does NOT enter
-                      weather mode: clicking it re-targets the timeline chart to the cloud cover (three
-                      altitude-band curves), the same chip <-> chart coupling as the other chips.  -->
-                ${showSunLabel && layout !== null && this._cloudCover >= 0 ? html`
+                <!--  Cloud chip: a standalone pill just to the RIGHT of the irradiance chip, joined by a
+                      short fixed cloud-coloured leader, showing the live cloud cover with a dynamic glyph.
+                      Unlike the HA card it does NOT enter weather mode: clicking it re-targets the timeline
+                      chart to the cloud cover (three altitude-band curves), same chip <-> chart coupling as
+                      the other chips. Anchored off the sun so it tracks the irradiance chip.  -->
+                ${showSunLabel && this._cloudCover >= 0 ? html`
+                    <div
+                        class="cloud-chip-leader"
+                        style="left:${(sunScene!.sun.x + 40).toFixed(1)}px; top:${(sunScene!.sun.y - 34).toFixed(1)}px"
+                    ></div>
                     <div
                         class="cloud-chip ${this._chartTarget === 'cloud' ? 'is-chart-active' : ''}"
-                        style="left:${(sunScene!.sun.x + (layout!.home.x - sunScene!.sun.x) / 3).toFixed(1)}px; top:${(sunScene!.sun.y + (layout!.home.y - sunScene!.sun.y) / 3).toFixed(1)}px"
+                        style="left:${(sunScene!.sun.x + 84).toFixed(1)}px; top:${(sunScene!.sun.y - 34).toFixed(1)}px"
                         role="button"
                         tabindex="0"
                         @click=${() => this._setChartTarget('cloud')}

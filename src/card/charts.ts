@@ -1361,34 +1361,36 @@ export function renderPvChart(host: ChartHost): TemplateResult
                     x2="${x.toFixed(2)}" y2="${H}"
                 ></line>
             `)}
-            ${area ? svg`
-                <path
-                    d="${area}"
-                    fill="${pvColor}"
-                    fill-opacity="0.25"
-                ></path>
-            ` : nothing}
-            ${perEntityCurves.map(c => svg`
-                <path
-                    class="hc-chart-line hc-chart-line-source"
-                    d="${c.line}"
-                    stroke="${c.color}"
-                ></path>
-            `)}
-            ${line ? svg`
-                <path
-                    class="hc-chart-line"
-                    d="${line}"
-                    stroke="${pvColor}"
-                ></path>
-            ` : nothing}
-            ${predictedLine ? svg`
-                <path
-                    class="hc-chart-line hc-chart-predicted"
-                    d="${predictedLine}"
-                    stroke="${predictedPvColor}"
-                ></path>
-            ` : nothing}
+            <g class="hc-chart-grow">
+                ${area ? svg`
+                    <path
+                        d="${area}"
+                        fill="${pvColor}"
+                        fill-opacity="0.25"
+                    ></path>
+                ` : nothing}
+                ${perEntityCurves.map(c => svg`
+                    <path
+                        class="hc-chart-line hc-chart-line-source"
+                        d="${c.line}"
+                        stroke="${c.color}"
+                    ></path>
+                `)}
+                ${line ? svg`
+                    <path
+                        class="hc-chart-line"
+                        d="${line}"
+                        stroke="${pvColor}"
+                    ></path>
+                ` : nothing}
+                ${predictedLine ? svg`
+                    <path
+                        class="hc-chart-line hc-chart-predicted"
+                        d="${predictedLine}"
+                        stroke="${predictedPvColor}"
+                    ></path>
+                ` : nothing}
+            </g>
             ${showHover ? svg`
                 <line
                     class="hc-hover-guide"
@@ -1609,12 +1611,14 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             ${dayXs.map(x => svg`
                 <line class="hc-day-sep" x1="${x.toFixed(2)}" y1="0" x2="${x.toFixed(2)}" y2="${H}"></line>
             `)}
-            ${drawn.map(d => d.area ? svg`
-                <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
-            ` : nothing)}
-            ${drawn.map(d => d.line ? svg`
-                <path class="hc-chart-line" d="${d.line}" stroke="${d.color}"></path>
-            ` : nothing)}
+            <g class="hc-chart-grow">
+                ${drawn.map(d => d.area ? svg`
+                    <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
+                ` : nothing)}
+                ${drawn.map(d => d.line ? svg`
+                    <path class="hc-chart-line" d="${d.line}" stroke="${d.color}"></path>
+                ` : nothing)}
+            </g>
             ${showHover ? svg`
                 <line class="hc-hover-guide" x1="${hoverX.toFixed(2)}" y1="0" x2="${hoverX.toFixed(2)}" y2="${H}"></line>
             ` : nothing}

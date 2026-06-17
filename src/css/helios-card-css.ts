@@ -291,7 +291,8 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .grid-label,
     ha-card.overlay-masked .low-carbon-leader-svg,
     ha-card.overlay-masked .low-carbon-label,
-    ha-card.overlay-masked .cloud-chip
+    ha-card.overlay-masked .cloud-chip,
+    ha-card.overlay-masked .cloud-chip-leader
     {
         opacity: 0;
         pointer-events: none;
@@ -398,8 +399,15 @@ export const heliosCardStyles = css`
         display: block;
         width: 100%;
         height: 100%;
-        /*  Grow the curve up from the baseline when the chart target changes (the SVG is keyed on the
-            target so it re-mounts and replays), matching HA's own graph cards' 500 ms grow. */
+    }
+    /*  Grow ONLY the curves (wrapped in .hc-chart-grow) up from the baseline when the chart target
+        changes (the SVG is keyed on the target so it re-mounts and replays), matching HA's graph cards'
+        500 ms grow. The dotted day/night separators and the hover guide sit OUTSIDE this group so they
+        stay put instead of stretching with the animation. fill-box anchors the scale at the group's own
+        bbox bottom (the chart baseline). */
+    .hc-chart-grow
+    {
+        transform-box: fill-box;
         transform-origin: bottom;
         animation: hc-chart-grow 500ms ease-out;
     }
@@ -410,7 +418,7 @@ export const heliosCardStyles = css`
     }
     @media (prefers-reduced-motion: reduce)
     {
-        .hc-chart-svg { animation: none; }
+        .hc-chart-grow { animation: none; }
     }
 
     /*  Stroke-only outline on top of the filled area so peaks read
@@ -2046,6 +2054,18 @@ export const heliosCardStyles = css`
     {
         box-shadow: 0 1px 3px var(--shadow-color),
                     0 0 12px color-mix(in srgb, var(--secondary-text-color, #727272) 70%, transparent);
+    }
+    /*  Short fixed cloud-coloured leader joining the irradiance chip to the cloud chip on its right. */
+    .cloud-chip-leader
+    {
+        position: absolute;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 2px;
+        background: var(--secondary-text-color, #727272);
+        border-radius: 1px;
+        pointer-events: none;
+        z-index: 10;
     }
 
     /*  Solar ray bead, small filled disc travelling sun -> PV chip

@@ -4805,12 +4805,21 @@ export class HeliosEngine
         {
             return 1.0;
         }
+        const SMALL = 360;
         const FLOOR = 600;
         const TOP   = 1200;
+        const MIN   = 0.72;
         const MAX   = 2.2;
-        if (minDim <= FLOOR)
+        //Small phones: shrink the arc so it fits the card instead of spilling past the edges (same
+        //down-scale as the dashboard card). <= SMALL clamps to MIN; SMALL..FLOOR ramps MIN -> 1.0;
+        //FLOOR..TOP ramps 1.0 -> MAX for wide kiosks.
+        if (minDim <= SMALL)
         {
-            return 1.0;
+            return MIN;
+        }
+        if (minDim < FLOOR)
+        {
+            return MIN + (1.0 - MIN) * (minDim - SMALL) / (FLOOR - SMALL);
         }
         if (minDim >= TOP)
         {
