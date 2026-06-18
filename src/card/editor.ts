@@ -21,8 +21,8 @@ import
 import { pickTranslations, type Translations } from '../i18n';
 
 
-//LiDAR View visual knobs that existed before the in-card opacity slider replaced them. Left here as a const tuple so `_update` can strip
-//them silently on every config write: the runtime already ignores these keys, the silent strip just keeps the saved YAML tidy.
+// Legacy LiDAR View knobs, superseded by the in-card opacity slider. Stripped silently on every config write to keep saved YAML
+// tidy; the runtime already ignores them.
 const LIDAR_VIEW_LEGACY_KEYS = [
     'lidar-view-point-color',
     'lidar-view-point-opacity',
@@ -34,16 +34,9 @@ const LIDAR_VIEW_LEGACY_KEYS = [
 
 
 
-//Render a localised hint string that may contain markdown-style
-//links `[text](url)` as a Lit fragment with real `<a>` anchors.
-//No HTML parsing, no innerHTML: each link is built through Lit's
-//tagged template literal so the URL + text stay text-escaped.
-//
-//URL safety: anything that doesn't start with `http://` or
-//`https://` is rendered as plain text. Stops a malicious /
-//corrupted translation from sneaking in a `javascript:` URI.
-//
-//Used by editor hints that need a clickable link to helios-lidar.org or other public docs.
+// Render a localised hint with markdown-style `[text](url)` links as a Lit fragment of real `<a>` anchors. Built via Lit's tagged
+// template (no innerHTML) so URL + text stay escaped. URL safety: anything not http(s):// or same-origin is rendered as plain text,
+// blocking a corrupted translation from injecting a `javascript:` URI. Used by editor hints linking to public docs.
 function renderMarkdownLinks(text: string): unknown[]
 {
     const parts: unknown[] = [];
@@ -64,13 +57,12 @@ function renderMarkdownLinks(text: string): unknown[]
         }
         else if (/^\/[a-zA-Z0-9_\-/.]*$/.test(url))
         {
-            //Same-origin in-app navigation (e.g. /config/energy to jump to the Home Assistant Energy dashboard editor).
-            //No target=_blank so the user stays inside the HA SPA and the dashboard's own navigation history works.
+            // Same-origin in-app navigation (e.g. /config/energy). No target=_blank so the user stays inside the HA SPA.
             parts.push(html`<a href="${url}">${label}</a>`);
         }
         else
         {
-            //Suspicious scheme, render as plain text so the user can see the URL but the browser doesn't follow it.
+            // Suspicious scheme: render the URL as plain text so the browser doesn't follow it.
             parts.push(`${label} (${url})`);
         }
         cursor = match.index + match[0].length;
@@ -83,30 +75,19 @@ function renderMarkdownLinks(text: string): unknown[]
 }
 
 
-//Visual editor, exposes every config option through native HA form
-//controls (text inputs, color picker, entity picker). Wired into the
-//card via HeliosCard.getConfigElement().
+// Visual editor exposing every config option through native HA form controls. Wired in via HeliosCard.getConfigElement().
 @customElement('helios-card-editor')
 export class HeliosCardEditor extends LitElement
 {
     @property({ attribute: false }) public hass?: any;
     @state()                        private _cfg: HeliosConfig = {};
     @state()                        private _pickerReady = false;
-    //Accordion: at most one top-level editor section open at a time
-    //(the alternative was a stack of expanded blocks which got too
-    //tall to scan once every section was open). Tracks the id of
-    //the currently-open section; null when every section is collapsed.
-    //Defaults to 'location' so the very first thing the user sees on
-    //a fresh card is where the home sits.
+    // Accordion: at most one top-level section open at a time (a stack of expanded blocks got too tall to scan). Id of the open
+    // section, or null when all collapsed. Defaults to 'location' so a fresh card opens on where the home sits.
     @state()                        private _openSection: string | null = 'location';
-    //Per-key debounce timers for slider inputs. Sliders fire @input
-    //on every pixel of drag, so dispatching `config-changed` per
-    //tick would cascade an updateConfig + full re-render through
-    //the engine on each pixel, visibly painful during preview. We
-    //update the local _cfg synchronously (so the slider's bound
-    //.value tracks the drag perfectly) but only dispatch the
-    //cross-component `config-changed` event after a short idle
-    //window.
+    // Per-key debounce timers for slider @input. Sliders fire on every drag pixel; dispatching `config-changed` per tick would
+    // cascade a full engine re-render each pixel (painful during preview). _cfg updates synchronously so the bound .value tracks the
+    // drag, but `config-changed` only dispatches after a short idle window.
     private static readonly SLIDER_COMMIT_DELAY_MS = 250;
     private _sliderDebounce: Map<string, number> = new Map();
 
@@ -118,8 +99,8 @@ export class HeliosCardEditor extends LitElement
             window.clearTimeout(t);
         }
         this._sliderDebounce.clear();
-        //"Cache vidé" confirmation timer survives a fast unmount if not cleared, fires on a dead element and triggers a Lit warning
-        //about touching @state after disconnect. Clear it here so the editor unmounts cleanly mid-feedback.
+        // Clear the "Cache vidé" confirmation timer; otherwise a fast unmount lets it fire on a dead element and warn about
+        // touching @state after disconnect.
         if (this._resetFeedbackTimer !== undefined)
         {
             window.clearTimeout(this._resetFeedbackTimer);
@@ -129,32 +110,24 @@ export class HeliosCardEditor extends LitElement
 
     public setConfig(config: HeliosConfig): void
     {
-        //Strip every legacy / removed config key the moment the user
-        //opens the editor. Keeps YAML clean as the schema evolves and
-        //prevents stale config from carrying ghost behaviour into a
-        //fresh card frame.
+        // Strip legacy/removed keys on editor open so stale config can't carry ghost behaviour into a fresh card frame.
         const sanitised = HeliosCardEditor._sanitiseConfig({ ...config });
         const changed   = !HeliosCardEditor._configEq(config, sanitised);
         this._cfg = sanitised;
-        //If we trimmed anything, push the cleaned config back up to
-        //HA so the YAML reflects the schema immediately, not only on
-        //the user's next manual edit.
+        // If anything was trimmed, push the cleaned config back to HA so the YAML reflects the schema now, not on the next edit.
         if (changed)
         {
             this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: sanitised } }));
         }
     }
 
-    //Schema-aware strip of legacy / removed keys. The list grows with
-    //the version; new entries land here when a key is retired so the
-    //next editor open silently scrubs the user's YAML.
+    // Legacy/removed keys scrubbed on the next editor open. Grows as keys are retired across versions.
     private static _RETIRED_KEYS: string[] = [
         'card-theme',
         'card-theme-light',
         'card-theme-dark',
-        //Entity slots the HA Energy dashboard already declares are silently stripped on the next editor open; the card
-        //runtime resolves them from `energy/get_prefs` instead. See helios-card.ts setConfig for the user-facing
-        //migration notification.
+        // Entity slots the HA Energy dashboard already declares; the runtime resolves these from `energy/get_prefs` instead.
+        // See helios-card.ts setConfig for the user-facing migration notification.
         'pv-power-entity',
         'grid-import-entity',
         'grid-export-entity',
@@ -173,17 +146,15 @@ export class HeliosCardEditor extends LitElement
         'lidar-view-point-size',
         'lidar-view-radius',
         'building-radius',
-        //Colour identity is fixed by the HA Energy palette via the DEFAULT_*_COLOR_HEX constants in
-        //helios-config.ts; the renderer no longer reads any per-card override so the stale YAML keys
-        //get stripped on the next editor pass.
+        // Colour identity is fixed by the HA Energy palette (DEFAULT_*_COLOR_HEX in helios-config.ts); the renderer reads no
+        // per-card override, so these stale keys get stripped.
         'sun-color',
         'cloud-color',
         'pv-color',
         'battery-color',
         'building-color',
-        //LiDAR view styling collapsed into the HA --primary-text-color token + the in-card opacity
-        //slider. These five keys are also stripped on every edit via LIDAR_VIEW_LEGACY_KEYS below,
-        //listing them here too so an editor open that doesn't touch anything still cleans the YAML.
+        // LiDAR view styling collapsed into --primary-text-color + the in-card opacity slider. Also stripped on every edit via
+        // LIDAR_VIEW_LEGACY_KEYS; listed here too so a no-op editor open still cleans the YAML.
         'lidar-view-point-color',
         'lidar-view-point-opacity',
         'lidar-view-wireframe',
@@ -223,9 +194,9 @@ export class HeliosCardEditor extends LitElement
         this._ensureEntityPicker();
     }
 
-    //ha-entity-picker is part of HA's lazy-loaded card-editor bundle. In a fresh tab, or in HA versions that don't pre-load it for custom cards, the
-    //tag is unknown until something on the page pulls it in. We force the load by creating a transient "entities" card and asking for its config
-    //element, the side effect registers ha-entity-picker. While the load is pending we fall back to a plain text input so the field is never broken.
+    // ha-entity-picker ships in HA's lazy-loaded card-editor bundle and may be unregistered in a fresh tab. Force the load by
+    // creating a transient "entities" card and requesting its config element (the side effect registers the tag). Until then the
+    // field falls back to a plain text input so it's never broken.
     private async _ensureEntityPicker(): Promise<void>
     {
         if (this._pickerReady)
@@ -283,8 +254,7 @@ export class HeliosCardEditor extends LitElement
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
         const next = { ...this._cfg, [key]: value } as Record<string, unknown>;
-        //Silently strip the LiDAR View visual knobs that were collapsed into the in-card opacity slider, the moment the user makes any edit, so the config self-heals without needing
-        //a one-shot migration. The runtime ignores them too, this just keeps the YAML tidy.
+        // Strip the legacy LiDAR View knobs on any edit so the config self-heals without a one-shot migration.
         for (const k of LIDAR_VIEW_LEGACY_KEYS)
         {
             if (k in next)
@@ -301,10 +271,8 @@ export class HeliosCardEditor extends LitElement
         this._update(key, (e.target as HTMLInputElement).value);
     }
 
-    //Free-form numeric field. Empty input clears the option (so the
-    //card falls back to its default behaviour); a valid finite number
-    //is committed as-is. Anything else is ignored, the previous value
-    //stays in place.
+    // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits as-is; anything
+    // else is ignored, leaving the previous value.
     private _numField(key: keyof HeliosConfig, e: Event): void
     {
         const raw = (e.target as HTMLInputElement).value.trim();
@@ -321,8 +289,8 @@ export class HeliosCardEditor extends LitElement
         this._update(key, v);
     }
 
-    //Slider commit. Updates local state synchronously so the slider thumb tracks the drag, but defers the cross-component `config-changed` event by
-    //SLIDER_COMMIT_DELAY_MS so the engine doesn't see a flood of intermediate values.
+    // Slider commit. Updates local state synchronously so the thumb tracks the drag, but defers `config-changed` by
+    // SLIDER_COMMIT_DELAY_MS so the engine doesn't see a flood of intermediate values.
     private _numSlider(key: keyof HeliosConfig, e: Event): void
     {
         const v = parseFloat((e.target as HTMLInputElement).value);
@@ -331,7 +299,7 @@ export class HeliosCardEditor extends LitElement
             return;
         }
 
-        //Local update only, no event dispatch yet.
+        // Local update only, no event dispatch yet.
         this._cfg = { ...this._cfg, [key]: v };
 
         const k        = String(key);
@@ -350,15 +318,9 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    //Enforces the accordion contract for top-level editor sections:
-    //opening one closes every other (Lit re-render is driven by the
-    //_openSection state binding the `open` attribute on each
-    //<details>). When the user collapses the currently-open section
-    //the editor falls back to "everything closed", a valid state
-    //since the section content is the only mandatory surface.
-    //
-    //Also scrolls the just-opened section into view so the user is never left looking at the bottom of the previous section after a click. Done on
-    //the next rAF tick so the layout reflects the newly-expanded body before we measure.
+    // Accordion contract: opening a section closes the others (_openSection binds each <details>'s `open` attribute). Collapsing the
+    // open one falls back to "everything closed". Also scrolls the just-opened section into view on the next rAF tick (after layout
+    // reflects the expanded body) so the user isn't left at the bottom of the previous section.
     private _onSectionToggle(sectionId: string, e: Event): void
     {
         const el = e.currentTarget as HTMLDetailsElement;
@@ -381,11 +343,8 @@ export class HeliosCardEditor extends LitElement
         return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
     }
 
-    //Filter for the PV entity picker, accepts power/energy device
-    //classes (the canonical case) plus any sensor whose unit looks
-    //like W/kW/MW or Wh/kWh/MWh. The unit fallback covers custom
-    //template sensors that don't bother declaring a device_class.
-    //integrations like Ecowitt where the field is just a raw float.
+    // Solar-radiation entity filter: accepts the `irradiance` device class plus any sensor reporting W/m². The unit fallback covers
+    // template sensors (e.g. Ecowitt) that don't declare a device_class.
     private _solarRadiationEntityFilter = (entity: any): boolean =>
     {
         if (!entity || !entity.attributes)
@@ -400,23 +359,13 @@ export class HeliosCardEditor extends LitElement
         return u === 'W/m²' || u === 'W/m2';
     };
 
-    //Multi-entity grid editor: each slot (import / export) accepts a
-    //list of entities, same UX as the PV-array / battery-bank lists
-    //above but trimmed to a single field per entry. The slot's value
-    //in the config is normalised on read: a leftover legacy string
-    //is converted to a one-element array, and a fully empty array is
-    //serialised as an absent key so the YAML stays clean.
-
     protected render(): TemplateResult
     {
         const c = this._cfg;
         const t = this._t();
 
-        //Placeholders for the home lat/lon override fields. We surface
-        //HA's currently-configured home so the user instantly sees what
-        //they would be overriding, falling back to a neutral example
-        //(Amsterdam) when HA hasn't set one. Empty input means "use
-        //HA's home"; the placeholder is non-binding text only.
+        // Placeholders for the home lat/lon override fields: show HA's configured home (so the user sees what they'd override),
+        // falling back to Amsterdam when HA hasn't set one. Non-binding hint text only; empty input means "use HA's home".
         const haLat = this.hass?.config?.latitude;
         const haLon = this.hass?.config?.longitude;
         const latPlaceholder = typeof haLat === 'number' && isFinite(haLat)
@@ -810,9 +759,8 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    //Fires the window-level reset bus so every live HeliosCard on the page drops its cached Open-Meteo payload + in-memory PV history and triggers a
-    //fresh fetch. Also flashes a short "Cache vidé" confirmation on the button itself for 2 s so the user knows the click landed without us needing a
-    //toast system inside the editor.
+    // Fires the window-level reset bus so every live HeliosCard drops its cached Open-Meteo payload + in-memory PV history and
+    // re-fetches. Flashes a 2 s "Cache vidé" confirmation on the button so the user sees the click landed without an editor toast.
     private _resetFeedbackTimer?: number;
     @state() private _resetFeedback: string | null = null;
 
