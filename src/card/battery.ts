@@ -9,12 +9,11 @@ import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
+import { BATTERY_CACHE_TTL_MS } from '../constants';
 
 
 //Module-level history cache, survives Lit unmount+remount (navigate away from Helios and back) like the PV cache in pv.ts.
 //15-min TTL covers nav-around-the-dashboard without serving stale data forever.
-
-const BATTERY_CACHE_TTL_MS = 15 * 60_000;
 
 interface BatteryHistoryCacheEntry
 {

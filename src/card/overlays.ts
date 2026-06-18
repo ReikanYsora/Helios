@@ -3,6 +3,7 @@
 //the "flow duration" easing that ramps animation speed with the live production rate.
 
 import type { HeliosEngine } from '../helios-engine';
+import { EQ_EPS_PX } from '../constants';
 
 
 //One arc sample from engine.projectSunScene(): (x,y) for placement, nearness/belowHorizon for visual modulation,
@@ -94,7 +95,6 @@ export interface OverlaysHost
 
 //Sub-pixel epsilon for screen-space equality: below this the eye can't tell and Lit shouldn't re-render. Larger skips
 //real motion frames; smaller re-renders on floating-point projection noise.
-const EQ_EPS_PX = 0.25;
 
 function nearlyEq(a: number, b: number): boolean
 {

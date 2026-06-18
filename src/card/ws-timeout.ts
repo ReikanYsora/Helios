@@ -9,7 +9,7 @@
 //No retry/backoff: the caller's fetch-key gate re-issues on the next `refresh*` cycle when the
 //(entity, window) tuple changes, the right escape valve for a transient recorder stall.
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+import { WS_DEFAULT_TIMEOUT_MS as DEFAULT_TIMEOUT_MS, WS_MAX_CONCURRENT_FETCHES as MAX_CONCURRENT_FETCHES } from '../constants';
 
 
 //Rejection raised when `callWS` outlasts its timeout budget. The WS `type` is forwarded into the
@@ -33,7 +33,6 @@ export class WsTimeoutError extends Error
 //own helpers), so two Helios cards collectively cap at 4 — a good-citizen heuristic, not a
 //system-wide throttle.
 
-const MAX_CONCURRENT_FETCHES = 2;
 let _activeFetches = 0;
 const _fetchQueue: Array<() => void> = [];
 

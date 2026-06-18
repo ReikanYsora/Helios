@@ -9,6 +9,7 @@ import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
 import type { ChartSeries } from './charts';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+import { ENGINE_SPAWN_COOLDOWN_MS, GLOBAL_SPAWN_COOLDOWN_MS } from '../constants';
 
 
 //Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine without a full
@@ -260,13 +261,11 @@ export function initVisibilityObserver(host: InitHost): void
 //Hard throttle: refuse to respawn if the previous spawn is younger than ENGINE_SPAWN_COOLDOWN_MS. HA's editor preview fires
 //setConfig() bursts (10+/s), each respawn allocating a fresh MapLibre WebGL context that the browser's 8-16 slots can't keep up with
 //("too many active WebGL contexts"). 600ms safely covers one MapLibre teardown + GL slot release while still feeling instant.
-const ENGINE_SPAWN_COOLDOWN_MS = 600;
 const _pendingRespawnTimers = new WeakMap<InitHost, number>();
 
 //Global spawn rate limit across ALL helios-card instances: dashboard edit mode can hold many cards alive, each starting up
 //independently still bursts past the WebGL slot pool. Anything beyond one fresh engine per 800ms is rejected.
 let _globalLastSpawnAt = 0;
-const GLOBAL_SPAWN_COOLDOWN_MS = 800;
 
 //Called from disconnectedCallback so a pending deferred respawn can't fire after teardown (which would spawn an engine for a card
 //with no shadow root).

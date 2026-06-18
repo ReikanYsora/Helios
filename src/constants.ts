@@ -75,3 +75,27 @@ export const SUN_ARC_NIGHT_OPACITY = 0.25;  //below-horizon segment opacity
 export const CLOUD_DISC_RADIUS_M   = 30;
 export const CLOUD_CIRCLE_SEGMENTS = 128;
 export const PV_CHIP_OFFSET_PX     = 70;    //PV chip lift above the home cluster
+
+
+//=== Animation / timing ===
+export const WEATHER_FADE_IN_MS  = 600;
+export const WEATHER_FADE_OUT_MS = 280;
+export const LIDAR_FADE_IN_MS    = 380;
+export const LIDAR_FADE_OUT_MS   = 280;
+export const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
+export const AUTO_ROTATE_INACTIVITY_MS = 5_000;
+export const ENGINE_SPAWN_COOLDOWN_MS = 600;
+export const GLOBAL_SPAWN_COOLDOWN_MS = 800;
+
+//=== Cache TTLs / timeouts / throttles ===
+export const PV_CACHE_TTL_MS        = 15 * 60_000;
+export const BATTERY_CACHE_TTL_MS   = 15 * 60_000;
+export const RADIATION_CACHE_TTL_MS = 15 * 60_000;
+export const HA_DAILY_TOTALS_TTL_MS = 25_000;
+export const FORECAST_THROTTLE_MS   = 5 * 60_000;
+export const WS_DEFAULT_TIMEOUT_MS  = 30_000;
+export const WS_MAX_CONCURRENT_FETCHES = 2;
+
+//=== Misc thresholds ===
+export const EQ_EPS_PX = 0.25;
+export const TIMELINE_MAX_TICKS = 7;

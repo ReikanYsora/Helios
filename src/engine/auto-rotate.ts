@@ -8,13 +8,7 @@
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { HeliosConfig } from '../helios-config';
-
-
-//4 deg/s reads as continuous drift; the previous 1.5 deg/s gave a sub-pixel delta
-//at typical Helios zoom that only displaced ~1px every 15 frames (visible "steps").
-//A full revolution takes 90 seconds.
-const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
-const AUTO_ROTATE_INACTIVITY_MS = 5_000;
+import { AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS } from '../constants';
 
 
 //Engine surface this loop reads/writes. Gesture handlers bump

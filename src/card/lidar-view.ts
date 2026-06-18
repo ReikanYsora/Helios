@@ -7,11 +7,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 import type { CardMode } from './card-mode';
-
-
-//Enter runs longer than exit: the dot cloud "settles in" while the HUD hurries back on dismiss.
-const LIDAR_FADE_IN_MS  = 380;
-const LIDAR_FADE_OUT_MS = 280;
+import { LIDAR_FADE_IN_MS, LIDAR_FADE_OUT_MS } from '../constants';
 
 
 //Structural surface the host card exposes. Card-side mode state (_cardMode + _overlayMaskActive) drives

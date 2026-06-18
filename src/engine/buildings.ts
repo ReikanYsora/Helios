@@ -18,6 +18,7 @@
 
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
+import { HOME_FALLBACK_M } from '../constants';
 
 export interface BuildingsResult
 {
@@ -42,7 +43,6 @@ export interface FetchBuildingsOptions
 const EARTH_RADIUS_M    = 6_371_008.8;
 //If no polygon contains the home point, pick the nearest within this radius — covers HA's home latitude landing in
 //a garden a few metres off the actual building.
-const HOME_FALLBACK_M   = 30;
 
 
 function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }

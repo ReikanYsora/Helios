@@ -11,11 +11,10 @@ import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+import { RADIATION_CACHE_TTL_MS } from '../constants';
 
 
 // Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip.
-
-const RADIATION_CACHE_TTL_MS = 15 * 60_000;
 
 interface RadiationHistoryCacheEntry
 {

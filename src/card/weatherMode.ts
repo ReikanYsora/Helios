@@ -16,11 +16,7 @@
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 import type { CardMode } from './card-mode';
-
-
-//Shared time base with the LiDAR fade so the cadence reads consistently across modes.
-const WEATHER_FADE_IN_MS  = 600;
-const WEATHER_FADE_OUT_MS = 280;
+import { WEATHER_FADE_IN_MS, WEATHER_FADE_OUT_MS } from '../constants';
 
 
 export interface WeatherModeHost extends OverlaysHost

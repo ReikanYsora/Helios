@@ -5,8 +5,8 @@
 const HOUR_MS = 3_600_000;
 const DAY_MS  = 24 * HOUR_MS;
 
-//Max boundary ticks / labels kept after thinning, so a wide window stays legible.
-export const TIMELINE_MAX_TICKS = 7;
+import { TIMELINE_MAX_TICKS } from '../constants';
+export { TIMELINE_MAX_TICKS };
 
 export type TimelineKind = 'intraday' | 'days' | 'weeks' | 'months';
 

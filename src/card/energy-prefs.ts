@@ -2,6 +2,7 @@
 //per-card entity slots). Subscribed once per card; HA's `energy_preferences_updated` event triggers a fresh fetch.
 
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+import { HA_DAILY_TOTALS_TTL_MS } from '../constants';
 
 
 export interface EnergyDefaults
@@ -185,7 +186,6 @@ type HaDailyTotalsCacheEntry =
     result:    number | null;
     inflight?: Promise<number | null>;
 };
-const HA_DAILY_TOTALS_TTL_MS = 25_000;
 const _haDailyTotalsCache = new Map<string, HaDailyTotalsCacheEntry>();
 
 

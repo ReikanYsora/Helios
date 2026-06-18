@@ -9,6 +9,7 @@ import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } fr
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
+import { PV_CACHE_TTL_MS } from '../constants';
 
 
 //Resolve the live PV entity from the HA Energy solar source. Prefers `stat_rate` (signed W/kW) over cumulative `stat_energy_from`
@@ -82,8 +83,6 @@ export interface PvHost extends LoadingTrackerHost
 //event the per-instance `_pv*FetchKey` gate cannot catch — without it every navigation restarted the heavy fetch from zero.
 //Each entry carries the parsed series + fetched-at timestamp; TTL stops stale data drifting forever. Keyed by the same fetch
 //key the refresh path computes, so an entity/range/SoC change invalidates naturally.
-
-const PV_CACHE_TTL_MS = 15 * 60_000;
 
 interface PvStatsCacheEntry
 {
