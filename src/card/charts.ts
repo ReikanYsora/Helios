@@ -1,9 +1,5 @@
-//Timeline chart rendering: the two SVG cards that sit under the map, the timeline cursors that scrub across them, and the per-day kWh aggregation
-//used by the day chips.
-//
-//Pure templates: each function takes a structural `ChartHost`
-//(the card) and returns a Lit `TemplateResult` or a derived
-//value. State mutations live elsewhere; charts only read.
+//Timeline chart rendering: the two SVG cards under the map, the scrub cursors, and per-day kWh aggregation for the
+//day chips. Pure templates over a structural `ChartHost`; charts only read, state mutations live elsewhere.
 
 import { html, svg, nothing, TemplateResult } from 'lit';
 import
@@ -26,24 +22,17 @@ import { sliceForRange, valueAt } from './unifiedStore';
 import { sumChangeForDay, type ChangeBucket } from './energy-stats';
 
 
-//Per-point forecast multiplier. Identity on calR today; kept as a single hook so a future
-//multiplier (weather grid contribution, hourly bias correction, etc.) can re-wire through
-//the call sites without a sweep.
+//Per-point forecast multiplier. Identity today; kept as a single hook for a future multiplier (weather grid
+//contribution, hourly bias correction) to re-wire through the call sites without a sweep.
 export function effectiveForecastRatio(calR: number): number
 {
     return calR;
 }
 
 
-//Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd]
-//in the requested direction (rising = first crossing where alt > 0,
-//setting = first crossing where alt ≤ 0 after being > 0). Returns
-//null at polar latitudes during the day-long polar day / night
-//windows where the sun never crosses the horizon, or when the
-//bracket is degenerate. Used by the timeline's per-day sunrise /
-//sunset markers; coarse 1-hour scan + 12 iterations of bisection
-//get the answer to seconds precision in ~22 getSunPosition calls
-//per event, well under the per-frame budget.
+//Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd] in the requested direction. Returns null
+//during polar day/night (no crossing) or a degenerate bracket. Coarse 1-hour scan + 12 bisection iterations reach
+//seconds precision in ~22 getSunPosition calls, well under the per-frame budget.
 function findSunCrossing(
     lat: number,
     lon: number,
@@ -97,15 +86,9 @@ function findSunCrossing(
 }
 
 
-//Per-day night intervals clipped to the visible time range.
-//Each interval is a (sunset[N] -> sunrise[N+1]) pair returned as
-//{ startPct, endPct } fractional positions; consumed by
-//`renderTimelineNightZones` to lay diagonal-hatch overlays over
-//the chart cards. The walk pads one day on either side of the
-//visible window so the leading and trailing night chunks (the
-//morning before the first sunrise, the evening after the last
-//sunset) still resolve correctly when the window doesn't start
-//or end exactly on a solar boundary.
+//Per-day night intervals clipped to the visible range, each a (sunset[N] -> sunrise[N+1]) pair as
+//{ startPct, endPct } for `renderTimelineNightZones`. The walk pads one day each side so leading/trailing night
+//chunks still resolve when the window doesn't start/end on a solar boundary.
 function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPct: number }>
 {
     const range = host._timeRange;
@@ -169,8 +152,7 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
             }
             else if (!sawAnySunrise)
             {
-                //Leading night: the window opens before the first sunset of our walk, so the morning chunk up to the first sunrise is still a night
-                //zone.
+                //Leading night: window opens before the walk's first sunset, so the morning up to the first sunrise is night.
                 intervals.push({ startMs: -Infinity, endMs: c.ms });
             }
             sawAnySunrise = true;
@@ -199,14 +181,8 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
 }
 
 
-//Night-zone overlays for a chart card. Renders one absolutely-
-//positioned div per night interval, filled with a solid low-alpha
-//wash. The divs are inserted inside the chart card so they
-//inherit the card's relative positioning + overflow clipping;
-//z-index lifts them above the SVG curves (which paint as flow
-//content) but stays below the live + scrub cursors (z-index 4).
-//The result reads as "this stretch of timeline is night", with
-//the underlying curves still legible through the low-alpha wash.
+//Night-zone overlays: one absolutely-positioned low-alpha-wash div per night interval, inside the chart card so it
+//inherits the card's positioning + clipping. z-index sits above the SVG curves but below the cursors (z-index 4).
 export function renderTimelineNightZones(host: ChartHost): TemplateResult
 {
     const intervals = computeNightIntervals(host);
@@ -225,15 +201,9 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult
 }
 
 
-//Semi-opaque overlay covering the future portion of a chart card.
-//Paints on top of the curves + night-zones at z-index 3, leaving
-//the live + scrub cursors (z-index 4) untouched. Anchored to "now"
-//inside the active visible range, so the past portion (left of
-//the overlay) reads at full punch and the forecast portion (right
-//of the overlay) sits behind a wash that fades curves, fills and
-//hatch overlays in one go. Returns nothing when "now" sits
-//outside the range (a fully-past or fully-future window), so the
-//mask never shrinks to a sliver or fills the whole card.
+//Semi-opaque overlay over the future portion of a chart card (z-index 3: above curves + night-zones, below the
+//z-index-4 cursors). Anchored to "now" so the forecast side reads behind a wash. Returns nothing when "now" is
+//outside the range, so the mask never shrinks to a sliver or fills the whole card.
 export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 {
     const range = host._timeRange;
@@ -263,22 +233,10 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 }
 
 
-//PV value at the hover timestamp, expressed in the entity's
-//native power unit so the tooltip number matches the Y axis of
-//the PV chart and the user's own entity reading. Observed-history
-//pair around the cursor wins; falling back to the clear-sky model
-//(scaled by pv-peak-kwp + thermal derating + LiDAR shading) for
-//hours past "now" keeps the readout meaningful in the forecast
-//window. Returns NaN value when neither source can supply a
-//number at the cursor instant (no entity configured, sample gap,
-//etc).
-//Hue-rotated palette built around the HA Energy `--energy-solar-color` theme token. The first source keeps the
-//base hue (so single-source installs reading this index get the exact theme colour), siblings step the hue by
-//`360 / N` degrees so a 2-source split E / W lands on opposite hues, a 3-source install on 120 ° spacing, and so
-//on. The CSS HSL `from` syntax lets us derive the rotation in pure CSS so the actual colour follows the user's
-//live theme without us having to parse the resolved RGB. Falls back to a fixed orange on browsers that don't
-//support the relative-colour syntax. Exported so the dashboard chart tooltip can reuse the same per-source
-//colours next to the friendly-name rows.
+//Hue-rotated palette around the HA Energy `--energy-solar-color` token. Source 0 keeps the base hue; siblings step
+//`360 / N` degrees (a 2-source E/W split lands on opposite hues). The CSS HSL `from` syntax derives the rotation so
+//the colour follows the live theme without parsing resolved RGB; falls back to a fixed orange where unsupported.
+//Exported so the dashboard tooltip can reuse the same per-source colours.
 export function pvSourceColor(index: number, total: number): string
 {
     if (total <= 1)
@@ -293,11 +251,9 @@ export function pvSourceColor(index: number, total: number): string
 export function pvValueAtTime(
     host: ChartHost,
     targetMs: number,
-    //Optional per-source history override. When supplied, the function reads from this series instead of the
-    //aggregated `_pvHistory`, used by the multi-source per-entity tooltip rows so each source displays its own
-    //value at the scrub instant. The calibration / LTS fallback is skipped in override mode (no per-entity LTS is
-    //fetched yet); the forecast pass on the aggregated path stays as-is, so a per-entity row simply reads "—" when
-    //the cursor lands past the per-entity history's tail.
+    //Optional per-source history override (multi-source tooltip rows). Reads this series instead of the aggregated
+    //`_pvHistory`; the calibration/LTS and forecast fallbacks are skipped in override mode (no per-entity LTS yet),
+    //so a per-entity row reads "—" past its history's tail.
     seriesOverride?: { times: Date[]; values: number[] },
 ): { value: number; unit: string; isPredicted: boolean }
 {
@@ -316,35 +272,18 @@ export function pvValueAtTime(
                          : duLow === 'mw' ? 1 / 1_000_000
                          : 1;
 
-    //Hard zero when the sun is below the horizon at the cursor
-    //instant. Catches three otherwise-tricky cases at once:
-    //  - A stale observed sample (the entity didn't tick after dusk)
-    //    that interpAt clamps forward into the night.
-    //  - Forecast bracketing pairs straddling sunrise / sunset
-    //    where the linear interp between "0" and "small positive"
-    //    leaks a few watts into pre-dawn / post-dusk.
-    //  - Inverter standby readings that a power-entity reports as
-    //    0.5-2 W all night.
-    //Panels can't produce without sun, so we don't trust any source
-    //that disagrees with that physical floor.
+    //Hard zero when the sun is below the horizon at the cursor instant. Catches stale observed samples clamped
+    //forward into the night, forecast pairs straddling sunrise/sunset leaking a few watts, and inverter standby
+    //readings (0.5-2 W) all night. Panels can't produce without sun, so we enforce that physical floor.
     const coords = getHomeCoords(host.config, host.hass);
     if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0)
     {
         return { value: 0, unit: displayUnit, isPredicted: false };
     }
 
-    //Observed history. Cumulative entities differentiate between
-    //the bracketing pair (the same shape the chart uses); power
-    //entities linearly interpolate. Sensor noise (and net-meter
-    //entities swinging through zero at dawn / dusk) can hand back
-    //a small negative reading; we floor at zero so the tooltip
-    //never displays "-2 W" of production.
-    //
-    //Hover instants BEYOND the last observed sample fall through
-    //to the forecast pass below: clamping interpAt to the last
-    //observed value would mean the tooltip reads "3 W" for noon
-    //tomorrow just because that was the panel's reading at 16:00
-    //yesterday (the late-afternoon tail of the last seen day).
+    //Observed history. Cumulative entities differentiate the bracketing pair; power entities interpolate. Floor at
+    //zero so sensor/net-meter noise never shows "-2 W". Instants beyond the last observed sample fall through to the
+    //forecast pass: clamping interpAt would freeze the tooltip on yesterday's late-afternoon reading.
     const hist = seriesOverride ?? host._pvHistory;
     const rawFirstMs = (hist && hist.times.length >= 1)
         ? hist.times[0].getTime()
@@ -390,15 +329,9 @@ export function pvValueAtTime(
             }
         }
     }
-    //Older past, before the head of the raw 6-hour window: fall
-    //back to the hourly LTS slot the calibration already fetched.
-    //The LTS values are already in native power units (mean for
-    //power sensors, differentiated state for cumulative-energy
-    //sensors) so a linear interpolation at the cursor instant is
-    //the right thing to do regardless of the source entity type.
-    //Skipped in `seriesOverride` mode because no per-entity LTS is fetched alongside the per-entity raw history yet
-    //(the override carries only the 6 h raw window). Per-entity rows simply read "—" for older past until a
-    //per-entity LTS path is added.
+    //Older past, before the head of the raw 6-hour window: fall back to the hourly LTS slot calibration fetched.
+    //LTS values are already in native power units, so interpolation is correct regardless of entity type. Skipped in
+    //`seriesOverride` mode (no per-entity LTS yet, override carries only the 6 h raw window) -> per-entity rows read "—".
     if (!seriesOverride)
     {
         const calib = host._pvCalibStats;
@@ -406,12 +339,9 @@ export function pvValueAtTime(
         {
             if (isCumulative)
             {
-                //_pvCalibStats carries the meter's cumulative `state` (kWh) per hourly LTS bucket for
-                //energy sensors, NOT power, the same contract dashboard.ts relies on when it baseline-
-                //subtracts these samples for the daily-kWh total. So differentiate the bracketing pair
-                //into average power, exactly like the raw-history branch above, instead of reading the
-                //cumulative value straight through (which mislabels a kWh reading as kW and inflates the
-                //scrub readout ~1000x once the cursor falls past the raw 6 h window).
+                //_pvCalibStats carries the meter's cumulative `state` (kWh) per LTS bucket for energy sensors, NOT
+                //power (same contract dashboard.ts relies on). Differentiate the bracketing pair into average power
+                //like the raw-history branch; reading cumulative straight through inflates the readout ~1000x.
                 for (let i = 1; i < calib.times.length; i++)
                 {
                     const t1 = calib.times[i].getTime();
@@ -448,17 +378,16 @@ export function pvValueAtTime(
         }
     }
 
-    //Per-entity override mode has no per-source forecast yet (the model is single-aggregate), so we stop here on a
-    //future cursor and let the caller show "—". The aggregated path below stays unchanged for the headline forecast.
+    //Override mode has no per-source forecast yet, so stop on a future cursor and let the caller show "—". The
+    //aggregated path below stays unchanged for the headline forecast.
     if (seriesOverride)
     {
         return { value: NaN, unit: displayUnit, isPredicted: false };
     }
 
-    //Forecast for future hours: read the unified store's CORRECTED forecast at the cursor instant, the
-    //same series the dotted timeline curve draws and the dashboard "affiné" headline integrates, so the
-    //tooltip never disagrees with the line it sits on. The store value is already cap-clipped and
-    //correction-applied, no local model loop here.
+    //Forecast for future hours: read the store's CORRECTED forecast at the cursor instant (same series the dotted
+    //curve draws and the dashboard headline integrates), so the tooltip never disagrees with its line. Already
+    //cap-clipped and correction-applied, no local model loop.
     const store = host._unifiedStore;
     if (store)
     {
@@ -473,24 +402,15 @@ export function pvValueAtTime(
 }
 
 
-//Hover tooltip block, sits above the chart-card stack inside the
-//time-bar. Shows the hover timestamp + one icon-coded row per
-//series, plus the day's kWh production (observed past + today
-//so-far) or forecast (future days) on a dedicated row. A small
-//magnet-snap tab appears above the tooltip the moment the scrub
-//pointer enters the narrow band around the live cursor, signalling
-//the imminent auto-snap back to live mode (see applyTimelinePointer
-//in timeline.ts for the actual snap logic). The PV row is skipped
-//silently when the entity isn't configured or no value is available
-//at the cursor instant, so the chip stays useful for forecast-only
-//setups.
+//Hover tooltip above the chart-card stack: the hover timestamp + one icon-coded row per series, plus the day's kWh
+//production (past) or forecast (future). A magnet-snap tab surfaces when the scrub enters the band around the live
+//cursor (snap logic in applyTimelinePointer, timeline.ts). The PV row is skipped silently when unavailable.
 export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
-    //Tooltip stays available even when _chartSeries is null (Open-Meteo unreachable). The PV +
-    //per-entity rows read from the recorder and render fine; the irradiance + cloud cells just go
-    //missing for that hover, falling back to NaN handled below.
+    //Tooltip stays available when _chartSeries is null (Open-Meteo unreachable): PV + per-entity rows read from the
+    //recorder fine, irradiance + cloud cells just fall back to NaN handled below.
     if (!range)
     {
         return html``;
@@ -503,11 +423,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
         return html``;
     }
 
-    //Tooltip shows ONLY while the pointer is actively over the chart
-    //(or actively dragging the scrub, which keeps _chartHoverPct in
-    //sync). Once the gesture ends, _chartHoverPct goes null and the
-    //tooltip disappears, leaving only the scrub line behind so the
-    //user reads the locked instant without a floating callout.
+    //Tooltip shows only while the pointer is actively over the chart (or dragging the scrub). On gesture end
+    //_chartHoverPct goes null and the tooltip disappears, leaving just the scrub line.
     const hoverPct = host._chartHoverPct;
     if (hoverPct === null || hoverPct < 0 || hoverPct > 100)
     {
@@ -522,9 +439,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
     const pv   = pvValueAtTime(host, atMs);
 
-    //Active chart target: the tooltip rows follow whatever the re-targetable chart is showing, the same
-    //chip <-> chart <-> tooltip coupling as the HA card. Grid / battery values are read from the unified
-    //store at the cursor instant (watts; kw() formats to kW). valueAt may return null -> coerce to NaN.
+    //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling, like the
+    //HA card). Grid/battery read from the store at the cursor instant (watts; kw() formats to kW; null -> NaN).
     const target   = host._chartTarget ?? 'production';
     const store    = host._unifiedStore;
     const gridImpW = store ? (valueAt(store.gridImport, store, atMs) ?? NaN) : NaN;
@@ -535,10 +451,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
         : NaN;
     const kw = (w: number): string => `${formatLocalisedNumber(host.hass, w / 1000, 1)} kW`;
 
-    //Per-entity breakdown rows for multi-source installs (LBDG_'s feature). Each row carries the friendly name from
-    //hass.states + a colour pastille derived by hue-rotating the theme PV colour, so the chip ↔ row visual link
-    //matches the per-source curve drawn on the chart underneath. Single-source installs skip the breakdown entirely
-    //(the per-entity map carries one entry equal to the aggregate, which would duplicate the headline row).
+    //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
+    //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
+    //which would duplicate the headline row).
     const perEntityMap     = host._pvHistoryPerEntity;
     const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()).sort() : [];
     const perEntityRows: Array<{ id: string; label: string; valueText: string; colorIdx: number }> = [];
@@ -563,9 +478,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     }
     const hasPv = isFinite(pv.value);
 
-    //The scrub tooltip icons now inherit the active HA theme colour
-    //(see .tb-hover-tooltip-icon), so the per-series tints from the
-    //legacy DEFAULT_*_COLOR_HEX constants are no longer applied here.
+    //Scrub tooltip icons inherit the active theme colour (see .tb-hover-tooltip-icon); the legacy per-series
+    //DEFAULT_*_COLOR_HEX tints are no longer applied here.
 
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
@@ -573,12 +487,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
         hour: '2-digit', minute: '2-digit',
     }).format(atDate);
 
-    //Day total split into observed (past scrub) and forecast (future scrub). The split key is the cursor instant vs
-    //"now", not the day boundary, so scrubbing later-today hours shows the day's forecast projection (full-day kWh) and
-    //scrubbing earlier-today hours shows the observed production so far. Today's past bucket prefers the recorder-backed
-    //`_haSolarTodayKwh` so the tooltip matches the dashboard "produced today" chip to the watt-hour, falling back to the
-    //local trapezoidal integration when the HA Energy preference is not wired. Today's future bucket and every other
-    //future day stay on `computeDailyKwhTotals`, which adds the forecast model's remaining hours to the observed past.
+    //Day total split observed/forecast by cursor-vs-"now" (not the day boundary), so later-today hours show the
+    //full-day forecast and earlier hours the production so far. Today's past prefers recorder-backed
+    //`_haSolarTodayKwh` (matches the dashboard chip), else local trapezoidal integration; future stays on
+    //`computeDailyKwhTotals`.
     const dayKey = new Date(atDate);
     dayKey.setHours(0, 0, 0, 0);
     const todayKey = new Date();
@@ -597,13 +509,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
         ? formatLocalisedNumber(host.hass, dayKwh, 1) + ' kWh'
         : '';
 
-    //Magnet-snap detection. When the scrub pointer lands within a
-    //narrow band around the live cursor, applyTimelinePointer in
-    //timeline.ts auto-releases back to live mode. A small restore
-    //tab surfaces above the tooltip the moment the pointer enters
-    //that band so the user reads the upcoming snap visually. The
-    //px-based scrub check uses 8 px, this pct equivalent is sized to
-    //match at typical chart widths (8 px on a 700 px chart ~= 1.2 %).
+    //Magnet-snap detection: when the scrub lands in a narrow band around the live cursor, applyTimelinePointer
+    //(timeline.ts) auto-releases to live mode and a restore tab surfaces. The 8 px scrub check maps to ~1.2 % at
+    //typical chart widths (8 px on a 700 px chart).
     const MAGNET_PCT   = 1.2;
     const nowMsRef     = Date.now();
     const inMagnetZone = nowMsRef >= startMs && nowMsRef <= startMs + rangeMs
@@ -615,19 +523,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                      : (Math.abs(pv.value) < 100 ? 1 : 0);
 
     const haLang   = (host.hass?.language as string | undefined) || '';
-    //Short label inside the magnet-snap tab. The tooltip title + aria-label still carry the long phrase for screen readers
-    //and hover hint; the inline label stays single-word so the tab does not bloat the tooltip width.
+    //Short inline label for the magnet-snap tab; the title + aria-label carry the long phrase for screen readers.
     const liveLabel = 'Live';
     const liveText  = haLang.toLowerCase().startsWith('fr')
         ? 'Retour au live'
         : 'Back to live';
 
-    //Tooltip horizontal anchor: a continuous left-to-right slide
-    //driven by translateX(-${pct}%), so the tooltip's left edge sits
-    //at 0 when the scrub is at 0 % and its right edge sits at 100 %
-    //when the scrub is at 100 %. Net result: the tooltip never goes
-    //off-screen yet there's no jump-to-edge magnet at any threshold,
-    //the box just slides smoothly along with the scrub.
+    //Tooltip horizontal anchor: a continuous translateX(-${pct}%) slide, so its left edge sits at 0 % and right edge
+    //at 100 % as the scrub sweeps. Never goes off-screen, no jump-to-edge magnet.
     return html`
         <div
             class="tb-hover-tooltip-tail ${inMagnetZone ? 'is-magnet-snap' : ''}"
@@ -754,28 +657,25 @@ export interface ChartSeries
     cloudLow:     number[];
     cloudMid:     number[];
     cloudHigh:    number[];
-    //Hourly horizontal beam + diffuse radiation (W/m²), -1 where the
-    //model didn't decompose. Feed the tilt transposition with the real
-    //direct / diffuse split. Consumers that don't transpose ignore them.
+    //Hourly horizontal beam + diffuse radiation (W/m²), -1 where the model didn't decompose. Feeds tilt
+    //transposition with the real direct/diffuse split; non-transposing consumers ignore them.
     directRad:    number[];
     diffuseRad:   number[];
     //Hourly ground snow depth (m), NaN where unknown. Feeds the winter snow-cover derate.
     snowDepth:    number[];
-    //Hourly ambient temperature (°C) and 10-metre wind speed (m/s).
-    //NaN where the model didn't supply a value. Consumers that
-    //don't care about thermal derating ignore these fields.
+    //Hourly ambient temperature (°C) and 10-metre wind speed (m/s), NaN where unsupplied. Consumers that don't
+    //thermal-derate ignore these.
     temperature:  number[];
     windSpeed:    number[];
 }
 
-//Re-targetable bottom-chart target: the single series-set the one chart draws at a time. 'production'
-//(+ dashed forecast + per-source breakdown) is the default; 'grid' / 'battery' draw their two-direction
-//flows (accent = the dominant side over the window); 'irradiance' draws the W/m² curve on a fixed
-//0..1000 scale. Cloud is intentionally NOT a target, it lives in weather mode.
+//Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (+ dashed
+//forecast + per-source breakdown) is default; 'grid'/'battery' draw two-direction flows (accent = dominant side);
+//'irradiance' draws W/m² on a fixed 0..1000 scale.
 export type ChartTarget = 'production' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud';
 
-//Structural surface the host card exposes to this module. The `_chartHoverPct` field is intentionally writable: hover handlers defined here mutate it
-//on pointermove / pointerleave, exactly like the dashboard's `_dashChartHoverTs`. All other fields stay read-only.
+//Structural surface the host card exposes. `_chartHoverPct` is intentionally writable (hover handlers mutate it on
+//pointermove/leave); all other fields stay read-only.
 export interface ChartHost
 {
     readonly config:        HeliosConfig | undefined;
@@ -783,40 +683,31 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
-    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. Used to sum exact
-    //per-day produced kWh (sumChangeForDay) so the daily totals match the HA Energy dashboard to the
-    //watt-hour instead of drifting from the integrated, gap-interpolated curve.
+    //Recorder `change` series (5-min buckets) for the solar meter(s). sumChangeForDay sums exact per-day kWh so
+    //totals match the HA Energy dashboard to the watt-hour, not the gap-interpolated curve.
     readonly _pvChangeSeries: ChangeBucket[] | null;
-    //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
-    //source and the scrub tooltip can show a per-source breakdown next to the summed value. Single-source installs
-    //carry a single entry equal to the aggregate; multi-source installs carry one entry per HA Energy source.
+    //Per-entity histories alongside aggregated `_pvHistory` for per-source curves + tooltip breakdown. Single-source
+    //installs carry one entry equal to the aggregate; multi-source carry one per HA Energy source.
     readonly _pvHistoryPerEntity: Map<string, PvHistory>;
-    //Hourly long-term-statistics series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` because it
-    //carries the same 5-day window with two orders of magnitude fewer rows on high-frequency installs. Null while the stats fetch is in
-    //flight, or empty when the entity is not LTS-tracked, in both cases the consumer degrades to `_pvHistory`.
+    //Hourly LTS series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` (same
+    //window, far fewer rows on high-frequency installs). Null while fetching / empty when not LTS-tracked -> consumer
+    //degrades to `_pvHistory`.
     readonly _pvCalibStats:   PvHistory | null;
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
-    //HA Energy daily-total alignment: today's produced kWh as queried
-    //from the recorder `change` statistic on every `stat_energy_from`
-    //array, so the scrub tooltip lands on the same figure the dashboard
-    //chip shows. Null when not configured or before the first recorder
-    //call lands, in which case the tooltip falls back to the local
-    //trapezoidal integration over `_pvHistory`.
+    //Today's produced kWh from the recorder `change` statistic over the `stat_energy_from` arrays, so the tooltip
+    //matches the dashboard chip. Null when unconfigured or pre-first-call -> tooltip falls back to trapezoidal
+    //integration over `_pvHistory`.
     readonly _haSolarTodayKwh?: number | null;
-    //Mutable hover-cursor position as a percent inside the visible
-    //time range (0..100), null when no hover is active. Written by
-    //the pointer handlers defined below.
+    //Mutable hover-cursor position as a percent of the visible range (0..100), null when inactive. Written by the
+    //pointer handlers below.
     _chartHoverPct:         number | null;
-    //Exposed so the PV predictor inside the chart layer can pull
-    //the loaded LiDAR raster for the per-array shading raycast.
-    //Optional because the chart still renders fine without the
-    //engine reference (shading just falls back to "no obstacle").
+    //Exposes the loaded LiDAR raster for the per-array shading raycast. Optional: without it shading falls back to
+    //"no obstacle" and the chart still renders.
     readonly _engine?:      { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
-    //Unified 5-day data source, single point of truth for the production + forecast curves the
-    //timeline + radial + dashboard charts read from. Null only between mount and the first build,
-    //the chart degrades to an empty curve until then.
+    //Unified 5-day data source, single point of truth for the production + forecast curves across timeline / radial /
+    //dashboard. Null only between mount and first build -> chart degrades to an empty curve.
     readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
@@ -826,13 +717,9 @@ export interface ChartHost
 }
 
 
-//Linear-interpolate a series at a target absolute timestamp. The
-//series is assumed strictly increasing in time. Targets outside
-//the range clamp to the nearest endpoint; NaN slots break the
-//interpolation, the caller then sees NaN and skips rendering.
-//Used by the hover tooltip + dot positions across the irradiance,
-//cloud and PV curves so all three readouts share the same
-//interpolation contract.
+//Linear-interpolate a (strictly time-ascending) series at a target timestamp. Out-of-range targets clamp to the
+//nearest endpoint; NaN slots yield NaN so the caller skips rendering. Shared by the hover tooltip + dot positions
+//across the irradiance, cloud and PV curves.
 export function interpAt(times: Date[], values: number[], targetMs: number): number
 {
     const n = Math.min(times.length, values.length);
@@ -849,10 +736,8 @@ export function interpAt(times: Date[], values: number[], targetMs: number): num
         const v = values[n - 1];
         return isFinite(v) ? v : NaN;
     }
-    //Binary search over the monotonically ascending `times` array. The early returns above already handled the
-    //out-of-range cases, so here we know times[0] < targetMs < times[n - 1] and we narrow lo/hi to the bracketing
-    //pair in O(log n). The previous linear scan walked from index 1 on every render, hot on 1 Hz sensors where
-    //`_pvHistory` reaches ~21,600 entries over a 6 h window and the tooltip re-runs interpAt twice per render.
+    //Binary search the bracketing pair in O(log n) (early returns above guarantee times[0] < targetMs < times[n-1]).
+    //Replaces a linear scan that was hot on 1 Hz sensors (~21,600 entries over 6 h, interpAt twice per render).
     let lo = 0;
     let hi = n - 1;
     while (hi - lo > 1)
@@ -884,12 +769,9 @@ export function interpAt(times: Date[], values: number[], targetMs: number): num
 }
 
 
-//Hover-cursor pointer handlers. Attached on each chart card; the
-//card's bounding rect drives the fractional X conversion. A press
-//(e.buttons !== 0) clears the hover so a scrub drag never leaves
-//a stale dot behind: the scrub interaction itself lives on the
-//time-bar pointerdown above us, and once it captures the pointer
-//our pointermove no longer fires until release.
+//Hover-cursor pointer handlers, attached per chart card (its bounding rect drives the fractional X). A press
+//(e.buttons !== 0) clears the hover so a scrub drag leaves no stale dot; the scrub itself lives on the time-bar
+//pointerdown and captures the pointer until release.
 export function handleChartHoverMove(host: ChartHost, e: PointerEvent): void
 {
     if (e.buttons !== 0)
@@ -918,14 +800,9 @@ export function handleChartHoverLeave(host: ChartHost): void
 }
 
 
-//Render the optional photovoltaic production graph that sits
-//above the main timeline chart. Same X axis as the main chart
-//(time range pulled from host._timeRange) so day boundaries and
-//the scrub cursor line up vertically across both blocks. The
-//curve is plotted from host._pvHistory (fetched via the HA
-//history WebSocket command); future data is intentionally left
-//blank, the curve naturally stops at the last recorded sample
-//since there's no production data after "now".
+//Render the photovoltaic production graph above the main timeline chart. Shares the X axis (host._timeRange) so day
+//boundaries and the scrub cursor align across both. The observed curve stops at the last recorded sample; the
+//forecast continues past "now".
 export function renderPvChart(host: ChartHost): TemplateResult
 {
     const range = host._timeRange;
@@ -946,30 +823,24 @@ export function renderPvChart(host: ChartHost): TemplateResult
     }
 
     const pvColor = DEFAULT_PV_COLOR_HEX;
-    //Theme-aware "predicted" PV shade for the dashed forecast curve
-    //overlay: light theme blends pvColor toward BLACK so it stays
-    //readable on a white card; dark theme blends toward WHITE so it
-    //still reads as a softer line on the dark plate. Mirrors the
-    //dashboard's predictedColor logic.
+    //Theme-aware "predicted" shade for the dashed forecast curve: light theme blends toward black, dark toward white,
+    //so it stays a readable softer line on either plate. Mirrors the dashboard's predictedColor logic.
     const isDarkTheme       = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
     const predictedPvColor  = isDarkTheme
         ? lerpHexToward(pvColor, '#ffffff', 0.55)
         : lerpHexToward(pvColor, '#000000', 0.35);
 
-    //Day-boundary X positions from the shared timeline model, same source as the weather chart so the
-    //dotted separators line up across the two. Bounded to <= 40 entries; empty on wide spans.
+    //Day-boundary X positions from the shared timeline model (same source as the weather chart so separators line
+    //up). Bounded to <= 40 entries; empty on wide spans.
     const endMsAbs = range.end.getTime();
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
 
-    //Single-source read: the unified data source (src/card/unifiedStore.ts) carries the production
-    //series for the full J-2 to J+2 window in watts, interpolated linearly between real samples,
-    //never mixed with the forecast model. sliceForRange returns one sample per DISPLAY bucket within
-    //the visible window. Empty when the source isn't built yet (first paint), the chart renders the
-    //empty frame in that case.
+    //Single-source read: unifiedStore carries the production series over the full J-2..J+2 window in watts (linearly
+    //interpolated, never mixed with forecast). sliceForRange returns one sample per DISPLAY bucket in view; empty
+    //before the first build -> empty frame.
     const lu = (host._pvUnit || '').toLowerCase();
     const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-    //Reference the cumulative-detection flag so the unused-variable warning stays silent (the
-    //branch lives in the legacy code path now, the store handles cumulative->W internally).
+    //Keep the cumulative flag referenced (warning silence); the store now handles cumulative->W internally.
     void isCumulativeEnergy;
     void hist;
     const store = host._unifiedStore;
@@ -978,16 +849,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
     const xOf = (t: Date): number =>
         ((t.getTime() - startMs) / rangeMs) * W;
 
-    //Observed samples are in the entity's native power unit
-    //(kW / W / MW for a power entity, or differentiated to that
-    //unit / hour for a cumulative-energy entity). Calibration k
-    //is "W per percent of STC", so a raw `pct * k` predicted
-    //value is in WATTS. Mixing units on the same Y axis would
-    //flatten the observed curve into invisibility when the
-    //entity is in kW and the predicted is in W (yMax pegged to
-    //thousands while observed sits at single digits). Compute
-    //the W → native scale once and apply it to the predicted
-    //series so both feed yMax on the same axis.
+    //Observed samples are in the entity's native power unit; the forecast is in watts. Compute the W -> native scale
+    //once so both feed yMax on the same axis (mixing units would flatten a kW observed curve when the predicted is
+    //in W).
     const nativeFromW = (() => {
         const native = isCumulativeEnergy
             ? (lu === 'kwh' ? 'kw' : lu === 'mwh' ? 'mw' : lu === 'wh' ? 'w' : '')
@@ -1003,9 +867,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         return 1;
     })();
 
-    //Production samples: read from the data source in watts, multiplied by nativeFromW so the value
-    //feeds the Y axis on the same scale the entity's native unit uses (rest of the chart still draws
-    //in native units, the data source is the single conversion point).
+    //Production samples: store watts × nativeFromW so the Y axis stays in the entity's native unit (store is the
+    //single conversion point).
     const samples: Array<{ t: Date; v: number }> = [];
     if (rangeSlice)
     {
@@ -1017,9 +880,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
     }
 
-    //Forecast curve: same source, same unit conversion. The forecast series in the store already
-    //carries the cap-clipped, calibration-applied, shading-aware watts at every DISPLAY bucket. No
-    //local computePvPowerWeighted loop here, the data source is the single point of truth.
+    //Forecast curve: same store, same conversion. The forecast series is already cap-clipped, calibration-applied
+    //and shading-aware at every DISPLAY bucket, no local model loop here.
     const predictedSamples: Array<{ t: Date; v: number }> = [];
     if (rangeSlice)
     {
@@ -1031,14 +893,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
     }
 
-    //Auto-scale: the Y axis maps 0 to the bottom edge and the
-    //series' running max to the top edge. With a min of 1 we
-    //avoid division-by-zero when the series is all-zero (early
-    //morning, prolonged outage) and keep the curve visibly
-    //pinned to the baseline rather than silently disappearing.
-    //Predicted samples also feed into yMax so the forecast line
-    //doesn't clip when expected production exceeds anything
-    //the user has produced lately.
+    //Auto-scale Y to the running max (min 1 to avoid divide-by-zero on an all-zero window, keeping the curve pinned
+    //to the baseline). Predicted samples feed yMax too so the forecast line never clips above observed peaks.
     let yMax = 1;
     for (const s of samples)          { if (s.v > yMax) yMax = s.v; }
     for (const s of predictedSamples) { if (s.v > yMax) yMax = s.v; }
@@ -1060,13 +916,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
         line = `M ${points.join(' L ')}`;
     }
 
-    //Per-source curves. One light polyline per HA Energy source, drawn UNDER the aggregate line so the eye reads the
-    //total as the dominant trace and the breakdown as background context. Hue rotates around the theme PV colour so
-    //a split E / W lands on opposite hues; the same colour shows up in the tooltip pastille for the matching row,
-    //giving the user a row ↔ curve visual link. Skipped on single-source installs where the per-entity map carries
-    //one entry equal to the aggregate (drawing it would just paint a duplicate trace at lower opacity under the
-    //headline curve). The per-entity series uses the same cumulative-differentiation rule as the aggregate path so
-    //a 4 × stat_energy_from / no stat_rate setup paints as 4 power curves, not 4 monotonically climbing kWh ramps.
+    //Per-source curves: one light polyline per HA Energy source under the aggregate line (background context), hue
+    //matching the tooltip pastille for a row <-> curve link. Skipped on single-source installs (the lone entry equals
+    //the aggregate). Same cumulative-differentiation rule as the aggregate, so a 4× stat_energy_from setup paints as
+    //4 power curves, not climbing kWh ramps.
     const perEntityIdsForCurves = host._pvHistoryPerEntity.size > 1
         ? Array.from(host._pvHistoryPerEntity.keys()).sort()
         : [];
@@ -1117,9 +970,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
             eValues = dV;
         }
         const ePoints: string[] = [];
-        //Lighter decimation than the aggregate: per-entity curves are background context, half the resolution is
-        //plenty and keeps the SVG path strings short on 4-source / 1 Hz installs (4 × 750 points stays under the
-        //browser path limit).
+        //Lighter decimation than the aggregate (~750 points): background curves need less resolution and short path
+        //strings keep 4-source / 1 Hz installs under the browser path limit.
         const stride = Math.max(1, Math.floor(eTimes.length / 750));
         for (let i = 0; i < eTimes.length; i += stride)
         {
@@ -1155,12 +1007,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         predictedLine = `M ${pPoints.join(' L ')}`;
     }
 
-    //Hover dot, drawn at the interpolated PV value at hover time.
-    //Observed samples win; if there's no observed value at that
-    //instant (future, gap, outage), fall back to the predicted
-    //series so the dot keeps tracking. Same Y axis as the curve
-    //it rides on, so the dot reads as "this is where the curve
-    //sits at that moment" rather than free-floating.
+    //Hover dot at the interpolated PV value. Observed wins; with no observed value (future, gap, outage) it falls
+    //back to the predicted series. Same Y axis as the curve it rides, so it reads as a point on the curve.
     const hoverPct = host._chartHoverPct;
     let hoverX:     number = 0;
     let hoverY:     number = NaN;
@@ -1170,10 +1018,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
     {
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
-        //Observed curve: only inside the observed window, else interpAt clamps to the last reading and
-        //the dot freezes on yesterday's late-afternoon value when hovering tomorrow. Forecast curve:
-        //wherever it has a value, so on the production part the user sees BOTH the production dot AND the
-        //forecast dot riding their own curves, not just one.
+        //Observed dot only inside the observed window (else interpAt clamps and the dot freezes on yesterday's tail
+        //when hovering tomorrow). Forecast dot wherever it has a value, so both dots ride their own curves at once.
         const lastObsMs = samples.length > 0
             ? samples[samples.length - 1].t.getTime()
             : -Infinity;
@@ -1253,8 +1099,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
 
 //Re-targetable bottom chart. Production keeps its dedicated renderer (forecast + per-source breakdown +
-//native-unit scaling); grid / battery / irradiance go through the generic renderer below. One chart, the
-//active target decides what it shows, matching the HA energy-solar-overview card.
+//native-unit scaling); other targets go through the generic renderer below. Matches the HA energy-solar-overview card.
 export function renderBottomChart(host: ChartHost): TemplateResult
 {
     const target = host._chartTarget ?? 'production';
@@ -1266,9 +1111,8 @@ export function renderBottomChart(host: ChartHost): TemplateResult
 }
 
 
-//Accent colour for the active chart target: the colour the chart border and the active chip share, so
-//re-targeting reads as one coupled gesture (same as the HA card). Production / irradiance are fixed;
-//grid / battery take the dominant side over the visible window.
+//Accent colour for the active target, shared by the chart border and active chip so re-targeting reads as one
+//gesture. Production/irradiance/cloud/soc are fixed; grid/battery take the dominant side over the window.
 export function chartAccentColor(host: ChartHost): string
 {
     const target = host._chartTarget ?? 'production';
@@ -1309,10 +1153,9 @@ export function chartAccentColor(host: ChartHost): string
 }
 
 
-//Generic chart for the non-production targets, all read from the unified store. Grid + battery draw two
-//directional series each (accent = the dominant side over the window); irradiance draws one curve on a
-//fixed 0..1000 W/m² scale. Power series stay in watts (the tooltip formats to kW), so no per-entity
-//native-unit handling here, that stays in renderPvChart for production only.
+//Generic chart for the non-production targets. Grid + battery draw two directional series each; irradiance one
+//curve on a fixed 0..1000 W/m² scale. Power stays in watts (tooltip formats to kW); native-unit handling lives in
+//renderPvChart for production only.
 function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'production'>): TemplateResult
 {
     const store = host._unifiedStore;
@@ -1332,9 +1175,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     const xOf = (tMs: number): number => ((tMs - startMs) / rangeMs) * W;
 
-    //Map a store series (aligned on the store buckets) to visible-range points, dropping nulls and
-    //clipping to the timeline window. Bucket centre matches sliceForRange so curves line up with the
-    //production chart's day separators.
+    //Map a store series to visible-range points, dropping nulls and clipping to the window. Bucket centre matches
+    //sliceForRange so curves line up with the production chart's day separators.
     const toPts = (arr: ReadonlyArray<number | null>, map?: (v: number) => number): Array<{ t: number; v: number }> =>
     {
         const out: Array<{ t: number; v: number }> = [];
@@ -1364,8 +1206,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'battery')
     {
-        //Store battery is signed net power (charge - discharge). Split into two non-negative curves so
-        //charging and discharging read as distinct flows, each zero while the other is active.
+        //Store battery is signed net power (charge - discharge); split into two non-negative curves so each flow
+        //reads distinctly, zero while the other is active.
         const charge    = toPts(store.battery, v => Math.max(0, v));
         const discharge = toPts(store.battery, v => Math.max(0, -v));
         series = [
@@ -1375,8 +1217,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'battery-soc')
     {
-        //Battery state-of-charge over the window, read straight from the fetched SoC history (the store
-        //only carries a live SoC sample at the current bucket). One curve on a fixed 0..100 % scale.
+        //Battery SoC over the window, read from the fetched SoC history (the store only has a live sample). One curve
+        //on a fixed 0..100 % scale.
         const hist = host._batterySocHistory;
         const pts: Array<{ t: number; v: number }> = [];
         if (hist)
@@ -1395,8 +1237,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'cloud')
     {
-        //Cloud-cover bands read from the hourly weather series (not the bucketed store): low / mid / high
-        //altitude layers on a fixed 0..100 % scale, in light -> dark cloud-grey shades.
+        //Cloud-cover bands from the hourly weather series (not the bucketed store): low/mid/high layers on a fixed
+        //0..100 % scale, light -> dark cloud-grey shades.
         const cs = host._chartSeries;
         const csPts = (arr: ReadonlyArray<number>): Array<{ t: number; v: number }> =>
         {
@@ -1425,8 +1267,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         fixedMax = 1000;
     }
 
-    //Y scale: fixed for irradiance, else auto to the running max across both series (min 1 to avoid a
-    //flat-line divide-by-zero on an all-zero window).
+    //Y scale: fixed where set, else auto to the running max across series (min 1 to avoid divide-by-zero on an
+    //all-zero window).
     let yMax = fixedMax;
     if (yMax <= 0)
     {
@@ -1499,10 +1341,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
 }
 
 
-//The thin track now carries only the cursors. Day
-//separators live inside the chart card SVG (dotted vertical
-//lines) and the scrub time label has been promoted to a chip
-//above the chart card.
+//The thin track carries only the cursors; day separators live inside the chart card SVG and the scrub time label is
+//a chip above the card.
 export function renderTimelineTicks(host: ChartHost): TemplateResult
 {
     if (!host._timeRange)
@@ -1529,11 +1369,9 @@ export function renderTimelineTicks(host: ChartHost): TemplateResult
 }
 
 
-//Adaptive timeline labels overlaying the chart-card footer line. The shared timeline model picks the
-//granularity from the visible span (hours for a single day, weekday names for a week, day + short month
-//for a month-plus, month names beyond that) and thins the count, so a wide window stays legible instead
-//of stamping one chip per day. Each label sits at its model fraction; in the day view today's label is
-//emphasised, matching the now-cursor. Separators draw the matching boundary lines.
+//Adaptive timeline labels over the chart-card footer. The shared timeline model picks granularity from the visible
+//span (hours / weekdays / day+month / months) and thins the count so a wide window stays legible. Each label sits
+//at its model fraction; the day view emphasises today, matching the now-cursor. Separators draw boundary lines.
 export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 {
     if (!host._timeRange)
@@ -1549,8 +1387,8 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
-    //Emphasise today only in the day view, where each label names one calendar day; on the wider spans
-    //the now-cursor already marks the present and a single highlighted weekday/month would read oddly.
+    //Emphasise today only in the day view (each label names one calendar day); on wider spans the now-cursor already
+    //marks the present.
     const isTodayLabel = (d: Date): boolean =>
         model.kind === 'days' && d.getTime() === today0.getTime();
 
@@ -1571,18 +1409,9 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 
 
 
-//Compute kWh-per-day totals over the active timeline range. The helper integrates two sources:
-//
-//  - Past + today-so-far: sum of the observed PV history (from
-//    `_pvHistory`), respecting the entity's unit (W/kW power
-//    sensors are integrated by trapezoidal rule; cumulative
-//    energy sensors are differenced and summed).
-//  - Today-remainder + future: integration of the kWp × clear-
-//    sky × cloud model, hour by hour, using the engine's
-//    weather series.
-//
-//Returns a Map keyed by each day's local-midnight ms, with values in kWh. Days that fall outside the active range or carry no usable data are
-//omitted.
+//kWh-per-day totals over the active range, from two sources: past + today-so-far from the recorder `change` buckets
+//(Pass 1), today-remainder + future from the store's corrected forecast (Pass 2). Returns a Map keyed by each day's
+//local-midnight ms (kWh); days outside the range or without usable data are omitted.
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 {
     const out = new Map<number, number>();
@@ -1601,10 +1430,9 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         return d.getTime();
     };
 
-    //Pass 1: past + today-so-far, summed directly from the recorder `change` buckets per day so each
-    //day's produced kWh matches the HA Energy dashboard to the watt-hour. No curve integration, no gap
-    //interpolation (which was inflating the totals a percent or two above HA). The change series spans
-    //the store's J-2 past window, which covers every past day the timeline can show.
+    //Pass 1: past + today-so-far, summed per day from the recorder `change` buckets so each day matches HA Energy to
+    //the watt-hour (no curve integration / gap interpolation, which was inflating totals). The series spans the J-2
+    //past window, covering every past day shown.
     const changeSeries = host._pvChangeSeries;
     if (changeSeries && changeSeries.length > 0)
     {
@@ -1624,10 +1452,9 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         }
     }
 
-    //Pass 2: future + today-remainder from the unified store's CORRECTED forecast, the same series the
-    //dotted timeline curve draws and the dashboard "affiné" headline integrates, so the per-day chips
-    //agree with the curve next to them. Only buckets at / after "now" contribute (past is Pass 1's real
-    //production); the store forecast is already cap-clipped and correction-applied.
+    //Pass 2: future + today-remainder from the store's CORRECTED forecast (same series the dotted curve draws), so
+    //per-day chips agree with the curve. Only buckets at / after "now" contribute (past is Pass 1's real production);
+    //the forecast is already cap-clipped and correction-applied.
     const store = host._unifiedStore;
     if (store)
     {
