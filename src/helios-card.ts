@@ -2370,14 +2370,17 @@ export class HeliosCard extends LitElement
                             ></path>
                         ` : nothing}
                         <!--
-                            PV ↔ Power, solid L-shaped path with a
+                            Battery ↔ Home, solid L-shaped path with a
                             small filled bead riding along it at a
-                            speed proportional to |P|. The bead's
-                            animateMotion path is flipped inline by
-                            the renderer when discharging so the
-                            travel direction matches the energy flow
-                            (PV → Power when charging, Power → PV
-                            when discharging).
+                            speed proportional to |P|. The leader path
+                            is built chip -> home, so the bead's
+                            default travel is battery -> home, i.e.
+                            DISCHARGING. When CHARGING the renderer
+                            flips it with keyPoints="1;0" so the bead
+                            travels home -> battery, matching the
+                            physical energy flow INTO the battery
+                            (same reversal scheme as the grid export
+                            bead below).
                         -->
                         ${showPowerChip ? svg`
                             <path
@@ -2385,7 +2388,20 @@ export class HeliosCard extends LitElement
                                 style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${powerLeaderPath}"
                             ></path>
-                            ${!batteryIdle ? svg`
+                            ${!batteryIdle ? (batteryCharging ? svg`
+                                <circle
+                                    class="battery-leader-bead"
+                                    r="3"
+                                    style="fill:${batteryLeaderColor}"
+                                >
+                                    <animateMotion
+                                        dur="${batteryFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        keyPoints="1;0" keyTimes="0;1"
+                                        path="${powerArrowPath}"
+                                    ></animateMotion>
+                                </circle>
+                            ` : svg`
                                 <circle
                                     class="battery-leader-bead"
                                     r="3"
@@ -2397,7 +2413,7 @@ export class HeliosCard extends LitElement
                                         path="${powerArrowPath}"
                                     ></animateMotion>
                                 </circle>
-                            ` : nothing}
+                            `) : nothing}
                         ` : nothing}
                     </svg>
                     ${showSocChip ? html`
