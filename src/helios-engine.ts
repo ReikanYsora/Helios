@@ -10,7 +10,11 @@ import { LidarViewLayer } from './engine/lidar-view-layer';
 import { WeatherCloudLayer } from './engine/weather-cloud-layer';
 import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
-import { CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG } from './engine/camera-bounds';
+import {
+    CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
+    SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY,
+    CLOUD_DISC_RADIUS_M, CLOUD_CIRCLE_SEGMENTS, PV_CHIP_OFFSET_PX, DEFAULT_CLOUD_RGB,
+} from './constants';
 import
 {
     shadowRasterSizeFor,
@@ -210,7 +214,6 @@ const IS_MOBILE = (() =>
 })();
 
 
-const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
 
 //Parse a CSS colour ("#rrggbb", "rgb(...)", "rgba(...)", or a getComputedStyle-resolved var) into a
@@ -292,32 +295,7 @@ function buildCirclePolygon(
     return ring;
 }
 
-//Cloud-cover disc: cloud coverage shown as a ground disc centred on the home inside a 100%-reference ring.
-//Radius scales linearly with cloud % (0% → 0, 100% → R). Real-world metres; 30 m reads as ~75 px at our
-//locked zoom 18, focal on the home. Disc/ring styling lives in .cloud-svg in helios-card-css.
-const CLOUD_DISC_RADIUS_M       = 30;
-//Vertices approximating the disc/ring. 128 is overkill but negligible (~128 trig ops per update).
-const CLOUD_CIRCLE_SEGMENTS     = 128;
-
-//Vertical offset (CSS px) anchoring the PV/battery chip cluster above the projected home. SoC and Power
-//chips sit on a shared shelf this far above; PV chip mirrors below. Slides the whole cluster as one.
-const PV_CHIP_OFFSET_PX         = 70;
-//Height (m) above the home the camera frames on. Top map padding is sized to this point's projection so
-//the house sits low with headroom for the solar arc, and tall roofs don't push it off-screen. Mirrors HA card.
-const CAMERA_TARGET_HEIGHT_M    = 10;
-
-
-//Solar arc: the sun's full 24h trajectory, projected via MapLibre's camera matrices.
-//Radius (m) of the imaginary hemisphere centred on the home. 40 m at zoom 18 keeps the whole arc inside a
-//card-sized canvas even at low altitudes where the path stretches east-west (100 m pushed half off the top).
-const SUN_ARC_RADIUS_M          = 40;
-//Samples over the 24h day (one per 15 min). 96 reads smooth at tight zoom and is cheap to recompute.
-const SUN_ARC_SAMPLES           = 96;
-//Opacity multiplier when the sun is below the horizon. The arc
-//remains visible (so the user keeps a sense of where the sun will
-//rise / has set) but is faded out so it doesn't compete visually
-//with the daytime portion that's actually contributing power.
-const SUN_ARC_NIGHT_OPACITY     = 0.25;
+//Cloud disc, chip cluster, camera target and sun-arc tunables now live in constants.ts.
 
 
 function weatherCodeToIntensity(code: number, pct: number): CloudIntensity

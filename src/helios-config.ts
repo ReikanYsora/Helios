@@ -1,6 +1,26 @@
 //Public config schema for the Helios card: the option keys the user touches via YAML or the visual
 //editor, their DEFAULT_* values, and the resolver helpers the editor + runtime read. Engine internals
-//(layer IDs, raster sizes, tunables) live in helios-engine.ts, not here.
+//(layer IDs, raster sizes, tunables) live in helios-engine.ts, not here. Every DEFAULT_*/MIN/MAX value
+//now lives in constants.ts; this module imports them for the resolvers below and re-exports them so
+//existing `from './helios-config'` imports keep working.
+
+import {
+    DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, DISPLAY_FADE_DELTA_M,
+    DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
+    DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
+    DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
+    MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
+} from './constants';
+export {
+    DEFAULT_SUN_COLOR_HEX, DEFAULT_CLOUD_COLOR_HEX, DEFAULT_PV_COLOR_HEX, DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_BATTERY_IN_COLOR_HEX, DEFAULT_BATTERY_OUT_COLOR_HEX, DEFAULT_GRID_IMPORT_COLOR_HEX,
+    DEFAULT_GRID_EXPORT_COLOR_HEX, DEFAULT_BUILDING_COLOR_HEX, DEFAULT_BUILDING_OPACITY,
+    DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
+    MAX_DISPLAY_RADIUS_M, DISPLAY_FADE_DELTA_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
+    MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
+    MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
+    MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
+} from './constants';
 
 
 //User-facing config passed to setConfig(), read by the engine + editor. Every key is optional and typed
@@ -70,44 +90,6 @@ export interface HeliosConfig
 }
 
 
-//Fixed-colour design system: one fixed colour per metric (no hue-ramping), varied by area/position so a
-//glance reads "more sun/cloud" without decoding a gradient. Defaults track HA's Energy palette so a Helios
-//card reads as a first-party Energy tile and theme overrides (Catppuccin, Nord...) flow through the CSS vars.
-//Sun takes HA amber (distinct from the PV solar orange, since the card is named for the sun).
-export const DEFAULT_SUN_COLOR_HEX:   string = '#ffc107';  //--amber-color
-export const DEFAULT_CLOUD_COLOR_HEX: string = '#727272';  //--secondary-text-color (neutral)
-export const DEFAULT_PV_COLOR_HEX:    string = '#ff9800';  //--energy-solar-color
-//Battery SoC ("stock") uses HA's discharge teal; live power direction switches the leader/chip between the
-//in (pink, charging) and out (teal, discharging) variants below.
-export const DEFAULT_BATTERY_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
-export const DEFAULT_BATTERY_IN_COLOR_HEX:  string = '#f06292';  //--energy-battery-in-color
-export const DEFAULT_BATTERY_OUT_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
-//Grid import blue, grid export purple, straight from the HA Energy palette.
-export const DEFAULT_GRID_IMPORT_COLOR_HEX: string = '#488fc2';  //--energy-grid-consumption-color
-export const DEFAULT_GRID_EXPORT_COLOR_HEX: string = '#8353d1';  //--energy-grid-return-color
-
-
-//Single source of truth for the on-screen display radius across all three layers (buildings, LiDAR cells,
-//raster shadows). 200 m default reads as "the buildings around my house" without dragging mid-range phones;
-//the `display-radius` slider lowers it for perf or raises it for a wider survey. LiDAR fades out over the
-//outer DISPLAY_FADE_DELTA_M band.
-export const DEFAULT_DISPLAY_RADIUS_M = 200;
-//Editor slider bounds: 50 m (perf floor) to 500 m (widest before per-frame geometry projection costs).
-export const MIN_DISPLAY_RADIUS_M = 50;
-export const MAX_DISPLAY_RADIUS_M = 500;
-//Inward LiDAR fade band from the display radius: cells in [radius - delta, radius] smoothstep to zero.
-//Buildings + shadows are binary at the radius (footprints clamped server-side at the tile boundary).
-export const DISPLAY_FADE_DELTA_M = 50;
-export const DEFAULT_BUILDING_OPACITY          = 0.25;
-export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
-export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
-
-//Display update frequency (buckets/hour). 4 = every 15 min. Clamp [1,12]: 12 = 5 min, the recorder's finest
-//statistics period, so a higher value would only interpolate cosmetic sub-buckets with no extra real data.
-export const DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR = 4;
-export const MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 1;
-export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 12;
-
 //Resolve the bucket cadence (buckets/hour) from config, clamped to range, defaulting on missing/invalid.
 //Single source of truth for the store builder + every cadence consumer (path builders, chart aspect, ...).
 export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined): number
@@ -121,11 +103,6 @@ export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined):
     return r;
 }
 
-
-//Decimal places for every value readout (kW/kWh), one setting for visual uniformity. Default 1, clamp [0,3].
-export const DEFAULT_VALUE_DECIMALS = 1;
-export const MIN_VALUE_DECIMALS     = 0;
-export const MAX_VALUE_DECIMALS     = 3;
 
 //Resolve the decimal-place count from `value-decimals`, clamped [0,3], defaulting on missing/invalid.
 export function valueDecimals(config: HeliosConfig | undefined): number
@@ -180,15 +157,6 @@ export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.25;
 //radius). Derived as DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M so one edit rescales every layer.
 export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M;
 
-
-//Rolling-window period defaults (history days / forecast days around today, inclusive). Reproduce the -2/+2
-//window; these only seed the initial span, the in-card selector overrides at runtime. Past [0,30], future [0,14].
-export const DEFAULT_PERIOD_PAST_DAYS   = 2;
-export const DEFAULT_PERIOD_FUTURE_DAYS = 2;
-export const MIN_PERIOD_PAST_DAYS       = 0;
-export const MAX_PERIOD_PAST_DAYS       = 30;
-export const MIN_PERIOD_FUTURE_DAYS     = 0;
-export const MAX_PERIOD_FUTURE_DAYS     = 14;
 
 //Resolve past/forecast day counts from their config keys, clamped to range, defaulting on missing/invalid.
 export function periodPastDays(config: HeliosConfig | undefined): number
