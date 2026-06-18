@@ -1,26 +1,17 @@
-//Tiny client-side cartographic projection for the few WCS providers
-//that refuse EPSG:4326 axis-label subsetting and require their native
-//national projection (Belgian Lambert 72, Austrian MGI Gauss-Krüger,
-//German UTM zones, etc.).
+//Tiny client-side cartographic projection for the few WCS providers that refuse
+//EPSG:4326 axis-label subsetting and require their native national projection
+//(Belgian Lambert 72, Austrian MGI Gauss-Krüger, German UTM zones, etc.).
 //
-//Scope: forward-only (lat/lon -> easting/northing in metres). We never
-//need the inverse, the WCS returns a raster aligned to our requested
-//projected bbox and the shared pipeline interprets that raster as if
-//it covers our original lat/lon bbox. For small query radii (~200 m)
-//the geometric distortion at the corners is sub-metre and well below
-//our raster pitch, so the approximation is invisible in the shadow
-//output.
+//Forward-only (lat/lon -> easting/northing in metres): we never need the inverse
+//since the WCS raster aligned to our projected bbox is reinterpreted as covering
+//the original lat/lon bbox. At ~200 m query radii the corner distortion is
+//sub-metre, below the raster pitch, so the approximation is invisible.
 //
-//Implementation: EPSG-recommended formulas for two projection methods,
-//Transverse Mercator (covers UTM zones and the Austrian Gauss-Krüger
-//family) and Lambert Conformal Conic 2SP (covers Belgian Lambert 72).
-//Datum shifts are intentionally ignored, all providers receive the
-//user's WGS84 lat/lon coords fed directly into the projection formula.
-//The Bessel-vs-WGS84 ellipsoid difference adds ~10 m of horizontal
-//offset for MGI providers (Austria); since the resulting raster is
-//bigger than our home anchor and the home stays inside it, the offset
-//manifests as the home sitting ~10 m off the raster centre, not as
-//missing data. Good enough for shadow modelling at metre scale.
+//Uses EPSG-recommended formulas for Transverse Mercator (UTM + Austrian
+//Gauss-Krüger) and Lambert Conformal Conic 2SP (Belgian Lambert 72). Datum
+//shifts are applied where they matter (see below); for MGI an unhandled
+//Bessel-vs-WGS84 residual of ~10 m just offsets the home from the raster centre
+//without losing data, fine at metre scale.
 //
 //Adding a projection = define an EpsgEntry in EPSG_REGISTRY below.
 
@@ -39,8 +30,8 @@ interface Ellipsoid
 const WGS84:    Ellipsoid = { a: 6378137.0,    f: 1 / 298.257223563 };
 //Bessel 1841 (used by Austrian MGI datum and German DHDN).
 const BESSEL:   Ellipsoid = { a: 6377397.155,  f: 1 / 299.1528128   };
-//GRS80 (used by ETRS89 / UTM ETRS, identical to WGS84 for our purposes
-//but kept distinct for code self-documentation).
+//GRS80 (ETRS89 / UTM ETRS); identical to WGS84 for our purposes but kept
+//distinct for self-documentation.
 const GRS80:    Ellipsoid = { a: 6378137.0,    f: 1 / 298.257222101 };
 //International 1924 (Hayford), used by Belgian BD72 datum.
 const HAYFORD:  Ellipsoid = { a: 6378388.0,    f: 1 / 297.0          };
@@ -48,16 +39,13 @@ const HAYFORD:  Ellipsoid = { a: 6378388.0,    f: 1 / 297.0          };
 
 //----------------------------------------------------------------- datum
 
-//3-parameter (Bursa-Wolf simplified) datum shift to apply BEFORE
-//projecting the user's WGS84 lat/lon to a national projection that
-//sits on a different datum. Ignoring this for BE BD72 introduces an
-//80-190 m horizontal offset, big enough that the home would drift off
-//the centre of the LiDAR raster; with the shift applied we land within
-//~3 m which is invisible at our 0.5-1 m raster pitch.
+//3-parameter (Bursa-Wolf simplified) datum shift applied BEFORE projecting WGS84
+//lat/lon to a national projection on a different datum. For BD72, skipping it
+//introduces an 80-190 m offset (home drifts off the raster); with it we land
+//within ~3 m, invisible at our 0.5-1 m pitch.
 //
-//Values are the WGS84 -> target_datum translation in metres. They are
-//the negation of the conventional target_datum -> WGS84 shift
-//published by the national agencies.
+//Values are the WGS84 -> target_datum translation in metres, i.e. the negation
+//of the conventional target_datum -> WGS84 shift published by national agencies.
 interface DatumShift
 {
     tx: number;
@@ -65,18 +53,17 @@ interface DatumShift
     tz: number;
 }
 
-//BD72 (Belgian Datum 72). Conventional BD72 -> WGS84 shift is
-//(-106.869, +52.297, -103.724), we apply the inverse here.
+//BD72 (Belgian Datum 72). Inverse of the conventional BD72 -> WGS84 shift
+//(-106.869, +52.297, -103.724).
 const SHIFT_BD72:  DatumShift = { tx:  106.869, ty: -52.297, tz:  103.724 };
-//MGI (Austrian National). Conventional MGI -> WGS84 7-param is
-//(+577.326, +90.129, +463.919, ...rotations), we apply the inverse
-//3-param translation, leaving the rotation residual (~5 m) on the
-//table, well below the 5 m pitch of the Austrian state services.
+//MGI (Austrian National). Inverse 3-param translation of the conventional MGI ->
+//WGS84 7-param; the dropped rotation residual (~5 m) stays below the Austrian
+//services' 5 m pitch.
 const SHIFT_MGI:   DatumShift = { tx: -577.326, ty: -90.129, tz: -463.919 };
 
 
-//Convert geographic (lat, lon, h=0) on a given ellipsoid to geocentric
-//Cartesian (X, Y, Z) in metres. Used as the first leg of a datum shift.
+//Geographic (lat, lon, h=0) on a given ellipsoid -> geocentric Cartesian
+//(X, Y, Z) in metres. First leg of a datum shift.
 function geoToEcef(latDeg: number, lonDeg: number, ell: Ellipsoid): [number, number, number]
 {
     const phi = latDeg * DEG;
@@ -92,10 +79,9 @@ function geoToEcef(latDeg: number, lonDeg: number, ell: Ellipsoid): [number, num
     ];
 }
 
-//Inverse of geoToEcef. Closed-form for h=0 isn't direct, but a 3-step
-//Bowring iteration converges to sub-mm in 1 pass for sensible inputs.
-//We only need the lat/lon part, the height comes out near zero (sub-cm)
-//after the datum translation when both ellipsoids are sea-level-fitted.
+//Inverse of geoToEcef via Bowring iteration (sub-mm in 1 pass for sensible
+//inputs). We only use the lat/lon; height comes out near zero (sub-cm) after a
+//datum translation between two sea-level-fitted ellipsoids.
 function ecefToGeo(x: number, y: number, z: number, ell: Ellipsoid): [number, number]
 {
     const e2 = 2 * ell.f - ell.f * ell.f;
@@ -113,9 +99,8 @@ function ecefToGeo(x: number, y: number, z: number, ell: Ellipsoid): [number, nu
     return [phi / DEG, lon / DEG];
 }
 
-//WGS84 lat/lon -> target-datum lat/lon via 3-param Cartesian shift.
-//Output coords feed straight into the projection formula configured
-//for the target datum's ellipsoid.
+//WGS84 lat/lon -> target-datum lat/lon via 3-param Cartesian shift; output feeds
+//straight into the projection formula for the target datum's ellipsoid.
 function shiftDatum(
     latDeg:   number,
     lonDeg:   number,
@@ -130,8 +115,8 @@ function shiftDatum(
 
 //----------------------------------------------------------------- methods
 
-//Transverse Mercator forward, EPSG coordinate operation method 9807. Returns [easting, northing] in metres. Accurate to <1 m within a few hundred km
-//of the central meridian, sub-cm within a UTM zone, which covers everything we care about.
+//Transverse Mercator forward (EPSG method 9807). Returns [easting, northing] in
+//metres; sub-cm within a UTM zone, which covers everything we care about.
 function tmForward(
     latDeg: number,
     lonDeg: number,
@@ -200,10 +185,9 @@ function tmForward(
 }
 
 
-//Lambert Conformal Conic 2SP forward, EPSG coordinate operation method
-//9802. Returns [easting, northing] in metres. Accurate to <1 m within
-//the projection's standard zone. Used by Belgian Lambert 72 (lat1=49.833,
-//lat2=51.167, lat0=90, lon0=4.367, FE=150000.013, FN=5400088.438).
+//Lambert Conformal Conic 2SP forward (EPSG method 9802). Returns [easting,
+//northing] in metres, <1 m within the standard zone. Used by Belgian Lambert 72
+//(lat1=49.833, lat2=51.167, lat0=90, lon0=4.367, FE=150000.013, FN=5400088.438).
 function lccForward(
     latDeg: number,
     lonDeg: number,
@@ -274,16 +258,16 @@ export interface EpsgEntry
 {
     //EPSG numeric code, used as the lookup key.
     code: number;
-    //EPSG URN suffix the WCS expects in SUBSETTINGCRS / OUTPUTCRS.
-    //Always the full http://www.opengis.net/def/crs/EPSG/0/<code>.
+    //EPSG URN suffix the WCS expects in SUBSETTINGCRS / OUTPUTCRS; always the
+    //full http://www.opengis.net/def/crs/EPSG/0/<code>.
     urn:  string;
-    //Forward projection function. Takes lat/lon in degrees, returns projected coords in metres.
+    //Forward projection: lat/lon in degrees -> projected coords in metres.
     project(latDeg: number, lonDeg: number): { x: number; y: number };
 }
 
-//Belgian Lambert 72 (EPSG:31370). Belgium and the Flanders WCS use
-//this; the Wallonia WCS also exposes it but only serves rendered RGB
-//rasters so we don't dispatch through here for that province.
+//Belgian Lambert 72 (EPSG:31370), used by Belgium and the Flanders WCS. The
+//Wallonia WCS also exposes it but serves only rendered RGB rasters, so we don't
+//dispatch through here for that province.
 const epsg_31370: EpsgEntry =
 {
     code:  31370,
@@ -304,10 +288,9 @@ const epsg_31370: EpsgEntry =
     }
 };
 
-//ETRS89 / UTM zone N. Generic factory because Helios touches
-//several zones (Germany uses 32N for the west / centre and 33N for
-//the east). Zone N has central meridian at lon = 6*N - 183, k0=0.9996,
-//false easting 500000, false northing 0 (northern hemisphere).
+//ETRS89 / UTM zone N factory (Helios touches several zones; Germany uses 32N
+//west/centre and 33N east). Central meridian lon = 6*N - 183, k0=0.9996, false
+//easting 500000, false northing 0 (northern hemisphere).
 function makeUtmEntry(zone: number, ell: Ellipsoid, code: number, urn: string): EpsgEntry
 {
     const cm = 6 * zone - 183;
@@ -327,8 +310,7 @@ function makeUtmEntry(zone: number, ell: Ellipsoid, code: number, urn: string): 
 }
 
 //EPSG:25832 = ETRS89 / UTM zone 32N (GRS80). German states west of
-//Thuringia / Saxony use this; Baden-Württemberg's WCS axis labels
-//are E/N.
+//Thuringia/Saxony; Baden-Württemberg's WCS axis labels are E/N.
 const epsg_25832: EpsgEntry = makeUtmEntry(32, GRS80, 25832,
     'http://www.opengis.net/def/crs/EPSG/0/25832');
 
@@ -336,16 +318,15 @@ const epsg_25832: EpsgEntry = makeUtmEntry(32, GRS80, 25832,
 const epsg_25833: EpsgEntry = makeUtmEntry(33, GRS80, 25833,
     'http://www.opengis.net/def/crs/EPSG/0/25833');
 
-//EPSG:32633 = WGS84 / UTM zone 33N. Steiermark's terrain WCS uses
-//this (the legacy MGI Gauss-Krüger M34 zone was retired in favour of
-//UTM). Same projection math as 25833, different EPSG ID and ellipsoid.
+//EPSG:32633 = WGS84 / UTM zone 33N. Steiermark's terrain WCS (the legacy MGI
+//Gauss-Krüger M34 zone was retired for UTM). Same math as 25833, different EPSG
+//ID and ellipsoid.
 const epsg_32633: EpsgEntry = makeUtmEntry(33, WGS84, 32633,
     'http://www.opengis.net/def/crs/EPSG/0/32633');
 
-//EPSG:31254 = MGI / Austria GK West (M28, central meridian 10.333°).
-//Tirol's terrain WCS uses this. The native datum is MGI on Bessel; we
-//feed WGS84 coords directly, introducing ~10 m horizontal offset, which
-//is below the 5 m raster pitch when summed with the central tendency.
+//EPSG:31254 = MGI / Austria GK West (M28, central meridian 10.333°), used by
+//Tirol's terrain WCS. Native datum is MGI on Bessel; feeding WGS84 directly
+//adds ~10 m horizontal offset, below the 5 m raster pitch.
 const epsg_31254: EpsgEntry =
 {
     code:  31254,
@@ -395,21 +376,18 @@ for (const e of [epsg_31370, epsg_25832, epsg_25833, epsg_32633, epsg_31254, eps
 
 //----------------------------------------------------------------- API
 
-//Look up a registered EPSG entry. Returns undefined if the code isn't
-//in the registry, callers should fail soft (skip the fetch) when this
-//happens so an outdated provider doesn't crash the engine.
+//Look up a registered EPSG entry; undefined if absent. Callers should fail soft
+//(skip the fetch) so an outdated provider doesn't crash the engine.
 export function getEpsg(code: number): EpsgEntry | undefined
 {
     return REGISTRY.get(code);
 }
 
-//Project a lat/lon bbox to the target EPSG's native metric coords. We
-//project all four corners and take the axis-aligned envelope, the
-//resulting metric bbox is slightly larger than the original lat/lon
-//rectangle (the projected rectangle is rotated relative to the lat/lon
-//grid). The WCS returns the raster covering that envelope; the shared
-//pipeline then treats it as covering our original lat/lon bbox, the
-//~0.1 % geometric stretch is invisible in the shadow output.
+//Project a lat/lon bbox to the target EPSG's native metric coords by projecting
+//all four corners and taking the axis-aligned envelope. That envelope is
+//slightly larger than the original lat/lon rectangle (the projected rectangle is
+//rotated relative to the grid); the WCS raster covering it is then treated as
+//covering the original bbox, the ~0.1% stretch being invisible in the output.
 export function projectBbox(
     bbox: { minLat: number; maxLat: number; minLon: number; maxLon: number },
     entry: EpsgEntry

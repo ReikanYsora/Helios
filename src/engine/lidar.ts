@@ -1,21 +1,16 @@
 //Common interface and registry for country-specific LiDAR providers.
 //
-//Adding a country = drop a new file under ./lidar/providers/ that
-//exports a LidarSource and register it in LIDAR_SOURCES below. No
-//engine-side changes needed.
+//Adding a country = drop a new file under ./lidar/providers/ that exports a
+//LidarSource and register it in LIDAR_SOURCES below; no engine-side changes needed.
 //
-//Pipeline overview: when the user has shadows enabled AND a provider
-//covers the home, the engine calls fetchShadowRegions() with the home
-//position and a radius. The provider fetches a height raster around
-//the home, runs a size-capped 8-connected flood fill on the cells
-//above the height threshold, and emits one convex-hull Polygon per
-//capped clump with `render_height` set to the clump's mean cell
-//height. Those polygons feed projectExtrusionShadows() exactly like
-//the OpenFreeMap building footprints do when LiDAR is unavailable.
-//Capping the
-//clump area keeps a dense forest from collapsing into one giant
-//blanket shadow while preserving the organic, non-grid-aligned
-//shape of a convex hull.
+//Pipeline: with shadows enabled and a provider covering the home, the engine calls
+//fetchShadowRegions() with the home position and a radius. The provider fetches a
+//height raster, runs a size-capped 8-connected flood fill on cells above the height
+//threshold, and emits one convex-hull Polygon per capped clump with `render_height`
+//set to the clump's mean height. Those polygons feed projectExtrusionShadows() just
+//like the OpenFreeMap building footprints do when LiDAR is unavailable. Capping the
+//clump area keeps a dense forest from collapsing into one giant blanket shadow while
+//preserving the organic, non-grid-aligned shape of a convex hull.
 
 export interface LidarSource
 {
@@ -24,23 +19,21 @@ export interface LidarSource
     //Human-readable label, currently logs-only.
     name:  string;
 
-    //Native cell pitch in metres for the upstream raster as published by the data owner. The engine sizes the requested rasterSize off this value so
-    //the fetched grid matches real source samples instead of forcing the server to interpolate up: at "high" precision the engine asks one cell per
-    //native sample, "medium" one per 2, "low" one per 4. Lets the LiDAR view + shadows scale with the actual ground truth rather than a fixed pixel
-    //count.
+    //Native cell pitch (metres) of the upstream raster as published by the data
+    //owner. The engine sizes the requested rasterSize off this so the grid matches
+    //real source samples instead of forcing server interpolation: "high" asks one
+    //cell per native sample, "medium" one per 2, "low" one per 4.
     nativeCellPitchMeters: number;
 
-    //Cheap synchronous coverage probe. Implementations should bail
-    //fast (a couple of bbox comparisons) so the engine can call this
-    //on every home-position change without measurable cost.
+    //Cheap synchronous coverage probe. Must bail fast (a couple of bbox comparisons)
+    //since the engine calls it on every home-position change.
     covers(lat: number, lon: number): boolean;
 
-    //Fetch shadow regions around the home as a FeatureCollection of
-    //bin polygons with render_height set per bin, together with a
-    //small diagnostics bag the engine surfaces through
-    //`window.heliosStats()`. Returns an empty collection on network
-    //failure, out-of-coverage bbox or empty raster, so the caller
-    //can always use the result unconditionally.
+    //Fetch shadow regions around the home as a FeatureCollection of bin polygons
+    //(render_height set per bin) plus a diagnostics bag surfaced via
+    //`window.heliosStats()`. Returns an empty collection on network failure,
+    //out-of-coverage bbox or empty raster, so the caller can use the result
+    //unconditionally.
     fetchShadowRegions(opts: LidarShadowFetchOptions): Promise<LidarShadowResult>;
 }
 
@@ -49,32 +42,28 @@ export interface LidarShadowResult
     features:    GeoJSON.FeatureCollection;
     diagnostics:
     {
-        //Number of LiDAR cells that passed the height threshold and the circular crop. 0 when the home is outside coverage or the WMS round-trip
-        //failed.
+        //Cells that passed the height threshold and circular crop. 0 when the home
+        //is outside coverage or the WMS round-trip failed.
         cellsKept:   number;
-        //Cells-per-clump cap actually used (derived from the chosen
-        //precision). Surfaced so the user can confirm the size cap
-        //matches expectations.
+        //Cells-per-clump cap actually used (derived from precision); surfaced so the
+        //user can confirm it matches expectations.
         cellsPerClumpCap: number;
         //Min / max kept height in metres. null when no cell passed.
         heightRangeM: [number, number] | null;
     };
-    //Raw height raster + geo, forwarded by every provider so the
-    //engine can keep it around for the LiDAR View overlay (which
-    //projects every cell, threshold-bypassed, to screen).
-    //Producers always populate it when the upstream fetch succeeded;
-    //consumers that only care about cast shadows can ignore the field.
+    //Raw height raster + geo, forwarded by every provider so the engine can keep it
+    //for the LiDAR View overlay (which projects every cell, threshold-bypassed, to
+    //screen). Always populated on a successful fetch; consumers that only care about
+    //cast shadows can ignore it.
     raster?:
     {
         heights:    Float32Array;
-        //Optional DTM band (ground elevation in the source vertical
-        //datum, NaN where no-data). Populated by the local-nDSM
-        //provider when it reads a 2-band COG; absent on legacy
-        //single-band COGs and on every public
-        //provider (their WCS layers only expose the nDSM). The
-        //shading ray-march in pv-shading.ts falls back to flat-
-        //ground geometry whenever the field is undefined, so the
-        //two paths coexist without a flag.
+        //Optional DTM band (ground elevation in the source vertical datum, NaN where
+        //no-data). Populated by the local-nDSM provider when it reads a 2-band COG;
+        //absent on legacy single-band COGs and on every public provider (their WCS
+        //layers only expose the nDSM). The pv-shading.ts ray-march falls back to
+        //flat-ground geometry when this is undefined, so the two paths coexist
+        //without a flag.
         terrain?:   Float32Array;
         rasterSize: number;
         minLat:     number;
@@ -88,13 +77,14 @@ export interface LidarShadowFetchOptions
 {
     homeLat:                  number;
     homeLon:                  number;
-    //Radius in metres around the home from which heights are sampled. The provider over-fetches slightly so trees on the edge still cast their shadow
-    //inward.
+    //Radius (metres) around the home from which heights are sampled. The provider
+    //over-fetches slightly so edge trees still cast their shadow inward.
     radiusMeters:             number;
-    //Pixel count per side requested from the upstream raster. The engine picks this based on the user's `lidar-precision`.
+    //Pixel count per side requested from the upstream raster; engine picks it from
+    //the user's `lidar-precision`.
     rasterSize:               number;
-    //Optional circular crop. Cells beyond this distance from the home are dropped so the shadow zones stay inside the visible disc. When unset, the
-    //bbox is the only bound.
+    //Optional circular crop: cells beyond this distance from the home are dropped so
+    //shadow zones stay inside the visible disc. When unset, the bbox is the only bound.
     cropRadiusMeters?:        number;
     signal?:                  AbortSignal;
 }
@@ -109,22 +99,26 @@ import { polandGugikNmpt }             from './lidar/providers/pl';
 import { canadaHrdem }                 from './lidar/providers/ca';
 import { brandenburgBerlinDom }        from './lidar/providers/de-bb-be';
 import { vermontVcgiNdsm }             from './lidar/providers/us-vt';
-//Baden-Württemberg, Austria Tirol, Austria Steiermark and Belgium Flanders source files (de-bw, at-tirol, at-stmk, be-fl) all
-//live under ./lidar/providers/ and remain functional but are NOT currently registered: the DSM-DTM subtraction quality on those
-//feeds was judged below the bar set by the existing nDSM providers (per-pixel subtraction amplifies noise on building edges and
-//over vegetation, which renders the cast shadows as blobs instead of recognisable footprints). Re-enable by importing +
-//appending to LIDAR_SOURCES when a cleaner data path is identified for those regions.
+//Baden-Württemberg, Austria Tirol, Austria Steiermark and Belgium Flanders source
+//files (de-bw, at-tirol, at-stmk, be-fl) live under ./lidar/providers/ and remain
+//functional but are NOT registered: their DSM-DTM subtraction quality was judged
+//below the nDSM providers' bar (per-pixel subtraction amplifies noise on building
+//edges and over vegetation, rendering shadows as blobs instead of recognisable
+//footprints). Re-enable by importing + appending to LIDAR_SOURCES once a cleaner
+//data path exists.
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
 } from './lidar/local-ndsm';
 import type { HeliosConfig } from '../helios-config';
 
-//Registered providers, ordered by preference. findLidarSource() returns the FIRST provider whose covers() probe accepts the home
-//position; there is no fallback chain when the actual fetch turns up no-data, so order is load-bearing whenever two providers'
-//bounding boxes overlap. Bbox checks today are non-overlapping (one country / region per provider, plus German Länder keyed by
-//state bboxes), single-fetch normalised-raster providers come first (France BIL, NRW nDOM, Poland NMPT, Canada HRDEM DSM,
-//Vermont nDSM) because they skip the DSM-DTM subtraction round-trip; DSM-DTM subtraction providers follow.
+//Registered providers, ordered by preference. findLidarSource() returns the FIRST
+//provider whose covers() probe accepts the home; there is no fallback when the fetch
+//turns up no-data, so order is load-bearing whenever two providers' bboxes overlap.
+//Bbox checks today are non-overlapping (one country/region per provider, German
+//Länder keyed by state bboxes). Single-fetch normalised-raster providers (France BIL,
+//NRW nDOM, Poland NMPT, Canada HRDEM DSM, Vermont nDSM) come first because they skip
+//the DSM-DTM subtraction round-trip; subtraction providers follow.
 export const LIDAR_SOURCES: LidarSource[] = [
     franceLidarHd,
     nrwLidarNdom,
@@ -150,12 +144,10 @@ export function findLidarSource(lat: number, lon: number): LidarSource | null
     return null;
 }
 
-//Read the six `lidar-local-ndsm-*` keys off a HeliosConfig and either
-//return a fully-typed LocalNdsmConfig (when every required field is
-//valid) or null (when the provider is disabled, the URL is missing,
-//or any bbox value is missing / non-finite / out of EPSG:4326 range /
-//ordered wrong). Never throws; invalid local-provider config never
-//invalidates the rest of the card config.
+//Read the six `lidar-local-ndsm-*` keys off a HeliosConfig and return a fully-typed
+//LocalNdsmConfig (every required field valid) or null (provider disabled, URL missing,
+//or any bbox value missing / non-finite / out of EPSG:4326 range / mis-ordered).
+//Never throws: invalid local-provider config never invalidates the rest of the config.
 export function validateLocalNdsmConfig(cfg: HeliosConfig | undefined | null): LocalNdsmConfig | null
 {
     if (!cfg)
@@ -226,25 +218,20 @@ function numFromCfg(v: unknown): number | null
     return null;
 }
 
-//One-shot warning latches. When the user enables the local provider but leaves the config incomplete or invalid, log exactly once per session so the
-//silent fall-through is diagnosable without spamming the console on every shadow refresh. Same one-shot pattern for the "bbox valid but does not
-//cover the home" case (typical lat / lon swap) and for the silent fall-through onto a public provider.
+//One-shot warning latches: log each silent fall-through exactly once per session so
+//it stays diagnosable without spamming the console on every shadow refresh. Cases:
+//invalid/incomplete local config, and bbox valid but not covering the home (typical
+//lat/lon swap).
 let _warnedInvalidLocalNdsm = false;
 let _warnedBboxDoesNotCoverHome = false;
 
-//Config-aware provider resolver. Behaviour:
-//
-//  1. When the local-nDSM config validates, construct a per-config
-//     LocalNdsmSource and return it if it covers (lat, lon). This
-//     takes precedence over any public provider that would otherwise
-//     match the same point.
-//  2. Otherwise (no local config, or local config does not cover the
-//     point) fall back to the existing static LIDAR_SOURCES chain
-//     via findLidarSource().
-//
-//findLidarSource() and the static LIDAR_SOURCES list are unchanged
-//and still exported for any caller that does not need config-aware
-//resolution.
+//Config-aware provider resolver:
+//  1. When the local-nDSM config validates, build a per-config LocalNdsmSource and
+//     return it if it covers (lat, lon). Takes precedence over any matching public
+//     provider.
+//  2. Otherwise fall back to the static LIDAR_SOURCES chain via findLidarSource().
+//findLidarSource() and LIDAR_SOURCES stay unchanged and exported for callers that
+//don't need config-aware resolution.
 export function resolveLidarSource(
     lat: number,
     lon: number,
@@ -275,12 +262,10 @@ export function resolveLidarSource(
         {
             return local;
         }
-        //Bbox validates but the home is OUTSIDE the rectangle. Most common
-        //case is a lat / lon swap in the config (the user pasted longitudes
-        //into the *-lat keys and latitudes into the *-lon keys, both pass
-        //the bare -90..90 / -180..180 range check). Surface the actual
-        //numbers so the user can spot the swap from the console without
-        //digging into the source.
+        //Bbox validates but the home is OUTSIDE the rectangle. Most common cause is a
+        //lat/lon swap (longitudes pasted into *-lat keys and vice versa, both pass the
+        //bare range check). Surface the actual numbers so the user can spot the swap
+        //from the console.
         if (!_warnedBboxDoesNotCoverHome)
         {
             _warnedBboxDoesNotCoverHome = true;

@@ -1,39 +1,24 @@
-//Smooth, time-based auto-rotation around the home. Runs in the
-//OPPOSITE direction to the sun's apparent motion (decreasing
-//bearing in NH, where the sun goes east → south → west, i.e.
-//clockwise from above) so the camera and the live sun visually
-//counter-orbit each other, a quiet but constant motion that
-//makes the card feel alive even with no user input. The rotation
-//pauses for AUTO_ROTATE_INACTIVITY_MS after every user gesture
-//(mouse down / wheel / touch) so the user has full control during
-//a manipulation, then resumes from wherever the user left the
-//camera, no recalibration to a fixed bearing.
-//
-//We tween in seconds (delta-time integrated against the frame
-//rate) rather than a fixed per-frame increment so the rotation
-//speed is constant across 60 Hz / 120 Hz displays and survives
-//tab-throttling with no visible jumps when the user comes back.
+//Smooth time-based auto-rotation around the home, counter to the sun's apparent
+//motion (decreasing bearing in NH) so camera and sun visually counter-orbit,
+//keeping the card alive with no user input. Pauses for AUTO_ROTATE_INACTIVITY_MS
+//after every user gesture, then resumes from the camera's current bearing (no
+//recalibration). Tweens in seconds (delta-time integrated) rather than a fixed
+//per-frame increment so speed is constant across refresh rates and survives
+//tab-throttling without visible jumps.
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { HeliosConfig } from '../helios-config';
 
 
-//Speed picked so the rotation reads as a continuous slow drift
-//rather than a sequence of pixel-snap "steps". The previous 1.5
-//deg/s produced an infra-pixel delta per frame at the typical
-//Helios zoom: the on-screen displacement only reached ~1 px once
-//every 15 frames, which the eye reads as discrete jumps. 4 deg/s
-//gives a sub-pixel delta around 0.18 px/frame at the same zoom,
-//continuous enough for the eye while still slow enough that a
-//full revolution takes 90 seconds.
+//4 deg/s reads as continuous drift; the previous 1.5 deg/s gave a sub-pixel delta
+//at typical Helios zoom that only displaced ~1px every 15 frames (visible "steps").
+//A full revolution takes 90 seconds.
 const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
 const AUTO_ROTATE_INACTIVITY_MS = 5_000;
 
 
-//Structural surface the engine exposes to this loop. Only the
-//fields the loop actually reads / writes; gesture handlers in the
-//engine bump `_autoRotateLastUserAction` directly, no helper here
-//(a 1-line assignment doesn't benefit from a wrapper).
+//Engine surface this loop reads/writes. Gesture handlers bump
+//`_autoRotateLastUserAction` directly (no wrapper for a 1-line assignment).
 export interface AutoRotateHost
 {
     readonly map?:         MapLibreMap;
@@ -42,19 +27,14 @@ export interface AutoRotateHost
     _autoRotateRaf?:           number;
     _autoRotateLastFrame:      number;
     _autoRotateLastUserAction: number;
-    //Accumulated bearing held by the loop. Lets us integrate the
-    //sub-degree per-frame delta in our own float without round-
-    //tripping through MapLibre's getBearing(), which clamps and
-    //returns a normalised value that may silently quantise the
-    //increment near zero and produce the "step-by-step" jitter.
+    //Bearing integrated in our own float; round-tripping through getBearing()
+    //clamps/normalises and may quantise the sub-degree increment into jitter.
     _autoRotateBearing?:       number;
 }
 
 
-//Kick off the rotation rAF loop. Idempotent: a second call while
-//the loop is already running is a no-op. The loop self-terminates
-//when the map goes away (engine cleanup); the cleanup path also
-//cancels the rAF directly to drop it on the same frame.
+//Kick off the rotation rAF loop. Idempotent. Self-terminates when the map goes
+//away; engine cleanup also cancels the rAF directly to drop it on the same frame.
 export function startAutoRotateLoop(host: AutoRotateHost): void
 {
     if (host._autoRotateRaf !== undefined || !host.map)
@@ -63,10 +43,7 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
     }
     host._autoRotateLastFrame      = performance.now();
     host._autoRotateLastUserAction = 0;
-    //Seed the locally tracked bearing from the map's current value
-    //so the loop's first step picks up from wherever the camera
-    //already is. Subsequent frames integrate against this slot
-    //without round-tripping through getBearing().
+    //Seed local bearing from the map so the first step picks up from the current camera.
     host._autoRotateBearing = host.map.getBearing();
 
     const tick = (t: number) =>
@@ -81,20 +58,14 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
         host._autoRotateLastFrame = t;
 
         const sinceUser = Date.now() - host._autoRotateLastUserAction;
-        //Strict equality check: an undefined config (the common
-        //case for fresh installs) defaults to OFF. Auto-rotation
-        //is a stylistic touch some users find distracting, and
-        //in scrub mode it can confuse "did the camera move or
-        //did time pass?". The user has to explicitly opt in via
-        //the editor toggle. Detail mode also suppresses it.
+        //Defaults OFF (undefined config): rotation is opt-in via the editor toggle
+        //since it can distract and, in scrub mode, blur "did the camera move or did
+        //time pass?". Detail mode also suppresses it.
         const autoRotateEnabled = host.cfg['auto-rotate-enabled'] === true;
-        //camera-locked overrides auto-rotate too: the whole point of the
-        //lock is "the camera stays exactly where I dialled it in", so a
-        //slow idle orbit would defeat the user's intent.
+        //camera-locked overrides too: the lock means "stays where I dialled it in".
         const cameraLocked      = (host.cfg as Record<string, unknown>)['camera-locked'] === true;
-        //Long-lived disable: the user explicitly opted OUT or locked the camera. Suspend the rAF loop entirely
-        //instead of self-resubmitting at 60 Hz forever. The engine re-arms the loop from `updateConfig` whenever
-        //either flag flips back to its rotation-permitting state, so toggling the editor switch resumes seamlessly.
+        //Long-lived disable: suspend the rAF loop rather than self-resubmit at 60Hz
+        //forever. `updateConfig` re-arms the loop when either flag flips back.
         if (!autoRotateEnabled || cameraLocked)
         {
             host._autoRotateRaf = undefined;
@@ -104,14 +75,11 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
             && !cameraLocked
             && sinceUser >= AUTO_ROTATE_INACTIVITY_MS)
         {
-            //Negative delta: bearing decreases, camera rotates counter-clockwise around the up axis as seen from above, map content drifts clockwise
-            //on screen, opposite of the sun's apparent motion.
+            //Negative delta: bearing decreases, camera rotates CCW about the up axis;
+            //map content drifts CW on screen, opposite the sun.
             //
-            //Re-sync the locally tracked bearing with whatever the
-            //map currently says when the user just stopped touching
-            //the camera (sinceUser flips above the threshold): a
-            //manual drag mid-loop would otherwise see us snap back
-            //to the locally stored value at the next tick.
+            //Re-sync local bearing from the map right when the user stops touching the
+            //camera (sinceUser crosses the threshold), else a mid-loop drag snaps back.
             if (host._autoRotateBearing === undefined
                 || sinceUser - AUTO_ROTATE_INACTIVITY_MS < 16)
             {
@@ -122,7 +90,7 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
         }
         else
         {
-            //While paused, keep the locally tracked bearing in sync with the live map so a resume picks up smoothly from the user-edited camera.
+            //While paused, track the live map so a resume picks up from the edited camera.
             host._autoRotateBearing = host.map.getBearing();
         }
 

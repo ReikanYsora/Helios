@@ -1,47 +1,36 @@
 //Shared post-processing pipeline for every LiDAR provider.
 //
-//Inputs: a Float32Array of "height above ground in metres" per cell,
-//laid out row-major, north edge first (image-y convention), plus the
-//geographic bbox of the raster and the home anchor.
+//Input: a row-major Float32Array of "height above ground in metres" per cell
+//(north edge first, image-y convention), plus the raster bbox and home anchor.
+//Output: a FeatureCollection of Polygon features carrying a render_height
+//(mean cell height of the clump), fed to projectExtrusionShadows() like the
+//MapTiler footprints are when LiDAR is unavailable.
 //
-//Outputs: a FeatureCollection of Polygon features, each carrying a
-//render_height property (mean cell height of the clump). The features
-//feed projectExtrusionShadows() exactly like the MapTiler footprints
-//do when LiDAR is unavailable.
-//
-//Providers differ only in HOW they get the height-above-ground values
-//(IGN serves it as a single nDSM raster; UK/NL/NO have to fetch DSM
-//and DTM separately and subtract; ES merges two normalised layers).
-//Once the heights are ready, the consolidation logic is identical, so
-//keeping it in one place avoids drift between providers.
+//Providers differ only in HOW they obtain the height-above-ground values
+//(IGN: single nDSM raster; UK/NL/NO: fetch DSM + DTM and subtract; ES: merges
+//two normalised layers). Consolidation is identical, so it lives here to avoid
+//drift between providers.
 
 import { convexHull } from '../shadows';
 import type { LidarShadowResult } from '../lidar';
 
-//Tuning constants. Same defaults as the legacy FR-only implementation:
-//
-//  HEIGHT_THRESH_M            , keep cells at or above this height
-//                               (skip grass and bare-ground noise).
-//  HEIGHT_MAX_M               , sanity clamp; above this is treated as
-//                               garbage (giant sequoias top out ~95 m).
-//  TARGET_COMPONENT_AREA_M2   , physical target area of one flood-fill
-//                               component, the cell cap is derived from
-//                               this and the actual pixel pitch so
-//                               component size stays consistent across
-//                               precisions. ~16 m² is a 4 m × 4 m clump,
-//                               the size of a single tree crown or one
-//                               wing of a small building; smaller clumps
-//                               trace irregular shapes (L-shaped roofs,
-//                               tree rows that zigzag) much closer to
-//                               their real outline once the per-clump
-//                               convex hull is taken in pass 3.
-//                               (Tuned down from a wider initial cap
-//                               after field reports that the cast
-//                               shadow blob looked too "smudged".)
-//  MIN_COMPONENT_CELLS        , floor on cells per component before we
-//                               bother emitting a polygon. Drops single-
-//                               cell noise that would render as speckled
-//                               dot shadows.
+//Tuning constants (same defaults as the legacy FR-only implementation):
+//  HEIGHT_THRESH_M          keep cells at/above this height (skip grass and
+//                           bare-ground noise).
+//  HEIGHT_MAX_M             sanity clamp; above this is garbage (tallest trees
+//                           top out ~95 m).
+//  TARGET_COMPONENT_AREA_M2 physical target area of one flood-fill component;
+//                           the cell cap is derived from this and the actual
+//                           pixel pitch so component size stays consistent
+//                           across precisions. ~16 m² (4 m × 4 m) is one tree
+//                           crown or one wing of a small building; smaller
+//                           clumps trace irregular shapes (L-shaped roofs,
+//                           zigzag tree rows) closer to their real outline once
+//                           the per-clump convex hull is taken in pass 3.
+//                           (Tuned down from a wider cap after the cast shadow
+//                           blob looked too "smudged".)
+//  MIN_COMPONENT_CELLS      floor on cells per component before emitting a
+//                           polygon; drops single-cell speckle.
 const DEFAULT_HEIGHT_THRESH_M    = 5;
 const DEFAULT_HEIGHT_MAX_M       = 100;
 const DEFAULT_TARGET_AREA_M2     = 16;
@@ -57,9 +46,8 @@ export interface RasterGeo
     maxLat:     number;
     minLon:     number;
     maxLon:     number;
-    //Optional circular crop in metres around (homeLat, homeLon). When
-    //set, cells beyond the radius are dropped so the shadow zones stay
-    //inside the visible disc.
+    //Optional circular crop (metres) around (homeLat, homeLon): cells beyond
+    //the radius are dropped so shadow zones stay inside the visible disc.
     homeLat:    number;
     homeLon:    number;
     cropRadiusMeters?: number;
@@ -69,35 +57,31 @@ export interface PipelineOptions
 {
     heightThreshM?: number;
     heightMaxM?:    number;
-    //Override the per-component physical target area (m²) when a
-    //provider's data has a meaningfully different cell pitch from the
-    //IGN baseline (1 m). Most callers can leave this default.
+    //Override the per-component physical target area (m²) when a provider's
+    //cell pitch differs meaningfully from the IGN baseline (1 m). Most callers
+    //leave this default.
     targetAreaM2?:  number;
     minComponentCells?: number;
-    //Opt-in 3x3 median pre-filter on the raster, BEFORE thresholding.
-    //Recommended for providers that publish DSM + DTM separately and
-    //let the client subtract per-pixel (AT-Tirol, AT-Steiermark,
-    //DE-BW, NL, UK), the per-pixel subtraction amplifies single-cell
-    //noise at building edges + vegetation, which would otherwise pass
-    //the height threshold and saturate the flood fill with junk
-    //components. The median pass keeps building roofs (multi-cell
-    //plateaux) while killing isolated spikes. nDSM providers that
-    //ship a pre-computed normalised height (FR, PL, CA, VT, NRW)
-    //typically don't need this, the source agency has already
-    //smoothed the raster server-side.
+    //Opt-in 3x3 median pre-filter, BEFORE thresholding. Recommended for
+    //providers that publish DSM + DTM separately and subtract client-side
+    //(AT-Tirol, AT-Steiermark, DE-BW, NL, UK): the subtraction amplifies
+    //single-cell noise at building edges + vegetation, which would pass the
+    //threshold and saturate the flood fill with junk. The median keeps
+    //building roofs (multi-cell plateaux) while killing isolated spikes.
+    //nDSM providers shipping a pre-smoothed normalised height (FR, PL, CA, VT,
+    //NRW) typically don't need it.
     medianSmooth?: boolean;
 }
 
-//Run the shared consolidation pipeline on a height-above-ground
-//Float32Array. The caller is responsible for any DSM-DTM subtraction
-//or no-data sentinel scrubbing; pass NaN for cells you want skipped.
+//Run the shared consolidation pipeline on a height-above-ground Float32Array.
+//The caller handles any DSM-DTM subtraction or no-data scrubbing; pass NaN for
+//cells to skip.
 //
-//Optional `terrain` parallel buffer (same shape, same indexing as
-//`heights`) carries the DTM band when the source COG ships one
-//(the helios-lidar.org 2-band pipeline). It is forwarded verbatim
-//onto the result's `raster.terrain` field so the shading ray-march
-//can lift its comparison into absolute Z. Pure pass-through: the
-//shadow consolidation logic itself stays nDSM-only.
+//Optional `terrain` parallel buffer (same shape/indexing as `heights`) carries
+//the DTM band when the source COG ships one (helios-lidar.org 2-band
+//pipeline). It is forwarded verbatim onto result.raster.terrain so the shading
+//ray-march can lift its comparison into absolute Z. Pure pass-through: the
+//consolidation logic stays nDSM-only.
 export function processHeightRaster(
     heights: Float32Array,
     geo:     RasterGeo,
@@ -130,13 +114,12 @@ export function processHeightRaster(
     const pxLatM  = pxLat * M_PER_DEG_LAT;
     const cellAreaM2 = pxLatM * pxLatM;
 
-    //Cell cap derived from physical target area so component size is
-    //consistent across providers regardless of their native pixel
-    //pitch. Clamped so very low precision still produces multi-cell
-    //components and very high precision doesn't blow the cap loose.
-    //Upper bound 80 cells caps the worst-case convex-hull extension
-    //to a single building wing or tree group; the shadow polygon
-    //then reads as a recognisable shape rather than a smudged blob.
+    //Cell cap derived from physical target area so component size is consistent
+    //across providers regardless of native pixel pitch. Clamped so very low
+    //precision still yields multi-cell components and very high precision
+    //doesn't blow the cap loose. Upper bound 80 cells caps the worst-case hull
+    //extension to one building wing / tree group, keeping the shadow polygon a
+    //recognisable shape rather than a smudged blob.
     const maxCellsPerComponent = Math.max(4, Math.min(80,
         Math.round(targetArea / Math.max(0.01, cellAreaM2))));
 
@@ -144,9 +127,8 @@ export function processHeightRaster(
         ? geo.cropRadiusMeters
         : null;
 
-    //Pass 1: identify valid cells (above threshold + inside crop).
-    //Row j = 0 is the NORTH edge of the bbox (raster image convention,
-    //top-down); latitude decreases as j grows.
+    //Pass 1: identify valid cells (above threshold + inside crop). Row j = 0 is
+    //the NORTH edge of the bbox (image convention); latitude decreases as j grows.
     const validArr = new Uint8Array(N);
     const hOk      = new Float32Array(N);
     let keptCells  = 0;
@@ -187,8 +169,8 @@ export function processHeightRaster(
         }
     }
 
-    //Pass 2: size-capped 8-connected flood fill. Same logic as the legacy FR implementation, lifted here so every provider gets the same
-    //dappled-shadow look.
+    //Pass 2: size-capped 8-connected flood fill (legacy FR logic, lifted here
+    //so every provider gets the same dappled-shadow look).
     const labels = new Int32Array(N);
     const stack: number[] = [];
     const components: Array<{ cells: number[]; heightSum: number }> = [];
@@ -248,10 +230,9 @@ export function processHeightRaster(
         }
     }
 
-    //Pass 3: one convex-hull Polygon per component. Vertices are the
-    //4 corners of every cell in the component; the hull breaks the
-    //grid alignment of the underlying raster so cast shadows alpha-
-    //composite into a continuous-but-dappled pattern instead of a
+    //Pass 3: one convex-hull Polygon per component. Hull vertices are the 4
+    //corners of every cell; breaking the grid alignment lets cast shadows
+    //alpha-composite into a continuous-but-dappled pattern rather than a
     //tile-aligned grid texture.
     const out: GeoJSON.Feature[] = [];
     for (const comp of components)
@@ -301,9 +282,10 @@ export function processHeightRaster(
                 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))]
                 : null
         },
-        //Forward the raw raster + geo so the engine can keep it for the LiDAR View overlay. Same buffer reference, no copy: the pipeline never
-        //mutates `heights` after the validity pass above, and the engine treats the buffer as read-only. The terrain band, when provided, is
-        //forwarded with the same zero-copy contract.
+        //Forward the raw raster + geo for the LiDAR View overlay. Zero-copy:
+        //the pipeline never mutates `heights` after the validity pass and the
+        //engine treats the buffer as read-only. The terrain band, when given,
+        //is forwarded under the same contract.
         raster:
         {
             heights:    heights,
@@ -317,18 +299,14 @@ export function processHeightRaster(
     };
 }
 
-//3x3 median filter in-place over a Float32 raster, edges handled by
-//reusing the cell's own value when the kernel falls off the grid.
-//NaN inputs are preserved (the median of [NaN, ...] is NaN by our
-//convention so a no-data cell stays no-data), which keeps the
-//upstream "no-data" semantics intact for nDSM cells the upstream
-//WCS marked as missing. Returns a fresh Float32Array, the input is
-//not mutated.
+//3x3 median filter over a Float32 raster; edges reuse the cell's own value when
+//the kernel falls off the grid. NaN inputs are preserved (no-data stays
+//no-data), keeping upstream "no-data" semantics for cells the WCS marked
+//missing. Returns a fresh array; the input is not mutated.
 //
-//Use case: DSM-DTM subtraction providers (AT-Tirol, AT-Steiermark,
-//DE-BW) where per-pixel subtraction amplifies single-cell noise at
-//building edges + vegetation. A median pass kills isolated spikes
-//while preserving multi-cell building plateaux.
+//Use case: DSM-DTM subtraction providers (AT-Tirol, AT-Steiermark, DE-BW)
+//where subtraction amplifies single-cell noise at building edges + vegetation.
+//The median kills isolated spikes while preserving multi-cell roof plateaux.
 function median3x3(src: Float32Array, size: number): Float32Array
 {
     const out = new Float32Array(src.length);
@@ -367,7 +345,7 @@ function median3x3(src: Float32Array, size: number): Float32Array
                 }
             }
             if (n === 0) { out[idx] = NaN; continue; }
-            //In-place insertion sort, faster than Array.sort on a 9- element buffer.
+            //In-place insertion sort, faster than Array.sort on a 9-element buffer.
             for (let k = 1; k < n; k++)
             {
                 const v = buf[k];
@@ -402,7 +380,8 @@ export function emptyResult(): LidarShadowResult
     };
 }
 
-//Compute the lat/lon bbox around a home point, padded by `padFactor` so trees on the edge of the radius still cast their shadow inward.
+//Compute the lat/lon bbox around a home point, padded by `padFactor` so edge
+//trees still cast their shadow inward.
 export function homeBbox(
     homeLat: number, homeLon: number, radiusMeters: number, padFactor: number
 ): { minLat: number; maxLat: number; minLon: number; maxLon: number }
@@ -419,7 +398,8 @@ export function homeBbox(
     };
 }
 
-//Great-circle distance in metres for the circular crop. Cheap enough to call per-cell at our raster sizes.
+//Great-circle distance in metres for the circular crop. Cheap enough per-cell
+//at our raster sizes.
 export function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number
 {
     const toRad = Math.PI / 180;

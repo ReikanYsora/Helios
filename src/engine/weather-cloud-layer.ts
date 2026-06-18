@@ -1,16 +1,12 @@
 //MapLibre GL custom layer for the weather-mode cloud overlay. Three full-bbox quads (low / mid /
-//high cloud-cover bands) rendered with a fragment shader that samples a tiny RGBA data texture
-//(R = low, G = mid, B = high coverage) at the fragment's geographic position, multiplies the
-//bilinear-interpolated coverage by 4 octaves of simplex FBM noise for the "shredded cloud" look,
-//and emits a soft-edged shape in --primary-text-color modulated by per-band opacity (low 0.20,
-//mid 0.40, high 0.60). All three bands share the same texture so re-uploading on a timeline
-//scrub is one ~400-byte transfer, and per-band visibility is a per-quad branch in CPU (no
-//uniform branching in the shader).
+//high bands) sample a tiny RGBA data texture (R/G/B = per-band coverage) at the fragment's geo
+//position, shape it with 4 octaves of simplex FBM, and emit a soft-edged shape in
+//--primary-text-color at per-band opacity. Shared texture keeps a timeline-scrub re-upload to one
+//~400-byte transfer; per-band visibility branches in CPU, not in the shader.
 //
-//Integration: the engine instantiates the layer + adds it to the MapLibre map on weather-mode
-//entry, calls updateData() on grid refresh + timeline scrub, sets bandsVisible() on chip toggle,
-//and removes the layer on weather-mode exit. The layer saves / restores enough WebGL state on
-//each render() call that the basemap rendering stays uncorrupted.
+//Engine lifecycle: instantiate + add on weather-mode entry, updateData() on grid refresh / scrub,
+//bandsVisible() on chip toggle, remove on exit. render() saves/restores enough WebGL state to
+//leave the basemap rendering uncorrupted.
 
 import type { CustomLayerInterface, Map as MaplibreMap, CustomRenderMethodInput } from 'maplibre-gl';
 
@@ -27,17 +23,14 @@ export interface WeatherCloudLayerOptions
 }
 
 
-//Per-band alpha multiplier applied on top of the shaped cloud density. 20 / 40 / 60 % gives growing
-//visual weight from low to high so a fully overcast stack reads as a heavy ceiling rather than three
-//identical greys.
+//Per-band alpha multiplier on top of the shaped density: growing weight low->high so a fully
+//overcast stack reads as a heavy ceiling rather than three identical greys.
 const BAND_OPACITY = [0.20, 0.40, 0.60] as const;
 
 
-//Vertex shader. Mercator coordinates [0..1]^2 + altitude in the same unit system; MapLibre's
-//mainMatrix transforms straight to clip space. The geographic lon / lat is passed as a separate
-//attribute so the fragment shader can sample the data texture by location (zoom / pan / rotate
-//invariant) and feed the noise function in degrees so the cloud features stay the same size
-//on the ground regardless of camera zoom.
+//Vertex shader. Mercator coords feed mainMatrix straight to clip space; geo lon/lat is a separate
+//attribute so the fragment can sample by location (zoom/pan/rotate invariant) and feed the noise
+//in degrees, keeping cloud features ground-stable regardless of zoom.
 const VERT_SRC = `
 precision highp float;
 attribute vec3 a_pos;
@@ -52,22 +45,17 @@ void main()
 `;
 
 
-//Fragment shader. Threshold-based cloud carving: the FBM simplex noise field defines WHERE
-//clouds could be, the bilinear-sampled coverage from the data texture shifts the threshold +
-//the smoothstep band so the noise variation stays visible at any coverage level (the previous
-//formula collapsed to a flat fill at 100 % coverage). Output is premultiplied alpha so
-//MapLibre's framebuffer blends correctly.
+//Fragment shader. Threshold-based carving: FBM noise sets where clouds can be, the bilinear
+//coverage from the data texture shifts the threshold + smoothstep band so noise variation stays
+//visible at any coverage (a plain multiply collapsed to flat fill at 100%). Output is
+//premultiplied alpha for MapLibre's framebuffer.
 //
-//Per-band scale + phase so the three altitudes paint visibly different cloud signatures: high
-//bands get broader features (cirrus-like sheets), low bands get tighter features (cumulus
-//puffs). All three bands tint with --primary-text-color, the band identity comes from the
-//shape + opacity stack.
+//Per-band scale + phase paint distinct signatures: high bands broad (cirrus sheets), low bands
+//tight (cumulus puffs); colour is always --primary-text-color, band identity is shape + opacity.
 //
-//Mobile-driver hardening: u_bandIndex is a float (some Adreno / Mali drivers misbehave on int
-//ternary inside fragments), u_time is wrapped to [0, 3600) host-side to keep FP24 precision
-//on long sessions, and the geographic UV computation discards out-of-bounds + edge-faded-to-
-//zero fragments before the expensive FBM call so the per-frame cost stays low even when the
-//quad geometry overshoots the data bbox.
+//Mobile-driver hardening: u_bandIndex is float (some Adreno/Mali drivers misbehave on int ternary
+//in fragments), u_time wraps to [0,3600) host-side for FP24 precision, and out-of-bounds /
+//edge-faded fragments discard before the FBM call.
 //
 //Simplex noise: Ashima Arts' canonical 2D implementation, public domain.
 const FRAG_SRC = `
@@ -185,8 +173,7 @@ void main()
 `;
 
 
-//Web Mercator projection used by MapLibre internally: longitude / latitude -> [0, 1]^2 unit
-//square. The output is what mainMatrix transforms straight to clip space.
+//MapLibre's internal Web Mercator projection: lon/lat -> [0,1]^2, the input mainMatrix expects.
 function lngLatToMercator(lng: number, lat: number): [number, number]
 {
     const x = lng / 360 + 0.5;
@@ -220,8 +207,8 @@ export class WeatherCloudLayer implements CustomLayerInterface
 
     private opts:    WeatherCloudLayerOptions;
     private startMs: number = performance.now();
-    //cos(centre_lat) cached host-side so the per-frame render() loop is one uniform write per
-    //draw instead of recomputing the trig on every call. Refreshed on every bbox update.
+    //cos(centre_lat) cached host-side so render() writes one uniform per draw instead of redoing
+    //the trig each call. Refreshed on every bbox update.
     private latCosCached: number = 1;
 
     constructor(opts: WeatherCloudLayerOptions)
@@ -264,14 +251,13 @@ export class WeatherCloudLayer implements CustomLayerInterface
         this.map          = null;
     }
 
-    //MapLibre 5 hands us either a Float32Array (legacy) or an object carrying defaultProjectionData.
-    //mainMatrix. We sniff for the typed array shape and fall back to the object path.
+    //MapLibre 5 hands us either a Float32Array (legacy) or an object carrying
+    //defaultProjectionData.mainMatrix; sniff for the typed-array shape, else the object path.
     public render(gl: WebGLRenderingContext, args: Float32Array | CustomRenderMethodInput): void
     {
         if (!this.program || !this.vertexBuffer || !this.dataTexture) { return; }
-        //MapLibre's `mat4` typing is wider than what gl.uniformMatrix4fv accepts directly, so we
-        //pull the raw values out into a fresh Float32Array; allocating 16 floats per frame is
-        //negligible compared to the rest of the per-frame cost.
+        //MapLibre's `mat4` typing is wider than gl.uniformMatrix4fv accepts, so copy the raw
+        //values into a fresh Float32Array; 16 floats/frame is negligible.
         let matrix: Float32Array | null = null;
         if (ArrayBuffer.isView(args))
         {
@@ -302,24 +288,19 @@ export class WeatherCloudLayer implements CustomLayerInterface
         gl.uniform4f(this.uBbox,  this.opts.bbox.west, this.opts.bbox.south,
                                   this.opts.bbox.east, this.opts.bbox.north);
         gl.uniform1f(this.uLatCos, this.latCosCached);
-        //Wrap the elapsed seconds at 3600 (1 h) so the time uniform stays within FP24 precision
-        //even on mobile GPUs that demote highp float in the fragment shader. The drift step is
-        //small enough that the wrap is invisible to the user.
+        //Wrap elapsed seconds at 3600 (1 h) to keep u_time within FP24 even on GPUs that demote
+        //highp in the fragment; the drift step is small enough that the wrap is invisible.
         const elapsedSec = (performance.now() - this.startMs) / 1000;
         gl.uniform1f(this.uTime, elapsedSec % 3600);
 
         gl.enable(gl.BLEND);
-        //Premultiplied alpha matches MapLibre's framebuffer; the fragment shader already
-        //multiplies u_color by alpha so the rgb channel carries the colour scaled by coverage.
-        //Using SRC_ALPHA / ONE_MINUS_SRC_ALPHA against a premultiplied source would double-blend
-        //and saturate to flat colour.
+        //Premultiplied-alpha blend (shader already scales u_color by alpha). SRC_ALPHA /
+        //ONE_MINUS_SRC_ALPHA against a premultiplied source would double-blend to flat colour.
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
 
-        //Paint order low -> mid -> high so the higher (more opaque) band sits on top, matching
-        //the dot-cloud composition from previous betas. The band index is passed as a float so
-        //the fragment shader can run ternaries against it without int-precision pitfalls on
-        //mobile drivers.
+        //Paint low -> mid -> high so the more opaque band sits on top. Band index is a float to
+        //avoid int-precision pitfalls in the fragment ternaries on mobile drivers.
         const order = [0, 1, 2] as const;
         for (const band of order)
         {
@@ -329,9 +310,8 @@ export class WeatherCloudLayer implements CustomLayerInterface
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
 
-        //Schedule the next frame for the slow drift. MapLibre coalesces repaint requests so
-        //even at 60 fps the cost is one map redraw per frame; the drift speed in the shader
-        //(t * 0.04 / 0.05) is tuned for that cadence.
+        //Request the next frame for the slow drift; MapLibre coalesces repaints so it's one redraw
+        //per frame. The shader drift speed is tuned for this cadence.
         this.map?.triggerRepaint();
     }
 
@@ -412,9 +392,9 @@ export class WeatherCloudLayer implements CustomLayerInterface
     {
         const gl = this.gl!;
         const { west, south, east, north } = this.opts.bbox;
-        //Quad as triangle strip: SW, SE, NW, NE. Each vertex stores 3 mercator coords + 2 lon/lat
-        //attributes so the fragment shader can both sample the data texture (using lon/lat -> UV)
-        //and feed the noise function at the geographic position.
+        //Quad as triangle strip (SW, SE, NW, NE). Each vertex = 3 mercator coords + 2 lon/lat, so
+        //the fragment can both sample the data texture (lon/lat -> UV) and feed the noise at the geo
+        //position.
         const mercSW = lngLatToMercator(west, south);
         const mercSE = lngLatToMercator(east, south);
         const mercNW = lngLatToMercator(west, north);
@@ -442,9 +422,8 @@ export class WeatherCloudLayer implements CustomLayerInterface
         {
             return;
         }
-        //Pack the 3 bands into the R / G / B channels of an N x N RGBA8 texture. Each cell stores
-        //one cloud-cover percent quantised to 8 bits, which is plenty: the shader noise dominates
-        //the visual signal at sub-percent scales anyway.
+        //Pack the 3 bands into R/G/B of an N x N RGBA8 texture, one cloud-cover percent per cell at
+        //8-bit precision; the shader noise dominates the signal at sub-percent scales anyway.
         const px = new Uint8Array(N * N * 4);
         for (let i = 0; i < N * N; i++)
         {

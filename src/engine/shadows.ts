@@ -1,10 +1,8 @@
-//Ground-projected shadow polygons. MapLibre 5 has no native cast-shadow
-//for fill-extrusion layers, so we compute them in JS each timeline tick:
-//for every input footprint we offset its vertices by (h / tan(alt)) in
-//the opposite-of-sun direction and emit the convex hull of (original ,
-//projected) as a flat Polygon. The 3D extrusion of the original feature
-//hides the under-feature part of that polygon at render time, leaving
-//only the actual ground shadow visible.
+//Ground-projected shadow polygons. MapLibre 5 has no native cast-shadow for
+//fill-extrusion layers, so we compute them in JS each timeline tick: offset each
+//footprint's vertices by (h / tan(alt)) in the opposite-of-sun direction and emit the
+//convex hull of (original, projected) as a flat Polygon. The 3D extrusion hides the
+//under-feature part at render time, leaving only the ground shadow visible.
 
 const M_PER_DEG_LAT = 111_320;
 
@@ -12,22 +10,18 @@ export interface ProjectShadowsOptions
 {
     //Compass azimuth, degrees clockwise from north (matches getSunPosition).
     sunAzimuthDeg:    number;
-    //Altitude above horizon in degrees. Below minAltitudeDeg the projector returns an empty FeatureCollection.
+    //Altitude above horizon (deg). Below minAltitudeDeg the projector returns an empty FeatureCollection.
     sunAltitudeDeg:   number;
-    //Reference latitude for the metres-to-degrees-of-longitude
-    //conversion. cos(lat) is constant over a Helios card's bbox.
+    //Reference latitude for metres-to-degrees-of-longitude; cos(lat) is constant over a card's bbox.
     homeLat:          number;
     //Drop features whose effective height is below this. Default 2 m.
     minHeightM?:      number;
-    //Sun-altitude cut-off below which we emit nothing. Default 1.5 deg
-    //(below that, shadows become hundreds of metres long and the
-    //night-shade overlay already conveys "it's dark").
+    //Sun-altitude cut-off below which we emit nothing. Default 1.5 deg (below that, shadows
+    //run hundreds of metres and the night-shade overlay already conveys "it's dark").
     minAltitudeDeg?:  number;
-    //Optional clip-to-disc. When all three are set, every emitted
-    //polygon is clipped against a circular region of `clipRadiusMeters`
-    //around (clipCenterLat, clipCenterLon). Used to keep cast shadows
-    //within the building visibility radius, consistent with the
-    //surroundings extrusion clip.
+    //Optional clip-to-disc. When all three are set, every polygon is clipped against a
+    //circle of clipRadiusMeters around (clipCenterLat, clipCenterLon), to keep cast
+    //shadows within the building visibility radius (consistent with the extrusion clip).
     clipCenterLat?:   number;
     clipCenterLon?:   number;
     clipRadiusMeters?: number;
@@ -50,8 +44,7 @@ export function projectExtrusionShadows(
     const azR  = opts.sunAzimuthDeg  * D;
     const altR = opts.sunAltitudeDeg * D;
 
-    //Shadow direction = opposite of the sun on the ground plane
-    //(compass: x = east, y = north).
+    //Shadow direction = opposite of the sun on the ground plane (compass: x = east, y = north).
     const shadowDx = -Math.sin(azR);
     const shadowDy = -Math.cos(azR);
 
@@ -59,11 +52,8 @@ export function projectExtrusionShadows(
     const mPerDegLon = M_PER_DEG_LAT * Math.cos(opts.homeLat * D);
     const minH       = opts.minHeightM ?? 2;
 
-    //Build the clip polygon once per (clip center, radius) tuple,
-    //cached across calls. The 64-vertex disc approximation doesn't
-    //depend on sun position, so re-generating it on every refresh
-    //was pure waste; same for the per-edge direction vectors that
-    //Sutherland-Hodgman consumes (pre-baked here as `clipEdges`).
+    //Build the clip polygon once per (clip center, radius) tuple, cached across calls: the
+    //disc and Sutherland-Hodgman edge vectors don't depend on sun position (see getClipBundle).
     const clipBundle = (
         typeof opts.clipCenterLat   === 'number'
      && typeof opts.clipCenterLon   === 'number'
@@ -123,11 +113,9 @@ export function projectExtrusionShadows(
                 continue;
             }
 
-            //One flat-opacity shadow polygon per casting region: the
-            //convex hull of (original vertices + opposite-of-sun
-            //projections). The 3D extrusion of the original feature
-            //covers the under-feature part at render time, leaving
-            //only the ground spillover visible.
+            //One flat-opacity shadow polygon per casting region: the convex hull of
+            //(original vertices + opposite-of-sun projections). The 3D extrusion covers the
+            //under-feature part at render time, leaving only the ground spillover visible.
             const cloud: Array<[number, number]> = [];
             for (const p of outer)
             {
@@ -141,10 +129,8 @@ export function projectExtrusionShadows(
                 continue;
             }
 
-            //Optional clip-to-disc. The shadow trail can extend well
-            //past the building visibility radius for a tall region
-            //near the edge; clipping here keeps the visible shadows
-            //confined to the same disc as the rendered buildings.
+            //Optional clip-to-disc: a tall region near the edge can trail past the building
+            //visibility radius, so confine visible shadows to the same disc as the buildings.
             let ring: Array<[number, number]> = hull;
             if (clipBundle)
             {
@@ -169,14 +155,13 @@ export function projectExtrusionShadows(
     return { type: 'FeatureCollection', features: out };
 }
 
-//Cached approximation of the clip disc. The 64-vertex ring and the per-edge `dx`, `dy` deltas Sutherland-Hodgman consumes never depend on the sun
-//position, so we rebuild them only when the clip center or radius actually changes.
+//Cached approximation of the clip disc: the 64-vertex ring and per-edge dx/dy deltas
+//never depend on the sun position, so we rebuild only when the center or radius changes.
 interface ClipBundle
 {
     ring: Array<[number, number]>;
-    //Pre-baked edge vectors, indexed by edge i.
-    //  dx[i] = ring[(i+1) % N].x - ring[i].x
-    //  dy[i] = ring[(i+1) % N].y - ring[i].y
+    //Pre-baked edge vectors, indexed by edge i:
+    //  dx[i] = ring[(i+1) % N].x - ring[i].x, dy[i] = ring[(i+1) % N].y - ring[i].y
     dx:   Float64Array;
     dy:   Float64Array;
 }
@@ -222,11 +207,9 @@ function getClipBundle(
     return _clipBundleCache;
 }
 
-//Sutherland-Hodgman polygon clip. `subject` is a non-closed ring in
-//CCW order; `clip` is the pre-baked bundle from `getClipBundle`
-//(CCW ring + per-edge direction vectors). Returns the intersection
-//ring (also non-closed, possibly empty). The "inside" test is the
-//standard left-of-edge sign of the 2D cross product.
+//Sutherland-Hodgman polygon clip. `subject` is a non-closed CCW ring; `clip` is the
+//pre-baked bundle from getClipBundle (CCW ring + per-edge direction vectors). Returns the
+//intersection ring (non-closed, possibly empty). "Inside" = left-of-edge sign of the 2D cross.
 function clipConvexPolygon(
     subject: Array<[number, number]>,
     clip:    ClipBundle
@@ -260,8 +243,7 @@ function clipConvexPolygon(
         {
             const curr = input[i];
             const next = input[(i + 1) % input.length];
-            //Cross product of (edge_dir, point - e1). Positive = left
-            //of edge = inside for our CCW clip ring.
+            //Cross of (edge_dir, point - e1). Positive = left of edge = inside for our CCW ring.
             const cCross = edx * (curr[1] - e1y) - edy * (curr[0] - e1x);
             const nCross = edx * (next[1] - e1y) - edy * (next[0] - e1x);
             const cIn = cCross >= 0;
@@ -274,11 +256,7 @@ function clipConvexPolygon(
                 }
                 else
                 {
-                    //Line-line intersection between (curr,next) and
-                    //(e1, e1+edge). Solved with the cross-product
-                    //ratio cCross / (cCross - nCross); curr lies at
-                    //distance proportional to cCross, next at nCross,
-                    //and the zero-crossing splits them linearly.
+                    //Intersection of (curr,next) with the edge via the ratio cCross/(cCross-nCross).
                     const t = cCross / (cCross - nCross);
                     output.push([
                         curr[0] + t * (next[0] - curr[0]),
@@ -301,7 +279,7 @@ function clipConvexPolygon(
     return output;
 }
 
-//Andrew's monotone chain. Returns vertices CCW, NOT closed. Exported for the LiDAR pipeline which uses it to wrap each consolidated region.
+//Andrew's monotone chain. Returns vertices CCW, NOT closed. Exported for the LiDAR pipeline which wraps each consolidated region.
 export function convexHull(pts: Array<[number, number]>): Array<[number, number]>
 {
     if (pts.length < 3)
