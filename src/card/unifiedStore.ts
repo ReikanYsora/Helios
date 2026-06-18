@@ -45,12 +45,6 @@ export { displayUpdateFrequencyPerHour } from '../helios-config';
 const HOUR_MS = 3_600_000;
 const DAY_MS  = 24 * HOUR_MS;
 
-//5-day window, independent of the user-facing cadence knob.
-export const STORE_DAYS_PAST  = 2;
-export const STORE_DAYS_AHEAD = 2;
-export const STORE_DAYS       = STORE_DAYS_PAST + 1 + STORE_DAYS_AHEAD;
-
-
 //Per-build cadence bundle. Derived from the user config once at the top of buildUnifiedStore and
 //threaded through every per-metric builder so the bucket arithmetic stays consistent across passes.
 interface CadenceParams
@@ -64,12 +58,12 @@ interface CadenceParams
 
 export interface UnifiedDataStore
 {
-    //Reference timestamps. storeStartMs is midnight of (today - STORE_DAYS_PAST) days local;
-    //storeEndMs is midnight of (today + STORE_DAYS_AHEAD + 1) days local.
+    //Reference timestamps. storeStartMs is local midnight at the start of the active rolling window;
+    //storeEndMs is local midnight just past its end.
     storeStartMs:  number;
     storeEndMs:    number;
     //Cadence the series in this store live at. Captured on the store so every read-side accessor
-    //(valueAt, sliceForDay, sliceForRange) stays consistent with the build, and so the rebuild
+    //(valueAt, sliceForRange) stays consistent with the build, and so the rebuild
     //trigger can compare it against the current user setting to invalidate stale stores.
     bucketsPerHour: number;
     bucketsPerDay:  number;
@@ -475,16 +469,6 @@ export function valueAt(series: ReadonlyArray<number | null>, store: UnifiedData
 }
 
 
-//Bucket range for the day at offset `dayOffset` (-2..+2 typically). Returns the half-open
-//[startBucket, endBucket) indices that cover that calendar day. Out-of-range offsets clamp to the
-//store bounds.
-export function dayBucketRange(store: UnifiedDataStore, dayOffset: number): { start: number; end: number }
-{
-    const dayStartMs = store.storeStartMs + (STORE_DAYS_PAST + dayOffset) * DAY_MS;
-    const startBucket = Math.max(0, bucketForMs(store.storeStartMs, dayStartMs, store.stepMs, store.bucketsTotal));
-    const endBucket   = Math.min(store.bucketsTotal, startBucket + store.bucketsPerDay);
-    return { start: startBucket, end: endBucket };
-}
 
 
 //Integrate the forecast series (watts per bucket) over [dayStartMs, dayEndMs) into kWh, at the store
@@ -533,49 +517,6 @@ export function forecastCumulativeForDay(store: UnifiedDataStore, dayStartMs: nu
 }
 
 
-//Slice the per-day arrays for the card at `dayOffset`. Returns store.bucketsPerDay-length series
-//(storage == display cadence in the current architecture, so no resampling is needed). Graphs walk
-//the returned arrays at their native length.
-export interface DaySlice
-{
-    dayStartMs:  number;
-    dayEndMs:    number;
-    pastEndHour: number;
-    bucketsPerHour: number;
-    hourlyIrradiance: ReadonlyArray<number | null>;
-    hourlyCloud:      ReadonlyArray<number | null>;
-    hourlyProd:       ReadonlyArray<number | null>;
-    hourlyForecast:   ReadonlyArray<number | null>;
-    hourlyBatt:       ReadonlyArray<number | null>;
-    hourlyBattSoc:    ReadonlyArray<number | null>;
-    hourlyGridIn:     ReadonlyArray<number | null>;
-    hourlyGridOut:    ReadonlyArray<number | null>;
-}
-
-export function sliceForDay(store: UnifiedDataStore, dayOffset: number): DaySlice
-{
-    const dayStartMs = store.storeStartMs + (STORE_DAYS_PAST + dayOffset) * DAY_MS;
-    const dayEndMs   = dayStartMs + DAY_MS;
-    const nowMs      = Date.now();
-    const pastEndHour = dayEndMs <= nowMs ? 24
-                      : dayStartMs >= nowMs ? 0
-                      : (nowMs - dayStartMs) / HOUR_MS;
-    const { start, end } = dayBucketRange(store, dayOffset);
-    return {
-        dayStartMs,
-        dayEndMs,
-        pastEndHour,
-        bucketsPerHour:   store.bucketsPerHour,
-        hourlyIrradiance: store.irradiance.slice(start, end),
-        hourlyCloud:      store.cloud.slice(start, end),
-        hourlyProd:       store.production.slice(start, end),
-        hourlyForecast:   store.forecast.slice(start, end),
-        hourlyBatt:       store.battery.slice(start, end),
-        hourlyBattSoc:    store.batterySoc.slice(start, end),
-        hourlyGridIn:     store.gridImport.slice(start, end),
-        hourlyGridOut:    store.gridExport.slice(start, end),
-    };
-}
 
 
 //Per-bucket samples covering an arbitrary [startMs, endMs] sub-window of the store. Used by the

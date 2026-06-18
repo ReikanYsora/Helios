@@ -71,7 +71,6 @@ export interface Translations
         today?:         string; //'Today'
         configDefault?: string; //'Default' (returns to the configured span)
         last7Days?:     string; //'7 d'
-        last30Days?:    string; //'30 d'
     };
 
     editor:

@@ -112,13 +112,3 @@ export function lerpHexToward(a: string, b: string, t: number): string
     const h = (n: number) => n.toString(16).padStart(2, '0');
     return `#${h(r)}${h(g)}${h(bl)}`;
 }
-
-
-//Short date formatter. Honours the user's HA language preference so a French dashboard reads "lun. 3 juin" while an English one reads "Mon, Jun 3".
-export function formatDate(d: Date, hass?: { language?: string }): string
-{
-    const lang = (hass?.language as string | undefined) || undefined;
-    return new Intl.DateTimeFormat(lang, {
-        weekday: 'short', day: 'numeric', month: 'short',
-    }).format(d);
-}

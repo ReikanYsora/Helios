@@ -583,16 +583,6 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Solid midline splitting irradiance (top) from cloud
-        cover (bottom). Day-label chips overlay it. Token-driven so
-        the line flips with the theme. */
-    .hc-chart-mid
-    {
-        stroke: var(--primary-text-color, #212121);
-        stroke-width: 1.4;
-        vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
 
     /*  Tiny hour ticks centred on the midline. Discreet enough to
         read as ambient texture rather than a primary feature. */
@@ -1150,16 +1140,6 @@ export const heliosCardStyles = css`
         );
     }
 
-    /*  Optional PV graph card stacked above the main chart. Same
-        height as the main chart so the two cards form a balanced
-        stack: production sits on top, irradiance + cloud cover
-        underneath, neither dominating the other. The combined
-        block keeps the same total vertical footprint the previous
-        (32 px PV + 64 px main) layout occupied. */
-    .tb-pv-card
-    {
-        height: clamp(36px, 8cqw, 72px);
-    }
 
 
     /*  Cloud-cover toggle button. iOS-friendly 40 px touch target,
@@ -2245,10 +2225,6 @@ export const heliosCardStyles = css`
         stroke: rgba(255, 255, 255, 0.55);
     }
 
-    ha-card.theme-dark .hc-chart-mid
-    {
-        stroke: #cccccc;
-    }
 
     ha-card.theme-dark .hc-hour-tick
     {

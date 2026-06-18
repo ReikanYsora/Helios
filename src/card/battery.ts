@@ -62,13 +62,6 @@ export interface BatteryHistory
     values: number[];
 }
 
-//Result of computeBatteryToday: live SoC plus the cumulative charged / discharged energy from midnight to "now", in kWh.
-export interface BatteryToday
-{
-    socNow:        number | null;
-    chargedKwh:    number;
-    dischargedKwh: number;
-}
 
 
 //Resolve the battery power + SoC entity ids from the HA Energy defaults. Power prefers the `stat_rate` (live signed W), falling back to the
@@ -114,7 +107,7 @@ export interface BatteryHost extends LoadingTrackerHost
     //HA Energy daily-total alignment: when the user has battery
     //sources configured on the Energy dashboard, the card refresh
     //loop queries the recorder for today's net charge / discharge
-    //change and writes the values here. `computeBatteryToday`
+    //change and writes the values here. The battery readout
     //prefers these over the in-browser integration of
     //`_batteryPowerHistory`. Null when no HA stat is available or
     //the recorder call has not yet landed (consumer falls back to
@@ -720,75 +713,3 @@ export function formatBatteryPower(hass: any, value: number, unit: string, decim
 }
 
 
-//Aggregate today's battery energy from the historical power series.
-//Walks the samples from midnight to "now", trapezoid-integrates the
-//positive (charging) and negative (discharging) sides separately
-//into kWh totals. Returns the live SoC alongside so the dashboard
-//card can render the vessel + flow values from a single read.
-export function computeBatteryToday(host: BatteryHost): BatteryToday
-{
-    //HA Energy alignment short-circuit. When the user wired battery
-    //sources on the Energy dashboard, the card's refresh tick has
-    //already populated the two slots from `recorder/statistics_during_period`
-    //(types: 'change') over today's local window. The recorder
-    //value is the same Riemann sum the Energy dashboard tile shows,
-    //precise to the watt-hour on every cadence including the 1 Hz
-    //installs where the in-browser integration drifts. Use both
-    //slots as a pair: a partial override (only one side set) would
-    //let one direction tick from HA while the other ticks from the
-    //local buffer, the two directions would no longer share a
-    //consistent baseline.
-    const haCharged    = host._haBatteryChargedKwh    ?? null;
-    const haDischarged = host._haBatteryDischargedKwh ?? null;
-    if (haCharged !== null && haDischarged !== null)
-    {
-        return {
-            socNow:        host._batterySoc,
-            chargedKwh:    haCharged,
-            dischargedKwh: haDischarged,
-        };
-    }
-
-    const today0 = new Date();
-    today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime();
-    const endMs   = Date.now();
-
-    let chargedKwh    = 0;
-    let dischargedKwh = 0;
-
-    const hist = host._batteryPowerHistory;
-    if (hist && hist.times.length >= 2)
-    {
-        for (let i = 1; i < hist.times.length; i++)
-        {
-            const tMs = hist.times[i].getTime();
-            if (tMs < startMs || tMs > endMs)
-            {
-                continue;
-            }
-            const dtH = (tMs - hist.times[i - 1].getTime()) / 3_600_000;
-            if (dtH <= 0 || dtH > 6)
-            {
-                continue;
-            }
-            const wAvg = (pvNormalizeToWatts(hist.values[i - 1], host._batteryPowerUnit)
-                        + pvNormalizeToWatts(hist.values[i],     host._batteryPowerUnit)) / 2;
-            const kwh = (wAvg * dtH) / 1000;
-            if (kwh > 0)
-            {
-                chargedKwh    += kwh;
-            }
-            else
-            {
-                dischargedKwh += -kwh;
-            }
-        }
-    }
-
-    return {
-        socNow: host._batterySoc,
-        chargedKwh,
-        dischargedKwh
-    };
-}

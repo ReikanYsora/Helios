@@ -207,8 +207,8 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
 }
 
 
-//Kind-aware label for the adaptive timeline footer. Honours the HA language preference like
-//format.ts/formatDate: intraday -> hour:minute, days -> short weekday, weeks -> day + short month,
+//Kind-aware label for the adaptive timeline footer. Honours the HA language preference:
+//intraday -> hour:minute, days -> short weekday, weeks -> day + short month,
 //months -> full month name.
 export function formatTimelineLabel(kind: TimelineKind, d: Date, hass?: { language?: string }): string
 {

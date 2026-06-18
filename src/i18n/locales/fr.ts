@@ -40,7 +40,6 @@ export const fr: Translations = {
         today:         'Aujourd\'hui',
         configDefault: 'Défaut',
         last7Days:     '7 j',
-        last30Days:    '30 j',
     },
 
     editor:

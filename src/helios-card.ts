@@ -80,7 +80,6 @@ import {
     type EnergyDefaults,
 } from './card/energy-prefs';
 import {
-    renderWeatherOverlay,
     enterWeatherMode,
     exitWeatherMode,
     syncWeatherShaderState,
@@ -549,10 +548,10 @@ export class HeliosCard extends LitElement
     //banner tells the user why the weather data is not updating.
     @state() _weatherRateLimited = false;
 
-    //Per-band visibility flags for the weather-mode SVG cloud overlay. The three chips under
-    //the mode-bar double as toggle buttons: tapping a chip flips its flag, which gates the
-    //matching `<g>` band's render output in renderWeatherOverlay. Default all-on so the user
-    //sees every layer the moment they enter weather mode; flags reset on every mode entry.
+    //Per-band visibility flags for the weather-mode cloud shader. The three centred cloud chips
+    //double as toggle buttons: tapping a chip flips its flag, which syncWeatherShaderState relays
+    //to the MapLibre cloud shader. Default all-on so the user sees every layer the moment they
+    //enter weather mode; flags reset on every mode entry.
     @state() _weatherShowHigh = true;
     @state() _weatherShowMid  = true;
     @state() _weatherShowLow  = true;
@@ -2969,13 +2968,6 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
 
-                <!--  Weather overlay. Full-card HTML overlay above the MapLibre canvas, painted
-                      with a per-altitude cloud-cover raster sampled from the multi-point Open-
-                      Meteo grid at the SELECTED instant. Pointer-events disabled so it never
-                      intercepts clicks meant for the map. Fades in via inline opacity driven by
-                      the fade RAF loop, then the engine.enterWeatherCamera tilts the camera to
-                      top-down + zooms out so the user reads the area like a satellite plan. -->
-                ${renderWeatherOverlay(this)}
                 ${renderLidarViewOpacityPicker(this, this._onLidarOpacityChange)}
 
             </ha-card>

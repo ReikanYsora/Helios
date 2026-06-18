@@ -20,7 +20,6 @@
 //mode costs at most one 100-location POST against Open-Meteo; subsequent entries within the TTL
 //window cost zero API calls.
 
-import { nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 import type { CardMode } from './card-mode';
@@ -179,9 +178,3 @@ export function syncWeatherShaderState(host: WeatherModeHost): void
 }
 
 
-//The shader layer renders inside MapLibre, the card no longer has an SVG overlay to emit. Kept
-//as a no-op stub so the call sites in helios-card.ts compile unchanged.
-export function renderWeatherOverlay(_host: WeatherModeHost): TemplateResult | typeof nothing
-{
-    return nothing;
-}

@@ -43,7 +43,6 @@ export const en: Translations = {
         today:         'Today',
         configDefault: 'Default',
         last7Days:     '7 d',
-        last30Days:    '30 d',
     },
 
     editor:
