@@ -7,6 +7,7 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
+    DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_LIDAR_VIEW_OPACITY,
     DEFAULT_PERIOD_PAST_DAYS,
     DEFAULT_PERIOD_FUTURE_DAYS,
@@ -2250,43 +2251,26 @@ export class HeliosCard extends LitElement
                                     <ha-icon icon="${lockIcon}"></ha-icon>
                                 </button>
                             `}
-                            ${isWeather ? html`
-                                <!--  Per-altitude cloud band toggles. Same visual recipe as the mode bar in the top-
-                                      right corner: vertical column of identical 40 px round icon-only buttons sharing
-                                      the .mode-bar-seg style. State does not persist across mode entries,
-                                      enterWeatherMode resets all three to ON so the user always lands on a complete
-                                      view of every band the first time the mode opens.                                -->
-                                <div class="mode-bar" role="group" aria-label="Cloud band toggles">
-                                    <button
-                                        type="button"
-                                        class="mode-bar-seg ${this._weatherShowHigh ? 'is-on' : ''}"
-                                        aria-pressed="${this._weatherShowHigh ? 'true' : 'false'}"
-                                        aria-label="Toggle high cloud layer"
-                                        @click="${() => { this._weatherShowHigh = !this._weatherShowHigh; }}"
-                                    >
-                                        <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="mode-bar-seg ${this._weatherShowMid ? 'is-on' : ''}"
-                                        aria-pressed="${this._weatherShowMid ? 'true' : 'false'}"
-                                        aria-label="Toggle mid cloud layer"
-                                        @click="${() => { this._weatherShowMid = !this._weatherShowMid; }}"
-                                    >
-                                        <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="mode-bar-seg ${this._weatherShowLow ? 'is-on' : ''}"
-                                        aria-pressed="${this._weatherShowLow ? 'true' : 'false'}"
-                                        aria-label="Toggle low cloud layer"
-                                        @click="${() => { this._weatherShowLow = !this._weatherShowLow; }}"
-                                    >
-                                        <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
-                                    </button>
-                                </div>
-                            ` : nothing}
                         </div>
+                        ${isWeather ? html`
+                            <!--  Weather world, dashboard-style. The per-altitude cloud bands are now value
+                                  chips stacked above the home (high on top, low nearest the home), each one a
+                                  toggle for its band: active shows the icon + cover %, inactive dims to an
+                                  icon-only ghost. A single glowing home disc sits dead-centre and exits the
+                                  mode. enterWeatherMode resets all three bands to ON so the first open shows a
+                                  complete sky.                                                              -->
+                            ${this._renderCloudBandChip('high', this._cloudScene?.cloudHigh ?? 0, this._weatherShowHigh, 129)}
+                            ${this._renderCloudBandChip('mid',  this._cloudScene?.cloudMid  ?? 0, this._weatherShowMid,  92)}
+                            ${this._renderCloudBandChip('low',  this._cloudScene?.cloudLow  ?? 0, this._weatherShowLow,  55)}
+                            <button
+                                type="button"
+                                class="weather-home"
+                                aria-label="Exit weather view"
+                                @click="${this._onModeLayer}"
+                            >
+                                <ha-icon icon="mdi:home"></ha-icon>
+                            </button>
+                        ` : nothing}
                         <div class="overlay-top-right">
                             <div class="mode-bar" role="radiogroup" aria-label="View mode">
                                 <button
@@ -3007,6 +2991,40 @@ export class HeliosCard extends LitElement
         this._exitScrubMode();
         this._cardMode = 'weather';
     };
+
+    //Weather-mode altitude band chip (dashboard parity): a value pill stacked above the home (high on
+    //top, low nearest the home). Active shows the band icon + cover %; inactive dims to an icon-only
+    //ghost. Clicking toggles the band, which syncWeatherShaderState() relays to the cloud shader on the
+    //next update.
+    private _renderCloudBandChip(
+        band: 'low' | 'mid' | 'high',
+        value: number,
+        active: boolean,
+        offsetPx: number
+    ): TemplateResult
+    {
+        return html`
+            <div
+                class="cloud-band-chip ${active ? 'is-active' : 'is-inactive'}"
+                style="top:calc(50% - ${offsetPx}px); --cloud-chip-color:${DEFAULT_CLOUD_COLOR_HEX}"
+                role="button"
+                tabindex="0"
+                aria-pressed="${active ? 'true' : 'false'}"
+                aria-label="Toggle ${band} cloud layer"
+                @click="${() => this._toggleWeatherBand(band)}"
+            >
+                <ha-icon icon="${cloudLayerIcon(band)}"></ha-icon>
+                ${active ? html`<span>${Math.round(value)} %</span>` : nothing}
+            </div>
+        `;
+    }
+
+    private _toggleWeatherBand(band: 'low' | 'mid' | 'high'): void
+    {
+        if (band === 'low')      { this._weatherShowLow  = !this._weatherShowLow;  }
+        else if (band === 'mid') { this._weatherShowMid  = !this._weatherShowMid;  }
+        else                     { this._weatherShowHigh = !this._weatherShowHigh; }
+    }
     //Mode-transition state machine. Called from updated() when _cardMode changed. Single switch on
     //the (prev, next) pair drives:
     //  1. _overlayMaskActive: ON the moment we leave base. OFF on weather -> base immediately

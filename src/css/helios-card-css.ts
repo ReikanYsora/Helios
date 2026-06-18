@@ -297,11 +297,11 @@ export const heliosCardStyles = css`
         opacity: 0;
         pointer-events: none;
     }
-    /*  home-pill is the small circular home icon that anchors the home cluster. It hides on every
-        masked mode EXCEPT weather: in weather mode the basemap + radar overlay alone don't show
-        where the user lives, so the pill stays so the user can identify their own roof against
-        the rain cells around it. */
-    ha-card.overlay-masked:not(.mode-weather) .home-pill
+    /*  home-pill is the small circular home icon that anchors the base UI home cluster. It hides on
+        every masked mode, weather included: in weather mode the centred glowing home disc takes over
+        as the "you are here" anchor + exit control, so the base pill would just double up on it. It
+        fades back in on the return to base. */
+    ha-card.overlay-masked .home-pill
     {
         opacity: 0;
         pointer-events: none;
@@ -317,18 +317,117 @@ export const heliosCardStyles = css`
         transform: translateY(140%);
         pointer-events: none;
     }
-    /*  Top-left cluster (lock chip) hides on every masked mode EXCEPT weather: weather mode hosts
-        the per-altitude cloud band toggles in this rail and they need to stay interactive while
-        the rest of the HUD is faded out. */
-    ha-card.overlay-masked:not(.mode-weather) .overlay-top-left
+    /*  Top-left cluster (lock chip) hides on every masked mode. Weather mode no longer hosts the cloud
+        band toggles here (they moved to the centred value chips), so nothing in this rail stays. */
+    ha-card.overlay-masked .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
     }
+    /*  Top-right mode bar stays through LiDAR (so the user can exit), but hides in weather mode for the
+        clean dashboard look: the only chrome there is the centred cloud chips + the home exit disc. */
     ha-card.overlay-masked .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
+    }
+    ha-card.overlay-masked.mode-weather .overlay-top-right
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /*  Weather-mode altitude band chips: a value pill per cloud band, stacked above the home (the
+        inline top offset places high/mid/low). Same pill recipe as the UI value chips. Active carries a
+        cloud-coloured glow + the cover %, inactive dims to an icon-only ghost. Fixed width so the three
+        line up whether or not they show a value. */
+    .cloud-band-chip
+    {
+        position: absolute;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 26;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--ha-space-1, 4px);
+        width: 84px;
+        box-sizing: border-box;
+        background: var(--card-background-color, #ffffff);
+        color: var(--primary-text-color, #212121);
+        border: 2px solid var(--cloud-chip-color, #727272);
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        box-shadow: 0 1px 3px var(--shadow-color);
+        cursor: pointer;
+        transition: opacity 0.2s ease, box-shadow 0.2s ease;
+    }
+    .cloud-band-chip ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    .cloud-band-chip.is-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--cloud-chip-color, #727272) 70%, transparent);
+    }
+    .cloud-band-chip.is-inactive
+    {
+        opacity: 0.55;
+    }
+
+    /*  Weather-mode exit: a glowing, gently pulsing home disc dead-centre over the top-down map. The
+        only way out of weather mode now that the top-right bar hides; click returns to base. */
+    .weather-home
+    {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 25;
+        width: 52px;
+        height: 52px;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--primary-text-color);
+        background: var(--card-background-color, #1c1c1c);
+        --home-glow: color-mix(in srgb, var(--sun-color, #f59e0b) 55%, transparent);
+        box-shadow: 0 0 0 2px var(--home-glow),
+                    0 0 22px 4px var(--home-glow);
+        animation: weather-home-pulse 2.6s ease-in-out infinite;
+    }
+    .weather-home ha-icon
+    {
+        --mdc-icon-size: 26px;
+    }
+    @keyframes weather-home-pulse
+    {
+        0%, 100%
+        {
+            box-shadow: 0 0 0 2px var(--home-glow),
+                        0 0 16px 2px var(--home-glow);
+        }
+        50%
+        {
+            box-shadow: 0 0 0 2px var(--home-glow),
+                        0 0 32px 7px var(--home-glow);
+        }
+    }
+    @media (prefers-reduced-motion: reduce)
+    {
+        .weather-home { animation: none; }
     }
 
 
