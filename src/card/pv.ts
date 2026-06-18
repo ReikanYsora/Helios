@@ -60,8 +60,6 @@ export interface PvHost extends LoadingTrackerHost
     //tooltip can show a per-entity breakdown. Keyed by entity id; single-source carries one entry equal to `_pvHistory`.
     //Empty map = aggregated only (single-source or pre-fetch boot window).
     _pvHistoryPerEntity:    Map<string, PvHistory>;
-    _pvFetchKey:            string;
-    _pvFetching:            boolean;
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
     //Hourly LTS series feeding the 5-day forecast calibration. Same times[]/values[] shape as `_pvHistory`, via
     //`recorder/statistics_during_period` period:'hour' over 5 days. Power sensors land as bucket means; cumulative-energy as
@@ -87,24 +85,12 @@ export interface PvHost extends LoadingTrackerHost
 
 const PV_CACHE_TTL_MS = 15 * 60_000;
 
-interface PvHistoryCacheEntry
-{
-    history:          PvHistory;
-    //Per-entity snapshots so a cross-mount cache hit also primes the per-entity curves without a fresh round-trip. Stored as a
-    //plain object map for JSON-friendliness; the Map <-> object coercion lives at the cache-set/cache-get boundary.
-    historyPerEntity: Record<string, PvHistory>;
-    batteryHistory:   PvHistory | null;
-    diagnostics:      { rawEntries: number; samples: number; windowH: number };
-    ts:               number;
-}
-
 interface PvStatsCacheEntry
 {
     stats: PvHistory;
     ts:    number;
 }
 
-const _pvHistoryCache:        Map<string, PvHistoryCacheEntry> = new Map();
 const _pvCalibStatsCache:     Map<string, PvStatsCacheEntry>   = new Map();
 
 
@@ -128,7 +114,6 @@ function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): Pv
 //memo; without it the next refresh would short-circuit on a cache hit and re-populate what the user just asked to clear.
 export function clearPvModuleCaches(): void
 {
-    _pvHistoryCache.clear();
     _pvCalibStatsCache.clear();
 }
 
@@ -148,7 +133,6 @@ export function refreshPv(host: PvHost): void
             host._pvHistory = null;
             host._pvUnit    = '';
         }
-        host._pvFetchKey = '';
         return;
     }
 

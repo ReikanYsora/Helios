@@ -338,8 +338,6 @@ export class HeliosCard extends LitElement
     //Per-entity histories alongside _pvHistory so the chart can draw one curve per source and the scrub
     //tooltip can break down by entity. Keyed by entity id; cleared + repopulated in fetchPvHistory.
     _pvHistoryPerEntity: Map<string, { times: Date[]; values: number[] }> = new Map();
-    _pvFetchKey  = '';
-    _pvFetching  = false;
     //Most recent PV history fetch outcome, surfaced via window.heliosStats() (raw entries, samples kept
     //after unit/unavailable filtering, window in hours).
     _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
@@ -860,7 +858,6 @@ export class HeliosCard extends LitElement
         this._haSolarForecastLoaded       = false;
         this._haSolarForecastFetching     = false;
         this._haSolarForecastFetchedAt    = 0;
-        this._pvFetchKey                  = '';
         this._pvCalibStatsFetchKey        = '';
         this._pvHistoryDiagnostics        = null;
         this._gridImportChangeSeries      = null;

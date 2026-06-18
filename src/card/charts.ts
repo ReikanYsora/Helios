@@ -22,13 +22,6 @@ import { sliceForRange, valueAt } from './unifiedStore';
 import { sumChangeForDay, type ChangeBucket } from './energy-stats';
 
 
-//Per-point forecast multiplier. Identity today; kept as a single hook for a future multiplier (weather grid
-//contribution, hourly bias correction) to re-wire through the call sites without a sweep.
-export function effectiveForecastRatio(calR: number): number
-{
-    return calR;
-}
-
 
 //Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd] in the requested direction. Returns null
 //during polar day/night (no crossing) or a degenerate bracket. Coarse 1-hour scan + 12 bisection iterations reach
