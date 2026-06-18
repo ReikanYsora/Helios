@@ -1678,6 +1678,9 @@ export class HeliosEngine
     private _arcInputsCache?: {
         dayStartMs: number;
         cloudPctInt: number;
+        //Sun-arc scale baked into the sphere points below (×100, rounded). Part of the key so a card
+        //resize / zoom change rebuilds the arc at the new size instead of keeping the old radius.
+        scaleKey: number;
         samples: Array<{
             lon: number;
             lat: number;
@@ -1686,6 +1689,10 @@ export class HeliosEngine
             belowHorizon: boolean;
         } | null>;
     };
+    //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/
+    //zoom change rather than for every arc sample + every frame. Bearing/pitch invariant, so it never
+    //needs refreshing during auto-rotation.
+    private _arcScaleMemo?: { w: number; h: number; zoom: number; scale: number };
 
     //Last signature of the shadow raster inputs (sun position rounded,
     //home, radius, source-features identity + length). When unchanged
@@ -4863,34 +4870,81 @@ export class HeliosEngine
     //radius + halo gradient stops (rendered card-side) consume the
     //same value via `getSunArcScale()` so the disc-to-arc ratio
     //stays constant across canvas sizes.
+    //Stepped fallback used before the map projection is ready (first frames): the old canvas-size
+    //ramp, kept only so the very first paint has a sane radius.
+    private _steppedArcScale(minDim: number): number
+    {
+        if (!Number.isFinite(minDim) || minDim <= 0) { return 1.0; }
+        const SMALL = 360, FLOOR = 600, TOP = 1200, MIN = 0.72, MAX = 2.2;
+        if (minDim <= SMALL) { return MIN; }
+        if (minDim <  FLOOR) { return MIN + (1.0 - MIN) * (minDim - SMALL) / (FLOOR - SMALL); }
+        if (minDim >= TOP)   { return MAX; }
+        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
+    }
+
+    //Dynamic sun-arc radius scale. Rather than a fixed metres value, the arc is sized so its widest
+    //on-screen reach is a fraction of the card's smaller side, on ANY card size, camera zoom or home
+    //(the camera fits to each building's radius, so a fixed world radius reads tiny on one home and
+    //huge on another). We measure the ground pixels-per-metre at the home by projecting a small probe
+    //circle and taking the largest home->point screen distance over 8 compass directions: that max is
+    //the projected ellipse's semi-major axis, which is INVARIANT to the map bearing and pitch (they
+    //only rotate / vertically-squash the ellipse, never lengthen its major axis), so the arc holds a
+    //steady size through auto-rotation instead of pulsing. Memoised per (canvas, zoom).
     private _sunArcScale(): number
     {
-        const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
-        if (!Number.isFinite(minDim) || minDim <= 0)
+        const w = this._cachedCanvasCssW;
+        const h = this._cachedCanvasCssH;
+        const minDim = Math.min(w || Infinity, h || Infinity);
+        const zoom = this.map ? this.map.getZoom() : -1;
+
+        const memo = this._arcScaleMemo;
+        if (memo && memo.w === w && memo.h === h && memo.zoom === zoom)
         {
-            return 1.0;
+            return memo.scale;
         }
-        const SMALL = 360;
-        const FLOOR = 600;
-        const TOP   = 1200;
-        const MIN   = 0.72;
-        const MAX   = 2.2;
-        //Small phones: shrink the arc so it fits the card instead of spilling past the edges (same
-        //down-scale as the dashboard card). <= SMALL clamps to MIN; SMALL..FLOOR ramps MIN -> 1.0;
-        //FLOOR..TOP ramps 1.0 -> MAX for wide kiosks.
-        if (minDim <= SMALL)
+
+        let scale = this._steppedArcScale(minDim);
+        if (this.map && Number.isFinite(minDim) && minDim > 0)
         {
-            return MIN;
+            const D          = Math.PI / 180;
+            const mPerDegLat = 111_320;
+            const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
+            const PROBE_M    = 60;
+            const home = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+            if (home)
+            {
+                let maxDistPx = 0;
+                for (let k = 0; k < 8; k++)
+                {
+                    const ang   = (k / 8) * 2 * Math.PI;
+                    const east  = PROBE_M * Math.sin(ang);
+                    const north = PROBE_M * Math.cos(ang);
+                    const p = this._projectScenePoint(
+                        this.homeLon + east  / mPerDegLon,
+                        this.homeLat + north / mPerDegLat,
+                        0
+                    );
+                    if (!p) { continue; }
+                    const dist = Math.hypot(p.x - home.x, p.y - home.y);
+                    if (dist > maxDistPx) { maxDistPx = dist; }
+                }
+                const pxPerM = maxDistPx / PROBE_M;
+                if (pxPerM > 0)
+                {
+                    //Target on-screen arc radius as a fraction of the card's smaller side. The sun path
+                    //is azimuth-limited (narrower than a full circle), so the fraction is generous; the
+                    //clamp keeps the disc/halo sane and stops the arc spilling on extreme aspect ratios.
+                    //Tuned to leave headroom above the apex for the irradiance / cloud chips that sit
+                    //on the sun.
+                    const TARGET_FRAC = 0.41;
+                    const desiredR    = (TARGET_FRAC * minDim) / pxPerM;
+                    scale = Math.max(0.72, Math.min(desiredR / SUN_ARC_RADIUS_M, 6));
+                }
+            }
         }
-        if (minDim < FLOOR)
-        {
-            return MIN + (1.0 - MIN) * (minDim - SMALL) / (FLOOR - SMALL);
-        }
-        if (minDim >= TOP)
-        {
-            return MAX;
-        }
-        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
+
+        this._arcScaleMemo = { w, h, zoom, scale };
+        return scale;
     }
     //Public accessor for the sun-arc scale so the card-side render
     //can scale the sun disc + halo together with the arc world-metres
@@ -5075,11 +5129,13 @@ export class HeliosEngine
         //lon/lat/altitudeM tuples through the current map matrix.
         const dayStartMs  = dayStart.getTime();
         const cloudPctInt = Math.round(liveCloud);
+        const arcScaleKey = Math.round(this._sunArcScale() * 100);
         let cache = this._arcInputsCache;
         if (
             !cache
          || cache.dayStartMs  !== dayStartMs
          || cache.cloudPctInt !== cloudPctInt
+         || cache.scaleKey    !== arcScaleKey
         )
         {
             const samples: Array<{
@@ -5122,7 +5178,7 @@ export class HeliosEngine
                     belowHorizon: sun3D.altitudeM < 0
                 });
             }
-            cache = { dayStartMs, cloudPctInt, samples };
+            cache = { dayStartMs, cloudPctInt, scaleKey: arcScaleKey, samples };
             this._arcInputsCache = cache;
         }
 
