@@ -1,8 +1,7 @@
-//Home-battery data subsystem: live SoC + power polling, history fetch, scrub-time sampling, today's energy aggregation and chip formatting.
+//Home-battery subsystem: live SoC + power polling, history fetch, scrub-time sampling, today's energy aggregation, chip formatting.
 //
-//Single-source model: the user wires their battery on the HA Energy dashboard (one or more `stat_rate`, `stat_energy_from`, `stat_energy_to`,
-//`stat_soc` keys per source); Helios picks the first entry of each list and reads from it. Multi-source aggregation is no longer done in the
-//card, the HA Energy dashboard already publishes the aggregate values where applicable.
+//Single-source model: the user wires their battery on the HA Energy dashboard (per-source lists of `stat_rate`, `stat_energy_from`,
+//`stat_energy_to`, `stat_soc`); Helios reads the first entry of each. Multi-source aggregation lives in the HA Energy dashboard now.
 
 import { formatPowerKw } from './format';
 import { pvNormalizeToWatts } from './pv';
@@ -12,12 +11,8 @@ import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './l
 import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 
 
-//-----------------------------------------------------------------
-//Module-level cache for the battery history fetch. Survives Lit
-//element unmount + remount (the user navigating away from the
-//Helios card and back) the same way the PV cache does in pv.ts.
-//15-minute TTL covers the most common nav-around-the-dashboard
-//pattern without serving stale data forever.
+//Module-level history cache, survives Lit unmount+remount (navigate away from Helios and back) like the PV cache in pv.ts.
+//15-min TTL covers nav-around-the-dashboard without serving stale data forever.
 
 const BATTERY_CACHE_TTL_MS = 15 * 60_000;
 
@@ -46,16 +41,14 @@ function batteryHistoryCacheGet(key: string): BatteryHistoryCacheEntry | null
 }
 
 
-//Wipe the module-level battery cache. Called from the card's `resetDataCache()` hook so the editor's "reset" button actually drops
-//the cross-mount memo.
+//Wipe the module-level cache. Called from the card's `resetDataCache()` so the editor's "reset" drops the cross-mount memo.
 export function clearBatteryModuleCaches(): void
 {
     _batteryHistoryCache.clear();
 }
 
 
-//Fetched historical series for one battery entity (SoC or power),
-//parallel times[] / values[] arrays.
+//Fetched historical series for one battery entity (SoC or power), as parallel times[] / values[] arrays.
 export interface BatteryHistory
 {
     times:  Date[];
@@ -64,9 +57,8 @@ export interface BatteryHistory
 
 
 
-//Resolve the battery power + SoC entity ids from the HA Energy defaults. Power prefers the `stat_rate` (live signed W), falling back to the
-//`stat_energy_from` (discharge kWh) and then `stat_energy_to` (charge kWh) when the source did not declare a power_config block. SoC reads
-//the `stat_soc` slot directly. Either side returns null when the matching array is empty.
+//Resolve battery power + SoC entity ids from HA Energy defaults. Power prefers `stat_rate` (live signed W), falling back to
+//`stat_energy_from` (discharge kWh) then `stat_energy_to` (charge kWh) when no power_config block. SoC reads `stat_soc`. null when empty.
 export function resolveBatteryEntities(defaults: EnergyDefaults): { powerEntity: string | null; socEntity: string | null }
 {
     const powerEntity = defaults.batteryStatRates[0]
@@ -78,10 +70,8 @@ export function resolveBatteryEntities(defaults: EnergyDefaults): { powerEntity:
 }
 
 
-//Structural surface the host card exposes to this module. Mutable
-//fields are typed non-readonly so refresh / fetch helpers can
-//assign them; Lit's @state reactivity is preserved because each
-//assignment hits the same setter the decorator installed.
+//Surface the host card exposes to this module. Mutable fields are non-readonly so refresh/fetch helpers can assign them;
+//Lit @state reactivity is preserved since each assignment hits the decorator's setter.
 export interface BatteryHost extends LoadingTrackerHost
 {
     readonly hass:       any;
@@ -95,33 +85,23 @@ export interface BatteryHost extends LoadingTrackerHost
     _batteryPowerHistory: BatteryHistory | null;
     _batteryFetchKey:     string;
     _batteryFetching:     boolean;
-    //Recorder `change` series for the battery charge (`stat_energy_to`) and discharge
-    //(`stat_energy_from`) energy meters, 5-minute buckets. These are SEPARATE directional meters,
-    //so the net power sign is structural (charge positive, discharge negative) instead of inferred
-    //from a single signed sensor, which is what fixes the "charge stuck at 0 W" bug. Null until the
-    //first fetch lands.
+    //Recorder `change` series for charge (`stat_energy_to`) and discharge (`stat_energy_from`) meters, 5-min buckets. SEPARATE
+    //directional meters, so the net power sign is structural (charge +, discharge -) not inferred from one signed sensor: this is
+    //what fixes the "charge stuck at 0 W" bug. Null until first fetch.
     _batteryChargeChangeSeries:    ChangeBucket[] | null;
     _batteryDischargeChangeSeries: ChangeBucket[] | null;
     _batteryChangeFetchKey:        string;
     _batteryChangeFetching:        boolean;
-    //HA Energy daily-total alignment: when the user has battery
-    //sources configured on the Energy dashboard, the card refresh
-    //loop queries the recorder for today's net charge / discharge
-    //change and writes the values here. The battery readout
-    //prefers these over the in-browser integration of
-    //`_batteryPowerHistory`. Null when no HA stat is available or
-    //the recorder call has not yet landed (consumer falls back to
-    //the local integration in either case).
+    //HA Energy daily-total alignment: when battery sources are configured, the refresh loop queries today's net charge/discharge
+    //change here and the readout prefers these over the in-browser integration of `_batteryPowerHistory`. Null when no HA stat
+    //exists or the recorder call hasn't landed (consumer falls back to the local integration either way).
     _haBatteryChargedKwh?:    number | null;
     _haBatteryDischargedKwh?: number | null;
 }
 
 
-//Live + history refresh, called from the card on every lifecycle
-//cycle. Reads SoC and power from hass.states for the entities
-//resolved off the HA Energy defaults, and dispatches a history
-//fetch when the (entities, range) tuple changes. History fields are
-//populated in fetchBatteryHistory after the WS response lands.
+//Live + history refresh, called every lifecycle cycle. Reads SoC and power from hass.states for the resolved entities and
+//dispatches a history fetch when the (entities, range) tuple changes; history fields land in fetchBatteryHistory.
 export function refreshBattery(host: BatteryHost): void
 {
     if (!host.hass)
@@ -131,8 +111,7 @@ export function refreshBattery(host: BatteryHost): void
 
     const { powerEntity, socEntity } = resolveBatteryEntities(host._energyDefaults);
 
-    //Nothing configured: clear everything and bail. This keeps a stale graph from lingering when the user wipes the battery source from
-    //the HA Energy dashboard.
+    //Nothing configured: clear everything so no stale graph lingers when the user wipes the battery source from HA Energy.
     if (!powerEntity && !socEntity)
     {
         if (host._batterySoc           !== null)
@@ -159,14 +138,10 @@ export function refreshBattery(host: BatteryHost): void
         return;
     }
 
-    //Live SoC + power readouts. SoC clamped to [0, 100] because some BMS entities briefly report 100.5 % during absorption or dip
-    //negative around calibration, neither of which is meaningful to the user. Power normalised to watts so downstream consumers can
-    //work with a single unit regardless of how the source reports.
-    //
-    //Multi-bank SoC averaging mirrors the HA frontend logic
-    //(`src/panels/lovelace/cards/energy/hui-energy-distribution-card.ts:213-225`): plain arithmetic mean of every
-    //wired `stat_soc` value, NaN entries filtered out, single-bank installs collapse to the single value. The
-    //capacity-weighted average from HA core PR #172817 lands once the field exists in the storage schema.
+    //Live SoC: clamped to [0, 100] since some BMS briefly report 100.5% during absorption or dip negative near calibration. Power
+    //normalised to watts so consumers work in one unit. Multi-bank SoC averaging mirrors HA frontend
+    //(hui-energy-distribution-card.ts:213-225): arithmetic mean of every wired `stat_soc`, NaN filtered, single-bank collapses to
+    //the one value. Capacity-weighted average from HA core PR #172817 lands once the field exists in the storage schema.
     let nextSoc: number | null = null;
     const socEntities = host._energyDefaults.batteryStatSocs;
     if (socEntities.length > 0)
@@ -188,14 +163,10 @@ export function refreshBattery(host: BatteryHost): void
             nextSoc = Math.max(0, Math.min(100, sum / count));
         }
     }
-    //Live battery power, convention "positive = charging".
-    //  - When the HA Energy battery sources declare a signed power sensor (`power_config.stat_rate`),
-    //    sum its state across banks, real-time, exactly like the HA Energy live tile. Per-bank sign
-    //    inversion is honoured via the `invertedRateEntities` set.
-    //  - Otherwise the net comes from the two SEPARATE directional energy meters: the latest charge
-    //    bucket (stat_energy_to) minus the latest discharge bucket (stat_energy_from). Because charge
-    //    and discharge are distinct meters, the sign is structural and charging is never lost, which
-    //    is the fix for the "battery charge stuck at 0 W" bug.
+    //Live battery power, "positive = charging". When sources declare a signed power sensor (`power_config.stat_rate`), sum its state
+    //across banks like the HA Energy live tile (per-bank sign honoured via `invertedRateEntities`). Otherwise the net comes from the
+    //two SEPARATE directional energy meters: latest charge bucket (stat_energy_to) minus latest discharge (stat_energy_from), so the
+    //sign is structural and charging is never lost (the "stuck at 0 W" fix).
     let nextPower: number | null = null;
     let nextUnit:  string        = '';
     const rateEntities = host._energyDefaults.batteryStatRates;
@@ -245,44 +216,33 @@ export function refreshBattery(host: BatteryHost): void
         host._batteryPowerUnit = nextUnit;
     }
 
-    //Past power series: recorder `change` on the two directional energy meters. Charge from
-    //stat_energy_to, discharge from stat_energy_from; the store + scrub net them (charge - discharge)
-    //so the sign is structural, no single-sensor inference. Fetched over the store's J-2 past window.
+    //Past power series: recorder `change` on the two directional energy meters (charge from stat_energy_to, discharge from
+    //stat_energy_from); the store + scrub net them (charge - discharge) so the sign is structural. Fetched over the J-2 window.
     fetchBatteryChangeSeries(host);
 
-    //History fetch, only when the (entities, range) tuple changed.
-    //Without this guard we'd reissue the WS command on every Lit
-    //cycle (e.g. every clock tick).
+    //History fetch only when the (entities, range) tuple changed, else we'd reissue the WS command every Lit cycle (every clock tick).
     if (!host._timeRange || host._batteryFetching)
     {
         return;
     }
 
-    //Entity arrays for the SoC history fetch. SoC stays on the raw / mean statistics path (it is a
-    //measurement, not an energy counter); power history is sourced from the change series above.
+    //SoC stays on the raw/mean statistics path (a measurement, not an energy counter); power history comes from the change series above.
     const powerEntities = host._energyDefaults.batteryStatRates;
     if (socEntities.length === 0 && powerEntities.length === 0)
     {
         return;
     }
-    //Two-tier window:
-    //  - LTS arm uses `visibleStart`, full visible timeline range,
-    //    so the dashboard panel's today's charged / discharged kWh
-    //    totals integrate across the full current day. LTS is
-    //    near-free on the recorder regardless of source frequency.
-    //  - Raw arm uses `rawStart`, capped at the last 6 h. The raw
-    //    path only fires when LTS is empty (custom sensor without
-    //    `state_class`), and on a 1 Hz BMS without LTS the wider
-    //    window would drag the recorder.
-    //  Both anchors are computed off `Date.now()` so the inner
-    //  clamp at fetchBatteryHistory never tips into the future.
+    //Two-tier window. LTS arm uses `visibleStart` (full visible timeline) so today's charged/discharged kWh integrate across the
+    //full day; LTS is near-free on the recorder. Raw arm uses `rawStart`, capped at 6 h, firing only when LTS is empty (custom
+    //sensor without `state_class`) since a wider window on a 1 Hz BMS without LTS would drag the recorder. Both anchors are off
+    //`Date.now()` so the inner clamp in fetchBatteryHistory never tips into the future.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
     const rawStart     = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
     const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
     const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
-    //Multi-bank aggregation: the fetch key carries every wired entity (sorted) so adding / removing a bank flips
-    //the key and invalidates the previous snapshot. Same shape as the PV multi-source fetch key, see pv.ts.
+    //Fetch key carries every wired entity (sorted) so adding/removing a bank flips the key and invalidates the snapshot. Same shape
+    //as the PV multi-source fetch key, see pv.ts.
     const sortedSoc      = [...socEntities].sort();
     const sortedPower    = [...powerEntities].sort();
     const sig            = `${sortedSoc.join(',')}|${sortedPower.join(',')}`;
@@ -293,8 +253,7 @@ export function refreshBattery(host: BatteryHost): void
     }
     host._batteryFetchKey = fetchKey;
 
-    //Cache hit short-circuits the WS round-trip: the user navigates away from the Helios card and back, the module-level cache still has
-    //the previous parsed series ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (entities / range) change.
+    //Cache hit short-circuits the WS round-trip on navigate-away-and-back. Invalidates on TTL (15 min) or any (entities/range) change.
     const cached = batteryHistoryCacheGet(fetchKey);
     if (cached)
     {
@@ -306,11 +265,9 @@ export function refreshBattery(host: BatteryHost): void
 }
 
 
-//Fetch the recorder `change` series for the battery charge (stat_energy_to) + discharge
-//(stat_energy_from) energy meters over the store's J-2 past window. Gated on a per-host fetch key
-//that re-arms every CHANGE_REFRESH_MS (and on entity-set / window changes), so the series keeps
-//tracking newly committed recorder buckets during the session. Charge and discharge are fetched
-//as two independent series so the consumer can net them with a structural sign.
+//Fetch the recorder `change` series for charge (stat_energy_to) + discharge (stat_energy_from) meters over the J-2 window. Gated on
+//a per-host key that re-arms every CHANGE_REFRESH_MS (and on entity-set/window changes) so the series tracks newly committed
+//buckets. Charge and discharge fetched as two independent series so the consumer can net them with a structural sign.
 function fetchBatteryChangeSeries(host: BatteryHost): void
 {
     const chargeIds    = host._energyDefaults.batteryStatEnergyTos;
@@ -321,12 +278,10 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
     const startMs = today0.getTime() - 2 * 24 * 3_600_000;
-    //End anchor rounded down to the refresh boundary. Folding it into the fetch key re-arms the
-    //gate once per CHANGE_REFRESH_MS, so the live-chip fallback and the past curve keep tracking
-    //newly committed recorder buckets (a startMs-only key froze the series at mount-time data
-    //until midnight: a battery idle at page load showed 0 W for the rest of the day). Rounding
-    //also lands every card on the same energy-stats cache key, so an N-card dashboard still hits
-    //the recorder once per interval.
+    //End anchor rounded down to the refresh boundary, folded into the fetch key so the gate re-arms once per CHANGE_REFRESH_MS and
+    //the live-chip fallback + past curve keep tracking new buckets (a startMs-only key froze the series until midnight: a battery
+    //idle at load showed 0 W all day). Rounding also lands every card on the same energy-stats cache key, so an N-card dashboard
+    //still hits the recorder once per interval.
     const endMs   = changeRefreshAnchorMs();
     const sortedCharge    = [...chargeIds].sort();
     const sortedDischarge = [...dischargeIds].sort();
@@ -351,8 +306,8 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
 }
 
 
-//Parse a raw-history payload (`history/history_during_period`, minimal response shape) into a `BatteryHistory`. Accepts both `lu` (numeric epoch
-//seconds) and `last_updated` / `last_changed` (ISO strings) so the function survives HA payload variations across releases.
+//Parse a raw-history payload (`history/history_during_period`, minimal shape) into a `BatteryHistory`. Accepts `lu` (epoch seconds)
+//and `last_updated`/`last_changed` (ISO) so it survives HA payload variations across releases.
 function parseRawBatteryHistory(arr: any[]): BatteryHistory
 {
     const times:  Date[]   = [];
@@ -399,11 +354,9 @@ function parseRawBatteryHistory(arr: any[]): BatteryHistory
 }
 
 
-//Parse a statistics payload (`recorder/statistics_during_period`) into a `BatteryHistory`. SoC and power sensors most often expose
-//`state_class: measurement` (Victron, Solis, Tesla, Pylontech, BYD, SonnenBatterie BMS) and the relevant column is `mean`. Some setups
-//wire a cumulative-energy kWh counter as the battery power source instead (`state_class: total_increasing`), in which case `mean` is
-//`null` and `state` carries the cumulative reading at the bucket end. We prefer `mean` when present and fall back to `state` so the
-//slot lands populated either way.
+//Parse a statistics payload (`recorder/statistics_during_period`) into a `BatteryHistory`. SoC/power sensors usually expose
+//`state_class: measurement` so the column is `mean`. Some setups wire a cumulative kWh counter (`total_increasing`) where `mean` is
+//null and `state` carries the bucket-end reading; prefer `mean`, fall back to `state` so the slot lands populated either way.
 function parseBatteryStats(arr: any[]): BatteryHistory
 {
     const times:  Date[]   = [];
@@ -421,7 +374,7 @@ function parseBatteryStats(arr: any[]): BatteryHistory
         if (valueRaw === null || valueRaw === undefined)
         {
             valueRaw = item?.state;
-            //Cumulative readings anchor at the bucket end so consecutive deltas attribute correctly to the bucket that produced them.
+            //Cumulative readings anchor at bucket end so consecutive deltas attribute to the bucket that produced them.
             anchorAtEnd = true;
         }
         if (valueRaw === null || valueRaw === undefined)
@@ -443,8 +396,8 @@ function parseBatteryStats(arr: any[]): BatteryHistory
 }
 
 
-//Coerce a `start` / `end` statistics field into a millisecond epoch. Same accept set as the PV stats parser, kept here as a private copy so
-//`battery.ts` stays import-light (a single circular guard through `pv.ts` would otherwise be needed).
+//Coerce a `start`/`end` statistics field into a millisecond epoch. Same accept set as the PV stats parser, kept as a private copy so
+//battery.ts stays import-light (avoiding a circular guard through pv.ts).
 function parseStatBoundary(raw: unknown): number | null
 {
     if (raw === null || raw === undefined)
@@ -470,16 +423,14 @@ function parseStatBoundary(raw: unknown): number | null
 }
 
 
-//History fetch for the battery overlay. Tries `recorder/statistics_during_period` first because it's the only path that scales on a
-//Victron BMS reporting at >1 Hz (5-min buckets, ~576 rows for a 2-day window per entity vs ~150-200k raw). When the entity has no
-//long-term-statistics tracking (no `state_class`) the stats array comes back empty and we fall back to a raw `history/history_during_period`
-//fetch with `significant_changes_only` so the legacy code path still works for users with custom or non-`measurement` entities.
+//History fetch for the battery overlay. Tries `recorder/statistics_during_period` first: the only path that scales on a >1 Hz Victron
+//BMS (5-min buckets, ~576 rows per 2-day window vs ~150-200k raw). When the entity has no LTS tracking (no `state_class`) the stats
+//array is empty and we fall back to raw `history/history_during_period` with `significant_changes_only` for custom/non-measurement
+//entities. SoC + power entities are bundled into one WS roundtrip when both are configured.
 //
-//SoC + power entities are bundled into one WS roundtrip when both are configured.
-//Last-known-carry-forward aggregator across N battery banks. Mirrors `aggregatePvHistoriesLkcf` in pv.ts but adds two
-//hooks for the battery semantics: a per-entity `transform` (used to flip the sign on `stat_rate_inverted` wirings
-//before the sum) and a top-level `reducer` (`sum` for power, `mean` for SoC). Walks the union of all per-entity
-//timestamps in O(entities * union) so multi-bank fetches stay sub-ms even at 1 Hz BMS cadence.
+//aggregateBatteryLkcf: last-known-carry-forward aggregator across N banks. Mirrors `aggregatePvHistoriesLkcf` in pv.ts plus two
+//battery hooks: a per-entity `transform` (flip sign on `stat_rate_inverted` wirings before the sum) and a `reducer` (`sum` for
+//power, `mean` for SoC). Walks the union of all timestamps in O(entities * union), sub-ms even at 1 Hz BMS cadence.
 function aggregateBatteryLkcf(
     perEntity: BatteryHistory[],
     reducer:   'sum' | 'mean',
@@ -559,8 +510,7 @@ export async function fetchBatteryHistory(
     beginLoadingPhase(host, 'battery-history');
     try
     {
-        //History only exists up to "now", the future half of the timeline has no battery data. Clamp the fetch end so we don't waste a roundtrip on
-        //empty future buckets.
+        //History only exists up to "now"; clamp the fetch end so we don't waste a roundtrip on empty future buckets.
         const now = new Date();
         const fetchEnd = end > now ? now : end;
         if (ltsStart >= fetchEnd && rawStart >= fetchEnd)
@@ -570,7 +520,7 @@ export async function fetchBatteryHistory(
             return;
         }
 
-        //Dedupe: an install that wires the same entity both as SoC and as power is degenerate but cheap to handle.
+        //Dedupe: wiring the same entity as both SoC and power is degenerate but cheap to handle.
         const idSet = new Set<string>();
         for (const id of socEntities)   idSet.add(id);
         for (const id of powerEntities) idSet.add(id);
@@ -578,23 +528,19 @@ export async function fetchBatteryHistory(
 
         const perEntity: Record<string, BatteryHistory> = {};
 
-        //LTS arm uses the broader `ltsStart` (typically the visible
-        //timeline start, often midnight or earlier) so the dashboard
-        //panel's today's charged/discharged kWh totals can integrate
-        //across the FULL current day. The raw fallback below uses
-        //the narrower `rawStart` so a non-LTS-tracked entity does
-        //not pull a multi-day raw scan on a 1 Hz BMS.
+        //LTS arm uses the broader `ltsStart` (usually visible start, often midnight or earlier) so today's charged/discharged kWh
+        //integrate across the full day. The raw fallback below uses the narrower `rawStart` so a non-LTS entity doesn't pull a
+        //multi-day raw scan on a 1 Hz BMS.
         const statsResult: any = await callWSWithTimeout<any>(host.hass, {
             type:           'recorder/statistics_during_period',
             start_time:     ltsStart.toISOString(),
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  ids,
             period:         '5minute',
-            //Both fields, because a setup that wires a cumulative kWh meter as the battery power source has `mean: null` per bucket
-            //(measurement assumption breaks). Asking for `state` too lets the parser cover both wirings in one round-trip.
+            //Both fields: a cumulative-kWh-as-power wiring has `mean: null` per bucket, so asking for `state` too lets the parser
+            //cover both wirings in one round-trip.
             types:          ['mean', 'state'],
-            //Normalise: SoC stays %, power stays in W, cumulative energy stays in kWh, so the downstream parser does
-            //not have to handle Wh / MWh / mW scaling at sample time.
+            //Normalise units so the parser doesn't handle Wh/MWh/mW scaling at sample time (SoC %, power W, energy kWh).
             units:          { energy: 'kWh', power: 'W' },
         });
         const statsUsable = ids.some(id => Array.isArray(statsResult?.[id]) && statsResult[id].length > 0);
@@ -607,9 +553,8 @@ export async function fetchBatteryHistory(
         }
         else
         {
-            //Either no entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
-            //`significant_changes_only` so high-frequency installs still benefit from server-side dedup. Raw arm is capped at the narrow
-            //`rawStart` (last 6 h) so a 1 Hz BMS without LTS does not drag the recorder.
+            //No entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
+            //`significant_changes_only` for server-side dedup; raw arm capped at `rawStart` (6 h) so a 1 Hz BMS doesn't drag the recorder.
             const rawResult: any = await callWSWithTimeout<any>(host.hass, {
                 type:                     'history/history_during_period',
                 start_time:               rawStart.toISOString(),
@@ -625,10 +570,8 @@ export async function fetchBatteryHistory(
             }
         }
 
-        //Multi-bank LKCF aggregation. SoC averages across every wired bank, power sums with per-entity sign-flips
-        //applied from `_energyDefaults.invertedRateEntities` before the sum so a mixed-wiring install (standard sign
-        //on bank A, inverted on bank B) still aggregates correctly. Single-bank installs collapse to the per-entity
-        //series unchanged.
+        //Multi-bank LKCF aggregation: SoC averages across banks, power sums with per-entity sign-flips from `invertedRateEntities`
+        //before the sum so mixed-wiring installs aggregate correctly. Single-bank collapses to the per-entity series unchanged.
         const invertedSet = new Set(host._energyDefaults.invertedRateEntities);
         const socSeries   = aggregateBatteryLkcf(
             socEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
@@ -643,8 +586,7 @@ export async function fetchBatteryHistory(
         host._batterySocHistory   = socSeries;
         host._batteryPowerHistory = powerSeries;
 
-        //Persist the parsed series for the next mount. Cross-mount cache hits short-circuit the WS round-trip entirely on the
-        //navigation case that drives the user-visible "lag on each return" symptom.
+        //Persist for the next mount: cross-mount cache hits short-circuit the WS round-trip on the navigation "lag on each return" case.
         if (cacheKey)
         {
             _batteryHistoryCache.set(cacheKey, { soc: socSeries, power: powerSeries, ts: Date.now() });
@@ -671,10 +613,8 @@ export async function fetchBatteryHistory(
 }
 
 
-//Locate the history sample at or before `time` and return its
-//value, or null if the time falls outside the fetched window. A
-//60 s grace at the tail keeps "scrub to live" resolving cleanly
-//(same convention as the PV chip).
+//Locate the history sample at or before `time` and return its value, or null if outside the fetched window. 60 s tail grace keeps
+//"scrub to live" resolving cleanly (same convention as the PV chip).
 export function batterySampleAtTime(
     hist: BatteryHistory | null,
     time: Date
@@ -705,8 +645,8 @@ export function batterySampleAtTime(
 }
 
 
-//Format a signed battery power value for the chip. Always prints in kW at the configured precision,
-//with an explicit + / − sign so the user can tell charging from discharging at a glance.
+//Format a signed battery power value for the chip: always kW at the configured precision, with explicit +/- so charging vs
+//discharging reads at a glance.
 export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number): string
 {
     return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals, true);

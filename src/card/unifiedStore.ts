@@ -1,34 +1,23 @@
-//Unified 5-day data source. Single source of truth for every per-time signal the dashboard cards,
-//the radial sundial, the graph view and the main UI timeline read from. Built ONCE after the
-//underlying fetches land, cached on the host, sliced and re-sampled by every downstream consumer
-//at look-up time. Live numeric chips deliberately stay on the direct hass.states path (no extra
-//layer between the live entity value and the chip text); every other surface that draws or hovers
-//a curve uses this source.
+//Unified 5-day data source: the single source of truth for every per-time signal the dashboard cards, radial
+//sundial, graph view and main timeline read. Built ONCE after the underlying fetches land, cached on the host,
+//then sliced/re-sampled by consumers at look-up time. Live numeric chips stay on the direct hass.states path; every
+//other surface that draws or hovers a curve uses this source.
 //
-//Cadence: a single user-facing knob (`display-update-frequency-per-hour`, 1-60, default 4) controls
-//both the storage cadence of the data source and the rendering cadence of every graph that reads
-//from it. Higher values give more precise curves at the cost of CPU per rebuild + memory per
-//series. The forecast curve is the lone exception: it is sourced from Home Assistant's Energy
-//dashboard at the forecast source's native hourly cadence, then read into the storage buckets as a
-//stepped hourly curve (each store bucket reads the wh of the HA forecast hour it falls inside).
+//Cadence: one knob (`display-update-frequency-per-hour`, 1-60, default 4) controls both the storage cadence and the
+//render cadence of every graph. Higher = more precise curves at the cost of CPU/rebuild + memory/series. The forecast
+//curve is the exception: sourced from HA's Energy dashboard at its native hourly cadence, read into buckets as a
+//stepped hourly curve (each bucket reads the wh of the HA forecast hour it falls inside).
 //
-//Window: J-2 to J+2 = 5 days × (24 × bucketsPerHour) buckets per series. Origin: storeStartMs =
-//midnight (local time) of (today - 2 days), so bucket 0 sits at the J-2 day start.
+//Window: J-2 to J+2 = 5 days x (24 x bucketsPerHour) buckets/series. Origin storeStartMs = local midnight of
+//(today - 2 days), so bucket 0 sits at the J-2 day start.
 //
-//Series carried (every one is an array of length bucketsTotal, null marks "no real data and no
-//surrounding real samples to interpolate between"):
-//  - irradiance W/m² (weather model, interpolated between hourly samples)
-//  - cloud %        (weather model, interpolated between hourly samples)
-//  - production W   (PV LTS + raw history, interpolated between samples, no forecast mixed in)
-//  - forecast W     (HA Energy dashboard solar forecast, hourly, read as a stepped curve)
-//  - battery W      (signed, history-driven, interpolated between samples)
-//  - batterySoc %   (live observation only at the current bucket)
-//  - gridImport W   (slope of cumulative kWh meter, interpolated between samples)
-//  - gridExport W   (slope of cumulative kWh meter, interpolated between samples)
+//Each series is length bucketsTotal; null marks "no real data and no surrounding samples to interpolate between":
+//irradiance W/m2, cloud % (both weather model, interpolated hourly), production W (PV LTS + history, no forecast),
+//forecast W (HA Energy solar forecast, hourly stepped), battery W (signed, history), batterySoc % (live only, current
+//bucket), gridImport/gridExport W (slope of cumulative kWh meter).
 //
-//Forecast is a peer of production, not a fallback for it. The radial dial overlays the forecast
-//curve as a dashed line on top of the production fill; the two series are never mixed inside a
-//single value.
+//Forecast is a peer of production, not a fallback: the dial overlays forecast as a dashed line on top of the
+//production fill; the two series are never mixed inside a single value.
 
 import type { HeliosConfig } from '../helios-config';
 import { displayUpdateFrequencyPerHour } from '../helios-config';
@@ -37,16 +26,15 @@ import type { PvHistory } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
 import { forecastWattsAt, type SolarForecastPoint } from './energy-forecast';
 
-//Re-export for graph consumers that want to query the user-configured cadence directly (e.g. the
-//SVG path builders that walk bucketsPerHour at render time).
+//Re-export so graph consumers (e.g. SVG path builders walking bucketsPerHour) can query the cadence directly.
 export { displayUpdateFrequencyPerHour } from '../helios-config';
 
 
 const HOUR_MS = 3_600_000;
 const DAY_MS  = 24 * HOUR_MS;
 
-//Per-build cadence bundle. Derived from the user config once at the top of buildUnifiedStore and
-//threaded through every per-metric builder so the bucket arithmetic stays consistent across passes.
+//Per-build cadence bundle, derived from config once at the top of buildUnifiedStore and threaded through every
+//per-metric builder so bucket arithmetic stays consistent across passes.
 interface CadenceParams
 {
     bucketsPerHour:  number;
@@ -58,27 +46,23 @@ interface CadenceParams
 
 export interface UnifiedDataStore
 {
-    //Reference timestamps. storeStartMs is local midnight at the start of the active rolling window;
-    //storeEndMs is local midnight just past its end.
+    //Local midnight at the start of the active rolling window / local midnight just past its end.
     storeStartMs:  number;
     storeEndMs:    number;
-    //Cadence the series in this store live at. Captured on the store so every read-side accessor
-    //(valueAt, sliceForRange) stays consistent with the build, and so the rebuild
-    //trigger can compare it against the current user setting to invalidate stale stores.
+    //Cadence the series live at, captured so read-side accessors stay consistent with the build and the rebuild
+    //trigger can compare against the current user setting to invalidate stale stores.
     bucketsPerHour: number;
     bucketsPerDay:  number;
     bucketsTotal:   number;
     stepMs:         number;
-    //Build timestamp + data-version hash so consumers can detect "this is the same store as the
-    //one I rendered against last frame" without comparing every series.
+    //Build timestamp + data-version hash so consumers can detect "same store as last frame" without comparing series.
     builtAtMs:    number;
     dataVersion:  string;
 
     irradiance:   (number | null)[];
     cloud:        (number | null)[];
     production:   (number | null)[];
-    //Solar forecast watts, sourced from HA's Energy dashboard (energy/solar_forecast). All-null when no
-    //forecast source is configured, in which case no forecast curve or label renders.
+    //HA Energy solar forecast (energy/solar_forecast). All-null when no forecast source is configured (no curve/label).
     forecast:     (number | null)[];
     battery:      (number | null)[];
     batterySoc:   (number | null)[];
@@ -87,42 +71,40 @@ export interface UnifiedDataStore
 }
 
 
-//Structural host surface required to build the store. Mirrors the union of what every per-metric
-//builder needs to read; the actual card / dashboard host implements a superset of this.
+//Structural host surface required to build the store: the union of what every per-metric builder reads. The actual
+//card / dashboard host implements a superset.
 export interface UnifiedStoreHost
 {
     readonly config:                  HeliosConfig | undefined;
-    //Active rolling-window span in days (history before today / forecast after today). Owned by the
-    //card (config seed + runtime period selector); buildUnifiedStore builds exactly this many days.
+    //Active rolling-window span in days (history before today / forecast after). Owned by the card (config seed +
+    //runtime selector); buildUnifiedStore builds exactly this many days.
     readonly _periodPastDays:         number;
     readonly _periodFutureDays:       number;
     readonly hass:                    { language?: string; states?: Record<string, { state: string }>; config?: { latitude?: number; longitude?: number } } | undefined;
     readonly _chartSeries:            ChartSeries | null;
     readonly _pvHistory:              PvHistory | null;
-    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. The canonical past-
-    //production source: buildProduction converts each bucket's reset-corrected kWh to average watts.
+    //Recorder `change` series for the solar meter(s), 5-min buckets. Canonical past-production source: buildProduction
+    //converts each bucket's reset-corrected kWh to average watts.
     readonly _pvChangeSeries:         ChangeBucket[] | null;
     readonly _pvCalibStats:           PvHistory | null;
     readonly _pvUnit:                 string;
-    //Recorder `change` series for the battery charge (stat_energy_to) + discharge (stat_energy_from)
-    //meters. buildBattery nets them (charge - discharge) so the sign is structural.
+    //Recorder `change` series for battery charge (stat_energy_to) + discharge (stat_energy_from). buildBattery nets
+    //them (charge - discharge) so the sign is structural.
     readonly _batteryChargeChangeSeries:    ChangeBucket[] | null;
     readonly _batteryDischargeChangeSeries: ChangeBucket[] | null;
     readonly _batterySoc:             number | null;
-    //Recorder `change` series for the grid import / export energy meters, 5-minute buckets. Same
-    //contract as the production series: each direction's bucket kWh is converted to average watts.
+    //Recorder `change` series for grid import / export meters, 5-min buckets. Same contract as production: each
+    //direction's bucket kWh -> average watts.
     readonly _gridImportChangeSeries: ChangeBucket[] | null;
     readonly _gridExportChangeSeries: ChangeBucket[] | null;
     readonly _engine?:                { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
-    //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries and
-    //sorted by time. Empty when no forecast source is configured, in which case the forecast series is
-    //left all-null and no curve renders.
+    //HA Energy solar forecast (energy-forecast.ts), merged across config entries and time-sorted. Empty when no
+    //forecast source is configured (forecast series left all-null, no curve renders).
     readonly _haSolarForecast:        ReadonlyArray<SolarForecastPoint>;
 }
 
 
-//Bucket arithmetic helpers. Bucketing is HALF-OPEN: a sample at time t lands in bucket
-//Math.floor((t - storeStartMs) / stepMs). Out-of-window samples return -1.
+//Bucket arithmetic. Bucketing is HALF-OPEN: sample at t lands in floor((t - storeStartMs) / stepMs). -1 = out of window.
 function bucketForMs(storeStartMs: number, ms: number, stepMs: number, bucketsTotal: number): number
 {
     if (ms < storeStartMs) { return -1; }
@@ -131,9 +113,8 @@ function bucketForMs(storeStartMs: number, ms: number, stepMs: number, bucketsTo
     return idx;
 }
 
-//Fill null gaps in a sparse array with linear interpolation between the bracketing non-null samples.
-//Edges (before the first non-null, after the last non-null) carry the nearest non-null forward /
-//backward so the consumer always sees a continuous progression where it makes sense to extrapolate.
+//Fill null gaps with linear interpolation between bracketing non-null samples. Edges carry the nearest non-null
+//forward/backward so the consumer sees a continuous progression where extrapolation makes sense.
 function interpolateNullGaps(arr: (number | null)[]): void
 {
     const N = arr.length;
@@ -169,8 +150,7 @@ function interpolateNullGaps(arr: (number | null)[]): void
 }
 
 
-//Midnight (local time) of the first day in the rolling window (today - daysPast). Used as the store
-//origin so every bucket lines up on calendar day boundaries.
+//Local midnight of the first day in the window (today - daysPast), so every bucket lines up on calendar day boundaries.
 function storeOriginMs(daysPast: number): number
 {
     const d = new Date();
@@ -180,9 +160,8 @@ function storeOriginMs(daysPast: number): number
 
 
 //---------------------------------------------------------------------------------------------------
-//Per-metric builders. Each walks one source array (or a small set of sources), bucketizes the
-//in-window samples and returns a length-p.bucketsTotal array. Builders that depend on already-built
-//series take them as a second argument so the build order stays explicit.
+//Per-metric builders. Each bucketizes in-window samples into a length-p.bucketsTotal array. Builders that depend on
+//already-built series take them as a second argument so the build order stays explicit.
 //---------------------------------------------------------------------------------------------------
 
 
@@ -208,7 +187,7 @@ function buildIrradiance(host: UnifiedStoreHost, storeStartMs: number, storeEndM
     {
         if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
     }
-    //Weather model lands at 1 sample / hour, the rest of the buckets stay null until we interpolate.
+    //Weather model lands ~1 sample/hour; remaining buckets stay null until interpolated.
     interpolateNullGaps(out);
     return out;
 }
@@ -241,20 +220,18 @@ function buildCloud(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: nu
 }
 
 
-//Production = past actual only, no model fallback. Sourced from the recorder `change` metric on the
-//solar energy meter(s) (host._pvChangeSeries), the exact same data the HA Energy dashboard consumes:
-//each 5-minute bucket's reset-corrected, unit-normalised kWh is converted to its average watts
-//(kWh * 1000 / bucket-hours). No client-side counter differentiation, no unit-string classification,
-//so a 15-minute SolarEdge counter or a daily-reset meter is handled natively by the recorder.
+//Production = past actual only, no model fallback. Sourced from the recorder `change` metric on the solar meter(s)
+//(_pvChangeSeries) — the exact data the HA Energy dashboard consumes: each 5-min bucket's reset-corrected,
+//unit-normalised kWh -> average watts (kWh * 1000 / bucket-hours). No client-side differentiation or unit classification,
+//so a 15-min SolarEdge counter or daily-reset meter is handled natively by the recorder.
 //
-//Store buckets are always >= the 5-minute source period (the data-interval control caps at 12 / hour
-//= 5 min), so each store bucket aggregates one or more whole source buckets and the conversion is
-//exact. Past gaps between source buckets are linearly interpolated so the curve stays continuous;
-//future buckets stay null so the forecast series owns the future half.
+//Store buckets are always >= the 5-min source period (data-interval caps at 12/hour = 5 min), so each store bucket
+//aggregates whole source buckets and the conversion is exact. Past gaps interpolated; future buckets stay null so the
+//forecast series owns the future half.
 function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
     const out = changeSeriesToWatts(host._pvChangeSeries, _storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
-    //Production is never negative; a tiny negative recorder change (meter glitch) is noise, floor it.
+    //Production is never negative; floor tiny negative recorder changes (meter glitch noise).
     for (let i = 0; i < out.length; i++)
     {
         const v = out[i];
@@ -272,10 +249,9 @@ function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEn
 }
 
 
-//Forecast = the HA Energy dashboard's own solar forecast (energy/solar_forecast), aligned to the store
-//buckets. The HA forecast is hourly watt-hours; each store bucket reads the wh of the HA forecast hour
-//its midpoint falls inside (a stepped hourly curve, exactly the magnitude the Energy dashboard draws).
-//Returns an all-null array when no forecast source is configured, so no curve and no label render.
+//Forecast = HA Energy's own solar forecast (energy/solar_forecast) aligned to store buckets. The HA forecast is hourly
+//watt-hours; each bucket reads the wh of the HA forecast hour its midpoint falls inside (stepped hourly curve, the exact
+//magnitude the Energy dashboard draws). All-null when no forecast source is configured.
 function buildForecast(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
 {
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
@@ -292,10 +268,9 @@ function buildForecast(host: UnifiedStoreHost, storeStartMs: number, storeEndMs:
 }
 
 
-//Battery net power per bucket, convention "positive = charging". Charge watts come from the
-//stat_energy_to `change` series, discharge from stat_energy_from; the net is charge - discharge.
-//Because the two directions are separate recorder meters, the sign is structural, charging is never
-//lost (the bug where a single signed sensor only ever surfaced discharge). Future buckets null.
+//Battery net power per bucket, "positive = charging". Charge watts from the stat_energy_to `change` series, discharge
+//from stat_energy_from; net = charge - discharge. Two separate meters make the sign structural, so charging is never
+//lost (the old bug where a single signed sensor only surfaced discharge). Future buckets null.
 function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
     const charge    = changeSeriesToWatts(host._batteryChargeChangeSeries,    storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
@@ -320,8 +295,7 @@ function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: numbe
 }
 
 
-//Battery SoC: no per-bucket history fetch today, so we only have the live state. Park it on the
-//bucket "now" sits in and leave every other bucket null.
+//Battery SoC: no per-bucket history today, only the live state. Park it on the bucket "now" sits in; rest stay null.
 function buildBatterySoc(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
@@ -333,10 +307,8 @@ function buildBatterySoc(host: UnifiedStoreHost, storeStartMs: number, nowMs: nu
 }
 
 
-//Grid import / export: average watts per bucket from the recorder `change` series on the
-//directional energy meter, exactly like the production series (kWh * 1000 / bucket-hours). Reset-
-//corrected + unit-normalised server-side, no client-side differentiation. Past gaps interpolated,
-//future buckets null.
+//Grid import / export: average watts per bucket from the directional meter's recorder `change` series, exactly like
+//production (kWh * 1000 / bucket-hours). Reset-corrected + unit-normalised server-side. Past gaps interpolated, future null.
 function buildGridChange(
     series:       ChangeBucket[] | null,
     storeStartMs: number,
@@ -363,15 +335,13 @@ function buildGridChange(
 }
 
 
-//Cheap data-version hash. Combines the cadence + the lengths of every underlying source so a fetch
-//that grows any of them OR the user-facing cadence knob change invalidates the cache key.
+//Cheap data-version hash: cadence + the lengths of every source, so a fetch that grows any of them OR a cadence knob
+//change invalidates the cache key.
 function computeDataVersion(host: UnifiedStoreHost): string
 {
-    //Day-key (local midnight). Included in the version hash so the store auto-rebuilds at midnight
-    //rollover even when no new source rows have landed yet. Without this, opening the dashboard
-    //after a midnight passage with the same fetched arrays leaves the store anchored on the
-    //previous day's J-2 origin, and every per-day slice ends up shifted by one day until the
-    //first fresh fetch trips a length change.
+    //Day-key (local midnight) included so the store auto-rebuilds at midnight rollover even when no new rows landed.
+    //Without it, opening the dashboard after midnight with the same arrays leaves the store anchored on the previous
+    //day's J-2 origin and every per-day slice is shifted by one day until a fetch trips a length change.
     const todayKey = new Date().toDateString();
     const cadence       = displayUpdateFrequencyPerHour(host.config);
     const seriesLen     = host._chartSeries?.times.length ?? 0;
@@ -387,14 +357,13 @@ function computeDataVersion(host: UnifiedStoreHost): string
 }
 
 
-//Top-level builder. Resolves the cadence from the user config, then runs each per-metric pass in
-//dependency order. Pure function of the host snapshot: same input -> same output, no side effects.
+//Top-level builder. Resolves cadence from config, then runs each per-metric pass in dependency order. Pure function of
+//the host snapshot: same input -> same output, no side effects.
 export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
 {
     const bucketsPerHour = displayUpdateFrequencyPerHour(host.config);
     const bucketsPerDay  = 24 * bucketsPerHour;
-    //Rolling-window span from the card's active period (config seed or runtime selector override). The
-    //store holds exactly daysPast history + today + daysFuture forecast days.
+    //Rolling-window span from the card's active period (config seed or runtime override): daysPast + today + daysFuture.
     const daysPast   = host._periodPastDays;
     const daysFuture = host._periodFutureDays;
     const storeDays  = daysPast + 1 + daysFuture;
@@ -407,8 +376,7 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
     const cloud        = buildCloud(host, storeStartMs, storeEndMs, p);
-    //Production reads ONLY real sensor samples and interpolates between them. Forecast is read from
-    //the HA Energy dashboard's configured solar forecast, aligned to the store cadence.
+    //Production reads ONLY real sensor samples + interpolates; forecast reads the HA Energy forecast at store cadence.
     const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
     const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
     const battery      = buildBattery(host, storeStartMs, nowMs, p);
@@ -436,8 +404,7 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
 }
 
 
-//Returns true when the store already on the host matches the host's current data version. Lets the
-//caller decide whether to skip a rebuild (cache stays warm) or trigger a fresh build.
+//True when the host's current store matches the host's current data version; lets the caller skip the rebuild.
 export function isStoreFresh(host: UnifiedStoreHost, store: UnifiedDataStore | null): boolean
 {
     if (!store) { return false; }
@@ -446,13 +413,12 @@ export function isStoreFresh(host: UnifiedStoreHost, store: UnifiedDataStore | n
 
 
 //---------------------------------------------------------------------------------------------------
-//Read-side accessors. Every downstream consumer (radial dial, graph view, timeline) goes through
-//these so the bucket arithmetic stays in one place and the interpolation contract is consistent.
+//Read-side accessors. Every consumer (radial dial, graph view, timeline) goes through these so bucket arithmetic and
+//the interpolation contract stay in one place.
 //---------------------------------------------------------------------------------------------------
 
 
-//Linearly interpolate a series value at an exact timestamp. Returns null when the timestamp falls
-//outside the store window OR both surrounding buckets are null.
+//Linearly interpolate a series value at an exact timestamp. Null when outside the window OR both surrounding buckets null.
 export function valueAt(series: ReadonlyArray<number | null>, store: UnifiedDataStore, ms: number): number | null
 {
     if (ms < store.storeStartMs || ms >= store.storeEndMs) { return null; }
@@ -471,11 +437,9 @@ export function valueAt(series: ReadonlyArray<number | null>, store: UnifiedData
 
 
 
-//Integrate the forecast series (watts per bucket) over [dayStartMs, dayEndMs) into kWh, at the store
-//cadence: each non-null bucket contributes watts × stepHours / 1000. The single source for every
-//forecast kWh figure (dashboard headline, CoverFlow cards, day-strip chips) so they all match the
-//timeline curve exactly. Returns null when no bucket in range carried a value (e.g. no HA forecast
-//source configured).
+//Integrate the forecast series (watts/bucket) over [dayStartMs, dayEndMs) into kWh at store cadence: each non-null
+//bucket contributes watts x stepHours / 1000. Single source for every forecast kWh figure (headline, CoverFlow cards,
+//day-strip chips) so they all match the timeline curve. Null when no bucket in range carried a value.
 export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): number | null
 {
     const series = store.forecast;
@@ -495,9 +459,8 @@ export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number
 }
 
 
-//Cumulative forecast kWh samples across [dayStartMs, dayEndMs), one point per store bucket, for the
-//dashboard's running intraday forecast curve. Same integration as integrateForecastKwh so the curve's
-//endpoint equals the headline total. Always seeded with a 0 point at dayStartMs.
+//Cumulative forecast kWh across [dayStartMs, dayEndMs), one point per bucket, for the running intraday curve. Same
+//integration as integrateForecastKwh (endpoint == headline total). Always seeded with a 0 point at dayStartMs.
 export function forecastCumulativeForDay(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): Array<{ tMs: number; kwh: number }>
 {
     const stepH = store.stepMs / HOUR_MS;
@@ -519,10 +482,8 @@ export function forecastCumulativeForDay(store: UnifiedDataStore, dayStartMs: nu
 
 
 
-//Per-bucket samples covering an arbitrary [startMs, endMs] sub-window of the store. Used by the
-//main timeline chart which renders the production + forecast curves across the visible 5-day window.
-//One entry per storage bucket whose centre falls inside the requested window; null entries indicate
-//"no data" for that bucket.
+//Per-bucket samples over an arbitrary [startMs, endMs] sub-window. Used by the main timeline chart (production +
+//forecast curves across the visible 5-day window). One entry per bucket whose centre falls inside; null = no data.
 export interface RangeSlice
 {
     times:      Date[];

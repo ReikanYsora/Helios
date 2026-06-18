@@ -1,32 +1,20 @@
 //Self-sourced building footprints around the home.
 //
-//Rendering buildings through OpenFreeMap's full vector basemap as a
-//single fill-extrusion layer forces MapLibre to draw every building
-//in the viewport at every frame. In dense urban areas that's
-//several thousand extrusions per frame, visible jank on mobile and
-//heavy battery drain. Filtering after-the-fact via MapLibre paint
-//expressions (distance, feature-state) produces flicker and
-//inconsistent opacities at tile boundaries because the geometry is
-//clipped per tile, so a building that spans two tiles renders as
-//two features with independently-evaluated paint properties.
+//Drawing OpenFreeMap's full basemap as one fill-extrusion layer makes MapLibre redraw every building in the
+//viewport each frame (thousands in dense areas: jank + battery drain), and post-filtering via paint expressions
+//flickers because tile-clipped geometry evaluates paint per tile.
 //
-//The fix is architectural: we fetch the OpenFreeMap planet vector
-//tiles ourselves once at startup (only the 1–4 tiles that cover
-//the radius around the home), decode them with @mapbox/vector-tile,
-//filter features by distance, identify the polygon(s) that make up
-//the home, and emit TWO GeoJSON FeatureCollections that the engine
-//feeds into two distinct fill-extrusion layers:
-//
+//So we fetch the OpenFreeMap planet vector tiles ourselves once at startup (just the 1–4 tiles covering the radius),
+//decode with @mapbox/vector-tile, filter by distance, find the home polygon(s), and emit TWO GeoJSON
+//FeatureCollections fed into two fill-extrusion layers:
 //  - helios-buildings-home          : home polygon(s) at full opacity
 //  - helios-buildings-surroundings  : neighbours at configured opacity
 //
-//Tiles are fetched once per (home, radius, cluster) tuple: the home
-//doesn't move during a session, so there is no listener on pan/zoom.
-//Style reloads (theme switches) reuse the cached GeoJSON without
-//re-hitting OpenFreeMap.
+//Fetched once per (home, radius, cluster) tuple — the home doesn't move, so no pan/zoom listener. Style reloads
+//(theme switches) reuse the cached GeoJSON.
 //
-//OpenFreeMap exposes the OpenMapTiles schema, which carries the `building` source-layer with `render_height` and `render_min_height` properties. The
-//parsing pipeline only needs those two attributes plus the polygon geometry.
+//OpenFreeMap serves the OpenMapTiles schema: the `building` source-layer carries render_height / render_min_height,
+//which plus the polygon geometry is all the parser needs.
 
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
@@ -42,26 +30,19 @@ export interface FetchBuildingsOptions
     homeLon:              number;
     homeLat:              number;
     radiusMeters:         number;
-    //Cluster radius (m). Every building whose centroid sits within
-    //this radius, OR which contains the home point, is grouped
-    //into the "home" feature collection at full opacity. Allows
-    //attached verandas / outbuildings to read as one with the main
-    //house. 0 = legacy single-polygon home behaviour.
+    //Cluster radius (m). Buildings whose centroid sits within it, or which contain the home point, join the "home"
+    //collection at full opacity so attached verandas/outbuildings read as one with the house. 0 = single-polygon home.
     clusterRadiusMeters?: number;
-    //Tile zoom level to fetch. OpenMapTiles (the schema OpenFreeMap
-    //serves) carries the `building` source-layer with `render_height`
-    //from z=13 upward, capped at z=14 for the planet tileset. z=14
-    //keeps the tile count to 1 (rarely 2) for radii under ~500 m,
-    //the smallest network footprint while still giving us proper
-    //extrusion heights.
+    //Tile zoom. OpenMapTiles carries render_height from z=13, capped at z=14 for the planet tileset. z=14 keeps the
+    //tile count to 1 (rarely 2) for radii under ~500 m while still giving proper extrusion heights.
     zoom?:                number;
     signal?:              AbortSignal;
 }
 
 const EARTH_RADIUS_M    = 6_371_008.8;
-const HOME_FALLBACK_M   = 30;   //If no polygon contains the home point, pick
-                                //the nearest one within this radius. Covers the common case where HA's home latitude lands in a garden a few metres
-                                //off the actual building.
+//If no polygon contains the home point, pick the nearest within this radius — covers HA's home latitude landing in
+//a garden a few metres off the actual building.
+const HOME_FALLBACK_M   = 30;
 
 
 function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }
@@ -84,8 +65,7 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
     return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
 }
 
-//Convert a degree delta in latitude / longitude to metres at a given latitude. Used to expand the home point into a bbox before mapping it to tile
-//indices.
+//Degree delta per metre at a given latitude — used to expand the home point into a bbox before mapping to tiles.
 function metersToDegLat(m: number): number
 {
     return m / 111_320;
@@ -97,8 +77,7 @@ function metersToDegLon(m: number, atLat: number): number
 }
 
 
-//Ray-casting point-in-polygon for a single ring (lon,lat pairs).
-//Returns true if (lon, lat) is strictly inside or on the boundary.
+//Ray-casting point-in-polygon for one ring (lon,lat pairs); true if inside or on the boundary.
 function pointInRing(lon: number, lat: number, ring: number[][]): boolean
 {
     let inside = false;
@@ -116,11 +95,8 @@ function pointInRing(lon: number, lat: number, ring: number[][]): boolean
     return inside;
 }
 
-//A GeoJSON Polygon is [outer, hole1, hole2, ...]; a MultiPolygon is
-//an array of those. We treat the home check as "point is in the
-//outer ring of any polygon". Holes are ignored, a building polygon
-//with a courtyard still counts as containing the home point if the
-//home sits anywhere within the outer footprint.
+//Home check = "point is in the outer ring of any polygon". Holes are ignored, so a building with a courtyard still
+//counts if the home sits anywhere within the outer footprint.
 function polygonContains(geom: GeoJSON.Geometry, lon: number, lat: number): boolean
 {
     if (geom.type === 'Polygon')
@@ -134,12 +110,8 @@ function polygonContains(geom: GeoJSON.Geometry, lon: number, lat: number): bool
     return false;
 }
 
-//Centroid approximation: average of outer-ring vertices. Used only
-//for the radius filter, exact centroids aren't necessary, we just
-//need a "representative" point per building. For MultiPolygon we
-//take the centroid of the first polygon's outer ring; close enough
-//for filter purposes (a building rendered as a MultiPolygon is rare
-//and the parts are always adjacent).
+//Centroid approximation (average of outer-ring vertices) — only for the radius filter, so exactness isn't needed.
+//For MultiPolygon we use the first polygon's outer ring; its parts are always adjacent, so close enough.
 function representativePoint(geom: GeoJSON.Geometry): [number, number] | null
 {
     let ring: number[][] | null = null;
@@ -161,11 +133,8 @@ function representativePoint(geom: GeoJSON.Geometry): [number, number] | null
 }
 
 
-//OpenFreeMap publishes its planet vector tiles under a versioned
-//snapshot path that rotates every few weeks. The TileJSON at
-///planet exposes the current snapshot's tile URL template; we fetch
-//it once per page lifetime and cache the result so subsequent
-//building pulls (radius / cluster changes) skip the round-trip.
+//OpenFreeMap rotates its planet tiles under a versioned snapshot path every few weeks. The /planet TileJSON exposes
+//the current snapshot's tile URL template; fetched once per page lifetime and cached so later pulls skip the trip.
 const OFM_TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
 let _ofmTileTemplate:        string | null = null;
 let _ofmTileTemplateInflight: Promise<string | null> | null = null;
@@ -218,9 +187,8 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     const r          = Math.max(1, opts.radiusMeters);
     const cluster    = Math.max(0, opts.clusterRadiusMeters ?? 0);
 
-    //Bounding box around the home in degrees, derived from the radius. We over-estimate by a few percent so a building whose centroid is *just*
-    //outside the bbox but whose actual nearest corner is inside the radius still gets fetched. The wasted features are filtered out at the haversine
-    //step below.
+    //Bbox around the home in degrees, over-estimated a few percent so a building whose centroid is just outside but
+    //whose nearest corner is inside the radius still gets fetched; the slack is dropped at the haversine step below.
     const padFactor  = 1.15;
     const dLat       = metersToDegLat(r * padFactor);
     const dLon       = metersToDegLon(r * padFactor, opts.homeLat);
@@ -246,19 +214,13 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         }
     }
 
-    //Defensive: at very small radii on a tile corner we expect 1–4
-    //tiles. Anything larger means radius or zoom is misconfigured;
-    //bail rather than hammer the API.
+    //Defensive: small radii expect 1–4 tiles. More means radius/zoom is misconfigured; bail rather than hammer the API.
     if (tilesToFetch.length > 16)
     {
         throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested, radius/zoom misconfigured`);
     }
 
-    //Resolve the OpenFreeMap tile URL template once (cached for the
-    //page lifetime). The TileJSON returns a versioned snapshot path
-    //(.../planet/<YYYYMMDD_NNNNNN_pt>/{z}/{x}/{y}.pbf), and OFM
-    //rotates that snapshot every few weeks; hitting the TileJSON at
-    //runtime keeps us pointed at whatever the current snapshot is
+    //Resolve the OpenFreeMap tile template once (cached for the page lifetime); keeps us on the current snapshot
     //without hard-coding a date that will rot.
     const tileTemplate = await getOpenFreeMapTileTemplate(opts.signal);
     if (!tileTemplate)
@@ -281,10 +243,8 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         }
         catch (e)
         {
-            //Network error → silently skip this tile. Surroundings
-            //will be sparser but the card stays usable. Errors are
-            //already logged by the browser network panel; flooding
-            //the HA console would be noise.
+            //Network error → skip this tile silently; surroundings get sparser but the card stays usable. The browser
+            //network panel already logs it, so flooding the HA console would just be noise.
             return;
         }
         if (!resp.ok)
@@ -336,23 +296,15 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
                 continue;
             }
 
-            //Split MultiPolygons into independent Polygon features.
-            //OpenMapTiles' vector-tile encoder groups multiple
-            //unrelated buildings into a single MultiPolygon feature
-            //(observed: 24 sub-polygons in one rural tile). Without
-            //splitting, home detection would capture the whole
-            //MultiPolygon and render every grouped building at full
-            //opacity. Genuine multi-part buildings (L-shaped, multi-
-            //wing) render identically because every part shares the
-            //same `render_height`.
+            //Split MultiPolygons into independent Polygons: OpenMapTiles groups unrelated buildings into one
+            //MultiPolygon (seen: 24 sub-polygons in a rural tile), so without splitting, home detection would capture
+            //all of them at full opacity. Genuine multi-part buildings render identically since the parts share
+            //render_height.
             if (geojson.geometry.type === 'Polygon')
             {
-                //Rebuild as a plain feature. @mapbox/vector-tile's toGeoJSON returns
-                //null-prototype `properties`, and maplibre's worker serializer reads
-                //`input.constructor._classRegistryKey`, which throws on a null-proto
-                //object. The spread + a fresh geometry give a normal prototype (as the
-                //MultiPolygon branch below does), so a lone Polygon building, e.g. a
-                //small freshly-mapped shed, doesn't blow up the whole buildings source.
+                //Rebuild as a plain feature: toGeoJSON returns null-prototype `properties`, and maplibre's worker
+                //serializer reads `input.constructor._classRegistryKey`, which throws on a null-proto object. The
+                //spread + fresh geometry restore a normal prototype so a lone Polygon building doesn't break the source.
                 features.push({
                     type:       'Feature',
                     geometry:   { type: 'Polygon', coordinates: geojson.geometry.coordinates as number[][][] },
@@ -374,14 +326,12 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         }
     }));
 
-    //Classify each feature into one of three buckets:
-    //  - home cluster: contains the home point OR is within
-    //    `cluster` metres of it (attached verandas / outbuildings)
-    //  - surroundings: within `r` metres but outside the cluster
+    //Classify each feature:
+    //  - home cluster: contains the home point OR within `cluster` m (attached verandas/outbuildings)
+    //  - surroundings: within `r` m but outside the cluster
     //  - discarded: outside `r`
-    //
-    //If no feature contains the home point and no feature is within the cluster radius, fall back to the closest building within HOME_FALLBACK_M,
-    //covers HA coordinates that land on a garden or driveway a few metres off the actual house footprint.
+    //If nothing contains the home point or sits within the cluster, fall back to the closest building within
+    //HOME_FALLBACK_M — covers HA coords landing on a garden/driveway a few metres off the house footprint.
     const homeCluster: GeoJSON.Feature[] = [];
     const surroundings: GeoJSON.Feature[] = [];
     let homeFallback: { feature: GeoJSON.Feature; distance: number } | null = null;

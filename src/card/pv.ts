@@ -1,11 +1,7 @@
-//Photovoltaic data subsystem: live state polling, history fetch, rolling-buffer sampling, instantaneous-rate derivation, calibration helpers, and the
-//chip / chart value formatter.
+//Photovoltaic data subsystem: live polling, history/LTS fetch, instantaneous-rate derivation, calibration, chip/chart formatting.
 //
-//The functions in here operate against a "host" object (the card)
-//that owns the `@state` PV fields. Lit reactivity is preserved by
-//writing back to the same setters the card declares, so calling
-//refreshPv(this) from a card lifecycle hook still triggers a
-//re-render exactly as the inline version did.
+//Functions operate on a "host" (the card) that owns the @state PV fields. Writing back through the card's setters preserves
+//Lit reactivity, so calling refreshPv(this) from a lifecycle hook re-renders as the old inline version did.
 
 import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
@@ -15,11 +11,9 @@ import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './l
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 
 
-//Resolve the live PV entity from the HA Energy dashboard solar source. Prefers the optional `stat_rate` (signed W or kW)
-//over the cumulative `stat_energy_from` (kWh) so the chart and chip plot the live power directly instead of going
-//through the trapezoidal differentiation path that reads as flat-topped plateaus on sparse meters. Returns an empty
-//string when no solar source is configured, the caller treats that as "chip + chart hidden". Multi-source installs
-//collapse to the first entry today; full per-source aggregation across all solar sources lands in a follow-up.
+//Resolve the live PV entity from the HA Energy solar source. Prefers `stat_rate` (signed W/kW) over cumulative `stat_energy_from`
+//(kWh) so the chart plots live power directly instead of through trapezoidal differentiation (flat-topped on sparse meters).
+//Empty string = no solar source configured (chip + chart hidden). Multi-source installs collapse to the first entry for now.
 export function resolvePvLiveEntity(defaults: EnergyDefaults): string
 {
     if (defaults.solarStatRates.length > 0)
@@ -36,26 +30,22 @@ export function resolvePvLiveEntity(defaults: EnergyDefaults): string
 
 
 
-//Fetched historical series, parallel times[] / values[] arrays so a binary or linear search can locate a sample by timestamp without re-allocating
-//wrapper objects.
+//Historical series as parallel times[]/values[] arrays so a sample can be located by timestamp without allocating wrapper objects.
 export interface PvHistory
 {
     times:  Date[];
     values: number[];
 }
 
-//Result of a rate computation. `unit` matches what the user's PV
-//chip should print after the value (W / kW / MW / "<unit>/h").
+//Result of a rate computation. `unit` is what the PV chip prints after the value (W / kW / MW / "<unit>/h").
 export interface PvRate
 {
     value: number;
     unit:  string;
 }
 
-//Structural surface the host card exposes to this module. The
-//mutable `_pv*` fields are typed non-readonly so the refresh / fetch
-//helpers can assign them; Lit's @state reactivity is preserved
-//because the assignment hits the same setter the decorator installed.
+//Structural surface the host card exposes here. The mutable `_pv*` fields are non-readonly so the helpers can assign them;
+//@state reactivity is preserved because assignment hits the same setter the decorator installed.
 export interface PvHost extends LoadingTrackerHost
 {
     readonly config:     HeliosConfig | undefined;
@@ -66,27 +56,23 @@ export interface PvHost extends LoadingTrackerHost
     _pvCurrent:             number | null;
     _pvUnit:                string;
     _pvHistory:             PvHistory | null;
-    //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
-    //source (LBDG_'s feature request) and the scrub tooltip can show a per-entity breakdown next to the summed
-    //value. The map is keyed by entity id; on single-source installs it carries a single entry that equals
-    //`_pvHistory`. Empty map = aggregated only (single-source or pre-fetch boot window).
+    //Per-entity histories alongside the aggregated `_pvHistory` so the chart can render one curve per source and the scrub
+    //tooltip can show a per-entity breakdown. Keyed by entity id; single-source carries one entry equal to `_pvHistory`.
+    //Empty map = aggregated only (single-source or pre-fetch boot window).
     _pvHistoryPerEntity:    Map<string, PvHistory>;
     _pvFetchKey:            string;
     _pvFetching:            boolean;
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
-    //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same parallel times[] / values[] shape as `_pvHistory`,
-    //populated via `recorder/statistics_during_period` with `period: 'hour'` over the past 5 days. Power sensors land here as bucket
-    //means; cumulative-energy sensors land as the bucket-end `state` field. Carries roughly 120 rows, an order of magnitude lighter
-    //recorder load than the raw history path on a high-frequency BMS. Null when statistics are unavailable (entity has no
-    //`state_class`, LTS disabled), the calibration then degrades to the narrower `_pvHistory` window.
+    //Hourly LTS series feeding the 5-day forecast calibration. Same times[]/values[] shape as `_pvHistory`, via
+    //`recorder/statistics_during_period` period:'hour' over 5 days. Power sensors land as bucket means; cumulative-energy as
+    //bucket-end `state`. ~120 rows, far lighter on the recorder than the raw path. Null when LTS unavailable (no `state_class`,
+    //LTS disabled); calibration then degrades to the narrower `_pvHistory` window.
     _pvCalibStats:          PvHistory | null;
     _pvCalibStatsFetchKey:  string;
     _pvCalibStatsFetching:  boolean;
-    //Recorder `change` series for the solar energy meter(s), 5-minute buckets over the store's past
-    //window. This is the canonical past-production source for the unified store (timeline + dashboard
-    //graph) and the chip scrub: the recorder hands back reset-corrected, unit-normalised kWh per
-    //bucket, the same metric the HA Energy dashboard consumes, so the plotted production matches HA to
-    //the watt-hour without any client-side counter differentiation. Null until the first fetch lands.
+    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. Canonical past-production source for the unified
+    //store (timeline + dashboard graph) and chip scrub: the recorder returns reset-corrected, unit-normalised kWh per bucket,
+    //the same metric HA Energy consumes, so plotted production matches HA without client-side differentiation. Null pre-fetch.
     _pvChangeSeries:         ChangeBucket[] | null;
     _pvChangeSeriesFetchKey: string;
     _pvChangeSeriesFetching: boolean;
@@ -94,26 +80,18 @@ export interface PvHost extends LoadingTrackerHost
 
 
 //-----------------------------------------------------------------
-//Module-level cache for the three PV-side WS fetches. Survives Lit
-//element unmount + remount (the user navigating away from the card
-//and back), which is the lifecycle event that the per-instance
-//`_pv*FetchKey` gate cannot catch. Without this, every navigation
-//restarted the heavy fetch from zero
-//
-//Each entry carries the parsed series + the fetched-at timestamp.
-//TTL keeps stale data from drifting forever, the next refresh
-//cycle after expiry falls back to a fresh fetch. Keyed by the same
-//fetch key the refresh path computes, so an entity / range / SoC
-//bank change naturally invalidates without an explicit clear.
+//Module-level cache for the PV-side WS fetches. Survives Lit unmount+remount (user navigating away and back), the lifecycle
+//event the per-instance `_pv*FetchKey` gate cannot catch — without it every navigation restarted the heavy fetch from zero.
+//Each entry carries the parsed series + fetched-at timestamp; TTL stops stale data drifting forever. Keyed by the same fetch
+//key the refresh path computes, so an entity/range/SoC change invalidates naturally.
 
 const PV_CACHE_TTL_MS = 15 * 60_000;
 
 interface PvHistoryCacheEntry
 {
     history:          PvHistory;
-    //Per-entity snapshots preserved in the cache so a cross-mount cache hit also primes the per-entity curves on the
-    //chart without a fresh round-trip. Stored as a plain object map for JSON-friendliness; the Map ↔ object coercion
-    //lives at the cache-set / cache-get boundary.
+    //Per-entity snapshots so a cross-mount cache hit also primes the per-entity curves without a fresh round-trip. Stored as a
+    //plain object map for JSON-friendliness; the Map <-> object coercion lives at the cache-set/cache-get boundary.
     historyPerEntity: Record<string, PvHistory>;
     batteryHistory:   PvHistory | null;
     diagnostics:      { rawEntries: number; samples: number; windowH: number };
@@ -146,9 +124,8 @@ function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): Pv
 }
 
 
-//Wipe the module-level PV caches. Called from the card's `resetDataCache()` hook so the editor's "reset" button actually drops the
-//cross-mount memo. Without this call the next refresh would short-circuit on a cache hit and re-populate the slot with the exact data
-//the user just asked to clear.
+//Wipe the module-level PV caches. Called from the card's `resetDataCache()` so the editor "reset" button drops the cross-mount
+//memo; without it the next refresh would short-circuit on a cache hit and re-populate what the user just asked to clear.
 export function clearPvModuleCaches(): void
 {
     _pvHistoryCache.clear();
@@ -156,17 +133,15 @@ export function clearPvModuleCaches(): void
 }
 
 
-//Live + history refresh, called from the card on every lifecycle
-//cycle. Cheap fast paths exit early when no entity is configured or
-//when the (entity, range) tuple matches the last successful fetch.
+//Live + history refresh, called every lifecycle cycle. Fast paths exit early when no entity is configured or the (entity, range)
+//tuple matches the last successful fetch.
 export function refreshPv(host: PvHost): void
 {
     const entity = resolvePvLiveEntity(host._energyDefaults);
 
     if (!entity || !host.hass)
     {
-        //Reset everything when the user clears the entity field so the chip and graph immediately disappear instead of sticking around with stale
-        //data.
+        //Reset everything when the entity field is cleared so the chip and graph disappear instead of sticking with stale data.
         if (host._pvCurrent !== null || host._pvHistory !== null)
         {
             host._pvCurrent = null;
@@ -177,20 +152,16 @@ export function refreshPv(host: PvHost): void
         return;
     }
 
-    //Seed `_pvHistory` as an empty pair so the boot gate clears immediately on entity resolution
-    //and the live tail extension below can append without a null guard each cycle. The chart
-    //pulls its past portion from `_pvCalibStats` LTS and the right-edge
-    //live tail from the `hass.states[entity]` pushes appended here.
+    //Seed `_pvHistory` empty so the boot gate clears on entity resolution and the live-tail extension below can append without a
+    //null guard. The chart pulls its past portion from `_pvCalibStats` LTS and the right-edge live tail from the pushes here.
     if (host._pvHistory === null)
     {
         host._pvHistory = { times: [], values: [] };
     }
 
-    //Multi-source LIVE aggregation. A user with a split E/W install (or any other multi-string install with one
-    //solar source per string in HA Energy) sees the SUM of every wired stat_rate / stat_energy_from sensor on the
-    //chip, the tooltip, the dashboard headline, instead of just the first entry the previous resolver returned. The
-    //history fetch + scrub-past path stays single-entity for now (uses `entity` resolved above) until the recorder
-    //+ interpolation refactor that turns `_pvHistory` into a summed series lands.
+    //Multi-source LIVE aggregation. A split E/W install (one solar source per string in HA Energy) sees the SUM of every wired
+    //stat_rate / stat_energy_from on chip, tooltip and headline instead of just the first entry. The history fetch + scrub-past
+    //path stays single-entity (uses `entity` above) until the recorder+interpolation refactor sums `_pvHistory`.
     const liveEntities = host._energyDefaults.solarStatRates.length > 0
         ? host._energyDefaults.solarStatRates
         : host._energyDefaults.solarStatEnergyFroms;
@@ -205,14 +176,11 @@ export function refreshPv(host: PvHost): void
         let liveTs:       number        = 0;
         if (isMultiEntity)
         {
-            //Sum the raw value across every configured live entity and keep the unit of the first valid sample. The
-            //downstream consumer (currentPvRate / pvRateAtTime) classifies cumulative vs measurement off `_pvUnit` so
-            //a kWh-only HA Energy install (4 stat_energy_from sources, no stat_rate) lands as a summed kWh stream and
-            //the buffer differentiation derives total W exactly as it does for a single source; a stat_rate-on-every-
-            //source install lands as a summed W stream and the chip skips the buffer path. The unit is taken from the
-            //first valid entity; multi-source installs where the per-source units disagree are an HA config error
-            //(one source in W, another in kW would mis-sum), so this path trusts the single-unit assumption a single
-            //HA Energy block enforces and skips the per-sample normalisation helper.
+            //Sum raw values across every live entity, keeping the first valid sample's unit. Downstream (currentPvRate /
+            //pvRateAtTime) classifies cumulative vs measurement off `_pvUnit`, so a kWh-only install sums to kWh and the buffer
+            //differentiation derives W, while a stat_rate-on-every-source install sums to W and skips the buffer. Disagreeing
+            //per-source units are an HA config error (W vs kW mis-sums), so this trusts the single-unit assumption HA enforces
+            //per Energy block and skips per-sample normalisation.
             let sumValue  = 0;
             let firstUnit = '';
             let anyValid  = false;
@@ -269,16 +237,14 @@ export function refreshPv(host: PvHost): void
         if (nextValue !== null)
         {
             const ts = liveTs || Date.now();
-            //Extend `_pvHistory`'s tail with the live sample so the chart's right edge tracks the live state between hourly history
-            //re-fetches. The history fetch is keyed by (entity, fetch-range) and `range.end` is pinned to the hourly weather grid,
-            //so without this the plotted PV curve flatlines at the value captured at the last hour boundary even while the chip
-            //keeps ticking. The next full fetch (when the hour rolls over) replaces the array wholesale.
+            //Extend `_pvHistory`'s tail with the live sample so the chart's right edge tracks live state between hourly
+            //re-fetches. The fetch is keyed by (entity, fetch-range) with `range.end` pinned to the hourly weather grid, so
+            //without this the curve flatlines at the last hour boundary while the chip keeps ticking. The next full fetch
+            //replaces the array wholesale.
             //
-            //In-place push instead of spread: with the live state ticking up to ~50 times per second and the fetch key sitting
-            //stable for an hour at a time, the previous spread-then-reassign reallocated `times` and `values` on every tick
-            //and the arrays grew unbounded. Push mutates the existing arrays (Lit re-renders are driven by the live state
-            //assignment above, not by `_pvHistory` identity), and we trim entries that drift before `_timeRange.start` so the
-            //tail does not balloon past the visible window.
+            //In-place push, not spread: live state ticks ~50x/sec while the fetch key holds for an hour, so the old
+            //spread-then-reassign reallocated and grew the arrays unbounded. Push mutates in place (Lit re-renders off the live
+            //state assignment above, not `_pvHistory` identity); we trim entries that drift before `_timeRange.start`.
             const hist = host._pvHistory;
             if (hist)
             {
@@ -288,8 +254,7 @@ export function refreshPv(host: PvHost): void
                 {
                     hist.times.push(new Date(ts));
                     hist.values.push(nextValue);
-                    //Drop the leading samples that have aged out of the chart's visible window. Guards the array against
-                    //unbounded growth on long-uptime sessions where the fetch key stays stable for many hours.
+                    //Drop leading samples aged out of the visible window, guarding against unbounded growth on long sessions.
                     if (host._timeRange)
                     {
                         const rangeStartMs = host._timeRange.start.getTime();
@@ -317,11 +282,9 @@ export function refreshPv(host: PvHost): void
     }
 
     //Two fetches, gated independently so each reissues only when its (entity, window) tuple changes:
-    //  1. Hourly long-term statistics over 5 days, feeding the 5-day forecast calibration (`calibration.ts`).
-    //  2. The recorder `change` series (5-minute buckets) for the past-production curve, the same data the HA
-    //     Energy dashboard consumes.
-    //Both exit cheaply on subsequent Lit cycles (clock ticks, hass updates) because the fetch-key cache
-    //short-circuits identical-range re-fetches.
+    //  1. Hourly LTS over 5 days, feeding the forecast calibration (`calibration.ts`).
+    //  2. Recorder `change` series (5-min buckets) for the past-production curve, the same data HA Energy consumes.
+    //Both exit cheaply on later cycles because the fetch-key cache short-circuits identical-range re-fetches.
     if (!host._timeRange)
     {
         return;
@@ -331,34 +294,19 @@ export function refreshPv(host: PvHost): void
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
 
-    //Raw history, narrow window. Capped at the last RAW_WINDOW_H
-    //hours regardless of how wide the user's visible timeline is.
-    //The HA recorder is single-threaded behind SQLite, so a multi-
-    //day raw fetch on a 1 Hz inverter (Victron Cerbo and friends)
-    //blocks every other card reading the same entity for the
-    //duration of the fetch, on every card load. The chart already
-    //has access to the `_pvCalibStats` LTS slot (hour resolution over
-    //5 days), which carries the past portion of the visible timeline
-    //orders of magnitude faster than a raw scan.
-    //Hoisted out of the LTS fetch blocks below so the calibration path see the same entity set for
-    //their cache keys. A drift between the keys would re-fetch one path on every refresh, defeating the hourly /
-    //5-min cadence guarantees.
+    //Raw-history fetch was removed (see below); LTS now covers the past portion. Build the shared entity set + fetch-key part
+    //here so the calibration path keys against the same set — a drift would re-fetch on every refresh, defeating the cadence.
     const sortedLive   = [...liveEntities].sort();
     const fetchKeyPart = sortedLive.length > 0 ? sortedLive.join(',') : entity;
 
-    //Raw `history/history_during_period` fetch removed. The card is now wired to the HA Energy dashboard end-to-end
-    //(daily totals via recorder `change`, headlines via `_haSolarTodayKwh`, calibration via `_pvCalibStats`,
-    //forecast calibration, and the live chip via `hass.states[entity]` direct read), so the
-    //raw 6 h scan that was kept around to feed the chart tail + scrub past at 1 Hz precision is no longer load-
-    //bearing for any single feature. It was also the single heaviest WS round-trip the card fired (4-source 1 Hz
-    //Victron install = ~5-10 MB payload, single-threaded SQLite recorder scan on every card mount). The chart
-    //rendering already blends `_pvCalibStats` for any portion `_pvHistory` does not cover; with `_pvHistory` empty
-    //the whole past portion of the curve flows through LTS. The right-edge live tail is still extended via the
-    //`hass.states[entity]` push appended directly to `_pvHistory.times` / `.values` higher up in this function,
-    //so the curve still tracks the live state at the cadence HA fires state_changed events.
+    //Raw `history/history_during_period` fetch removed. The card is wired to HA Energy end-to-end (daily totals via recorder
+    //`change`, headlines via `_haSolarTodayKwh`, calibration via `_pvCalibStats`, live chip via `hass.states[entity]`), so the
+    //heavy 6 h 1 Hz raw scan (single biggest WS round-trip: ~5-10 MB on a 4-source Victron, single-threaded SQLite scan on every
+    //mount) is no longer load-bearing. The chart blends `_pvCalibStats` for any portion `_pvHistory` does not cover; with
+    //`_pvHistory` empty the whole past flows through LTS, and the right-edge live tail is still pushed from `hass.states[entity]`.
 
-    //Hourly LTS for calibration (5 days). Multi-source aggregation matches the raw-history path so the calibration
-    //ratio is learned against the SUMMED predicted-vs-actual instead of the first-entity-only fraction.
+    //Hourly LTS for calibration (5 days). Multi-source aggregation matches the old raw path so the calibration ratio is learned
+    //against the SUMMED predicted-vs-actual instead of first-entity-only.
     if (!host._pvCalibStatsFetching)
     {
         const calibStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
@@ -381,21 +329,16 @@ export function refreshPv(host: PvHost): void
         }
     }
 
-    //Past-production curve for the unified store (timeline + dashboard graph) + the chip scrub. Sourced
-    //from the recorder `change` metric on the solar ENERGY meter(s) (`stat_energy_from`), exactly like
-    //the HA Energy dashboard: the recorder returns reset-corrected, unit-normalised kWh per 5-minute
-    //bucket and the store divides by the bucket duration to get average watts. No client-side counter
-    //differentiation, so a 15-minute SolarEdge counter or a daily-reset meter is handled natively by
-    //the recorder instead of producing a flat-zero curve or a midnight spike.
+    //Past-production curve for the unified store + chip scrub. From the recorder `change` metric on the solar ENERGY meter(s)
+    //(`stat_energy_from`), exactly like HA Energy: reset-corrected, unit-normalised kWh per 5-min bucket, divided by bucket
+    //duration for average watts. No client-side differentiation, so 15-min SolarEdge or daily-reset meters work natively.
     const changeIds = host._energyDefaults.solarStatEnergyFroms;
     if (changeIds.length > 0 && !host._pvChangeSeriesFetching)
     {
         const seriesStart = new Date(today0.getTime() - 2 * 24 * HOUR_MS);
         const sortedChange = [...changeIds].sort();
-        //The refresh anchor re-arms the gate once per CHANGE_REFRESH_MS. fetchEnd alone (timeline
-        //range end) only moves when the engine shifts the time range (a weather refresh landing,
-        //the midnight rollover), far too coarse on its own: it froze the past curve and the
-        //cumulative-only live-chip fallback at mount-time data for hours.
+        //The refresh anchor re-arms the gate once per CHANGE_REFRESH_MS. fetchEnd alone only moves on time-range shifts (weather
+        //refresh, midnight rollover) — too coarse: it froze the past curve and the cumulative-only chip fallback for hours.
         const changeKey    = `${sortedChange.join(',')}|${seriesStart.getTime()}|${fetchEnd.getTime()}|${changeRefreshAnchorMs()}`;
         if (changeKey !== host._pvChangeSeriesFetchKey)
         {
@@ -422,20 +365,14 @@ export function refreshPv(host: PvHost): void
 
 
 
-
-//Last-known-carry-forward aggregator. Walks the union of all per-entity timestamps and at each tick reads each
-//entity's most recent sample at or before the cursor, then sums. The cursor monotonicity (every series is sorted by
-//time) makes the walk O((entities + timestamps) total) instead of O(entities * timestamps). Works equally well for
-//power sensors (instantaneous reading at each tick) and cumulative kWh sensors.
+//Last-known-carry-forward aggregator. Walks the union of all per-entity timestamps; at each tick reads each entity's most recent
+//sample at or before the cursor, then sums. Cursor monotonicity (series sorted by time) makes this O(entities + timestamps), not
+//O(entities * timestamps). Works for both power sensors (instantaneous) and cumulative kWh.
 //
-//`cumulative` flag enables per-entity baselining: each entity is baselined at its first observed value within the
-//window before its contribution is summed. Without this, a multi-source install where one entity comes online
-//mid-window (e.g., a Victron MPPT that boots up at 13:00 with a lifetime cumulative of 1000 kWh) would inject a
-//phantom 1000 kWh jump into the aggregated series at 13:00, and the dashboard's today-kWh integration would
-//attribute that whole jump to "today's production starting at 13:00". With baselining each entity contributes 0 at
-//its first appearance and only its delta-since-arrival from there, so the aggregated curve grows smoothly. Power
-//sensors must use `cumulative: false` because baselining a W reading turns it into "delta-W since the first sample",
-//which is meaningless.
+//`cumulative` enables per-entity baselining: each entity is baselined at its first observed value in the window before summing.
+//Without it, an entity coming online mid-window (a Victron MPPT booting at 13:00 with a lifetime 1000 kWh) injects a phantom
+//1000 kWh jump that today-kWh integration attributes to "today". Baselined, each entity contributes 0 at first appearance and
+//only its delta from there. Power sensors MUST use `cumulative: false` — baselining a W reading yields meaningless "delta-W".
 function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = false): PvHistory
 {
     if (perEntity.length === 0)
@@ -446,8 +383,8 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = 
     {
         return perEntity[0];
     }
-    //Union of all timestamps, sorted ascending. Set + sort beats a merge-of-sorted because the entity histories can
-    //carry tens of thousands of samples each on 1 Hz sensors and the explicit Set dedupes coincident timestamps.
+    //Union of all timestamps, sorted ascending. Set+sort beats merge-of-sorted because histories can carry tens of thousands of
+    //1 Hz samples each, and the Set dedupes coincident timestamps.
     const tsSet = new Set<number>();
     for (const h of perEntity)
     {
@@ -457,10 +394,8 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = 
         }
     }
     const sortedTs = Array.from(tsSet).sort((a, b) => a - b);
-    //One walking index per entity; advances monotonically through the sorted timestamps.
-    const cursors   = new Array<number>(perEntity.length).fill(-1);
-    //Per-entity baseline captured at the first observed value when `cumulative` mode is on. `null` means the
-    //entity has not yet contributed a sample within the window.
+    const cursors   = new Array<number>(perEntity.length).fill(-1); //one walking index per entity, advances monotonically
+    //Per-entity baseline captured at first observed value when `cumulative` is on. null = entity has not yet contributed.
     const baselines = cumulative ? new Array<number | null>(perEntity.length).fill(null) : null;
     const summed:   number[] = [];
     for (const ts of sortedTs)
@@ -503,25 +438,20 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = 
 
 
 
-//Pull a long-term-statistics series from HA's `recorder/statistics_during_period` WebSocket command. Trades raw resolution for a two-orders-of-
-//magnitude reduction in payload size, which keeps the recorder responsive on installs whose PV entity reports several samples per second (Victron
-//Cerbo and friends).
+//Pull an LTS series from HA's `recorder/statistics_during_period` WS command. Trades raw resolution for a ~100x smaller payload,
+//keeping the recorder responsive on installs reporting several samples per second (Victron Cerbo and friends). Populates
+//`host._pvCalibStats` for the 5-day forecast calibration.
 //
-//Populates `host._pvCalibStats` for the 5-day forecast calibration.
+//Field selection by unit: power sensors carry the bucket mean; cumulative-energy (Wh/kWh/MWh) carry their reading in `state`. We
+//request BOTH columns and let the parser prefer `mean`, falling back to `state`. Asking for both avoids a silent failure: when
+//the unit hasn't yet propagated to `host._pvUnit` (cold start before the first hass.states tick), a mean-only request would
+//return all-null buckets for a cumulative entity and leave the slot empty.
 //
-//Field selection depends on the entity unit. Power sensors carry the bucket mean. Cumulative-energy sensors (`Wh` / `kWh` / `MWh`) carry
-//their cumulative reading in the bucket `state` field. We ask for BOTH columns in the WS payload and let the parser prefer `mean` when
-//it is populated, with `state` as fallback. Asking for both removes a class of silent failures: when the entity unit hasn't yet propagated
-//to `host._pvUnit` at the time the fetch fires (cold start before the live hass.states tick lands), the heuristic would have asked for
-//`mean` only and a cumulative-energy entity would have returned all-null buckets, leaving the slot empty.
+//Anchoring: both flavours anchor at the bucket midpoint to match the power-sensor convention and the trapezoidal integration in
+//`calibration.ts`; cross-day attribution drift is absorbed by `actualKwhForDay`'s guard widening. Buckets with both null dropped.
 //
-//Anchoring: cumulative samples (taken from `state`) anchor at the bucket midpoint to match the power-sensor convention. The slight
-//attribution drift across the day boundary is absorbed by `calibration.ts:actualKwhForDay`'s guard widening.
-//Power samples (taken from `mean`) anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` matches the
-//existing semantics. Buckets with both `mean` AND `state` null are dropped silently.
-//
-//Long-term statistics require the source entity to carry a `state_class` (`measurement`, `total`, or `total_increasing`) so HA tracks it. When the
-//entity is not LTS-tracked HA returns an empty array; we surface that as an empty `PvHistory` and let the consumer fall back to `_pvHistory`.
+//LTS requires the entity to carry a `state_class` (measurement/total/total_increasing). Untracked entities return an empty array,
+//surfaced as an empty `PvHistory` so the consumer falls back to `_pvHistory`.
 export async function fetchPvStatistics(
     host: PvHost,
     entityIds: string[],
@@ -529,9 +459,8 @@ export async function fetchPvStatistics(
     end: Date,
     period: '5minute' | 'hour' | 'day' | 'week' | 'month',
     cacheKey: string = '',
-    //Same `cumulative` flag as fetchPvHistory. For LTS this matters because cumulative entities populate the `state`
-    //field with the bucket-end lifetime value, which mirrors the multi-source phantom-jump risk if one source comes
-    //online mid-window. Power entities populate `mean` directly and stay on the raw-sum path.
+    //Same `cumulative` flag as the aggregator: cumulative entities populate `state` with the bucket-end lifetime value, so the
+    //multi-source phantom-jump risk applies. Power entities populate `mean` and stay on the raw-sum path.
     cumulative: boolean = false,
 ): Promise<void>
 {
@@ -562,19 +491,16 @@ export async function fetchPvStatistics(
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  entityIds,
             period,
-            //Request both `mean` and `state`. Power sensors populate `mean`, cumulative-energy sensors populate `state`. The parser
-            //below prefers `mean` and falls back to `state`, so a single round-trip covers both wirings without depending on the
-            //user-facing unit having reached `host._pvUnit` yet.
+            //Request both: power sensors populate `mean`, cumulative-energy populate `state`. One round-trip covers both wirings
+            //without depending on the user-facing unit having reached `host._pvUnit`.
             types:          ['mean', 'state'],
-            //Normalise to kWh / W so installs reporting in Wh, MWh or kW land on the same scale the calibration + chart
-            //expect. The `pvNormalizeToWatts` helper still handles the live state read where this hint is unavailable.
+            //Normalise to kWh/W so installs reporting in Wh/MWh/kW land on the scale calibration + chart expect. The live read
+            //uses `pvNormalizeToWatts` where this hint is unavailable.
             units:          { energy: 'kWh', power: 'W' },
         });
 
-        //Per-entity bucket parse, then LKCF aggregation over the union of bucket midpoints. LTS buckets typically
-        //align across same-period entities (every entity has a 14:00 hour bucket etc.), in which case the LKCF
-        //walker collapses to a clean per-bucket sum; on misaligned series the carry-forward keeps the per-source
-        //contribution stable across gaps.
+        //Per-entity bucket parse, then LKCF aggregation over the union of bucket midpoints. Same-period entities usually align
+        //(every entity has a 14:00 bucket), collapsing the walker to a clean per-bucket sum; misaligned series carry forward.
         const perEntity: PvHistory[] = [];
         for (const id of entityIds)
         {
@@ -605,9 +531,7 @@ export async function fetchPvStatistics(
                 {
                     continue;
                 }
-                //Bucket midpoint anchor for both flavours. Aligns with the trapezoidal integration in `calibration.ts` and
-                //the forecast learning. Mid-bucket attribution averages out across the day boundary for cumulative sensors when the
-                //calibration's cross-day guard tolerates the trailing slice.
+                //Bucket midpoint anchor for both flavours, aligning with the trapezoidal integration in `calibration.ts`.
                 const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
                 times.push(new Date(anchorMs));
                 values.push(v);
@@ -642,8 +566,8 @@ export async function fetchPvStatistics(
 }
 
 
-//Coerce a `start` / `end` field from a statistics bucket into a millisecond epoch. Accepts ISO strings, numeric seconds, and numeric milliseconds
-//since HA's payload shape has changed between releases. Returns null on anything unparseable.
+//Coerce a stats-bucket `start`/`end` into a millisecond epoch. Accepts ISO strings, numeric seconds and numeric milliseconds
+//(HA's payload shape has changed across releases). Returns null on anything unparseable.
 function parseStatBoundary(raw: unknown): number | null
 {
     if (raw === null || raw === undefined)
@@ -669,27 +593,12 @@ function parseStatBoundary(raw: unknown): number | null
 }
 
 
-//Locate the slot that brackets a scrub timestamp. Priority order:
-//  1. `_pvHistory` raw (~2 days, finest resolution)
-//  2. `_pvCalibStats` hourly (5 days), populated right after card mount and not deferred to idle
-//
-//Compute the production rate at an arbitrary historical time
-//(used when the user scrubs the timeline into the past). For
-//a cumulative entity we differentiate the two history samples
-//bracketing the requested instant; for a power entity we just
-//return the value of the closest historical sample. Returns
-//null when the requested time falls outside every fetched
-//history window, the chip is then hidden by the caller, which
-//is the right behaviour for the future half of the timeline
-//(no production data exists there yet).
+//Production rate at an arbitrary historical time (timeline scrubbed into the past). Reads average power from the recorder
+//`change` series (5-min buckets): the recorder already handled resets + unit conversion, so it's a single bucket lookup, no
+//differentiation. Returns null when no bucket covers the instant (future scrub or recorder gap), which hides the chip — right
+//for the future half. Watts floored at zero so a net-meter quirk never surfaces as negative production.
 export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 {
-    //Read the average power at the scrub instant from the recorder `change` series (5-minute
-    //buckets). The recorder already handled resets + unit conversion, so this is a single bucket
-    //lookup, no differentiation, no classification. Returns null when no bucket covers the instant
-    //(future scrub, or a gap in the recorder data), which hides the chip there, the right behaviour
-    //for the future half of the timeline. Watts are floored at zero so a net-meter quirk never
-    //surfaces as negative production.
     const w = wattsAtFromChangeSeries(host._pvChangeSeries, time.getTime());
     if (w === null)
     {
@@ -699,18 +608,12 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 }
 
 
-//Compute the live "now" PV production rate, sourced exactly like the HA Energy live tile:
-//
-//  - When the solar source declares a power sensor (`stat_rate`), read its state directly, summed
-//    across every wired stat_rate for a split install. This is the real-time value HA itself shows.
-//  - Otherwise (cumulative-only install, e.g. SolarEdge with no power sensor) fall back to the
-//    average power of the latest completed 5-minute recorder `change` bucket. HA shows no live power
-//    at all in this case; the 5-minute average is the closest HA-consistent live read available, and
-//    it fixes the old "stuck at 0 W" failure where a 15-minute counter never filled the rolling
-//    buffer's 5-minute window.
-//
-//Returns null when neither source yields a value (no power sensor and no change series yet), so the
-//caller hides the chip rather than ever printing the lifetime cumulative total.
+//Live "now" PV rate, sourced like the HA Energy live tile:
+//  - With a power sensor (`stat_rate`), read its state directly, summed across every wired stat_rate. The real-time value HA shows.
+//  - Cumulative-only install (e.g. SolarEdge, no power sensor): fall back to the average power of the latest completed 5-min
+//    recorder `change` bucket — the closest HA-consistent live read, fixing the old "stuck at 0 W" where a 15-min counter never
+//    filled the rolling buffer's window.
+//Returns null when neither yields a value, so the caller hides the chip rather than printing the lifetime cumulative total.
 export function currentPvRate(host: PvHost): PvRate | null
 {
     const rates = host._energyDefaults.solarStatRates;
@@ -736,13 +639,12 @@ export function currentPvRate(host: PvHost): PvRate | null
 }
 
 
-//Convert a POWER RATE into watts. Used to drive animation speeds on a unit-agnostic scale, the leader-line dash flow saturates at a fixed wattage no
-//matter what unit the user's sensor is in.
+//Convert a POWER RATE into watts, to drive animation speeds on a unit-agnostic scale (leader-line dash flow saturates at a fixed
+//wattage regardless of sensor unit).
 //
-//Contract: the `value` argument MUST already be an instantaneous power rate (W / kW / MW). Cumulative-energy sensors (Wh / kWh / MWh)
-//are caller-side differentiated into a power rate FIRST via pvRateAtTime / currentPvRate before reaching this helper. Passing a raw
-//cumulative-energy reading here returns 0 (which pauses any animation that depends on it, instead of silently mis-scaling a kWh
-//figure as if it were already in watts), the explicit no-op is meant as a wiring trap for future callers.
+//Contract: `value` MUST already be an instantaneous power rate (W/kW/MW). Cumulative-energy (Wh/kWh/MWh) must be differentiated
+//caller-side via pvRateAtTime/currentPvRate first. Passing a raw cumulative reading returns 0 (pausing the animation rather than
+//mis-scaling kWh as watts) — an intentional wiring trap for future callers.
 export function pvNormalizeToWatts(value: number, unit: string): number
 {
     const lu = (unit || '').toLowerCase();
@@ -769,20 +671,14 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 
 
 
-
-//Format a PV reading for the chip below the home. The display
-//auto-rescales W → kW when the magnitude crosses a threshold so
-//a 4500 W reading prints as "4.5 kW" rather than the noisier
-//"4500 W". Energy units (kWh / Wh) keep their native unit and
-//get a single decimal, daily totals usually sit in the 0–50 kWh
-//band where one decimal is the right amount of precision.
+//Format a PV reading for the chip below the home. Power auto-rescales W -> kW so 4500 W prints "4.5 kW"; energy keeps its native
+//unit with one decimal (daily totals sit in the 0-50 kWh band where one decimal is right).
 export function formatPvValue(hass: any, value: number, unit: string, decimals: number): string
 {
     const u  = (unit || '').trim();
     const lu = u.toLowerCase();
 
-    //Power sources always print in kW, energy sources in kWh, both at the configured precision, so
-    //the PV chip reads uniform with every other readout regardless of the sensor's native unit.
+    //Power always prints kW, energy kWh, both at configured precision, so the chip reads uniform regardless of native unit.
     if (lu === 'w' || lu === 'kw' || lu === 'mw')
     {
         return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals);
@@ -791,8 +687,7 @@ export function formatPvValue(hass: any, value: number, unit: string, decimals: 
     {
         return formatEnergyKwh(hass, energyToKwh(value, unit), decimals);
     }
-    //Fallback for arbitrary units: keep the entity's own unit string but still honour the global
-    //decimal setting so the precision tracks everything else.
+    //Arbitrary units: keep the entity's own unit string but still honour the global decimal setting.
     const formatted = formatLocalisedNumber(hass, value, decimals);
     return u ? `${formatted} ${u}` : formatted;
 }
