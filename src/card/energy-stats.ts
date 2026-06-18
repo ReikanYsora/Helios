@@ -7,13 +7,16 @@
 //unit conversion (`units: { energy: 'kWh' }` normalises Wh/kWh/MWh server-side). Helios's only math is
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number Helios shows the same number.
 
+import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION } from '../constants';
+
 const HOUR_MS = 3_600_000;
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
 //re-arming once a minute keeps cumulative-only live chips within ~1 min of the freshest bucket without WS spam.
 //Callers fold floor(now / CHANGE_REFRESH_MS) into their fetch key so the gate re-arms on this boundary.
-export const CHANGE_REFRESH_MS = 60_000;
+//Defined in constants.ts; re-exported here because pv/grid/battery import it from this module.
+export { CHANGE_REFRESH_MS } from '../constants';
 
 //"Now" rounded down to the refresh boundary: the single anchor every fetch gate folds into its key (battery/grid also
 //pass it as fetch end). One helper so call sites can't drift and every card shares one cache entry per interval.
@@ -198,8 +201,6 @@ export function changeSeriesToWatts(
 //    in ONE bucket and zeroes the other two; the latest bucket then reads 0 two-thirds of the time and ~3x one-third.
 //We distinguish by density of non-zero buckets in a probe window: dense => fine (read latest direct), sparse =>
 //coarse (average the probe window so the lone delta spreads over its real interval). Fine installs are untouched.
-const COARSE_PROBE_MS = 15 * 60_000;   //span we judge density over + average a coarse meter across
-const DENSE_FRACTION  = 0.6;           //>= this share of probe buckets non-zero => fine meter, read direct
 
 //Average power (W) over buckets overlapping [loMs, hiMs), pro-rating straddlers. Returns kwh/ms/nonZero/total so the
 //caller can both average AND judge meter density.

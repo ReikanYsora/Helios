@@ -13,12 +13,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 //  - medium , 1024x1024. ~2 m/px. Previous default.
 //  - high   , 2048x2048. ~1 m/px, edges land on the LiDAR grid. ~40 ms encode, 4x medium memory; desktop dense scenes.
 import type { LidarPrecisionLevel } from '../helios-config';
-
-const SHADOW_RASTER_SIZE_BY_PRECISION: Record<LidarPrecisionLevel, number> = {
-    low:    512,
-    medium: 1024,
-    high:   2048,
-};
+import { SHADOW_RASTER_SIZE_BY_PRECISION } from '../constants';
 
 export function shadowRasterSizeFor(level: LidarPrecisionLevel): number
 {

@@ -25,29 +25,15 @@ export interface SampleHourly
 }
 
 
-//Forecast window: 5 days back + today + 2 forward. Matches the timeline range so the cached payload feeds every
-//consumer without overshoot. Each extra past day past 14 inflates Open-Meteo's billing by a day-bucket; capping at
-//5 + 3 = 8 keeps the home-point fetch at 1 bucket.
-const PAST_DAYS     = 5;
-//Open-Meteo counts today inside forecast_days, so 3 yields today + 2 future. Cloud-cover forecast loses value beyond +2.
-const FORECAST_DAYS = 3;
-
-//Exponential back-off on consecutive HTTP 429s, indexed by streak. After the table we stay on the last value (60 min);
-//a single success resets the counter so the user is never permanently locked out.
-export const RATE_LIMIT_BACKOFF_MS = [
-    5  * 60_000,
-    15 * 60_000,
-    60 * 60_000
-];
-
-//Graduated back-off for non-429 failures (network down, 5xx, JSON parse). Starts at 1 min so a transient blip recovers
-//quickly, caps at 60 min so a sustained outage can't pile up retries that themselves trigger a per-IP rate limit.
-export const OTHER_ERROR_BACKOFF_MS = [
-    1  * 60_000,
-    5  * 60_000,
-    15 * 60_000,
-    60 * 60_000
-];
+//Forecast window, back-off tables, cache TTL/precision now live in constants.ts. Aliased on import so the in-file
+//usages below stay unchanged; the two back-off tables are also re-exported because helios-engine.ts imports them here.
+import {
+    WEATHER_PAST_DAYS          as PAST_DAYS,
+    WEATHER_FORECAST_DAYS      as FORECAST_DAYS,
+    WEATHER_CACHE_TTL_MS       as CACHE_TTL_MS,
+    WEATHER_CACHE_KEY_DECIMALS as CACHE_KEY_DECIMALS,
+} from '../constants';
+export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../constants';
 
 
 //Median ignoring null/undefined/NaN. Combines concurrent multi-model forecasts into one robust value per timestep.
@@ -141,14 +127,6 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 //In-browser cache. Precision is fixed to 'high'; the tag stays in the key so re-introducing a precision toggle later
 //won't collide with existing cached payloads.
 const CACHE_KEY_PREFIX = 'helios-weather-cache:';
-//45 min TTL: the 10-min refresh interval hits the localStorage cache for 4 cycles then fetches fresh on the 5th.
-//Open-Meteo's models refresh every 15 min server-side and the timezone-anchored payload is fully replaced on local
-//midnight regardless, so 45 min stays "fresh enough" while cutting network volume by a third on long sessions.
-const CACHE_TTL_MS     = 45 * 60_000;
-//Cache-key precision: 3 decimals = 110 m, well below Open-Meteo's coarsest grid cell (25 km ECMWF, ~1.3 km AROME-France).
-//Near-identical homes (multi-card dashboards, editor lat/lon drag) round to one entry and share the fetch. The API URL is
-//rounded to the same precision so the API/CDN sees one canonical request.
-const CACHE_KEY_DECIMALS = 3;
 
 
 //Module-level diagnostics walked by window.heliosStats() so a power user can audit network/cache/dedup ratios over a

@@ -99,3 +99,30 @@ export const WS_MAX_CONCURRENT_FETCHES = 2;
 //=== Misc thresholds ===
 export const EQ_EPS_PX = 0.25;
 export const TIMELINE_MAX_TICKS = 7;
+
+
+//=== LiDAR precision / shadows ===
+export type LidarPrecisionLevel = 'low' | 'medium' | 'high';
+export const DEFAULT_LIDAR_PRECISION: LidarPrecisionLevel = 'medium';
+export const LIDAR_PRECISION_PITCH_MULT: Record<LidarPrecisionLevel, number> = { low: 4, medium: 2, high: 1 };
+export const DEFAULT_SHADOW_OPACITY = 0.32;
+export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
+export const DEFAULT_LIDAR_VIEW_OPACITY = 0.25;
+export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M;
+export const SHADOW_RASTER_SIZE_BY_PRECISION: Record<LidarPrecisionLevel, number> = { low: 512, medium: 1024, high: 2048 };
+
+
+//=== Weather fetch ===
+export const WEATHER_PAST_DAYS          = 5;
+export const WEATHER_FORECAST_DAYS      = 3;
+export const WEATHER_CACHE_TTL_MS       = 45 * 60_000;
+export const WEATHER_CACHE_KEY_DECIMALS = 3;
+export const RATE_LIMIT_BACKOFF_MS:  readonly number[] = [5 * 60_000, 15 * 60_000, 60 * 60_000];
+export const OTHER_ERROR_BACKOFF_MS: readonly number[] = [1 * 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
+export const WEATHER_BAND_OPACITY = [0.20, 0.40, 0.60] as const;
+
+
+//=== Energy-stats (change-series) ===
+export const CHANGE_REFRESH_MS = 60_000;
+export const COARSE_PROBE_MS   = 15 * 60_000;
+export const DENSE_FRACTION    = 0.6;

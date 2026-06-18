@@ -5,7 +5,7 @@
 //existing `from './helios-config'` imports keep working.
 
 import {
-    DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, DISPLAY_FADE_DELTA_M,
+    DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M,
     DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
     DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
@@ -20,7 +20,10 @@ export {
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
     MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
+    DEFAULT_LIDAR_PRECISION, LIDAR_PRECISION_PITCH_MULT, DEFAULT_SHADOW_OPACITY,
+    DEFAULT_LIDAR_LOCAL_NDSM_ENABLED, DEFAULT_LIDAR_VIEW_OPACITY, LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
 } from './constants';
+export type { LidarPrecisionLevel } from './constants';
 
 
 //User-facing config passed to setConfig(), read by the engine + editor. Every key is optional and typed
@@ -129,33 +132,6 @@ export function displayRadiusM(config: HeliosConfig | undefined): number
     if (r > MAX_DISPLAY_RADIUS_M) { return MAX_DISPLAY_RADIUS_M; }
     return r;
 }
-
-
-//Shadow precision = multiplier on the provider's native cell pitch: high 1x, medium 2x, low 4x. Pinning to
-//the native sampling means each rendered point maps to a real publication cell, not a server interpolation.
-//Only meaningful inside provider coverage; outside, shadows fall back to footprints.
-export type LidarPrecisionLevel = 'low' | 'medium' | 'high';
-export const DEFAULT_LIDAR_PRECISION: LidarPrecisionLevel = 'medium';
-//Precision -> pitch multiplier (effective pitch = nativePitch x multiplier; rasterSize derived from radius + pitch).
-export const LIDAR_PRECISION_PITCH_MULT: Record<LidarPrecisionLevel, number> = {
-    low:    4,
-    medium: 2,
-    high:   1
-};
-//Default ground-shadow opacity when `shadow-opacity` is unset.
-export const DEFAULT_SHADOW_OPACITY = 0.32;
-
-
-//Default opt-in for the local-nDSM LiDAR provider (editor toggle default). Stays off until enabled AND given url + bbox.
-export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
-
-
-//LiDAR View overlay defaults. Disc radius derives from DEFAULT_DISPLAY_RADIUS_M; colours fixed white; overall
-//opacity is runtime state from the in-card slider (DEFAULT_LIDAR_VIEW_OPACITY is its first-open value).
-export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.25;
-//Radius where the LiDAR overlay alpha starts ramping down (full inside, smoothstep to zero out to the display
-//radius). Derived as DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M so one edit rescales every layer.
-export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M;
 
 
 //Resolve past/forecast day counts from their config keys, clamped to range, defaulting on missing/invalid.

@@ -10,6 +10,8 @@
 
 import type { CustomLayerInterface, Map as MaplibreMap, CustomRenderMethodInput } from 'maplibre-gl';
 
+import { WEATHER_BAND_OPACITY as BAND_OPACITY } from '../constants';
+
 
 export interface WeatherCloudLayerOptions
 {
@@ -24,8 +26,7 @@ export interface WeatherCloudLayerOptions
 
 
 //Per-band alpha multiplier on top of the shaped density: growing weight low->high so a fully
-//overcast stack reads as a heavy ceiling rather than three identical greys.
-const BAND_OPACITY = [0.20, 0.40, 0.60] as const;
+//overcast stack reads as a heavy ceiling rather than three identical greys. (WEATHER_BAND_OPACITY in constants.)
 
 
 //Vertex shader. Mercator coords feed mainMatrix straight to clip space; geo lon/lat is a separate
