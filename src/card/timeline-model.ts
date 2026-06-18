@@ -1,8 +1,5 @@
-//Adaptive timeline model. Ported from the HA energy-solar-overview card so the standalone Helios
-//timeline picks its tick granularity (hours / days / weeks / months) from the visible span, instead
-//of always drawing one cell per day (which turned a 30-day window into 30 unreadable chips). The card
-//feeds it the active rolling window [start, end]; the renderer draws model.labels + model.separators
-//+ model.dayBoundaries. Kept Lit- and engine-free so any card-side module can import it cheaply.
+//Adaptive timeline model (ported from the HA energy-solar-overview card): tick granularity (hours/days/
+//weeks/months) follows the visible span. Fed [start, end]; outputs labels + separators + dayBoundaries.
 
 
 const HOUR_MS = 3_600_000;
@@ -15,10 +12,8 @@ export type TimelineKind = 'intraday' | 'days' | 'weeks' | 'months';
 
 export interface TimelineSeparator
 {
-    //Fraction in [0, 1] of the way across the window.
-    frac: number;
-    //The boundary instant (separator) or period-start instant (label) the entry marks.
-    date: Date;
+    frac: number; //Position in [0, 1] across the window.
+    date: Date;   //Boundary instant (separator) or period-start instant (label).
 }
 
 export interface TimelineModel
@@ -26,12 +21,9 @@ export interface TimelineModel
     kind:   TimelineKind;
     start:  Date;
     end:    Date;
-    //Boundary gridlines (day / week / month starts), thinned to <= maxTicks.
-    separators: TimelineSeparator[];
-    //Labels: 'intraday' / 'weeks' sit ON the boundary; 'days' / 'months' sit centred on the period named.
-    labels: TimelineSeparator[];
-    //Midnight gridline fractions, only populated when individual days read clearly (span 1-40 days).
-    dayBoundaries: number[];
+    separators: TimelineSeparator[]; //Boundary gridlines (day/week/month starts), thinned to <= maxTicks.
+    labels:     TimelineSeparator[]; //'intraday'/'weeks' sit ON the boundary; 'days'/'months' sit centred on the period.
+    dayBoundaries: number[];         //Midnight gridline fractions, only when individual days read clearly (span 1-40 days).
 }
 
 
@@ -62,11 +54,10 @@ function addMonths(d: Date, n: number): Date
     return r;
 }
 
-//Monday-anchored ISO week start, at local midnight.
+//Monday-anchored ISO week start at local midnight (getDay() 0=Sun..6=Sat, so Sunday maps 6 days back).
 function startOfISOWeek(d: Date): Date
 {
     const r = startOfDay(d);
-    //getDay(): 0 = Sunday .. 6 = Saturday. ISO weeks start Monday, so Sunday maps to 6 days back.
     const dow = (r.getDay() + 6) % 7;
     return addDays(r, -dow);
 }
@@ -80,8 +71,7 @@ function startOfMonth(d: Date): Date
 }
 
 
-//Build the adaptive tick / label model for a visible window. Span thresholds + thinning mirror the HA
-//card so the two surfaces read identically.
+//Build the adaptive tick/label model for a visible window. Span thresholds + thinning mirror the HA card.
 export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TIMELINE_MAX_TICKS): TimelineModel
 {
     const total    = end.getTime() - start.getTime() || 1;
@@ -90,17 +80,13 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
     let kind: TimelineKind;
     let firstTick: Date;
     let next: (d: Date) => Date;
-    //Start of the period containing `d`; null for intraday (labels sit on ticks).
-    let periodStart: ((d: Date) => Date) | null;
-    //'boundary': label is a point-in-time, sits ON the tick. 'centered': label names a span
-    //(weekday, month) and sits centred on the period.
-    let labelMode: 'boundary' | 'centered';
+    let periodStart: ((d: Date) => Date) | null; //Start of the period containing `d`; null for intraday (labels sit on ticks).
+    let labelMode: 'boundary' | 'centered';      //'boundary': label sits ON the tick. 'centered': label names a span (weekday/month).
 
     if (spanDays <= 2.05)
     {
         kind = 'intraday';
-        //Finest "nice" hour step that keeps the tick count within the width budget, so a wide card
-        //shows 2 h / 3 h ticks instead of always 6 h.
+        //Finest "nice" hour step keeping the tick count within budget (wide card shows 2h/3h, not always 6h).
         const spanHours = total / HOUR_MS;
         const stepH = [1, 2, 3, 4, 6, 12].find(h => spanHours / h <= maxTicks) ?? 12;
         const firstStep = Math.ceil((start.getHours() + start.getMinutes() / 60 + 1e-3) / stepH) * stepH;
@@ -134,11 +120,8 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
         labelMode   = 'centered';
     }
 
-    //Day labels are short (weekday names) and read clearly even across a full week, so the 'days' kind
-    //gets a generous budget that keeps one label + one separator PER DAY rather than thinning to every
-    //other day (which made the 7-day view look like it was dropping days). The 'days' kind already caps
-    //at ~14 days upstream, so 16 effectively means "never thin a day view". Other kinds keep the
-    //standard budget so wide week/month spans still collapse to a readable tick count.
+    //'days' never thins (short weekday labels read fine across a full week; budget 16 is above its ~14-day cap);
+    //other kinds keep maxTicks so wide week/month spans collapse to a readable tick count.
     const tickBudget = kind === 'days' ? Math.max(maxTicks, 16) : maxTicks;
     const thin = <T>(arr: T[]): T[] =>
     {
@@ -166,15 +149,13 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
     }
     else
     {
-        //Period-name labels (weekday, month) centred on each COMPLETE period; a period clipped by a
-        //window edge gets no label.
+        //Period-name labels (weekday/month) centred on each COMPLETE period; the 0.99 visibility ratio keeps the
+        //last period when the window ends on its final millisecond (e.g. a week ending Sun 23:59:59.999).
         const allLabels: TimelineSeparator[] = [];
         let p = periodStart!(start);
         for (let g = 0; p.getTime() < end.getTime() && g < 500; g++)
         {
             const pEndDate  = next(p);
-            //Complete = a visibility ratio (not strict pEnd <= end), so the last period still counts when
-            //the window ends on its final millisecond (e.g. a week ending Sun 23:59:59.999).
             const periodLen = pEndDate.getTime() - p.getTime() || 1;
             const visible   = Math.min(pEndDate.getTime(), end.getTime()) - Math.max(p.getTime(), start.getTime());
             if (visible >= periodLen * 0.99)
@@ -207,9 +188,8 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
 }
 
 
-//Kind-aware label for the adaptive timeline footer. Honours the HA language preference:
-//intraday -> hour:minute, days -> short weekday, weeks -> day + short month,
-//months -> full month name.
+//Kind-aware label for the timeline footer, honouring the HA language: intraday -> hour:minute,
+//days -> short weekday, weeks -> day + short month, months -> full month name.
 export function formatTimelineLabel(kind: TimelineKind, d: Date, hass?: { language?: string }): string
 {
     const lang = (hass?.language as string | undefined) || undefined;
