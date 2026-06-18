@@ -1,20 +1,12 @@
 //PDOK AHN4 shadow source for the Netherlands.
 //
-//Rijkswaterstaat publishes the AHN4 (Actueel Hoogtebestand Nederland,
-//4th generation, surveyed 2020-2022) through a WCS 2.0.1 endpoint at
-//https://service.pdok.nl/rws/ahn/wcs/v1_0. Two coverages are
-//exposed at 0.5 m grid:
+//Rijkswaterstaat's AHN4 (surveyed 2020-2022) via a WCS 2.0.1 endpoint, two coverages at
+//0.5 m: dsm_05m (surface) and dtm_05m (terrain). Like the UK, this is separate DSM / DTM
+//rasters rather than a pre-computed normalised height, so we fetch both, subtract per pixel,
+//and feed the height-above-ground array to the pipeline.
 //
-//  dsm_05m , Digital Surface Model (all returns except water)
-//  dtm_05m , Digital Terrain Model (ground-classified points)
-//
-//Like the UK, Dutch data is published as separate DSM / DTM rasters rather than a pre-computed normalised height. We fetch both in parallel, subtract
-//per pixel, and feed the resulting height-above- ground array to the shared pipeline.
-//
-//Coverage: mainland Netherlands. Caribbean Netherlands (BES islands)
-//are not on AHN; bbox-clip excludes them. Both EPSG:4326 and
-//EPSG:28992 (Dutch RD) are advertised, we pin to 4326 so the request
-//builder stays uniform across providers.
+//Coverage: mainland Netherlands; BES islands aren't on AHN and the bbox-clip excludes them.
+//EPSG:4326 and EPSG:28992 are advertised; we pin to 4326 to keep the builder uniform.
 
 import type {
     LidarSource,

@@ -1,19 +1,13 @@
 //Land Tirol terrain ALS shadow source.
 //
-//Tirol publishes its airborne-laser-scanning derived elevation
-//data through `gis.tirol.gv.at` as a single MapServer with a
-//WCSServer extension, free open data, no API key, no signup. The
-//service exposes multiple coverages including a DGM and a DOM at
-//5 m (statewide) and 50 cm (where available). We pull the 5 m
-//pair because it covers the full state, the 50 cm variants are
-//project-scoped.
+//Tirol's ALS-derived elevation via a single MapServer WCSServer on `gis.tirol.gv.at`, free
+//open data, no API key. The service exposes a DGM and DOM at 5 m (statewide) and 50 cm
+//(where available); we pull the 5 m pair because it covers the full state.
 //
-//Same DSM-DTM subtraction pattern as Steiermark / UK / NL / NO,
-//both layers publish heights above sea level so subtracting
-//yields the metres-above-ground raster the pipeline needs.
-//Native CRS is EPSG:31254 (MGI Austria Lambert with central meridian
-//M28), the service rejects EPSG:4326 axis-label subsetting so we
-//project the bbox client-side via proj.ts before sending the request.
+//Same DSM-DTM subtraction as Steiermark / UK / NL / NO: both layers publish heights above
+//sea level, so subtracting yields metres-above-ground. Native CRS is EPSG:31254 (MGI Austria
+//Lambert M28); the service rejects EPSG:4326 axis-label subsetting so we project the bbox
+//client-side via proj.ts.
 
 import type {
     LidarSource,
@@ -28,8 +22,8 @@ const WCS_URL   = 'https://gis.tirol.gv.at/arcgis/services/Service_Public/terrai
 const DOM_COV   = 'Oberflaechenmodell_5m_M28';
 const DGM_COV   = 'Gelaendemodell_5m_M28';
 
-//Bounding box of Tirol, padded into the Bavarian / Italian / Swiss / Salzburg borders so border-area homes still trigger a fetch. WCS clips silently
-//outside the state's mosaic.
+//Tirol bbox, padded into neighbouring borders so border-area homes still fetch. WCS clips
+//silently outside the state's mosaic.
 const TIROL_BBOX = { minLat: 46.65, maxLat: 47.75, minLon: 10.05, maxLon: 12.95 };
 
 export const austriaTirolAls: LidarSource =
@@ -66,10 +60,8 @@ export const austriaTirolAls: LidarSource =
         }
         const proj = projectBbox(bbox, epsg);
 
-        //ArcGIS WCSServer advertises lowercase axes "x y" for both
-        //spatial and grid axes (its RectifiedGrid block uses lowercase
-        //regardless of the CRS family). Hardcoded here rather than
-        //driven from the EPSG entry since labels are server-specific.
+        //ArcGIS WCSServer advertises lowercase "x y" for both spatial and grid axes,
+        //regardless of CRS family. Hardcoded here since labels are server-specific.
         const buildUrl = (cov: string): string =>
         {
             const params = new URLSearchParams({
@@ -107,10 +99,8 @@ export const austriaTirolAls: LidarSource =
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
         }, {
-            //5 m native grid + DSM-DTM subtraction = noisy edges. Median
-            //pre-filter cleans single-cell artefacts; threshold lifted
-            //to 7 m skips tall scrub the Tirol forest serves as DSM-DTM
-            //residuals.
+            //5 m grid + DSM-DTM subtraction yields noisy edges. Median pre-filter cleans
+            //single-cell artefacts; 7 m threshold skips tall scrub from forest residuals.
             medianSmooth:  true,
             heightThreshM: 7,
         });

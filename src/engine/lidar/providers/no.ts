@@ -1,22 +1,15 @@
 //Kartverket NHM (Nasjonal Høydemodell) shadow source for Norway.
 //
-//Norway's national elevation model is published by Kartverket through
-//ArcGIS ImageServer endpoints (not OGC WCS, which simplifies the
-//URL builder but means we go through the ESRI exportImage REST call
-//instead of GetCoverage). Two services are available nationwide:
+//Norway's national elevation model via Kartverket ArcGIS ImageServers (ESRI exportImage
+//REST, not OGC WCS): DTM (Float32 terrain) and DOM (Float32 surface; "DOM" = Digital
+//Overflate Modell, i.e. DSM). We fetch both, subtract, and feed the height-above-ground
+//raster to the pipeline.
 //
-// /arcgis/rest/services/DTM/ImageServer , Float32 terrain heights /arcgis/rest/services/DOM/ImageServer , Float32 surface heights
+//The ImageServers are natively EPSG:25833 (UTM 33N) but exportImage reprojects transparently
+//when we send bboxSR=4326 / imageSR=4326, keeping the URL builder uniform with the OGC ones.
+//format=tiff returns a Float32 GeoTIFF when the source is Float32.
 //
-//"DOM" is the Norwegian abbreviation for Digital Overflate Modell, i.e. the same as DSM. We fetch both, subtract, and feed the height-above-ground
-//raster to the shared pipeline.
-//
-//Spatial reference: the ImageServers are natively in EPSG:25833
-//(ETRS89 / UTM Zone 33N), but exportImage transparently reprojects
-//if we send `bboxSR=4326` and `imageSR=4326`, which lets us keep the
-//provider URL builder uniform with the OGC ones. exportImage's
-//`format=tiff` returns a Float32 GeoTIFF when the source is Float32.
-//
-//Coverage: mainland Norway + Svalbard. We bbox-clip on a generous rectangle that covers both.
+//Coverage: mainland Norway + Svalbard, bbox-clipped on a generous rectangle covering both.
 
 import type {
     LidarSource,
@@ -29,8 +22,8 @@ import { fetchFloat32GeoTiff, subtractRasters } from '../geotiff';
 const DTM_URL = 'https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage';
 const DOM_URL = 'https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage';
 
-//Mainland Norway + Jan Mayen + Svalbard. Wide on purpose, the exportImage call returns no-data outside actual coverage so the pipeline drops anything
-//that comes back empty.
+//Mainland Norway + Jan Mayen + Svalbard, wide on purpose. exportImage returns no-data
+//outside actual coverage, so the pipeline drops anything that comes back empty.
 const NO_BBOX = { minLat: 57.5, maxLat: 81.0, minLon: 4.0, maxLon: 33.0 };
 
 export const norwayKartverketNhm: LidarSource =
@@ -60,10 +53,8 @@ export const norwayKartverketNhm: LidarSource =
             return emptyResult();
         }
 
-        //ArcGIS exportImage. bbox in lon-lat order (xmin, ymin, xmax,
-        //ymax) when bboxSR=4326. format=tiff with no compression
-        //returns a Float32 GeoTIFF for Float32 source data, which the
-        //GeoTIFF helper decodes natively.
+        //ArcGIS exportImage. bbox in lon-lat order (xmin, ymin, xmax, ymax) when bboxSR=4326.
+        //format=tiff returns a Float32 GeoTIFF for Float32 source data.
         const buildUrl = (base: string): string =>
         {
             const params = new URLSearchParams({
@@ -88,7 +79,8 @@ export const norwayKartverketNhm: LidarSource =
             return emptyResult();
         }
 
-        //Replace the noData sentinel with NaN before subtracting so a missing ground sample doesn't pollute the surface delta.
+        //Replace the noData sentinel with NaN before subtracting so a missing ground sample
+        //doesn't pollute the surface delta.
         const cleanseNoData = (a: Float32Array): Float32Array =>
         {
             for (let i = 0; i < a.length; i++)

@@ -1,12 +1,10 @@
-//Small formatting and validation helpers shared between the card render path and the visual editor. Kept dependency-free so any card-side module can
-//pull them in without dragging Lit or engine symbols along.
+//Formatting/validation helpers shared between the card render path and the visual editor. Kept
+//dependency-free so any card-side module can pull them in without dragging Lit or engine symbols along.
 
 
-//Format a number with the user's locale (decimal mark, grouping).
-//Falls back to a locale-independent toFixed when Intl rejects the
-//resolved locale string, which protects against custom HA locales
-//that aren't valid BCP-47 tags. `integer = true` rounds to the
-//nearest integer and drops the fraction digits entirely.
+//Format a number with the user's locale (decimal mark, grouping). Falls back to locale-independent
+//toFixed when Intl rejects the resolved locale, guarding against custom HA locales that aren't valid
+//BCP-47 tags. `integer = true` rounds to the nearest integer and drops fraction digits.
 export function formatLocalisedNumber(
     hass: any,
     value: number,
@@ -14,9 +12,9 @@ export function formatLocalisedNumber(
     integer: boolean = false
 ): string
 {
-    //Guard against NaN / Infinity / undefined-coerced-to-number coming from cold-cache reads or upstream parser failures. Without
-    //this guard `Intl.NumberFormat.format(NaN)` returns the literal "NaN" string which surfaces in chips; we render a neutral
-    //zero placeholder instead so the chip stays readable until real data lands.
+    //Guard against NaN / Infinity / undefined from cold-cache reads or upstream parser failures:
+    //`Intl.NumberFormat.format(NaN)` yields the literal "NaN" in chips, so render a neutral zero
+    //placeholder until real data lands.
     if (!isFinite(value))
     {
         return integer ? '0' : (0).toFixed(fractionDigits);
@@ -39,9 +37,8 @@ export function formatLocalisedNumber(
 
 
 //Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every
-//chip prints the same unit and precision regardless of the source sensor's native unit. Input is
-//watts. `signed` prefixes an explicit + / − (the card's figure-dash) so battery charge reads apart
-//from discharge at a glance; unsigned just formats the value.
+//chip prints the same unit/precision regardless of the source sensor's native unit. Input is watts.
+//`signed` prefixes an explicit + / − (figure-dash) so battery charge reads apart from discharge.
 export function formatPowerKw(hass: any, watts: number, decimals: number, signed: boolean = false): string
 {
     if (signed)
@@ -53,17 +50,15 @@ export function formatPowerKw(hass: any, watts: number, decimals: number, signed
 }
 
 
-//Uniform energy readout: always kilowatt-hours, locale-aware, with the caller's decimal count.
-//Input is already in kWh.
+//Uniform energy readout: always kilowatt-hours, locale-aware, caller's decimal count. Input already in kWh.
 export function formatEnergyKwh(hass: any, kwh: number, decimals: number): string
 {
     return `${formatLocalisedNumber(hass, kwh, decimals)} kWh`;
 }
 
 
-//Normalise an energy value + unit string to kilowatt-hours. Mirrors pvNormalizeToWatts on the power
-//side: Wh / kWh / MWh fold to kWh; an unknown unit is treated as already kWh so the caller still
-//prints a finite number rather than dropping the readout.
+//Normalise an energy value + unit to kilowatt-hours. Mirrors pvNormalizeToWatts: Wh / kWh / MWh fold
+//to kWh; an unknown unit is treated as already kWh so the caller still prints a finite number.
 export function energyToKwh(value: number, unit: string): number
 {
     switch ((unit || '').trim().toLowerCase())
@@ -75,12 +70,9 @@ export function energyToKwh(value: number, unit: string): number
 }
 
 
-//Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged,
-//1 = pure black). Multiplicative on each channel, keeps the
-//hue intact, just lowers the value. Used to derive the slightly
-//darker rim colour around the sun disc from the configured sun
-//colour, so the rim stays visible against the disc fill without
-//the user having to configure two colours.
+//Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged, 1 = pure black). Multiplicative per
+//channel, keeping hue intact. Derives the darker sun-disc rim from the configured sun colour so the
+//rim stays visible without a second config key.
 export function darkenHex(hex: string, factor: number): string
 {
     const f = 1 - Math.max(0, Math.min(1, factor));
@@ -92,11 +84,8 @@ export function darkenHex(hex: string, factor: number): string
 }
 
 
-//Linear blend between two #rrggbb hex colours. `t` = 0 returns
-//`a` unchanged, `t` = 1 returns `b`. Used by the cloud disc to
-//derive the light (low) and dark (high) band shades from the
-//configured cloud colour without needing a second / third
-//config key.
+//Linear blend between two #rrggbb hex colours: `t` = 0 returns `a`, `t` = 1 returns `b`. The cloud
+//disc uses it to derive light (low) and dark (high) band shades from one configured cloud colour.
 export function lerpHexToward(a: string, b: string, t: number): string
 {
     const u = Math.max(0, Math.min(1, t));

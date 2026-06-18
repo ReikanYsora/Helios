@@ -1,20 +1,12 @@
 //Environment Agency LiDAR Composite shadow source for England.
 //
-//Defra exposes the national LiDAR Composite as two separate WMS
-//services: a Digital Surface Model (DSM, includes vegetation +
-//buildings) and a Digital Terrain Model (DTM, bare ground only). We
-//fetch both and subtract per pixel to produce a height-above-ground
-//raster, which the shared pipeline then consolidates into shadow
-//polygons.
+//Defra exposes the national LiDAR Composite as two separate WMS services: DSM (vegetation +
+//buildings) and DTM (bare ground). We fetch both and subtract per pixel for a
+//height-above-ground raster. Both serve image/tiff (Float32 GeoTIFF); CRS:84 (EPSG:4326,
+//lon-lat axis order) is supported, so we pin to it and avoid reprojection bookkeeping.
 //
-//Both endpoints serve image/tiff (Float32 GeoTIFF). CRS:84 (=
-//EPSG:4326 with lon-lat axis order) is supported by the elevation
-//layers, so we pin to that and avoid any reprojection bookkeeping.
-//
-//Coverage: ~99 % of England. The DSM service does NOT cover Wales,
-//Scotland or Northern Ireland; we bbox-clip on the English-mainland
-//rectangle, with a few-degree pad for the eastern English coast and
-//Lundy.
+//Coverage is ~99 % of England only (not Wales/Scotland/NI). We bbox-clip on the
+//English-mainland rectangle with a few-degree coastal pad.
 
 import type {
     LidarSource,
@@ -29,10 +21,8 @@ const DTM_URL = 'https://environment.data.gov.uk/spatialdata/lidar-composite-dig
 const DSM_LAYER = 'Lidar_Composite_Elevation_LZ_DSM_1m';
 const DTM_LAYER = 'Lidar_Composite_Elevation_DTM_1m';
 
-//Coverage of the English LiDAR Composite. Wider than England's
-//geopolitical extent on purpose (Cornwall west tip, Northumberland
-//east coast, Channel Islands) so home points right on the edge still
-//probe.
+//English LiDAR Composite bbox, intentionally wider than England's geopolitical extent so
+//edge home points still probe.
 const UK_BBOX = { minLat: 49.7, maxLat: 56.0, minLon: -7.2, maxLon: 2.1 };
 
 export const englandLidarComposite: LidarSource =
@@ -62,9 +52,7 @@ export const englandLidarComposite: LidarSource =
             return emptyResult();
         }
 
-        //CRS:84 is EPSG:4326 with lon,lat axis order, no axis flip
-        //needed in the BBOX string. Defra advertises both EPSG:27700
-        //(British National Grid) and CRS:84 on the elevation layers.
+        //CRS:84 is EPSG:4326 with lon,lat axis order, so no axis flip in the BBOX string.
         const buildUrl = (base: string, layer: string): string =>
         {
             const params = new URLSearchParams({
@@ -82,8 +70,7 @@ export const englandLidarComposite: LidarSource =
             return `${base}?${params.toString()}`;
         };
 
-        //Fire DSM and DTM requests in parallel; both must succeed for
-        //the subtraction to mean anything.
+        //Both must succeed for the subtraction to mean anything.
         const [dsm, dtm] = await Promise.all([
             fetchFloat32GeoTiff(buildUrl(DSM_URL, DSM_LAYER), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DTM_URL, DTM_LAYER), rasterSize, opts.signal)

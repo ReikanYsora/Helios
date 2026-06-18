@@ -1,17 +1,11 @@
-//Vermont Center for Geographic Information (VCGI) nDSM shadow
-//source, the first US-state native provider in Helios.
+//Vermont Center for Geographic Information (VCGI) nDSM shadow source, the first US-state
+//native provider in Helios.
 //
-//VCGI publishes a statewide normalized Digital Surface Model
-//(nDSM, metres-above-ground) derived from the 2013-2017 QL2 0.7 m
-//LiDAR collection, as a public ArcGIS Image Server. Single-fetch,
-//no subtraction round-trip, no authentication, no API key. The
-//service is hosted on `maps.vcgi.vermont.gov/arcgis/`, returns
-//Float32 pixels and natively supports re-projection from any input
-//SR (we send bbox in EPSG:4326 and get the response back in 4326
-//too).
+//VCGI's statewide nDSM (metres-above-ground, from the 2013-2017 QL2 0.7 m LiDAR) via a
+//public ArcGIS Image Server. Single-fetch, no subtraction, no auth, no API key. Returns
+//Float32 pixels and reprojects from any input SR (we send and receive EPSG:4326).
 //
-//Coverage: state of Vermont (USA, ~645 K people). Pixel pitch
-//0.7 m on the upstream cache.
+//Coverage: state of Vermont, 0.7 m pixel pitch on the upstream cache.
 
 import type {
     LidarSource,
@@ -23,8 +17,8 @@ import { fetchFloat32GeoTiff } from '../geotiff';
 
 const IMG_URL   = 'https://maps.vcgi.vermont.gov/arcgis/rest/services/EGC_services/IMG_VCGI_LIDARNDSM_WM_CACHE_v1/ImageServer/exportImage';
 
-//Bounding box of Vermont, padded into New Hampshire / Massachusetts / New York / Québec borders. The service returns no-data outside the state mosaic
-//so over-fetching is free.
+//Vermont bbox, padded into neighbouring borders. The service returns no-data outside the
+//state mosaic, so over-fetching is free.
 const VT_BBOX = { minLat: 42.65, maxLat: 45.10, minLon: -73.50, maxLon: -71.40 };
 
 export const vermontVcgiNdsm: LidarSource =
@@ -54,14 +48,10 @@ export const vermontVcgiNdsm: LidarSource =
             return emptyResult();
         }
 
-        //ArcGIS exportImage. bbox in lon-lat order (xmin, ymin, xmax,
-        //ymax) with bboxSR=4326. The upstream is natively cached in
-        //Web Mercator (EPSG:3857) but reprojects transparently when
-        //imageSR=4326 is requested. format=tiff with pixelType=F32
-        //returns a Float32 GeoTIFF the shared helper decodes
-        //natively. The nDSM is already metres-above-ground so the
-        //pipeline gets fed the height raster directly, no DSM-DTM
-        //subtraction needed.
+        //ArcGIS exportImage. bbox in lon-lat order (xmin, ymin, xmax, ymax) with bboxSR=4326.
+        //Upstream is cached in Web Mercator but reprojects transparently for imageSR=4326.
+        //format=tiff + pixelType=F32 returns a Float32 GeoTIFF. The nDSM is already
+        //metres-above-ground, so the pipeline gets the height raster directly (no subtraction).
         const params = new URLSearchParams({
             bbox:          `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`,
             bboxSR:        '4326',

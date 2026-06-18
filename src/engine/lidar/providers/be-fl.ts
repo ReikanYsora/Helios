@@ -1,25 +1,12 @@
 //Vlaanderen DHMVII OpenLiDAR shadow source for Flanders, Belgium.
 //
-//Digitaal Vlaanderen / EODaS publishes the second-generation Digital
-//Height Model of Flanders (DHMVII, 2013-2015 acquisition, 1 m raster)
-//through a GeoServer WCS at remotesensing.vlaanderen.be:
+//Digitaal Vlaanderen DHMVII (2013-2015, 1 m) via a GeoServer WCS: DSM_1M and DEM_1M (DTM),
+//both heights above sea level, so subtracting yields the metres-above-ground raster the
+//pipeline needs. Native CRS is EPSG:31370 (Belgian Lambert 72); the service rejects
+//EPSG:4326 axis-label subsetting so we project the bbox client-side via proj.ts.
 //
-//  openlidar__LiDAR_DHMV_II_DSM_1M , 1 m Digital Surface Model
-//  openlidar__LiDAR_DHMV_II_DEM_1M , 1 m Digital Elevation Model (DTM)
-//
-//Both publish heights above sea level so subtracting yields the
-//metres-above-ground raster the pipeline needs. Native CRS is
-//EPSG:31370 (Belgian Lambert 72); the service rejects EPSG:4326
-//axis-label subsetting so we project the bbox client-side via
-//proj.ts.
-//
-//Wallonia (the southern French-speaking region) is not served here.
-//Its national geoportal exposes the equivalent LiDAR through ArcGIS
-//MapServer instances that only render RGB hillshade visualisations,
-//no Float32 elevation endpoint is published. Wallonia coverage
-//remains a known gap as a result.
-//
-//License: open data, CC-BY-equivalent, no API key, no signup. The attribution string lives in the README rather than in the shadow tile metadata.
+//Wallonia is a known gap: its geoportal only exposes RGB hillshade ArcGIS MapServers, no
+//Float32 elevation endpoint. Open data, CC-BY-equivalent, no API key.
 
 import type {
     LidarSource,
@@ -34,11 +21,9 @@ const WCS_URL = 'https://remotesensing.vlaanderen.be/services/openlidar/wcs';
 const DSM_COV = 'openlidar__LiDAR_DHMV_II_DSM_1M';
 const DTM_COV = 'openlidar__LiDAR_DHMV_II_DEM_1M';
 
-//Bounding box of Flanders, padded into the Wallonia / Netherlands /
-//French / Brussels borders so homes on the edge still trigger a fetch.
-//WCS returns no-data outside the regional mosaic so over-fetching is
-//cheap, no risk of accidentally covering Wallonia (the WCS layer is
-//Flanders-only on the server side).
+//Flanders bbox, padded into neighbouring borders so edge homes still fetch. WCS returns
+//no-data outside the regional mosaic, so over-fetching is cheap; the layer is
+//Flanders-only server-side, so no risk of covering Wallonia.
 const FL_BBOX = { minLat: 50.65, maxLat: 51.55, minLon: 2.50, maxLon: 5.95 };
 
 export const flandersDhmv2: LidarSource =
@@ -75,9 +60,7 @@ export const flandersDhmv2: LidarSource =
         }
         const proj = projectBbox(bbox, epsg);
 
-        //BE-Flandre's GeoServer WCS advertises spatial axes "X Y"
-        //(uppercase) and grid axes "i j", different labels per
-        //request parameter as required by the OGC SCALESIZE schema.
+        //This GeoServer advertises spatial axes "X Y" (uppercase) and grid axes "i j".
         const buildUrl = (cov: string): string =>
         {
             const params = new URLSearchParams({
@@ -115,8 +98,8 @@ export const flandersDhmv2: LidarSource =
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
         }, {
-            //DSM 1 m minus DEM 1 m: same noise profile as the Austrian and BW DSM-DTM pipelines. Median pre-filter + 7 m threshold matches the rest
-            //of the subtraction-based providers so the rendered shadows look consistent across borders.
+            //Same DSM-DTM noise profile as the Austrian and BW pipelines. Median pre-filter
+            //+ 7 m threshold matches the other subtraction-based providers for consistency.
             medianSmooth:  true,
             heightThreshM: 7,
         });

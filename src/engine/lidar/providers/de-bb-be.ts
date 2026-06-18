@@ -1,25 +1,12 @@
 //Land Brandenburg LGB bDOM + DGM shadow source.
 //
-//Brandenburg's surveying agency (LGB, Landesvermessung und
-//Geobasisinformation Brandenburg) publishes two OGC WCS 2.0.1
-//coverages on `isk.geobasis-bb.de/ows/`, free open data under
-//Datenlizenz Deutschland Namensnennung 2.0:
+//Brandenburg's LGB publishes two WCS 2.0.1 coverages on `isk.geobasis-bb.de/ows/` (DLDE-BY-
+//2.0): bdom_wcs (image-based DSM, 1 m) and dgm_wcs (terrain, 1 m), both spanning Brandenburg
+//+ Berlin. Both publish heights above sea level (Float32 GeoTIFF), so we fetch and subtract
+//for metres-above-ground, same shape as UK / NL / NO / AT-Stmk.
 //
-//  bdom_wcs , Bildbasiertes Digitales Oberflächenmodell, 1 m,
-//             "Brandenburg mit Berlin" (so includes Berlin city)
-//  dgm_wcs  , Digitales Geländemodell, 1 m, same Brandenburg + Berlin
-//             extent
-//
-//Both publish heights above sea level in metres (Float32 GeoTIFF
-//via image/tiff), so we fetch both and subtract to get the
-//metres-above-ground raster the pipeline needs. Same shape as the
-//UK / NL / NO / AT-Stmk providers.
-//
-//EPSG:4326 is supported natively by both endpoints, so we keep the URL builder uniform with the OGC providers.
-//
-//Coverage spans Brandenburg + Berlin in one WCS, so the same
-//provider serves both Lands. That's ~6.1 M people (Brandenburg
-//~2.5 M, Berlin ~3.6 M) in a single integration.
+//EPSG:4326 is supported natively, keeping the URL builder uniform with the OGC providers.
+//One WCS covers both Lands, so a single integration serves Brandenburg + Berlin.
 
 import type {
     LidarSource,
@@ -34,8 +21,8 @@ const DGM_URL   = 'https://isk.geobasis-bb.de/ows/dgm_wcs';
 const DOM_COV   = 'bb_bdom';
 const DGM_COV   = 'bb_dgm';
 
-//Bounding box of Brandenburg + Berlin, padded so homes at the Saxony or Polish border still trigger a fetch. The WCS clips silently outside the
-//actual mosaic.
+//Brandenburg + Berlin bbox, padded so border homes still fetch. WCS clips silently outside
+//the actual mosaic.
 const BB_BE_BBOX = { minLat: 51.36, maxLat: 53.56, minLon: 11.27, maxLon: 14.77 };
 
 export const brandenburgBerlinDom: LidarSource =

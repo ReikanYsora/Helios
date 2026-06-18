@@ -24,8 +24,8 @@ export function cloudCoverIcon(coverPct: number): string
 }
 
 
-//Per-altitude cloud layer icon. Vertical-align glyphs read more clearly than weather glyphs at this size: they literally
-//show "thing at the bottom / centre / top of a frame", which maps directly to low / mid / high atmospheric layers.
+//Per-altitude cloud layer icon. Vertical-align glyphs read more clearly than weather glyphs at this
+//size: "thing at the bottom / centre / top of a frame" maps directly to low / mid / high layers.
 export function cloudLayerIcon(layer: 'low' | 'mid' | 'high'): string
 {
     if (layer === 'low')

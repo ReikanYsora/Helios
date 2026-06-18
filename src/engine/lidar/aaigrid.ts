@@ -1,9 +1,7 @@
-//ESRI ASCII Grid fetch + decode helper, used by providers whose WCS
-//endpoint refuses to serve a Float32 GeoTIFF directly. GUGiK Poland
-//advertises `image/tiff` in its capabilities but the bytes come back
-//as an 8-bit RGB rendering of the heights, useless to us. Asking
-//for `image/x-aaigrid` returns the real surface heights in metres
-//as a plain ASCII grid wrapped in a WCS multipart envelope.
+//ESRI ASCII Grid fetch + decode helper for providers whose WCS endpoint won't serve a Float32
+//GeoTIFF directly. GUGiK Poland advertises `image/tiff` but returns an 8-bit RGB render of the
+//heights; asking for `image/x-aaigrid` returns the real surface heights in metres as a plain ASCII
+//grid wrapped in a WCS multipart envelope.
 //
 //AAIGrid format, after stripping the multipart wrapper:
 //
@@ -15,19 +13,15 @@
 //   dy           0.000020661157
 //   NODATA_value -9999
 //   v v v v ...     <- ncols x nrows space-separated values, row-major,
-//   v v v v ...        top row first (matches our convention for
-//   ...                row 0 = north edge)
+//   v v v v ...        top row first (row 0 = north edge, our convention)
 //
-//Reference: GDAL AAIGrid driver
-//https://gdal.org/drivers/raster/aaigrid.html
+//Reference: GDAL AAIGrid driver https://gdal.org/drivers/raster/aaigrid.html
 
 import { lidarFetchUrl } from './proxy';
 
 
-//Header keywords AAIGrid is allowed to expose. Lowercased here so
-//the parser stays case-insensitive without per-token toLowerCase
-//calls in the hot loop. `xllcenter` / `yllcenter` are GDAL aliases
-//for `xllcorner` / `yllcorner` and appear on some servers.
+//Header keywords AAIGrid may expose, lowercased for case-insensitive matching. `xllcenter` /
+//`yllcenter` are GDAL aliases for `xllcorner` / `yllcorner` seen on some servers.
 const HEADER_KEYS = new Set([
     'ncols', 'nrows',
     'xllcorner', 'yllcorner', 'xllcenter', 'yllcenter',
@@ -36,11 +30,9 @@ const HEADER_KEYS = new Set([
 ]);
 
 
-//Pull the ASCII grid body out of a WCS 2.0 multipart envelope. The
-//grid sits in the part whose Content-Type is `image/x-aaigrid`; the
-//other parts (the PRJ string at the tail, an optional GML metadata
-//header) get skipped. When the response is not wrapped (raw grid
-//body), we treat the whole text as the grid.
+//Pull the ASCII grid body out of a WCS 2.0 multipart envelope. The grid sits in the
+//`image/x-aaigrid` part; other parts (trailing PRJ string, optional GML header) are skipped. An
+//unwrapped (raw grid) response is treated as the grid in full.
 function extractAaiGridBody(text: string): string | null
 {
     const marker = text.indexOf('image/x-aaigrid');
@@ -61,26 +53,22 @@ function extractAaiGridBody(text: string): string | null
     {
         return null;
     }
-    //The body ends at the next multipart boundary marker (`--wcs` or
-    //similar). Scan forward for a line starting with `--`.
+    //Body ends at the next multipart boundary marker; scan forward for a line starting with `--`.
     const endIdx = text.indexOf('\n--', bodyStart);
     return endIdx >= 0 ? text.slice(bodyStart, endIdx) : text.slice(bodyStart);
 }
 
 
-//Parse header + values out of the AAIGrid body. Returns the raw
-//heights array sized ncols * nrows on success, null on any malformed
-//input. NoData cells are mapped to NaN so the downstream pipeline
-//(processHeightRaster) can treat them as "out of coverage" the same
-//way it does for every other provider.
+//Parse header + values out of the AAIGrid body. Returns the heights array sized ncols * nrows, or
+//null on malformed input. NoData cells map to NaN so processHeightRaster treats them as "out of
+//coverage" like every other provider.
 function parseAaiGrid(body: string): {
     ncols: number;
     nrows: number;
     heights: Float32Array
 } | null
 {
-    //Tokenise once, the body has at most a few hundred thousand
-    //numbers and split() is comfortably faster than per-char scans.
+    //Tokenise once: a few hundred thousand numbers at most, where split() beats per-char scans.
     const tokens = body.split(/\s+/).filter(t => t.length > 0);
     if (tokens.length < 2)
     {
@@ -91,7 +79,7 @@ function parseAaiGrid(body: string): {
     let nrows = 0;
     let nodata: number | null = null;
     let i = 0;
-    //Walk header pairs until we hit a token that isn't a header keyword.
+    //Walk header pairs until a token isn't a header keyword.
     while (i + 1 < tokens.length)
     {
         const key = tokens[i].toLowerCase();
@@ -112,8 +100,7 @@ function parseAaiGrid(body: string): {
         {
             nodata = parseFloat(valStr);
         }
-        //Other geometry keys are not needed by Helios, the upstream
-        //bbox + SCALESIZE already fix the spatial extent.
+        //Other geometry keys aren't needed: the upstream bbox + SCALESIZE fix the spatial extent.
         i += 2;
     }
     if (ncols <= 0 || nrows <= 0)
@@ -148,10 +135,8 @@ function parseAaiGrid(body: string): {
 }
 
 
-//Resample a (ncols x nrows) grid to rasterSize x rasterSize via
-//nearest-neighbour. Same shape as the resample step inside the
-//GeoTIFF helper so providers can swap one for the other without
-//touching the downstream pipeline.
+//Resample a (ncols x nrows) grid to rasterSize x rasterSize via nearest-neighbour. Same shape as the
+//GeoTIFF helper's resample step so providers can swap one for the other.
 function resampleNearest(
     src:        Float32Array,
     srcCols:    number,
@@ -179,11 +164,9 @@ function resampleNearest(
 }
 
 
-//Drop-in counterpart to fetchFloat32GeoTiff for providers that have
-//to ask for `image/x-aaigrid` because their `image/tiff` is an RGB
-//render. Same signature, same Float32Array output sized
-//rasterSize x rasterSize, so the provider only needs to change the
-//FORMAT param and the helper name.
+//Drop-in counterpart to fetchFloat32GeoTiff for providers that must ask for `image/x-aaigrid`
+//because their `image/tiff` is an RGB render. Same signature and Float32Array output, so the provider
+//only changes the FORMAT param and the helper name.
 export async function fetchAaiGridHeights(
     url:        string,
     rasterSize: number,

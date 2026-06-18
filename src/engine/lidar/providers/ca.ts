@@ -1,25 +1,15 @@
 //NRCan HRDEM Mosaic shadow source for Canada.
 //
-//Canada's High Resolution Digital Elevation Model (HRDEM) is the
-//national LiDAR-derived elevation dataset published by Natural
-//Resources Canada through the GeoBase / GeoCanada infrastructure.
-//Distributed as a GeoServer WCS 1.1.1 endpoint that exposes both
-//a DSM (digital surface model) and a DTM (terrain model) coverage,
-//free open data, no API key, no signup.
+//Natural Resources Canada's HRDEM via a GeoServer WCS 1.1.1 endpoint, free open data, no
+//API key. Same single-coverage shape as France / NRW / Poland: we pull the "dsm" coverage
+//which already holds absolute surface heights, so we skip the DSM-minus-DTM round-trip and
+//let the pipeline derive a height threshold from the home's local terrain.
 //
-//Same single-coverage shape as France / NRW / Poland: we pull the "dsm" coverage which already contains absolute surface heights so we skip the
-//DSM-minus-DTM round-trip. The pipeline derives a height threshold from the home's local terrain on the fly.
+//Resolution is 1 m in the LiDAR-sourced populated south, coarser further north; the
+//upstream interpolates when the requested grid is denser than the source.
 //
-//Resolution: 1 m in southern populated areas (LiDAR-sourced), 2 m
-//further north, satellite-derived in the very far north. We size
-//the request off the native pitch the user's lidar-precision picks,
-//the upstream interpolates if the requested grid is denser than the
-//source.
-//
-//Note on WCS version: NRCan's GeoServer only exposes WCS 1.1.1,
-//which uses BoundingBox + GridOrigin + GridOffsets rather than
-//WCS 2.0.1's SUBSET / SCALESIZE. The math is the same, just a
-//different envelope.
+//NRCan's GeoServer only exposes WCS 1.1.1, which uses BoundingBox + GridOrigin +
+//GridOffsets rather than 2.0.1's SUBSET / SCALESIZE. Same math, different envelope.
 
 import type {
     LidarSource,
@@ -32,21 +22,16 @@ import { fetchFloat32GeoTiff } from '../geotiff';
 const WCS_URL    = 'https://datacube.services.geo.ca/ows/elevation';
 const COVERAGE   = 'dsm';
 
-//Bbox of Canada padded into Alaska + the Atlantic to catch coastal
-//homes on the maritime provinces and the Yukon-Alaska border. The
-//WCS silently returns no-data outside actual coverage (and HRDEM
-//is patchy in the very far north anyway), so over-fetching at the
-//edges is free.
+//Canada bbox padded into Alaska + the Atlantic to catch coastal homes. WCS returns no-data
+//outside actual coverage (and HRDEM is patchy in the far north), so over-fetching is free.
 const CA_BBOX = { minLat: 41.5, maxLat: 84.0, minLon: -141.5, maxLon: -52.0 };
 
 export const canadaHrdem: LidarSource =
 {
     id:   'ca-nrcan-hrdem',
     name: 'NRCan HRDEM (Canada)',
-    //HRDEM is 1 m where LiDAR-derived (most populated south), 2 m in
-    //the rest of the country. We declare 1 m as the native pitch so
-    //high-precision requests don't downsample on the upstream where
-    //the source is finer.
+    //Declare 1 m (the LiDAR-derived south) so high-precision requests don't downsample
+    //where the source is finer.
     nativeCellPitchMeters: 1.0,
 
     covers(lat: number, lon: number): boolean
@@ -69,16 +54,12 @@ export const canadaHrdem: LidarSource =
             return emptyResult();
         }
 
-        //WCS 1.1.1 GetCoverage. NRCan's GeoServer (geotrellis backend)
-        //expects BoundingBox in (lat_min, lon_min, lat_max, lon_max)
-        //order for EPSG:4326, not the more common (x_min, y_min,
-        //x_max, y_max) lon-first convention; mixing the two yields a
-        //500 "ExtentRangeError: xmin must be less than xmax". Format
-        //is `image/geotiff` (not `image/tiff`, which the server
-        //explicitly rejects). GridOrigin is the top-left corner in
-        //the same lat,lon order, GridOffsets is "delta_lat
-        //delta_lon" with delta_lat negative because the grid scans
-        //top-to-bottom.
+        //WCS 1.1.1 GetCoverage. This GeoServer expects BoundingBox in (lat_min, lon_min,
+        //lat_max, lon_max) order for EPSG:4326, not the usual lon-first convention; mixing
+        //them yields a 500 "ExtentRangeError: xmin must be less than xmax". Format must be
+        //`image/geotiff` (the server rejects `image/tiff`). GridOrigin is the top-left
+        //corner in the same lat,lon order; GridOffsets is "delta_lat delta_lon" with
+        //delta_lat negative because the grid scans top-to-bottom.
         const deltaLat = (bbox.maxLat - bbox.minLat) / rasterSize;
         const deltaLon = (bbox.maxLon - bbox.minLon) / rasterSize;
 

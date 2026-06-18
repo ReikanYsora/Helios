@@ -1,23 +1,13 @@
 //Land Steiermark ALS shadow source for Styria, Austria.
 //
-//Styria publishes its airborne-laser-scanning derived elevation data through GIS Steiermark as a pair of ArcGIS-backed WCS services, free open data,
-//no API key, no signup:
+//Styria's ALS-derived elevation via a pair of ArcGIS-backed WCS services, free open data,
+//no API key: ALSHoeheninformation_1m_UTM33N (DSM) and ALSGelaendeinformation_1m_UTM33N
+//(DTM). Each exposes four coverages; "Coverage4" is the state-wide Gesamtmodell mosaic (the
+//first three are project-scoped subsets and hillshades). We fetch Coverage4 from each and
+//subtract to derive metres-above-ground, the same DSM-DTM pattern as UK / NL / NO.
 //
-//  ALSHoeheninformation_1m_UTM33N  , DSM (Oberflächenmodell, the
-//                                     full surface with trees and
-//                                     buildings)
-//  ALSGelaendeinformation_1m_UTM33N , DTM (Geländemodell, the bare
-//                                      ground after filtering)
-//
-//Both services expose four coverages, the fourth ("Coverage4") is
-//the state-wide Gesamtmodell mosaic; the first three are project-
-//scoped subsets and hillshade variants. We fetch Coverage4 from each
-//service and subtract to derive metres-above-ground, the same
-//DSM-DTM pattern used for the UK / NL / NO providers.
-//
-//Native CRS is EPSG:32633 (WGS84 / UTM Zone 33N). The service
-//rejects EPSG:4326 axis-label subsetting so we project the bbox
-//client-side via proj.ts before sending the request.
+//Native CRS is EPSG:32633 (UTM 33N); the service rejects EPSG:4326 axis-label subsetting so
+//we project the bbox client-side via proj.ts.
 
 import type {
     LidarSource,
@@ -32,8 +22,8 @@ const DOM_URL   = 'https://gis.stmk.gv.at/arcgis/services/OGD/ALSHoeheninformati
 const DTM_URL   = 'https://gis.stmk.gv.at/arcgis/services/OGD/ALSGelaendeinformation_1m_UTM33N/MapServer/WCSServer';
 const COVERAGE  = 'Coverage4';
 
-//Bounding box of Styria, padded so homes on the Carinthian and Burgenland borders still trigger a fetch. WCS returns no-data outside the state's
-//mosaic so over-fetching at the edges is free.
+//Styria bbox, padded so border homes still fetch. WCS returns no-data outside the state's
+//mosaic, so over-fetching is free.
 const AT_STMK_BBOX = { minLat: 46.55, maxLat: 47.85, minLon: 13.50, maxLon: 16.20 };
 
 export const austriaSteiermarkAls: LidarSource =
@@ -108,12 +98,9 @@ export const austriaSteiermarkAls: LidarSource =
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
         }, {
-            //1 m DSM minus 1 m DTM looks clean on paper but the
-            //Steiermark mosaic carries low residuals over forest and
-            //agricultural land that saturate the default 5 m threshold
-            //(>80 % of cells passing). Median pre-filter + 7 m threshold
-            //recovers building-tree separation without losing real
-            //roofs.
+            //The Steiermark mosaic carries low residuals over forest and farmland that
+            //saturate the default 5 m threshold (>80 % of cells passing). Median pre-filter
+            //+ 7 m threshold recovers building-tree separation without losing real roofs.
             medianSmooth:  true,
             heightThreshM: 7,
         });

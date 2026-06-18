@@ -1,17 +1,12 @@
 //IGN LiDAR HD shadow source for metropolitan France + Corsica.
 //
-//IGN's Geoplateforme exposes the LiDAR HD survey through a standard
-//OGC WMS-Raster endpoint at https://data.geopf.fr/wms-r. We fetch the
-//MNH product ("Modele Numerique de Hauteur"): heights of objects
-//above the bare terrain. A pixel of 8.5 means "something 8.5 m tall
-//sits at this location", which lumps trees, hedges and buildings
-//together.
+//IGN's Geoplateforme exposes the LiDAR HD survey via an OGC WMS-Raster endpoint. We fetch
+//the MNH product (heights of objects above bare terrain): a pixel of 8.5 means something
+//8.5 m tall sits there, lumping trees, hedges and buildings together.
 //
-//Unique among Helios's LiDAR providers: IGN's WMS-R supports
-//FORMAT=image/x-bil;bits=32, which streams the raster as raw little-
-//endian float32 height values, no header, no parser dependency. The
-//other providers serve image/tiff and route through the GeoTIFF
-//helper instead.
+//Unique among our providers: IGN's WMS-R supports FORMAT=image/x-bil;bits=32, streaming the
+//raster as raw little-endian float32 with no header or parser. The others serve image/tiff
+//via the GeoTIFF helper.
 
 import type {
     LidarSource,
@@ -24,7 +19,7 @@ import { lidarFetchUrl } from '../proxy';
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
 
-//Bounding box of metropolitan France + Corsica, padded by ~0.3 deg so home points right on the coast still trigger a fetch.
+//Metropolitan France + Corsica bbox, padded ~0.3 deg so coastal home points still fetch.
 const FR_BBOX = { minLat: 41.0, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 
 export const franceLidarHd: LidarSource =
@@ -55,9 +50,8 @@ export const franceLidarHd: LidarSource =
             return emptyResult();
         }
 
-        //WMS 1.3.0 with EPSG:4326 wants axis order (lat, lon); 1.1.1
-        //would want (lon, lat). We pin to 1.3.0 so the axis convention
-        //is unambiguous.
+        //WMS 1.3.0 + EPSG:4326 wants axis order (lat, lon) (1.1.1 would want lon, lat). We pin
+        //to 1.3.0 so the convention is unambiguous.
         const params = new URLSearchParams({
             SERVICE: 'WMS',
             VERSION: '1.3.0',
@@ -89,9 +83,8 @@ export const franceLidarHd: LidarSource =
         try { buf = await resp.arrayBuffer(); }
         catch (_) { return emptyResult(); }
 
-        //A short response means the server returned a ServiceException
-        //XML rather than the binary raster (typical when the layer name
-        //drifts); bail rather than read garbage as floats.
+        //A short response means a ServiceException XML, not the binary raster (typical when
+        //the layer name drifts); bail rather than read garbage as floats.
         const expectedBytes = rasterSize * rasterSize * 4;
         if (buf.byteLength < expectedBytes)
         {

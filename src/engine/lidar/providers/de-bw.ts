@@ -1,30 +1,14 @@
 //Baden-Württemberg LGL DOM5 + DGM1 shadow source.
 //
-//LGL Baden-Württemberg (Landesamt für Geoinformation und
-//Landentwicklung) opened its full geodata catalogue under
-//Datenlizenz Deutschland Namensnennung 2.0 in June 2024, including
-//two INSPIRE-themed WCS coverages on `owsproxy.lgl-bw.de`:
+//Two INSPIRE-themed WCS coverages (DLDE-BY-2.0) on `owsproxy.lgl-bw.de`: DOM5 (surface,
+//5 m) and DGM1 (terrain, 1 m), both Float32 GeoTIFF. Both publish through the INSPIRE
+//elevation theme, so the CoverageId is the generic `EL.ElevationGridCoverage` on each
+//endpoint (the URL differentiates DOM from DGM, not the id).
 //
-//  WCS_INSP_BW_Hoehe_Coverage_DOM5 , Digitales Oberflächenmodell,
-//                                    5 m grid (5 m for the DSM is
-//                                    LGL's published resolution for
-//                                    state-wide downloads, finer
-//                                    products are bulk-only)
-//  WCS_INSP_BW_Hoehe_Coverage_DGM1 , Digitales Geländemodell, 1 m
-//
-//Both coverages publish through the INSPIRE elevation theme, so the
-//coverage identifier is the generic `EL.ElevationGridCoverage` on
-//each endpoint (the URL differentiates DOM from DGM, not the
-//CoverageId). Both return Float32 GeoTIFF. The service rejects
-//EPSG:4326 axis-label subsetting and requires its native UTM 32N
-//(EPSG:25832) projection, so we project the bbox client-side via
-//proj.ts before sending the request.
-//
-//Resolution: BW publishes DOM at 5 m and DGM at 1 m. Helios's
-//pipeline resamples both onto the same SCALESIZE grid before
-//subtracting, so the mismatch is transparent. The actual height
-//resolution is bounded by the coarser of the two (5 m for DOM in
-//this case).
+//The service rejects EPSG:4326 axis-label subsetting and requires native UTM 32N
+//(EPSG:25832), so we project the bbox client-side via proj.ts. The pipeline resamples
+//both onto the same SCALESIZE grid before subtracting; effective resolution is bounded
+//by the coarser DOM (5 m).
 
 import type {
     LidarSource,
@@ -40,16 +24,15 @@ const DGM_URL   = 'https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Cov
 //Both INSPIRE-themed coverages use the generic theme coverage id.
 const COVERAGE  = 'EL.ElevationGridCoverage';
 
-//Bounding box of Baden-Württemberg, padded into Rheinland-Pfalz + Bavaria + Switzerland borders so coastal homes still trigger a fetch. WCS returns
-//no-data outside the state mosaic.
+//Baden-Württemberg bbox, padded into neighbouring borders so edge homes still fetch.
+//WCS returns no-data outside the state mosaic.
 const BW_BBOX = { minLat: 47.50, maxLat: 49.85, minLon: 7.45, maxLon: 10.55 };
 
 export const badenWurttembergLgl: LidarSource =
 {
     id:   'de-bw-lgl',
     name: 'LGL BW DOM5 + DGM1 (Baden-Württemberg)',
-    //LGL BW DOM is published on a 5 m grid. The DGM1 is 1 m but the subtracted output is bounded by the coarser DOM resolution, so we declare 5 m as
-    //the effective native pitch.
+    //Subtracted output is bounded by the coarser DOM grid, so declare 5 m as the pitch.
     nativeCellPitchMeters: 5.0,
 
     covers(lat: number, lon: number): boolean
@@ -79,10 +62,8 @@ export const badenWurttembergLgl: LidarSource =
         }
         const proj = projectBbox(bbox, epsg);
 
-        //LGL BW's INSPIRE WCS advertises spatial axes "E N" (UTM
-        //easting / northing) and grid axes "X Y" (uppercase, the
-        //RectifiedGrid block's labels). Hardcoded here, no two
-        //national INSPIRE proxies agree on the conventions.
+        //Spatial axes "E N" (UTM easting/northing), grid axes "X Y" (uppercase). Hardcoded
+        //per server; no two national INSPIRE proxies agree on axis conventions.
         const buildUrl = (base: string): string =>
         {
             const params = new URLSearchParams({
@@ -120,12 +101,8 @@ export const badenWurttembergLgl: LidarSource =
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
         }, {
-            //DOM is published at 5 m and DGM at 1 m; the subtraction
-            //is dominated by the coarser DOM grid which puts a lot of
-            //2-5 m noise on building edges and low vegetation. Median
-            //pre-filter kills isolated spikes, threshold raised to 7 m
-            //skips tall scrub and 1-story garden sheds whose render
-            //would otherwise dominate the shadow output.
+            //Coarse DOM grid puts 2-5 m noise on building edges and low vegetation. Median
+            //pre-filter kills isolated spikes; 7 m threshold skips tall scrub and garden sheds.
             medianSmooth:  true,
             heightThreshM: 7,
         });

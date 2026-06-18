@@ -1,13 +1,10 @@
-//Camera pitch bounds. Single source of truth used by the MapLibre constructor (minPitch / maxPitch),
-//the drag-rotate handler, the editor's live setCameraPitch entry point, the initial-pose clamp on
-//_initialPitch (covers stored localStorage pose + camera-pitch-deg YAML override) and the detail-mode
-//dive target. Changing the limits here propagates to every code path that can move the camera, so the
-//user cannot bypass the floor through any pose source. MIN = mostly top-down, MAX = nearly horizontal
-//(grazing ground angle), REST = the hemisphere-aware default when nothing else is configured.
+//Camera pitch bounds — single source of truth for the MapLibre constructor (min/maxPitch), the
+//drag-rotate handler, the editor's setCameraPitch, the initial-pose clamp (localStorage pose +
+//camera-pitch-deg YAML override) and the detail-mode dive target, so no pose source can bypass the
+//floor. MIN = mostly top-down, MAX = nearly horizontal, REST = hemisphere-aware default.
 //
-//Kept in its own module so both helios-engine.ts and detail-mode.ts can pull from one constant set
-//without introducing a circular import (detail-mode lives under src/engine/ and is imported by the
-//engine itself).
+//Its own module so helios-engine.ts and detail-mode.ts can share the constants without a circular
+//import (detail-mode lives under src/engine/ and is imported by the engine).
 
 export const CAMERA_PITCH_MIN_DEG  = 15;
 export const CAMERA_PITCH_MAX_DEG  = 55;
