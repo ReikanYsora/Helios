@@ -1,14 +1,8 @@
 import { css } from 'lit';
 
-//Visual styles for the card configuration editor. Kept in its own
-//file (separate from the runtime card's helios-card-css.ts) so a
-//styling change to the editor never accidentally affects the card
-//rendered on the dashboard, and vice versa. The two surfaces live
-//in distinct Shadow DOM trees and share zero selectors, so the
-//split is purely organisational, not functional.
-//
-//Single export: `editorStyles`, applied to the <helios-card-editor>
-//root element that hosts the whole config UI.
+//Styles for the config editor. Kept separate from the runtime card's
+//helios-card-css.ts so editor and card never share selectors.
+//Single export: `editorStyles`, applied to <helios-card-editor>.
 
 
 export const editorStyles = css`
@@ -32,11 +26,9 @@ export const editorStyles = css`
         border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
     }
 
-    /*  Subsection heading inside an already-collapsible block. One
-        notch quieter than .section-title (no border, dimmer colour)
-        so users read it as "still inside the parent section, this
-        is just a logical group". Used for the LiDAR View knobs
-        nested in the Shading section. */
+    /*  Subsection heading inside a collapsible block. Quieter than
+        .section-title (no border, dimmer) so it reads as a logical
+        group still inside the parent section. */
     .subsection-title
     {
         font-size: 11px;
@@ -48,17 +40,11 @@ export const editorStyles = css`
         margin-bottom: 4px;
     }
 
-    /*  Collapsible section. Uses native <details>/<summary> so the
-        open/closed state needs no JS plumbing and survives keyboard
-        navigation for free. The default disclosure triangle is
-        replaced by a custom chevron via ::before so the summary
-        row visually matches a regular .section-title heading with a
-        single rotating glyph that signals expandability.
-
-        Extra margin-top between sibling sections so they read as
-        distinct blocks even when several are collapsed in a row.
-        The first child of the editor gets no margin (the editor
-        container handles its own top padding).                     */
+    /*  Collapsible section. Native <details>/<summary> so open/closed
+        state needs no JS and is keyboard-accessible. Default triangle
+        replaced by a custom ::before chevron so the row matches a
+        .section-title heading. Extra margin-top separates siblings;
+        first child gets none (editor handles its own top padding). */
     details.advanced-section
     {
         display: flex;
@@ -99,8 +85,8 @@ export const editorStyles = css`
     {
         transform: rotate(90deg);
     }
-    /*  Per-section icon, sits between the chevron and the label so each accordion row reads at a glance. Inherits the
-        section title's primary-colour tint and shrinks to match the title's vertical rhythm without overpowering it. */
+    /*  Per-section icon between the chevron and label. Inherits the
+        section title's tint, sized to match the title's rhythm. */
     .section-icon
     {
         --mdc-icon-size: 16px;
@@ -111,13 +97,9 @@ export const editorStyles = css`
         flex-shrink: 0;
     }
 
-    /*  Vertical rhythm: a positive top margin pushes the help
-        visibly away from its field above, and a generous bottom
-        margin creates a clear break before the next field. Both
-        stack with the section's 14 px flex gap, giving:
-          field → help        = gap + top    = 14 + 8  = 22 px
-          help  → next field  = gap + bottom = 14 + 20 = 34 px
-        Hierarchy ratio 1.5×, both spacings comfortable to read.   */
+    /*  Help text margins stack with the section's 14 px flex gap:
+        field→help = 22 px, help→next field = 34 px (1.5x ratio), so
+        the help reads as attached to the field above it. */
     .field-help
     {
         font-size: 11px;
@@ -153,13 +135,9 @@ export const editorStyles = css`
         position: relative;
     }
 
-    /*  Extra breathing room between two consecutive fields with no
-        help text between them (e.g. the Location lat/lon pair or
-        the Local LiDAR bbox quartet). Without it the rows visually
-        touch because the section flex gap alone is too tight. The
-        selector only fires when both siblings are .field, so cases
-        with a .hint or .field-help between still rely on the
-        help's own margins.                                          */
+    /*  Extra gap between two consecutive fields with no help text
+        between them (e.g. the lat/lon pair). Only fires when both
+        siblings are .field, so help-separated rows are unaffected. */
     .field + .field
     {
         margin-top: 8px;
@@ -196,13 +174,10 @@ export const editorStyles = css`
         font-size: 13px;
     }
 
-    /*  Native dropdown reused for any setting with 3+ options whose
-        labels can't fit a horizontal segmented toggle without
-        cropping across languages. Same width budget as the text
-        inputs so right-edge alignment matches the rest of the
-        editor. The browser's native chevron + dropdown menu is
-        kept on purpose: it's the most familiar control on every
-        HA frontend (desktop, mobile, iframe). */
+    /*  Native dropdown for settings with 3+ options that won't fit a
+        segmented toggle across languages. Same width as the text
+        inputs for right-edge alignment; native chevron kept on
+        purpose as the most familiar control across HA frontends. */
     .he-select
     {
         width: 180px;
@@ -214,8 +189,8 @@ export const editorStyles = css`
         font-size: 13px;
     }
 
-    /*  Two-button toggle, sized to match the other inputs so
-        the right-edge alignment stays consistent across fields. */
+    /*  Two-button toggle, sized to match the other inputs for
+        consistent right-edge alignment. */
     .segmented-toggle
     {
         display: inline-flex;
@@ -255,9 +230,8 @@ export const editorStyles = css`
         color: var(--text-primary-color, #fff);
     }
 
-    /*  Slider variant, replaces type="number" inputs so the
-        user can never enter a value outside the supported range.
-        The matching value is shown to the right of the track. */
+    /*  Slider variant replacing number inputs so a value out of the
+        supported range can't be entered. Value shown right of track. */
     .slider-row
     {
         display: inline-flex;
@@ -290,23 +264,17 @@ export const editorStyles = css`
         border-radius: 3px;
     }
 
-    /*  Breathing room under the entity picker row in every grid slot
-        (combined, import, export) so the invert toggle / "add source"
-        button does not crowd the dropdown. */
+    /*  Gap under the entity picker row in each grid slot so the
+        invert toggle / add-source button doesn't crowd the dropdown. */
     .grid-source-row
     {
         margin-bottom: 12px;
     }
 
-    /*  Reset section: warning text stacked ABOVE the button so the
-        user reads the destructive-action explanation before
-        reaching the click target. The button itself is
-        right-aligned (display:block + margin-left:auto), matching
-        the +Add row affordance pattern used in the PV arrays
-        section so the editor's bottom-of-section action buttons
-        all live in the same screen position. Destructive red
-        border + label so the colour reinforces the "this empties
-        data" message even at a glance. */
+    /*  Reset section: warning stacked above the button so the
+        destructive-action explanation is read before the click
+        target. Button right-aligned to match the +Add affordance.
+        Red border + label reinforces "this empties data". */
     .reset-warning
     {
         font-size: 11px;
@@ -341,10 +309,9 @@ export const editorStyles = css`
         outline-offset: 2px;
     }
 
-    /*  About section pinned at the very bottom of the editor.
-        Compact rows for the version + links + appreciation line,
-        styled as a "credits panel" rather than another config
-        section so the user reads it as a soft footer.              */
+    /*  About section pinned at the bottom of the editor. Compact
+        rows styled as a soft credits-panel footer, not a config
+        section. */
     .about-row
     {
         display: flex;
@@ -367,10 +334,9 @@ export const editorStyles = css`
         font-size: 13px;
         color: var(--primary-text-color, #18181b);
     }
-    /*  Identity rows. Every row uses the same label-left, content-right layout the version row
-        established: flex layout with the label squeezed left + the value or link pushed right.
-        about-row already has the base flex container; the per-content variants below tune the
-        right-side style (link, plain value, version chip). */
+    /*  Identity rows. Label-left, content-right layout (from about-row's
+        flex container); variants below tune the right side (link, plain
+        value, version chip). */
     .about-row-value
     {
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
@@ -396,16 +362,16 @@ export const editorStyles = css`
         --mdc-icon-size: 18px;
         color: inherit;
     }
-    /*  X brand mark: inline SVG so the post-rebrand glyph renders properly (mdi:twitter would
-        mis-label the platform). Sized to match the ha-icon glyphs in adjacent rows. */
+    /*  X brand mark: inline SVG (mdi:twitter would mis-label the
+        post-rebrand platform). Sized to match adjacent ha-icon glyphs. */
     .about-row-svg
     {
         width:  18px;
         height: 18px;
         flex-shrink: 0;
     }
-    /*  Version chip: HA frontend body font, bold, primary text colour, decorated as a link (the
-        anchor jumps to the matching GitHub release page). */
+    /*  Version chip styled as a link jumping to the matching GitHub
+        release page. */
     .about-version-link
     {
         font-weight: var(--ha-font-weight-bold, 700);
@@ -449,11 +415,8 @@ export const editorStyles = css`
         padding-top: 14px;
         border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  BMC button styled to match the reset-btn shape (transparent fill,
-        1px border, compact padding, right-aligned via margin-left: auto)
-        but in BMC yellow so the brand colour still reads even though the
-        fill is gone. Same hover bloom pattern as reset-btn for visual
-        consistency across the editor's outline buttons.                */
+    /*  BMC button: same outline shape as reset-btn but in BMC yellow,
+        with the same hover bloom for consistency. */
     .about-coffee-link
     {
         margin-top: 8px;

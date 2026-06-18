@@ -1,21 +1,13 @@
 import { css, unsafeCSS } from 'lit';
-//MapLibre's stylesheet ships under dist/maplibre-gl.css. Vite's
-//`?inline` query suffix returns the file content as a raw string
-//instead of injecting a global <style> tag, we need the rules
-//*inside* our shadow root, not in document <head>. Without these
-//rules .maplibregl-canvas falls back to the default `position:
-//static`, which makes the canvas participate in the layout flow:
-//in HA panel-mode (where the parent container has no fixed
-//height), the explicit pixel size MapLibre writes onto the canvas
-//pushes the container, our ResizeObserver fires, MapLibre re-reads
-//a bigger container, and we're in an unbounded growth loop. With
-//the rule applied the canvas is taken out of flow and the loop
-//breaks.
+//MapLibre's stylesheet imported via `?inline` (raw string, not a global
+//<style>) so the rules land inside our shadow root. Without them
+//.maplibregl-canvas stays position:static, joins the layout flow, and in
+//HA panel-mode (no fixed parent height) the canvas pushes the container,
+//ResizeObserver fires, MapLibre re-reads a bigger size = unbounded growth.
 import maplibreCss from 'maplibre-gl/dist/maplibre-gl.css?inline';
 
-//Visual styles for the main HeliosCard. Kept in a dedicated file so
-//the card module reads as logic only; rules are grouped by feature
-//(layout, timeline, overlays, solar arc, tooltips).
+//Visual styles for HeliosCard. Grouped by feature (layout, timeline,
+//overlays, solar arc, tooltips).
 export const heliosCardStyles = css`
     ${unsafeCSS(maplibreCss)}
 
@@ -30,82 +22,50 @@ export const heliosCardStyles = css`
         position: relative;
         overflow: hidden;
         background: #000;
-        /*  Clip the black map backdrop to the PADDING box so it stops INSIDE the <ha-card> border
-            instead of bleeding under it. Without this, background-clip defaults to border-box and the
-            black fills the rounded-corner gap between the (inner-clipped) map and the border, painting a
-            dark thick corner that doesn't match HA's subtle card frame. Same fix as the dashboard
-            integration; same padding-box pattern used on the chips / mode bar. */
+        /*  Clip the black map backdrop to the padding box so it stops inside the <ha-card> border
+            instead of bleeding under it and painting a dark corner that breaks HA's subtle frame. */
         background-clip: padding-box;
-        /*  Container query host so the fullscreen / kiosk breakpoint
-            rules at the bottom of this stylesheet can react to the
-            card's own width without depending on the viewport size,
-            which would mis-fire when the user has several Helios
-            cards side by side in a grid view. See issue #33. */
+        /*  Container-query host so the kiosk breakpoint at the bottom reacts to the card's own width,
+            not the viewport (which would mis-fire with several cards side by side). See issue #33. */
         container-type: inline-size;
         container-name: helios-card;
-        /*  Border + shadow come from <ha-card> itself (same --ha-card-*
-            tokens), so we don't restyle the frame; doing so only diverged
-            from the user's theme. border-radius stays because the
-            overflow:hidden above clips the full-bleed map to it. */
+        /*  Border + shadow come from <ha-card>'s own --ha-card-* tokens; border-radius stays because
+            overflow:hidden clips the full-bleed map to it. */
         border-radius: var(--ha-card-border-radius, 12px);
         font-family: var(--ha-font-family-body, 'Roboto', sans-serif);
         height:     100%;
         width:      100%;
-        /*  Floor that survives dashboard layouts where the parent
-            doesn't apply an explicit height (vertical-stack, panel
-            view, some custom dashboards like Mushroom-based grids).
-            Without this floor, height:100% resolves to the children's
-            intrinsic height, which means only the timeline chart's
-            ~150 px contributes and the 3D map area collapses out of
-            view. 480 px leaves the chart its natural height and gives
-            the map area ~330 px which is enough to read the home and
-            its surroundings. Layouts that DO pass an explicit height
-            (masonry via getCardSize, sections view via getGridOptions)
-            override this freely.                                       */
+        /*  Floor for layouts where the parent gives no explicit height (vertical-stack, panel, some
+            grids): without it height:100% collapses to the children's intrinsic height and the 3D map
+            area vanishes. 480 px gives the map ~330 px. Layouts that pass a height override this. */
         min-height: 480px;
-        /*  New stacking context so absolute children with z-index
-            stay scoped to the card instead of escaping above HA's
-            dashboard chrome on scroll. */
+        /*  Stacking context so absolute z-index children stay scoped to the card and don't escape
+            above HA chrome on scroll. */
         isolation: isolate;
     }
 
     #map-container
     {
-        /*  Absolute + inset:0 so the container fills its ha-card
-            parent via the containing-block dimensions (which respect
-            min-height) rather than via percentage height resolution.
-            Percentage heights only cascade when the parent has a
-            concrete pixel height, the Masonry dashboard layout sets
-            only a min-height floor on the card, so a height:100% here
-            would collapse to 0 and the MapLibre canvas would never
-            render. Sections and panel views pass a pixel height down,
-            so the old percentage path worked there, the absolute path
-            works under both.                                          */
+        /*  Absolute + inset so the container fills the ha-card via containing-block dimensions (which
+            respect min-height). A percentage height would collapse to 0 under Masonry (min-height-only
+            floor) and the MapLibre canvas would never render; absolute works under every layout. */
         position: absolute;
-        /*  Bleed 1 px under the <ha-card> border (the card's overflow:hidden re-clips the map to the
-            rounded shape) so the map covers the 1 px anti-alias seam at the rounded corners where the
-            black backdrop would otherwise peek between the inner-clipped map and the border. */
+        /*  Bleed 1 px under the border (re-clipped by the card's overflow:hidden) to cover the
+            anti-alias seam where the black backdrop would peek at the rounded corners. */
         inset: -1px;
     }
 
-    /*  Force-hide the MapLibre attribution rail. attributionControl
-        compact: true is meant to collapse it to an icon, but MapLibre
-        auto-expands the full bar above 640 px viewport width which
-        most dashboard cards exceed. We hide it outright via CSS, the
-        attribution credit (MapLibre + OpenFreeMap + OpenMapTiles +
-        OpenStreetMap data) lives in the README and the HACS info pane
-        so the license obligation stays satisfied through documentation
-        rather than chrome real estate. */
+    /*  Force-hide the MapLibre attribution rail: compact:true still auto-expands above 640 px width.
+        Attribution credit (MapLibre, OpenFreeMap, OpenMapTiles, OpenStreetMap) lives in the README +
+        HACS info pane so the licence obligation stays satisfied. */
     .maplibregl-ctrl-attrib,
     .maplibregl-ctrl-bottom-right,
     .maplibregl-ctrl-bottom-left
     {
         display: none !important;
     }
-    /*  Camera-locked cursor: drop the MapLibre grab cursor when the user has the camera
-        pinned. drag pan + drag rotate are both disabled in the locked state, so the open-hand
-        cursor was advertising an interaction that does not exist. MapLibre sets the cursor
-        inline on the canvas, so the override needs !important to bite. */
+    /*  Camera-locked cursor: drop MapLibre's grab cursor when pan + rotate are disabled, so it
+        doesn't advertise an interaction that doesn't exist. !important to beat MapLibre's inline style. */
     ha-card.camera-locked .maplibregl-canvas-container,
     ha-card.camera-locked .maplibregl-canvas
     {
@@ -113,17 +73,9 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Home hitbox, invisible circular click target centred on the
-        home's projected screen position. Sits above every overlay
-        SVG (z 12) but below the detail panel (z 60) so a click
-        always reaches it, regardless of which chip / leader happens
-        to sit underneath at that moment. */
-    /*  Home click target. Sized to comfortably overlap the 3D
-        building silhouette on a typical residential footprint
-        (40-50 m at home altitude after the projection), and z-index
-        bumped above every chip + leader cluster so the click reliably
-        lands on the home regardless of which decoration happens to
-        sit under the pointer at that moment.                       */
+    /*  Home click target: invisible circular hitbox centred on the home's projected position, sized to
+        overlap a typical building footprint. z-index above every chip + leader so the click always
+        lands on the home regardless of what sits under the pointer. */
     .home-hitbox
     {
         position: absolute;
@@ -136,45 +88,32 @@ export const heliosCardStyles = css`
         pointer-events: auto;
         z-index: 55;
     }
-    /*  Loading-state hitbox: still rendered (the user sees the home pill underneath) but inert.
-        No pointer events so click + mouseenter / mouseleave never fire, the wait cursor flags
-        the brief "still loading" window so the user does not think the click is broken when the
-        dashboard fails to open. The class is removed the moment the loader latches and the
-        normal pointer cursor + click handler come back. */
+    /*  Loading-state hitbox: rendered but inert (no pointer events) with a wait cursor flagging the
+        brief "still loading" window. Class is removed once the loader latches. */
     .home-hitbox.is-loading
     {
         cursor: wait;
         pointer-events: none;
     }
 
-    /*  Home hover glow. Same base + top + side-quad polygons as the
-        cloud-dome mask (so it tracks rotation pixel-for-pixel with
-        the building extrusion), painted in the configured sun colour
-        with a CSS drop-shadow bloom. Opacity is the only thing that
-        animates so the fade is GPU-cheap, the geometry comes back
-        every frame from the engine without re-rendering this SVG. */
+    /*  Home hover glow. Same polygons as the building extrusion so it tracks rotation pixel-for-pixel,
+        painted with a drop-shadow bloom. Only opacity animates (GPU-cheap); geometry comes from the
+        engine each frame. */
     .home-glow-svg
     {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
-        /*  The SVG itself stays click-transparent so empty pixels
-            don't capture clicks meant for chips behind it; only the
-            painted polygons (the home-glow-shape rule below) receive
-            pointer events. cursor: pointer makes the silhouette
-            read as interactive on hover. */
+        /*  SVG stays click-transparent so empty pixels don't capture clicks for chips behind it; only
+            the painted polygons (home-glow-shape below) take pointer events. */
         pointer-events: none;
         cursor: pointer;
-        /*  Sits ABOVE the basemap + buildings but BELOW the home chip
-            cluster (z 8) so the hover glow + production pulse never
-            cross over the PV / battery / grid / cloud / solar value
-            chips. The chips always win on the shared pixels. */
+        /*  Above basemap + buildings but below the chip cluster (z 8) so the glow never crosses the
+            value chips. */
         z-index: 6;
-        /*  Resting opacity is a faint 0.25 so the home silhouette stays discoverable on the
-            basemap even in busy mixed-building neighbourhoods. Hover bumps to 0.85 for an
-            unmistakable interactive cue; the drop-shadow stays modest at rest and ramps up on
-            hover via a heavier filter rule.                                                   */
+        /*  Faint at rest so the silhouette stays discoverable; hover bumps opacity + drop-shadow for
+            an unmistakable interactive cue. */
         opacity: 0.25;
         transition: opacity 0.18s ease, filter 0.18s ease;
         filter: drop-shadow(0 0 4px var(--primary-color, #03a9f4));
@@ -185,49 +124,30 @@ export const heliosCardStyles = css`
         filter: drop-shadow(0 0 8px var(--primary-color, #03a9f4));
     }
 
-    /*  Touch devices have no hover state, mouseenter / mouseleave
-        never fire, so the .is-hovered class is never applied. Show
-        the glow permanently at a softer opacity so the user still
-        gets a visual hint that the home is tappable. The
-        overlay-masked fade rule (specificity 0,2,0) wins over this
-        (0,1,0) so the glow still fades out in masked modes. */
+    /*  Touch devices never fire hover, so show the glow permanently at a softer opacity as a tappable
+        hint. The overlay-masked fade rule (specificity 0,2,0) still wins so the glow fades in masked modes. */
     @media (hover: none)
     {
         .home-glow-svg { opacity: 0.45; }
     }
     .home-glow-svg .home-glow-shape
     {
-        /*  Translucent HA primary-color halo painted ONLY on hover
-            (the parent SVG controls opacity); the home base identity
-            colour lives on the 3D fill-extrusion in _addBuildings(). */
+        /*  Translucent halo painted only on hover (parent SVG controls opacity); the home base colour
+            lives on the 3D fill-extrusion in _addBuildings(). */
         fill: var(--primary-color, #03a9f4);
         fill-opacity: 0.08;
         stroke: var(--primary-color, #03a9f4);
         stroke-width: 1;
         stroke-linejoin: round;
-        /*  Painted polygons capture clicks so the silhouette's actual shape becomes the hit
-            zone. The 120 px circular hitbox below only covers the centre, and on larger /
-            zoomed-in buildings the corners stick out past it; visiblePainted reads the painted
-            footprint and catches clicks anywhere on the visible roof. */
+        /*  visiblePainted makes the silhouette's painted shape the hit zone, catching clicks on the
+            roof corners that stick out past the centred 120 px circular hitbox. */
         pointer-events: visiblePainted;
     }
 
 
-    /*  When LiDAR View is active, fade out every overlay layer so
-        the dot cloud reads on its own against a quiet basemap. The
-        toggle button itself is opted back in (selector below) so
-        the user can always exit. The map container stays visible
-        so the dots are projected onto a real basemap.
-
-        Selector list covers the corners (top-left clock + top-right
-        rail minus the LiDAR button itself), the home hitbox / glow, and
-        the timeline. Easier to audit if any future overlay needs
-        to be hidden in LiDAR View by looking at this single block. */
-    /*  Base transition + composite-layer hint kept on the unprefixed selectors so the fade
-        runs in BOTH directions across every browser. The will-change: opacity hint promotes
-        each element to its own composite layer so the GPU drives the alpha sweep instead of
-        asking the painter to redo layout per frame, which would otherwise drop frames on the
-        chips that sit inside transform-less wrappers (time-bar, solar-svg).                  */
+    /*  Base opacity transition for every overlay that fades out behind a non-base mode (LiDAR fades
+        all to let the dot cloud read on its own). Kept on the unprefixed selectors so the fade runs
+        in both directions; will-change is scoped separately below to avoid pinning idle GPU layers. */
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
@@ -245,12 +165,9 @@ export const heliosCardStyles = css`
     {
         transition: opacity 0.35s ease;
     }
-    /*  will-change opt-in: scope the composite-layer promotion to the transition windows only.
-        Declaring will-change: opacity unconditionally on 15+ elements pins that many GPU layers
-        in idle VRAM (~15-30 MB on devices with limited budgets) and forces the compositor to
-        re-sync them on every Lit re-render. Promote only when a mode actually toggles, gated
-        on ha-card.overlay-masked, which is set on every non-base _cardMode. One rule covers
-        the union of transition windows. */
+    /*  will-change opt-in: promote to a composite layer only while a mode is toggling (gated on
+        overlay-masked). Declaring it unconditionally on 15+ elements would pin that many GPU layers
+        in idle VRAM and force a compositor re-sync on every Lit re-render. */
     ha-card.overlay-masked .overlay-top-left,
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
@@ -269,16 +186,14 @@ export const heliosCardStyles = css`
         will-change: opacity;
     }
 
-    /*  Timeline SLIDES out below the card / slides back in from the bottom edge instead of fading.
-        translateX kept inside every keyframe so the bar never drifts horizontally during the slide. */
+    /*  Timeline slides out below the card edge instead of fading. */
     .time-bar
     {
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
     }
-    /*  Chips + leaders + arcs fade out behind any non-base mode (LiDAR, weather).
-        Single rule keyed on the overlay-masked class so the state machine on the card side
-        controls exactly when the fade kicks in either direction. */
+    /*  Chips + leaders + arcs fade out behind any non-base mode (LiDAR, weather), keyed on
+        overlay-masked so the card's state machine controls the timing. */
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
     ha-card.overlay-masked .solar-svg,
@@ -297,35 +212,29 @@ export const heliosCardStyles = css`
         opacity: 0;
         pointer-events: none;
     }
-    /*  home-pill is the small circular home icon that anchors the base UI home cluster. It hides on
-        every masked mode, weather included: in weather mode the centred glowing home disc takes over
-        as the "you are here" anchor + exit control, so the base pill would just double up on it. It
-        fades back in on the return to base. */
+    /*  home-pill (base home anchor) hides on every masked mode, weather included: there the centred
+        glowing home disc takes over as anchor + exit, so the pill would double up. */
     ha-card.overlay-masked .home-pill
     {
         opacity: 0;
         pointer-events: none;
     }
-    /*  Timeline slides below the card edge for any non-base mode (overlay-masked is set on every
-        non-base mode). Weather mode is the exception:
-        the cloud grid is fetched as a 5-day window (-2/+3 days) on entry, so scrubbing the time-
-        bar just walks the cached time slice without a fresh fetch. Keeping the timebar visible
-        means the user can replay the day's cloud cover or peek ahead at the forecast directly
-        from the weather view. */
+    /*  Timeline slides below the card edge for any non-base mode, except weather: the cloud grid is
+        fetched as a 5-day window on entry, so scrubbing walks the cached slice without a refetch and
+        the user can replay the day's cloud cover or peek ahead. */
     ha-card.overlay-masked:not(.mode-weather) .time-bar
     {
         transform: translateY(140%);
         pointer-events: none;
     }
-    /*  Top-left cluster (lock chip) hides on every masked mode. Weather mode no longer hosts the cloud
-        band toggles here (they moved to the centred value chips), so nothing in this rail stays. */
+    /*  Top-left cluster (lock chip) hides on every masked mode; nothing else lives in this rail. */
     ha-card.overlay-masked .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
     }
-    /*  Top-right mode bar stays through LiDAR (so the user can exit), but hides in weather mode for the
-        clean dashboard look: the only chrome there is the centred cloud chips + the home exit disc. */
+    /*  Top-right mode bar stays through LiDAR (so the user can exit) but hides in weather mode, where
+        the only chrome is the centred cloud chips + home exit disc. */
     ha-card.overlay-masked .overlay-top-right
     {
         opacity: 1;
@@ -337,10 +246,9 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Weather-mode altitude band chips: a value pill per cloud band, stacked above the home (the
-        inline top offset places high/mid/low). Same pill recipe as the UI value chips. Active carries a
-        cloud-coloured glow + the cover %, inactive dims to an icon-only ghost. Fixed width so the three
-        line up whether or not they show a value. */
+    /*  Weather-mode altitude band chips: one value pill per cloud band, stacked above the home via an
+        inline top offset. Active carries a cloud-coloured glow + cover %, inactive dims to an icon-only
+        ghost. Fixed width so the three line up regardless of value. */
     .cloud-band-chip
     {
         position: absolute;
@@ -384,8 +292,8 @@ export const heliosCardStyles = css`
         opacity: 0.55;
     }
 
-    /*  Weather-mode exit: a glowing, gently pulsing home disc dead-centre over the top-down map. The
-        only way out of weather mode now that the top-right bar hides; click returns to base. */
+    /*  Weather-mode exit: a glowing, pulsing home disc dead-centre over the map. The only way out of
+        weather mode now that the top-right bar hides; click returns to base. */
     .weather-home
     {
         position: absolute;
@@ -431,30 +339,18 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Timeline, pinned to the bottom of the card with uniform
-        breathing space. The whole bar accepts pointer events for
-        scrub. */
-
+    /*  Timeline, pinned to the bottom of the card. The whole bar accepts pointer events for scrub. */
     .time-bar
     {
         position: absolute;
-        /*  Bottom inset matches the time-bar's internal flex gap.
-            With the day-label chip row pinned as the last flex
-            child, an equal inset above (gap to the chart card) and
-            below (gap to the card edge) centres the chip row in
-            the band between the chart card's bottom edge and the
-            card's bottom edge.                                       */
         bottom: 6px;
-        /*  Centred via left + right gutter instead of transform: translateX(-50%) because the transform
-            promoted the time-bar into a compositor layer that rasterised the inner SVG charts + tooltips
-            at fractional resolution = blur. With left: 8 px + right: 8 px + width: auto the timeline is
-            still 100 % - 16 px wide but renders at native pixel resolution. */
+        /*  Centred via left/right gutters, not translateX(-50%): the transform promoted the bar into a
+            compositor layer that rasterised the inner SVG charts at fractional resolution = blur. */
         left: 8px;
         right: 8px;
         width: auto;
-        /*  Timeline owns its own stacking layer at the very top of
-            the card so the sun arc, the home glow and any overlay
-            chip never crosses over it during auto-rotate.            */
+        /*  Own stacking layer at the top of the card so the sun arc, home glow and overlay chips never
+            cross over it during auto-rotate. */
         z-index: 1000;
         display: flex;
         flex-direction: column;
@@ -471,19 +367,15 @@ export const heliosCardStyles = css`
         cursor: grabbing;
     }
 
-    /*  Chart card, bordered white panel hosting the area chart,
-        day-label chips on the midline, dotted day separators and
-        the live + scrub HTML cursor overlays. */
     /*  Chart + day-label footer composite. The frame (accent stroke, radius, shadow) lives here so the
-        chart and its footer read as ONE instrument with a hairline divider between them, mirroring the
-        HA energy-solar-overview timeline card where the footer is the bottom band of the same surface
-        rather than a second floating card. overflow:hidden clips both children to the rounded corners. */
+        chart and its footer read as one instrument with a hairline divider between them, like the HA
+        energy-solar-overview timeline. overflow:hidden clips both children to the rounded corners. */
     .tb-chart-stack
     {
         position: relative;
         background: var(--card-background-color, #ffffff);
-        /*  HA-style card frame: a thin 1 px stroke in the active chart accent, softened to 60 % so it
-            reads as a subtle frame rather than the heavy ink box it used to be. */
+        /*  HA-style card frame: a thin stroke in the active chart accent, softened to 60 % so it reads
+            as a subtle frame. */
         border: var(--ha-border-width-sm, 1px) solid
             color-mix(in srgb, var(--chart-accent, var(--primary-text-color, #212121)) 60%, transparent);
         border-radius: var(--ha-border-radius-lg, 8px);
@@ -493,11 +385,8 @@ export const heliosCardStyles = css`
     .tb-chart-card
     {
         position: relative;
-        /*  Height scales with the card's container width (cqw =
-            container-query width). 36 px floor on a small grid tile,
-            72 px ceiling on a fullscreen kiosk. Both timeline charts
-            share the same expression so they always stay siblings of
-            the same height. */
+        /*  Height scales with container width (cqw): 36 px floor on a small tile, 72 px ceiling on a
+            kiosk. Both timeline charts share this expression so they stay equal height. */
         height: clamp(36px, 8cqw, 72px);
         overflow: hidden;
     }
@@ -507,11 +396,9 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
     }
-    /*  Grow ONLY the curves (wrapped in .hc-chart-grow) up from the baseline when the chart target
-        changes (the SVG is keyed on the target so it re-mounts and replays), matching HA's graph cards'
-        500 ms grow. The dotted day/night separators and the hover guide sit OUTSIDE this group so they
-        stay put instead of stretching with the animation. fill-box anchors the scale at the group's own
-        bbox bottom (the chart baseline). */
+    /*  Grow only the curves up from the baseline when the chart re-targets (SVG is keyed so it
+        re-mounts and replays), matching HA's 500 ms grow. Separators + hover guide sit outside this
+        group so they don't stretch. fill-box anchors the scale at the chart baseline. */
     .hc-chart-grow
     {
         transform-box: fill-box;
@@ -528,13 +415,9 @@ export const heliosCardStyles = css`
         .hc-chart-grow { animation: none; }
     }
 
-    /*  Stroke-only outline on top of the filled area so peaks read
-        cleanly even where the gradient fades towards the midline.
-        Stroke width 0.7 px so the curve reads as a hairline
-        trace; a wider stroke (the earlier 1.4 px default) stacked
-        over itself on every wobble on high-variation days and
-        turned the dense regions into a smudged band. At 0.7 px
-        the curve stays a line at any zoom.                       */
+    /*  Stroke-only outline over the filled area so peaks read cleanly where the gradient fades.
+        0.7 px hairline: a wider stroke self-overlapped on high-variation days and smudged dense
+        regions into a band. */
     .hc-chart-line
     {
         fill: none;
@@ -546,22 +429,17 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  PV prediction line, overlays the observed PV chart for hours
-        past "now" using the user-configured peak power (pv-peak-kwp)
-        scaled by the clear-sky model. Dashed pattern, the stroke
-        colour itself is computed theme-aware in charts.ts so the
-        forecast curve stays readable on both backgrounds.          */
+    /*  PV prediction line: overlays the observed chart past "now" from pv-peak-kwp scaled by the
+        clear-sky model. Stroke colour is computed theme-aware in charts.ts. */
     .hc-chart-predicted
     {
         stroke-dasharray: 4 3;
         stroke-width: 1;
     }
 
-    /*  Per-source PV curves, one per HA Energy solar source on multi-source installs. Drawn UNDER the aggregate
-        line with lower opacity + the same 0.7 px stroke so the eye reads them as background context to the
-        headline total above. The stroke colour comes from the inline stroke attribute (a hue-rotated derivative
-        of the theme PV colour, see pvSourceColor in charts.ts) so the curve matches the colour pastille on the
-        corresponding tooltip row. */
+    /*  Per-source PV curves on multi-source installs. Drawn under the aggregate at lower opacity as
+        background context. Stroke colour comes from the inline attribute (hue-rotated derivative, see
+        pvSourceColor in charts.ts) so the curve matches its tooltip-row pastille. */
     .hc-chart-line-source
     {
         opacity: 0.35;
@@ -569,11 +447,8 @@ export const heliosCardStyles = css`
 
 
 
-    /*  Dotted day separators inside the chart card. Boosted to 0.55
-        alpha (was 0.30) and a slightly chunkier dash pattern so the
-        midnight boundaries between two days read clearly without the
-        eye having to hunt for them. Flips with the theme via
-        --rgb-primary-text-color. */
+    /*  Dotted day separators at midnight boundaries, at 0.55 alpha so they read clearly. Flips with
+        the theme via --rgb-primary-text-color. */
     .hc-day-sep
     {
         stroke: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.55);
@@ -584,8 +459,7 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Tiny hour ticks centred on the midline. Discreet enough to
-        read as ambient texture rather than a primary feature. */
+    /*  Tiny hour ticks on the midline, discreet ambient texture. */
     .hc-hour-tick
     {
         stroke: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.35);
@@ -594,12 +468,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Live cursor: thin line spanning the full chart with a small
-        triangle handle at the top. Slightly wider + a hair more
-        opaque than earlier iterations so it stays readable through
-        the future-mask wash that paints on top of half the chart.
-        Still kept subtle: it's a passive "where now is" reference,
-        not a focus target. */
+    /*  Live cursor: thin "where now is" line spanning the chart. Slightly wide + opaque so it stays
+        readable through the future-mask wash, but kept subtle as a passive reference. */
     .tb-cursor-now
     {
         position: absolute;
@@ -612,13 +482,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 4;
     }
-    /*  No top arrow on the pill, just the stroke. Reads cleaner
-        against the chart and matches the rounded chip language of
-        the rest of the card. */
-
-    /*  Scrub cursor: a thin solid brand-blue stroke spanning the
-        chart. No arrow, no handle dot, no pseudo-element, just a
-        single line so the cursor reads as a minimal scrub mark. */
+    /*  Scrub cursor: a thin solid brand-blue stroke spanning the chart, no arrow or handle, so it
+        reads as a minimal scrub mark. */
     .tb-cursor-sel
     {
         position: absolute;
@@ -633,10 +498,8 @@ export const heliosCardStyles = css`
         box-shadow: 0 0 4px rgba(var(--rgb-primary-color), 0.4);
     }
 
-    /*  Hover guide line, drawn vertically across the chart at
-        the pointer's X. Same dotted recipe as the day-separator
-        lines but a touch more opaque so it reads as "interactive
-        focus" rather than ambient structure.                       */
+    /*  Hover guide: vertical line at the pointer's X. Same dotted recipe as the day separators but
+        more opaque so it reads as interactive focus, not ambient structure. */
     .hc-hover-guide
     {
         stroke: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.55);
@@ -646,9 +509,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Per-curve hover dot, anchored at the interpolated Y of each series. Stroked in the HA
-        primary text colour so the dot reads as a circled marker on both themes (white on dark,
-        black on light), matching the radial dial's hover dots. */
+    /*  Per-curve hover dot at the interpolated Y of each series. Stroked in the primary text colour
+        so it reads as a circled marker on both themes. */
     .hc-hover-dot
     {
         stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 70%, transparent);
@@ -656,20 +518,14 @@ export const heliosCardStyles = css`
         vector-effect: non-scaling-stroke;
         pointer-events: none;
     }
-    /*  Timeline curve hover dot rendered as an absolutely-positioned HTML element overlay on
-        the chart card. The chart SVG uses preserveAspectRatio="none" so the area + line paths
-        stretch with the chart container width, but the previous SVG <circle r="3"> hover dots
-        were stretched too and ended up as tall ovals / cylinders at common chart aspect ratios.
-        Pulling the dots out into HTML CSS-pixel ovals (perfectly round via width = height +
-        border-radius 50%) decouples the dot shape from the SVG stretch, the user always sees a
-        circular marker centred on the curve. Position derived from the SVG hoverX / W and hoverY
-        / H ratios, the chart card and the SVG share the same content area so percentages map
-        cleanly between the two coordinate spaces. */
+    /*  Hover dot as an absolutely-positioned HTML element, not SVG: the chart SVG uses
+        preserveAspectRatio="none", which stretched <circle> dots into ovals. CSS-pixel dots
+        (width=height, border-radius 50%) stay round. Position derived from the hoverX/W, hoverY/H
+        ratios since card and SVG share the same content area. */
     .hc-hover-dot-html
     {
         position: absolute;
-        /*  Matches the moving beads on the chip leaders (SVG <circle r="3"> = 6 px filled disc, no
-            border) so the hover markers read as the same vocabulary across the card. */
+        /*  6 px filled disc, matching the moving beads on the chip leaders. */
         width: 6px;
         height: 6px;
         border-radius: 50%;
@@ -679,16 +535,9 @@ export const heliosCardStyles = css`
         z-index: 5;
     }
 
-    /*  Hover tooltip card, sits above the chart-card stack inside
-        the time-bar. Frame + padding match HA Energy dashboard chart
-        tooltips so the card reads as native HA chrome (card-background
-        surface, HA divider border, HA standard elevation shadow). */
-    /*  Wrapper that hosts the magnet tab + tooltip body. Carries the
-        horizontal positioning (left + translateX) so both children
-        slide together as one block when the scrub moves, the tab
-        inherits the wrapper's transform via the DOM tree so there's
-        no per-element lag. Bottom + margin lift the whole stack into
-        the 10 px gap above the chart card. */
+    /*  Wrapper hosting the tooltip body. Carries the horizontal positioning (left + translateX) so its
+        children slide together as one block on scrub. Bottom + margin lift the stack into the gap
+        above the chart card. */
     .tb-hover-tooltip-wrapper
     {
         position: absolute;
@@ -700,6 +549,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 30;
     }
+    /*  Frame + padding match HA Energy chart tooltips so it reads as native HA chrome. */
     .tb-hover-tooltip
     {
         position: relative;
@@ -718,10 +568,8 @@ export const heliosCardStyles = css`
         align-self: stretch;
     }
 
-    /*  Time heading at the top of the tooltip body, left-aligned with a
-        clock glyph in front and a hairline separator under it so the
-        time reads as a heading block above the data rows. Bold + tabular
-        numerals + left-aligned to match the data rows below. */
+    /*  Time heading at the top of the tooltip: clock glyph + bold tabular numerals with a hairline
+        separator under it, so the time reads as a heading above the data rows. */
     .tb-hover-tooltip-time
     {
         display: flex;
@@ -773,10 +621,9 @@ export const heliosCardStyles = css`
         text-align: right;
     }
 
-    /*  Per-source breakdown rows shown under the aggregate PV row on multi-source installs. Indent slightly so the
-        eye reads them as children of the aggregate row above. Smaller font + lighter weight to step them visually
-        below the headline without losing legibility. The colour pastille mirrors the hue-rotated per-source curve
-        drawn on the chart underneath so the user can match row to curve at a glance. */
+    /*  Per-source breakdown rows under the aggregate PV row on multi-source installs. Indented +
+        smaller so they read as children of the headline. The colour pastille mirrors the per-source
+        chart curve so row and curve can be matched. */
     .tb-hover-tooltip-row-sub
     {
         font-size: var(--ha-font-size-xs, 11px);
@@ -800,21 +647,13 @@ export const heliosCardStyles = css`
         min-width: 0;
     }
 
-    /*  Magnet-snap tab: real chip tab stacked above the tooltip in
-        the wrapper's vertical flex column. Top corners match the
-        tooltip's border-radius, bottom corners are flat and the
-        bottom border is dropped so the seam between the tab and the
-        tooltip reads as one continuous frame. -1 px margin pulls the
-        tab down onto the tooltip's top border, sharing the 1 px line. */
-    /*  LIVE chip floated at the top-right of the scrub tooltip, sharing the tooltip's own 6 px / 8 px padding so the
-        chip baseline matches the time row. Outline recipe: transparent backdrop + 1 px theme primary border +
-        primary-colour glyph + label, so the chip reads consistently across light + dark themes without ever clashing
-        with the tooltip background. The dot pulses to mirror the HA Energy dashboard's live-data vocabulary. */
+    /*  LIVE chip at the top-right of the scrub tooltip. Outline recipe (transparent backdrop + primary
+        border + primary glyph) so it reads on both themes without clashing with the tooltip background.
+        The dot pulses, mirroring HA Energy's live-data vocabulary. */
     .tb-hover-tooltip-live-chip
     {
-        /*  Lives as the last flex child of the time row, pushed to the right edge via margin-left: auto. align-items:
-            center on the parent vertically centres the chip with the clock glyph + the time label automatically, no
-            absolute positioning, no top/right calculation against the tooltip padding. */
+        /*  Last flex child of the time row, pushed right via margin-left: auto; the parent's
+            align-items: center vertically aligns it with the clock glyph + time label, no absolute math. */
         margin-left: auto;
         display: inline-flex;
         align-items: center;
@@ -832,13 +671,11 @@ export const heliosCardStyles = css`
         letter-spacing: 0.4px;
         text-transform: uppercase;
         line-height: 1;
-        /*  Force the chip onto its own GPU layer with a 3-axis translate, so it gets a pixel-snapped grid independent
-            of the wrapper's fractional translateX(-X%). Without this, the chip text + 1 px border antialias against a
-            sub-pixel offset inherited from the parent transform and read as blurry on high-DPI screens. */
+        /*  Own GPU layer via translateZ so the chip gets a pixel-snapped grid independent of the
+            wrapper's fractional translateX; otherwise the text + border antialias blurry on high-DPI. */
         transform: translateZ(0);
         backface-visibility: hidden;
-        /*  Fade in / out instead of pop in / out: render the chip in every tooltip pass and toggle visibility via
-            opacity. */
+        /*  Fade in/out via opacity (rendered every tooltip pass) instead of popping. */
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.16s ease-out;
@@ -869,25 +706,18 @@ export const heliosCardStyles = css`
         50%      { opacity: 0.4; }
     }
 
-    /*  Scrub tail: a vertical dotted line drawn at the scrub X,
-        sitting in the 10 px gap between the tooltip's bottom edge
-        and the chart-card top edge. Positioned independently of the
-        tooltip so it stays anchored on the scrub line even when the
-        tooltip slides to clear the timeline edges. The dot pattern
-        is painted via repeating-linear-gradient so the magnet-snap
-        variant can flow the dots upward via a background-position
-        animation; a plain dashed border could not be animated. */
+    /*  Scrub tail: vertical dotted line at the scrub X in the gap above the chart card. Positioned
+        independently of the tooltip so it stays on the scrub line when the tooltip slides to clear the
+        edges. Painted via repeating-linear-gradient so the magnet-snap variant can flow the dots
+        (a dashed border could not be animated). */
     .tb-hover-tooltip-tail
     {
         position: absolute;
         bottom: 100%;
         width: 1.5px;
         height: 10px;
-        /*  Default cursor paints in the theme's primary text colour
-            (black-ish on light themes, white-ish on dark) and is NOT
-            animated, so a regular scrub reads as a quiet vertical
-            cue. The brand-blue + flow animation only kicks in inside
-            the magnet zone (see the .is-magnet-snap rule below). */
+        /*  Default cursor paints in the primary text colour, un-animated, as a quiet scrub cue. The
+            brand-blue + flow animation only kicks in in the magnet zone (.is-magnet-snap below). */
         background-image: repeating-linear-gradient(
             to bottom,
             var(--primary-text-color, #212121) 0,
@@ -897,16 +727,11 @@ export const heliosCardStyles = css`
         );
         transform: translateX(-50%);
         pointer-events: none;
-        /*  Foreground layer above the tooltip (z 30) AND above any
-            chart-card decoration so the animated cursor stays visible
-            in the magnet zone. */
+        /*  Above the tooltip (z 30) and chart-card decoration so the animated cursor stays visible. */
         z-index: 1001;
     }
-    /*  Magnet-snap variant: brand-blue dot column with a continuous
-        upward flow animation so the user sees a "rising" pattern
-        that signals "release here to return to live". The flow runs
-        bottom to top because the live cursor sits ABOVE the chart
-        viewport (in time, "now" is the forward edge). */
+    /*  Magnet-snap variant: brand-blue dots flowing upward to signal "release here to return to live".
+        Flow runs bottom-to-top because "now" is the forward edge above the viewport. */
     .tb-hover-tooltip-tail.is-magnet-snap
     {
         background-image: repeating-linear-gradient(
@@ -924,23 +749,12 @@ export const heliosCardStyles = css`
         to   { background-position: 0 -4px; }
     }
 
-    /*  tb-hover-tooltip flips with the theme on its own through
-        --card-background-color / --primary-text-color /
-        --divider-color, no explicit dark override needed. */
+    /*  tb-hover-tooltip flips with the theme via --card-background-color etc., no dark override. */
 
 
-    /*  Night-zone overlays. One absolutely-positioned div per
-        sunset, next sunrise window, inserted as a sibling of the
-        chart SVG inside the chart card. A solid low-alpha wash
-        sits on top of the curves but below the live + scrub
-        cursors (z-index 4), so dusk and dawn read as "this slice
-        is night" without obscuring the curve shape underneath.     */
-    /*  Future-mask wash, sits on top of the curves and night zones
-        and stretches from "now" to the right edge of the card. The
-        wash uses the card background colour at moderate alpha so it
-        lightens the curves AND the night-zone washes in a single
-        pass without redoubling on overlapping regions. Cursors sit
-        at z-index 4 and stay fully opaque.                          */
+    /*  Future-mask wash: stretches from "now" to the right edge, on top of the curves and night zones
+        but below the cursors (z 4). Card background at moderate alpha lightens both curves and
+        night-zone washes in one pass without redoubling on overlap. */
     .hc-future-mask
     {
         position: absolute;
@@ -949,13 +763,9 @@ export const heliosCardStyles = css`
         right: 0;
         pointer-events: none;
         z-index: 3;
-        /*  color-mix keeps the wash translucent at every theme: 55 %
-            of the active card background mixed with 45 % transparency
-            lets the predicted PV curve underneath stay visible while
-            still marking the future portion as "not yet real". The
-            color-mix on transparent is critical, var(--card-background-
-            color) on its own goes fully opaque in dark mode and hides
-            the prediction entirely. */
+        /*  color-mix on transparent keeps the wash translucent on every theme so the predicted PV
+            curve stays visible; the bare var(--card-background-color) goes opaque in dark mode and
+            would hide the prediction. */
         background: color-mix(in srgb, var(--card-background-color, #ffffff) 55%, transparent);
     }
 
@@ -967,9 +777,8 @@ export const heliosCardStyles = css`
         bottom: 0;
         pointer-events: none;
         z-index: 3;
-        /*  Solid low-alpha wash marking the night slice: a touch darker than the card in light themes,
-            a touch lighter in dark themes. No diagonal hatch and no edge border, so dusk/dawn read as
-            one soft band that stays calm and keeps the curves underneath fully legible.              */
+        /*  Night-slice wash: a touch darker in light themes (lighter in dark, rule below), no hatch or
+            border, so dusk/dawn read as one calm band that keeps the curves legible. */
         background: rgba(0, 0, 0, 0.06);
     }
     ha-card.theme-dark .hc-night-zone
@@ -978,28 +787,22 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Day strip: a single bordered bar spanning the full timeline
-        width, with one centred label per visible day and a 1 px
-        vertical separator at every midnight boundary between two
-        adjacent days. Same border + radius + shadow recipe as the
-        chart cards above so the timeline stack reads as one
-        composed instrument.                                        */
+    /*  Day strip: a bordered bar with one centred label per visible day and a vertical separator at
+        each midnight. Frame recipe matches the chart cards so the stack reads as one instrument. */
     .tb-day-strip
     {
         position: relative;
         height: 22px;
         box-sizing: border-box;
-        /*  Footer band of the chart stack: the frame lives on .tb-chart-stack, so here we only draw the
-            hairline that separates the labels from the chart above. Matches the HA timeline-footer
-            (solid surface inherited from the stack + a single top divider), no second floating card. */
+        /*  Footer band of the chart stack: frame lives on .tb-chart-stack, so here we only draw the
+            hairline separating labels from the chart above (like the HA timeline footer). */
         border-top: var(--ha-border-width-sm, 1px) solid
             var(--divider-color, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.12));
         overflow: hidden;
         pointer-events: none;
     }
-    /*  Adaptive timeline label, point-positioned on its model fraction. The inline left anchors the
-        fraction; the translate pulls the label back by half its own width so the text sits centred over
-        the fraction rather than to its right. */
+    /*  Timeline label point-positioned on its model fraction: inline left anchors the fraction, the
+        translate centres the text over it. */
     .tb-day-strip-date
     {
         position: absolute;
@@ -1011,8 +814,7 @@ export const heliosCardStyles = css`
         padding: 0 1px;
         box-sizing: border-box;
         color: var(--primary-text-color, #212121);
-        /*  Inherit the HA frontend font stack rather than the OS default so the label's vertical metrics
-            match the chart cards stacked above. */
+        /*  HA frontend font stack so the label's metrics match the chart cards above. */
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, Roboto, "Helvetica Neue", Arial, sans-serif));
         font-size: clamp(9px, 7cqw, 11px);
         line-height: 18px;
@@ -1023,16 +825,14 @@ export const heliosCardStyles = css`
         font-weight: var(--ha-font-weight-normal, 400);
     }
 
-    /*  Today's label in the day view carries a touch more weight so it reads as the present alongside
-        the now-cursor. */
+    /*  Today's label carries more weight so it reads as the present alongside the now-cursor. */
     .tb-day-strip-date.is-today
     {
         font-weight: var(--ha-font-weight-medium, 500);
     }
 
-    /*  Header row sitting just ABOVE the timeline chart: the active-target indicator on the left and the
-        rolling-period selector on the right, at the same height. pointer-events: none so the band itself
-        stays transparent to map rotation; the interactive children re-enable events. */
+    /*  Header row above the chart: active-target indicator left, period selector right. pointer-events:
+        none so the band stays transparent to map rotation; the children re-enable events. */
     .tb-header
     {
         display: flex;
@@ -1042,19 +842,18 @@ export const heliosCardStyles = css`
         padding: 0 2px 4px;
         pointer-events: none;
     }
-    /*  Active-target indicator (mirror of HA's chart-indicator): the icon of whatever the timeline chart
-        currently shows, tinted with the active accent. Keyed so it fades in on each re-target. */
+    /*  Active-target indicator (mirrors HA's chart-indicator): icon of the current chart target, keyed
+        so it fades in on each re-target. */
     .tb-chart-indicator
     {
         display: inline-flex;
         align-items: center;
-        /*  Same chip frame as the period selector (card surface + shadow + radius) so the two header
-            controls read as one family. */
+        /*  Same chip frame as the period selector so the two header controls read as one family. */
         padding: 2px 6px;
         border-radius: 8px;
         background: var(--card-background-color, #ffffff);
         box-shadow: 0 1px 3px var(--shadow-color);
-        /*  Icon in the text ink (black), not the accent colour. */
+        /*  Icon in the text ink, not the accent colour. */
         color: var(--primary-text-color, #212121);
         pointer-events: none;
     }
@@ -1074,8 +873,8 @@ export const heliosCardStyles = css`
     {
         .tb-chart-indicator ha-icon { animation: none; }
     }
-    /*  Rolling-period selector: a compact text segmented control on the right of the header row. Same
-        on-primary active recipe as the mode bar so the two controls read as one family. */
+    /*  Rolling-period selector: compact text segmented control. Same on-primary active recipe as the
+        mode bar so the controls read as one family. */
     .tb-period-selector
     {
         display: inline-flex;
@@ -1118,12 +917,8 @@ export const heliosCardStyles = css`
     }
     .tb-period-seg.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
 
-    /*  Vertical separator at each between-day boundary. Dotted
-        1 px line matching the chart's own day separators
-        (.hc-day-sep: stroke 0.30 alpha, dasharray 1.5 / 2.5), so
-        the strip extends the same visual language as the cards
-        above it. No separator at the outer edges since the strip
-        border already closes the line there.                       */
+    /*  Vertical separator at each between-day boundary, dotted to match the chart's day separators.
+        None at the outer edges since the strip border closes those. */
     .tb-day-strip-sep
     {
         position: absolute;
@@ -1142,24 +937,9 @@ export const heliosCardStyles = css`
 
 
 
-    /*  Cloud-cover toggle button. iOS-friendly 40 px touch target,
-        icon-only with a title tooltip; the on state takes the brand
-        primary plate so the user has one consistent
-        visual language for "you are in a non-default mode".
-        Segments are glued together via shared borders and
-        matching corner radii.                                    */
-    /*  HA ha-icon-button-style toggles: each segment is a transparent
-        circle that holds the icon, an active or hover state lights
-        up the circle in the brand colour. Same visual vocabulary as
-        the HA dashboard toolbar buttons so a Helios card dropped
-        into a HA Energy dashboard reads as part of the toolbar
-        family. */
-    /*  Mode bar (Layer / LiDAR / Weather). Vertical column of three
-        icon-only toggles, anchored top-right, no backplate so the
-        column reads as a quiet HA-toolbar trio sitting on the map.
-        Each button uses the same transparent-circle recipe as the
-        camera-lock and cloud-cover toggles so all three corner
-        controls speak the same language. */
+    /*  Mode bar (Layer / LiDAR / Weather): vertical column of three icon-only toggles, top-right, no
+        backplate. Each button is a transparent 40 px circle (HA toolbar-button recipe, shared with the
+        camera-lock toggle) lighting up brand-blue when active. */
     .mode-bar
     {
         display: inline-flex;
@@ -1211,9 +991,7 @@ export const heliosCardStyles = css`
         align-items: center;
         pointer-events: none;
     }
-    /*  Active segment: brand-blue pastille behind the icon, white
-        glyph on top, same on-primary recipe as cloud-cover-toggle.is-on
-        so the two controls read as one family.                       */
+    /*  Active segment: brand-blue pastille behind a white glyph, the shared on-primary recipe. */
     .mode-bar-seg.is-on
     {
         background: var(--primary-color, #03a9f4);
@@ -1228,9 +1006,7 @@ export const heliosCardStyles = css`
         cursor: not-allowed;
         pointer-events: none;
     }
-    /*  Spinning LiDAR icon while shadows are being computed. Same
-        rotation primitive used by the centre shadow-busy spinner so
-        the two surfaces breathe at the same rate. */
+    /*  Spinning LiDAR icon while shadows compute, sharing the centre spinner's rotation primitive. */
     .mode-bar-seg .is-spinning
     {
         animation: helios-mode-spin 1s linear infinite;
@@ -1241,21 +1017,9 @@ export const heliosCardStyles = css`
         to   { transform: rotate(360deg); }
     }
 
-    /*  Top corner overlays. Camera-lock + scrub-return on the left,
-        cloud-cover toggle on the right. Both rails are flex rows
-        sitting 8 px from their card edge.                          */
-
-    /*  Date/time chip, same chip language as the on-map readouts.
-        Explicit height (border-box) so the chip and the back-to-
-        live button next to it share the exact same vertical
-        footprint, no align-items: center shift in the parent flex
-        container. */
-    /*  Global crisp-text rule for every chip rendered with a
-        translate centred on the home anchor. Without this rule
-        Safari and Chrome land the chip at a fractional pixel
-        (50 % anchor + -50 % translate) which softens the glyph
-        edges. text-rendering: geometricPrecision + antialiased
-        smoothing keeps the text sharp at any sub-pixel offset. */
+    /*  Crisp-text rule for chips translated onto the home anchor: the 50 % anchor + -50 % translate
+        lands them at a fractional pixel, so geometricPrecision + antialiased smoothing keeps the
+        glyphs sharp. */
     .pv-pct-label,
     .battery-pct-label,
     .solar-pct-label
@@ -1264,12 +1028,9 @@ export const heliosCardStyles = css`
         -webkit-font-smoothing: antialiased;
     }
 
-    /*  Top-right overlay rail. Hosts the three view-mode toggles
-        (default layer view). z-index: 60 keeps
-        the rail above the LiDAR canvas (z 30) and the centre spinner
-        (z 50) so a toggle is always reachable. Pointer events off on
-        the rail itself so the empty rail never steals map
-        interactions; each .cloud-cover-toggle button opts back in. */
+    /*  Top-right overlay rail hosting the mode-bar toggles. z-index 60 keeps it above the LiDAR canvas
+        (z 30) + centre spinner (z 50) so a toggle is always reachable. pointer-events off on the rail so
+        it never steals map interactions; the buttons opt back in. */
     .overlay-top-right
     {
         position: absolute;
@@ -1283,12 +1044,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Camera-lock toggle. Pinned top-left of the card, opens
-        (lock-open) when the camera is free and closes (lock) when
-        locked. Same visual size and idle/active recipe as the
-        .cloud-cover-toggle so the left lock button and the right
-        cloud-cover button read as one family. The brand-blue
-        pastille appears when locked, matching cloud-cover-toggle.is-on. */
+    /*  Camera-lock toggle, top-left. Same 40 px circle recipe as the mode-bar segments; brand-blue
+        pastille appears when locked. */
     .camera-lock-btn
     {
         appearance: none;
@@ -1341,9 +1098,8 @@ export const heliosCardStyles = css`
     }
     .camera-lock-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .camera-lock-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
-    /*  Disabled state (weather mode): button stays visible so the user reads the current lock
-        state at a glance but the click target is inert. Greys out + cursor switches to default,
-        no hover / active feedback so taps read as no-ops. */
+    /*  Disabled state (weather mode): button stays visible to show the lock state but is inert,
+        greyed out with no hover/active feedback. */
     .camera-lock-btn.is-disabled,
     .camera-lock-btn[disabled]
     {
@@ -1352,12 +1108,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Top-left rail, mirrors overlay-top-right on the opposite edge
-        so the corner overlays sit at matching heights. Hosts the
-        camera-lock toggle. Pointer events are off on the rail by
-        default; the button opts back in via .camera-lock-btn so
-        clicks reach it without the rail stealing unrelated map
-        interactions. */
+    /*  Top-left rail mirroring overlay-top-right, hosting the camera-lock toggle. pointer-events off on
+        the rail; the button opts back in so it doesn't steal map interactions. */
     .overlay-top-left
     {
         position: absolute;
@@ -1370,26 +1122,10 @@ export const heliosCardStyles = css`
         gap: 8px;
         pointer-events: none;
     }
-    /*  Per-altitude cloud band toggles share the .mode-bar / .mode-bar-seg recipe with the
-        top-right mode bar: identical 40 px round icon-only buttons stacked in a 4 px-gap flex
-        column. Nothing extra needed here, the wrapper class .mode-bar already pins pointer-
-        events: auto on the cluster so taps reach the buttons through the overlay-top-left rail
-        (which keeps pointer-events: none by default).                                            */
-
-    /*  Loading banner. Shown at the top of the card while the first hydration wave of data fetches
-        is still in flight (PV, battery, grid, solar radiation, daily totals, weather, buildings,
-        LiDAR). Retires for the rest of the card lifetime once every started phase has finished
-        once, so routine background refreshes (mode switches, scrub, time tick) do NOT bring it
-        back. Rounded card, themed bg + border + shadow so the user reads it as part of the rest
-        of the HUD chrome. Slide-in from the top + opacity, slide-out downwards via the same pure
-        CSS transition pattern (no keyframes, no animation: forwards). Sits above the timeline +
-        mode bar at z-index 60. */
-    /*  Loading banner. Pinned at the top edge of the card, horizontally centred between the lock
-        chip on the left and the mode-bar on the right (both anchored at top: 8px). No slide-in
-        animation: short fetch waves were ending before the slide-in completed, leaving the
-        banner blinking once and disappearing without showing meaningful information. Sits at the
-        same top edge as the surrounding chrome, plays no transform, only a snappy opacity step
-        when shown / hidden. */
+    /*  Loading banner, shown while the first hydration wave is in flight and retired for good once
+        every phase has finished once (so routine refreshes don't bring it back). Pinned top-centre
+        between the lock chip and mode-bar. No slide-in (short waves blinked once before it completed);
+        only a snappy opacity step. z-index 60, above the timeline + mode bar. */
     .loading-banner
     {
         position: absolute;
@@ -1443,12 +1179,9 @@ export const heliosCardStyles = css`
         transition: width 0.35s ease;
     }
 
-    /*  Alert banner painted under the loading banner whenever the Open-Meteo home-point fetch
-        is stuck in HTTP 429 back-off. Same width / centering as the loading banner so the two
-        read as a stacked column. Themed with the HA frontend alert vocabulary: a soft tinted
-        background derived from --warning-color (HA's standard yellow-orange alert hue for
-        rate-limit / advisory states, distinct from --error-color which is the red error tier)
-        plus a matching border. Falls back to a sensible amber if --warning-color is unset. */
+    /*  Alert banner under the loading banner when the Open-Meteo fetch is stuck in HTTP 429 back-off.
+        Same width/centering as the loading banner. Themed with --warning-color (HA's advisory hue,
+        distinct from the red --error-color), amber fallback. */
     .weather-rate-limit-banner
     {
         position: absolute;
@@ -1488,17 +1221,15 @@ export const heliosCardStyles = css`
         opacity: 0.9;
     }
 
-    /*  LiDAR View opacity slider. Painted at the bottom of the card while the LiDAR view is
-        active. Continuous capsule pill, ungated (no ticks) because opacity is a free analog tune,
-        not a binned pick. */
+    /*  LiDAR View opacity slider, shown at the bottom while LiDAR is active. Continuous capsule pill,
+        no ticks since opacity is a free analog tune. */
 
     .lidar-view-opacity-slider
     {
         position: absolute;
         bottom: 14px;
         left: 50%;
-        /*  Animation-IN + transition-OUT pattern: enters via a keyframe to avoid initial-paint
-            spillover, leaves via a regular CSS transition so the slide-out plays smoothly. */
+        /*  Enters via transition from this off-screen transform; leaves the same way for a smooth slide. */
         transform: translate(-50%, 60px);
         opacity: 0;
         pointer-events: none;
@@ -1577,23 +1308,12 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
     }
 
-    /*  Weather mode renders inside MapLibre via a GL custom layer (see
-        src/engine/weather-cloud-layer.ts), no DOM overlay any more, no per-cell SVG. */
+    /*  Weather mode renders inside MapLibre via a GL custom layer (src/engine/weather-cloud-layer.ts),
+        no DOM overlay. */
 
-    /*  Photovoltaic production chip, same frame as cloud/W/m² but
-        tinted in the user-configured production colour (border +
-        text + icon) for instant identification.
-        --pv-leader-color is set inline by the renderer. The
-        min-width / centred text are shared with the SoC and Power
-        battery chips so the visible gap on each side of the PV
-        chip is identical regardless of how wide each value reads
-        ("26 %" vs "+12.34 kW" otherwise produce visibly unequal
-        leader gaps). */
-    /*  PV production chip. Compact horizontal pill so it does not
-        crowd the map (HA-energy-shaped 76 x 76 nodes read too heavy
-        at the card's native zoom). The HA-energy identity stays via
-        the coloured ring + icon glyph + ink tokens, the shape stays
-        compact. */
+    /*  PV production chip: compact horizontal pill tinted in the production colour (--pv-leader-color,
+        set inline). Fixed min-width shared with the battery chips so the leader gap is identical
+        regardless of how wide the value reads. */
     .pv-pct-label
     {
         position: absolute;
@@ -1627,9 +1347,8 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Re-targetable-chart chips: clicking one points the single bottom chart at that metric. The base
-        chips are display-only (pointer-events: none); the [role="button"] selector both re-enables the
-        events and out-specifies the base rule regardless of source order. */
+    /*  Re-targetable chips: clicking one points the bottom chart at that metric. Base chips are
+        display-only; the [role="button"] selector re-enables events and out-specifies the base rule. */
     .pv-pct-label[role="button"],
     .battery-pct-label[role="button"],
     .grid-label[role="button"],
@@ -1637,12 +1356,11 @@ export const heliosCardStyles = css`
     {
         pointer-events: auto;
         cursor: pointer;
-        /*  Stop the chip's card-background from bleeding under the coloured 2px border at the rounded
-            ends (clips it to the padding box, inside the border). */
+        /*  Clip the card-background to the padding box so it doesn't bleed under the coloured border. */
         background-clip: padding-box;
     }
-    /*  Active target: a soft 12 px halo in the chip's OWN metric colour at 70 %, the same recipe as the
-        HA card's chips, so the active chip <-> chart coupling reads at a glance (was a flat primary ring). */
+    /*  Active target: a soft halo in the chip's own metric colour so the chip-to-chart coupling reads
+        at a glance. */
     .pv-pct-label.is-chart-active
     {
         box-shadow: 0 1px 3px var(--shadow-color),
@@ -1664,21 +1382,15 @@ export const heliosCardStyles = css`
                     0 0 12px color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #ffc107)) 70%, transparent);
     }
 
-    /*  Predicted PV chip, shown when scrubbing into the future. The
-        value comes from the kWp × clear-sky model, not a measured
-        reading, so we semi-transparency the whole chip and rely on
-        the leading "≈" character (set by the card's render) to
-        signal "estimate" textually. */
+    /*  Predicted PV chip when scrubbing into the future: the value is modelled, not measured, so the
+        chip dims and a leading "≈" (set by render) signals "estimate". */
     .pv-pct-label.is-predicted
     {
         opacity: 0.55;
         font-style: italic;
     }
 
-    /*  Battery SoC and Power chips, same compact pill recipe as the
-        PV chip. HA-energy node identity is carried by the coloured
-        ring, the icon and the ink tokens, the shape stays compact so
-        it does not crowd the map. */
+    /*  Battery SoC and Power chips, same compact pill recipe as the PV chip. */
     .battery-pct-label
     {
         position: absolute;
@@ -1712,12 +1424,9 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Grid chip: same compact single-line pill recipe as the PV and
-        battery chips, so its text stays crisp under camera rotation.
-        It shows the active flow only; the border follows the inline
-        --grid-leader-color the renderer resolves (consumption blue
-        while importing, return purple while exporting), the icon +
-        value flip with it. */
+    /*  Grid chip, same pill recipe as the PV/battery chips. Shows the active flow only; the border
+        follows the inline --grid-leader-color (blue importing, purple exporting), icon + value flip
+        with it. */
     .grid-label
     {
         position: absolute;
@@ -1761,9 +1470,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 5;
     }
-    /*  Single grid leader. Stroke + bead fill come from the inline
-        --grid-leader-color the renderer resolves to the dominant flow,
-        so one path serves both import (blue) and export (purple). */
+    /*  Single grid leader; stroke + bead fill from the inline --grid-leader-color, so one path serves
+        both import (blue) and export (purple). */
     .grid-leader-line
     {
         stroke-width: 1;
@@ -1771,9 +1479,8 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  Low-carbon chip: same single-line pill recipe as the others,
-        tinted in HA's non-fossil green. Sits at the top of the left
-        column and feeds the grid chip below it. */
+    /*  Low-carbon chip, same pill recipe tinted in HA's non-fossil green. Sits above the grid chip and
+        feeds it. */
     .low-carbon-label
     {
         position: absolute;
@@ -1807,9 +1514,8 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
     }
-    /*  Low-carbon → grid leader: a straight vertical hairline (no L,
-        the two chips share the column x). Stroke + bead fill come from
-        the inline --low-carbon-color. */
+    /*  Low-carbon → grid leader: a straight vertical hairline (chips share the column x). Stroke + bead
+        fill from the inline --low-carbon-color. */
     .low-carbon-leader-svg
     {
         position: absolute;
@@ -1826,13 +1532,8 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  PV → home leader. Vertical dashed line from the PV chip's
-        bottom edge down to the home marker, painted in the configured
-        PV colour. Same dash vocabulary as the battery leader so the
-        two flows read as one coherent visual language. Animation runs
-        only when current production is positive; idle state keeps the
-        line static. Sits at z 5, BELOW the chip cluster (z 6) so the
-        dashes pass behind the PV / SoC / Power chips. */
+    /*  PV → home leader: vertical dashed line from the PV chip down to the home, in the PV colour.
+        z 5, below the chip cluster (z 6) so the dashes pass behind the chips. */
     .pv-home-leader-svg
     {
         position: absolute;
@@ -1852,9 +1553,8 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  Moving bead, a small filled disc rides the leader at a
-        speed proportional to live production. Same vocabulary as
-        the Home Assistant energy-distribution card. */
+    /*  Moving bead riding the leader at a speed proportional to live production, like HA's
+        energy-distribution card. */
     .pv-home-leader-bead
     {
         opacity: 0.95;
@@ -1871,16 +1571,9 @@ export const heliosCardStyles = css`
 
 
 
-    /*  Battery leaders.
-        Both SoC ↔ PV and PV ↔ Power share the exact same visual
-        vocabulary: solid L-shaped path with a rounded fillet at
-        the bend, matching the Home Assistant energy-distribution
-        card. The PV ↔ Power leader carries a small filled bead
-        riding along the path (animateMotion in card.ts) at a
-        speed proportional to |P|; the bead's path is flipped
-        inline by the renderer when discharging so its travel
-        direction matches the energy flow. The SoC leader is
-        static, no bead: SoC is a level, not a flow. */
+    /*  Battery leaders. SoC↔PV and PV↔Power share a solid L-shaped path with a rounded bend. The
+        PV↔Power leader carries a bead at a speed proportional to |P|, its path flipped inline when
+        discharging so travel matches the flow. The SoC leader is static: SoC is a level, not a flow. */
     .battery-leader-svg
     {
         position: absolute;
@@ -1915,17 +1608,9 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.95;
     }
 
-    /*  Solar overlay, split into two passes so chips never occlude
-        the live sun while the night portion of the loop still reads
-        as background:
-          - .solar-svg-back paints only the dotted below-horizon
-            segments and stacks BELOW the home chip cluster (z 4)
-            so the home + readouts sit clearly on top of the night
-            half of the orbit.
-          - .solar-svg-front paints the above-horizon arc, the
-            incidence ray, and the sun disc, and stacks ABOVE the
-            chips (z 7) so the live sun always dominates the stack.
-            The card is named Helios, the sun must win the stack. */
+    /*  Solar overlay split into two passes so chips never occlude the live sun while the night part
+        still reads as background: .solar-svg-back paints the below-horizon dots below the chip cluster
+        (z 4); .solar-svg-front paints the above-horizon arc + ray + sun disc above the chips (z 7). */
     .solar-svg
     {
         position: absolute;
@@ -1933,17 +1618,13 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         pointer-events: none;
-        /* Daylight fade is fed via the --solar-daylight CSS variable
-           (set inline per render, ranges 0..1) instead of an inline
-           opacity, so the overlay-masked fade rule above can win
-           cleanly without fighting an inline style. */
+        /* Daylight fade via the --solar-daylight variable (0..1, set inline) rather than inline opacity,
+           so the overlay-masked fade rule can win without fighting an inline style. */
         opacity: var(--solar-daylight, 1);
         transition: opacity 600ms ease-out;
     }
-    /*  Central home pill, a circular node painted at the projected
-        home centre. Every chip leader (PV, battery, grid) docks
-        against its border so the home reads as the single energy
-        hub the way HA's Energy distribution card does.            */
+    /*  Central home pill at the projected home centre. Every chip leader docks against its border so
+        the home reads as the single energy hub, like HA's Energy distribution card. */
     .home-pill
     {
         position: absolute;
@@ -1954,9 +1635,8 @@ export const heliosCardStyles = css`
         align-items: center;
         justify-content: center;
         gap: 4px;
-        /*  Horizontal stadium, like the other chips and the HA card: the home glyph and the live usage
-            sit side by side. min-width / height match the leader dock half-extents (38 / 14 px) so the
-            chip leaders meet the visible pill edge. */
+        /*  Horizontal stadium: home glyph + live usage side by side. min-width/height match the leader
+            dock half-extents (38/14 px) so the leaders meet the visible pill edge. */
         min-width: 76px;
         height: 28px;
         box-sizing: border-box;
@@ -1973,11 +1653,10 @@ export const heliosCardStyles = css`
         line-height: 1.2;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
-        /*  Keep the mask fade AND ease the hover glow in/out. */
+        /*  Keep the mask fade and ease the hover glow in/out. */
         transition: opacity 0.35s ease, box-shadow 0.2s ease;
     }
-    /*  Very light glow on home hover: a soft halo in the primary colour,
-        the hover state is driven from the hitbox by the card. */
+    /*  Light glow on home hover; the hover state is driven from the hitbox by the card. */
     .home-pill.is-hovered
     {
         box-shadow: 0 1px 3px var(--shadow-color),
@@ -1986,15 +1665,12 @@ export const heliosCardStyles = css`
     .home-pill ha-icon
     {
         --mdc-icon-size: 16px;
-        /*  Home glyph in the text ink (black), not the blue pill border colour. */
+        /*  Home glyph in the text ink, not the blue pill border colour. */
         color: var(--primary-text-color, #212121);
         display: inline-flex;
         align-items: center;
     }
-    /*  Live home consumption, second line inside the hub. Same text
-        size as the surrounding chips so the cluster reads uniform;
-        tabular figures keep the digits steady, regular text ink keeps
-        it readable against the card background. */
+    /*  Live home consumption, second line inside the hub. Tabular figures keep the digits steady. */
     .home-pill-usage
     {
         font-size: var(--ha-font-size-s, 12px);
@@ -2007,46 +1683,27 @@ export const heliosCardStyles = css`
     }
 
     .solar-svg-back        { z-index: 4; }
-    /*  Above-horizon arc is rendered in TWO passes so the depth of
-        each segment drives the local z-order around the home cluster:
-          - solar-svg-front-far  (z 5)  : the half of the arc that has
-            already arched away from the camera. Sits BEHIND chips
-            (z 8), leaders (z 5..), pill (z 9); reads as "the arc
-            disappears behind the home".
-          - solar-svg-front-near (z 11) : the half closest to the
-            camera. Sits IN FRONT of chips + leaders so the arc reads
-            as "coming over the top of the home" on its near side.
-        Sun disc (z 12) and the W/m^2 chip (z 13) always paint last.  */
+    /*  Above-horizon arc in two passes so depth drives the local z-order around the home cluster:
+        front-far (z 5) is behind the chips/pill (arc disappears behind the home), front-near (z 11) is
+        in front (arc comes over the top). Sun disc (z 12) + W/m² chip (z 13) paint last. */
     .solar-svg-front-far  { z-index: 5; }
     .solar-svg-front-near { z-index: 11; }
-    /*  Sun disc inherits the same depth split as the arc:
-        - far half of the loop : disc paints UNDER chips + leaders
-          (z 5) so the sun "passes behind the home" as the loop
-          arcs away from the camera.
-        - near half of the loop : disc paints OVER everything but
-          the W/m^2 chip (z 12).                                  */
+    /*  Sun disc inherits the arc's depth split: far half under chips + leaders (z 5, passes behind the
+        home), near half over everything but the W/m² chip (z 12). */
     .solar-svg-sun-far    { z-index: 5;  }
     .solar-svg-sun-near   { z-index: 12; }
-    /*  Sun -> PV ray + bead live on their own SVG below the chip
-        family (pv-pct-label sits at z 8) so the chip's background
-        always occludes the ray endpoint at the chip border. The
-        sun disc itself stays in the depth-split SVGs above so the
-        disc still passes in front of / behind the home cluster
-        depending on camera bearing. */
+    /*  Sun → PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the
+        ray endpoint at the chip border. The sun disc stays in the depth-split SVGs above. */
     .solar-ray-svg        { z-index: 7;  }
 
-    /*  Arc, first pass paints a dark outline for legibility on
-        light basemaps; second pass paints the configured sun
-        colour on top. Stroke widths are set inline per segment. */
+    /*  Arc: first pass a dark outline for legibility on light basemaps, second pass the sun colour on
+        top. Stroke widths set inline per segment. */
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Below-horizon segments, round dots at fixed spacing so the eye reads "this is happening
-        underground" without colour or depth scaling having to carry the signal. dasharray "0 N"
-        with linecap round renders true circles on every browser. Stroke alpha is halved relative
-        to the above-horizon arc so the dotted leg recedes visually: the bright arc reads as
-        "the part of the day where there is sunlight" and the dotted leg as ambient context
-        underneath.                                                                              */
+    /*  Below-horizon segments as round dots (dasharray "0 N" + round linecap = true circles
+        everywhere) so the underground leg reads without colour cues. Stroke alpha halved vs the
+        above-horizon arc so the dotted leg recedes as ambient context. */
     .solar-svg .solar-arc-night
     {
         stroke-linecap: round;
@@ -2058,10 +1715,8 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.25;
     }
 
-    /*  Incidence ray, dashes flow from the sun toward the home at a
-        speed proportional to live irradiance. Hairline 1 px to match
-        the home cluster's solid leaders so the whole connector family
-        reads at one weight. */
+    /*  Incidence ray: dashes flow sun → home at a speed proportional to live irradiance. 1 px hairline
+        to match the home cluster's leaders. */
     .solar-svg .solar-ray
     {
         stroke-width: 1;
@@ -2077,8 +1732,8 @@ export const heliosCardStyles = css`
         to   { stroke-dashoffset: -10; }
     }
 
-    /*  Cloud chip on the sun -> home line: a stadium pill in cloud grey showing the live cover, clickable
-        to re-target the timeline chart to the cloud bands. Same recipe + active glow as the other chips. */
+    /*  Cloud chip on the sun → home line: a grey pill showing live cover, clickable to re-target the
+        chart to the cloud bands. Same recipe + active glow as the other chips. */
     .cloud-chip
     {
         position: absolute;
@@ -2114,7 +1769,7 @@ export const heliosCardStyles = css`
         box-shadow: 0 1px 3px var(--shadow-color),
                     0 0 12px color-mix(in srgb, var(--secondary-text-color, #727272) 70%, transparent);
     }
-    /*  Short fixed cloud-coloured leader joining the irradiance chip to the cloud chip on its right. */
+    /*  Short cloud-coloured leader joining the irradiance chip to the cloud chip on its right. */
     .cloud-chip-leader
     {
         position: absolute;
@@ -2127,12 +1782,8 @@ export const heliosCardStyles = css`
         z-index: 10;
     }
 
-    /*  Solar ray bead, small filled disc travelling sun -> PV chip
-        along the incidence ray. Same recipe as the PV / battery /
-        grid beads (white halo stroke, paint-order stroke-fill, dark
-        halo in theme-dark) so the bead family reads consistently
-        across all leaders. Speed comes from the inline animateMotion
-        dur value driven by the live irradiance.                    */
+    /*  Solar ray bead travelling sun → PV chip along the ray. Same recipe as the other beads; speed
+        from the inline animateMotion dur driven by live irradiance. */
     .solar-svg .solar-ray-bead
     {
         opacity: 0.95;
@@ -2148,29 +1799,21 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Solar irradiance label, chip pinned above the live sun
-        position, same chip language as the cloud and PV chips.
-        Sits in the front layer (z 7) so it stacks on top of every
-        home-anchored chip, matching the front-pass solar overlay. */
+    /*  Solar irradiance label pinned above the live sun, same chip language as the cloud/PV chips. */
     .solar-pct-label
     {
         position: absolute;
         transform: translate(-50%, -100%);
         pointer-events: none;
-        /*  Sits ABOVE the arc-front lines (z 11) so the W/m² readout
-            never gets crossed over by an arc segment that happens
-            to project through its area. The sun disc (z 12) still
-            paints on top because it shares the cluster identity. */
+        /*  Above the arc-front lines (z 11) so an arc segment never crosses the W/m² readout; the sun
+            disc (z 12) still paints on top. */
         z-index: 13;
         display: inline-flex;
         align-items: center;
         gap: 4px;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
-        /*  Sun chip uses the HA amber token so the live irradiance
-            reads distinct from the PV production identity. PV stays
-            on --energy-solar-color (orange); the sun stays on amber
-            so the two never blur visually. */
+        /*  Sun chip uses the HA amber token so it stays distinct from the PV production chip (orange). */
         border:     2px solid var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
         border-radius: 999px;
         padding: 3px 10px;
@@ -2192,33 +1835,15 @@ export const heliosCardStyles = css`
 
 
     /*  ============================================================
-        Dark theme, opt-in via the \`card-theme: dark\` config.
-
-        The whole card is already painted on top of a 3D map, so
-        "dark mode" here is really about the chrome (chips, charts,
-        cursors, day labels, leader lines, tooltips), the basemap
-        keeps its own colours. Strategy:
-
-          - chip surfaces flip from a solid white plate to a solid
-            near-black plate, so the chip itself reads as a clean
-            darkened tile over the map instead of a
-            bright sticker.
-          - chip text / borders / icons go from black to a soft
-            light-grey (#e6e6e6 text, #cccccc borders), pure white
-            would clip detail against bright basemap patches.
-          - chart hairlines (midline, day separators, hour ticks,
-            live cursor) flip from black-on-white to white-on-near-
-            black with the same opacity envelopes as the light skin
-            so the visual weight stays balanced.
-          - chart fills (PV / cloud / irradiance) are user-coloured
-            and unchanged, they read fine on both surfaces.
-          - the scrub blue (#1f6feb) and the live tooltip dark
-            plate already read on dark backgrounds, so they're left
-            alone.
+        Dark theme, opt-in via \`card-theme: dark\`. Affects only the chrome
+        (chips, charts, cursors, labels, leaders, tooltips); the basemap
+        keeps its own colours. Chip plates flip white → near-black, text/
+        borders go light-grey, and chart hairlines flip to white-on-dark
+        with the same opacity envelopes. User-coloured fills, the scrub
+        blue and the live tooltip plate already read on dark, left alone.
         ============================================================ */
 
-    /*  .tb-chart-card flips via --card-background-color +
-        --divider-color, no explicit dark-theme override needed. */
+    /*  .tb-chart-card flips via --card-background-color + --divider-color, no dark override needed. */
 
     ha-card.theme-dark .hc-day-sep
     {
@@ -2231,49 +1856,20 @@ export const heliosCardStyles = css`
         stroke: rgba(255, 255, 255, 0.35);
     }
 
-    /*  tb-cursor-now is driven by --rgb-primary-text-color + alpha
-        so it flips with the theme on its own, no dark overrides
-        needed. */
+    /*  tb-cursor-now is driven by --rgb-primary-text-color + alpha so it flips on its own. */
 
-    /*  Value chips (PV, battery, cloud, solar) sit on a dark plate
-        with a thick coloured ring in BOTH themes, matching the visual
-        language of Home Assistant's energy dashboard so a Helios card
-        sitting alongside HA's own surfaces reads as part of the same
-        family. The plate is opaque enough to stay readable over a
-        bright basemap in light mode without us forking the recipe
-        per theme. */
-
-    /*  Cloud leader keeps its slate-blue colour in dark mode too,
-        the chip's frame already carries the same colour on both
-        themes so the leader matches by default. */
-
-    /*  Solar arc outline, the light skin paints a black halo
-        behind the configured sun colour for legibility on bright
-        basemaps; in dark mode that halo would disappear into the
-        map, so we paint a faint white halo instead. The arc and
-        sun disc themselves keep their configured colour. */
+    /*  Solar arc outline: the light skin paints a black halo for legibility on bright basemaps; in
+        dark mode that halo would vanish into the map, so paint a faint white halo instead. */
     ha-card.theme-dark .solar-svg .solar-arc-outline
     {
         stroke: rgba(255, 255, 255, 0.45);
     }
 
 
-    /*  ---------------------------------------------------------
-        Animation perf hooks
-        ---------------------------------------------------------
-
-        1. .helios-paused, set on the host element by the card's
-           IntersectionObserver when the card scrolls out of the
-           viewport. Pauses every CSS animation (SVG dash-flow,
-           offset-path arrow flow) until the card returns. SMIL
-           <animateMotion> is paused in parallel via
-           svg.pauseAnimations() in the card script.
-
-        2. prefers-reduced-motion, respects the user's system
-           setting. When the user has asked for reduced motion at
-           the OS level, every helios animation and transition is
-           disabled. The card still functions; it just doesn't move.
-    */
+    /*  Animation perf hooks:
+        1. .helios-paused (set by the card's IntersectionObserver when scrolled off-screen) pauses every
+           CSS animation; SMIL <animateMotion> is paused in parallel via svg.pauseAnimations().
+        2. prefers-reduced-motion disables every helios animation + transition at the OS level. */
     :host(.helios-paused) *,
     :host(.helios-paused) *::before,
     :host(.helios-paused) *::after
@@ -2292,20 +1888,10 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Fullscreen / kiosk breakpoint, see issue #33. When the card
-        is rendered above 900 CSS px of width (a dedicated dashboard
-        view, kiosk panel, mobile portrait on tablet, ...), the chip
-        text bumps one size step up so the value chips, the day-strip
-        and the W/m² readout stay readable from across the room.
-
-        The sun arc radius and the home chip cluster offsets are
-        scaled separately by the engine (_heliosScale), so the
-        on-map geometry expands in lockstep with this typography pass
-        without overlapping the chip text.
-
-        Container queries on ha-card (declared above) so a Helios
-        card sitting in a wide section view alongside narrower cards
-        flips on its own width, not on the viewport's. */
+    /*  Fullscreen / kiosk breakpoint (issue #33): above 900 px card width the chip text bumps one size
+        step up so the chips, day-strip and W/m² readout stay legible from across the room. On-map
+        geometry is scaled separately by the engine (_heliosScale). Keyed on the container query (above)
+        so it flips on the card's own width, not the viewport's. */
     @container helios-card (min-width: 900px)
     {
         .pv-pct-label,
