@@ -1760,6 +1760,7 @@ export class HeliosCard extends LitElement
         //direction too (battery-in tint charging, battery-out tint discharging), independent of the
         //HA-sign flip applied to the chip text above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
+        const batteryDischarging = showPowerChip && (activeBatteryPower! < 0);
         const batteryLeaderColor = batteryCharging
             ? 'var(--energy-battery-in-color, #f06292)'
             : 'var(--energy-battery-out-color, #4db6ac)';
@@ -1846,9 +1847,60 @@ export class HeliosCard extends LitElement
             const postY = sy + dirV * r;
             return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${preX.toFixed(1)},${sy.toFixed(1)} Q ${ex.toFixed(1)},${sy.toFixed(1)} ${ex.toFixed(1)},${postY.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
         };
-        const socLeaderPath        = buildLPathToHome(layout?.batterySocLabel.x   ?? 0, layout?.batterySocLabel.y   ?? 0, 22);
-        const powerLeaderPath      = buildLPathToHome(layout?.batteryPowerLabel.x ?? 0, layout?.batteryPowerLabel.y ?? 0, 22);
-        const powerArrowPath       = powerLeaderPath;
+        //Rounded L between two arbitrary points. verticalFirst=true draws the vertical leg from the
+        //start, fillets the corner, then the horizontal leg into the end (used PV -> Power, which drops
+        //down then turns right). Same fillet vocabulary as buildLPathToHome so beads bend smoothly.
+        const buildLPath = (
+            sx: number, sy: number, ex: number, ey: number, verticalFirst: boolean
+        ): string =>
+        {
+            const FILLET_R = 12;
+            const dirH = ex > sx ? 1 : -1;
+            const dirV = ey > sy ? 1 : -1;
+            const r = Math.min(FILLET_R, Math.abs(ex - sx) / 2, Math.abs(ey - sy) / 2);
+            if (verticalFirst)
+            {
+                const preY  = ey - dirV * r;
+                const postX = sx + dirH * r;
+                return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${sx.toFixed(1)},${preY.toFixed(1)} Q ${sx.toFixed(1)},${ey.toFixed(1)} ${postX.toFixed(1)},${ey.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
+            }
+            const preX  = ex - dirH * r;
+            const postY = sy + dirV * r;
+            return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${preX.toFixed(1)},${sy.toFixed(1)} Q ${ex.toFixed(1)},${sy.toFixed(1)} ${ex.toFixed(1)},${postY.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
+        };
+
+        //Battery chip stack: Power (kW) on top, State-of-charge (%) below, sharing the same x.
+        const BATTERY_HALF_HEIGHT_PX = 14;
+        const socChipX   = layout?.batterySocLabel.x   ?? 0;
+        const socChipY   = layout?.batterySocLabel.y   ?? 0;
+        const powerChipX = layout?.batteryPowerLabel.x ?? 0;
+        const powerChipY = layout?.batteryPowerLabel.y ?? 0;
+        //SoC chip → Power chip: the state-of-charge belongs to the same battery as the power, so its
+        //leader docks on the Power chip rather than the home. Straight vertical hairline between their
+        //facing edges (SoC sits below the Power chip). No flow, a level.
+        const socLeaderPath = layout
+            ? `M ${socChipX.toFixed(1)},${(socChipY - BATTERY_HALF_HEIGHT_PX).toFixed(1)} L ${powerChipX.toFixed(1)},${(powerChipY + BATTERY_HALF_HEIGHT_PX).toFixed(1)}`
+            : '';
+        //SoC chip → home: the battery→home discharge flow (rounded L + animated bead), drawn ONLY while
+        //the battery is discharging to feed the home. It leaves from the SoC chip, the lower chip
+        //nearest the home, rather than the Power chip, so the Power chip stays a clean top node that PV
+        //feeds when charging.
+        const dischargeLeaderPath = (layout && batteryDischarging)
+            ? buildLPathToHome(socChipX, socChipY, 22)
+            : '';
+        //PV chip → Power chip, drawn ONLY while the battery is charging (PV feeding it): an inverted L
+        //that drops straight down from the PV chip then turns right into the Power chip's left edge,
+        //with a PV-coloured bead flowing toward the battery. Removed the instant the battery discharges.
+        const PV_TO_BATTERY_NUDGE_X = 30;
+        const pvToBatteryPath = (layout && batteryCharging && showPvLabel)
+            ? buildLPath(
+                layout.pvLabel.x,
+                layout.pvLabel.y + PV_HALF_HEIGHT_PX,
+                powerChipX - PV_TO_BATTERY_NUDGE_X,
+                powerChipY,
+                true
+            )
+            : '';
         const gridLeaderPath       = buildLPathToHome(layout?.gridLabel.x         ?? 0, layout?.gridLabel.y         ?? 0, 22);
 
         //Grid bead cadence, frequency (= 1 / dur) is proportional to
@@ -2425,9 +2477,9 @@ export class HeliosCard extends LitElement
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV, solid, inverted-L path with a
-                            rounded corner. No animation: SoC is a
-                            level, not a flow direction.
+                            SoC → Power chip, solid straight vertical
+                            hairline between the two stacked chips. No
+                            animation: SoC is a level, not a flow.
                         -->
                         ${showSocChip ? svg`
                             <path
@@ -2437,20 +2489,16 @@ export class HeliosCard extends LitElement
                             ></path>
                         ` : nothing}
                         <!--
-                            PV ↔ Power, solid L-shaped path with a
-                            small filled bead riding along it at a
-                            speed proportional to |P|. The bead's
-                            animateMotion path is flipped inline by
-                            the renderer when discharging so the
-                            travel direction matches the energy flow
-                            (PV → Power when charging, Power → PV
-                            when discharging).
+                            SoC → home, the battery→home discharge
+                            flow: solid rounded-L + bead toward the
+                            home, drawn only while the battery is
+                            discharging to feed the house.
                         -->
-                        ${showPowerChip ? svg`
+                        ${dischargeLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${powerLeaderPath}"
+                                d="${dischargeLeaderPath}"
                             ></path>
                             ${!batteryIdle ? svg`
                                 <circle
@@ -2461,7 +2509,34 @@ export class HeliosCard extends LitElement
                                     <animateMotion
                                         dur="${batteryFlowDuration}s"
                                         repeatCount="indefinite"
-                                        path="${powerArrowPath}"
+                                        path="${dischargeLeaderPath}"
+                                    ></animateMotion>
+                                </circle>
+                            ` : nothing}
+                        ` : nothing}
+                        <!--
+                            PV → Power chip, only while charging: an
+                            inverted L (down then right) in the PV
+                            colour with a bead flowing toward the
+                            battery, so the user sees the PV feeding it.
+                        -->
+                        ${pvToBatteryPath ? svg`
+                            <path
+                                class="pv-home-leader-line"
+                                style="--pv-leader-color:${pvColor}"
+                                fill="none"
+                                d="${pvToBatteryPath}"
+                            ></path>
+                            ${!batteryIdle ? svg`
+                                <circle
+                                    class="pv-home-leader-bead"
+                                    r="3"
+                                    fill="${pvColor}"
+                                >
+                                    <animateMotion
+                                        dur="${batteryFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        path="${pvToBatteryPath}"
                                     ></animateMotion>
                                 </circle>
                             ` : nothing}

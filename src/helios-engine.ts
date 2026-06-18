@@ -4670,8 +4670,10 @@ export class HeliosEngine
         const pvY = clusterY - PV_CHIP_OFFSET_PX * liftScale;
         //Battery column on the RIGHT: SoC on top, Power on the bottom.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
-        const batterySocY       = clusterY - CHIP_STACK_GAP_PX / 2;
-        const batteryPowerY     = clusterY + CHIP_STACK_GAP_PX / 2;
+        //Power chip on TOP (it pairs with the PV chip overhead and owns the lead down to the home),
+        //State-of-charge chip BELOW it. The SoC chip's leader docks on the Power chip, not the home.
+        const batteryPowerY     = clusterY - CHIP_STACK_GAP_PX / 2;
+        const batterySocY       = clusterY + CHIP_STACK_GAP_PX / 2;
         //Left column: low-carbon on top, grid on the bottom. The grid
         //chip drops to the bottom row (mirroring battery Power on the
         //right) and the low-carbon chip takes the top row (mirroring
