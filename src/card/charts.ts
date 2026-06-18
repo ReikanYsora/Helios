@@ -530,6 +530,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const gridImpW = store ? (valueAt(store.gridImport, store, atMs) ?? NaN) : NaN;
     const gridExpW = store ? (valueAt(store.gridExport, store, atMs) ?? NaN) : NaN;
     const battW    = store ? (valueAt(store.battery,    store, atMs) ?? NaN) : NaN;
+    const battSocV = host._batterySocHistory
+        ? interpAt(host._batterySocHistory.times, host._batterySocHistory.values, atMs)
+        : NaN;
     const kw = (w: number): string => `${formatLocalisedNumber(host.hass, w / 1000, 1)} kW`;
 
     //Per-entity breakdown rows for multi-source installs (LBDG_'s feature). Each row carries the friendly name from
@@ -703,6 +706,12 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                         </div>
                     ` : nothing}
                 ` : nothing}
+                ${target === 'battery-soc' && isFinite(battSocV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:battery"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, battSocV)))} %</span>
+                    </div>
+                ` : nothing}
                 ${target === 'irradiance' && isFinite(irrV) ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny"></ha-icon>
@@ -763,7 +772,7 @@ export interface ChartSeries
 //(+ dashed forecast + per-source breakdown) is the default; 'grid' / 'battery' draw their two-direction
 //flows (accent = the dominant side over the window); 'irradiance' draws the W/m² curve on a fixed
 //0..1000 scale. Cloud is intentionally NOT a target, it lives in weather mode.
-export type ChartTarget = 'production' | 'grid' | 'battery' | 'irradiance' | 'cloud';
+export type ChartTarget = 'production' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud';
 
 //Structural surface the host card exposes to this module. The `_chartHoverPct` field is intentionally writable: hover handlers defined here mutate it
 //on pointermove / pointerleave, exactly like the dashboard's `_dashChartHoverTs`. All other fields stay read-only.
@@ -809,6 +818,9 @@ export interface ChartHost
     //timeline + radial + dashboard charts read from. Null only between mount and the first build,
     //the chart degrades to an empty curve until then.
     readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
+    //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
+    //target, read directly here because the store only carries a live SoC sample at the current bucket.
+    readonly _batterySocHistory: { times: Date[]; values: number[] } | null;
     //Active bottom-chart target. Drives which series renderBottomChart draws; defaults to 'production'.
     readonly _chartTarget?: ChartTarget;
 }
@@ -1191,8 +1203,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
     let yMax = 1;
     for (const s of samples)          { if (s.v > yMax) yMax = s.v; }
     for (const s of predictedSamples) { if (s.v > yMax) yMax = s.v; }
+    //Leave a sliver of headroom at the top so the production / forecast peak never kisses the top edge.
+    const TOP_HEADROOM_PX = 10;
     const yOf = (v: number): number =>
-        H - Math.max(0, Math.min(1, v / yMax)) * H;
+        H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
 
     const points = samples.map(s =>
         `${xOf(s.t).toFixed(2)},${yOf(s.v).toFixed(2)}`);
@@ -1309,42 +1323,33 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //it rides on, so the dot reads as "this is where the curve
     //sits at that moment" rather than free-floating.
     const hoverPct = host._chartHoverPct;
-    let hoverX:    number = 0;
-    let hoverY:    number = NaN;
+    let hoverX:     number = 0;
+    let hoverY:     number = NaN;
+    let hoverYPred: number = NaN;
     let showHover = false;
     if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
     {
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
-        let hoverV: number = NaN;
-        //Only sample the observed curve when the hover instant sits inside the observed window. Otherwise interpAt would clamp to the last observed
-        //value and the dot would freeze on yesterday's late-afternoon reading when the user hovers at noon tomorrow.
+        //Observed curve: only inside the observed window, else interpAt clamps to the last reading and
+        //the dot freezes on yesterday's late-afternoon value when hovering tomorrow. Forecast curve:
+        //wherever it has a value, so on the production part the user sees BOTH the production dot AND the
+        //forecast dot riding their own curves, not just one.
         const lastObsMs = samples.length > 0
             ? samples[samples.length - 1].t.getTime()
             : -Infinity;
         if (samples.length >= 1 && hoverMs <= lastObsMs)
         {
-            hoverV = interpAt(
-                samples.map(s => s.t),
-                samples.map(s => s.v),
-                hoverMs,
-            );
+            const a = interpAt(samples.map(s => s.t), samples.map(s => s.v), hoverMs);
+            //Floor at zero: a net meter can dip below zero at dawn/dusk; the dot still rides the curve.
+            if (isFinite(a)) { hoverY = yOf(Math.max(0, a)); }
         }
-        if (!isFinite(hoverV) && predictedSamples.length >= 1)
+        if (predictedSamples.length >= 1)
         {
-            hoverV = interpAt(
-                predictedSamples.map(s => s.t),
-                predictedSamples.map(s => s.v),
-                hoverMs,
-            );
+            const p = interpAt(predictedSamples.map(s => s.t), predictedSamples.map(s => s.v), hoverMs);
+            if (isFinite(p)) { hoverYPred = yOf(Math.max(0, p)); }
         }
-        if (isFinite(hoverV))
-        {
-            //Floor at zero: a net-meter entity can briefly dip below zero around dawn / dusk and the dot should still ride the visible curve, not
-            //dive off the bottom of the card.
-            hoverY = yOf(Math.max(0, hoverV));
-            showHover = true;
-        }
+        showHover = isFinite(hoverY) || isFinite(hoverYPred);
     }
 
     return html`
@@ -1401,6 +1406,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
         ${showHover && isFinite(hoverY) ? html`
             <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverY / H * 100).toFixed(2)}%; background: ${pvColor};"></div>
         ` : nothing}
+        ${showHover && isFinite(hoverYPred) ? html`
+            <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverYPred / H * 100).toFixed(2)}%; background: ${predictedPvColor};"></div>
+        ` : nothing}
     `;
 }
 
@@ -1428,6 +1436,7 @@ export function chartAccentColor(host: ChartHost): string
     if (target === 'production') { return DEFAULT_PV_COLOR_HEX; }
     if (target === 'irradiance') { return DEFAULT_SUN_COLOR_HEX; }
     if (target === 'cloud')      { return DEFAULT_CLOUD_COLOR_HEX; }
+    if (target === 'battery-soc'){ return DEFAULT_BATTERY_OUT_COLOR_HEX; }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
@@ -1525,6 +1534,26 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             { pts: discharge, color: DEFAULT_BATTERY_OUT_COLOR_HEX },
         ];
     }
+    else if (target === 'battery-soc')
+    {
+        //Battery state-of-charge over the window, read straight from the fetched SoC history (the store
+        //only carries a live SoC sample at the current bucket). One curve on a fixed 0..100 % scale.
+        const hist = host._batterySocHistory;
+        const pts: Array<{ t: number; v: number }> = [];
+        if (hist)
+        {
+            for (let i = 0; i < hist.times.length; i++)
+            {
+                const tMs = hist.times[i].getTime();
+                if (tMs < startMs || tMs > endMsAbs) { continue; }
+                const v = hist.values[i];
+                if (v === undefined || !isFinite(v)) { continue; }
+                pts.push({ t: tMs, v });
+            }
+        }
+        series   = [{ pts, color: DEFAULT_BATTERY_OUT_COLOR_HEX }];
+        fixedMax = 100;
+    }
     else if (target === 'cloud')
     {
         //Cloud-cover bands read from the hourly weather series (not the bucketed store): low / mid / high
@@ -1565,7 +1594,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         yMax = 1;
         for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
     }
-    const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * H;
+    //Leave a sliver of headroom at the top so a curve's peak never kisses the timeline's top edge.
+    const TOP_HEADROOM_PX = 10;
+    const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
 
     const drawn = series.map(s =>
     {

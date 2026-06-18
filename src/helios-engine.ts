@@ -4611,7 +4611,10 @@ export class HeliosEngine
         //lift grows faster than the horizontal spread so the chips
         //float higher and the leader lines breathe.
         const liftScale = this._clusterLiftScale();
-        const CHIP_SIDE_X_OFFSET_PX = 70 * scale;
+        //Battery (right) and Grid/low-carbon (left) chips sit symmetrically this far off the home's x.
+        //A touch wider than the tight original so the side clusters breathe and don't crowd the home
+        //pill / their own leaders.
+        const CHIP_SIDE_X_OFFSET_PX = 84 * scale;
         //Vertical distance between the top and bottom rows of chips.
         //Bumped to 60 so the L-shape leaders below have enough room
         //to render their rounded fillet without overlapping the

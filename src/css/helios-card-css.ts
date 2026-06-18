@@ -678,10 +678,11 @@ export const heliosCardStyles = css`
     .hc-hover-dot-html
     {
         position: absolute;
-        width: 9px;
-        height: 9px;
+        /*  Matches the moving beads on the chip leaders (SVG <circle r="3"> = 6 px filled disc, no
+            border) so the hover markers read as the same vocabulary across the card. */
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        border: 1.5px solid color-mix(in srgb, var(--primary-text-color, #ffffff) 70%, transparent);
         box-sizing: border-box;
         transform: translate(-50%, -50%);
         pointer-events: none;

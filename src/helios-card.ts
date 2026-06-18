@@ -744,11 +744,12 @@ export class HeliosCard extends LitElement
     private _renderChartIndicator(): TemplateResult
     {
         const icons: Record<ChartTarget, string> = {
-            production: 'mdi:solar-power',
-            grid:       'mdi:transmission-tower',
-            battery:    'mdi:battery',
-            irradiance: 'mdi:white-balance-sunny',
-            cloud:      'mdi:cloud',
+            production:    'mdi:solar-power',
+            grid:          'mdi:transmission-tower',
+            battery:       'mdi:lightning-bolt',
+            'battery-soc': 'mdi:battery',
+            irradiance:    'mdi:white-balance-sunny',
+            cloud:         'mdi:cloud',
         };
         const icon = icons[this._chartTarget] ?? 'mdi:chart-line';
         return html`
@@ -2544,11 +2545,11 @@ export class HeliosCard extends LitElement
                     </svg>
                     ${showSocChip ? html`
                         <div
-                            class="battery-pct-label ${this._chartTarget === 'battery' ? 'is-chart-active' : ''}"
+                            class="battery-pct-label ${this._chartTarget === 'battery-soc' ? 'is-chart-active' : ''}"
                             style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
                             role="button"
                             tabindex="0"
-                            @click=${() => this._setChartTarget('battery')}
+                            @click=${() => this._setChartTarget('battery-soc')}
                         >
                             <ha-icon icon="mdi:battery"></ha-icon>
                             <span>${batterySocText}</span>
