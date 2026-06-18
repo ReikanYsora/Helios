@@ -1,70 +1,51 @@
 /*
- * Lightweight i18n for HELIOS, synchronous, zero-dep.
- *
- * Locales are inlined at build time so the user never has to host them
- * separately. The active language is picked from Home Assistant's
- * `hass.language` property, which mirrors the user's HA UI language.
- * If the requested language is missing, we fall back to English.
+ * Lightweight i18n for HELIOS: synchronous, zero-dep. Locales are inlined at build time. The
+ * active language comes from `hass.language`; missing languages fall back to English.
  */
 
-//Contractual shape every locale must implement.
-//
-//We declare it explicitly (rather than deriving it via `typeof en`) so
-//that the English locale can also import the type without creating a
-//circular dependency. Adding a new key requires:
-//  1. Adding it here in Translations.
-//  2. Adding it in every locale (TS error otherwise).
+//Contractual shape every locale must implement. Declared explicitly (not derived via `typeof en`)
+//so the English locale can import the type without a circular dependency. New keys must be added
+//here and in every locale (TS error otherwise).
 export interface Translations
 {
     cardName:        string;
     cardDescription: string;
-    //Label on the always-visible LiDAR-view chip in the top-right
-    //Detail dashboard, opened by clicking the home. The camera eases
-    //in (zoom + pitch) and a full-card overlay takes over while the
-    //pre-existing HUD fades out.
+    //Detail dashboard, opened by clicking the home: camera eases in (zoom + pitch), a full-card
+    //overlay takes over while the pre-existing HUD fades out.
     detail:
     {
         exitHint:  string;       //close-button aria-label
 
-        //CoverFlow dashboard panel. Each key is OPTIONAL because the renderer falls back to the
-        //English text below via `??` when the active locale has not been updated yet, so locale
-        //files only have to add these keys when ready.
+        //CoverFlow dashboard panel. Keys are OPTIONAL: the renderer falls back to the inline
+        //English text via `??` when the active locale lacks them.
         tileProductionLabel?:   string; //'Production'
         dayLabelToday?:         string; //'Today'
         dayLabelYesterday?:     string; //'Yesterday'
         dayLabelDayBefore?:     string; //'2 days ago'
         dayLabelTomorrow?:      string; //'Tomorrow'
         dayLabelDayAfter?:      string; //'In 2 days'
-        //Label inside the top-of-card loading banner, visible while the first hydration wave of
-        //data fetches is still in flight.
-        loadingLabel?:          string; //'Fetching data...'
-        //Headline + body for the alert banner that appears under the loading banner when the
-        //Open-Meteo weather-data fetch hits HTTP 429 (rate limit). Goes away once a subsequent
-        //fetch succeeds, the user knows the card is temporarily without fresh weather data and
-        //why.
+        loadingLabel?:          string; //'Fetching data...' (top-of-card loading banner)
+        //Open-Meteo HTTP 429 (rate limit) alert under the loading banner; clears once a fetch
+        //succeeds.
         weatherRateLimitTitle?:   string; //'OpenMeteo rate limit'
         weatherRateLimitMessage?: string; //'Too many requests, please wait'
-        //Badge labels on the dashboard radial dial chip strip (Production / Battery / Cloud /
-        //Irradiance).
+        //Radial dial chip strip badges.
         radialProductionLabel?: string; //'Production'
         radialBatteryLabel?:    string; //'Battery'
         radialCloudLabel?:      string; //'Cloud'
         radialIrradianceLabel?: string; //'Irradiance'
-        //Aria label + visible text on the "back to live" button that appears in the top-right corner
-        //of the radial card while a hover cursor is parked on the dial. Tapping it clears the cursor
-        //and snaps the dial back to its live read-out.
+        //"Back to live" button: clears the parked hover cursor and snaps the dial to its live
+        //read-out (aria label + visible text).
         radialBackToLive?:      string; //'Back to live'
-        //Aria label + title on the view-mode toggle in the CoverFlow card bandeau. The visible icon
-        //is a glyph (radar dial vs chart line), the title carries the human-readable mode name.
+        //View-mode toggle in the CoverFlow bandeau (aria label + title; icon is a glyph).
         dashViewRadialLabel?:   string; //'Radial view'
         dashViewGraphLabel?:    string; //'Graph view'
-        //Mini-card label above the graph view's forecast value (kWh predicted for the day, OR the
-        //hovered hour's instantaneous W when the user parks the cursor on the chart).
+        //Mini-card label above the graph view's forecast value (daily kWh, or the hovered hour's
+        //instantaneous W).
         dashForecastLabel?:     string; //'Forecast'
     };
 
-    //In-card rolling-period selector shown on the timeline (Today / Default / 7 d / 30 d). Optional so
-    //locales add it when ready; the renderer falls back to English when a key is absent.
+    //In-card rolling-period selector on the timeline. Optional; renderer falls back to English.
     period?:
     {
         rangeLabel?:    string; //'Time range' (aria-label on the selector group)
@@ -75,16 +56,14 @@ export interface Translations
 
     editor:
     {
-        //Optional override for the home location used as the card's
-        //center. When both fields are blank the card falls back to
-        //hass.config; when both are set to valid coords (lat -90..90,
-        //lon -180..180) they win over HA's configured home.
+        //Optional home-location override for the card's center. Blank → falls back to hass.config;
+        //valid coords (lat -90..90, lon -180..180) win over HA's configured home.
         locationSection:          string;
         homeLatitude:             string;
         homeLongitude:            string;
         locationHint:             string;
-        //Top section grouping the map style + label visibility + camera auto-rotate toggle. Title reads "UI & map" because it bundles the basemap
-        //chrome with the camera animation that drives the user-facing motion.
+        //Map style + label visibility + camera auto-rotate. Titled "UI & map" since it bundles
+        //basemap chrome with the camera animation.
         uiAndMapSection:          string;
         mapStyle:                 string;
         mapStyleHint:             string;
@@ -97,42 +76,32 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
-        //Data display section: per-card knob that controls how dense the unified data source is
-        //(buckets per hour, 1-60). Single slider, one hint. Sits above the PV install section so
-        //the user sees the precision / cost knob before the install-level config.
+        //Data display: density of the unified data source (buckets per hour, 1-60). Sits above the
+        //PV install section.
         dataDisplaySection:           string;
         displayUpdateFrequency:       string;
         displayUpdateFrequencyHelp:   string;
-        //Decimal-precision slider (0-3) for every value readout. Optional: locales fall back to the
-        //inline English default in the editor until they carry the key.
+        //Decimal-precision slider (0-3) for value readouts. Optional; falls back to inline English.
         valueDecimals?:               string;
         valueDecimalsHelp?:           string;
-        //Global display radius slider (50-500 m). Optional: only the FR locale carries it for now,
-        //every other locale falls back to the inline default in the editor. Re-added in v1.8.4 as a
-        //perf lever for older phones (smaller rendered disc = less geometry projected per frame).
+        //Global display radius slider (50-500 m). Optional, FR-only for now; perf lever (smaller
+        //disc = less geometry per frame). Re-added in v1.8.4.
         displayRadius?:               string;
         displayRadiusHelp?:           string;
-        //Single section for the user's PV install. Bundles the inverter cap, the per-row panel orientation, the inverter-cutoff
-        //SoC guard and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy
-        //dashboard equivalent.
+        //PV install: inverter cap, per-row panel orientation, inverter-cutoff SoC guard, optional
+        //solar-radiation override sensor — every install-level knob with no HA Energy equivalent.
         installationSection:      string;
-        //Hint rendered at the top of the section, telling the user every entity wiring (production, grid, battery) lives in
-        //the HA Energy dashboard now and this section only adds the install-level details that improve forecast accuracy.
+        //Section-top hint: entity wiring (production, grid, battery) lives in HA Energy now; this
+        //section only adds install details that improve forecast accuracy.
         installationHint:         string;
-        //Inverter clipping cap, in kW of AC output. Optional. When set, the forecast tops out at this value so an over-sized DC array hooked to a
-        //smaller inverter doesn't render a peak above what the hardware can actually deliver.
+        //Inverter clipping cap (kW AC). Optional; forecast tops out here so an over-sized DC array
+        //on a smaller inverter doesn't render an unachievable peak.
         pvInverterMaxKw:          string;
         pvInverterMaxKwHelp:      string;
-        //Multi-array PV layout. Each array entry exposes its own
-        //tilt (0..90, 0 = horizontal, 90 = vertical / balcony),
-        //azimuth (0..360 clockwise from north, 180 = south), and
-        //share % of the total kWp. The card-side reader normalises
-        //the shares to sum to 1.0 at compute time, so the editor
-        //surfaces a small hint when the typed shares don't add to
-        //100. The "+ Add array" button is hidden past 6 entries.
-        //Section title for the multi-array region, lifted into its
-        //own block so the editor reads as a discrete sub-section
-        //instead of a free-form continuation of the kWp row above.
+        //Multi-array PV layout. Each entry: tilt (0..90), azimuth (0..360 cw from north, 180=south),
+        //share % of total kWp. Shares are normalised to sum 1.0 at compute time, so the editor warns
+        //when typed shares don't add to 100. "+ Add array" hidden past 6 entries. pvArraysSection is
+        //its own block so the region reads as a discrete sub-section.
         pvArraysSection:          string;
         pvArraysHelp:             string;
         pvArrayTitle:             string;   //e.g. "Array {n}"
@@ -140,85 +109,74 @@ export interface Translations
         pvArrayNameHelp:          string;
         pvArrayTilt:              string;
         pvArrayAzimuth:           string;
-        //Per-string peak power in kWp. The total install power is
-        //the sum across rows.
+        //Per-string peak power (kWp); total install power is the row sum.
         pvArrayPeakKwp:           string;
         pvArrayPeakKwpHelp:       string;
         pvArrayAdd:               string;
         pvArrayRemove:            string;
         pvArrayNormHint:          string;
-        //Per-field helps under tilt / azimuth / share, with the share-specific explanation of the auto-normalisation contract spelled out so users
-        //know that 50/50 and 1/1 give the same forecast.
+        //Per-field helps for tilt / azimuth / share; share help spells out auto-normalisation (50/50
+        //and 1/1 give the same forecast).
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
-        //Optional per-array GPS coordinates. Used when the panels
-        //sit a meaningful distance away from the home (e.g. ground-
-        //mounted in a clearing while the home is under trees) so
-        //the prediction uses the panel's true sun position and the
-        //map shows a small marker at the panel location.
+        //Optional per-array GPS coords, for panels a meaningful distance from the home (e.g.
+        //ground-mounted in a clearing): drives true sun position + a map marker at the panel.
         pvArrayLatitude:          string;
         pvArrayLongitude:         string;
         pvArrayCoordsHelp:        string;
         pvArrayCoordsPlaceholder: string;
-        //Height of this group of panels above ground in metres. Used by the LiDAR-aware PV forecast to position the ray-march origin for the
+        //Panel-group height above ground (m). Positions the ray-march origin for the LiDAR-aware
         //per-array shading check.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
-        //Sun-tracking selector on each pv-arrays row. 'none' (default) is a fixed install, 'dual-axis'
-        //has both tilt and azimuth following the sun, 'single-axis-h' keeps the azimuth fixed and tracks
-        //tilt only, 'single-axis-v' keeps the tilt fixed and tracks azimuth only.
+        //Sun-tracking selector per row: 'none' (fixed, default), 'dual-axis' (tilt+azimuth track),
+        //'single-axis-h' (tilt only), 'single-axis-v' (azimuth only).
         pvArrayTracker:           string;
         pvArrayTrackerNone:       string;
         pvArrayTrackerDual:       string;
         pvArrayTrackerSingleH:    string;
         pvArrayTrackerSingleV:    string;
         pvArrayTrackerHelp:       string;
-        //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
-        //the forecast learning drops every hour where the SoC reached this value so the inverter-blocked production doesn't
-        //train as phantom shadow.
+        //Inverter cutoff SoC: % at which a hybrid inverter clamps PV once the battery ceiling is hit.
+        //Forecast learning drops every hour that reached this SoC so blocked production doesn't train
+        //as phantom shadow.
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;
-        //Optional W/m² sensor override (Ecowitt / Davis / personal weather station). When wired, the card prefers it over Open-Meteo
-        //for the live + past irradiance values. Forecast hours always fall through to the model since a sensor only knows the present.
+        //Optional W/m² sensor override (Ecowitt / Davis / PWS). When wired, preferred over Open-Meteo
+        //for live + past irradiance; forecast hours always fall through to the model.
         solarRadiationEntity:     string;
         solarRadiationEntityHelp: string;
-        //Surrounding buildings options. Cluster radius grows the home group to include attached outbuildings, opacity controls the transparency of
-        //the neighbours and the colour is the base tint reused for every rendered building.
+        //Surrounding buildings: cluster radius grows the home group to include attached outbuildings,
+        //opacity sets neighbour transparency, colour is the base tint for every building.
         buildingsSection:         string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
         buildingOpacity:          string;
-        //Pixel-ratio toggle replacing the old performance-mode
-        //switch. 'Auto' uses the device's devicePixelRatio capped at
-        //2 / 1.25 (desktop / mobile). '1x' forces 1.0 for the
-        //cheapest per-frame fragment workload.
-        //Third map-style segment: a curated minimal basemap (no POIs,
-        //no place labels, no road shields) for low-end devices.
+        //Third map-style segment: a curated minimal basemap (no POIs / place labels / road shields)
+        //for low-end devices.
         mapStyleMinimal:          string;
-        //Section grouping every shadow-related option.
+        //Shadow options.
         shadowsSection:           string;
-        //Master shadow toggle (LiDAR if available, OpenFreeMap
-        //building footprints otherwise).
+        //Master shadow toggle (LiDAR if available, OpenFreeMap footprints otherwise).
         shadowsEnabled:           string;
         shadowsEnabledOn:         string;
         shadowsEnabledOff:        string;
         shadowsEnabledHint:       string;
-        //LiDAR-driven shadow precision. Three named levels mapped to a raster size in helios-engine. Only meaningful when the home sits inside a
-        //LiDAR provider's coverage.
+        //LiDAR shadow precision: three levels mapped to a raster size in helios-engine. Only
+        //meaningful inside a LiDAR provider's coverage.
         lidarPrecision:          string;
         lidarPrecisionLow:       string;
         lidarPrecisionMedium:    string;
         lidarPrecisionHigh:      string;
         lidarPrecisionHint:      string;
-        //Opacity of the cast ground shadows, 0..1 slider in the editor.
+        //Cast-shadow opacity, 0..1 slider.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
-        //Collapsible nested section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
-        //<details>/<summary> toggle so the editor stays simple for the 99% of users who never need it.
+        //Collapsible nested section to point Helios at a custom nDSM GeoTIFF; hidden behind
+        //<details>/<summary> so the editor stays simple for users who don't need it.
         localLidarSection:        string;
         localLidarHint:           string;
-        //Discoverability line shown right under localLidarHint that points users at the Python tooling in tools/lidar/ for preparing the nDSM raster
-        //offline. Keeps the editor short while still making the helpers findable for users who don't yet know how to roll their own raster.
+        //Line under localLidarHint pointing at tools/lidar/ for preparing the nDSM raster offline.
         localLidarToolsHint:      string;
         localLidarEnabled:        string;
         localLidarUrl:            string;
@@ -226,25 +184,16 @@ export interface Translations
         localLidarMaxLat:         string;
         localLidarMinLon:         string;
         localLidarMaxLon:         string;
-        //Reset section: a single destructive button that wipes
-        //every cached payload (weather, PV history, sample
-        //buffer) and forces a fresh fetch. Sits in its own
-        //collapsible section at the very bottom of the editor.
-        //  resetSection         , section title
-        //  resetSectionHint     , one-liner under the title
-        //  resetCacheButton     , button label
-        //  resetCacheWarning    , destructive-action warning text
-        //  resetCacheDone       , transient confirmation shown on
-        //                         the button for a couple of seconds
-        //                         after the user clicks
+        //Reset: one destructive button wiping every cached payload (weather, PV history, sample
+        //buffer) and forcing a fresh fetch. Own collapsible section at the editor bottom.
+        //resetCacheDone is a transient post-click confirmation on the button.
         resetSection:             string;
         resetSectionHint:         string;
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
-        //About section pinned at the very bottom of the editor. Carries the running version string, a pointer at the companion site
-        //helios-lidar.org, the two source-code repositories (the card + the companion site) and a short appreciation line + Buy Me A
-        //Coffee link so a happy user has a frictionless path to support the work.
+        //About section at the editor bottom: version string, companion site helios-lidar.org, the
+        //two source repos, an appreciation line + Buy Me A Coffee link.
         aboutSection:             string;
         aboutVersionLabel:        string;
         aboutSiteTitle:           string;
@@ -254,16 +203,15 @@ export interface Translations
         aboutRepoLidar:           string;
         aboutCoffeeMessage:       string;
         aboutCoffeeLink:          string;
-        //Developer block: surfaces the person behind the card with links to a personal X profile +
-        //LinkedIn page. Sits right after the version row in the About section.
+        //Developer block (X profile + LinkedIn), right after the version row.
         aboutDeveloperLabel:      string;
         aboutDeveloperLinkedIn:   string;
     };
 }
 
-//Locale registry. Helios mirrors the 64 languages Home Assistant supports out of the box; pickTranslations walks the
-//hass.language tag through this map and falls back to English when no entry matches. Regional variants (en-GB, pt-BR,
-//es-419, sr-Latn, zh-Hans, zh-Hant) get their own entry so their dialect-specific phrasing wins over the language root.
+//Locale registry mirroring HA's 64 built-in languages. pickTranslations walks the hass.language tag
+//through this map, falling back to English. Regional variants (en-GB, pt-BR, es-419, sr-Latn,
+//zh-Hans, zh-Hant) get their own entry so dialect phrasing wins over the language root.
 import { af } from './locales/af';
 import { ar } from './locales/ar';
 import { bg } from './locales/bg';
@@ -294,8 +242,8 @@ import { hr } from './locales/hr';
 import { hu } from './locales/hu';
 import { hy } from './locales/hy';
 import { id } from './locales/id';
-//`is` is a TypeScript contextual keyword that confuses the parser at module scope; the locale file exports `is_`
-//(trailing underscore), the map below keys it as the natural `is` tag.
+//`is` is a TS contextual keyword that confuses the parser at module scope; the locale file exports
+//`is_`, the map below keys it as the natural `is` tag.
 import { is_ } from './locales/is';
 import { it } from './locales/it';
 import { ja } from './locales/ja';
@@ -346,10 +294,8 @@ const LOCALES: Record<string, Translations> =
 
 const FALLBACK: Translations = en;
 
-//Adding a new locale is a 3-step operation:
-//  1. Create ./locales/xx.ts exporting `xx: Translations`
-//  2. Import here and add the key to LOCALES
-//  3. Done, pickTranslations will resolve `xx-YY` → `xx-yy` → `xx` → `en`
+//Adding a locale: create ./locales/xx.ts exporting `xx: Translations`, import it here and add to
+//LOCALES; pickTranslations then resolves `xx-YY` → `xx-yy` → `xx` → `en`.
 export function pickTranslations(haLanguage: string | undefined): Translations
 {
     if (!haLanguage)
@@ -357,7 +303,7 @@ export function pickTranslations(haLanguage: string | undefined): Translations
         return FALLBACK;
     }
 
-    //Match in order of specificity: full tag → language root → English
+    //Match by specificity: full tag → language root → English
     const lower = haLanguage.toLowerCase();
     if (LOCALES[lower])
     {

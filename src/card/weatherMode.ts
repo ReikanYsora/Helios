@@ -1,33 +1,24 @@
-//Weather overlay mode. When the user toggles the weather chip in the mode bar, the rest of the
-//HUD fades out (same vocabulary as the LiDAR view), the camera tilts top-down and zooms in on
-//the area around the home, and a GPU-side cloud-cover overlay paints the modelled coverage as
-//three altitude bands (low / mid / high) using a fragment-shader-driven custom MapLibre layer
-//(see src/engine/weather-cloud-layer.ts). The bands stack with growing per-band opacity (20 /
-//40 / 60 %) so a fully overcast point reads as a heavy ceiling rather than three identical
-//greys.
+//Weather overlay mode. Toggling the weather chip fades the rest of the HUD out, tilts the camera
+//top-down over the home, and paints modelled cloud cover as three altitude bands (low/mid/high)
+//via a fragment-shader MapLibre layer (src/engine/weather-cloud-layer.ts). Bands stack with
+//growing per-band opacity (20/40/60 %) so a fully overcast point reads as a heavy ceiling.
 //
 //Lifecycle:
-//  - enterWeatherMode tilts the camera, ensures the cloud grid is loaded, then asks the engine
-//    to mount the shader layer.
-//  - exitWeatherMode tells the engine to remove the layer + cancel the refresh timer + restore
-//    the camera.
-//  - Timeline scrubs hit the engine's refreshCloudShaderTime(); the shader re-uploads the
-//    target hour's R / G / B data texture (one ~400-byte transfer, no network call).
-//  - The three altitude toggle buttons in the top-left rail drive setCloudShaderBands().
+//  - enterWeatherMode tilts the camera, ensures the cloud grid is loaded, then mounts the layer.
+//  - exitWeatherMode removes the layer, cancels the refresh timer, restores the camera.
+//  - Timeline scrubs hit refreshCloudShaderTime(), re-uploading the hour's RGB texture (no network).
+//  - The three altitude toggle buttons drive setCloudShaderBands().
 //
-//The data feed itself is cached in localStorage for 30 minutes, dedup-guarded, and abortable,
-//see src/helios-engine.ts (ensureWeatherCloudGrid + addCloudShaderLayer pair). One entry of the
-//mode costs at most one 100-location POST against Open-Meteo; subsequent entries within the TTL
-//window cost zero API calls.
+//Feed is cached in localStorage for 30 min, dedup-guarded, abortable (see src/helios-engine.ts:
+//ensureWeatherCloudGrid + addCloudShaderLayer). Mode entry costs at most one Open-Meteo POST;
+//subsequent entries within the TTL cost zero.
 
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 import type { CardMode } from './card-mode';
 
 
-//Shared time base with the LiDAR fade so the chip / leader / arc fade cadence reads as one
-//consistent vocabulary across modes. Enter ramps the overlay in over 600 ms while the HUD fades
-//out; exit ramps back to invisible in 280 ms while the HUD fades back in.
+//Shared time base with the LiDAR fade so the cadence reads consistently across modes.
 const WEATHER_FADE_IN_MS  = 600;
 const WEATHER_FADE_OUT_MS = 280;
 
@@ -43,33 +34,29 @@ export interface WeatherModeHost extends OverlaysHost
     _weatherFadeRaf?:           number;
     _selectedTime:              Date | null;
     _isLiveMode:                boolean;
-    //Per-band visibility flags driven by the three buttons in the top-left weather rail. Reset
-    //to all true on every weather-mode entry; the values forward straight into the shader layer
-    //as per-band draw skips, no shader uniform branching.
+    //Per-band visibility, driven by the top-left rail buttons. Reset to all-true on every entry;
+    //values forward straight into the shader layer as per-band draw skips.
     _weatherShowHigh:           boolean;
     _weatherShowMid:            boolean;
     _weatherShowLow:            boolean;
-    //Last time index pushed into the shader, used to short-circuit duplicate scrub updates.
+    //Last time index pushed into the shader; short-circuits duplicate scrub updates.
     _weatherShownTimeIdx?:      number;
-    //LitElement.requestUpdate(), invoked each frame during the fade so the inline opacity on
-    //the surrounding HUD elements steps smoothly. Duck-typed so importing LitElement here
-    //doesn't drag Lit into the engine surface.
+    //LitElement.requestUpdate(), called each fade frame to step HUD opacity. Duck-typed to keep
+    //Lit out of the engine surface.
     requestUpdate(): void;
 }
 
 
-//Lit elements are HTMLElements themselves, so the card root acts directly as the source of the
-//`--primary-text-color` CSS variable the shader reads. This helper just casts through the host
-//interface so the engine surface stays free of any Lit-specific typing.
+//Lit elements are HTMLElements, so the card root supplies the `--primary-text-color` the shader
+//reads. Cast through the host interface to keep the engine surface Lit-free.
 function getCssHost(host: WeatherModeHost): HTMLElement | null
 {
     return (host as unknown as HTMLElement | null) ?? null;
 }
 
 
-//Tilt the camera, fetch the cloud grid in the background, mount the shader layer the moment
-//the grid lands. Per-band toggles reset to all-true so the user always lands on a complete view
-//of every band the first time they re-enter the mode.
+//Tilt the camera, fetch the cloud grid in the background, mount the layer once it lands. Per-band
+//toggles reset to all-true so re-entry always lands on a complete view.
 export function enterWeatherMode(host: WeatherModeHost): boolean
 {
     if (!host._engine) { return false; }
@@ -105,8 +92,8 @@ export function enterWeatherMode(host: WeatherModeHost): boolean
 }
 
 
-//Tear the overlay down: start the HUD fade-in, drop the shader layer immediately so the basemap
-//comes back clean, hand the camera back, stop the cloud refresh timer.
+//Tear down: start the HUD fade-in, drop the layer so the basemap returns clean, hand back the
+//camera, stop the refresh timer.
 export function exitWeatherMode(host: WeatherModeHost): void
 {
     host._weatherFadeInStartMs  = null;
@@ -154,8 +141,8 @@ export function startWeatherFadeLoop(host: WeatherModeHost): void
 
 
 
-//Push any band-visibility / time-index changes coming from the card into the engine so the
-//shader updates without a Lit re-render path. Called from updated() on every card cycle.
+//Push band-visibility / time-index changes from the card into the engine without a Lit re-render.
+//Called from updated() on every card cycle.
 export function syncWeatherShaderState(host: WeatherModeHost): void
 {
     const engine = host._engine;

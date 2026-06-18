@@ -1,28 +1,21 @@
-//Single source of truth for "is the card still hydrating its data layer". One @state field
-//(_loadingPhases) on the card holds the per-phase state, one derived @state (_loadingHasCompleted)
-//latches once every registered phase has reached `done` for the FIRST TIME so the banner never
-//re-shows on subsequent routine refreshes (user clicks another mode, scrubs the timeline, etc).
+//Single source of truth for "is the card still hydrating its data layer". _loadingPhases holds
+//per-phase state; _loadingHasCompleted latches once every registered phase is `done` for the FIRST
+//time so the banner never re-shows on routine refreshes (mode change, timeline scrub, etc).
 //
-//Every data-fetch entry point in the card maps to ONE phase id below. The refresh / fetch functions
-//call beginLoadingPhase at start and endLoadingPhase at completion (success OR failure), no other
-//coordination is needed. Phases are registered lazily, so a user with no LiDAR or no battery sensor
-//never sees those phases counted toward the aggregate.
+//Each data-fetch entry point maps to ONE phase id below: call beginLoadingPhase at start and
+//endLoadingPhase at completion (success OR failure). Phases register lazily, so a user with no LiDAR
+//or no battery sensor never sees those phases counted.
 //
-//Banner UX:
-//- Visible from the moment the FIRST phase begins until every registered phase has reached done.
-//- Fades out via CSS transition (slide-up + opacity) when the aggregate hits 1.
-//- Stays hidden for the rest of the card lifetime: routine background refreshes do not flash the
-//  banner up again, that would feel like the card "loses its data" every time the user clicks.
-//- Themed rounded card, padded, with the same bg / border / shadow vocabulary as the rest of the
-//  HUD chrome so the user reads one consistent loading language across the card.
+//Banner UX: visible from the first phase start until every registered phase is done, then fades out
+//(slide-up + opacity) and stays hidden for the card lifetime so background refreshes never reflash
+//it. Themed to match the rest of the HUD chrome.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { pickTranslations } from '../i18n';
 
 
-//The set of phases the tracker knows about. Adding a new one here + wiring its begin / end calls in
-//the refresh function is the entire integration surface, the banner aggregates automatically. Names
-//are kebab-case so they read like CSS / log identifiers when surfaced for debugging.
+//Phases the tracker knows about. Adding one here + wiring its begin/end calls is the whole
+//integration surface; the banner aggregates automatically. Kebab-case to read like log identifiers.
 export type LoadingPhaseId =
     | 'energy-prefs'
     | 'pv-history'
@@ -45,11 +38,10 @@ export interface LoadingPhaseState
 }
 
 
-//Structural host surface. The card carries the phases map + the latched-completion flag as @state
-//so any mutation through these helpers re-renders the banner automatically.
+//Host surface. Phases map + latch flag are @state on the card so mutations re-render the banner.
 export interface LoadingTrackerHost
 {
-    //Untyped to match the rest of the codebase (hass is `any` everywhere it crosses module boundaries).
+    //Untyped to match the rest of the codebase (hass is `any` across module boundaries).
     readonly hass?:           { language?: string } | undefined;
     _loadingPhases:           ReadonlyMap<LoadingPhaseId, LoadingPhaseState>;
     _loadingHasCompleted:     boolean;
@@ -57,10 +49,8 @@ export interface LoadingTrackerHost
 }
 
 
-//Begin a phase. Idempotent: if the phase is already started OR already done it stays as-is so a
-//refresh function that runs more than once per session does not reset the tracker. Once the tracker
-//has latched _loadingHasCompleted = true, beginLoadingPhase is a no-op so background refreshes do
-//NOT bring the banner back.
+//Begin a phase. Idempotent (already started/done stays as-is); no-op once latched so background
+//refreshes do NOT bring the banner back.
 export function beginLoadingPhase(host: LoadingTrackerHost, id: LoadingPhaseId): void
 {
     if (host._loadingHasCompleted)
@@ -79,9 +69,9 @@ export function beginLoadingPhase(host: LoadingTrackerHost, id: LoadingPhaseId):
 }
 
 
-//Mark a phase done. Re-checks the aggregate and latches _loadingHasCompleted once every started
-//phase is done. The latch is the ONLY way the banner stops showing, so any phase that begins MUST
-//eventually end (success or failure path), otherwise the banner stays stuck on screen.
+//Mark a phase done and latch _loadingHasCompleted once every started phase is done. The latch is the
+//ONLY thing that stops the banner, so any phase that begins MUST eventually end (success or failure)
+//or the banner stays stuck.
 export function endLoadingPhase(host: LoadingTrackerHost, id: LoadingPhaseId): void
 {
     if (host._loadingHasCompleted)
@@ -96,8 +86,6 @@ export function endLoadingPhase(host: LoadingTrackerHost, id: LoadingPhaseId): v
     const next = new Map(host._loadingPhases);
     next.set(id, { started: true, done: true });
     host._loadingPhases = next;
-    //Latch the completion flag the moment every started phase has finished. Subsequent
-    //beginLoadingPhase calls are then no-ops for this card lifetime.
     let allDone = next.size > 0;
     for (const state of next.values())
     {
@@ -111,9 +99,8 @@ export function endLoadingPhase(host: LoadingTrackerHost, id: LoadingPhaseId): v
 }
 
 
-//Aggregate progress as a fraction in [0, 1]. Returns done / started, with a 0 floor so the bar
-//never sits at NaN before any phase has begun. The aggregate is purely informational, the banner's
-//visibility is controlled by `isLoadingBannerVisible` below, not by the progress value.
+//Aggregate progress in [0, 1] (done / started), 0 before any phase begins to avoid NaN. Purely
+//informational; banner visibility is controlled by isLoadingBannerVisible, not this value.
 export function loadingAggregateProgress(host: LoadingTrackerHost): number
 {
     if (host._loadingPhases.size === 0)
@@ -129,8 +116,7 @@ export function loadingAggregateProgress(host: LoadingTrackerHost): number
 }
 
 
-//True while the banner should be drawn. False before the first phase starts (banner has nothing to
-//report), false after the latch (banner is retired for this card lifetime), true everywhere in
+//True while the banner should be drawn: false before the first phase and after the latch, true in
 //between.
 export function isLoadingBannerVisible(host: LoadingTrackerHost): boolean
 {
@@ -142,8 +128,8 @@ export function isLoadingBannerVisible(host: LoadingTrackerHost): boolean
 }
 
 
-//Diagnostic surface for window.heliosStats() and the like. Returns an array of [phase, state] pairs
-//in registration order so the user can see which phase is currently blocking the banner.
+//Diagnostic surface (window.heliosStats() etc): [phase, state] pairs in registration order to see
+//which phase is blocking the banner.
 export function loadingPhasesSnapshot(host: LoadingTrackerHost): Array<{ id: LoadingPhaseId; started: boolean; done: boolean }>
 {
     const out: Array<{ id: LoadingPhaseId; started: boolean; done: boolean }> = [];
@@ -155,9 +141,8 @@ export function loadingPhasesSnapshot(host: LoadingTrackerHost): Array<{ id: Loa
 }
 
 
-//Render the loading banner at the top of the ha-card. Always emitted (so the slide-out transition
-//can fire when isLoadingBannerVisible flips false), gated by the .is-visible class for the actual
-//on-screen presence.
+//Render the loading banner. Always emitted (so the slide-out transition can fire when visibility
+//flips false), gated by the .is-visible class for on-screen presence.
 export function renderLoadingBanner(host: LoadingTrackerHost): TemplateResult | typeof nothing
 {
     const visible    = isLoadingBannerVisible(host);
@@ -165,9 +150,8 @@ export function renderLoadingBanner(host: LoadingTrackerHost): TemplateResult | 
     const t          = pickTranslations(host.hass?.language);
     const label      = t.detail.loadingLabel;
     const activeCls  = visible ? ' is-visible' : '';
-    //Aria-hidden mirrors visibility so screen readers do not announce the banner once it has slid
-    //out. Aria-live=polite means the label is announced once at first appearance and again when the
-    //percentage rounds to a new integer, but not on every progress update.
+    //aria-hidden mirrors visibility so SRs stop announcing it once slid out; aria-live=polite
+    //announces the label at first appearance and on integer percentage changes, not every update.
     return html`
         <div
             class="loading-banner${activeCls}"
@@ -194,11 +178,9 @@ export interface WeatherRateLimitHost
 }
 
 
-//Alert banner painted just under the loading banner whenever the Open-Meteo home-point fetch
-//is stuck in HTTP 429 back-off. Same width / centering as the loading banner so the two read
-//as a stacked column, themed with the HA --error-color so the user picks up the alert nature
-//at a glance without having to read the text. Disappears the moment the engine signals the
-//next successful fetch.
+//Alert banner under the loading banner while the Open-Meteo home-point fetch is in HTTP 429 back-off.
+//Stacks below it with matching width/centering, themed with --error-color. Hidden on the next
+//successful fetch.
 export function renderWeatherRateLimitBanner(host: WeatherRateLimitHost): TemplateResult | typeof nothing
 {
     const t        = pickTranslations(host.hass?.language);
