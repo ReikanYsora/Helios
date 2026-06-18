@@ -1,17 +1,12 @@
-//Screen-space overlay subsystem: pulls fresh projections from the
-//engine (sun arc, cloud dome, home silhouettes, label anchors),
-//maps the sun arc samples into stroke-ready segments, controls
-//the SMIL animation play-state when the card scrolls in / out of
-//view, and exposes the "flow duration" easing used to ramp
-//animation speeds with the live production rate.
+//Screen-space overlay subsystem: pulls fresh projections from the engine (sun arc, cloud dome, home silhouettes,
+//label anchors), maps sun arc samples into stroke segments, gates SMIL play-state on card visibility, and exposes
+//the "flow duration" easing that ramps animation speed with the live production rate.
 
 import type { HeliosEngine } from '../helios-engine';
 
 
-//Single arc sample as produced by engine.projectSunScene(). The
-//card consumes (x, y) for placement and `nearness` / `belowHorizon`
-//for visual modulation. `irradiance` is carried alongside for
-//consumers that want to colour-modulate per sample.
+//One arc sample from engine.projectSunScene(): (x,y) for placement, nearness/belowHorizon for visual modulation,
+//irradiance carried for per-sample colour modulation.
 export interface SunArcSample
 {
     x: number;
@@ -21,9 +16,7 @@ export interface SunArcSample
     belowHorizon: boolean;
 }
 
-//Full sun-scene projection: arc samples, sun position, home anchor,
-//daylight fraction, plus sunrise / sunset anchors (null when the
-//selected day has no sunrise or sunset, polar regions).
+//Full sun-scene projection. sunrise/sunset are null when the selected day has none (polar regions).
 export interface SunScene
 {
     arc:      SunArcSample[];
@@ -34,9 +27,7 @@ export interface SunScene
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
 }
 
-//Cloud-cover scene snapshot consumed by the card chip stack. The engine exposes the per-altitude percentages and the
-//resolved chip colour, refreshed on every map transform and clock tick. The per-layer chips next to the cloud-cover
-//toggle display these values directly.
+//Cloud-cover snapshot for the per-layer chips next to the cloud-cover toggle; refreshed on every transform / clock tick.
 export interface CloudScene
 {
     cloudHex:   string;
@@ -46,17 +37,15 @@ export interface CloudScene
     cloudHigh:  number;
 }
 
-//Per-polygon silhouette of one home building in screen space: the projected base ring and the projected top ring. Painted into the cloud-dome SVG
-//mask so the union covers the exact extruded prism even for concave footprints.
+//Screen-space silhouette of one building: projected base and top rings, painted into the cloud-dome SVG mask so the
+//union covers the exact extruded prism even for concave footprints.
 export interface HomeSilhouette
 {
     base: Array<{ x: number; y: number }>;
     top:  Array<{ x: number; y: number }>;
 }
 
-//Screen-space anchor positions for the always-visible chips
-//(cloud %, PV W, battery SoC + power) and the ring edge / home
-//point used by the leader lines.
+//Screen-space anchors for the always-visible chips plus ring edge / home point used by leader lines.
 export interface LabelLayout
 {
     cloudLabel:        { x: number; y: number };
@@ -67,21 +56,14 @@ export interface LabelLayout
     lowCarbonLabel:    { x: number; y: number };
     ringEdge:          { x: number; y: number };
     home:              { x: number; y: number };
-    //Projected screen position of the home roof top (home lat/lon at
-    //altitude render_height). Drop leader from the home pill lands
-    //exactly here so the connection follows the roof even when the
-    //user resizes the card or pitches the camera.
+    //Home roof top (home lat/lon at altitude render_height): leader drops here so it follows the roof under resize/pitch.
     homeRoof:          { x: number; y: number };
-    //Perspective-projected ground disc around the home. Drawn as
-    //a polygon in the PV leader SVG; pulses with the bead arrival
-    //by scaling around its centre (which is `home`).
+    //Perspective-projected ground disc around the home; drawn as a polygon, pulses with bead arrival by scaling about `home`.
     homeAnchorPoints:  string;
 }
 
-//One pair of arc samples mapped to a stroke-ready segment. The
-//segment shares one fixed colour (the configured sun colour);
-//depth perception comes from `nearness` (modulates stroke width)
-//and `belowHorizon` (switches the renderer to night-dot mode).
+//One pair of arc samples as a stroke segment. Fixed sun colour; depth comes from nearness (stroke width) and
+//belowHorizon (switches renderer to night-dot mode).
 export interface ArcSegment
 {
     x1: number; y1: number;
@@ -92,10 +74,8 @@ export interface ArcSegment
 }
 
 
-//Structural surface the host card exposes. Mixes engine + scene
-//state (mutated by refreshOverlays) with the DOM surface
-//setAnimationsPaused needs (shadowRoot + classList come from
-//LitElement / HTMLElement, the card satisfies them natively).
+//Surface the host card exposes: engine + scene state (mutated by refreshOverlays) plus the DOM surface
+//setAnimationsPaused needs (shadowRoot/classList satisfied natively by LitElement/HTMLElement).
 export interface OverlaysHost
 {
     readonly _engine?:      HeliosEngine;
@@ -112,11 +92,8 @@ export interface OverlaysHost
 }
 
 
-//Sub-pixel epsilon for screen-space equality. Below this the eye
-//cannot tell the difference and Lit shouldn't re-render. Larger
-//values would let Lit skip true motion frames; smaller ones would
-//re-render on floating-point projection noise that produces no
-//visible delta.
+//Sub-pixel epsilon for screen-space equality: below this the eye can't tell and Lit shouldn't re-render. Larger skips
+//real motion frames; smaller re-renders on floating-point projection noise.
 const EQ_EPS_PX = 0.25;
 
 function nearlyEq(a: number, b: number): boolean
@@ -181,10 +158,7 @@ function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
         && pointEq(a.lowCarbonLabel,    b.lowCarbonLabel)
         && pointEq(a.ringEdge,          b.ringEdge)
         && pointEq(a.home,              b.home)
-        //homeAnchorPoints is a long SVG points string; direct
-        //equality against the previous string captures every
-        //vertex delta the ground disc would render and is cheap
-        //(both ends are interned via the engine's call cycle).
+        //homeAnchorPoints is a long SVG points string; direct string equality captures every vertex delta cheaply.
         && a.homeAnchorPoints === b.homeAnchorPoints;
 }
 
@@ -294,25 +268,15 @@ function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
 }
 
 
-//Pull the fresh screen-space layouts from the engine and stash
-//them on the host. Cheap: each engine projection is a handful of
-//matrix multiplies, no allocations of consequence. Called on every
-//map transform broadcast by the engine, plus once at first weather
-//update (the engine's projection matrix is only ready after the
-//style has loaded), plus on every clock tick when in live mode
-//(the sun position depends on the time).
+//Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per projection).
+//Called on every map transform, once at first weather update (projection matrix ready only after style load), and on
+//every clock tick in live mode (sun position depends on time).
 //
-//Each assignment is gated by a shallow equality check against the
-//previous value. Lit uses identity-based dirty checking on @state
-//properties, so a fresh-identity assignment with identical numeric
-//content still triggers a full template re-render. During manual
-//map rotation MapLibre fires move events at the pointer rate (up
-//to 120 Hz on M4 trackpads), and the heavy template includes
-//three SMIL <animateMotion> elements whose `path` attribute is
-//rebuilt from these scene fields. Safari/WebKit re-arms the SMIL
-//clock on every path mutation; without these guards the clock
-//state grew monotonically over ~10-15 s of continuous drag and
-//the frame budget collapsed past the 120 Hz ceiling.
+//Each assignment is gated by an equality check: Lit dirty-checks @state by identity, so a fresh-identity assignment with
+//identical content still triggers a full re-render. During manual rotation MapLibre fires move events at pointer rate
+//(up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields; Safari re-arms the
+//SMIL clock on every path mutation, so without these guards the clock state grows over ~10-15 s of drag and frame
+//budget collapses.
 export function refreshOverlays(host: OverlaysHost): void
 {
     const nextLabel = host._engine?.projectHomeLabelLayout() ?? null;
@@ -338,23 +302,16 @@ export function refreshOverlays(host: OverlaysHost): void
         host._homeSilhouettes = nextHomes;
     }
 
-    //custom layer now: no per-transform projection on the JS side,
-    //no canvas redraw. The card just drives the fade-in/out alpha
-    //via _startLidarFadeLoop; MapLibre re-issues the layer's draw
-    //call on every transform automatically.
+    //Lidar is a custom layer now: no per-transform JS projection / canvas redraw. The card only drives fade alpha via
+    //_startLidarFadeLoop; MapLibre re-issues the layer draw on every transform.
 
-    //Weather raster source / layer is owned by the engine + the weather mode lifecycle, so this
-    //transform path stays free of a per-frame refreshOverlays for it.
+    //Weather raster source/layer is owned by the engine + weather mode lifecycle, so this transform path skips it.
 }
 
 
-//Pause / resume CSS keyframe animations and SMIL animations when
-//the card scrolls in / out of view. Uses the host's class list for
-//the CSS side (a single .helios-paused class is keyed off by the
-//card stylesheet) and walks the shadow tree to call
-//(un)pauseAnimations() on every SVG root for the SMIL side. Both
-//SMIL methods are no-ops on browsers that don't support them, so
-//no feature-detection is needed.
+//Pause/resume CSS keyframe + SMIL animations when the card scrolls in/out of view. CSS side: toggle .helios-paused
+//(keyed off by the card stylesheet). SMIL side: walk the shadow tree calling (un)pauseAnimations() on every SVG root;
+//both are no-ops where unsupported, so no feature detection needed.
 export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
 {
     host.classList.toggle('helios-paused', paused);
@@ -363,9 +320,7 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
     {
         return;
     }
-    //NodeList directly iterable: skip Array.from. The querySelectorAll
-    //result is live in spec but immutable for our use here; the loop
-    //touches every svg in order regardless.
+    //NodeList is directly iterable; skip Array.from.
     const svgs = root.querySelectorAll('svg');
     for (let i = 0; i < svgs.length; i++)
     {
@@ -389,8 +344,7 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
 }
 
 
-//Map an arc-sample sequence into stroke-ready segments. The caller paints each segment as one <line> with a stroke width scaled by `nearness` and a
-//colour pulled from the configured sun colour.
+//Map an arc-sample sequence into stroke segments. Caller paints each as a <line> with stroke width scaled by nearness.
 export function buildArcSegments(
     arc:      ReadonlyArray<SunArcSample>,
     sunColor: string
@@ -413,13 +367,9 @@ export function buildArcSegments(
 }
 
 
-//Map a "rate" magnitude to an animation duration in seconds.
-//  rate <= 0           → 30 s        (paused, night / no production)
-//  rate  = saturation  → minDuration (fastest, full power)
-//
-//Ease-out cubic ramp: half-saturation already feels meaningfully faster than the night baseline, which gives the user the feeling of raw power
-//pushing through the line. The minDuration is exposed so callers can tune the saturated-end pace per channel, the sun ray spans the full map and
-//benefits from a slightly slower flow than the PV leader, which is short and local.
+//Map a "rate" magnitude to an animation duration (seconds): rate<=0 -> 30s (paused, night), rate=saturation -> minDuration.
+//Ease-out cubic so half-saturation already feels notably faster than the night baseline ("raw power" feel). minDuration
+//is exposed per channel: the sun ray spans the whole map and wants a slightly slower flow than the short PV leader.
 export function flowDuration(
     rate:        number,
     saturation:  number,
@@ -430,11 +380,8 @@ export function flowDuration(
     {
         return 30;
     }
-    //Inline cubic instead of Math.pow(.., 3): the call fires from every
-    //bead duration recompute (sun ray, PV leader, grid beads) on each
-    //render frame; replacing the generic exponent with a 3-multiply
-    //chain shaves a measurable slice off the hot path under
-    //auto-rotate.
+    //Inline cubic instead of Math.pow(..,3): fires from every bead duration recompute per frame; the 3-multiply chain
+    //shaves a measurable slice off the hot path under auto-rotate.
     const f = Math.min(1, rate / saturation);
     const oneMinusF = 1 - f;
     const eased = 1 - oneMinusF * oneMinusF * oneMinusF;

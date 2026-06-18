@@ -1,13 +1,8 @@
-//Card initialization subsystem: pure helpers for resolving the
-//home coordinates and hashing the visual config, plus the engine
-//bootstrap path (debounce wrapper + immediate construction) and
-//the visibility observer that pauses animations when the card
-//scrolls offscreen.
+//Card init subsystem: home-coord resolution, visual-config hashing, engine bootstrap (debounce + construction), and the
+//visibility observer that pauses animations off-screen.
 //
-//LitElement lifecycle hooks (setConfig, connectedCallback,
-//disconnectedCallback, updated) stay on the card class itself
-//because HA + Lit invoke them directly on the element; they
-//delegate the meaty work to the helpers here.
+//LitElement lifecycle hooks (setConfig, connectedCallback, disconnectedCallback, updated) stay on the card class because HA + Lit
+//invoke them directly on the element; they delegate the work to the helpers here.
 
 import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
@@ -16,48 +11,36 @@ import type { ChartSeries } from './charts';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
-//Visual config keys that the engine reacts to via updateConfig(). Editing any of these from the visual editor or via the YAML hot-
-//reload pushes the change into the live engine without a full respawn. Anything outside this list either does not reach the engine
-//(card-only state), or is an identity input handled separately (home coords flip the engine identity through `_engineIdentitySig`).
-//
-//The list is exhaustive on purpose: a missing key would let a slider drag the editor exposes leave the engine on stale values until
-//the next natural respawn (page reload, dashboard edit, theme flip). Colour identity is fixed by the HA Energy palette via the
-//DEFAULT_*_COLOR_HEX constants in helios-config.ts, with no per-card override.
+//Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine without a full
+//respawn. Exhaustive on purpose - a missing key would leave a slider-dragged value stale until the next natural respawn. Card-only
+//state and identity inputs (home coords flip identity via `_engineIdentitySig`) are out. Colours are fixed by the HA Energy palette.
 export const VISUAL_CONFIG_KEYS = [
     'show-labels',
-    //map-style triggers a MapLibre setStyle(), the engine reloads the cloud disc, buildings and labels on the resulting `style.load`.
-    'map-style',
-    //solar-radiation-entity, when set, feeds the engine sensor samples that override Open-Meteo for the live + past irradiance
-    //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
+    'map-style', //triggers MapLibre setStyle(); engine reloads cloud disc, buildings and labels on the resulting `style.load`.
+    //When set, feeds the engine sensor samples that override Open-Meteo for live + past irradiance; a change must refresh so the
+    //override (or its absence) is picked up immediately.
     'solar-radiation-entity',
     //display-radius / cluster-radius invalidate cache and refetch; opacity is a cheap paint-property update.
     'display-radius',
     'building-cluster-radius',
     'building-opacity',
-    //Timeline visibility + chart UX preferences.
     'auto-rotate-enabled',
-    //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must invalidate the engine sig so the shadow pipeline reruns against the
-    //new provider config (toggle, URL or bbox).
+    //The 6 BYO-LiDAR keys: any change must invalidate the engine sig so the shadow pipeline reruns against the new provider config.
     'lidar-local-ndsm-enabled',
     'lidar-local-ndsm-url',
     'lidar-local-ndsm-min-lat',
     'lidar-local-ndsm-max-lat',
     'lidar-local-ndsm-min-lon',
     'lidar-local-ndsm-max-lon',
-    //camera-pitch-deg, camera-bearing-deg, camera-locked are NOT in this list: a slider drag would respawn the engine every frame,
-    //which would teardown + rebuild the WebGL context for every pixel of input motion. The editor instead pushes the live preview
-    //through engine.setCameraBearing / setCameraPitch / setCameraLocked and lets the new values bake into the config so the next
-    //natural respawn (page reload, dashboard edit, theme flip) reads them out of _initialBearing / _initialPitch.
+    //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: a slider drag would respawn (teardown + rebuild WebGL) every
+    //frame. The editor instead pushes live previews through engine.setCamera* and bakes values into config; the next natural respawn
+    //reads them from _initialBearing / _initialPitch.
 ] as const;
 
 
-//Defensive parser for `home-latitude` / `home-longitude` raw values
-//coming out of the card config. The config is typed `unknown`, so
-//bare `Number()` is unsafe: `Number('')`, `Number(false)`, `Number([])`,
-//`Number(null)` all return 0, which is a finite, in-range latitude
-//(Atlantic Ocean off the Gulf of Guinea) and would silently win the
-//range check in getHomeCoords. Accept numbers as-is and parse
-//strings that look like a decimal number; reject everything else.
+//Defensive parser for `home-latitude`/`home-longitude` raw config values (typed `unknown`). Bare Number() is unsafe: Number(''),
+//Number(false), Number([]), Number(null) all yield 0 - a finite in-range latitude that would silently win getHomeCoords's range
+//check. Accept numbers, parse decimal-looking strings, reject everything else.
 function parseConfigCoord(raw: unknown): number | null
 {
     if (typeof raw === 'number')
@@ -78,27 +61,12 @@ function parseConfigCoord(raw: unknown): number | null
 }
 
 
-//Resolves the home coordinates. Three-tier precedence, in order:
-//  1. `window.__heliosLocationOverride` , the debug helper set via
-//     the global `setHeliosLocation()` console function. Highest
-//     priority so a developer can always force a location regardless
-//     of card config.
-//  2. The card config keys `home-latitude` / `home-longitude`.
-//     Applied only when BOTH parse as numbers (or numeric strings)
-//     that are finite and in valid range (lat -90..90, lon
-//     -180..180). Anything else , including missing, partial, the
-//     empty string, booleans or arrays which `Number()` would
-//     happily coerce to 0 , is silently rejected so a half-edited
-//     YAML never warps the card to {0,0}.
-//  3. Home Assistant's configured home at
-//     hass.config.{latitude,longitude}.
-//Returns null only when none of the three has a usable pair.
+//Resolves home coords, precedence: (1) `window.__heliosLocationOverride` (debug helper via setHeliosLocation()), (2) config
+//`home-latitude`/`home-longitude` - only when BOTH are finite and in range (lat -90..90, lon -180..180), else rejected so a
+//half-edited YAML never warps to {0,0}, (3) hass.config.{latitude,longitude}. Returns null if none yields a usable pair.
 //
-//Memoization: the result is a pure function of (config, hass.config,
-//window override) identities. Cached on the config identity with the
-//hass.config and override pointers checked on read so a hass update
-//that didn't touch coordinates returns the same object reference
-//(allowing identity-based equality further upstream).
+//Memoized on config identity, with hass.config + override pointers checked on read, so an unrelated hass update returns the same
+//object reference (enables identity-based equality upstream).
 interface HomeCoordsCacheEntry
 {
     hassCfg:    unknown;
@@ -177,14 +145,9 @@ function _resolveHomeCoords(
 }
 
 
-//Cheap stable signature of the visual config, used to skip
-//updateConfig() when nothing the engine cares about has changed.
-//
-//WeakMap cache on the config identity: the function is called once
-//per Lit cycle (so once per overlay reprojection during auto-
-//rotate). Without the cache the .map(...).join('|') allocated a
-//fresh string of length ~300 characters per call, contributing to
-//the GC churn during rotation.
+//Cheap stable signature of the visual config, used to skip updateConfig() when nothing the engine cares about changed. WeakMap-cached
+//on config identity: called once per Lit cycle (once per overlay reprojection under auto-rotate); without the cache the join()
+//allocated a fresh ~300-char string per call, adding GC churn during rotation.
 const _configSigCache = new WeakMap<HeliosConfig, string>();
 
 export function computeConfigSig(config: HeliosConfig | undefined): string
@@ -206,10 +169,8 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
 }
 
 
-//Structural surface the host card exposes to this module. Extends
-//OverlaysHost so refreshOverlays(host) lands cleanly inside the
-//engine onWeatherUpdate / onMapTransform callbacks; the rest is
-//the engine + init lifecycle state the bootstrap mutates.
+//Structural surface the host card exposes to this module. Extends OverlaysHost so refreshOverlays(host) lands cleanly inside the
+//engine callbacks; the rest is the engine + init lifecycle state the bootstrap mutates.
 export interface InitHost extends OverlaysHost, LoadingTrackerHost
 {
     readonly config: HeliosConfig | undefined;
@@ -226,43 +187,28 @@ export interface InitHost extends OverlaysHost, LoadingTrackerHost
 
     _lastHomeKey:        string;
     _initInflight:       boolean;
-    //performance.now() of the most recent engine spawn. Used by the
-    //onContextLost recovery path to bail out when context losses
-    //arrive faster than the engine can stabilise, which only happens
-    //when the browser is thrashing its WebGL context pool. Re-spawning
-    //at that cadence cascades into more losses, the throttle breaks
-    //the loop and lets the existing engine settle.
+    //performance.now() of the most recent spawn. onContextLost bails when losses arrive faster than the engine stabilises (browser
+    //thrashing its WebGL context pool); respawning at that cadence cascades, so the throttle breaks the loop and lets it settle.
     _lastEngineSpawnAt:  number;
     _visibilityObserver?: IntersectionObserver;
-    //Document-level visibilitychange listener. Stored on the host
-    //so disconnectedCallback can removeEventListener cleanly when
-    //the card unmounts (each card has its own listener instance).
+    //Document visibilitychange listener, stored on the host so disconnectedCallback can removeEventListener cleanly (per-card instance).
     _onVisibilityChange?: () => void;
 
     requestUpdate(): void;
 }
 
 
-//IntersectionObserver hook: pause every CSS animation and every SVG
-//SMIL animation when the card scrolls out of the viewport, AND pause
-//the engine's 60 s shadow-refresh timer + the dome re-projection on
-//map moves. The rotation loop (a requestAnimationFrame in the engine)
-//is left running because the browser auto-throttles rAF on hidden
-//tabs and the card looks alive when the user scrolls back. The
-//Page Visibility API is layered on top so a Helios card sitting in
-//a hidden HA tab also goes quiet, not just one scrolled out of
-//view of a focused tab.
+//IntersectionObserver hook: when the card scrolls off-screen, pause CSS/SVG-SMIL animations plus the engine's 60s shadow timer and
+//dome re-projection. The rotation rAF is left running (the browser auto-throttles rAF on hidden tabs, and the card looks alive on
+//scroll-back). Page Visibility API is layered on top so a card in a hidden HA tab also goes quiet, not just one scrolled out of view.
 export function initVisibilityObserver(host: InitHost): void
 {
     if (host._visibilityObserver || typeof IntersectionObserver === 'undefined')
     {
         return;
     }
-    //Combined paused state: invisible if the card is off-screen
-    //(IntersectionObserver) OR the whole tab is hidden (Page
-    //Visibility API). Either condition kills the heavy work; the
-    //engine's own pause flag is updated when it exists (cheap, no
-    //teardown).
+    //Combined paused state: off-screen (IntersectionObserver) OR tab hidden (Page Visibility). Either kills the heavy work; the
+    //engine's own pause flag is updated when it exists (cheap, no teardown).
     let intersecting = true;
     let wasTabHidden = false;
     const applyState = () =>
@@ -271,11 +217,9 @@ export function initVisibilityObserver(host: InitHost): void
         const paused    = !intersecting || tabHidden;
         setAnimationsPaused(host, paused);
         host._engine?.setPaused(paused);
-        //Tab just became visible after being hidden. While hidden, refreshGrid / refreshPv / refreshBattery
-        //can clear their live values to null if hass momentarily disconnected (HA does this on tab focus
-        //loss in some setups). The reference-equality refresh gate in HeliosCard then short-circuits the
-        //next refresh because hass / config / _energyDefaults pointers are unchanged. Force-invalidating
-        //the cache references here makes the next render call refreshAll, repopulating the chip values.
+        //Tab just became visible. While hidden, refreshGrid/Pv/Battery can clear live values to null if hass momentarily disconnected
+        //(HA does this on focus loss in some setups), and HeliosCard's reference-equality refresh gate then short-circuits the next
+        //refresh (unchanged pointers). Force-invalidate the cache refs so the next render runs refreshAll and repopulates the chips.
         if (wasTabHidden && !tabHidden)
         {
             const h = host as unknown as {
@@ -303,45 +247,29 @@ export function initVisibilityObserver(host: InitHost): void
     host._visibilityObserver.observe(host as unknown as Element);
     if (typeof document !== 'undefined')
     {
-        //One global listener per card. Removed in the card's disconnectedCallback via _onVisibilityChange below.
+        //One global listener per card; removed in disconnectedCallback via _onVisibilityChange.
         host._onVisibilityChange = applyState;
         document.addEventListener('visibilitychange', host._onVisibilityChange);
     }
 }
 
 
-//Construct an engine. The shouldHaveEngine() gate has already
-//absorbed visibility, editor-preview and tab-hidden debouncing
-//upstream, so we go straight to initEngineNow(); a second debounce
-//here would just add a 500 ms stall to legitimate first paints.
-//Sets _initInflight so the updated() pass doesn't fire a second
-//initEngine() while the rAF inside initEngineNow() is still in
-//flight.
-//Hard throttle: refuse to respawn the engine if the previous spawn
-//is less than ENGINE_SPAWN_COOLDOWN_MS old. HA's editor preview can
-//fire setConfig() bursts (10+ per second on rapid field edits) and
-//each rapid respawn allocates a fresh MapLibre WebGL context that
-//browsers' 8-16 slots can't keep up with, surfacing as "too many
-//active WebGL contexts" errors. Spacing the spawns out lets the GPU
-//slot from the previous engine actually release before we ask for
-//another one. The threshold needs to cover one MapLibre teardown +
-//browser GL slot release; 600 ms is safely above both on mid-range
-//mobile while still feeling instant on a single edit.
+//Construct an engine. shouldHaveEngine() has already absorbed visibility/editor-preview/tab-hidden debouncing upstream, so go
+//straight to initEngineNow() (a second debounce would just add a 500ms stall to first paints). Sets _initInflight so updated()
+//doesn't fire a second initEngine() while the rAF inside initEngineNow() is in flight.
+//Hard throttle: refuse to respawn if the previous spawn is younger than ENGINE_SPAWN_COOLDOWN_MS. HA's editor preview fires
+//setConfig() bursts (10+/s), each respawn allocating a fresh MapLibre WebGL context that the browser's 8-16 slots can't keep up with
+//("too many active WebGL contexts"). 600ms safely covers one MapLibre teardown + GL slot release while still feeling instant.
 const ENGINE_SPAWN_COOLDOWN_MS = 600;
 const _pendingRespawnTimers = new WeakMap<InitHost, number>();
 
-//Global spawn rate limit, across ALL helios-card instances. Even
-//with the per-card cooldown, HA's dashboard edit mode can hold many
-//helios-cards alive simultaneously and each one independently
-//starting up still produces a burst that overruns the browser's
-//WebGL slot pool. Anything beyond one fresh engine per 800 ms is
-//rejected outright.
+//Global spawn rate limit across ALL helios-card instances: dashboard edit mode can hold many cards alive, each starting up
+//independently still bursts past the WebGL slot pool. Anything beyond one fresh engine per 800ms is rejected.
 let _globalLastSpawnAt = 0;
 const GLOBAL_SPAWN_COOLDOWN_MS = 800;
 
-//Called from the card's disconnectedCallback so a pending deferred
-//respawn can't fire after the card was torn down (which would spawn
-//a new engine for a card that no longer has a shadow root).
+//Called from disconnectedCallback so a pending deferred respawn can't fire after teardown (which would spawn an engine for a card
+//with no shadow root).
 export function cancelPendingRespawn(host: InitHost): void
 {
     const t = _pendingRespawnTimers.get(host);
@@ -359,17 +287,13 @@ export function initEngine(host: InitHost): void
     const lastAt = host._lastEngineSpawnAt ?? 0;
     const delta  = now - lastAt;
     const sinceGlobalSpawn = now - _globalLastSpawnAt;
-    //Either the per-card cooldown OR the global rate limit can force
-    //a deferral. The global limit wins when several helios-cards on
-    //the page race during a dashboard edit-mode transition.
+    //Per-card cooldown OR global rate limit can force a deferral; the global limit wins when several cards race during an edit-mode transition.
     const needDefer = (delta < ENGINE_SPAWN_COOLDOWN_MS && lastAt > 0)
                    || sinceGlobalSpawn < GLOBAL_SPAWN_COOLDOWN_MS;
     if (needDefer)
     {
-        //Coalesce rapid respawn requests into ONE deferred spawn that
-        //fires after the cooldown elapses. Any prior pending respawn
-        //is cleared so we never enqueue more than one wake-up; the
-        //latest config wins.
+        //Coalesce rapid respawn requests into ONE deferred spawn after the cooldown; clear any prior pending one so we never enqueue
+        //more than one wake-up (latest config wins).
         const prev = _pendingRespawnTimers.get(host);
         if (prev !== undefined)
         {
@@ -382,9 +306,7 @@ export function initEngine(host: InitHost): void
         const t = window.setTimeout(() =>
         {
             _pendingRespawnTimers.delete(host);
-            //Final check before crossing into the heavy spawn path:
-            //if the card was unmounted while the cooldown ran, just
-            //release the inflight flag and bail.
+            //If the card unmounted while the cooldown ran, release the inflight flag and bail before the heavy spawn path.
             const hostEl = host as unknown as { isConnected?: boolean };
             if (hostEl.isConnected === false)
             {
@@ -402,19 +324,14 @@ export function initEngine(host: InitHost): void
 }
 
 
-//Build the MapLibre engine and wire all the engine-side callbacks
-//back into card state. Runs once per (home, identity) tuple and
-//replaces any previous engine instance. Bails out early if the
-//container or hass.config isn't ready yet; the caller will retry on
-//the next Lit cycle when those land.
+//Build the MapLibre engine and wire engine-side callbacks back into card state. Runs once per (home, identity) tuple and replaces
+//any previous engine. Bails early if the container or hass.config isn't ready; the caller retries on the next Lit cycle.
 export function initEngineNow(host: InitHost): void
 {
     requestAnimationFrame(() =>
     {
-        //isConnected gate: the rAF gap above can land after a HA
-        //dashboard edit-mode unmount. Spawning an engine for a card
-        //that's no longer in the DOM allocates a WebGL context with
-        //no user-visible canvas and feeds the editor-mode cascade.
+        //isConnected gate: the rAF gap can land after a dashboard edit-mode unmount. Spawning for a card no longer in the DOM
+        //allocates a WebGL context with no visible canvas and feeds the editor-mode cascade.
         const cardEl = host as unknown as {
             shadowRoot:  ShadowRoot | null;
             isConnected: boolean;
@@ -437,21 +354,15 @@ export function initEngineNow(host: InitHost): void
             return;
         }
         const { lat, lon } = coords;
-        //hass.config.elevation is the user-defined home altitude
-        //(metres above sea level) from HA's General settings. It
-        //may be undefined on older HA installs or unconfigured
-        //instances; the engine and the auxiliary fetch both
-        //handle that case by simply not sending &elevation= and
-        //letting Open-Meteo fall back to its own DEM.
+        //User-defined home altitude (m ASL) from HA General settings; may be undefined on older/unconfigured installs - the engine
+        //and aux fetch then simply omit &elevation= and let Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
 
         const hadPreviousEngine = host._engine !== undefined;
         host._engine?.cleanup();
         host._engine = undefined;
-        //Defensive: clear anything MapLibre left in the container
-        //(canvas, telemetry div, marker root). Older revisions of
-        //MapLibre occasionally left a dead canvas behind, which
-        //would stack a second 3D context on top of the new one.
+        //Defensive: clear anything MapLibre left in the container (canvas, telemetry div, marker root). Old MapLibre revisions
+        //occasionally left a dead canvas that stacked a second 3D context on the new one.
         while (container.firstChild)
         {
             container.removeChild(container.firstChild);
@@ -459,8 +370,7 @@ export function initEngineNow(host: InitHost): void
 
         const spawnNewEngine = (): void =>
         {
-            //Container was checked above but the inter-frame gap below could land after a card disconnect. Re-check defensively so a torn-down card
-            //never spawns a new engine.
+            //Re-check defensively: the inter-frame gap could land after a card disconnect, so a torn-down card never spawns.
             if (!host.config || !host.hass?.config)
             {
                 host._initInflight = false;
@@ -469,12 +379,9 @@ export function initEngineNow(host: InitHost): void
             host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
             host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);
-            //Seed the timeline window from the engine's synthetic fallback immediately, so the time-bar
-            //renders from the first frame instead of staying hidden until the first weather push lands.
-            //That push can be delayed or skipped on a slow / rate-limited load (an aborted fetch returns
-            //without firing onWeatherUpdate, and the load now fans out several Open-Meteo requests), which
-            //left the whole timeline blank until the next day rollover. onWeatherUpdate upgrades this to
-            //the real data-derived window the moment weather arrives.
+            //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first frame instead of
+            //staying hidden until the first weather push - which can be delayed/skipped on a slow or rate-limited load (an aborted
+            //fetch returns without firing onWeatherUpdate). onWeatherUpdate upgrades this to the real data-derived window on arrival.
             if (!host._timeRange)
             {
                 host._timeRange = host._engine.getTimelineRange();
@@ -484,16 +391,9 @@ export function initEngineNow(host: InitHost): void
 
         if (hadPreviousEngine)
         {
-            //Firefox's WebGL context release isn't synchronous: when
-            //we call WEBGL_lose_context.loseContext() in cleanup(),
-            //the context stays in Firefox's pool for one more frame.
-            //If we allocate the next engine in the same tick the new
-            //MapLibre instance can fail to bind a context and end up
-            //rendering a black canvas. Skipping one animation frame
-            //gives Firefox time to release before the new request.
-            //Chrome doesn't strictly need this but the extra ~16 ms
-            //is invisible to the user (the editor preview was already
-            //debounced upstream).
+            //Firefox's WebGL context release isn't synchronous: after WEBGL_lose_context.loseContext() in cleanup() the context lingers
+            //in the pool one more frame, so allocating the next engine in the same tick can fail to bind and render black. Skipping one
+            //frame gives Firefox time to release. Chrome doesn't need it but the ~16ms is invisible (editor preview already debounced).
             requestAnimationFrame(spawnNewEngine);
             return;
         }
@@ -503,10 +403,8 @@ export function initEngineNow(host: InitHost): void
 }
 
 
-//Wires every engine-side callback into card state. Extracted so the
-//two engine-spawn paths (immediate, and rAF-deferred after a previous
-//engine cleanup) can share identical wiring. Assumes host._engine has
-//just been assigned and is non-null.
+//Wires every engine-side callback into card state. Extracted so both spawn paths (immediate, and rAF-deferred after a previous
+//cleanup) share identical wiring. Assumes host._engine was just assigned and is non-null.
 function wireEngineCallbacks(host: InitHost): void
 {
     if (!host._engine)
@@ -514,14 +412,9 @@ function wireEngineCallbacks(host: InitHost): void
         return;
     }
 
-    //Ping Lit so the chrome that depends on engine readiness
-    //(today: the LiDAR View button, which gates on the provider
-    //resolver via host._engine.getActiveLidarSourceId()) flips to
-    //its enabled state as soon as the engine lands, instead of
-    //waiting for the next clock tick to trigger an unrelated
-    //re-render. The engine instance itself isn't a @state
-    //property so this nudge is the only signal Lit gets that it
-    //became truthy.
+    //Ping Lit so engine-readiness-gated chrome (today: the LiDAR View button, gated on host._engine.getActiveLidarSourceId()) enables
+    //as soon as the engine lands instead of on the next clock tick. The engine isn't a @state property, so this nudge is the only
+    //signal Lit gets that it became truthy.
     host.requestUpdate();
 
     host._engine.onFetchStart = () =>
@@ -542,48 +435,31 @@ function wireEngineCallbacks(host: InitHost): void
     };
     host._engine.onWeatherUpdate = data =>
     {
-        //Per-layer cloud breakdown is now owned by the engine, it stashes low / mid / high alongside the effective coverage and projectCloudScene
-        //reads them back to size the three concentric bands. The card only needs the aggregate for the cloud chip label.
+        //Per-layer cloud breakdown is owned by the engine (it stashes low/mid/high and projectCloudScene reads them back to size the
+        //three bands); the card only needs the aggregate for the cloud chip label.
         host._cloudCover         = data.cloudCover;
         host._timeRange          = data.timeRange;
         host._isLiveMode         = data.isLiveTime;
-        //Pull the hourly series the chart canvas plots. Same cadence as the gradients above, since both consume the engine's hourly data refresh.
-        host._chartSeries        = host._engine?.getTimelineSeries() ?? null;
-        //First weather update is also our cue to ask the engine for the initial label layout, by this point the map has loaded its style and the
-        //projection matrix is available. Subsequent transforms refresh via onMapTransform.
+        host._chartSeries        = host._engine?.getTimelineSeries() ?? null; //hourly series the chart canvas plots
+        //First weather update is also our cue for the initial label layout: by now the map style has loaded and the projection matrix
+        //is available. Subsequent transforms refresh via onMapTransform.
         refreshOverlays(host);
     };
-    //Cloud-disc hover is wired directly on the SVG element via
-    //@mousemove / @mouseleave (see the render path's solar-svg),
-    //so the engine doesn't surface a hover callback for it.
-    //rAF-coalesced overlay refresh. MapLibre fires move events
-    //in bursts of 5-10 per frame during an inertial pan; without
-    //coalescing, refreshOverlays + the dome re-projection both
-    //ran several times per frame (sun arc reprojects 96 samples,
-    //home silhouettes reproject all extrusion footprints, dome
-    //reprojects 648 cells * 4 corners + 96 ribbon samples). With
-    //the rAF gate, at most one full overlay pass per frame, no
-    //matter how many move events MapLibre fires.
+    //Cloud-disc hover is wired directly on the SVG via @mousemove/@mouseleave (render path's solar-svg), so no engine callback for it.
+    //rAF-coalesced overlay refresh: MapLibre fires move events in bursts of 5-10/frame during inertial pan; without coalescing,
+    //refreshOverlays + dome re-projection ran several times per frame (sun arc 96 samples, home silhouettes all footprints, dome
+    //648 cells * 4 corners + 96 ribbon samples). The gate caps it at one full pass per frame.
     let overlayRaf: number | null = null;
-    //LiDAR-View and Weather modes hide the regular HUD via
-    //CSS opacity:0 + pointer-events:none. While in those modes
-    //the projected sun arc, home silhouettes and chip anchors are
-    //invisible but `refreshOverlays` still re-projects them on
-    //every map transform under auto-rotate. That was the dominant
-    //CPU sink while LiDAR view was active. Same idea for the dome
-    //scenes when their corresponding mode is OFF: skipping the
-    //refresh leaves the stale scene cached (the toggle path
-    //re-runs it once on enter so the user sees up-to-date data).
+    //LiDAR-View and Weather modes hide the HUD via CSS (opacity:0 + pointer-events:none). While there the projected sun arc,
+    //silhouettes and chip anchors are invisible but refreshOverlays still re-projects them on every transform under auto-rotate - the
+    //dominant CPU sink in LiDAR view. Same for dome scenes when their mode is OFF (the toggle re-runs once on enter to refresh).
     type ModeAwareHost = InitHost & {
         readonly _cardMode?: 'base' | 'lidar' | 'weather';
     };
     host._engine.onMapTransform = () =>
     {
-        //If the card is paused (off-screen or in a hidden tab) the
-        //browser still fires move events for tile-load completions,
-        //but the user can't see anything, so skip the per-frame
-        //work entirely. Comes back on the next render once the
-        //IntersectionObserver re-enables the engine.
+        //If paused (off-screen or hidden tab) the browser still fires move events for tile-load completions, but nothing's visible -
+        //skip the per-frame work. Resumes on the next render once the IntersectionObserver re-enables the engine.
         if (host._engine?.isPaused())
         {
             return;
@@ -596,34 +472,24 @@ function wireEngineCallbacks(host: InitHost): void
         {
             overlayRaf = null;
             const mh = host as ModeAwareHost;
-            //In LiDAR-View the HUD is faded out: skip projecting
-            //the sun arc, silhouettes, label layout, cloud scene.
-            //Same gate for both dome scenes when their own mode
-            //is OFF.
+            //In LiDAR-View the HUD is faded out: skip projecting sun arc, silhouettes, label layout, cloud scene.
             if (mh._cardMode !== 'lidar')
             {
                 refreshOverlays(host);
             }
         });
     };
-    //WebGL context loss handler. Does NOT auto-respawn: when the browser kills our context
-    //(typically because the page hit the per-origin cap of 8 to 16 WebGL contexts in editor
-    //preview mode), respawning here would fire ANOTHER getContext which kills another live
-    //context, which dispatches another context-lost event, looping until the editor session
-    //drowns in error spam.
-    //
-    //The handler marks the engine paused and lets MapLibre's own context-restored path bring
-    //it back when the user leaves the editor / scrolls / refocuses the tab.
-    //If that fails, a manual config change (any user edit) will hit
-    //the identity-change branch in updated() and spawn a fresh
-    //engine from a clean slate, with no cascade in flight.
+    //WebGL context-loss handler. Does NOT auto-respawn: when the browser kills our context (typically the per-origin 8-16 cap hit in
+    //editor preview), respawning here fires another getContext that kills another live context, looping until the session drowns in
+    //errors. MapLibre's own context-restored path brings it back on leave/scroll/refocus; otherwise the next user config edit hits the
+    //identity-change branch in updated() and spawns a fresh engine with no cascade in flight.
     host._engine.onContextLost = () =>
     {
         console.warn('[HELIOS] WebGL context lost. Auto-respawn disabled to avoid cascade in editor preview; the canvas will recover on the next user-driven config change.');
     };
 
-    //LiDAR shadow compute: the engine fires these around its WMS round-trip + raster paint pass. The card surfaces a small spinner chip top-right so
-    //the user has a clear "shadows are coming" signal during the few seconds the fetch takes on a cold start.
+    //LiDAR shadow compute (engine's WMS round-trip + raster paint): the card shows a spinner chip top-right as a "shadows are coming"
+    //signal during the few seconds the cold-start fetch takes.
     host._engine.onShadowComputeStart = () =>
     {
         host._shadowBusy = true;
@@ -634,9 +500,8 @@ function wireEngineCallbacks(host: InitHost): void
         host._shadowBusy = false;
         endLoadingPhase(host, 'lidar-raster');
     };
-    //Exposure compute busy flag: same pattern, used by the mode-bar
-    //LiDAR button to swap to a spinner + lock mode-switching while
-    //the irradiance fill is still computing.
+    //Exposure compute busy flag: same pattern, used by the mode-bar LiDAR button to show a spinner + lock mode-switching while the
+    //irradiance fill computes.
     host._engine.onLidarExposureBusyChange = (busy: boolean): void =>
     {
         host._lidarExposureBusy = busy;
@@ -644,9 +509,8 @@ function wireEngineCallbacks(host: InitHost): void
         else      { endLoadingPhase(host, 'lidar-exposure'); }
     };
 
-    //Rate-limit alert banner trigger: the engine fires this whenever the Open-Meteo home-point
-    //fetch transitions in or out of HTTP 429 back-off. The card paints an alert banner under
-    //the loading banner so the user understands why the weather data is not refreshing.
+    //Rate-limit banner trigger: fires when the Open-Meteo home-point fetch transitions in/out of HTTP 429 back-off. The card paints
+    //an alert under the loading banner explaining why weather isn't refreshing.
     host._engine.onWeatherRateLimitChange = (rateLimited: boolean): void =>
     {
         host._weatherRateLimited = rateLimited;

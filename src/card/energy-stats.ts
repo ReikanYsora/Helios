@@ -1,45 +1,29 @@
-//Shared energy-statistics layer. Every PAST energy series Helios draws (production, grid import /
-//export, battery charge / discharge) is sourced the exact same way the Home Assistant Energy
-//dashboard sources it: the recorder's pre-computed `change` metric, never a client-side
+//Shared energy-statistics layer. Every PAST energy series (production, grid import/export, battery charge/discharge)
+//is sourced exactly like the HA Energy dashboard: the recorder's pre-computed `change` metric, never client-side
 //differentiation of raw counter states.
 //
-//Why this matters: `recorder/statistics_during_period` with `types: ['change']` returns, per
-//statistic and per period bucket, the energy delta the recorder computed for that bucket. The
-//recorder handles all the hard parts natively, the same way HA Energy consumes them:
-//  - total_increasing resets (counter drops to 0 at midnight / on reboot) are detected and the
-//    delta is computed correctly across the reset, never a negative or absurd spike.
-//  - total + last_reset sources bracket the delta on the declared reset boundary.
-//  - unit conversion: `units: { energy: 'kWh' }` normalises Wh / kWh / MWh server-side so every
-//    install lands on the same kWh scale regardless of what the meter reports in.
-//
-//Helios's only remaining math is the trivial, deterministic last mile: kWh-per-bucket / bucket-
-//duration = average watts over the bucket. That is exactly what any "power from energy" template
-//in HA would produce, so where HA has a number Helios shows the same number to the watt, and
-//where HA has no number (a power curve, a live read from a cumulative-only meter) Helios derives
-//it from HA's own primitives instead of contradicting them.
+//`recorder/statistics_during_period` with `types: ['change']` returns the recorder's energy delta per statistic per
+//bucket, handling natively: total_increasing resets (no negative/absurd spike), total+last_reset boundaries, and
+//unit conversion (`units: { energy: 'kWh' }` normalises Wh/kWh/MWh server-side). Helios's only math is
+//kWh-per-bucket / bucket-duration = average watts, so where HA has a number Helios shows the same number.
 
 const HOUR_MS = 3_600_000;
 
 
-//Re-fetch cadence for the change-series gates in pv.ts / grid.ts / battery.ts. The recorder
-//commits a new 5-minute statistics bucket every 5 minutes; re-arming the per-host fetch gate once
-//a minute keeps the cumulative-only live chips within ~1 min of the freshest committed bucket
-//without WS spam. Callers fold floor(now / CHANGE_REFRESH_MS) into their fetch key so the gate
-//re-arms on this boundary instead of only when the window origin shifts at midnight.
+//Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
+//re-arming once a minute keeps cumulative-only live chips within ~1 min of the freshest bucket without WS spam.
+//Callers fold floor(now / CHANGE_REFRESH_MS) into their fetch key so the gate re-arms on this boundary.
 export const CHANGE_REFRESH_MS = 60_000;
 
-//"Now" rounded down to the refresh boundary, the single anchor every change-series fetch gate
-//folds into its key (and battery / grid also pass as the fetch end). One helper instead of three
-//hand-rolled roundings so the call sites cannot drift apart, and so every card on a dashboard
-//computes the identical anchor and shares one cache entry per interval.
+//"Now" rounded down to the refresh boundary: the single anchor every fetch gate folds into its key (battery/grid also
+//pass it as fetch end). One helper so call sites can't drift and every card shares one cache entry per interval.
 export function changeRefreshAnchorMs(): number
 {
     return Math.floor(Date.now() / CHANGE_REFRESH_MS) * CHANGE_REFRESH_MS;
 }
 
 
-//One recorder change bucket: the energy delta in kWh over [startMs, endMs). Already reset-
-//corrected and unit-normalised by the recorder.
+//One recorder change bucket: energy delta in kWh over [startMs, endMs), already reset-corrected and unit-normalised.
 export interface ChangeBucket
 {
     startMs: number;
@@ -48,18 +32,14 @@ export interface ChangeBucket
 }
 
 
-//Recorder statistics period. We fetch `5minute` for fine series (the recorder keeps 5-minute
-//short-term statistics for ~10 days, comfortably covering Helios's 2-day past window) and `hour`
-//for coarse ones. There is no finer period than 5 minutes in HA, which is why the card's data-
-//interval control caps at 12 buckets / hour.
+//Recorder statistics period. `5minute` (kept ~10 days, covers the 2-day past window) for fine series, `hour` for
+//coarse. 5 min is the finest period HA offers, hence the data-interval control caps at 12 buckets/hour.
 export type StatPeriod = '5minute' | 'hour' | 'day';
 
 
-//Module-level cache shared across every Helios card on the page so an N-card dashboard hits the
-//recorder once per (window | period | statIds) tuple. TTL undershoots CHANGE_REFRESH_MS by a few
-//seconds: within one re-arm interval every card lands on the same key and shares one recorder hit,
-//and the rounded end anchor in the callers' keys guarantees nobody is ever served data older than
-//one interval. Inflight requests dedup so concurrent cards never race two parallel calls.
+//Module-level cache shared across every Helios card so an N-card dashboard hits the recorder once per
+//(window | period | statIds) tuple. TTL undershoots CHANGE_REFRESH_MS so all cards within one re-arm interval share
+//one hit, and the rounded end anchor guarantees nobody is served data older than one interval. Inflight dedups races.
 interface CacheEntry
 {
     ts:        number;
@@ -69,11 +49,9 @@ interface CacheEntry
 const TTL_MS = CHANGE_REFRESH_MS - 5_000;
 const _cache = new Map<string, CacheEntry>();
 
-//Drop every settled entry past its TTL. The re-arm scheme retires a (window | period | statIds)
-//key every CHANGE_REFRESH_MS, so without eviction the map gains an entry (with its full parsed
-//bucket array) per series per minute for the lifetime of the page: hundreds of MB per day on an
-//always-on wall-mounted dashboard. Called on every fetch; the map never holds more than a few
-//live entries so the sweep is O(handful).
+//Drop settled entries past TTL. Re-arm retires a key every CHANGE_REFRESH_MS, so without eviction the map gains an
+//entry (with its parsed bucket array) per series per minute for the page's lifetime: hundreds of MB/day on an
+//always-on dashboard. Called every fetch; the map holds only a few live entries so the sweep is O(handful).
 function pruneExpired(cache: Map<string, { ts: number; inflight?: unknown }>, nowMs: number): void
 {
     for (const [key, e] of cache)
@@ -91,12 +69,10 @@ export function clearEnergyStatsCache(): void
 }
 
 
-//Fetch the summed `change` series for a set of statistic ids over [startMs, endMs] at the given
-//period. The per-source buckets are summed into a single series aligned on bucket start, so a
-//multi-source install (split tariffs, two solar strings each wired as its own HA Energy source,
-//multi-bank battery) lands as one combined kWh-per-bucket curve. Returns null when the id list is
-//empty, hass is unavailable, or the call rejects, so callers fall back cleanly to their previous
-//series.
+//Fetch the summed `change` series for a set of statistic ids over [startMs, endMs] at the given period. Per-source
+//buckets are summed into one series aligned on bucket start, so multi-source installs (split tariffs, two solar
+//strings, multi-bank battery) land as one combined curve. Returns null on empty ids, no hass, or rejection so
+//callers fall back to their previous series.
 export async function fetchChangeSeries(
     hass:         any,
     statisticIds: string[],
@@ -133,10 +109,8 @@ export async function fetchChangeSeries(
                 units:         { energy: 'kWh' },
             }) as Record<string, Array<{ start?: unknown; end?: unknown; change?: number | null }>>;
 
-            //Merge the per-source buckets into a single series keyed on bucket start. Buckets align
-            //across same-period sources (every source has the same 14:00 hour / 14:05 5-min bucket),
-            //so the merge collapses to a clean per-bucket sum; misaligned sources still accumulate
-            //into the nearest start key without dropping energy.
+            //Merge per-source buckets into one series keyed on bucket start. Same-period sources share bucket starts
+            //so the merge is a clean per-bucket sum; misaligned sources still accumulate into the nearest start key.
             const merged = new Map<number, ChangeBucket>();
             let anyHit = false;
             for (const id of statisticIds)
@@ -167,8 +141,7 @@ export async function fetchChangeSeries(
         }
         catch (_)
         {
-            //Statistic missing, recorder under load, RBAC denied: leave the caller on its previous
-            //series until the next refresh succeeds.
+            //Missing statistic, recorder under load, RBAC denied: keep the caller on its previous series.
             return null;
         }
     })();
@@ -182,14 +155,10 @@ export async function fetchChangeSeries(
 
 
 
-//Project a change series onto the unified-store bucket grid as average watts. For each store
-//bucket, sum the kWh of every source bucket whose start falls inside it, then average-power =
-//summed-kWh * 1000 / bucket-duration-hours. Store buckets are always >= the source period (the
-//slider caps at 12 / hour = 5 min, the source period floor), so each store bucket contains one or
-//more whole source buckets and the conversion is exact, not interpolated.
-//
-//Buckets with no source data stay null; the caller interpolates the past half so the curve stays
-//continuous. Future buckets (start >= nowMs) stay null so the forecast series owns the future.
+//Project a change series onto the unified-store bucket grid as average watts: per store bucket, sum the kWh of every
+//source bucket starting inside it, then W = kWh * 1000 / bucket-duration-hours. Store buckets are always >= the
+//source period (slider caps at 12/hour = 5 min), so each contains whole source buckets and the conversion is exact.
+//Empty buckets stay null (caller interpolates the past); future buckets (start >= nowMs) stay null for the forecast.
 export function changeSeriesToWatts(
     buckets:      ChangeBucket[] | null,
     storeStartMs: number,
@@ -214,32 +183,26 @@ export function changeSeriesToWatts(
     for (let i = 0; i < bucketsTotal; i++)
     {
         if (!hit[i]) { continue; }
-        //Negative net (battery discharge bucket, or a meter that the recorder reports as a small
-        //negative change) is preserved here, the caller decides whether to floor it; production /
-        //grid floor at zero, battery keeps the sign.
+        //Negative net (battery discharge, or a small negative recorder change) is preserved; the caller floors if
+        //needed (production/grid floor at zero, battery keeps the sign).
         out[i] = (sums[i] * 1000) / stepH;
     }
     return out;
 }
 
 
-//Deriving live power from a recorder `change` series has to cope with two very different meters:
-//  - a FINE meter (Shelly, P1, Victron) whose counter advances every few seconds, so essentially
-//    every 5-minute recorder bucket carries energy. The latest bucket alone is the responsive,
-//    correct read, exactly as before.
-//  - a COARSE meter (SolarEdge: every 15 min) whose counter only advances on its report, so the
-//    recorder lands the whole 15-minute delta in ONE 5-minute bucket and zeroes the other two. The
-//    latest bucket then reads 0 two-thirds of the time and ~3x the true power one-third, the bug the
-//    Pi4 / SolarEdge tester saw.
-//We distinguish them by the density of non-zero buckets in a recent probe window: a dense window is a
-//fine meter (read the latest bucket directly, no smoothing, no behaviour change), a sparse window is a
-//coarse meter (average the whole probe window so the lone delta is spread over its real interval). So
-//the coarse-meter fix never touches a fine-meter install.
-const COARSE_PROBE_MS = 15 * 60_000;   //recent span we judge density over + average a coarse meter across
+//Deriving live power from a `change` series must cope with two meter types:
+//  - FINE (Shelly, P1, Victron): counter advances every few seconds, so every 5-min bucket carries energy and the
+//    latest bucket alone is the responsive, correct read.
+//  - COARSE (SolarEdge, every 15 min): counter only advances on report, so the recorder lands the whole 15-min delta
+//    in ONE bucket and zeroes the other two; the latest bucket then reads 0 two-thirds of the time and ~3x one-third.
+//We distinguish by density of non-zero buckets in a probe window: dense => fine (read latest direct), sparse =>
+//coarse (average the probe window so the lone delta spreads over its real interval). Fine installs are untouched.
+const COARSE_PROBE_MS = 15 * 60_000;   //span we judge density over + average a coarse meter across
 const DENSE_FRACTION  = 0.6;           //>= this share of probe buckets non-zero => fine meter, read direct
 
-//Average power (W) over the buckets overlapping [loMs, hiMs), pro-rating straddling buckets. Returns
-//{ kwh, ms, nonZero, total } so the caller can both compute the average AND judge meter density.
+//Average power (W) over buckets overlapping [loMs, hiMs), pro-rating straddlers. Returns kwh/ms/nonZero/total so the
+//caller can both average AND judge meter density.
 function probeChangeWindow(buckets: ChangeBucket[], loMs: number, hiMs: number): { kwh: number; ms: number; nonZero: number; total: number }
 {
     let kwh = 0;
@@ -268,8 +231,8 @@ function wattsFromBucket(b: ChangeBucket): number
 }
 
 
-//Live power for the chip on cumulative-only installs (no stat_rate). Fine meter: latest completed
-//bucket. Coarse meter: average of the recent probe window. Null only when no completed bucket exists.
+//Live power for the chip on cumulative-only installs (no stat_rate). Fine: latest completed bucket. Coarse: average
+//of the recent probe window. Null only when no completed bucket exists.
 export function latestWattsFromChangeSeries(
     buckets: ChangeBucket[] | null,
     nowMs:   number,
@@ -290,7 +253,7 @@ export function latestWattsFromChangeSeries(
     const dense = probe.nonZero >= Math.ceil(probe.total * DENSE_FRACTION);
     if (dense)
     {
-        //Fine meter: the latest bucket is the responsive, correct read (0 immediately on a real dip).
+        //Fine meter: latest bucket is the responsive, correct read (0 immediately on a real dip).
         return wattsFromBucket(buckets[lastIdx]);
     }
     //Coarse meter: spread the sparse delta over the probe span -> true average power.
@@ -298,8 +261,8 @@ export function latestWattsFromChangeSeries(
 }
 
 
-//Average watts at an arbitrary past instant, for the scrub tooltip. Same fine / coarse split centred
-//on tMs. Null only when no bucket covers the probe window (future scrub, gap before the data starts).
+//Average watts at an arbitrary past instant, for the scrub tooltip. Same fine/coarse split centred on tMs. Null only
+//when no bucket covers the probe window (future scrub, gap before data starts).
 export function wattsAtFromChangeSeries(
     buckets: ChangeBucket[] | null,
     tMs:     number,
@@ -323,11 +286,10 @@ export function wattsAtFromChangeSeries(
 }
 
 
-//Sum the recorder `change` over a single calendar day [dayStartMs, dayEndMs). Buckets are keyed on
-//their start, so this returns the exact kWh the recorder attributes to that day, the same number the
-//HA Energy dashboard's daily total shows, with no curve integration and no gap interpolation (which
-//is what made the integrated-curve daily totals drift a percent or two above HA). Returns null when
-//no bucket falls in the day so the caller can hide / fall back instead of showing a phantom zero.
+//Sum the recorder `change` over a single calendar day [dayStartMs, dayEndMs). Buckets are keyed on start, so this
+//returns the exact kWh the recorder attributes to the day (matching HA Energy's daily total), with no curve
+//integration or gap interpolation (which drifted integrated totals a percent or two above HA). Null when no bucket
+//falls in the day so the caller can hide/fall back instead of showing a phantom zero.
 export function sumChangeForDay(
     buckets:    ChangeBucket[] | null,
     dayStartMs: number,
@@ -355,8 +317,7 @@ function periodMs(period: StatPeriod): number
 }
 
 
-//Parse a statistics bucket boundary. The recorder serves epoch milliseconds (number) on modern
-//cores and ISO strings on older ones; accept both.
+//Parse a statistics bucket boundary: modern cores serve epoch ms (number), older ones ISO strings; accept both.
 function parseStatBoundary(raw: unknown): number | null
 {
     if (typeof raw === 'number' && Number.isFinite(raw)) { return raw; }
