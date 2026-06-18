@@ -1594,10 +1594,12 @@ export class HeliosCard extends LitElement
             : '';
         //PV -> Power chip, only while charging: an inverted L dropping from the PV chip then right into the
         //Power chip's left edge, PV-coloured bead toward the battery. Removed the instant it discharges.
+        //Its drop starts halfway between the PV->home leg (chip centre) and the chip's right edge so the two
+        //leaders leaving the PV chip don't overlap at their root.
         const PV_TO_BATTERY_NUDGE_X = 30;
         const pvToBatteryPath = (layout && batteryCharging && showPvLabel)
             ? buildLPath(
-                layout.pvLabel.x,
+                layout.pvLabel.x + PV_HALF_WIDTH_PX / 2,
                 layout.pvLabel.y + PV_HALF_HEIGHT_PX,
                 powerChipX - PV_TO_BATTERY_NUDGE_X,
                 powerChipY,
