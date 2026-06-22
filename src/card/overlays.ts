@@ -49,13 +49,11 @@ export interface HomeSilhouette
 //Screen-space anchors for the always-visible chips plus ring edge / home point used by leader lines.
 export interface LabelLayout
 {
-    cloudLabel:        { x: number; y: number };
     pvLabel:           { x: number; y: number };
     batterySocLabel:   { x: number; y: number };
     batteryPowerLabel: { x: number; y: number };
     gridLabel:         { x: number; y: number };
     lowCarbonLabel:    { x: number; y: number };
-    ringEdge:          { x: number; y: number };
     home:              { x: number; y: number };
     //Home roof top (home lat/lon at altitude render_height): leader drops here so it follows the roof under resize/pitch.
     homeRoof:          { x: number; y: number };
@@ -85,7 +83,6 @@ export interface OverlaysHost
 
     _labelLayout:     LabelLayout | null;
     _sunScene:        SunScene | null;
-    _cloudScene:      CloudScene | null;
     _homeSilhouettes: HomeSilhouette[];
 
     readonly shadowRoot: ShadowRoot | null;
@@ -150,13 +147,11 @@ function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
     {
         return false;
     }
-    return pointEq(a.cloudLabel,        b.cloudLabel)
-        && pointEq(a.pvLabel,           b.pvLabel)
+    return pointEq(a.pvLabel,           b.pvLabel)
         && pointEq(a.batterySocLabel,   b.batterySocLabel)
         && pointEq(a.batteryPowerLabel, b.batteryPowerLabel)
         && pointEq(a.gridLabel,         b.gridLabel)
         && pointEq(a.lowCarbonLabel,    b.lowCarbonLabel)
-        && pointEq(a.ringEdge,          b.ringEdge)
         && pointEq(a.home,              b.home)
         //homeAnchorPoints is a long SVG points string; direct string equality captures every vertex delta cheaply.
         && a.homeAnchorPoints === b.homeAnchorPoints;
@@ -214,35 +209,6 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     return true;
 }
 
-function cloudSceneEq(a: CloudScene | null, b: CloudScene | null): boolean
-{
-    if (a === b)
-    {
-        return true;
-    }
-    if (!a || !b)
-    {
-        return false;
-    }
-    if (a.cloudHex !== b.cloudHex)
-    {
-        return false;
-    }
-    if (a.cloudPct !== b.cloudPct)
-    {
-        return false;
-    }
-    if (a.cloudLow !== b.cloudLow)
-    {
-        return false;
-    }
-    if (a.cloudMid !== b.cloudMid)
-    {
-        return false;
-    }
-    return a.cloudHigh === b.cloudHigh;
-}
-
 function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
 {
     if (a === b)
@@ -287,15 +253,10 @@ export function refreshOverlays(host: OverlaysHost): void
 
     const t = host._selectedTime ?? host._now;
     const nextSun   = host._engine ? host._engine.projectSunScene(t)        : null;
-    const nextCloud = host._engine ? host._engine.projectCloudScene()       : null;
     const nextHomes = host._engine ? host._engine.projectHomeFootprints()   : [];
     if (!sunSceneEq       (host._sunScene,        nextSun))
     {
         host._sunScene        = nextSun;
-    }
-    if (!cloudSceneEq     (host._cloudScene,      nextCloud))
-    {
-        host._cloudScene      = nextCloud;
     }
     if (!homeSilhouettesEq(host._homeSilhouettes, nextHomes))
     {

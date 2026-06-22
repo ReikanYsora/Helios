@@ -12,8 +12,7 @@ import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
-    SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY,
-    CLOUD_DISC_RADIUS_M, CLOUD_CIRCLE_SEGMENTS, PV_CHIP_OFFSET_PX, DEFAULT_CLOUD_RGB,
+    SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
 } from './constants';
 import
 {
@@ -2015,14 +2014,6 @@ export class HeliosEngine
         return { start: new Date(visibleStartMs), end: new Date(visibleEndMs) };
     }
 
-    //Resolved cloud colour as RGB (callers build opaque or translucent strings).
-    private _resolvedCloudRgb(): RGB
-    {
-        //Colour configs are no longer consulted; the WebGL cloud disc can't read CSS vars directly, so it
-        //uses the DEFAULT_CLOUD_RGB fallback. Dynamic theme tracking would resolve a CSS var on style.load.
-        return DEFAULT_CLOUD_RGB;
-    }
-
     private _renderForCurrentSelection(): void
     {
         //Only the map is required: _getWeatherAtTime returns zero defaults when _homeHourlyData is null, so
@@ -2245,91 +2236,6 @@ export class HeliosEngine
         this._currentCloudLow  = Math.max(0, Math.min(100, cloudLow));
         this._currentCloudMid  = Math.max(0, Math.min(100, cloudMid));
         this._currentCloudHigh = Math.max(0, Math.min(100, cloudHigh));
-    }
-
-    //Project the cloud disc + 100% ring into screen space (null when not ready). Vertices are projected with
-    //anchor at the home's terrain elevation so the polygons stay true circles regardless of terrain. The
-    //disc is split into three concentric bands (low->mid->high outward), each band's width proportional to
-    //its layer's share of the total; the total radius still tracks effective cloud cover. Returns three
-    //concentric polygons plus the ring; the card stacks them outer-first.
-    public projectCloudScene(): {
-        discLow:    Array<{ x: number; y: number }>;
-        discMid:    Array<{ x: number; y: number }>;
-        discHigh:   Array<{ x: number; y: number }>;
-        ring:       Array<{ x: number; y: number }>;
-        cloudHex:   string;
-        cloudPct:   number;
-        cloudLow:   number;
-        cloudMid:   number;
-        cloudHigh:  number;
-    } | null
-    {
-        if (!this.map || !this._mapReady)
-        {
-            return null;
-        }
-
-        const pct  = this._currentCloudPct;
-        const cLow = this._currentCloudLow;
-        const cMid = this._currentCloudMid;
-        const cHi  = this._currentCloudHigh;
-        const R    = CLOUD_DISC_RADIUS_M * pct / 100;
-
-        //Each band's outer radius is the cumulative layer share. All-zero layers collapse to the home anchor
-        //(degenerate weather sample); the guard below keeps the polygons non-degenerate.
-        const total = cLow + cMid + cHi;
-        const rLow  = total > 0 ? R * (cLow / total)                : 0;
-        const rMid  = total > 0 ? R * ((cLow + cMid) / total)       : 0;
-        const rHigh = R;
-        const ringR = CLOUD_DISC_RADIUS_M;
-
-        //Geographic circle vertices, not closed: the card emits SVG polygons which carry implicit closure.
-        const lowGeo  = buildCirclePolygon(this.homeLon, this.homeLat,
-                                           rLow,  CLOUD_CIRCLE_SEGMENTS);
-        const midGeo  = buildCirclePolygon(this.homeLon, this.homeLat,
-                                           rMid,  CLOUD_CIRCLE_SEGMENTS);
-        const highGeo = buildCirclePolygon(this.homeLon, this.homeLat,
-                                           rHigh, CLOUD_CIRCLE_SEGMENTS);
-        const ringGeo = buildCirclePolygon(this.homeLon, this.homeLat,
-                                           ringR, CLOUD_CIRCLE_SEGMENTS);
-
-        //Every vertex projects at the home's elevation (not its own), keeping the polygon a true circle even
-        //when terrain bends between the home and the disc edge.
-        const projectGeo = (geo: Array<[number, number]>): Array<{ x: number; y: number }> =>
-        {
-            const out: Array<{ x: number; y: number }> = [];
-            for (const [lon, lat] of geo)
-            {
-                const p = this._projectScenePoint(lon, lat, 0);
-                if (p)
-                {
-                    out.push({ x: p.x, y: p.y });
-                }
-            }
-            return out;
-        };
-
-        const discLow  = projectGeo(lowGeo);
-        const discMid  = projectGeo(midGeo);
-        const discHigh = projectGeo(highGeo);
-        const ring     = projectGeo(ringGeo);
-
-        if (discHigh.length < 3 && ring.length < 3)
-        {
-            return null;
-        }
-
-        const rgb      = this._resolvedCloudRgb();
-        const cloudHex = '#'
-            + rgb[0].toString(16).padStart(2, '0')
-            + rgb[1].toString(16).padStart(2, '0')
-            + rgb[2].toString(16).padStart(2, '0');
-
-        return {
-            discLow, discMid, discHigh, ring,
-            cloudHex, cloudPct: pct,
-            cloudLow: cLow, cloudMid: cMid, cloudHigh: cHi
-        };
     }
 
     //Project the home building(s) into screen-space silhouettes. Each polygon yields a base ring (at
@@ -3702,13 +3608,11 @@ export class HeliosEngine
     //the projected home point (chip-leader anchor / disc centre). Null when the map isn't ready (card skips
     //the overlay that frame).
     public projectHomeLabelLayout(): {
-        cloudLabel:        { x: number; y: number };
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
         gridLabel:         { x: number; y: number };
         lowCarbonLabel:    { x: number; y: number };
-        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
         //Projected roof-top of the home building (home at render_height), the drop-leader's bottom endpoint
         //so the line lands on the roof at any size/pitch/zoom. Falls back to ground home when unresolved.
@@ -3733,25 +3637,6 @@ export class HeliosEngine
         //top-of-arc. Anchoring to one lon/lat lets the chip orbit smoothly under rotation.
         const lat0   = this.homeLat;
         const cosLat = Math.cos(lat0 * Math.PI / 180);
-        const baseDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
-        //Rotate the base (east NH, west SH) +45° CCW in the (east, north) frame: lands NH at NE, SH at SW.
-        const ROT      = Math.PI / 4;
-        const anchorDE = baseDE * Math.cos(ROT);
-        const anchorDN = baseDE * Math.sin(ROT);
-        const anchorDLng = anchorDE / (111_320 * cosLat);
-        const anchorDLat = anchorDN / 111_320;
-        const anchor = m.project([this.homeLon + anchorDLng, this.homeLat + anchorDLat]);
-        const ringEdgeX = anchor.x;
-        const ringEdgeY = anchor.y;
-
-        //Push the chip outward along the home->anchor radial so it stays outside the projected disc (with a
-        //short leader gap) even when rotation moves the anchor off the left side.
-        const CLOUD_CHIP_NUDGE_PX = 30;
-        const radDX = ringEdgeX - home.x;
-        const radDY = ringEdgeY - home.y;
-        const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
-        const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
-        const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
 
         //Chip cluster, organised into columns: PV anchored above the home, battery (SoC/Power) stacked on
         //the right, grid/low-carbon stacked on the left, so "what's in" and "what's stored/consumed" split.
@@ -3846,13 +3731,11 @@ export class HeliosEngine
         }
 
         return {
-            cloudLabel:        { x: cloudLabelX,    y: cloudLabelY  },
             pvLabel:           { x: pvX,            y: pvY          },
             batterySocLabel:   { x: batteryXRight,  y: batterySocY  },
             batteryPowerLabel: { x: batteryXRight,  y: batteryPowerY},
             gridLabel:         { x: gridXLeft,      y: gridY        },
             lowCarbonLabel:    { x: gridXLeft,      y: lowCarbonY   },
-            ringEdge:          { x: ringEdgeX,      y: ringEdgeY    },
             home:              { x: home.x,         y: clusterY     },
             homeRoof:          { x: home.x,         y: roofY        },
             homeAnchorPoints:  anchorPts.join(' '),
