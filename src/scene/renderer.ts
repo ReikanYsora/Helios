@@ -5,13 +5,13 @@
 //palette) and pose (bearing/pitch), then calls redraw(); per-frame work is rAF-coalesced.
 //
 //What it deliberately does NOT own: the HUD (chips, leaders, sun arc, timeline). Those are card-specific
-//and sit in their own SVG layer above this one — the host projects them through `camera` (and the sky.ts
-//helper for the arc). Both 2026.7.1 cards share this renderer; each adds its own HUD.
+//and sit in their own SVG layer above this one — the host projects them through `camera`. Both 2026.7.1
+//cards share this renderer; each adds its own HUD.
 
 import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
 import { renderBuildings, renderShadows, type Building, type ScenePalette } from './buildings';
-import { renderNightShade } from './sky';
+import { nightShade } from './colors';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 //Camera aim point above the home (m): lifts the home lower in the frame with headroom for the HUD arc.
@@ -167,8 +167,13 @@ export class SceneRenderer
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
         const alt = this._sun.altitude;
+        //Full-frame night/twilight wash for the current sun altitude (empty in daylight).
+        const shade = nightShade(alt);
+        const shadeSvg = shade.opacity > 0
+            ? `<rect width="${width}" height="${height}" fill="${shade.color}" opacity="${shade.opacity.toFixed(3)}"/>`
+            : '';
         this._sceneSvg.innerHTML =
-            renderNightShade(alt, width, height) +
+            shadeSvg +
             renderShadows(this.camera, this._buildings, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
             renderBuildings(this.camera, this._buildings, alt, this._palette, this._growth, this._palette.neighborOpacity);
 
