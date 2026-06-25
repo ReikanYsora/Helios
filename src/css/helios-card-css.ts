@@ -1329,6 +1329,35 @@ export const heliosCardStyles = css`
         z-index: 10;
     }
 
+    /*  Sunrise / sunset marker: a small glyph + local time pinned just outside the arc at the horizon
+        crossing, centred on its computed point. Sun-coloured, click-transparent. */
+    .sun-cross-marker
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        color: var(--sun-cross-color, #ffc107);
+        pointer-events: none;
+        z-index: 7;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+    .sun-cross-marker ha-icon
+    {
+        --mdc-icon-size: 18px;
+        width: 18px;
+        height: 18px;
+    }
+    .sun-cross-marker span
+    {
+        font-size: var(--ha-font-size-xs, 11px);
+        font-weight: var(--ha-font-weight-medium, 500);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+    }
+
     /*  Solar ray bead travelling sun → PV chip along the ray. Same recipe as the other beads; speed
         from the inline animateMotion dur driven by live irradiance. */
     .solar-svg .solar-ray-bead

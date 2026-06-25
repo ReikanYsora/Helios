@@ -4,15 +4,17 @@
 
 import type { HeliosEngine } from '../helios-engine';
 import { EQ_EPS_PX } from '../constants';
+import { arcColor } from '../scene/colors';
 
 
 //One arc sample from engine.projectSunScene(): (x,y) for placement, nearness/belowHorizon for visual modulation,
-//irradiance carried for per-sample colour modulation.
+//altitude (deg) for the time-of-day arc colour, irradiance carried for the legend.
 export interface SunArcSample
 {
     x: number;
     y: number;
     irradiance: number;
+    altitude:   number;
     nearness:   number;
     belowHorizon: boolean;
 }
@@ -306,7 +308,9 @@ export function buildArcSegments(
         out.push({
             x1: a.x, y1: a.y,
             x2: b.x, y2: b.y,
-            color:        sunColor,
+            //Time-of-day arc colour (grey under the horizon, warm near it, amber high), matching the
+            //source Solar scene card. `sunColor` is the live --warning-color amber the high arc takes.
+            color:        arcColor(0.5 * (a.altitude + b.altitude), sunColor),
             nearness:     0.5 * (a.nearness + b.nearness),
             belowHorizon: a.belowHorizon || b.belowHorizon
         });

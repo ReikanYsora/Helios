@@ -520,6 +520,7 @@ export class HeliosEngine
             lon: number;
             lat: number;
             altitudeM: number;
+            altitudeDeg: number;
             wm2: number;
             belowHorizon: boolean;
         } | null>;
@@ -1800,7 +1801,7 @@ export class HeliosEngine
     public projectSunScene(now: Date): {
         arc:      Array<{
             x: number; y: number;
-            irradiance: number; nearness: number; belowHorizon: boolean;
+            irradiance: number; altitude: number; nearness: number; belowHorizon: boolean;
         }>;
         sun:      { x: number; y: number; irradiance: number; altitude: number; nearness: number };
         home:     { x: number; y: number };
@@ -1857,6 +1858,7 @@ export class HeliosEngine
                 lon: number;
                 lat: number;
                 altitudeM: number;
+                altitudeDeg: number;
                 wm2: number;
                 belowHorizon: boolean;
             } | null> = [];
@@ -1879,6 +1881,7 @@ export class HeliosEngine
                     lon:          sun3D.lon,
                     lat:          sun3D.lat,
                     altitudeM:    sun3D.altitudeM,
+                    altitudeDeg:  sun3D.altitudeDeg,
                     wm2,
                     //altitudeM is R·sin(α), same sign as α, so < 0 means below the horizon. Surface a flag,
                     //not the value, since the card only switches render mode (solid vs dotted).
@@ -1892,7 +1895,7 @@ export class HeliosEngine
         //Per-frame: re-project the cached samples, recording depth to normalise into nearness below.
         type RawArcPoint = {
             x: number; y: number; irradiance: number; depth: number;
-            belowHorizon: boolean;
+            altitude: number; belowHorizon: boolean;
         };
         const raw: RawArcPoint[] = [];
         for (let i = 0; i < SUN_ARC_SAMPLES; i++)
@@ -1912,6 +1915,7 @@ export class HeliosEngine
                 y:            px.y,
                 irradiance:   s.wm2,
                 depth:        px.depth,
+                altitude:     s.altitudeDeg,
                 belowHorizon: s.belowHorizon
             });
         }
@@ -1963,6 +1967,7 @@ export class HeliosEngine
             x:            p.x,
             y:            p.y,
             irradiance:   p.irradiance,
+            altitude:     p.altitude,
             nearness:     nearnessOf(p.depth),
             belowHorizon: p.belowHorizon
         }));
@@ -2052,7 +2057,7 @@ export class HeliosEngine
     //(lon, lat, altitude_m) for _projectScenePoint. Azimuth clockwise from North; ENU offsets
     //east=R·cosα·sinφ, north=R·cosα·cosφ, up=R·sinα, converted to lon/lat via local metres-per-degree.
     private _sunSpherePoint(date: Date): {
-        lon: number; lat: number; altitudeM: number
+        lon: number; lat: number; altitudeM: number; altitudeDeg: number
     } | null
     {
         const sun = getSunPosition(date, this.homeLat, this.homeLon);
@@ -2071,9 +2076,10 @@ export class HeliosEngine
         const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
 
         return {
-            lon:        this.homeLon + east  / mPerDegLon,
-            lat:        this.homeLat + north / mPerDegLat,
-            altitudeM:  up
+            lon:         this.homeLon + east  / mPerDegLon,
+            lat:         this.homeLat + north / mPerDegLat,
+            altitudeM:   up,
+            altitudeDeg: sun.altitude
         };
     }
 

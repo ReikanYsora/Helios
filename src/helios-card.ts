@@ -1159,6 +1159,38 @@ export class HeliosCard extends LitElement
     }
 
 
+    //One sunrise/sunset marker: a glyph + local time pinned just OUTSIDE the arc at the horizon crossing
+    //(offset radially out from the home so it clears the arc line). Null crossing (polar day/night) → nothing.
+    private _renderSunCrossing(
+        cross:   { x: number; y: number; time: Date } | null,
+        home:    { x: number; y: number },
+        icon:    string,
+        color:   string
+    ): TemplateResult | typeof nothing
+    {
+        if (!cross)
+        {
+            return nothing;
+        }
+        const dx   = cross.x - home.x;
+        const dy   = cross.y - home.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const lx   = cross.x + (dx / dist) * 22;
+        const ly   = cross.y + (dy / dist) * 22;
+        const t    = cross.time.toLocaleTimeString(this.hass?.locale?.language ?? undefined,
+            { hour: '2-digit', minute: '2-digit' });
+        return html`
+            <div
+                class="sun-cross-marker"
+                style="left:${lx.toFixed(1)}px; top:${ly.toFixed(1)}px; --sun-cross-color:${color}"
+            >
+                <ha-icon icon="${icon}"></ha-icon>
+                <span>${t}</span>
+            </div>
+        `;
+    }
+
+
     //Render
 
     protected render(): TemplateResult
@@ -2174,12 +2206,12 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Sunrise / sunset markers were drawn here as
-                      sun-coloured ha-icon glyphs anchored at the
-                      arc's horizon crossings. Removed: the arc
-                      shape itself already communicates "the sun
-                      rises here, sets there", the icons added
-                      visual noise on the horizon line.            -->
+                <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
+                      each horizon crossing, like the source Solar scene card.  -->
+                ${showSun && sunScene ? html`
+                    ${this._renderSunCrossing(sunScene.sunrise, sunScene.home, 'mdi:weather-sunset-up',   sunColor)}
+                    ${this._renderSunCrossing(sunScene.sunset,  sunScene.home, 'mdi:weather-sunset-down', sunColor)}
+                ` : nothing}
 
 
                 <!--  Home hitbox, an invisible circular hover target
