@@ -18,3 +18,5 @@ export {
 export {
     mixHex, hexByte, lerp, nightShade, buildingColor, tintedRgba, arcColor,
 } from './colors';
+export { buildingsFromGeoJson } from './from-geojson';
+export type { FromGeoJsonOptions } from './from-geojson';
