@@ -28,16 +28,6 @@ export interface SunScene
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
 }
 
-//Cloud-cover snapshot for the per-layer chips next to the cloud-cover toggle; refreshed on every transform / clock tick.
-export interface CloudScene
-{
-    cloudHex:   string;
-    cloudPct:   number;
-    cloudLow:   number;
-    cloudMid:   number;
-    cloudHigh:  number;
-}
-
 //Screen-space silhouette of one building: projected base and top rings, painted into the cloud-dome SVG mask so the
 //union covers the exact extruded prism even for concave footprints.
 export interface HomeSilhouette

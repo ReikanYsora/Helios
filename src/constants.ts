@@ -69,8 +69,6 @@ export const SUN_ARC_NIGHT_OPACITY = 0.25;  //below-horizon segment opacity
 export const PV_CHIP_OFFSET_PX     = 70;    //PV chip lift above the home cluster
 
 //=== Animation / timing ===
-export const WEATHER_FADE_IN_MS  = 600;
-export const WEATHER_FADE_OUT_MS = 280;
 export const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
 export const AUTO_ROTATE_INACTIVITY_MS = 5_000;
 export const ENGINE_SPAWN_COOLDOWN_MS = 600;
@@ -102,7 +100,6 @@ export const WEATHER_CACHE_TTL_MS       = 45 * 60_000;
 export const WEATHER_CACHE_KEY_DECIMALS = 3;
 export const RATE_LIMIT_BACKOFF_MS:  readonly number[] = [5 * 60_000, 15 * 60_000, 60 * 60_000];
 export const OTHER_ERROR_BACKOFF_MS: readonly number[] = [1 * 60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
-export const WEATHER_BAND_OPACITY = [0.20, 0.40, 0.60] as const;
 
 
 //=== Energy-stats (change-series) ===

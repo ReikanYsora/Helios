@@ -7,7 +7,6 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PERIOD_PAST_DAYS,
     DEFAULT_PERIOD_FUTURE_DAYS,
     periodPastDays,
@@ -55,7 +54,6 @@ import
     flowDuration,
     type ArcSegment,
     type SunScene,
-    type CloudScene,
     type LabelLayout,
     type HomeSilhouette
 } from './card/overlays';
@@ -66,7 +64,6 @@ import
     onTimelinePointerMove,
     onTimelinePointerUp
 } from './card/timeline';
-import type { CardMode } from './card/card-mode';
 import { renderLoadingBanner, renderWeatherRateLimitBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
 import { refreshGrid, formatGridValue } from './card/grid';
 import {
@@ -77,12 +74,7 @@ import {
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
-import {
-    enterWeatherMode,
-    exitWeatherMode,
-    syncWeatherShaderState,
-} from './card/weatherMode';
-import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
+import { cloudCoverIcon } from './card/cloud-icons';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost } from './card/unifiedStore';
@@ -407,11 +399,6 @@ export class HeliosCard extends LitElement
     //Screen-space layout of the solar arc, sun and incidence ray. Recomputed via engine.projectSunScene()
     //on every map transform and clock tick (sun moves with time).
     @state() _sunScene: SunScene | null = null;
-    //Screen-space layout of the cloud-cover disc + 100% reference ring, via engine.projectCloudScene() on
-    //every map transform and clock tick. A pair of SVG polygons alongside the sun arc, anchored at the
-    //home's terrain elevation so the disc stays a true circle (a MapLibre fill layer would warp with the
-    //terrain mesh).
-    @state() _cloudScene: CloudScene | null = null;
     //Per-polygon screen-space silhouettes of the home building(s): each entry holds the projected base
     //and top ring of one polygon. The card paints both rings plus a quad per outer-ring edge into the
     //cloud-disc SVG mask, so the union covers the exact extruded prism even for concave footprints.
@@ -481,13 +468,6 @@ export class HeliosCard extends LitElement
     //banner explains the stall meanwhile.
     @state() _weatherRateLimited = false;
 
-    //Per-band visibility flags for the weather-mode cloud shader. The three centred cloud chips double as
-    //toggles; tapping one flips its flag, which syncWeatherShaderState relays to the shader. Reset to
-    //all-on on every mode entry.
-    @state() _weatherShowHigh = true;
-    @state() _weatherShowMid  = true;
-    @state() _weatherShowLow  = true;
-
     //Flipped by fetchEnergyPrefs after the first parse lands, so the card kicks refreshHaDailyTotals as
     //soon as the HA Energy defaults snapshot appears rather than waiting up to 30 s for the next tick.
     _energyDefaultsLoaded   = false;
@@ -502,20 +482,6 @@ export class HeliosCard extends LitElement
     //stay on the direct hass.states path: the store carries bucketed curves, the chips need sample-accurate
     //values a 15 min bucket would lose.
     @state() _unifiedStore: import('./card/unifiedStore').UnifiedDataStore | null = null;
-    //Single source of truth for the card's mode. Drives every transition (chip/leader/arc fade, timeline
-    //slide, Weather SVG fade). Set by the mode-bar click handlers, reacted to by _handleCardModeChange in
-    //updated(). Modes are mutually exclusive.
-    @state() _cardMode: CardMode = 'base';
-    //True while chips/leaders/arcs/timeline are masked behind a non-base mode. Weather -> base clears
-    //immediately (the raster is faint enough to read chips through).
-    @state() _overlayMaskActive = false;
-
-    //Weather mode overlay lifecycle: keeps the cloud-cover canvas painting through its exit fade after
-    //_cardMode left 'weather'. Cleared by the weather fade loop on completion.
-    _weatherOverlayVisible: boolean = false;
-    _weatherFadeInStartMs:  number | null = null;
-    _weatherFadeOutStartMs: number | null = null;
-    _weatherFadeRaf?:       number;
 
 
     private _timer?:           number;
@@ -953,13 +919,6 @@ export class HeliosCard extends LitElement
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
         unsubscribeEnergyPrefs(this);
-        //The weather overlay fade + dashboard count-up loops self-resubmit via rAF and close over `this`,
-        //so a detached card would otherwise keep calling requestUpdate().
-        if (this._weatherFadeRaf !== undefined)
-        {
-            cancelAnimationFrame(this._weatherFadeRaf);
-            this._weatherFadeRaf = undefined;
-        }
         cancelPendingRespawn(this);
         if (this._connectSettleTimer !== undefined)
         {
@@ -997,30 +956,6 @@ export class HeliosCard extends LitElement
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
         //(one hash compare), ~50 ms for a full 480 × 7 bucketization + forecast pass on a real refresh.
         this._maybeRebuildUnifiedStore();
-
-        //Mode-transition state machine. The mode-bar handlers just set _cardMode; the rest of the
-        //transition (engine fade kick, overlay mask flip) is centralised here so one switch on _cardMode
-        //drives every side effect, and the picker .is-active classes animate on the same render as the flip.
-        if (_changedProperties.has('_cardMode'))
-        {
-            const prev = (_changedProperties.get('_cardMode') as CardMode | undefined) ?? 'base';
-            if (prev !== this._cardMode)
-            {
-                this._handleCardModeChange(prev, this._cardMode);
-            }
-        }
-
-        //Weather mode: forward band-toggle + scrub changes to the shader without an SVG rebuild. No-op
-        //unless in weather mode with the layer mounted.
-        if (this._cardMode === 'weather'
-            && (_changedProperties.has('_weatherShowLow')
-             || _changedProperties.has('_weatherShowMid')
-             || _changedProperties.has('_weatherShowHigh')
-             || _changedProperties.has('_selectedTime')
-             || _changedProperties.has('_isLiveMode')))
-        {
-            syncWeatherShaderState(this);
-        }
 
         //Lazy Energy WS subscribe: HA can attach hass after connectedCallback, where the connect-time call
         //bailed without callWS. The helper is idempotent (checks _energyPrefsUnsub), so re-calling is safe.
@@ -1091,14 +1026,9 @@ export class HeliosCard extends LitElement
                 }, CONNECT_SETTLE_MS - sinceConnect + 16);
                 return;
             }
-            //Reset mode flags on identity change. _cardMode survives the engine respawn but the engine's
-            //active flags reset on a fresh instance, so force a clean base mode at the new home.
+            //New home = fresh hydration wave, surface the loading banner again.
             if (identityChanged)
             {
-                this._cardMode           = 'base';
-                this._overlayMaskActive  = false;
-                this._weatherOverlayVisible = false;
-                //New home = fresh hydration wave, surface the loading banner again.
                 this._loadingPhases       = new Map();
                 this._loadingHasCompleted = false;
             }
@@ -1735,17 +1665,11 @@ export class HeliosCard extends LitElement
         const isDark = this._resolveIsDark(themesObj);
         const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
-        //ha-card classes: theme + a mode-* class from _cardMode + overlay-masked for the chip/leader/arc/
-        //timeline hide rules. Weather mode hides chips/leaders/arcs but keeps the bottom timeline visible
-        //(CSS mode-weather exception in helios-card-css.ts) so the user can scrub.
-        const overlayMasked = this._overlayMaskActive;
         //camera-locked swaps the MapLibre grab cursor for the default arrow when the camera is pinned (pan
         //+ rotate disabled, so the open-hand cursor was misleading). Re-evaluated every render.
         const cameraLocked = this._isCameraLocked();
         const cardClasses = [
             cardThemeClass,
-            `mode-${this._cardMode}`,
-            overlayMasked     ? 'overlay-masked' : '',
             cameraLocked      ? 'camera-locked'  : '',
         ].filter(Boolean).join(' ');
 
@@ -1807,88 +1731,25 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-<!--  Top-right mode bar: two glued segments picking
-                      which canvas state the card is in. The default
-                      Layer UI is the regular HUD (sun arc, clouds,
-                      leader lines, chips); Weather paints the
-                      per-altitude cloud cover over a quiet basemap.
-                      The modes are mutually exclusive; the bar shows
-                      which one is active and lets the user switch in
-                      a single click. Each segment is icon-only with a
-                      title tooltip; the active segment takes the same
-                      scrub-blue plate the clock chip uses while
-                      scrubbing, for visual consistency with the
-                      other mode-indicating chips.                   -->
+<!--  Camera lock chip (top-left). Tapping flips the
+                      lock and asks the engine to persist the pose
+                      (bearing + pitch + lock flag) to localStorage for
+                      the next reload. No tooltip/label: the padlock
+                      glyph carries the meaning and tooltips are
+                      useless on touch.                              -->
                 ${hasHomeCoords ? (() => {
-                    const isLayer    = this._cardMode === 'base';
-                    const isWeather  = this._cardMode === 'weather';
-                    //Mode-bar click handlers bound once as class fields so Lit sees a stable identity and
-                    //doesn't re-attach the @click handlers per render.
-                    const onLayer    = this._onModeLayer;
-                    const onWeather  = this._onModeWeather;
-                    //Camera lock chip (top-left). Tapping flips the lock and asks the engine to persist the
-                    //pose (bearing + pitch + lock flag) to localStorage for the next reload. No tooltip/label:
-                    //the padlock glyph carries the meaning and tooltips are useless on touch.
                     const cameraLocked  = this._isCameraLocked();
                     const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
-                    //Lock button hidden in weather mode: the engine force-locks the camera on enter (to
-                    //frame the top-down view), so the toggle would do nothing. Pre-enter state is restored
-                    //on exit, so the returning button shows the right state.
                     return html`
                         <div class="overlay-top-left">
-                            ${isWeather ? nothing : html`
-                                <button
-                                    type="button"
-                                    class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
-                                    aria-pressed="${cameraLocked ? 'true' : 'false'}"
-                                    @click="${this._onCameraLockToggle}"
-                                >
-                                    <ha-icon icon="${lockIcon}"></ha-icon>
-                                </button>
-                            `}
-                        </div>
-                        ${isWeather ? html`
-                            <!--  Weather world, dashboard-style. The per-altitude cloud bands are now value
-                                  chips stacked above the home (high on top, low nearest the home), each one a
-                                  toggle for its band: active shows the icon + cover %, inactive dims to an
-                                  icon-only ghost. A single glowing home disc sits dead-centre and exits the
-                                  mode. enterWeatherMode resets all three bands to ON so the first open shows a
-                                  complete sky.                                                              -->
-                            ${this._renderCloudBandChip('high', this._cloudScene?.cloudHigh ?? 0, this._weatherShowHigh, 129)}
-                            ${this._renderCloudBandChip('mid',  this._cloudScene?.cloudMid  ?? 0, this._weatherShowMid,  92)}
-                            ${this._renderCloudBandChip('low',  this._cloudScene?.cloudLow  ?? 0, this._weatherShowLow,  55)}
                             <button
                                 type="button"
-                                class="weather-home"
-                                aria-label="Exit weather view"
-                                @click="${this._onModeLayer}"
+                                class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
+                                aria-pressed="${cameraLocked ? 'true' : 'false'}"
+                                @click="${this._onCameraLockToggle}"
                             >
-                                <ha-icon icon="mdi:home"></ha-icon>
+                                <ha-icon icon="${lockIcon}"></ha-icon>
                             </button>
-                        ` : nothing}
-                        <div class="overlay-top-right">
-                            <div class="mode-bar" role="radiogroup" aria-label="View mode">
-                                <button
-                                    type="button"
-                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''}"
-                                    role="radio"
-                                    aria-checked="${isLayer ? 'true' : 'false'}"
-                                    aria-label="Default layer UI"
-                                    @click="${onLayer}"
-                                >
-                                    <ha-icon icon="mdi:home"></ha-icon>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="mode-bar-seg ${isWeather ? 'is-on' : ''}"
-                                    role="radio"
-                                    aria-checked="${isWeather ? 'true' : 'false'}"
-                                    aria-label="Weather view"
-                                    @click="${onWeather}"
-                                >
-                                    <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
-                                </button>
-                            </div>
                         </div>
                     `;
                 })() : nothing}
@@ -2479,60 +2340,6 @@ export class HeliosCard extends LitElement
         this._homeHover = false;
     };
 
-    //Bound mode-bar handlers, class fields (stable identity, so Lit doesn't re-attach the @click handlers
-    //per render). Each drops scrub state via _exitScrubMode first: a mode switch shifts the timeline, and
-    //the absolutely-positioned scrub tooltip would otherwise float orphaned.
-    private _onModeLayer = (): void =>
-    {
-        this._exitScrubMode();
-        this._cardMode = 'base';
-    };
-    private _onModeWeather = (): void =>
-    {
-        this._exitScrubMode();
-        this._cardMode = 'weather';
-    };
-
-    //Weather-mode altitude band chip: a value pill stacked above the home (high on top, low nearest it).
-    //Active shows icon + cover %, inactive dims to an icon-only ghost. Clicking toggles the band, which
-    //syncWeatherShaderState() relays to the shader.
-    private _renderCloudBandChip(
-        band: 'low' | 'mid' | 'high',
-        value: number,
-        active: boolean,
-        offsetPx: number
-    ): TemplateResult
-    {
-        return html`
-            <div
-                class="cloud-band-chip ${active ? 'is-active' : 'is-inactive'}"
-                style="top:calc(50% - ${offsetPx}px); --cloud-chip-color:${DEFAULT_CLOUD_COLOR_HEX}"
-                role="button"
-                tabindex="0"
-                aria-pressed="${active ? 'true' : 'false'}"
-                aria-label="Toggle ${band} cloud layer"
-                @click="${() => this._toggleWeatherBand(band)}"
-            >
-                <ha-icon icon="${cloudLayerIcon(band)}"></ha-icon>
-                ${active ? html`<span>${Math.round(value)} %</span>` : nothing}
-            </div>
-        `;
-    }
-
-    private _toggleWeatherBand(band: 'low' | 'mid' | 'high'): void
-    {
-        if (band === 'low')      { this._weatherShowLow  = !this._weatherShowLow;  }
-        else if (band === 'mid') { this._weatherShowMid  = !this._weatherShowMid;  }
-        else                     { this._weatherShowHigh = !this._weatherShowHigh; }
-    }
-    //Mode-transition state machine (see _handleCardModeChange below; the doc comment is split around the
-    //inserted _maybeRebuildUnifiedStore). Driven from updated() on a _cardMode change, the (prev, next)
-    //switch drives:
-    //  1. _overlayMaskActive: ON on leaving base. OFF on weather -> base immediately (faint overlay).
-    //  2. Weather enter/exit: enterWeatherMode() kicks fade-in + camera ease + grid fetch; exitWeatherMode()
-    //     fades out + restores the camera.
-    //CSS animations run on their own classes (.overlay-masked on ha-card).
-
     //Unified store refresh: short-circuits when the host store matches the current data version (hash
     //compare), else rebuilds and assigns the @state. Setting it during updated() schedules one follow-up
     //render but doesn't loop (the rebuild has the same dataVersion, so the next isStoreFresh short-circuits).
@@ -2546,35 +2353,7 @@ export class HeliosCard extends LitElement
         this._unifiedStore = buildUnifiedStore(host);
     }
 
-    //Those CSS classes derive from _cardMode / _overlayMaskActive in the render output: no keyframes or
-    //rAF, just transitions on the base style that fire on class change.
-    private _handleCardModeChange(prev: CardMode, next: CardMode): void
-    {
-        if (next !== 'base')
-        {
-            this._overlayMaskActive = true;
-        }
-
-        if (prev === 'weather' && next !== 'weather')
-        {
-            if (this._weatherOverlayVisible)
-            {
-                exitWeatherMode(this);
-            }
-            if (next === 'base')
-            {
-                //Weather overlay is faint: lift the mask immediately so chips + timeline slide back in
-                //while the overlay fades out and the camera eases to the pre-enter pose.
-                this._overlayMaskActive = false;
-            }
-        }
-        else if (prev !== 'weather' && next === 'weather')
-        {
-            enterWeatherMode(this);
-        }
-    }
-    //Reset timeline scrub state so the absolutely-positioned tooltip disappears next render. Called from
-    //the mode-bar handlers since a mode swap shifts the timeline and would otherwise orphan the tooltip.
+    //Reset timeline scrub state so the absolutely-positioned tooltip disappears next render.
     private _exitScrubMode = (): void =>
     {
         if (this._selectedTime !== null)

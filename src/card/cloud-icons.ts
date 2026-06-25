@@ -1,4 +1,4 @@
-//Cloud-cover and per-altitude layer MDI icon resolvers, shared between the cloud-cover toggle and the per-layer chips.
+//Cloud-cover MDI icon resolver for the cloud-cover chip.
 
 
 //Map a 0..100 cloud cover to a Material Design weather glyph.
@@ -21,20 +21,4 @@ export function cloudCoverIcon(coverPct: number): string
         return 'mdi:weather-cloudy';
     }
     return 'mdi:weather-pouring';
-}
-
-
-//Per-altitude cloud layer icon. Vertical-align glyphs read more clearly than weather glyphs at this
-//size: "thing at the bottom / centre / top of a frame" maps directly to low / mid / high layers.
-export function cloudLayerIcon(layer: 'low' | 'mid' | 'high'): string
-{
-    if (layer === 'low')
-    {
-        return 'mdi:format-vertical-align-bottom';
-    }
-    if (layer === 'mid')
-    {
-        return 'mdi:format-vertical-align-center';
-    }
-    return 'mdi:format-vertical-align-top';
 }

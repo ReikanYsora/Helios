@@ -125,7 +125,7 @@ export const heliosCardStyles = css`
     }
 
     /*  Touch devices never fire hover, so show the glow permanently at a softer opacity as a tappable
-        hint. The overlay-masked fade rule (specificity 0,2,0) still wins so the glow fades in masked modes. */
+        hint. */
     @media (hover: none)
     {
         .home-glow-svg { opacity: 0.45; }
@@ -145,197 +145,11 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Base opacity transition for every overlay that fades out behind a non-base mode (weather fades
-        the HUD). Kept on the unprefixed selectors so the fade runs in both directions; will-change is
-        scoped separately below to avoid pinning idle GPU layers. */
-    .overlay-top-left,
-    .home-glow-svg,
-    .home-hitbox,
-    .solar-svg,
-    .solar-pct-label,
-    .pv-home-leader-svg,
-    .pv-pct-label,
-    .battery-leader-svg,
-    .battery-pct-label,
-    .grid-leader-svg,
-    .grid-label,
-    .low-carbon-leader-svg,
-    .low-carbon-label,
-    .home-pill
-    {
-        transition: opacity 0.35s ease;
-    }
-    /*  will-change opt-in: promote to a composite layer only while a mode is toggling (gated on
-        overlay-masked). Declaring it unconditionally on 15+ elements would pin that many GPU layers
-        in idle VRAM and force a compositor re-sync on every Lit re-render. */
-    ha-card.overlay-masked .overlay-top-left,
-    ha-card.overlay-masked .home-glow-svg,
-    ha-card.overlay-masked .home-hitbox,
-    ha-card.overlay-masked .solar-svg,
-    ha-card.overlay-masked .solar-pct-label,
-    ha-card.overlay-masked .pv-home-leader-svg,
-    ha-card.overlay-masked .pv-pct-label,
-    ha-card.overlay-masked .battery-leader-svg,
-    ha-card.overlay-masked .battery-pct-label,
-    ha-card.overlay-masked .grid-leader-svg,
-    ha-card.overlay-masked .grid-label,
-    ha-card.overlay-masked .low-carbon-leader-svg,
-    ha-card.overlay-masked .low-carbon-label,
-    ha-card.overlay-masked .home-pill
-    {
-        will-change: opacity;
-    }
-
     /*  Timeline slides out below the card edge instead of fading. */
     .time-bar
     {
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
-    }
-    /*  Chips + leaders + arcs fade out behind any non-base mode (weather), keyed on
-        overlay-masked so the card's state machine controls the timing. */
-    ha-card.overlay-masked .home-glow-svg,
-    ha-card.overlay-masked .home-hitbox,
-    ha-card.overlay-masked .solar-svg,
-    ha-card.overlay-masked .solar-pct-label,
-    ha-card.overlay-masked .pv-home-leader-svg,
-    ha-card.overlay-masked .pv-pct-label,
-    ha-card.overlay-masked .battery-leader-svg,
-    ha-card.overlay-masked .battery-pct-label,
-    ha-card.overlay-masked .grid-leader-svg,
-    ha-card.overlay-masked .grid-label,
-    ha-card.overlay-masked .low-carbon-leader-svg,
-    ha-card.overlay-masked .low-carbon-label,
-    ha-card.overlay-masked .cloud-chip,
-    ha-card.overlay-masked .cloud-chip-leader
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-    /*  home-pill (base home anchor) hides on every masked mode, weather included: there the centred
-        glowing home disc takes over as anchor + exit, so the pill would double up. */
-    ha-card.overlay-masked .home-pill
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-    /*  Timeline slides below the card edge for any non-base mode, except weather: the cloud grid is
-        fetched as a 5-day window on entry, so scrubbing walks the cached slice without a refetch and
-        the user can replay the day's cloud cover or peek ahead. */
-    ha-card.overlay-masked:not(.mode-weather) .time-bar
-    {
-        transform: translateY(140%);
-        pointer-events: none;
-    }
-    /*  Top-left cluster (lock chip) hides on every masked mode; nothing else lives in this rail. */
-    ha-card.overlay-masked .overlay-top-left
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-    /*  Top-right mode bar stays in the base view but hides in weather mode, where
-        the only chrome is the centred cloud chips + home exit disc. */
-    ha-card.overlay-masked .overlay-top-right
-    {
-        opacity: 1;
-        pointer-events: auto;
-    }
-    ha-card.overlay-masked.mode-weather .overlay-top-right
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-
-    /*  Weather-mode altitude band chips: one value pill per cloud band, stacked above the home via an
-        inline top offset. Active carries a cloud-coloured glow + cover %, inactive dims to an icon-only
-        ghost. Fixed width so the three line up regardless of value. */
-    .cloud-band-chip
-    {
-        position: absolute;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 26;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--ha-space-1, 4px);
-        width: 84px;
-        box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
-        color: var(--primary-text-color, #212121);
-        border: 2px solid var(--cloud-chip-color, #727272);
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        cursor: pointer;
-        transition: opacity 0.2s ease, box-shadow 0.2s ease;
-    }
-    .cloud-band-chip ha-icon
-    {
-        --mdc-icon-size: 16px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-    .cloud-band-chip.is-active
-    {
-        box-shadow: 0 1px 3px var(--shadow-color),
-                    0 0 12px color-mix(in srgb, var(--cloud-chip-color, #727272) 70%, transparent);
-    }
-    .cloud-band-chip.is-inactive
-    {
-        opacity: 0.55;
-    }
-
-    /*  Weather-mode exit: a glowing, pulsing home disc dead-centre over the map. The only way out of
-        weather mode now that the top-right bar hides; click returns to base. */
-    .weather-home
-    {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 25;
-        width: 52px;
-        height: 52px;
-        border: none;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--primary-text-color);
-        background: var(--card-background-color, #1c1c1c);
-        --home-glow: color-mix(in srgb, var(--sun-color, #f59e0b) 55%, transparent);
-        box-shadow: 0 0 0 2px var(--home-glow),
-                    0 0 22px 4px var(--home-glow);
-        animation: weather-home-pulse 2.6s ease-in-out infinite;
-    }
-    .weather-home ha-icon
-    {
-        --mdc-icon-size: 26px;
-    }
-    @keyframes weather-home-pulse
-    {
-        0%, 100%
-        {
-            box-shadow: 0 0 0 2px var(--home-glow),
-                        0 0 16px 2px var(--home-glow);
-        }
-        50%
-        {
-            box-shadow: 0 0 0 2px var(--home-glow),
-                        0 0 32px 7px var(--home-glow);
-        }
-    }
-    @media (prefers-reduced-motion: reduce)
-    {
-        .weather-home { animation: none; }
     }
 
 
@@ -873,8 +687,8 @@ export const heliosCardStyles = css`
     {
         .tb-chart-indicator ha-icon { animation: none; }
     }
-    /*  Rolling-period selector: compact text segmented control. Same on-primary active recipe as the
-        mode bar so the controls read as one family. */
+    /*  Rolling-period selector: compact text segmented control with the shared on-primary active
+        recipe so the controls read as one family. */
     .tb-period-selector
     {
         display: inline-flex;
@@ -937,86 +751,6 @@ export const heliosCardStyles = css`
 
 
 
-    /*  Mode bar (Layer / Weather): row of two icon-only toggles, top-right, no backplate. Each button
-        is a transparent 40 px circle (HA toolbar-button recipe, shared with the camera-lock toggle)
-        lighting up brand-blue when active. */
-    .mode-bar
-    {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        pointer-events: auto;
-    }
-    .mode-bar-seg
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  40px;
-        height: 40px;
-        box-sizing: border-box;
-        padding: 0;
-        background-color: transparent;
-        background-clip: padding-box;
-        color: var(--primary-text-color, #212121);
-        border: 0;
-        outline: 0 !important;
-        outline-offset: 0;
-        border-radius: 50%;
-        overflow: hidden;
-        cursor: pointer;
-        position: relative;
-        opacity: 1;
-        -webkit-tap-highlight-color: transparent;
-        transition: background-color 0.15s, color 0.15s, opacity 0.15s;
-    }
-    .mode-bar-seg:hover,
-    .mode-bar-seg:focus,
-    .mode-bar-seg:focus-visible,
-    .mode-bar-seg:active
-    {
-        outline: 0 !important;
-        box-shadow: none !important;
-    }
-    .mode-bar-seg:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
-    .mode-bar-seg:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
-    .mode-bar-seg ha-icon
-    {
-        --mdc-icon-size: 22px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-        pointer-events: none;
-    }
-    /*  Active segment: brand-blue pastille behind a white glyph, the shared on-primary recipe. */
-    .mode-bar-seg.is-on
-    {
-        background: var(--primary-color, #03a9f4);
-        color: var(--text-on-primary-color, #ffffff);
-    }
-    .mode-bar-seg.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
-    .mode-bar-seg.is-on:active { background: var(--darker-primary-color, #01579b); }
-    .mode-bar-seg.is-disabled,
-    .mode-bar-seg:disabled
-    {
-        opacity: 0.4;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-    /*  Spinning icon while shadows compute, sharing the centre spinner's rotation primitive. */
-    .mode-bar-seg .is-spinning
-    {
-        animation: helios-mode-spin 1s linear infinite;
-    }
-    @keyframes helios-mode-spin
-    {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
-    }
-
     /*  Crisp-text rule for chips translated onto the home anchor: the 50 % anchor + -50 % translate
         lands them at a fractional pixel, so geometricPrecision + antialiased smoothing keeps the
         glyphs sharp. */
@@ -1028,23 +762,7 @@ export const heliosCardStyles = css`
         -webkit-font-smoothing: antialiased;
     }
 
-    /*  Top-right overlay rail hosting the mode-bar toggles. z-index 60 keeps it above the basemap canvas
-        (z 30) + centre spinner (z 50) so a toggle is always reachable. pointer-events off on the rail so
-        it never steals map interactions; the buttons opt back in. */
-    .overlay-top-right
-    {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 60;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 8px;
-        pointer-events: none;
-    }
-
-    /*  Camera-lock toggle, top-left. Same 40 px circle recipe as the mode-bar segments; brand-blue
+    /*  Camera-lock toggle, top-left. Same 40 px circle recipe as the toolbar-button recipe; brand-blue
         pastille appears when locked. */
     .camera-lock-btn
     {
@@ -1098,7 +816,7 @@ export const heliosCardStyles = css`
     }
     .camera-lock-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .camera-lock-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
-    /*  Disabled state (weather mode): button stays visible to show the lock state but is inert,
+    /*  Disabled state: button stays visible to show the lock state but is inert,
         greyed out with no hover/active feedback. */
     .camera-lock-btn.is-disabled,
     .camera-lock-btn[disabled]
@@ -1108,7 +826,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Top-left rail mirroring overlay-top-right, hosting the camera-lock toggle. pointer-events off on
+    /*  Top-left rail hosting the camera-lock toggle. pointer-events off on
         the rail; the button opts back in so it doesn't steal map interactions. */
     .overlay-top-left
     {
@@ -1123,9 +841,9 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
     /*  Loading banner, shown while the first hydration wave is in flight and retired for good once
-        every phase has finished once (so routine refreshes don't bring it back). Pinned top-centre
-        between the lock chip and mode-bar. No slide-in (short waves blinked once before it completed);
-        only a snappy opacity step. z-index 60, above the timeline + mode bar. */
+        every phase has finished once (so routine refreshes don't bring it back). Pinned top-centre.
+        No slide-in (short waves blinked once before it completed);
+        only a snappy opacity step. z-index 60, above the timeline. */
     .loading-banner
     {
         position: absolute;
@@ -1220,9 +938,6 @@ export const heliosCardStyles = css`
         text-align: center;
         opacity: 0.9;
     }
-
-    /*  Weather mode renders inside MapLibre via a GL custom layer (src/engine/weather-cloud-layer.ts),
-        no DOM overlay. */
 
     /*  PV production chip: compact horizontal pill tinted in the production colour (--pv-leader-color,
         set inline). Fixed min-width shared with the battery chips so the leader gap is identical
@@ -1531,8 +1246,7 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         pointer-events: none;
-        /* Daylight fade via the --solar-daylight variable (0..1, set inline) rather than inline opacity,
-           so the overlay-masked fade rule can win without fighting an inline style. */
+        /* Daylight fade via the --solar-daylight variable (0..1, set inline). */
         opacity: var(--solar-daylight, 1);
         transition: opacity 600ms ease-out;
     }
