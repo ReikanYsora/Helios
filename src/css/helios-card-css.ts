@@ -1,16 +1,8 @@
-import { css, unsafeCSS } from 'lit';
-//MapLibre's stylesheet imported via `?inline` (raw string, not a global
-//<style>) so the rules land inside our shadow root. Without them
-//.maplibregl-canvas stays position:static, joins the layout flow, and in
-//HA panel-mode (no fixed parent height) the canvas pushes the container,
-//ResizeObserver fires, MapLibre re-reads a bigger size = unbounded growth.
-import maplibreCss from 'maplibre-gl/dist/maplibre-gl.css?inline';
+import { css } from 'lit';
 
 //Visual styles for HeliosCard. Grouped by feature (layout, timeline,
 //overlays, solar arc, tooltips).
 export const heliosCardStyles = css`
-    ${unsafeCSS(maplibreCss)}
-
     :host
     {
         display: block;
@@ -48,26 +40,60 @@ export const heliosCardStyles = css`
     {
         /*  Absolute + inset so the container fills the ha-card via containing-block dimensions (which
             respect min-height). A percentage height would collapse to 0 under Masonry (min-height-only
-            floor) and the MapLibre canvas would never render; absolute works under every layout. */
+            floor); absolute works under every layout. Hosts the 2.5D renderer's ground holder + scene SVG.
+            overflow:hidden clips the tilted basemap canvas (which extends past the frame at low pitch) to
+            the card; perspective gives the rotateX/rotateZ ground transform its vanishing point. */
         position: absolute;
         /*  Bleed 1 px under the border (re-clipped by the card's overflow:hidden) to cover the
             anti-alias seam where the black backdrop would peek at the rounded corners. */
         inset: -1px;
+        overflow: hidden;
+        perspective: 1200px;
     }
 
-    /*  Force-hide the MapLibre attribution rail: compact:true still auto-expands above 640 px width.
-        Attribution credit (MapLibre, OpenFreeMap, OpenMapTiles, OpenStreetMap) lives in the README +
-        HACS info pane so the licence obligation stays satisfied. */
-    .maplibregl-ctrl-attrib,
-    .maplibregl-ctrl-bottom-right,
-    .maplibregl-ctrl-bottom-left
+    /*  Renderer ground holder: the tilted basemap tile canvas + edge fade, driven by a CSS 3D transform
+        (rotateX = pitch, rotateZ = bearing) the renderer writes each frame. preserve-3d keeps the canvas
+        in the parent's perspective space. */
+    .scene-ground-holder
     {
-        display: none !important;
+        position: absolute;
+        inset: 0;
+        transform-style: preserve-3d;
+        pointer-events: none;
     }
-    /*  Camera-locked cursor: drop MapLibre's grab cursor when pan + rotate are disabled, so it
-        doesn't advertise an interaction that doesn't exist. !important to beat MapLibre's inline style. */
-    ha-card.camera-locked .maplibregl-canvas-container,
-    ha-card.camera-locked .maplibregl-canvas
+    /*  Basemap tile canvas (live CARTO tiles) or its flat-plane fallback. Positioned by the renderer's
+        transform-origin + transform; sized in JS to the stitched tile grid. */
+    .ground,
+    .ground-flat
+    {
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    /*  Edge fade: same size + transform as the ground, dissolving the disc borders into the card
+        background so the basemap doesn't end in a hard rectangle. */
+    .ground-fade
+    {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+    }
+    /*  Screen-space scene SVG: the renderer repaints night-shade + cast shadows + extruded buildings into
+        it every frame. Full-size overlay above the ground, click-transparent (the HUD SVGs above own
+        their own pointer events). */
+    .scene-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+    }
+    /*  Camera-locked cursor: default cursor when rotation is disabled, so the scene doesn't advertise an
+        interaction that doesn't exist. */
+    ha-card.camera-locked #map-container
     {
         cursor: default !important;
     }

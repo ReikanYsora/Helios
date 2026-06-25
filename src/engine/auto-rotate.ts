@@ -6,7 +6,7 @@
 //per-frame increment so speed is constant across refresh rates and survives
 //tab-throttling without visible jumps.
 
-import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { SceneRenderer } from '../scene';
 import type { HeliosConfig } from '../helios-config';
 import { AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS } from '../constants';
 
@@ -15,7 +15,7 @@ import { AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS } from '../constants
 //`_autoRotateLastUserAction` directly (no wrapper for a 1-line assignment).
 export interface AutoRotateHost
 {
-    readonly map?:         MapLibreMap;
+    readonly _renderer?:   SceneRenderer;
     readonly cfg:          HeliosConfig;
 
     _autoRotateRaf?:           number;
@@ -31,18 +31,19 @@ export interface AutoRotateHost
 //away; engine cleanup also cancels the rAF directly to drop it on the same frame.
 export function startAutoRotateLoop(host: AutoRotateHost): void
 {
-    if (host._autoRotateRaf !== undefined || !host.map)
+    if (host._autoRotateRaf !== undefined || !host._renderer)
     {
         return;
     }
     host._autoRotateLastFrame      = performance.now();
     host._autoRotateLastUserAction = 0;
-    //Seed local bearing from the map so the first step picks up from the current camera.
-    host._autoRotateBearing = host.map.getBearing();
+    //Seed local bearing from the renderer so the first step picks up from the current camera.
+    host._autoRotateBearing = host._renderer.getCameraBearing();
 
     const tick = (t: number) =>
     {
-        if (!host.map)
+        const renderer = host._renderer;
+        if (!renderer)
         {
             host._autoRotateRaf = undefined;
             return;
@@ -77,15 +78,15 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
             if (host._autoRotateBearing === undefined
                 || sinceUser - AUTO_ROTATE_INACTIVITY_MS < 16)
             {
-                host._autoRotateBearing = host.map.getBearing();
+                host._autoRotateBearing = renderer.getCameraBearing();
             }
             host._autoRotateBearing -= AUTO_ROTATE_DEG_PER_SEC * dt;
-            host.map.setBearing(host._autoRotateBearing);
+            renderer.setCameraBearing(host._autoRotateBearing);
         }
         else
         {
-            //While paused, track the live map so a resume picks up from the edited camera.
-            host._autoRotateBearing = host.map.getBearing();
+            //While paused, track the live camera so a resume picks up from the edited pose.
+            host._autoRotateBearing = renderer.getCameraBearing();
         }
 
         host._autoRotateRaf = requestAnimationFrame(tick);

@@ -8,7 +8,9 @@ import type { Building } from './buildings';
 
 //Minimal structural view of the GeoJSON we consume — avoids depending on @types/geojson here.
 interface Ring extends Array<[number, number]> {}
-interface Geom { type: string; coordinates: unknown }
+//`coordinates` is optional so @types/geojson's Geometry union (which includes GeometryCollection, with no
+//coordinates) is structurally assignable; outerRing() narrows on `type` before reading it.
+interface Geom { type: string; coordinates?: unknown }
 interface Feat { geometry?: Geom | null; properties?: Record<string, unknown> | null }
 interface FeatureCollectionLike { features?: Feat[] }
 
