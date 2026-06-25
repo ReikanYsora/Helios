@@ -170,7 +170,7 @@ window.addEventListener('helios-data-cache-reset', () =>
 
 //Public diagnostic command, exposed once on first bundle load. Returns a JSON-safe snapshot AND prints
 //a grouped console dump (build version, engine lifecycle counters, one section per card). Config values
-//are PII-free and safe to paste into an issue (no API keys; basemap is keyless OpenFreeMap).
+//are PII-free and safe to paste into an issue (no API keys; basemap is keyless CARTO raster tiles).
 {
     interface HeliosWin extends Window
     {
@@ -1187,7 +1187,7 @@ export class HeliosCard extends LitElement
     protected render(): TemplateResult
     {
         //Precondition for the live card chrome: home coordinates resolved (HA config or card-level lat/lon
-        //override). The basemap is keyless OpenFreeMap, so this is purely "can we project the home".
+        //override). The basemap is keyless CARTO raster tiles, so this is purely "can we project the home".
         const hasHomeCoords = getHomeCoords(this.config, this.hass) !== null;
 
 

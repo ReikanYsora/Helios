@@ -1,7 +1,7 @@
 {
   "name": "Helios",
   "filename": "helios.js",
-  "homeassistant": "2024.4.0",
+  "homeassistant": "2026.1.0",
   "hacs": "1.32.0",
   "render_readme": true
 }

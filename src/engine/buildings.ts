@@ -1,93 +1,73 @@
-//Self-sourced building footprints around the home.
+//Self-sourced building footprints around the home, via the OpenStreetMap Overpass API.
 //
-//Drawing OpenFreeMap's full basemap as one fill-extrusion layer makes MapLibre redraw every building in the
-//viewport each frame (thousands in dense areas: jank + battery drain), and post-filtering via paint expressions
-//flickers because tile-clipped geometry evaluates paint per tile.
+//Earlier this module fetched OpenFreeMap planet basemap tiles and decoded their binary building layer,
+//which dragged in a tile decoder + a polygon intermediate. The 2.5D renderer only ever needs local-metre
+//footprints, so we now query Overpass directly (the same path as the reference "Snapshot" Solar scene
+//card) and hand back ready-to-extrude scene Building[].
 //
-//So we fetch the OpenFreeMap planet vector tiles ourselves once at startup (just the 1–4 tiles covering the radius),
-//decode with @mapbox/vector-tile, filter by distance, find the home polygon(s), and emit TWO GeoJSON
-//FeatureCollections fed into two fill-extrusion layers:
-//  - helios-buildings-home          : home polygon(s) at full opacity
-//  - helios-buildings-surroundings  : neighbours at configured opacity
+//We ask Overpass for every `way["building"]` and multipolygon `relation["building"]` within the radius,
+//convert each ring lat/lon -> local metres (east/north) relative to the home, keep the nearest
+//MAX_BUILDINGS COMPLETE footprints, and flag the building that contains the home GPS (else the nearest)
+//as isHome. When Overpass yields nothing — offline, both mirrors down, or genuinely no mapped buildings —
+//we fall back to a single standard house at the origin so the scene always has a home to draw.
 //
-//Fetched once per (home, radius, cluster) tuple — the home doesn't move, so no pan/zoom listener. Style reloads
-//(theme switches) reuse the cached GeoJSON.
-//
-//OpenFreeMap serves the OpenMapTiles schema: the `building` source-layer carries render_height / render_min_height,
-//which plus the polygon geometry is all the parser needs.
+//Fetched once per (home, radius) tuple and cached in localStorage (the home doesn't move), so a reload
+//doesn't re-hit Overpass. Heights are fixed at FIXED_BUILDING_HEIGHT_M — OSM heights are ignored because
+//tall buildings dominate the faux-3D framing and read as walls, not homes.
 
-import { VectorTile } from '@mapbox/vector-tile';
-import { PbfReader } from 'pbf';
-import { HOME_FALLBACK_M } from '../constants';
-
-export interface BuildingsResult
-{
-    home:         GeoJSON.FeatureCollection;
-    surroundings: GeoJSON.FeatureCollection;
-}
+import { type Building } from '../scene/buildings';
+import { type Point } from '../scene/colors';
 
 export interface FetchBuildingsOptions
 {
-    homeLon:              number;
-    homeLat:              number;
-    radiusMeters:         number;
-    //Cluster radius (m). Buildings whose centroid sits within it, or which contain the home point, join the "home"
-    //collection at full opacity so attached verandas/outbuildings read as one with the house. 0 = single-polygon home.
-    clusterRadiusMeters?: number;
-    //Tile zoom. OpenMapTiles carries render_height from z=13, capped at z=14 for the planet tileset. z=14 keeps the
-    //tile count to 1 (rarely 2) for radii under ~500 m while still giving proper extrusion heights.
-    zoom?:                number;
-    signal?:              AbortSignal;
+    homeLon:      number;
+    homeLat:      number;
+    radiusMeters: number;
+    signal?:      AbortSignal;
 }
 
-const EARTH_RADIUS_M    = 6_371_008.8;
-//If no polygon contains the home point, pick the nearest within this radius — covers HA's home latitude landing in
-//a garden a few metres off the actual building.
+//Fixed prism height (m) for every building — OSM render heights are deliberately ignored (tall ones break
+//the faux-3D framing). Helios already drew every footprint at 6 m.
+const FIXED_BUILDING_HEIGHT_M = 6;
+//Keep only the nearest N complete footprints — dense blocks would otherwise flood the scene.
+const MAX_BUILDINGS = 50;
+//Half-extents of the local-mode fallback house (~10 x 8 m), centred on the home.
+const FALLBACK_HOUSE_HALF_W = 5;
+const FALLBACK_HOUSE_HALF_D = 4;
+//localStorage cache: the home is static, so a 30-day TTL keeps reloads off Overpass.
+const BUILDING_CACHE_TTL_MS = 30 * 86_400_000;
+//A failed mirror waits this long before the next mirror is tried.
+const OVERPASS_RETRY_DELAY_MS = 1200;
+//Two CORS mirrors (the main one rate-limits under load), tried in order.
+const OVERPASS_ENDPOINTS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
 
+const DEG = Math.PI / 180;
 
-function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }
+//One Overpass element: a `way` carries its ring in `.geometry`; a multipolygon `relation` carries its
+//rings in `.members[].geometry` (we keep the outer ones).
+interface OverpassWay
 {
-    const n      = Math.pow(2, z);
-    const latRad = lat * Math.PI / 180;
-    const x      = Math.floor((lon + 180) / 360 * n);
-    const y      = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
-    return { x, y };
+    type:     string; //'way' | 'relation'
+    geometry?: { lat: number; lon: number }[];           //ways
+    members?: {
+        role:     string;
+        geometry?: { lat: number; lon: number }[];
+    }[];                                                  //multipolygon relations
+    tags?:    Record<string, string>;
 }
 
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number
-{
-    const toRad = Math.PI / 180;
-    const dLat  = (lat2 - lat1) * toRad;
-    const dLon  = (lon2 - lon1) * toRad;
-    const a     = Math.sin(dLat / 2) ** 2
-                + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad)
-                * Math.sin(dLon / 2) ** 2;
-    return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
-}
-
-//Degree delta per metre at a given latitude — used to expand the home point into a bbox before mapping to tiles.
-function metersToDegLat(m: number): number
-{
-    return m / 111_320;
-}
-
-function metersToDegLon(m: number, atLat: number): number
-{
-    return m / (111_320 * Math.cos(atLat * Math.PI / 180));
-}
-
-
-//Ray-casting point-in-polygon for one ring (lon,lat pairs); true if inside or on the boundary.
-function pointInRing(lon: number, lat: number, ring: number[][]): boolean
+//Ray-casting point-in-polygon for one footprint (local metres); true if (x, y) is inside.
+function pointInPolygon(x: number, y: number, polygon: Point[]): boolean
 {
     let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++)
     {
-        const xi = ring[i][0], yi = ring[i][1];
-        const xj = ring[j][0], yj = ring[j][1];
-        const intersect = ((yi > lat) !== (yj > lat))
-                       && (lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi);
-        if (intersect)
+        const [ax, ay] = polygon[i];
+        const [bx, by] = polygon[j];
+        if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax)
         {
             inside = !inside;
         }
@@ -95,286 +75,248 @@ function pointInRing(lon: number, lat: number, ring: number[][]): boolean
     return inside;
 }
 
-//Home check = "point is in the outer ring of any polygon". Holes are ignored, so a building with a courtyard still
-//counts if the home sits anywhere within the outer footprint.
-function polygonContains(geom: GeoJSON.Geometry, lon: number, lat: number): boolean
+//Distance from the home (origin) to a footprint — 0 when the origin is INSIDE it. Used to rank buildings
+//and pick the home: a large building that contains the point ranks first even though its centroid may be
+//far (which would otherwise drop it or hand "home" to a closer-centroid neighbour).
+function distanceToHome(polygon: Point[]): number
 {
-    if (geom.type === 'Polygon')
+    if (pointInPolygon(0, 0, polygon))
     {
-        return geom.coordinates.length > 0 && pointInRing(lon, lat, geom.coordinates[0] as number[][]);
+        return 0;
     }
-    if (geom.type === 'MultiPolygon')
+    let nearest = Infinity;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++)
     {
-        return geom.coordinates.some(poly => poly.length > 0 && pointInRing(lon, lat, poly[0] as number[][]));
+        const [ax, ay] = polygon[j];
+        const dx    = polygon[i][0] - ax;
+        const dy    = polygon[i][1] - ay;
+        const len2  = dx * dx + dy * dy;
+        const t     = len2 ? Math.max(0, Math.min(1, (-ax * dx - ay * dy) / len2)) : 0;
+        nearest = Math.min(nearest, Math.hypot(ax + t * dx, ay + t * dy));
     }
-    return false;
+    return nearest;
 }
 
-//Centroid approximation (average of outer-ring vertices) — only for the radius filter, so exactness isn't needed.
-//For MultiPolygon we use the first polygon's outer ring; its parts are always adjacent, so close enough.
-function representativePoint(geom: GeoJSON.Geometry): [number, number] | null
+//localStorage cache key — rounded home position + radius, so any meaningful move invalidates the entry.
+function cacheKey(lat: number, lng: number, radius: number): string
 {
-    let ring: number[][] | null = null;
-    if (geom.type === 'Polygon' && geom.coordinates.length > 0)
-    {
-        ring = geom.coordinates[0] as number[][];
-    }
-    else if (geom.type === 'MultiPolygon' && geom.coordinates.length > 0 && geom.coordinates[0].length > 0)
-    {
-        ring = geom.coordinates[0][0] as number[][];
-    }
-    if (!ring || ring.length === 0)
-    {
-        return null;
-    }
-    let sx = 0, sy = 0;
-    for (const p of ring) { sx += p[0]; sy += p[1]; }
-    return [sx / ring.length, sy / ring.length];
+    return `helios-bld:${lat.toFixed(4)}:${lng.toFixed(4)}:${radius}`;
 }
 
-
-//OpenFreeMap rotates its planet tiles under a versioned snapshot path every few weeks. The /planet TileJSON exposes
-//the current snapshot's tile URL template; fetched once per page lifetime and cached so later pulls skip the trip.
-const OFM_TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
-let _ofmTileTemplate:        string | null = null;
-let _ofmTileTemplateInflight: Promise<string | null> | null = null;
-
-async function getOpenFreeMapTileTemplate(signal?: AbortSignal): Promise<string | null>
+//Parse Overpass `elements` into ranked scene Building[]. Each ring lat/lon -> local metres east/north
+//relative to the home, centroid computed, ranked by distance-to-footprint, nearest MAX_BUILDINGS kept.
+function parseBuildings(ways: OverpassWay[], lat: number, lng: number): Building[]
 {
-    if (_ofmTileTemplate)
+    const perLat = 111_320;
+    const perLon = 111_320 * Math.cos(lat * DEG);
+    const buildings: Building[] = [];
+
+    //Collect outer rings: simple `way` buildings + the outer ring(s) of multipolygon `relation` buildings.
+    //Dense cities map whole blocks as relations — without these the home can be missing.
+    const rings: { lat: number; lon: number }[][] = [];
+    for (const el of ways)
     {
-        return _ofmTileTemplate;
-    }
-    if (_ofmTileTemplateInflight)
-    {
-        return _ofmTileTemplateInflight;
-    }
-
-    _ofmTileTemplateInflight = (async (): Promise<string | null> =>
-    {
-        try
+        if (el.type === 'way' && el.geometry)
         {
-            const resp = await fetch(OFM_TILEJSON_URL, { signal });
-            if (!resp.ok)
+            rings.push(el.geometry);
+        }
+        else if (el.type === 'relation' && el.members)
+        {
+            for (const m of el.members)
             {
-                return null;
-            }
-            const tj   = await resp.json() as { tiles?: string[] };
-            const url  = Array.isArray(tj.tiles) && tj.tiles.length > 0 ? tj.tiles[0] : null;
-            if (!url)
-            {
-                return null;
-            }
-            _ofmTileTemplate = url;
-            return url;
-        }
-        catch (_)
-        {
-            return null;
-        }
-        finally
-        {
-            _ofmTileTemplateInflight = null;
-        }
-    })();
-    return _ofmTileTemplateInflight;
-}
-
-
-export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Promise<BuildingsResult>
-{
-    const z          = Math.max(0, Math.floor(opts.zoom ?? 14));
-    const r          = Math.max(1, opts.radiusMeters);
-    const cluster    = Math.max(0, opts.clusterRadiusMeters ?? 0);
-
-    //Bbox around the home in degrees, over-estimated a few percent so a building whose centroid is just outside but
-    //whose nearest corner is inside the radius still gets fetched; the slack is dropped at the haversine step below.
-    const padFactor  = 1.15;
-    const dLat       = metersToDegLat(r * padFactor);
-    const dLon       = metersToDegLon(r * padFactor, opts.homeLat);
-    const minLat     = opts.homeLat - dLat;
-    const maxLat     = opts.homeLat + dLat;
-    const minLon     = opts.homeLon - dLon;
-    const maxLon     = opts.homeLon + dLon;
-
-    //Tile range covering the bbox. Note Y is inverted (north-up).
-    const tlTile = lonLatToTile(minLon, maxLat, z);
-    const brTile = lonLatToTile(maxLon, minLat, z);
-    const xMin   = Math.min(tlTile.x, brTile.x);
-    const xMax   = Math.max(tlTile.x, brTile.x);
-    const yMin   = Math.min(tlTile.y, brTile.y);
-    const yMax   = Math.max(tlTile.y, brTile.y);
-
-    const tilesToFetch: Array<{ x: number; y: number }> = [];
-    for (let x = xMin; x <= xMax; x++)
-    {
-        for (let y = yMin; y <= yMax; y++)
-        {
-            tilesToFetch.push({ x, y });
-        }
-    }
-
-    //Defensive: small radii expect 1–4 tiles. More means radius/zoom is misconfigured; bail rather than hammer the API.
-    if (tilesToFetch.length > 16)
-    {
-        throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested, radius/zoom misconfigured`);
-    }
-
-    //Resolve the OpenFreeMap tile template once (cached for the page lifetime); keeps us on the current snapshot
-    //without hard-coding a date that will rot.
-    const tileTemplate = await getOpenFreeMapTileTemplate(opts.signal);
-    if (!tileTemplate)
-    {
-        return { home: { type: 'FeatureCollection', features: [] },
-                 surroundings: { type: 'FeatureCollection', features: [] } };
-    }
-
-    const features: GeoJSON.Feature[] = [];
-    await Promise.all(tilesToFetch.map(async ({ x, y }) =>
-    {
-        const url = tileTemplate
-            .replace('{z}', String(z))
-            .replace('{x}', String(x))
-            .replace('{y}', String(y));
-        let resp: Response;
-        try
-        {
-            resp = await fetch(url, { signal: opts.signal });
-        }
-        catch (e)
-        {
-            //Network error → skip this tile silently; surroundings get sparser but the card stays usable. The browser
-            //network panel already logs it, so flooding the HA console would just be noise.
-            return;
-        }
-        if (!resp.ok)
-        {
-            return;
-        }
-        let buf: ArrayBuffer;
-        try
-        {
-            buf = await resp.arrayBuffer();
-        }
-        catch (_)
-        {
-            return;
-        }
-        if (buf.byteLength === 0)
-        {
-            return;
-        }
-
-        let tile: VectorTile;
-        try
-        {
-            tile = new VectorTile(new PbfReader(new Uint8Array(buf)));
-        }
-        catch (_)
-        {
-            return;
-        }
-        const layer = tile.layers['building'];
-        if (!layer)
-        {
-            return;
-        }
-
-        for (let i = 0; i < layer.length; i++)
-        {
-            let geojson: GeoJSON.Feature;
-            try
-            {
-                geojson = layer.feature(i).toGeoJSON(x, y, z) as GeoJSON.Feature;
-            }
-            catch (_)
-            {
-                continue;
-            }
-            if (!geojson.geometry)
-            {
-                continue;
-            }
-
-            //Split MultiPolygons into independent Polygons: OpenMapTiles groups unrelated buildings into one
-            //MultiPolygon (seen: 24 sub-polygons in a rural tile), so without splitting, home detection would capture
-            //all of them at full opacity. Genuine multi-part buildings render identically since the parts share
-            //render_height.
-            if (geojson.geometry.type === 'Polygon')
-            {
-                //Rebuild as a plain feature: toGeoJSON returns null-prototype `properties`, and maplibre's worker
-                //serializer reads `input.constructor._classRegistryKey`, which throws on a null-proto object. The
-                //spread + fresh geometry restore a normal prototype so a lone Polygon building doesn't break the source.
-                features.push({
-                    type:       'Feature',
-                    geometry:   { type: 'Polygon', coordinates: geojson.geometry.coordinates as number[][][] },
-                    properties: { ...(geojson.properties ?? {}) }
-                });
-            }
-            else if (geojson.geometry.type === 'MultiPolygon')
-            {
-                for (const polyCoords of geojson.geometry.coordinates)
+                if (m.geometry && (m.role === 'outer' || !m.role))
                 {
-                    features.push({
-                        type:       'Feature',
-                        geometry:   { type: 'Polygon', coordinates: polyCoords as number[][][] },
-                        properties: { ...(geojson.properties ?? {}) }
-                    });
+                    rings.push(m.geometry);
                 }
             }
-            //Lines / points are skipped silently, not buildings.
         }
-    }));
+    }
 
-    //Classify each feature:
-    //  - home cluster: contains the home point OR within `cluster` m (attached verandas/outbuildings)
-    //  - surroundings: within `r` m but outside the cluster
-    //  - discarded: outside `r`
-    //If nothing contains the home point or sits within the cluster, fall back to the closest building within
-    //HOME_FALLBACK_M — covers HA coords landing on a garden/driveway a few metres off the house footprint.
-    const homeCluster: GeoJSON.Feature[] = [];
-    const surroundings: GeoJSON.Feature[] = [];
-    let homeFallback: { feature: GeoJSON.Feature; distance: number } | null = null;
-
-    for (const f of features)
+    for (const geometry of rings)
     {
-        const contains = polygonContains(f.geometry, opts.homeLon, opts.homeLat);
-        const rep      = representativePoint(f.geometry);
-        const d        = rep
-            ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0])
-            : Infinity;
+        const footprint: Point[] = geometry.map((n) => [
+            (n.lon - lng) * perLon,
+            (n.lat - lat) * perLat,
+        ]);
 
-        if (contains || (cluster > 0 && d <= cluster))
+        //OSM rings are CLOSED (last vertex repeats the first); drop it so the painter doesn't draw a
+        //degenerate wall looping back on itself.
+        if (footprint.length > 1 && footprint[0][0] === footprint[footprint.length - 1][0])
         {
-            homeCluster.push(f);
+            footprint.pop();
+        }
+        if (footprint.length < 3)
+        {
             continue;
         }
 
-        if (rep && d <= HOME_FALLBACK_M
-            && (!homeFallback || d < homeFallback.distance))
+        //Counter-clockwise winding so the painter's screen-space back-face cull has a consistent sign
+        //(OSM mixes CW + CCW footprints, which would otherwise flip walls inside-out).
+        let signedArea = 0;
+        for (let i = 0; i < footprint.length; i++)
         {
-            homeFallback = { feature: f, distance: d };
+            const next = (i + 1) % footprint.length;
+            signedArea += footprint[i][0] * footprint[next][1] - footprint[next][0] * footprint[i][1];
+        }
+        if (signedArea < 0)
+        {
+            footprint.reverse();
         }
 
-        if (d <= r)
+        let centerX = 0;
+        let centerY = 0;
+        for (const [x, y] of footprint)
         {
-            surroundings.push(f);
+            centerX += x;
+            centerY += y;
         }
+        buildings.push({
+            footprint,
+            height:  FIXED_BUILDING_HEIGHT_M, //OSM heights ignored (tall ones break the framing)
+            isHome:  false,
+            centerX: centerX / footprint.length,
+            centerY: centerY / footprint.length,
+        });
     }
 
-    //Promote the fallback when no feature was in the cluster.
-    if (homeCluster.length === 0 && homeFallback)
+    //Keep the nearest MAX_BUILDINGS, COMPLETE buildings only (whole footprints, never clipped — OSM returns
+    //full geometry even for buildings only partly inside the radius). Rank by distance to the FOOTPRINT
+    //(0 when it contains the home), so a large building wrapping the home is never dropped.
+    const dist = new Map<Building, number>();
+    for (const bld of buildings)
     {
-        homeCluster.push(homeFallback.feature);
-        const idx = surroundings.indexOf(homeFallback.feature);
-        if (idx >= 0)
+        dist.set(bld, distanceToHome(bld.footprint));
+    }
+    buildings.sort((a, b) => dist.get(a)! - dist.get(b)!);
+    const kept = buildings.slice(0, MAX_BUILDINGS);
+    markHome(kept);
+    return kept;
+}
+
+//"The home" = the building that CONTAINS the GPS point (distance 0), else the nearest footprint. Recomputed
+//on every load — including from cache — so a stale cached isHome can't persist.
+function markHome(buildings: Building[]): void
+{
+    let nearest = -1;
+    let best    = Infinity;
+    for (let i = 0; i < buildings.length; i++)
+    {
+        buildings[i].isHome = false;
+        const d = distanceToHome(buildings[i].footprint);
+        if (d < best)
         {
-            surroundings.splice(idx, 1);
+            best    = d;
+            nearest = i;
         }
     }
+    if (nearest >= 0)
+    {
+        buildings[nearest].isHome = true;
+    }
+}
 
+//A single standard detached house centred on the home, for offline / no-result fallback.
+function fallbackHouse(): Building
+{
+    const w = FALLBACK_HOUSE_HALF_W;
+    const d = FALLBACK_HOUSE_HALF_D;
     return {
-        home:         { type: 'FeatureCollection', features: homeCluster },
-        surroundings: { type: 'FeatureCollection', features: surroundings }
+        //CCW winding (positive signed area), like parsed OSM footprints, for consistent culling.
+        footprint: [
+            [-w, -d],
+            [w, -d],
+            [w, d],
+            [-w, d],
+        ],
+        height:  FIXED_BUILDING_HEIGHT_M,
+        isHome:  true,
+        centerX: 0,
+        centerY: 0,
     };
+}
+
+//Fetch building footprints around the home and return ready-to-extrude scene Building[]. Serves a fresh
+//localStorage cache first, then tries each Overpass mirror in turn; on total failure (offline, both mirrors
+//down, no mapped buildings) returns the single fallback house so the scene always has a home. Respects
+//opts.signal — an abort propagates as an AbortError the caller already swallows.
+export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Promise<Building[]>
+{
+    const lat    = opts.homeLat;
+    const lng    = opts.homeLon;
+    const radius = Math.max(1, Math.round(opts.radiusMeters));
+    const key    = cacheKey(lat, lng, radius);
+
+    //Cache hit: reuse the stored footprints (re-marking the home from current logic, so a stale cached
+    //isHome can't persist). The cache never holds the fallback house — only real Overpass results.
+    try
+    {
+        const raw    = localStorage.getItem(key);
+        const cached = raw
+            ? (JSON.parse(raw) as { time: number; buildings: Building[] })
+            : null;
+        if (cached?.buildings?.length && Date.now() - cached.time < BUILDING_CACHE_TTL_MS)
+        {
+            markHome(cached.buildings);
+            return cached.buildings;
+        }
+    }
+    catch (_)
+    {
+        //Corrupt cache entry — ignore and re-fetch.
+    }
+
+    const overpassQuery =
+        `[out:json][timeout:25];(way["building"](around:${radius},${lat},${lng});`
+        + `relation["building"](around:${radius},${lat},${lng}););out geom;`;
+
+    /* eslint-disable no-await-in-loop -- retries are intentionally sequential */
+    for (const endpoint of OVERPASS_ENDPOINTS)
+    {
+        try
+        {
+            const response = await fetch(
+                endpoint + '?data=' + encodeURIComponent(overpassQuery),
+                {
+                    referrerPolicy: 'no-referrer', //don't leak the HA instance URL to Overpass
+                    signal:         opts.signal,
+                }
+            );
+            if (!response.ok)
+            {
+                throw new Error(String(response.status));
+            }
+            const data      = (await response.json()) as { elements?: OverpassWay[] };
+            const buildings = parseBuildings(data.elements ?? [], lat, lng);
+            if (buildings.length)
+            {
+                try
+                {
+                    localStorage.setItem(key, JSON.stringify({ time: Date.now(), buildings }));
+                }
+                catch (_)
+                {
+                    //Storage quota: not fatal — the footprints still render this session.
+                }
+                return buildings;
+            }
+        }
+        catch (err)
+        {
+            //Propagate aborts so a rapid radius change cancels cleanly (the caller swallows AbortError).
+            if ((err as { name?: string })?.name === 'AbortError')
+            {
+                throw err;
+            }
+            //Mirror failed: wait, then try the next endpoint.
+            await new Promise<void>((resolve) =>
+            {
+                setTimeout(resolve, OVERPASS_RETRY_DELAY_MS);
+            });
+        }
+    }
+    /* eslint-enable no-await-in-loop */
+
+    //Every mirror failed or returned nothing: fall back to the standard house, NOT cached (a later retry
+    //or config change can still recover the real buildings).
+    return [fallbackHouse()];
 }

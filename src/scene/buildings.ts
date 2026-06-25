@@ -5,7 +5,6 @@
 //Assistant frontend Solar scene card.
 
 import { SceneCamera, PERSPECTIVE, NEAR_PLANE } from './projection';
-import { metresPerDegree } from './tiles';
 import { mixHex, hexByte, tintedRgba, pointsAttr, type Point } from './colors';
 
 const DEG = Math.PI / 180;
@@ -158,20 +157,9 @@ export function renderBuildings(
 }
 
 //---------------------------------------------------------------------------------------------------------
-//Footprint geometry helpers + the GeoJSON→Building adapter. Kept local to the building painters: they are
-//the only consumers of these footprint utilities. Ported from the Home Assistant frontend Solar scene card.
+//Footprint geometry helpers. Kept local to the building painters: they are the only consumers of these
+//footprint utilities. Ported from the Home Assistant frontend Solar scene card.
 //---------------------------------------------------------------------------------------------------------
-
-//Convert a lat/lng ring to local metres (east, north) relative to the home origin.
-function ringToLocalMetres(
-    ring:    Array<[number, number]>, //[lng, lat] pairs (GeoJSON order)
-    homeLat: number,
-    homeLng: number
-): Point[]
-{
-    const { perLon, perLat } = metresPerDegree(homeLat);
-    return ring.map(([lng, lat]) => [(lng - homeLng) * perLon, (lat - homeLat) * perLat] as Point);
-}
 
 //Drop only TRULY collinear (redundant) vertices — common in OSM footprints where a straight wall is
 //split by extra points — so a wall stays ONE quad with no false vertical edge bisecting it. The 0.05 m
@@ -233,122 +221,4 @@ function convexHull(pts: Point[]): Point[]
     lower.pop();
     upper.pop();
     return lower.concat(upper);
-}
-
-//Minimal structural view of the GeoJSON we consume — avoids depending on @types/geojson here.
-interface Ring extends Array<[number, number]> {}
-//`coordinates` is optional so @types/geojson's Geometry union (which includes GeometryCollection, with no
-//coordinates) is structurally assignable; outerRing() narrows on `type` before reading it.
-interface Geom { type: string; coordinates?: unknown }
-interface Feat { geometry?: Geom | null; properties?: Record<string, unknown> | null }
-interface FeatureCollectionLike { features?: Feat[] }
-
-export interface FromGeoJsonOptions
-{
-    //Fixed prism height in metres. When set, every building is drawn at this height (the source card's
-    //approach — tall OSM buildings break the faux-3D framing). When undefined, the per-feature
-    //render_height − render_min_height is used (clamped to [minHeightM, maxHeightM]).
-    fixedHeightM?: number;
-    minHeightM?:   number;
-    maxHeightM?:   number;
-}
-
-//Extract a feature's outer ring as [lng, lat] pairs. Handles Polygon + MultiPolygon (first polygon).
-function outerRing(geom: Geom | null | undefined): Ring | null
-{
-    if (!geom) { return null; }
-    if (geom.type === 'Polygon')
-    {
-        const rings = geom.coordinates as Ring[];
-        return rings?.[0] ?? null;
-    }
-    if (geom.type === 'MultiPolygon')
-    {
-        const polys = geom.coordinates as Ring[][];
-        return polys?.[0]?.[0] ?? null;
-    }
-    return null;
-}
-
-function centroid(footprint: Point[]): { x: number; y: number }
-{
-    let x = 0;
-    let y = 0;
-    for (const [px, py] of footprint) { x += px; y += py; }
-    const n = footprint.length || 1;
-    return { x: x / n, y: y / n };
-}
-
-function featureToBuilding(
-    feat:    Feat,
-    homeLat: number,
-    homeLng: number,
-    isHome:  boolean,
-    opts:    FromGeoJsonOptions
-): Building | null
-{
-    const ring = outerRing(feat.geometry);
-    if (!ring || ring.length < 3) { return null; }
-    const footprint = ringToLocalMetres(ring, homeLat, homeLng);
-
-    //GeoJSON rings are CLOSED (last vertex repeats the first); drop it so the painter doesn't draw a
-    //degenerate wall looping back on itself.
-    if (footprint.length > 1
-        && footprint[0][0] === footprint[footprint.length - 1][0]
-        && footprint[0][1] === footprint[footprint.length - 1][1])
-    {
-        footprint.pop();
-    }
-    if (footprint.length < 3) { return null; }
-
-    //Enforce counter-clockwise winding so the painter's screen-space back-face cull has a consistent
-    //sign (OSM mixes CW + CCW footprints, which would otherwise flip walls inside-out).
-    let area2 = 0;
-    for (let i = 0; i < footprint.length; i++)
-    {
-        const n = (i + 1) % footprint.length;
-        area2 += footprint[i][0] * footprint[n][1] - footprint[n][0] * footprint[i][1];
-    }
-    if (area2 < 0) { footprint.reverse(); }
-
-    let height: number;
-    if (opts.fixedHeightM != null)
-    {
-        height = opts.fixedHeightM;
-    }
-    else
-    {
-        const top  = Number(feat.properties?.render_height) || 0;
-        const base = Number(feat.properties?.render_min_height) || 0;
-        const min  = opts.minHeightM ?? 3;
-        const max  = opts.maxHeightM ?? 24;
-        height = Math.max(min, Math.min(max, top - base || min));
-    }
-
-    const c = centroid(footprint);
-    return { footprint, height, isHome, centerX: c.x, centerY: c.y };
-}
-
-//Convert Helios's { home, surroundings } building collections to the renderer's Building[]. Home
-//features are flagged isHome (painted in the brand colour); surroundings are the faint ghost context.
-export function buildingsFromGeoJson(
-    home:        FeatureCollectionLike | null | undefined,
-    surroundings: FeatureCollectionLike | null | undefined,
-    homeLat:     number,
-    homeLng:     number,
-    opts:        FromGeoJsonOptions = {}
-): Building[]
-{
-    const out: Building[] = [];
-    for (const f of home?.features ?? [])
-    {
-        const b = featureToBuilding(f, homeLat, homeLng, true, opts);
-        if (b) { out.push(b); }
-    }
-    for (const f of surroundings?.features ?? [])
-    {
-        const b = featureToBuilding(f, homeLat, homeLng, false, opts);
-        if (b) { out.push(b); }
-    }
-    return out;
 }

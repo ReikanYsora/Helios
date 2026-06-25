@@ -13,9 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mapbox/vector-tile": "^3.0.0",
-    "lit": "^3.3.3",
-    "pbf": "^5.1.0"
+    "lit": "^3.3.3"
   },
   "devDependencies": {
     "terser": "^5.48.0",

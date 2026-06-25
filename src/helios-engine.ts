@@ -1,8 +1,8 @@
 import { SceneRenderer } from './scene/renderer';
-import { buildingsFromGeoJson } from './scene/buildings';
+import { type Building } from './scene/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
-import { fetchBuildingsAroundHome, type BuildingsResult } from './engine/buildings';
+import { fetchBuildingsAroundHome } from './engine/buildings';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
@@ -66,7 +66,7 @@ const _liveEngines = new Set<HeliosEngine>();
 
 
 //-----------------------------------------------------------------
-//Shared module-scope cache for parsed building GeoJSON. HA re-creates the card element on every config
+//Shared module-scope cache for parsed building footprints. HA re-creates the card element on every config
 //commit, re-allocating the WebGL context, but a fresh engine can pick up the already-parsed data
 //synchronously and skip the parse+projection cost (10-50 ms) that otherwise shows as a preview flash. TTL
 //is wide since the data is static; the key encodes home position + radius, so any meaningful change
@@ -75,14 +75,14 @@ const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
 
 interface SharedBuildingsCacheEntry
 {
-    data: BuildingsResult;
+    data: Building[];
     ts:   number;
 }
 
 const _sharedBuildingsCache: Map<string, SharedBuildingsCacheEntry> = new Map();
 
 
-function sharedBuildingsCacheGet(key: string): BuildingsResult | null
+function sharedBuildingsCacheGet(key: string): Building[] | null
 {
     const entry = _sharedBuildingsCache.get(key);
     if (!entry)
@@ -219,7 +219,7 @@ export class HeliosEngine
     public onFetchStart?:    () => void;
     public onFetchEnd?:      () => void;
     public onWeatherUpdate?: (data: WeatherData) => void;
-    //Buildings GeoJSON fetch lifecycle (around fetchBuildingsAroundHome) for the loading banner.
+    //Buildings fetch lifecycle (around fetchBuildingsAroundHome) for the loading banner.
     public onBuildingsFetchStart?: () => void;
     public onBuildingsFetchEnd?:   () => void;
 
@@ -483,8 +483,8 @@ export class HeliosEngine
 
 
     //Cached building fetch around the home. The home doesn't move during a session, so fetch once and
-    //reuse across style reloads instead of re-hitting MapTiler. Invalidated when building-radius changes.
-    private _buildingsData:     BuildingsResult | null = null;
+    //reuse across style reloads instead of re-hitting Overpass. Invalidated when building-radius changes.
+    private _buildingsData:     Building[] | null = null;
     private _buildingsFetchKey: string = '';
     private _buildingsAbort?:   AbortController;
 
@@ -1056,7 +1056,7 @@ export class HeliosEngine
 
     //Push the current building data into the renderer (it extrudes home + surroundings itself) and kick off
     //the background fetch. The renderer paints opacity/colour/shadows from its palette + sun, so there are no
-    //per-layer MapLibre sources to build here anymore — just feed buildingsFromGeoJson once data is in hand.
+    //per-layer MapLibre sources to build here anymore — just feed the footprints once data is in hand.
     private _addBuildings(): void
     {
         bumpStat('addBuildingsCalls');
@@ -1065,11 +1065,11 @@ export class HeliosEngine
             return;
         }
         this._pushRenderableSources();
-        //Kick off the background buildings fetch; the renderer re-paints once GeoJSON lands.
+        //Kick off the background buildings fetch; the renderer re-paints once the footprints land.
         this._ensureBuildingsFetched();
     }
 
-    //Idempotent fetch helper: reuses _buildingsData across re-inits, re-hitting MapTiler only when the
+    //Idempotent fetch helper: reuses _buildingsData across re-inits, re-hitting Overpass only when the
     //home position or radius changed.
     private _ensureBuildingsFetched(): void
     {
@@ -1086,8 +1086,8 @@ export class HeliosEngine
             return;
         }
 
-        //Shared-cache short-circuit: a fresh engine after an editor commit would re-parse the buildings
-        //GeoJSON unless served from here (the browser HTTP cache only covers the tile request).
+        //Shared-cache short-circuit: a fresh engine after an editor commit would re-parse the Overpass
+        //footprints unless served from here (the localStorage cache lives in engine/buildings.ts).
         const sharedBuildings = sharedBuildingsCacheGet(key);
         if (sharedBuildings)
         {
@@ -1110,11 +1110,10 @@ export class HeliosEngine
 
         fetchBuildingsAroundHome(
         {
-            homeLon:             this.homeLon,
-            homeLat:             this.homeLat,
-            radiusMeters:        radius,
-            clusterRadiusMeters: clusterRadius,
-            signal:              ac.signal
+            homeLon:      this.homeLon,
+            homeLat:      this.homeLat,
+            radiusMeters: radius,
+            signal:       ac.signal
         })
         .then(result =>
         {
@@ -1144,23 +1143,16 @@ export class HeliosEngine
         });
     }
 
-    //Convert the MapTiler footprints to scene Building[] and hand them to the renderer (it extrudes home +
-    //surroundings and casts their shadows itself). Empty until the GeoJSON fetch resolves.
+    //Hand the current footprints to the renderer (it extrudes home + surroundings and casts their shadows
+    //itself). Empty until the Overpass fetch resolves; fetchBuildingsAroundHome already returns scene
+    //Building[] (fixed 6 m prisms, home flagged), so nothing to convert here.
     private _pushRenderableSources(): void
     {
         if (!this._renderer)
         {
             return;
         }
-        this._renderer.setBuildings(buildingsFromGeoJson(
-            this._buildingsData?.home,
-            this._buildingsData?.surroundings,
-            this.homeLat,
-            this.homeLon,
-            //Fixed 6 m prisms (OSM render_height ignored): tall buildings dominate the faux-3D framing and
-            //read as walls, not homes — the same call the source Solar scene card makes.
-            { fixedHeightM: 6 },
-        ));
+        this._renderer.setBuildings(this._buildingsData ?? []);
     }
 
 
@@ -1425,19 +1417,15 @@ export class HeliosEngine
         //and to anchor the cluster above the roof so it follows the silhouette as the canvas grows. Falls
         //back to ground home before _buildingsData lands.
         let roofY = home.y;
-        const homeFeatures = this._buildingsData?.home?.features;
-        if (homeFeatures && homeFeatures.length > 0)
+        const homeBuildings = this._buildingsData?.filter((b) => b.isHome) ?? [];
+        if (homeBuildings.length > 0)
         {
             let maxH = 0;
-            for (const feat of homeFeatures)
+            for (const b of homeBuildings)
             {
-                const props = (feat.properties ?? {}) as Record<string, unknown>;
-                const h     = typeof props['render_height'] === 'number'
-                    ? (props['render_height'] as number)
-                    : 0;
-                if (h > maxH)
+                if (b.height > maxH)
                 {
-                    maxH = h;
+                    maxH = b.height;
                 }
             }
             if (maxH > 0)
@@ -2081,8 +2069,8 @@ export class HeliosEngine
         const shadowsOn = this._shadowsEnabled();
         const buildingsFootprints = this._buildingsData
             ? {
-                home:         this._buildingsData.home.features.length,
-                surroundings: this._buildingsData.surroundings.features.length
+                home:         this._buildingsData.filter((b) => b.isHome).length,
+                surroundings: this._buildingsData.filter((b) => !b.isHome).length
               }
             : null;
         let shadowSource: string;
@@ -2170,7 +2158,7 @@ export class HeliosEngine
             return;
         }
 
-        //Building updates: radius/cluster changes invalidate the GeoJSON and refetch via _addBuildings. The
+        //Building updates: radius/cluster changes invalidate the footprints and refetch via _addBuildings. The
         //renderer re-extrudes from the new footprints; there are no per-layer paint properties to poke.
         const nextRadius  = this._buildingRadiusMeters();
         const nextCluster = this._buildingClusterRadiusMeters();
