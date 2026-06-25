@@ -1,4 +1,5 @@
-import { css } from 'lit';
+import { css, unsafeCSS } from 'lit';
+import { GROUND_FADE_START } from '../scene/tiles';
 
 //Visual styles for HeliosCard. Grouped by feature (layout, timeline,
 //overlays, solar arc, tooltips).
@@ -13,9 +14,11 @@ export const heliosCardStyles = css`
     {
         position: relative;
         overflow: hidden;
-        background: #000;
-        /*  Clip the black map backdrop to the padding box so it stops inside the <ha-card> border
-            instead of bleeding under it and painting a dark corner that breaks HA's subtle frame. */
+        /*  Card background follows the HA theme (the basemap disc fades into it at its edges), so the card
+            reads as a first-party tile rather than a black box. */
+        background: var(--ha-card-background, var(--card-background-color, #fff));
+        /*  Clip the backdrop to the padding box so it stops inside the <ha-card> border instead of bleeding
+            under it and painting a corner that breaks HA's subtle frame. */
         background-clip: padding-box;
         /*  Container-query host so the kiosk breakpoint at the bottom reacts to the card's own width,
             not the viewport (which would mis-fire with several cards side by side). See issue #33. */
@@ -70,14 +73,28 @@ export const heliosCardStyles = css`
         top: 0;
         left: 0;
     }
-    /*  Edge fade: same size + transform as the ground, dissolving the disc borders into the card
-        background so the basemap doesn't end in a hard rectangle. */
+    /*  Privacy/offline flat ground: no tiles, just the themed card background so the scene still reads as
+        a first-party tile (the buildings + arc draw on top). */
+    .ground-flat
+    {
+        background: var(--ha-card-background, var(--card-background-color, #fff));
+    }
+    /*  Edge fade: same size + transform as the ground, a radial gradient that's transparent out to 90%
+        (GROUND_FADE_START) then dissolves to the themed card background, turning the square tile grid into
+        a soft disc that melts into the card. */
     .ground-fade
     {
         position: absolute;
         top: 0;
         left: 0;
+        will-change: transform;
         pointer-events: none;
+        background: radial-gradient(
+            circle closest-side at 50% 50%,
+            transparent 0%,
+            transparent ${unsafeCSS(GROUND_FADE_START)}%,
+            var(--ha-card-background, var(--card-background-color, #fff)) 100%
+        );
     }
     /*  Screen-space scene SVG: the renderer repaints night-shade + cast shadows + extruded buildings into
         it every frame. Full-size overlay above the ground, click-transparent (the HUD SVGs above own

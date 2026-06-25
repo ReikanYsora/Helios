@@ -15,6 +15,9 @@ export const TILE_PX = 256;
 //2048px GPU texture limit of old devices). GROUND_ZOOM = CARTO tile zoom (street detail).
 export const GROUND_RADIUS = 3;
 export const GROUND_ZOOM   = 18;
+//Radius (% of the ground's closest side) at which the edge-fade gradient starts dissolving the square
+//tile grid into the themed card background, turning it into a soft disc. Consumed by the card CSS.
+export const GROUND_FADE_START = 90;
 
 //Screen px per real metre at the ground plane for a given latitude + tile zoom. Drives SceneCamera.pxPerMetre.
 export function pxPerMetreFor(latitude: number, zoom: number = GROUND_ZOOM): number
