@@ -1463,9 +1463,9 @@ export class HeliosEngine
         //on the Power chip, not the home.
         const batteryPowerY     = clusterY - CHIP_STACK_GAP_PX / 2;
         const batterySocY       = clusterY + CHIP_STACK_GAP_PX / 2;
-        //Left column is just the grid chip, centred on the cluster hub.
+        //Left column: the grid chip sits low (bottom-left), mirroring the battery SoC chip on the right.
         const gridXLeft         = home.x - CHIP_SIDE_X_OFFSET_PX;
-        const gridY             = clusterY;
+        const gridY             = clusterY + CHIP_STACK_GAP_PX / 2;
 
         //PV home-anchor ground disc as a polygon: sample N points on a circle of PV_HOME_ANCHOR_RADIUS_M
         //around the home, project each, and express relative to the home so the SVG can translate-to-home.

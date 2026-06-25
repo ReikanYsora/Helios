@@ -29,6 +29,19 @@ export interface ScenePalette
     dark:     boolean;
 }
 
+//Per-frame appearance of the HOME prism only (neighbours are unaffected). All optional: an empty object
+//renders the home as a solid `palette.home` block at full `growth`, i.e. the default behaviour.
+export interface HomeAppearance
+{
+    //Solid fill colour for the home prism — the active chip's colour. Defaults to palette.home.
+    color?:  string;
+    //Stacked histogram: one band per producing PV string, `frac` summing to ~1, ordered bottom→top. With
+    //2+ bands the home paints as a vertical stack instead of a solid block (tallest band = top producer).
+    bands?:  { frac: number; color: string }[];
+    //Extra height multiplier (0..1) for the squash/grow-on-retarget animation; multiplies `growth`.
+    growth?: number;
+}
+
 //Every footprint casts a shadow; one group-opacity flattens overlaps into a single even shade. `sun` is
 //{azimuth (deg from N, CW), altitude (deg)}. shadowColor is a solid colour; shadowOpacity its peak alpha.
 export function renderShadows(
@@ -68,14 +81,17 @@ export function renderShadows(
 
 //Extrude + paint the buildings far→near. `altitude` is the sun altitude (deg) for the time-of-day tint;
 //`growth` ∈ [0,1] animates the prisms rising on first load. `neighborOpacity` (0..1, from the card's
-//building-opacity config) sets how solid the surrounding (non-home) prisms read; the home is always solid.
+//building-opacity config) sets how solid the surrounding (non-home) prisms read. `home` customises the
+//home prism only: its solid colour follows the active chip, an extra growth multiplier drives the
+//squash/grow on retarget, and 2+ bands turn it into a vertical stacked histogram (one per PV string).
 export function renderBuildings(
     cam:             SceneCamera,
     buildings:       Building[],
     altitude:        number,
     palette:         ScenePalette,
     growth:          number,
-    neighborOpacity: number = 0.25
+    neighborOpacity: number = 0.25,
+    home:            HomeAppearance = {}
 ): string
 {
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
@@ -89,34 +105,59 @@ export function renderBuildings(
         .filter((o) => o.cameraZ < nearCull)
         .sort((a, b) => a.depth - b.depth);
 
-    //Home highlight: brightened edges on the home's own faces make it stand out.
-    const eg        = mixHex(palette.home, '#ffffff', 0.5);
-    const edgeColor = `rgba(${hexByte(eg, 1)},${hexByte(eg, 3)},${hexByte(eg, 5)},0.1)`;
     //Neighbours use the raw colour (NOT altitude-tinted): the night shading would darken it to near the
     //dark-theme background and make them vanish. Opacity is driven by the card's building-opacity config
     //(neighborOpacity) so the user controls how solid the surrounding context reads.
     const nb     = palette.neighbor;
     const nbRgba = (op: number): string =>
         `rgba(${hexByte(nb, 1)},${hexByte(nb, 3)},${hexByte(nb, 5)},${Math.max(0, Math.min(1, op)).toFixed(3)})`;
+    const homeBands = home.bands && home.bands.length >= 2 ? home.bands : null;
 
     let svg = '';
     for (const { index } of order)
     {
-        const b         = buildings[index];
-        const homeColor = palette.home;
-        const fp        = simplifyFootprint(b.footprint);
-        const base      = fp.map((p) => cam.project(p[0], p[1], 0));
-        const roof      = fp.map((p) => cam.project(p[0], p[1], b.height * growth));
-        const roofFill  = b.isHome
-            ? tintedRgba(mixHex(homeColor, '#ffffff', 0.18), altitude, 0.92)
-            : nbRgba(neighborOpacity);
-        const wallFill  = b.isHome
-            ? tintedRgba(mixHex(homeColor, '#000000', 0.22), altitude, 0.9)
-            : nbRgba(neighborOpacity * 0.7);
-        const stroke    = b.isHome ? edgeColor : nbRgba(Math.min(1, neighborOpacity * 1.1));
-        const strokeW   = b.isHome ? 1 : 0.4;
+        const b  = buildings[index];
+        const fp = simplifyFootprint(b.footprint);
+        //Home prism height carries the extra squash/grow multiplier; the home colour follows the chip.
+        const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);
 
-        const h = b.height * growth;
+        //Vertical bands as cumulative height fractions [0 .. 1] with a fill per band. A solid prism is just
+        //one band spanning the full height; the home histogram is one band per producing PV string.
+        const cum:  number[] = [0];
+        const fill: string[] = [];
+        if (b.isHome && homeBands)
+        {
+            for (const band of homeBands)
+            {
+                cum.push(Math.min(1, cum[cum.length - 1] + band.frac));
+                fill.push(tintedRgba(mixHex(band.color, '#000000', 0.22), altitude, 0.9));
+            }
+            cum[cum.length - 1] = 1; //pin against rounding drift
+        }
+        else
+        {
+            cum.push(1);
+            fill.push(b.isHome
+                ? tintedRgba(mixHex(home.color ?? palette.home, '#000000', 0.22), altitude, 0.9)
+                : nbRgba(neighborOpacity * 0.7));
+        }
+        const rings    = cum.map((c) => fp.map((p) => cam.project(p[0], p[1], h * c)));
+        const base     = rings[0];
+        const roof     = rings[rings.length - 1];
+        //Roof + edge stroke follow the top band (histogram) or the solid colour; the home keeps a brightened
+        //edge so it reads as the focal building.
+        const topColor = homeBands ? homeBands[homeBands.length - 1].color : (home.color ?? palette.home);
+        const roofFill = b.isHome
+            ? tintedRgba(mixHex(topColor, '#ffffff', 0.18), altitude, 0.92)
+            : nbRgba(neighborOpacity);
+        let stroke = nbRgba(Math.min(1, neighborOpacity * 1.1));
+        if (b.isHome)
+        {
+            const eg = mixHex(home.color ?? palette.home, '#ffffff', 0.5);
+            stroke   = `rgba(${hexByte(eg, 1)},${hexByte(eg, 3)},${hexByte(eg, 5)},0.1)`;
+        }
+        const strokeW = b.isHome ? 1 : 0.4;
+
         //All visible faces (walls + roof) painted strictly far→near by their centroid camera depth, so a
         //nearer wing's wall correctly occludes a farther wing's roof (right even for concave footprints).
         const faces: { depth: number; svg: string }[] = [];
@@ -139,12 +180,17 @@ export function renderBuildings(
             {
                 continue;
             }
+            //One quad per band, stacked up the wall; a solid prism is the single full-height band.
+            let wall = '';
+            for (let k = 0; k < fill.length; k++)
+            {
+                const lo = rings[k];
+                const hi = rings[k + 1];
+                wall += `<polygon points="${pointsAttr([lo[i], lo[next], hi[next], hi[i]])}" fill="${fill[k]}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+            }
             const midE = (fp[i][0] + fp[next][0]) / 2;
             const midN = (fp[i][1] + fp[next][1]) / 2;
-            faces.push({
-                depth: cam.project3(midE, midN, h / 2).depth,
-                svg: `<polygon points="${pointsAttr([p0, p1, p2, p3])}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`,
-            });
+            faces.push({ depth: cam.project3(midE, midN, h / 2).depth, svg: wall });
         }
         faces.push({
             depth: cam.project3(b.centerX, b.centerY, h).depth,

@@ -116,22 +116,6 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Home click target: invisible circular hitbox centred on the home's projected position, sized to
-        overlap a typical building footprint. z-index above every chip + leader so the click always
-        lands on the home regardless of what sits under the pointer. */
-    .home-hitbox
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        width:  120px;
-        height: 120px;
-        border-radius: 50%;
-        background: transparent;
-        cursor: pointer;
-        pointer-events: auto;
-        z-index: 55;
-    }
-
     /*  Timeline slides out below the card edge instead of fading. */
     .time-bar
     {

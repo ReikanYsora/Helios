@@ -2147,20 +2147,6 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
 
-                <!--  Home hitbox, an invisible circular hover target
-                      centred on the home's projected screen position.
-                      Drives the sun-coloured hover glow on the home
-                      silhouette. Rendered once the map layout is ready.
-                      The click action is intentionally unbound for now
-                      (the home interaction is being redesigned).  -->
-                ${hasHomeCoords && layout !== null ? html`
-                    <div
-                        class="home-hitbox"
-                        style="left:${layout!.home.x}px; top:${layout!.home.y}px"
-                        @mouseenter="${this._onHomeEnter}"
-                        @mouseleave="${this._onHomeLeave}"
-                    ></div>
-                ` : nothing}
 
                 <!--  Home pill: a small circular node painted exactly
                       at the projected home centre. Every chip leader
@@ -2183,6 +2169,8 @@ export class HeliosCard extends LitElement
                         role="button"
                         tabindex="0"
                         @click=${() => this._setChartTarget('consumption')}
+                        @mouseenter="${this._onHomeEnter}"
+                        @mouseleave="${this._onHomeLeave}"
                     >
                         <ha-icon icon="mdi:home"></ha-icon>
                         ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}
