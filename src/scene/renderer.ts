@@ -10,7 +10,7 @@
 
 import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
-import { renderBuildings, renderShadows, type Building, type ScenePalette } from './buildings';
+import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
 import { nightShade } from './colors';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -55,6 +55,10 @@ export class SceneRenderer
     private _buildings: Building[] = [];
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
+    //Home prism appearance (the active chip's colour, optional stacked PV-string bands, and the squash
+    //multiplier for the on-retarget animation). Empty colour falls back to palette.home (solid block).
+    private _home: HomeAppearance = { growth: 1 };
+    private _homeRaf = 0;
     private _palette: ScenePaletteFull = {
         home:            '#488fc2',
         neighbor:        '#cccccc',
@@ -150,6 +154,56 @@ export class SceneRenderer
         this.scheduleRedraw();
     }
 
+    //Set the home prism's colour + optional PV-string histogram bands instantly (a same-chip recolour or
+    //scrub). Keeps the current squash multiplier so it doesn't interrupt an in-flight animation.
+    public setHome(color: string, bands: { frac: number; color: string }[] = []): void
+    {
+        this._home = { color, bands, growth: this._home.growth ?? 1 };
+        this.scheduleRedraw();
+    }
+
+    //Animate the home to a new colour/bands on chip retarget: squash to the ground (220 ms, old appearance),
+    //swap colour + bands at the bottom, then grow back up (300 ms, new appearance). Instant under reduced
+    //motion or when no prior colour exists (first paint).
+    public animateHomeTo(color: string, bands: { frac: number; color: string }[] = []): void
+    {
+        if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
+        if (!this._home.color || prefersReducedMotion())
+        {
+            this._home = { color, bands, growth: 1 };
+            this.scheduleRedraw();
+            return;
+        }
+        const DOWN = 220;
+        const UP   = 300;
+        const start = performance.now();
+        const tick = (now: number): void =>
+        {
+            if (!this._alive) { this._homeRaf = 0; return; }
+            const t = now - start;
+            if (t < DOWN)
+            {
+                const x = t / DOWN;
+                this._home = { ...this._home, growth: 1 - x * x * x }; //ease-in squash 1 -> 0, old appearance
+            }
+            else if (t < DOWN + UP)
+            {
+                const x = (t - DOWN) / UP;
+                this._home = { color, bands, growth: 1 - (1 - x) ** 3 }; //swapped at the bottom, ease-out grow
+            }
+            else
+            {
+                this._home = { color, bands, growth: 1 };
+                this.scheduleRedraw();
+                this._homeRaf = 0;
+                return;
+            }
+            this.scheduleRedraw();
+            this._homeRaf = requestAnimationFrame(tick);
+        };
+        this._homeRaf = requestAnimationFrame(tick);
+    }
+
     public setCameraBearing(deg: number): void
     {
         this.camera.setPose(deg, this.camera.tiltDeg);
@@ -208,7 +262,7 @@ export class SceneRenderer
         this._sceneSvg.innerHTML =
             shadeSvg +
             renderShadows(this.camera, this._buildings, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
-            renderBuildings(this.camera, this._buildings, alt, this._palette, this._growth, this._palette.neighborOpacity);
+            renderBuildings(this.camera, this._buildings, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
 
         this.onAfterDraw?.();
     }
@@ -218,6 +272,7 @@ export class SceneRenderer
         this._alive = false;
         if (this._rafToken) { cancelAnimationFrame(this._rafToken); this._rafToken = 0; }
         if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
+        if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
         this._groundHolder.remove();
         this._sceneSvg.remove();
     }

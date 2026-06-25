@@ -454,6 +454,25 @@ export class HeliosEngine
             locked,
         });
     }
+
+    //Home prism appearance, driven by the card's active chip: `color` is the chip's accent, `bands` the
+    //per-PV-string production split (empty = solid). `animate` plays the squash/grow on a chip change; an
+    //instant set is used for same-chip scrubs. The card computes these (they're hass/energy-derived).
+    public setHomeAppearance(color: string, bands: { frac: number; color: string }[], animate: boolean): void
+    {
+        if (!this._renderer)
+        {
+            return;
+        }
+        if (animate)
+        {
+            this._renderer.animateHomeTo(color, bands);
+        }
+        else
+        {
+            this._renderer.setHome(color, bands);
+        }
+    }
     //Defaults the editor's reset button restores: always the hemisphere-aware boot pose, never the user's
     //customised values (reading _initialBearing/_initialPitch would echo back what they just changed).
     public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }

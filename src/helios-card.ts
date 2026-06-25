@@ -38,6 +38,7 @@ import
 {
     renderBottomChart,
     chartAccentColor,
+    solarBands,
     type ChartTarget,
     renderTimelineTicks,
     renderTimelineDayLabels,
@@ -555,6 +556,28 @@ export class HeliosCard extends LitElement
         }
     };
 
+    //Last target the home prism was painted for, so updated() can tell a chip CHANGE (play the squash/grow)
+    //from a same-chip scrub/tick (instant recolour). Undefined until the first paint (no squash on load).
+    private _lastHomeTarget?: ChartTarget;
+
+    //Push the home prism's appearance for the active chip to the renderer (via the engine): the chip's
+    //accent colour, plus the per-PV-string production histogram when the solar chip is active (a single
+    //producing string falls back to a solid block). `animate` plays the squash/grow on a chip change.
+    private _updateHomeAppearance(animate: boolean): void
+    {
+        if (!this._engine)
+        {
+            return;
+        }
+        const color = chartAccentColor(this);
+        const atMs  = this._selectedTime?.getTime() ?? Date.now();
+        const bands = this._chartTarget === 'production' ? solarBands(this, atMs) : [];
+        //No squash on the very first paint (no prior target to grow away from).
+        const play  = animate && this._lastHomeTarget !== undefined;
+        this._lastHomeTarget = this._chartTarget;
+        this._engine.setHomeAppearance(color, bands, play);
+    }
+
     //Active-target indicator left of the timeline header: the current chart's icon, tinted with the active
     //accent. Keyed on the target so the glyph fades in on each re-target.
     private _renderChartIndicator(): TemplateResult
@@ -921,6 +944,18 @@ export class HeliosCard extends LitElement
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
         //(one hash compare), ~50 ms for a full 480 × 7 bucketization + forecast pass on a real refresh.
         this._maybeRebuildUnifiedStore();
+
+        //Drive the home prism's colour + PV-string histogram from the active chip. The squash/grow plays
+        //only when the chip CHANGES; a scrub or live tick on the same chip recolours/restacks instantly.
+        //Gated on these states so the frequent auto-rotate reprojections (which touch none of them) don't
+        //re-resolve the theme colour every frame.
+        if (this._engine
+            && (_changedProperties.has('_chartTarget')
+                || _changedProperties.has('_selectedTime')
+                || _changedProperties.has('hass')))
+        {
+            this._updateHomeAppearance(_changedProperties.has('_chartTarget'));
+        }
 
         //Lazy Energy WS subscribe: HA can attach hass after connectedCallback, where the connect-time call
         //bailed without callWS. The helper is idempotent (checks _energyPrefsUnsub), so re-calling is safe.

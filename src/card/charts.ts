@@ -3,7 +3,7 @@
 
 import { html, svg, nothing, TemplateResult } from 'lit';
 import { type HeliosConfig } from '../helios-config';
-import { ENERGY_COLOR } from './theme-colors';
+import { ENERGY_COLOR, hueRotate } from './theme-colors';
 import { formatLocalisedNumber, lerpHexToward } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { type PvHistory } from './pv';
@@ -229,6 +229,30 @@ export function pvSourceColor(index: number, total: number): string
     }
     const step = 360 / total;
     return `hsl(from var(--energy-solar-color, #ff9800) calc(h + ${index * step}) s l)`;
+}
+
+//Per-PV-string production shares at an instant, for the home stacked histogram. Reads each source's raw
+//history (interpolated to the instant), keeps the producing ones, and returns {fraction, #rrggbb colour}
+//hue-spread off the solar token by source index — matching the per-source chart curves. Empty unless 2+
+//sources are producing right now; below that the home renders as a single solid block.
+export function solarBands(host: ChartHost, atMs: number): { frac: number; color: string }[]
+{
+    const map = host._pvHistoryPerEntity;
+    if (!map || map.size < 2) { return []; }
+    const ids   = Array.from(map.keys()).sort();
+    const solar = ENERGY_COLOR.pv(host as unknown as Element);
+    const step  = 360 / ids.length;
+    const parts: { v: number; idx: number }[] = [];
+    for (let i = 0; i < ids.length; i++)
+    {
+        const ph = map.get(ids[i]);
+        if (!ph) { continue; }
+        const v = interpAt(ph.times, ph.values, atMs);
+        if (isFinite(v) && v > 0) { parts.push({ v, idx: i }); }
+    }
+    const total = parts.reduce((s, p) => s + p.v, 0);
+    if (total <= 0 || parts.length < 2) { return []; }
+    return parts.map((p) => ({ frac: p.v / total, color: hueRotate(solar, p.idx * step) }));
 }
 
 
