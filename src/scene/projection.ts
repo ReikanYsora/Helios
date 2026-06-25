@@ -5,7 +5,7 @@
 //bearing → pitch → perspective transform, so the SVG content stays glued to the rotating basemap.
 //
 //All coordinates are LOCAL METRES relative to the home origin: +east, +north, +up. The lat/lng →
-//local-metre conversion (and tile math) lives in ./geo. This module is pure and card-agnostic so the
+//local-metre conversion (and tile math) lives in ./tiles. This module is pure and card-agnostic so the
 //two 2026.7.1 cards can share one camera.
 
 //Pitch bounds shared by the editor, drag-rotate and the initial-pose clamp. MIN = nearly top-down,

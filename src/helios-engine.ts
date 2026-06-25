@@ -1,4 +1,5 @@
-import { SceneRenderer, buildingsFromGeoJson } from './scene';
+import { SceneRenderer } from './scene/renderer';
+import { buildingsFromGeoJson } from './scene/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './engine/buildings';

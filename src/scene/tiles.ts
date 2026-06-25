@@ -6,10 +6,11 @@
 //Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane, mirroring how the
 //MapLibre attribution rail was handled.
 
-import { lonLatToTile } from './geo';
-
 const DEG = Math.PI / 180;
 const EARTH_CIRCUMFERENCE_M = 40075016.686;
+//Metres per degree of latitude (WGS84 mean). Longitude scales this by cos(lat). Constant factor is good
+//to ~1 m over the few-hundred-metre scene radius — well under OSM footprint resolution.
+const METRES_PER_DEG_LAT = 111_320;
 export const TILE_PX = 256;
 //Tiles each side of the home: the canvas is (2*R+1)*TILE_PX, so KEEP ≤ 3 (7×7×256 = 1792px, under the
 //2048px GPU texture limit of old devices). GROUND_ZOOM = CARTO tile zoom (street detail).
@@ -23,6 +24,25 @@ export const GROUND_FADE_START = 90;
 export function pxPerMetreFor(latitude: number, zoom: number = GROUND_ZOOM): number
 {
     return (TILE_PX * 2 ** zoom) / (EARTH_CIRCUMFERENCE_M * Math.cos(latitude * DEG));
+}
+
+//Web Mercator: lon/lat → fractional tile coordinates at the given zoom.
+export function lonLatToTile(lon: number, lat: number, zoom: number): [number, number]
+{
+    const world  = 2 ** zoom;
+    const latRad = lat * DEG;
+    const y      = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2;
+    return [((lon + 180) / 360) * world, y * world];
+}
+
+//Metres-per-degree scale at a given home latitude: [perLon, perLat]. A point (lat, lng) becomes local
+//metres via east = (lng - homeLng) * perLon, north = (lat - homeLat) * perLat.
+export function metresPerDegree(homeLat: number): { perLon: number; perLat: number }
+{
+    return {
+        perLon: METRES_PER_DEG_LAT * Math.cos(homeLat * DEG),
+        perLat: METRES_PER_DEG_LAT,
+    };
 }
 
 export interface Ground
