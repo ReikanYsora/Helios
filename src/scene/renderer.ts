@@ -9,7 +9,6 @@
 //helper for the arc). Both 2026.7.1 cards share this renderer; each adds its own HUD.
 
 import { SceneCamera } from './projection';
-import { metresPerDegree } from './geo';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
 import { renderBuildings, renderShadows, type Building, type ScenePalette } from './buildings';
 import { renderNightShade } from './sky';
@@ -49,8 +48,6 @@ export class SceneRenderer
     private readonly _targetHeightM: number;
 
     private _ground?:   Ground;
-    private _lat = 0;
-    private _lon = 0;
     private _buildings: Building[] = [];
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
@@ -89,8 +86,6 @@ export class SceneRenderer
     //Resolve + build the basemap for a home position. `live` fetches CARTO tiles; otherwise a flat plane.
     public async setLocation(lat: number, lon: number, live: boolean): Promise<void>
     {
-        this._lat = lat;
-        this._lon = lon;
         this.camera.pxPerMetre = pxPerMetreFor(lat);
         const ground = await buildGround(lat, lon, live);
         if (!this._alive) { return; }
@@ -136,15 +131,6 @@ export class SceneRenderer
 
     public getCameraBearing(): number { return this.camera.bearingDeg; }
     public getCameraPitch():   number { return this.camera.tiltDeg; }
-
-    //lon/lat → screen px via the local-metre conversion + the camera. Null if no location is set.
-    public projectLonLat(lon: number, lat: number): { x: number; y: number } | null
-    {
-        if (!this._ground) { return null; }
-        const { perLon, perLat } = metresPerDegree(this._lat);
-        const [x, y] = this.camera.project((lon - this._lon) * perLon, (lat - this._lat) * perLat, 0);
-        return { x, y };
-    }
 
     //rAF-coalesced redraw: many setters per frame collapse to one paint.
     public scheduleRedraw(): void

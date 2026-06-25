@@ -340,13 +340,6 @@ export class HeliosEngine
     //Map transform changed: card recomputes screen-space projections (arc, chips, leaders) from this hook.
     public onMapTransform?:  () => void;
 
-    //False once cleanup() has run. The card polls this so it can detect when its engine was force-evicted
-    //by the MAX_LIVE_ENGINES cap; otherwise it calls updateConfig() on a destroyed map.
-    public isAlive(): boolean
-    {
-        return this._renderer !== undefined;
-    }
-
     //Camera pose persistence via localStorage keyed on home coords. Lovelace doesn't persist config-changed
     //from a live card (only the editor preview), so YAML round-trip isn't an option. 3-decimal rounding
     //(~111 m) separates neighbouring homes while tolerating GPS jitter.
@@ -471,11 +464,6 @@ export class HeliosEngine
     //constant so the sun-arc-scale memo key + any zoom-aware callers keep a stable value.
     public getCameraZoom():    number { return 18; }
 
-    //Lat/lon -> screen pixel via the SceneCamera (used by the SVG cloud overlay). Null when not ready.
-    public projectLonLat(lon: number, lat: number): { x: number; y: number } | null
-    {
-        return this._renderer?.projectLonLat(lon, lat) ?? null;
-    }
 
     //Auto-rotation: when idle a few seconds the map slowly orbits the home counter to the sun's motion
     //(~1.5°/s). Any interaction resets the inactivity timer, pausing then resuming from the new bearing.
@@ -1309,19 +1297,6 @@ export class HeliosEngine
         }
     }
 
-    //"Reset view": restore the resting bearing/pitch. The 2.5D camera is always anchored on the home (no
-    //pan), so this just snaps the pose back to the configured/hemisphere-aware defaults. The renderer has no
-    //easeTo; a direct set is instant (no inertial tween) but the pose snap is the visible behaviour anyway.
-    public recenter(): void
-    {
-        if (!this._renderer)
-        {
-            return;
-        }
-        this._renderer.setCameraBearing(this._initialBearing());
-        this._renderer.setCameraPitch(this._initialPitch());
-    }
-
     //Wall-clock until which fresh gestures are ignored. Read via isUserGestureSuppressed() to filter scrubs
     //and drag-rotate; for view transitions needing a post-animation input cooldown.
     _postExitCooldownUntil = 0;
@@ -2022,27 +1997,6 @@ export class HeliosEngine
             }, 100);
         }
     }
-
-    //Hourly temperature + wind series aligned with getTimelineSeries' `times`. NaN entries where the model
-    //gave no value (callers skip them). Null until a weather payload lands.
-    public getAmbientSeries(): {
-        times:        Date[];
-        temperature:  number[];
-        windSpeed:    number[];
-    } | null
-    {
-        const home = this._homeHourlyData;
-        if (!home || !home.times.length)
-        {
-            return null;
-        }
-        return {
-            times:       home.times,
-            temperature: home.temperature,
-            windSpeed:   home.windSpeed,
-        };
-    }
-
 
     //Hourly series for the chart (one entry per hour over the forecast window): irradiance (W/m², sensor ->
     //shortwave -> Haurwitz fallback so the curve stays continuous past the model horizon), effective cloud
