@@ -581,6 +581,7 @@ export class HeliosEngine
         //Spin up the 2.5D renderer. It builds its own DOM (ground holder + scene SVG) inside the container,
         //owns the SceneCamera every projection routes through, and paints night-shade + cast shadows +
         //extruded buildings itself. The home blue + shadow colour/opacity are merged into its palette.
+        this._container = container;
         this._renderer = new SceneRenderer(container, {
             sun:           '#ffc107',
             shadow:        '#000000',
@@ -589,7 +590,7 @@ export class HeliosEngine
         });
         this._renderer.setCameraBearing(this._initialBearing());
         this._renderer.setCameraPitch(this._initialPitch());
-        this._renderer.setPalette({ dark: this._cardIsDark });
+        this._resolvePalette();
 
         //Re-project the card's HUD (arc, chips, leaders, home glow) on every renderer paint so the overlays
         //stay glued to the rotating basemap. The renderer fires onAfterDraw after each frame's paint.
@@ -687,8 +688,8 @@ export class HeliosEngine
             lastPointerX = e.clientX;
             lastPointerY = e.clientY;
             this._autoRotateLastUserAction = Date.now();
-            //Drag right (+dx) bumps bearing up so content follows the gesture (subtract read inverted).
-            this._renderer.setCameraBearing(this._renderer.getCameraBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+            //Drag right turns the scene with the gesture (negate dx: +dx read inverted on the canvas plane).
+            this._renderer.setCameraBearing(this._renderer.getCameraBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
             //Subtract dy so drag up flattens pitch, drag down goes bird's-eye; clamped to session bounds.
             const nextPitch = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG,
                 this._renderer.getCameraPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
@@ -782,9 +783,43 @@ export class HeliosEngine
 
     //_cardIsDark is pushed by the card every Lit update so the renderer's tint follows the HA theme.
     private _cardIsDark: boolean = false;
+    //The card-side host element (#map-container) the renderer mounts into; carries the cascaded HA theme
+    //CSS custom properties we resolve the scene palette from.
+    private _container?: HTMLElement;
+
+    //Resolve a theme colour token to #rrggbb. Reads the CSS custom property off the host's computed style
+    //(so it follows the active HA theme), accepting #rgb / #rrggbb / rgb()/rgba(); falls back when unset.
+    private _cssHex(name: string, fallback: string): string
+    {
+        const raw = this._container ? getComputedStyle(this._container).getPropertyValue(name).trim() : '';
+        if (/^#[0-9a-f]{6}$/i.test(raw)) { return raw; }
+        if (/^#[0-9a-f]{3}$/i.test(raw)) { return '#' + raw.slice(1).split('').map(c => c + c).join(''); }
+        const m = raw.match(/rgba?\(\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)/i);
+        if (m)
+        {
+            const h = (n: string): string => Math.max(0, Math.min(255, Math.round(parseFloat(n)))).toString(16).padStart(2, '0');
+            return '#' + h(m[1]) + h(m[2]) + h(m[3]);
+        }
+        return fallback;
+    }
+
+    //Push the full scene palette to the renderer from the live HA theme tokens (matching the source Solar
+    //scene card's colour wiring) + the building-opacity config. Re-run on init and on every theme flip.
+    private _resolvePalette(): void
+    {
+        this._renderer?.setPalette({
+            dark:            this._cardIsDark,
+            home:            this._cssHex('--energy-grid-consumption-color', '#488fc2'),
+            neighbor:        this._cssHex('--primary-text-color', '#dddddd'),
+            sun:             this._cssHex('--warning-color', '#ffc107'),
+            shadow:          this._cssHex('--shadow-color', '#000000'),
+            shadowOpacity:   this._shadowsEnabled() ? this._shadowOpacity() : 0,
+            neighborOpacity: this._buildingOpacity(),
+        });
+    }
 
     //Card -> engine theme polarity. The renderer tints its painted geometry (night-shade, building faces)
-    //from the `dark` palette flag; no basemap style swap (the CARTO basemap keeps its own colours).
+    //from the resolved theme palette; no basemap style swap (a CSS filter darkens the CARTO tiles instead).
     public setCardThemeIsDark(isDark: boolean): void
     {
         if (this._cardIsDark === isDark)
@@ -792,7 +827,7 @@ export class HeliosEngine
             return;
         }
         this._cardIsDark = isDark;
-        this._renderer?.setPalette({ dark: isDark });
+        this._resolvePalette();
     }
 
     //Master shadow toggle. False = no cast shadows; true = shadows cast from building footprints.
@@ -1226,6 +1261,9 @@ export class HeliosEngine
             this._buildingsData?.surroundings,
             this.homeLat,
             this.homeLon,
+            //Fixed 6 m prisms (OSM render_height ignored): tall buildings dominate the faux-3D framing and
+            //read as walls, not homes — the same call the source Solar scene card makes.
+            { fixedHeightM: 6 },
         ));
     }
 
@@ -2286,16 +2324,17 @@ export class HeliosEngine
             }
         }
 
-        //Shadow opacity / master toggle: push the new opacity into the renderer palette and force one
-        //atmosphere pass so the change lands immediately (setSun re-paints the shadows at the new opacity).
+        //Shadow opacity / master toggle / building opacity: re-resolve the whole palette (cheap) so the
+        //renderer repaints with the new values, and force one atmosphere pass so shadows land immediately.
         const nextShadowOpa = this._shadowOpacity();
         const nextShadowsOn = this._shadowsEnabled();
+        this._resolvePalette();
         if (nextShadowOpa !== prevShadowOpa || nextShadowsOn !== prevShadowsOn)
         {
-            this._renderer.setPalette({ shadowOpacity: nextShadowsOn ? nextShadowOpa : 0 });
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         }
+        this._renderer.scheduleRedraw();
 
         if (this._homeHourlyData && this._mapReady)
         {

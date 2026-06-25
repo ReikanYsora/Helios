@@ -62,6 +62,26 @@ function featureToBuilding(
     if (!ring || ring.length < 3) { return null; }
     const footprint = ringToLocalMetres(ring, homeLat, homeLng);
 
+    //GeoJSON rings are CLOSED (last vertex repeats the first); drop it so the painter doesn't draw a
+    //degenerate wall looping back on itself.
+    if (footprint.length > 1
+        && footprint[0][0] === footprint[footprint.length - 1][0]
+        && footprint[0][1] === footprint[footprint.length - 1][1])
+    {
+        footprint.pop();
+    }
+    if (footprint.length < 3) { return null; }
+
+    //Enforce counter-clockwise winding so the painter's screen-space back-face cull has a consistent
+    //sign (OSM mixes CW + CCW footprints, which would otherwise flip walls inside-out).
+    let area2 = 0;
+    for (let i = 0; i < footprint.length; i++)
+    {
+        const n = (i + 1) % footprint.length;
+        area2 += footprint[i][0] * footprint[n][1] - footprint[n][0] * footprint[i][1];
+    }
+    if (area2 < 0) { footprint.reverse(); }
+
     let height: number;
     if (opts.fixedHeightM != null)
     {

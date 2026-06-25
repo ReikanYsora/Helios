@@ -501,12 +501,6 @@ export class HeliosCard extends LitElement
     private _arcFrontBuf:     ArcSegment[] = [];
     private _arcFrontNearBuf: ArcSegment[] = [];
 
-    //Cached SVG point strings for the home silhouettes. Keyed by _homeSilhouettes identity: a fresh array
-    //from refreshOverlays rebuilds the cache, otherwise the pre-built strings come back untouched. Saves
-    //the per-vertex Array.map + join on every render.
-    private _silhouetteCacheKey: unknown = null;
-    private _silhouettePtsCache: Array<{ base: string; top: string; walls: string[] } | null> = [];
-
 
 
     //HA card lifecycle
@@ -1163,47 +1157,6 @@ export class HeliosCard extends LitElement
         const dy = chipY - homeY;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         return { x: cornerX + (halfH * dx) / dist, y: homeY + (halfH * dy) / dist };
-    }
-
-
-    //Build (or return cached) the SVG point strings for the home silhouette layer. _homeSilhouettes gets a
-    //new array identity only when projected vertices move enough to redraw; otherwise the cache is reused.
-    private _getSilhouettePoints(): Array<{ base: string; top: string; walls: string[] } | null>
-    {
-        const sils = this._homeSilhouettes;
-        if (this._silhouetteCacheKey === sils)
-        {
-            return this._silhouettePtsCache;
-        }
-
-        const out: Array<{ base: string; top: string; walls: string[] } | null> = [];
-        for (const sil of sils)
-        {
-            const N = Math.min(sil.base.length, sil.top.length);
-            if (N < 3) { out.push(null); continue; }
-            let basePts = '';
-            let topPts  = '';
-            for (let i = 0; i < N; i++)
-            {
-                if (i > 0) { basePts += ' '; topPts += ' '; }
-                basePts += sil.base[i].x + ',' + sil.base[i].y;
-                topPts  += sil.top [i].x + ',' + sil.top [i].y;
-            }
-            const walls: string[] = new Array(N);
-            for (let i = 0; i < N; i++)
-            {
-                const j = (i + 1) % N;
-                walls[i] =
-                    sil.base[i].x + ',' + sil.base[i].y + ' ' +
-                    sil.base[j].x + ',' + sil.base[j].y + ' ' +
-                    sil.top [j].x + ',' + sil.top [j].y + ' ' +
-                    sil.top [i].x + ',' + sil.top [i].y;
-            }
-            out.push({ base: basePts, top: topPts, walls });
-        }
-        this._silhouetteCacheKey = sils;
-        this._silhouettePtsCache = out;
-        return out;
     }
 
 
@@ -2224,40 +2177,6 @@ export class HeliosCard extends LitElement
                       rises here, sets there", the icons added
                       visual noise on the horizon line.            -->
 
-
-                <!--  Home hover glow, sun-coloured halo around the
-                      projected home silhouette. Reuses the same base
-                      ring + top ring + side quads as the cloud-disc
-                      mask (so it tracks rotation and matches the
-                      extrusion exactly), painted as fill + stroke in
-                      the configured sun colour with a CSS drop-
-                      shadow filter for the bloom. The opacity is
-                      flipped via a class so the appearance / fade is
-                      a pure CSS transition, no per-frame work.  -->
-                ${hasHomeCoords && this._homeSilhouettes.length > 0 ? (() => {
-                    const sunColor = DEFAULT_SUN_COLOR_HEX;
-                    const silhouettePts = this._getSilhouettePoints();
-                    //Static hover-only halo. The earlier pulse-on-bead-arrival carved a hot spot that
-                    //competed with the steady HA-Energy-blue identity and read poorly under the cloud wash.
-                    const glowClasses = [
-                        'home-glow-svg',
-                        this._homeHover ? 'is-hovered' : '',
-                    ].filter(Boolean).join(' ');
-                    return html`
-                        <svg class="${glowClasses}"
-                             style="--helios-sun-color:${sunColor};--pv-leader-color:${pvColor};--pv-flow-duration:${pvFlowDuration}s"
-                             @mouseenter="${this._onHomeEnter}"
-                             @mouseleave="${this._onHomeLeave}">
-                            ${silhouettePts.map(sil => sil === null ? nothing : svg`
-                                <polygon class="home-glow-shape" points="${sil.base}" />
-                                <polygon class="home-glow-shape" points="${sil.top}" />
-                                ${sil.walls.map(w => svg`
-                                    <polygon class="home-glow-shape" points="${w}" />
-                                `)}
-                            `)}
-                        </svg>
-                    `;
-                })() : nothing}
 
                 <!--  Home hitbox, an invisible circular hover target
                       centred on the home's projected screen position.

@@ -68,13 +68,15 @@ export function renderShadows(
 }
 
 //Extrude + paint the buildings far→near. `altitude` is the sun altitude (deg) for the time-of-day tint;
-//`growth` ∈ [0,1] animates the prisms rising on first load.
+//`growth` ∈ [0,1] animates the prisms rising on first load. `neighborOpacity` (0..1, from the card's
+//building-opacity config) sets how solid the surrounding (non-home) prisms read; the home is always solid.
 export function renderBuildings(
-    cam:       SceneCamera,
-    buildings: Building[],
-    altitude:  number,
-    palette:   ScenePalette,
-    growth:    number
+    cam:             SceneCamera,
+    buildings:       Building[],
+    altitude:        number,
+    palette:         ScenePalette,
+    growth:          number,
+    neighborOpacity: number = 0.25
 ): string
 {
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
@@ -92,11 +94,11 @@ export function renderBuildings(
     const eg        = mixHex(palette.home, '#ffffff', 0.5);
     const edgeColor = `rgba(${hexByte(eg, 1)},${hexByte(eg, 3)},${hexByte(eg, 5)},0.1)`;
     //Neighbours use the raw colour (NOT altitude-tinted): the night shading would darken it to near the
-    //dark-theme background and make them vanish. Fixed faint opacity, halved in dark theme.
+    //dark-theme background and make them vanish. Opacity is driven by the card's building-opacity config
+    //(neighborOpacity) so the user controls how solid the surrounding context reads.
     const nb     = palette.neighbor;
-    const nbFade = palette.dark ? 0.5 : 1;
     const nbRgba = (op: number): string =>
-        `rgba(${hexByte(nb, 1)},${hexByte(nb, 3)},${hexByte(nb, 5)},${op * nbFade})`;
+        `rgba(${hexByte(nb, 1)},${hexByte(nb, 3)},${hexByte(nb, 5)},${Math.max(0, Math.min(1, op)).toFixed(3)})`;
 
     let svg = '';
     for (const { index } of order)
@@ -108,11 +110,11 @@ export function renderBuildings(
         const roof      = fp.map((p) => cam.project(p[0], p[1], b.height * growth));
         const roofFill  = b.isHome
             ? tintedRgba(mixHex(homeColor, '#ffffff', 0.18), altitude, 0.92)
-            : nbRgba(0.16);
+            : nbRgba(neighborOpacity);
         const wallFill  = b.isHome
             ? tintedRgba(mixHex(homeColor, '#000000', 0.22), altitude, 0.9)
-            : nbRgba(0.11);
-        const stroke    = b.isHome ? edgeColor : nbRgba(0.16);
+            : nbRgba(neighborOpacity * 0.7);
+        const stroke    = b.isHome ? edgeColor : nbRgba(Math.min(1, neighborOpacity * 1.1));
         const strokeW   = b.isHome ? 1 : 0.4;
 
         const h = b.height * growth;

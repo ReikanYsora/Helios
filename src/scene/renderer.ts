@@ -17,6 +17,9 @@ import { renderNightShade } from './sky';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 //Camera aim point above the home (m): lifts the home lower in the frame with headroom for the HUD arc.
 const DEFAULT_TARGET_HEIGHT_M = 3;
+//Dark-theme tint for the (always-light) CARTO basemap, applied as a CSS filter on the ground element so
+//the tiles read as a dark map. Same recipe as the source Solar scene card.
+const DARK_FILTER = 'invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4)';
 
 export interface SceneRendererOptions
 {
@@ -29,9 +32,11 @@ export interface SceneRendererOptions
 
 export interface ScenePaletteFull extends ScenePalette
 {
-    sun:           string;
-    shadow:        string;
-    shadowOpacity: number;
+    sun:             string;
+    shadow:          string;
+    shadowOpacity:   number;
+    //0..1 how solid the surrounding (non-home) buildings read; from the card's building-opacity config.
+    neighborOpacity: number;
 }
 
 export class SceneRenderer
@@ -50,12 +55,13 @@ export class SceneRenderer
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
     private _palette: ScenePaletteFull = {
-        home:          '#488fc2',
-        neighbor:      '#cccccc',
-        dark:          false,
-        sun:           '#ffc107',
-        shadow:        '#000000',
-        shadowOpacity: 0.32,
+        home:            '#488fc2',
+        neighbor:        '#cccccc',
+        dark:            false,
+        sun:             '#ffc107',
+        shadow:          '#000000',
+        shadowOpacity:   0.32,
+        neighborOpacity: 0.25,
     };
 
     private _redrawScheduled = false;
@@ -167,6 +173,8 @@ export class SceneRenderer
             const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
             this._ground.el.style.transformOrigin = transformOrigin;
             this._ground.el.style.transform = transform;
+            //Dark theme: tint the (light) CARTO tiles to a dark map via a CSS filter.
+            this._ground.el.style.filter = this._palette.dark ? DARK_FILTER : 'none';
             this._ground.fade.style.transformOrigin = transformOrigin;
             this._ground.fade.style.transform = transform;
         }
@@ -176,7 +184,7 @@ export class SceneRenderer
         this._sceneSvg.innerHTML =
             renderNightShade(alt, width, height) +
             renderShadows(this.camera, this._buildings, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
-            renderBuildings(this.camera, this._buildings, alt, this._palette, this._growth);
+            renderBuildings(this.camera, this._buildings, alt, this._palette, this._growth, this._palette.neighborOpacity);
 
         this.onAfterDraw?.();
     }

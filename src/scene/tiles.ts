@@ -14,7 +14,7 @@ export const TILE_PX = 256;
 //Tiles each side of the home: the canvas is (2*R+1)*TILE_PX, so KEEP ≤ 3 (7×7×256 = 1792px, under the
 //2048px GPU texture limit of old devices). GROUND_ZOOM = CARTO tile zoom (street detail).
 export const GROUND_RADIUS = 3;
-export const GROUND_ZOOM   = 19;
+export const GROUND_ZOOM   = 18;
 
 //Screen px per real metre at the ground plane for a given latitude + tile zoom. Drives SceneCamera.pxPerMetre.
 export function pxPerMetreFor(latitude: number, zoom: number = GROUND_ZOOM): number
