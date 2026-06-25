@@ -1860,7 +1860,10 @@ export class HeliosEngine
         if (sunScreen.depth < dMin) { dMin = sunScreen.depth; }
         if (sunScreen.depth > dMax) { dMax = sunScreen.depth; }
         const dRange = (dMax - dMin) || 1;
-        const nearnessOf = (d: number) => 1 - (d - dMin) / dRange;
+        //SceneCamera.project3 returns depth = cameraZ, where LARGER = nearer the camera (it magnifies in the
+        //perspective divide) — the opposite of MapLibre's old `w` depth. So nearness peaks at dMax (closest);
+        //no `1 -` (that was the MapLibre convention and inverted the near/far layer split after the swap).
+        const nearnessOf = (d: number) => (d - dMin) / dRange;
 
         const arc = raw.map(p => ({
             x:            p.x,
