@@ -20,6 +20,10 @@ const DEFAULT_TARGET_HEIGHT_M = 3;
 //the tiles read as a dark map. Same recipe as the source Solar scene card.
 const DARK_FILTER = 'invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4)';
 
+//Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
+const prefersReducedMotion = (): boolean =>
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
 export interface SceneRendererOptions
 {
     //Sun colour + shadow colour/opacity for the painted geometry; merged into the palette.
@@ -63,6 +67,7 @@ export class SceneRenderer
 
     private _redrawScheduled = false;
     private _rafToken = 0;
+    private _growthRaf = 0;
     private _alive = true;
     //Fired after each redraw so the host can re-project its HUD on the same frame.
     public onAfterDraw?: () => void;
@@ -109,6 +114,34 @@ export class SceneRenderer
     public setGrowth(growth: number): void
     {
         this._growth = Math.max(0, Math.min(1, growth));
+    }
+
+    //Play the one-off building rise: prisms grow from the ground to full height (0 -> 1, cubic-out) over
+    //500 ms, the same window the HA energy graphs animate in. Instant under prefers-reduced-motion. The
+    //host replays it whenever buildings (re)arrive or the tab is re-entered, so it matches the graphs.
+    public animateGrowth(): void
+    {
+        if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
+        if (prefersReducedMotion())
+        {
+            this._growth = 1;
+            this.scheduleRedraw();
+            return;
+        }
+        //Drop to the ground synchronously so the buildings never flash at full height for a frame before
+        //the first animation tick lands.
+        this._growth = 0;
+        this.scheduleRedraw();
+        const start = performance.now();
+        const tick = (now: number): void =>
+        {
+            if (!this._alive) { this._growthRaf = 0; return; }
+            const t = Math.min(1, (now - start) / 500);
+            this._growth = 1 - (1 - t) ** 3;
+            this.scheduleRedraw();
+            this._growthRaf = t < 1 ? requestAnimationFrame(tick) : 0;
+        };
+        this._growthRaf = requestAnimationFrame(tick);
     }
 
     public setPalette(p: Partial<ScenePaletteFull>): void
@@ -184,6 +217,7 @@ export class SceneRenderer
     {
         this._alive = false;
         if (this._rafToken) { cancelAnimationFrame(this._rafToken); this._rafToken = 0; }
+        if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
         this._groundHolder.remove();
         this._sceneSvg.remove();
     }

@@ -67,7 +67,6 @@ import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
     refreshHaDailyTotals,
-    findCo2SignalEntity,
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
@@ -401,11 +400,6 @@ export class HeliosCard extends LitElement
     //energy_preferences_updated event. Chip refresh helpers read their fallback entity from here.
     @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
     _energyPrefsUnsub?: () => void;
-    //Memoised co2signal / Electricity Maps fossil-fuel-% entity for the low-carbon chip, resolved from the
-    //entity registry. Re-scanned only on registry identity change, so it survives a cold load where the
-    //registry lands after the first subscribe at near-zero per-render cost.
-    private _co2SignalEntity: string | null = null;
-    private _co2EntitiesRef: unknown = undefined;
     //HA Energy daily-total cache from refreshHaDailyTotals() against the recorder: PV produced, grid
     //imported, grid exported, battery charged, battery discharged today. Null when no HA stat is
     //configured or the recorder call has not landed; consumer chips then collapse silently.
@@ -1494,33 +1488,6 @@ export class HeliosCard extends LitElement
         //grid shows the chip + a static leader with no misleading motion.
         const gridBeadDur      = gridImporting ? gridImportBeadDur : gridExportBeadDur;
 
-        //Low-carbon (non-fossil) inflow. HA's co2signal entity reports grid fossil-fuel % (0-100); the
-        //low-carbon share is (100 - fossil)/100 and the power is the import scaled by it. Only exists while
-        //importing, so the chip hides on export, idle, and when co2signal isn't wired. Resolve + cache the
-        //entity off the registry, re-scanning only on registry identity change.
-        if (this.hass?.entities !== this._co2EntitiesRef)
-        {
-            this._co2EntitiesRef  = this.hass?.entities;
-            this._co2SignalEntity = findCo2SignalEntity(this.hass);
-        }
-        const co2Entity        = this._co2SignalEntity;
-        const fossilRaw        = co2Entity ? this.hass?.states?.[co2Entity]?.state : undefined;
-        const fossilPct        = (fossilRaw !== undefined && fossilRaw !== null) ? parseFloat(String(fossilRaw)) : NaN;
-        const lowCarbonShare   = Number.isFinite(fossilPct) ? Math.max(0, Math.min(1, 1 - fossilPct / 100)) : null;
-        const lowCarbonWatts   = (lowCarbonShare !== null && gridImporting && gridImportDisplayWatts !== null && gridImportDisplayWatts > 0)
-            ? gridImportDisplayWatts * lowCarbonShare
-            : null;
-        const showLowCarbon    = hasHomeCoords && layout !== null && !batteryScrubFuture && lowCarbonWatts !== null;
-        //Straight vertical leader from the low-carbon chip DOWN into the grid chip below it (same column x).
-        //Each end is nudged ~16 px off centre so the line meets the pill edges, not the chip bodies.
-        const lowCarbonLeaderPath = layout
-            ? `M ${layout.lowCarbonLabel.x.toFixed(1)},${(layout.lowCarbonLabel.y + 16).toFixed(1)} L ${layout.gridLabel.x.toFixed(1)},${(layout.gridLabel.y - 16).toFixed(1)}`
-            : '';
-        const lowCarbonBeadDur = (lowCarbonWatts === null || lowCarbonWatts < GRID_BEAD_IDLE_W)
-            ? null
-            : proportionalBeadDur(lowCarbonWatts, GRID_BEAD_IMPORT_CAP_W);
-        const lowCarbonColor   = 'var(--energy-non-fossil-color, #0f9d58)';
-
         //Solar-arc overlay: sun trajectory, current position and incidence ray to the home, all
         //pre-projected to screen space via projectSunScene(). Hidden until the engine is ready.
         const sunScene  = this._sunScene;
@@ -1948,32 +1915,6 @@ export class HeliosCard extends LitElement
                     >
                         <ha-icon icon="${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}"></ha-icon>
                         <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec)}</span>
-                    </div>
-                ` : nothing}
-
-                <!--  Low-carbon (non-fossil) chip, top of the LEFT
-                      column. Shows the live non-fossil share of the
-                      grid import in kW, derived from HA's co2signal
-                      entity. Its leader runs STRAIGHT DOWN into the grid
-                      chip below (the low-carbon energy arrives via the
-                      grid), bead travelling low-carbon → grid. Hidden
-                      unless importing AND the integration is wired.    -->
-                ${showLowCarbon ? html`
-                    <svg class="low-carbon-leader-svg">
-                        <path class="low-carbon-leader-line" style="stroke:${lowCarbonColor}" d="${lowCarbonLeaderPath}" />
-                        ${lowCarbonBeadDur !== null ? svg`
-                            <circle class="low-carbon-leader-bead" r="3" style="fill:${lowCarbonColor}">
-                                <animateMotion dur="${lowCarbonBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               path="${lowCarbonLeaderPath}" />
-                            </circle>
-                        ` : nothing}
-                    </svg>
-                    <div
-                        class="low-carbon-label"
-                        style="left:${layout!.lowCarbonLabel.x}px; top:${layout!.lowCarbonLabel.y}px; --low-carbon-color:${lowCarbonColor}"
-                    >
-                        <ha-icon icon="mdi:leaf"></ha-icon>
-                        <span>${formatGridValue(this.hass, lowCarbonWatts!, 'W', valueDec)}</span>
                     </div>
                 ` : nothing}
 

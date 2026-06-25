@@ -995,59 +995,6 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  Low-carbon chip, same pill recipe tinted in HA's non-fossil green. Sits above the grid chip and
-        feeds it. */
-    .low-carbon-label
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 8;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        min-width: 76px;
-        box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
-        color: var(--primary-text-color, #212121);
-        border: 2px solid var(--low-carbon-color, var(--energy-non-fossil-color, #0f9d58));
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        white-space: nowrap;
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
-    }
-    .low-carbon-label ha-icon
-    {
-        --mdc-icon-size: 16px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-    /*  Low-carbon → grid leader: a straight vertical hairline (chips share the column x). Stroke + bead
-        fill from the inline --low-carbon-color. */
-    .low-carbon-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-    }
-    .low-carbon-leader-line
-    {
-        stroke-width: 1;
-        stroke-linecap: round;
-        fill: none;
-    }
-
     /*  PV → home leader: vertical dashed line from the PV chip down to the home, in the PV colour.
         z 5, below the chip cluster (z 6) so the dashes pass behind the chips. */
     .pv-home-leader-svg
@@ -1443,7 +1390,6 @@ export const heliosCardStyles = css`
         .pv-pct-label,
         .battery-pct-label,
         .grid-label,
-        .low-carbon-label,
         .solar-pct-label
         {
             font-size: var(--ha-font-size-m, 14px);
@@ -1452,7 +1398,6 @@ export const heliosCardStyles = css`
         .pv-pct-label ha-icon,
         .battery-pct-label ha-icon,
         .grid-label ha-icon,
-        .low-carbon-label ha-icon,
         .solar-pct-label ha-icon
         {
             --mdc-icon-size: 18px;

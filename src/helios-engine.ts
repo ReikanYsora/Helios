@@ -486,6 +486,8 @@ export class HeliosEngine
     //reuse across style reloads instead of re-hitting Overpass. Invalidated when building-radius changes.
     private _buildingsData:     Building[] | null = null;
     private _buildingsFetchKey: string = '';
+    //Guards the one-shot prism-rise animation so it plays once per buildings load, not on every repaint.
+    private _grown = false;
     private _buildingsAbort?:   AbortController;
 
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
@@ -1152,7 +1154,19 @@ export class HeliosEngine
         {
             return;
         }
-        this._renderer.setBuildings(this._buildingsData ?? []);
+        const buildings = this._buildingsData ?? [];
+        this._renderer.setBuildings(buildings);
+        //Play the prism rise once, the first time real footprints land (matching the HA energy graphs,
+        //which re-animate on tab entry). Re-arm if the buildings ever go empty so a re-fetch replays it.
+        if (buildings.length && !this._grown)
+        {
+            this._grown = true;
+            this._renderer.animateGrowth();
+        }
+        else if (!buildings.length)
+        {
+            this._grown = false;
+        }
     }
 
 
@@ -1364,8 +1378,8 @@ export class HeliosEngine
     }
 
     //Screen-space layout of the on-map readout chips and their leader lines. Returns positions (CSS px
-    //relative to the canvas) for the cloud chip (outside the ring), PV chip, battery SoC/Power chips, grid
-    //and low-carbon chips, the ring edge (hemisphere-aware anchor direction for the cloud fill interp), and
+    //relative to the canvas) for the cloud chip (outside the ring), PV chip, battery SoC/Power chips, the
+    //grid chip, the ring edge (hemisphere-aware anchor direction for the cloud fill interp), and
     //the projected home point (chip-leader anchor / disc centre). Null when the map isn't ready (card skips
     //the overlay that frame).
     public projectHomeLabelLayout(): {
@@ -1373,7 +1387,6 @@ export class HeliosEngine
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
         gridLabel:         { x: number; y: number };
-        lowCarbonLabel:    { x: number; y: number };
         home:              { x: number; y: number };
         //Projected roof-top of the home building (home at render_height), the drop-leader's bottom endpoint
         //so the line lands on the roof at any size/pitch/zoom. Falls back to ground home when unresolved.
@@ -1402,7 +1415,7 @@ export class HeliosEngine
         const cosLat = Math.cos(lat0 * Math.PI / 180);
 
         //Chip cluster, organised into columns: PV anchored above the home, battery (SoC/Power) stacked on
-        //the right, grid/low-carbon stacked on the left, so "what's in" and "what's stored/consumed" split.
+        //the right, the grid chip on the left, so "what's in" and "what's stored/consumed" split.
         //All offsets scale by _heliosScale() so the cluster spreads on a kiosk layout (= 1.0 at standard
         //Lovelace sizes, unchanged).
         const scale = this._heliosScale();
@@ -1450,11 +1463,9 @@ export class HeliosEngine
         //on the Power chip, not the home.
         const batteryPowerY     = clusterY - CHIP_STACK_GAP_PX / 2;
         const batterySocY       = clusterY + CHIP_STACK_GAP_PX / 2;
-        //Left column mirrors the right: low-carbon on top, grid on the bottom, with a straight vertical
-        //leader down into the grid chip.
+        //Left column is just the grid chip, centred on the cluster hub.
         const gridXLeft         = home.x - CHIP_SIDE_X_OFFSET_PX;
-        const gridY             = clusterY + CHIP_STACK_GAP_PX / 2;
-        const lowCarbonY        = clusterY - CHIP_STACK_GAP_PX / 2;
+        const gridY             = clusterY;
 
         //PV home-anchor ground disc as a polygon: sample N points on a circle of PV_HOME_ANCHOR_RADIUS_M
         //around the home, project each, and express relative to the home so the SVG can translate-to-home.
@@ -1500,7 +1511,6 @@ export class HeliosEngine
             batterySocLabel:   { x: batteryXRight,  y: batterySocY  },
             batteryPowerLabel: { x: batteryXRight,  y: batteryPowerY},
             gridLabel:         { x: gridXLeft,      y: gridY        },
-            lowCarbonLabel:    { x: gridXLeft,      y: lowCarbonY   },
             home:              { x: home.x,         y: clusterY     },
             homeRoof:          { x: home.x,         y: roofY        },
             homeAnchorPoints:  anchorPts.join(' '),

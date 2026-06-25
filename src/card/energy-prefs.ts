@@ -60,36 +60,6 @@ export interface EnergyPrefsHost
 }
 
 
-//Find the co2signal / Electricity Maps grid fossil-fuel-% sensor (mirrors HA's Energy dashboard); Helios derives the
-//low-carbon split from it. Null when the integration is absent, which hides the low-carbon chip.
-export function findCo2SignalEntity(hass: any): string | null
-{
-    const entities = hass?.entities;
-    if (!entities || typeof entities !== 'object')
-    {
-        return null;
-    }
-    for (const ent of Object.values(entities) as Array<{ entity_id?: string; platform?: string }>)
-    {
-        if (!ent || (ent.platform !== 'co2signal' && ent.platform !== 'electricity_maps'))
-        {
-            continue;
-        }
-        const id = ent.entity_id;
-        if (!id)
-        {
-            continue;
-        }
-        //The integration exposes both a g/kWh intensity sensor and a % fossil-fuel sensor; we want the percentage one.
-        if (hass.states?.[id]?.attributes?.unit_of_measurement === '%')
-        {
-            return id;
-        }
-    }
-    return null;
-}
-
-
 //Fetch HA Energy dashboard prefs into the host's cached snapshot. Idempotent; bails silently when hass is unattached or
 //the call fails (RBAC denied, dashboard not configured).
 export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
