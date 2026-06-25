@@ -2,7 +2,6 @@
 //defensive WS round-trip cached on the host, a throttle / in-flight guard so duplicate cards don't hammer the call, and
 //a requestUpdate once the parsed result lands.
 
-import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import type { EnergyDefaults } from './energy-prefs';
 import { FORECAST_THROTTLE_MS } from '../constants';
 
@@ -20,7 +19,7 @@ export interface SolarForecastPoint
 }
 
 
-export interface EnergyForecastHost extends LoadingTrackerHost
+export interface EnergyForecastHost
 {
     readonly hass: any;
     //Read for the solar-forecast provider config entry ids (config_entry_solar_forecast).
@@ -56,7 +55,6 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
     }
     host._haSolarForecastFetchedAt = Date.now();
     host._haSolarForecastFetching = true;
-    beginLoadingPhase(host, 'solar-forecast');
     try
     {
         //Preferred: Helios-Forecast's detail series (sub-hourly future + hourly past). Falls back to HA's generic
@@ -84,7 +82,6 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
     finally
     {
         host._haSolarForecastFetching = false;
-        endLoadingPhase(host, 'solar-forecast');
     }
 }
 

@@ -64,7 +64,6 @@ import
     onTimelinePointerMove,
     onTimelinePointerUp
 } from './card/timeline';
-import { renderLoadingBanner, renderWeatherRateLimitBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
 import { refreshGrid, formatGridValue } from './card/grid';
 import {
     subscribeEnergyPrefs,
@@ -463,20 +462,10 @@ export class HeliosCard extends LitElement
     //chip top-right so the user knows the shadow layer is still computing.
     @state() _shadowBusy    = false;
 
-    //True while the Open-Meteo home-point fetch is stuck in HTTP 429 back-off (via the engine's
-    //onWeatherRateLimitChange callback, wired in init.ts). Clears on the next successful refresh; an alert
-    //banner explains the stall meanwhile.
-    @state() _weatherRateLimited = false;
-
     //Flipped by fetchEnergyPrefs after the first parse lands, so the card kicks refreshHaDailyTotals as
     //soon as the HA Energy defaults snapshot appears rather than waiting up to 30 s for the next tick.
     _energyDefaultsLoaded   = false;
     private _dailyTotalsKicked = false;
-    //Loading-tracker state. _loadingPhases maps each phase id to its progress (started/done).
-    //_loadingHasCompleted latches once every started phase first reaches done, after which the banner
-    //stays hidden so routine background refreshes don't re-flash it. Helpers in src/card/loading-tracker.ts.
-    @state() _loadingPhases:       ReadonlyMap<LoadingPhaseId, LoadingPhaseState> = new Map();
-    @state() _loadingHasCompleted: boolean = false;
     //Unified 5-day data store. Built after the initial weather + PV + battery + grid fetches, rebuilt when
     //any refresh, sliced/interpolated by the radial dial, graph view and main timeline. Live numeric chips
     //stay on the direct hass.states path: the store carries bucketed curves, the chips need sample-accurate
@@ -826,9 +815,6 @@ export class HeliosCard extends LitElement
         clearEnergyStatsCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot, refetches.
         this._engine?.resetDataCache();
-        //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.
-        this._loadingPhases       = new Map();
-        this._loadingHasCompleted = false;
         this.requestUpdate();
     }
 
@@ -1025,12 +1011,6 @@ export class HeliosCard extends LitElement
                     this.requestUpdate();
                 }, CONNECT_SETTLE_MS - sinceConnect + 16);
                 return;
-            }
-            //New home = fresh hydration wave, surface the loading banner again.
-            if (identityChanged)
-            {
-                this._loadingPhases       = new Map();
-                this._loadingHasCompleted = false;
             }
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
@@ -1678,9 +1658,6 @@ export class HeliosCard extends LitElement
 
                 <div id="map-container"></div>
 
-                ${renderLoadingBanner(this)}
-                ${renderWeatherRateLimitBanner(this)}
-
                 ${hasHomeCoords && this._timeRange ? html`
                     <div
                         class="time-bar"
@@ -2290,7 +2267,7 @@ export class HeliosCard extends LitElement
                       (the home interaction is being redesigned).  -->
                 ${hasHomeCoords && layout !== null ? html`
                     <div
-                        class="home-hitbox ${this._loadingHasCompleted ? '' : 'is-loading'}"
+                        class="home-hitbox"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                         @mouseenter="${this._onHomeEnter}"
                         @mouseleave="${this._onHomeLeave}"

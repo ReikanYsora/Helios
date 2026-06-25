@@ -88,13 +88,6 @@ export const heliosCardStyles = css`
         pointer-events: auto;
         z-index: 55;
     }
-    /*  Loading-state hitbox: rendered but inert (no pointer events) with a wait cursor flagging the
-        brief "still loading" window. Class is removed once the loader latches. */
-    .home-hitbox.is-loading
-    {
-        cursor: wait;
-        pointer-events: none;
-    }
 
     /*  Home hover glow. Same polygons as the building extrusion so it tracks rotation pixel-for-pixel,
         painted with a drop-shadow bloom. Only opacity animates (GPU-cheap); geometry comes from the
@@ -840,105 +833,6 @@ export const heliosCardStyles = css`
         gap: 8px;
         pointer-events: none;
     }
-    /*  Loading banner, shown while the first hydration wave is in flight and retired for good once
-        every phase has finished once (so routine refreshes don't bring it back). Pinned top-centre.
-        No slide-in (short waves blinked once before it completed);
-        only a snappy opacity step. z-index 60, above the timeline. */
-    .loading-banner
-    {
-        position: absolute;
-        top: 8px;
-        left: 64px;
-        right: 64px;
-        max-width: 260px;
-        margin: 0 auto;
-        padding: 6px 12px 8px;
-        background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
-        color: var(--primary-text-color, #ffffff);
-        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
-        border-radius: 16px;
-        font-size: var(--ha-font-size-s, 12px);
-        line-height: 1.4;
-        z-index: 60;
-        opacity: 0;
-        pointer-events: none;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .loading-banner.is-visible
-    {
-        opacity: 1;
-    }
-    .loading-banner-label
-    {
-        font-weight: var(--ha-font-weight-medium, 500);
-        opacity: 0.85;
-        text-align: center;
-    }
-    .loading-banner-bar
-    {
-        position: relative;
-        width: 100%;
-        height: 6px;
-        background: var(--divider-color, rgba(255, 255, 255, 0.15));
-        border-radius: 999px;
-        overflow: hidden;
-    }
-    .loading-banner-bar-fill
-    {
-        position: absolute;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        background: var(--primary-color, #03a9f4);
-        border-radius: 999px;
-        transition: width 0.35s ease;
-    }
-
-    /*  Alert banner under the loading banner when the Open-Meteo fetch is stuck in HTTP 429 back-off.
-        Same width/centering as the loading banner. Themed with --warning-color (HA's advisory hue,
-        distinct from the red --error-color), amber fallback. */
-    .weather-rate-limit-banner
-    {
-        position: absolute;
-        top: 60px;
-        left: 64px;
-        right: 64px;
-        max-width: 260px;
-        margin: 0 auto;
-        padding: 8px 12px;
-        background: color-mix(in srgb, var(--warning-color, #ff9800) 18%, transparent);
-        color: var(--warning-color, #ff9800);
-        border: 1px solid var(--warning-color, #ff9800);
-        border-radius: 8px;
-        font-size: var(--ha-font-size-s, 12px);
-        line-height: 1.4;
-        z-index: 60;
-        opacity: 0;
-        pointer-events: none;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        transition: opacity 0.25s ease;
-    }
-    .weather-rate-limit-banner.is-visible
-    {
-        opacity: 1;
-    }
-    .weather-rate-limit-banner-title
-    {
-        font-weight: var(--ha-font-weight-medium, 500);
-        text-align: center;
-    }
-    .weather-rate-limit-banner-message
-    {
-        text-align: center;
-        opacity: 0.9;
-    }
-
     /*  PV production chip: compact horizontal pill tinted in the production colour (--pv-leader-color,
         set inline). Fixed min-width shared with the battery chips so the leader gap is identical
         regardless of how wide the value reads. */

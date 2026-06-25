@@ -7,7 +7,6 @@ import { formatPowerKw } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
-import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 import { BATTERY_CACHE_TTL_MS } from '../constants';
 
@@ -71,11 +70,13 @@ export function resolveBatteryEntities(defaults: EnergyDefaults): { powerEntity:
 
 //Surface the host card exposes to this module. Mutable fields are non-readonly so refresh/fetch helpers can assign them;
 //Lit @state reactivity is preserved since each assignment hits the decorator's setter.
-export interface BatteryHost extends LoadingTrackerHost
+export interface BatteryHost
 {
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _energyDefaults: EnergyDefaults;
+
+    requestUpdate(): void;
 
     _batterySoc:          number | null;
     _batteryPower:        number | null;
@@ -288,7 +289,6 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     if (key === host._batteryChangeFetchKey) { return; }
     host._batteryChangeFetchKey = key;
     host._batteryChangeFetching = true;
-    beginLoadingPhase(host, 'battery-history');
     void Promise.all([
         sortedCharge.length    > 0 ? fetchChangeSeries(host.hass, sortedCharge,    startMs, endMs, '5minute') : Promise.resolve(null),
         sortedDischarge.length > 0 ? fetchChangeSeries(host.hass, sortedDischarge, startMs, endMs, '5minute') : Promise.resolve(null),
@@ -300,7 +300,6 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     }).finally(() =>
     {
         host._batteryChangeFetching = false;
-        endLoadingPhase(host, 'battery-history');
     });
 }
 
@@ -506,7 +505,6 @@ export async function fetchBatteryHistory(
         return;
     }
     host._batteryFetching = true;
-    beginLoadingPhase(host, 'battery-history');
     try
     {
         //History only exists up to "now"; clamp the fetch end so we don't waste a roundtrip on empty future buckets.
@@ -607,7 +605,6 @@ export async function fetchBatteryHistory(
     finally
     {
         host._batteryFetching = false;
-        endLoadingPhase(host, 'battery-history');
     }
 }
 

@@ -15,11 +15,10 @@
 import { pvNormalizeToWatts } from './pv';
 import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } from './format';
 import type { EnergyDefaults } from './energy-prefs';
-import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 
 
-export interface GridHost extends LoadingTrackerHost
+export interface GridHost
 {
     readonly hass:   any;
     //HA Energy dashboard defaults (populated by card/energy-prefs.ts) — the sole source of grid
@@ -106,7 +105,6 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 
     if (slot === 'import') { host._gridImportChangeFetchKey = key; host._gridImportChangeFetching = true; }
     else                   { host._gridExportChangeFetchKey = key; host._gridExportChangeFetching = true; }
-    beginLoadingPhase(host, 'grid-history');
     void fetchChangeSeries(host.hass, sorted, startMs, endMs, '5minute')
         .then((series) =>
         {
@@ -121,7 +119,6 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
         {
             if (slot === 'import') { host._gridImportChangeFetching = false; }
             else                   { host._gridExportChangeFetching = false; }
-            endLoadingPhase(host, 'grid-history');
         });
 }
 

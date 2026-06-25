@@ -24,11 +24,6 @@ export interface Translations
         dayLabelDayBefore?:     string; //'2 days ago'
         dayLabelTomorrow?:      string; //'Tomorrow'
         dayLabelDayAfter?:      string; //'In 2 days'
-        loadingLabel?:          string; //'Fetching data...' (top-of-card loading banner)
-        //Open-Meteo HTTP 429 (rate limit) alert under the loading banner; clears once a fetch
-        //succeeds.
-        weatherRateLimitTitle?:   string; //'OpenMeteo rate limit'
-        weatherRateLimitMessage?: string; //'Too many requests, please wait'
         //Radial dial chip strip badges.
         radialProductionLabel?: string; //'Production'
         radialBatteryLabel?:    string; //'Battery'

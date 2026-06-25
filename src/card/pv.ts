@@ -7,7 +7,6 @@ import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
 import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } from './format';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
-import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 import { PV_CACHE_TTL_MS } from '../constants';
 
@@ -47,12 +46,14 @@ export interface PvRate
 
 //Structural surface the host card exposes here. The mutable `_pv*` fields are non-readonly so the helpers can assign them;
 //@state reactivity is preserved because assignment hits the same setter the decorator installed.
-export interface PvHost extends LoadingTrackerHost
+export interface PvHost
 {
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _energyDefaults: import('./energy-prefs').EnergyDefaults;
+
+    requestUpdate(): void;
 
     _pvCurrent:             number | null;
     _pvUnit:                string;
@@ -327,7 +328,6 @@ export function refreshPv(host: PvHost): void
         {
             host._pvChangeSeriesFetchKey = changeKey;
             host._pvChangeSeriesFetching = true;
-            beginLoadingPhase(host, 'pv-change-series');
             void fetchChangeSeries(host.hass, sortedChange, seriesStart.getTime(), fetchEnd.getTime(), '5minute')
                 .then((series) =>
                 {
@@ -337,7 +337,6 @@ export function refreshPv(host: PvHost): void
                 .finally(() =>
                 {
                     host._pvChangeSeriesFetching = false;
-                    endLoadingPhase(host, 'pv-change-series');
                 });
         }
     }

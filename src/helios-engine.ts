@@ -249,17 +249,6 @@ export class HeliosEngine
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
-    //Host callback fired when the home-point fetch enters/leaves the rate-limited state, so the card can
-    //show an alert explaining why weather stopped refreshing.
-    public onWeatherRateLimitChange?: (rateLimited: boolean) => void;
-    private _emittedRateLimited = false;
-    private _setRateLimited(rateLimited: boolean): void
-    {
-        if (this._emittedRateLimited === rateLimited) { return; }
-        this._emittedRateLimited = rateLimited;
-        try { this.onWeatherRateLimitChange?.(rateLimited); }
-        catch (_) { /* host callback errors must not break the fetch path */ }
-    }
     //Consecutive non-429 failure count (5xx, network, JSON parse). Drives a graduated back-off so an
     //outage no longer retries at a flat 60 s cadence and piles up IP-rate-limit traffic. Resets on success.
     private _otherErrorStreak = 0;
@@ -2110,10 +2099,9 @@ export class HeliosEngine
             );
             this._renderForCurrentSelection();
 
-            //Success: reset both back-off streaks and drop the rate-limit banner immediately.
+            //Success: reset both back-off streaks.
             this._rateLimitStreak  = 0;
             this._otherErrorStreak = 0;
-            this._setRateLimited(false);
 
             if (this._selectedTime === null)
             {
@@ -2163,8 +2151,6 @@ export class HeliosEngine
                 const idx = Math.min(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS.length - 1);
                 retryDelay = RATE_LIMIT_BACKOFF_MS[idx];
                 this._rateLimitStreak++;
-                //Surface the rate-limit state to the card for an alert banner (helper dedups the callback).
-                this._setRateLimited(true);
 
                 this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),

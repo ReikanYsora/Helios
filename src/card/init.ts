@@ -8,7 +8,6 @@ import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
 import type { ChartSeries } from './charts';
-import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 import { ENGINE_SPAWN_COOLDOWN_MS, GLOBAL_SPAWN_COOLDOWN_MS } from '../constants';
 
 
@@ -165,7 +164,7 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
 
 //Structural surface the host card exposes to this module. Extends OverlaysHost so refreshOverlays(host) lands cleanly inside the
 //engine callbacks; the rest is the engine + init lifecycle state the bootstrap mutates.
-export interface InitHost extends OverlaysHost, LoadingTrackerHost
+export interface InitHost extends OverlaysHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
@@ -176,7 +175,6 @@ export interface InitHost extends OverlaysHost, LoadingTrackerHost
     _isLiveMode:         boolean;
     _chartSeries:        ChartSeries | null;
     _shadowBusy:         boolean;
-    _weatherRateLimited: boolean;
 
     _lastHomeKey:        string;
     _initInflight:       boolean;
@@ -407,22 +405,6 @@ function wireEngineCallbacks(host: InitHost): void
     //The engine isn't a @state property, so this nudge is the only signal Lit gets that it became truthy.
     host.requestUpdate();
 
-    host._engine.onFetchStart = () =>
-    {
-        beginLoadingPhase(host, 'weather-forecast');
-    };
-    host._engine.onFetchEnd = () =>
-    {
-        endLoadingPhase(host, 'weather-forecast');
-    };
-    host._engine.onBuildingsFetchStart = () =>
-    {
-        beginLoadingPhase(host, 'buildings');
-    };
-    host._engine.onBuildingsFetchEnd = () =>
-    {
-        endLoadingPhase(host, 'buildings');
-    };
     host._engine.onWeatherUpdate = data =>
     {
         //Per-layer cloud breakdown is owned by the engine (it stashes low/mid/high and projectCloudScene reads them back to size the
@@ -479,12 +461,4 @@ function wireEngineCallbacks(host: InitHost): void
     {
         host._shadowBusy = false;
     };
-
-    //Rate-limit banner trigger: fires when the Open-Meteo home-point fetch transitions in/out of HTTP 429 back-off. The card paints
-    //an alert under the loading banner explaining why weather isn't refreshing.
-    host._engine.onWeatherRateLimitChange = (rateLimited: boolean): void =>
-    {
-        host._weatherRateLimited = rateLimited;
-    };
-
 }
