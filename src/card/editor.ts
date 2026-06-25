@@ -114,6 +114,10 @@ export class HeliosCardEditor extends LitElement
         'card-theme',
         'card-theme-light',
         'card-theme-dark',
+        // Map style + label toggle: the basemap is now a fixed unlabeled CARTO raster, so neither option does
+        // anything. Stripped on the next editor open.
+        'map-style',
+        'show-labels',
         // Entity slots the HA Energy dashboard already declares; the runtime resolves these from `energy/get_prefs` instead.
         // See helios-card.ts setConfig for the user-facing migration notification.
         'pv-power-entity',
@@ -390,34 +394,6 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'map'}" @toggle="${(e: Event) => this._onSectionToggle('map', e)}">
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.editor.uiAndMapSection}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.mapStyle}</span>
-                    <select
-                        class="he-select"
-                        .value="${String(c['map-style'] ?? 'streets')}"
-                        @change="${(e: Event) => this._update('map-style', (e.target as HTMLSelectElement).value)}"
-                    >
-                        <option value="streets"   ?selected="${(String(c['map-style'] ?? 'streets')) === 'streets'}">${t.editor.mapStyleStreet}</option>
-                        <option value="minimal"   ?selected="${(String(c['map-style'] ?? 'streets')) === 'minimal'}">${t.editor.mapStyleMinimal}</option>
-                    </select>
-                </label>
-                <div class="hint">${t.editor.mapStyleHint}</div>
-                <div class="field">
-                    <span class="label">${t.editor.showLabels}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-labels'] !== false) ? 'active' : ''}"
-                            @click="${() => this._update('show-labels', true)}"
-                        >${t.editor.labelsOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-labels'] === false) ? 'active' : ''}"
-                            @click="${() => this._update('show-labels', false)}"
-                        >${t.editor.labelsOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.showLabelsHint}</div>
                 <label class="field">
                     <span class="label">${t.editor.displayRadius ?? 'Rayon d\'affichage'}</span>
                     <div class="slider-row">

@@ -31,16 +31,9 @@ export interface HeliosConfig
     //Index signature so retired/legacy keys read as `unknown` without widening errors; the named keys
     //below are the live schema, legacy YAML is stripped on the next editor open.
     [key: string]: unknown;
-    //When false, OpenFreeMap label layers (roads, POI, place names) are hidden for a minimal basemap. Default true.
-    'show-labels'?:           unknown;
     //Storage + render cadence in buckets/hour for the unified data source and every graph. Range 1-60,
     //default 4 (15 min). Higher = finer curves at more CPU/memory. Forecast stays hourly, then interpolated.
     'display-update-frequency-per-hour'?: unknown;
-    //Battery + grid wiring is resolved entirely from the HA Energy dashboard (SoC/power/sign for the battery
-    //chip; stat_energy_from/to + optional stat_rate for grid import/export). No per-card entity slots.
-    //Base style: 'streets' (default, full-colour Liberty) or 'minimal' (muted Positron); a dark HA theme
-    //auto-selects the Fiord dark style. Label toggle + building extrusion are independent of this.
-    'map-style'?:             unknown;
     //Idle-camera orbit opt-in. Default false. When true the camera slowly orbits the home while idle.
     'auto-rotate-enabled'?:    unknown;
     //Optional camera pose pinned at init (degrees), overriding the auto-default (pitch 55, bearing toward the

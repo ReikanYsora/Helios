@@ -15,8 +15,6 @@ import { ENGINE_SPAWN_COOLDOWN_MS, GLOBAL_SPAWN_COOLDOWN_MS } from '../constants
 //respawn. Exhaustive on purpose - a missing key would leave a slider-dragged value stale until the next natural respawn. Card-only
 //state and identity inputs (home coords flip identity via `_engineIdentitySig`) are out. Colours are fixed by the HA Energy palette.
 export const VISUAL_CONFIG_KEYS = [
-    'show-labels',
-    'map-style', //triggers MapLibre setStyle(); engine reloads cloud disc, buildings and labels on the resulting `style.load`.
     //When set, feeds the engine sensor samples that override Open-Meteo for live + past irradiance; a change must refresh so the
     //override (or its absence) is picked up immediately.
     'solar-radiation-entity',

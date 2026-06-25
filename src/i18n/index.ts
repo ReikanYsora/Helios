@@ -57,16 +57,9 @@ export interface Translations
         homeLatitude:             string;
         homeLongitude:            string;
         locationHint:             string;
-        //Map style + label visibility + camera auto-rotate. Titled "UI & map" since it bundles
-        //basemap chrome with the camera animation.
+        //Display radius + camera auto-rotate. Titled "UI & map" since it bundles the scene framing with
+        //the camera animation.
         uiAndMapSection:          string;
-        mapStyle:                 string;
-        mapStyleHint:             string;
-        mapStyleStreet:           string;
-        showLabels:               string;
-        showLabelsHint:           string;
-        labelsOn:                 string;
-        labelsOff:                string;
         autoRotate:               string;
         autoRotateHint:           string;
         autoRotateOn:             string;
@@ -147,9 +140,6 @@ export interface Translations
         buildingsHint:            string;
         buildingClusterRadius:    string;
         buildingOpacity:          string;
-        //Third map-style segment: a curated minimal basemap (no POIs / place labels / road shields)
-        //for low-end devices.
-        mapStyleMinimal:          string;
         //Shadow options.
         shadowsSection:           string;
         //Master shadow toggle (OpenFreeMap building footprints).
