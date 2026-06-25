@@ -5,19 +5,9 @@
 //resolvers (displayRadiusM, valueDecimals, periodPastDays...).
 
 
-//=== Colours ===
-//HA Energy palette so a Helios card reads as a first-party Energy tile; theme overrides flow through
-//the CSS vars at runtime. Sun takes HA amber (distinct from the PV solar orange).
-export const DEFAULT_SUN_COLOR_HEX = "#ffc107"; //--amber-color
-export const DEFAULT_CLOUD_COLOR_HEX = "#727272"; //--secondary-text-color (neutral)
-export const DEFAULT_BUILDING_COLOR_HEX = "#cccccc"; //HA neutral-80 from the frontend palette (src/resources/theme/color)
-//HA Energy token hex, mirrored as literals for inline SVG/canvas fills where a CSS var can't be used. Values
-//match the frontend tokens in src/resources/theme/color/color.globals.ts so a Helios card reads as first-party.
-export const DEFAULT_PV_COLOR_HEX           = "#ff9800"; //--energy-solar-color
-export const DEFAULT_GRID_IMPORT_COLOR_HEX  = "#488fc2"; //--energy-grid-consumption-color
-export const DEFAULT_GRID_EXPORT_COLOR_HEX  = "#8353d1"; //--energy-grid-return-color
-export const DEFAULT_BATTERY_IN_COLOR_HEX   = "#f06292"; //--energy-battery-in-color
-export const DEFAULT_BATTERY_OUT_COLOR_HEX  = "#4db6ac"; //--energy-battery-out-color
+//Colours are no longer constants: every drawing colour is resolved at runtime from the live HA theme
+//tokens — the scene palette via the engine's _cssHex (helios-engine.ts), the chips + charts via
+//ENERGY_COLOR (card/theme-colors.ts) — so a user's custom theme flows through with no hardcoded hex.
 
 //=== Display radius + buildings ===
 //Single on-screen radius (m) for buildings and shadows. 200 m default; the `display-radius`

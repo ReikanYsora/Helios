@@ -13,7 +13,6 @@ import
     displayRadiusM,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
-    DEFAULT_BUILDING_COLOR_HEX,
     DEFAULT_SHADOW_OPACITY,
     periodPastDays,
     periodFutureDays,
@@ -1152,10 +1151,11 @@ export class HeliosEngine
         return Math.min(100, v);
     }
 
-    //Building base colour. Colour configs are no longer consulted; falls back to DEFAULT_BUILDING_COLOR_HEX.
+    //Building base colour for the diagnostics snapshot. Resolved from the HA theme (the same token the
+    //renderer tints surrounding buildings with), not a config or constant.
     private _buildingColor(): string
     {
-        return DEFAULT_BUILDING_COLOR_HEX;
+        return this._cssHex('--primary-text-color', '#cccccc');
     }
 
     //Push the current building data into the renderer (it extrudes home + surroundings itself) and kick off

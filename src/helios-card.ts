@@ -5,8 +5,6 @@ import { HeliosEngine } from './helios-engine';
 import
 {
     type HeliosConfig,
-    DEFAULT_SUN_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX,
     DEFAULT_PERIOD_PAST_DAYS,
     DEFAULT_PERIOD_FUTURE_DAYS,
     periodPastDays,
@@ -16,6 +14,7 @@ import
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
 import { darkenHex } from './card/format';
+import { ENERGY_COLOR } from './card/theme-colors';
 import
 {
     refreshPv,
@@ -1177,9 +1176,9 @@ export class HeliosCard extends LitElement
         //PV production chip above the home, tied to it by an animated leader. Only renders when the HA
         //Energy dashboard exposes a solar source and the live read is a finite number.
         const pvEntityId   = resolvePvLiveEntity(this._energyDefaults);
-        //DEFAULT_PV_COLOR_HEX matches the HA Energy solar token; inline SVG attrs that need a literal hex
+        //ENERGY_COLOR.pv resolves the HA Energy solar token; inline SVG attrs that need a literal hex
         //(not a CSS var) read it directly so colours stay in sync with the CSS rules using the same token.
-        const pvColor      = DEFAULT_PV_COLOR_HEX;
+        const pvColor      = ENERGY_COLOR.pv(this);
         //Past scrub: the chip reflects actual production at that instant (like the cloud/irradiance chips).
         //Future scrub has no PV data yet, so we hide the chip rather than show a stale/fake number.
         const pvScrubbing  = !this._isLiveMode && this._selectedTime !== null;
@@ -1506,7 +1505,7 @@ export class HeliosCard extends LitElement
 
         //Fixed colour design system. The sun colour paints the arc, the disc rim and the irradiance fill.
         //The on-ground cloud disc is painted via MapLibre engine-side, so no cloud hex is needed here.
-        const sunColor      = DEFAULT_SUN_COLOR_HEX;
+        const sunColor      = ENERGY_COLOR.sun(this);
         const sunRimColor   = darkenHex(sunColor, 0.20);
         const arcSegments   = showSun ? buildArcSegments(sunScene!.arc, sunColor) : [];
         //Z-order split: below-horizon (dotted) segments render BEHIND the home chip cluster, above-horizon
@@ -2081,9 +2080,14 @@ export class HeliosCard extends LitElement
                             //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc
                             //ratio holds across canvas sizes (1.0 at standard Lovelace grid sizes).
                             const sunArcScale = this._engine?.getSunArcScale() ?? 1;
-                            const r = (HeliosCard.SUN_R_FAR
+                            //Cap the disc radius (px): the arc fills a fixed fraction of the frame at any
+                            //zoom, but sunArcScale grows as the ground zoom drops (lower px/m), which would
+                            //otherwise balloon the disc. 22 px keeps it a sun, not a spotlight.
+                            const r = Math.min(
+                                (HeliosCard.SUN_R_FAR
                                     + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene!.sun.nearness)
-                                    * sunArcScale;
+                                    * sunArcScale,
+                                22);
                             const rInner = r * sunFillRatio;
                             //Halo proportional to live irradiance, saturating at 1000 W/m². Same sqrt mapping
                             //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.

@@ -2,17 +2,8 @@
 //day chips. Pure templates over a structural `ChartHost`; charts only read, state mutations live elsewhere.
 
 import { html, svg, nothing, TemplateResult } from 'lit';
-import
-{
-    type HeliosConfig,
-    DEFAULT_SUN_COLOR_HEX,
-    DEFAULT_CLOUD_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX,
-    DEFAULT_GRID_IMPORT_COLOR_HEX,
-    DEFAULT_GRID_EXPORT_COLOR_HEX,
-    DEFAULT_BATTERY_IN_COLOR_HEX,
-    DEFAULT_BATTERY_OUT_COLOR_HEX
-} from '../helios-config';
+import { type HeliosConfig } from '../helios-config';
+import { ENERGY_COLOR } from './theme-colors';
 import { formatLocalisedNumber, lerpHexToward } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { type PvHistory } from './pv';
@@ -795,6 +786,7 @@ export function handleChartHoverLeave(host: ChartHost): void
 //forecast continues past "now".
 export function renderPvChart(host: ChartHost): TemplateResult
 {
+    const el = host as unknown as Element; //for live HA theme-token colour resolution
     const range = host._timeRange;
     const hist  = host._pvHistory;
     const W     = 1000;
@@ -812,7 +804,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
     }
 
-    const pvColor = DEFAULT_PV_COLOR_HEX;
+    const pvColor = ENERGY_COLOR.pv(el);
     //Theme-aware "predicted" shade for the dashed forecast curve: light theme blends toward black, dark toward white,
     //so it stays a readable softer line on either plate. Mirrors the dashboard's predictedColor logic.
     const isDarkTheme       = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
@@ -1105,16 +1097,17 @@ export function renderBottomChart(host: ChartHost): TemplateResult
 //gesture. Production/irradiance/cloud/soc are fixed; grid/battery take the dominant side over the window.
 export function chartAccentColor(host: ChartHost): string
 {
+    const el = host as unknown as Element; //for live HA theme-token colour resolution
     const target = host._chartTarget ?? 'production';
-    if (target === 'production') { return DEFAULT_PV_COLOR_HEX; }
-    if (target === 'irradiance') { return DEFAULT_SUN_COLOR_HEX; }
-    if (target === 'cloud')      { return DEFAULT_CLOUD_COLOR_HEX; }
-    if (target === 'battery-soc'){ return DEFAULT_BATTERY_OUT_COLOR_HEX; }
+    if (target === 'production') { return ENERGY_COLOR.pv(el); }
+    if (target === 'irradiance') { return ENERGY_COLOR.sun(el); }
+    if (target === 'cloud')      { return ENERGY_COLOR.cloud(el); }
+    if (target === 'battery-soc'){ return ENERGY_COLOR.batteryOut(el); }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
     {
-        return target === 'grid' ? DEFAULT_GRID_IMPORT_COLOR_HEX : DEFAULT_BATTERY_OUT_COLOR_HEX;
+        return target === 'grid' ? ENERGY_COLOR.gridImport(el) : ENERGY_COLOR.batteryOut(el);
     }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
@@ -1134,12 +1127,12 @@ export function chartAccentColor(host: ChartHost): string
     if (target === 'grid')
     {
         return sumArr(store.gridImport) >= sumArr(store.gridExport)
-            ? DEFAULT_GRID_IMPORT_COLOR_HEX
-            : DEFAULT_GRID_EXPORT_COLOR_HEX;
+            ? ENERGY_COLOR.gridImport(el)
+            : ENERGY_COLOR.gridExport(el);
     }
     return sumArr(store.battery, v => Math.max(0, v)) >= sumArr(store.battery, v => Math.max(0, -v))
-        ? DEFAULT_BATTERY_IN_COLOR_HEX
-        : DEFAULT_BATTERY_OUT_COLOR_HEX;
+        ? ENERGY_COLOR.batteryIn(el)
+        : ENERGY_COLOR.batteryOut(el);
 }
 
 
@@ -1148,6 +1141,7 @@ export function chartAccentColor(host: ChartHost): string
 //renderPvChart for production only.
 function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'production'>): TemplateResult
 {
+    const el = host as unknown as Element; //for live HA theme-token colour resolution
     const store = host._unifiedStore;
     const range = host._timeRange;
     const W = 1000;
@@ -1190,8 +1184,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         const imp = toPts(store.gridImport);
         const exp = toPts(store.gridExport);
         series = [
-            { pts: imp, color: DEFAULT_GRID_IMPORT_COLOR_HEX },
-            { pts: exp, color: DEFAULT_GRID_EXPORT_COLOR_HEX },
+            { pts: imp, color: ENERGY_COLOR.gridImport(el) },
+            { pts: exp, color: ENERGY_COLOR.gridExport(el) },
         ];
     }
     else if (target === 'battery')
@@ -1201,8 +1195,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         const charge    = toPts(store.battery, v => Math.max(0, v));
         const discharge = toPts(store.battery, v => Math.max(0, -v));
         series = [
-            { pts: charge,    color: DEFAULT_BATTERY_IN_COLOR_HEX },
-            { pts: discharge, color: DEFAULT_BATTERY_OUT_COLOR_HEX },
+            { pts: charge,    color: ENERGY_COLOR.batteryIn(el) },
+            { pts: discharge, color: ENERGY_COLOR.batteryOut(el) },
         ];
     }
     else if (target === 'battery-soc')
@@ -1222,7 +1216,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 pts.push({ t: tMs, v });
             }
         }
-        series   = [{ pts, color: DEFAULT_BATTERY_OUT_COLOR_HEX }];
+        series   = [{ pts, color: ENERGY_COLOR.batteryOut(el) }];
         fixedMax = 100;
     }
     else if (target === 'cloud')
@@ -1245,15 +1239,15 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             return out;
         };
         series = [
-            { pts: csPts(cs?.cloudLow  ?? []), color: lerpHexToward(DEFAULT_CLOUD_COLOR_HEX, '#ffffff', 0.35) },
-            { pts: csPts(cs?.cloudMid  ?? []), color: DEFAULT_CLOUD_COLOR_HEX },
-            { pts: csPts(cs?.cloudHigh ?? []), color: lerpHexToward(DEFAULT_CLOUD_COLOR_HEX, '#000000', 0.30) },
+            { pts: csPts(cs?.cloudLow  ?? []), color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.35) },
+            { pts: csPts(cs?.cloudMid  ?? []), color: ENERGY_COLOR.cloud(el) },
+            { pts: csPts(cs?.cloudHigh ?? []), color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.30) },
         ];
         fixedMax = 100;
     }
     else
     {
-        series   = [{ pts: toPts(store.irradiance), color: DEFAULT_SUN_COLOR_HEX }];
+        series   = [{ pts: toPts(store.irradiance), color: ENERGY_COLOR.sun(el) }];
         fixedMax = 1000;
     }
 
