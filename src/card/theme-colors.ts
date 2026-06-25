@@ -27,6 +27,8 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
 //cards use) with the palette defaults as fallbacks. Pass the card element as host.
 export const ENERGY_COLOR = {
     pv:         (h: Element | null | undefined): string => cssHex(h, '--energy-solar-color', '#ff9800'),
+    //Home consumption (load): the same consumption-blue the home pill rests in, so chip + chart agree.
+    consumption:(h: Element | null | undefined): string => cssHex(h, '--energy-grid-consumption-color', '#488fc2'),
     gridImport: (h: Element | null | undefined): string => cssHex(h, '--energy-grid-consumption-color', '#488fc2'),
     gridExport: (h: Element | null | undefined): string => cssHex(h, '--energy-grid-return-color', '#8353d1'),
     batteryIn:  (h: Element | null | undefined): string => cssHex(h, '--energy-battery-in-color', '#f06292'),

@@ -1108,7 +1108,9 @@ export const heliosCardStyles = css`
         color: var(--primary-color, #03a9f4);
         border: 2px solid var(--primary-color, #03a9f4);
         border-radius: 999px;
-        pointer-events: none;
+        /*  Clickable: the home is the consumption chip, retargeting the bottom chart to home usage. */
+        pointer-events: auto;
+        cursor: pointer;
         box-shadow: 0 1px 3px var(--shadow-color);
         font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
@@ -1123,6 +1125,12 @@ export const heliosCardStyles = css`
     {
         box-shadow: 0 1px 3px var(--shadow-color),
                     0 0 7px 1px color-mix(in srgb, var(--primary-color, #03a9f4) 28%, transparent);
+    }
+    /*  Active consumption target: same retarget glow the other chips use, in the consumption blue. */
+    .home-pill.is-chart-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 70%, transparent);
     }
     .home-pill ha-icon
     {

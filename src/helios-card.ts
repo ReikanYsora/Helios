@@ -561,6 +561,7 @@ export class HeliosCard extends LitElement
     {
         const icons: Record<ChartTarget, string> = {
             production:    'mdi:solar-power',
+            consumption:   'mdi:home-lightning-bolt',
             grid:          'mdi:transmission-tower',
             battery:       'mdi:lightning-bolt',
             'battery-soc': 'mdi:battery',
@@ -2177,8 +2178,11 @@ export class HeliosCard extends LitElement
                           centre of the cluster with no drop-leader, the chips
                           dock straight against its border.                -->
                     <div
-                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this._homeHover ? 'is-hovered' : ''}"
+                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this._homeHover ? 'is-hovered' : ''} ${this._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
+                        role="button"
+                        tabindex="0"
+                        @click=${() => this._setChartTarget('consumption')}
                     >
                         <ha-icon icon="mdi:home"></ha-icon>
                         ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}

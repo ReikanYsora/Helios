@@ -430,6 +430,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const gridImpW = store ? (valueAt(store.gridImport, store, atMs) ?? NaN) : NaN;
     const gridExpW = store ? (valueAt(store.gridExport, store, atMs) ?? NaN) : NaN;
     const battW    = store ? (valueAt(store.battery,    store, atMs) ?? NaN) : NaN;
+    //Home consumption (load) at the hovered instant: production + import − export − net battery (charge+),
+    //clamped at 0. Same formula as the consumption chart series. Hidden when no flow has any reading.
+    const prodW          = store ? (valueAt(store.production, store, atMs) ?? NaN) : NaN;
+    const hasConsumption = isFinite(prodW) || isFinite(gridImpW) || isFinite(gridExpW) || isFinite(battW);
+    const consumptionW   = Math.max(0,
+        (isFinite(prodW) ? prodW : 0) + (isFinite(gridImpW) ? gridImpW : 0)
+        - (isFinite(gridExpW) ? gridExpW : 0) - (isFinite(battW) ? battW : 0));
     const battSocV = host._batterySocHistory
         ? interpAt(host._batterySocHistory.times, host._batterySocHistory.values, atMs)
         : NaN;
@@ -565,6 +572,12 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                         </div>
                     `)}
                 ` : nothing}
+                ${target === 'consumption' && hasConsumption ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:home-lightning-bolt"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${kw(consumptionW)}</span>
+                    </div>
+                ` : nothing}
                 ${target === 'grid' ? html`
                     ${isFinite(gridImpW) && gridImpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
@@ -656,7 +669,7 @@ export interface ChartSeries
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (+ dashed
 //forecast + per-source breakdown) is default; 'grid'/'battery' draw two-direction flows (accent = dominant side);
 //'irradiance' draws W/m² on a fixed 0..1000 scale.
-export type ChartTarget = 'production' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud';
+export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud';
 
 //Structural surface the host card exposes. `_chartHoverPct` is intentionally writable (hover handlers mutate it on
 //pointermove/leave); all other fields stay read-only.
@@ -1100,6 +1113,7 @@ export function chartAccentColor(host: ChartHost): string
     const el = host as unknown as Element; //for live HA theme-token colour resolution
     const target = host._chartTarget ?? 'production';
     if (target === 'production') { return ENERGY_COLOR.pv(el); }
+    if (target === 'consumption'){ return ENERGY_COLOR.consumption(el); }
     if (target === 'irradiance') { return ENERGY_COLOR.sun(el); }
     if (target === 'cloud')      { return ENERGY_COLOR.cloud(el); }
     if (target === 'battery-soc'){ return ENERGY_COLOR.batteryOut(el); }
@@ -1179,7 +1193,27 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     type Line = { pts: Array<{ t: number; v: number }>; color: string };
     let series: Line[];
     let fixedMax = 0;
-    if (target === 'grid')
+    if (target === 'consumption')
+    {
+        //Home consumption (load) derived per bucket: production + grid import − grid export − net battery
+        //(charge-positive), clamped at 0. Same formula as the live home-usage pill, so chart + chip agree.
+        const cons: Array<{ t: number; v: number }> = [];
+        for (let i = 0; i < store.production.length; i++)
+        {
+            const p  = store.production[i];
+            const gi = store.gridImport[i];
+            const ge = store.gridExport[i];
+            const b  = store.battery[i];
+            //Skip buckets with no measured data at all, so a gap reads as a gap rather than a flat 0.
+            if (p === null && gi === null && ge === null && b === null) { continue; }
+            const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
+            if (tMs < startMs || tMs > endMsAbs) { continue; }
+            const v = Math.max(0, (p ?? 0) + (gi ?? 0) - (ge ?? 0) - (b ?? 0));
+            cons.push({ t: tMs, v });
+        }
+        series = [{ pts: cons, color: ENERGY_COLOR.consumption(el) }];
+    }
+    else if (target === 'grid')
     {
         const imp = toPts(store.gridImport);
         const exp = toPts(store.gridExport);
