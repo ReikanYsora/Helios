@@ -492,9 +492,6 @@ export class HeliosEngine
         onEnd:   (e: PointerEvent) => void;
     };
 
-    //Card-level hook fired on a renderer failure so the card can trigger a clean re-init. The 2.5D renderer
-    //has no WebGL context to lose, so this is now only a safety valve (kept for the card's existing wiring).
-    public onContextLost?: () => void;
 
     //Cached building fetch around the home. The home doesn't move during a session, so fetch once and
     //reuse across style reloads instead of re-hitting MapTiler. Invalidated when building-radius changes.
@@ -528,11 +525,6 @@ export class HeliosEngine
     //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
     //change, not per arc sample per frame. Bearing/pitch invariant, so auto-rotation never refreshes it.
     private _arcScaleMemo?: { w: number; h: number; zoom: number; scale: number };
-
-    //Optional card-side hooks for a busy indicator during the shadow raster paint; the engine computes
-    //silently if unset.
-    public onShadowComputeStart?: () => void;
-    public onShadowComputeEnd?:   () => void;
 
     constructor(
         container:    HTMLElement,
@@ -592,11 +584,10 @@ export class HeliosEngine
         this._renderer.setCameraPitch(this._initialPitch());
         this._resolvePalette();
 
-        //Re-project the card's HUD (arc, chips, leaders, home glow) on every renderer paint so the overlays
-        //stay glued to the rotating basemap. The renderer fires onAfterDraw after each frame's paint.
+        //Re-project the card's HUD (arc, chips, leaders) on every renderer paint so the overlays stay glued
+        //to the rotating basemap. The renderer fires onAfterDraw after each frame's paint.
         this._renderer.onAfterDraw = () =>
         {
-            this._invalidateProjCache();
             this.onMapTransform?.();
         };
 
@@ -604,7 +595,6 @@ export class HeliosEngine
         //single redraw at the end. The cached CSS dims feed _heliosScale()/_sunArcScale() and the HUD layout.
         this._resizeObserver = new ResizeObserver(entries =>
         {
-            this._invalidateProjCache();
             const entry = entries[entries.length - 1];
             if (entry)
             {
@@ -1035,90 +1025,6 @@ export class HeliosEngine
             temperatureC:     w.temperatureC,
             windMs:           w.windMs,
         });
-    }
-
-    //Project the home building(s) into screen-space silhouettes. Each polygon yields a base ring (at
-    //render_min_height) and top ring (at render_height); the card paints both plus a quad per outer edge
-    //into the SVG mask, covering the exact extruded prism even for concave (L/U) footprints. Per-vertex
-    //elevation matches MapLibre's fill-extrusion shader. Empty until the buildings GeoJSON has landed.
-    public projectHomeFootprints(): Array<{
-        base: Array<{ x: number; y: number }>;
-        top:  Array<{ x: number; y: number }>;
-    }>
-    {
-        if (!this._renderer || !this._mapReady)
-        {
-            return [];
-        }
-        const home = this._buildingsData?.home;
-        if (!home || !home.features.length)
-        {
-            return [];
-        }
-
-        const out: Array<{
-            base: Array<{ x: number; y: number }>;
-            top:  Array<{ x: number; y: number }>;
-        }> = [];
-        for (const feat of home.features)
-        {
-            const geom = feat.geometry;
-            if (!geom)
-            {
-                continue;
-            }
-            const props = (feat.properties ?? {}) as Record<string, unknown>;
-            const topH  = typeof props['render_height']     === 'number' ? props['render_height']     as number : 0;
-            const baseH = typeof props['render_min_height'] === 'number' ? props['render_min_height'] as number : 0;
-
-            let polygons: number[][][][] | null = null;
-            if (geom.type === 'Polygon')
-            {
-                polygons = [geom.coordinates as number[][][]];
-            }
-            else if (geom.type === 'MultiPolygon')
-            {
-                polygons = geom.coordinates as number[][][][];
-            }
-            if (!polygons)
-            {
-                continue;
-            }
-
-            for (const poly of polygons)
-            {
-                if (!poly.length)
-                {
-                    continue;
-                }
-                const outer = poly[0] as number[][];
-                if (outer.length < 3)
-                {
-                    continue;
-                }
-
-                const baseRing: Array<{ x: number; y: number }> = [];
-                const topRing:  Array<{ x: number; y: number }> = [];
-                for (const p of outer)
-                {
-                    const lon = p[0], lat = p[1];
-                    const pBase = this._projectScenePoint(lon, lat, baseH);
-                    const pTop  = this._projectScenePoint(lon, lat, topH);
-                    //Drop the vertex pair if either point is behind the camera, else the side-wall quad shears.
-                    if (!pBase || !pTop)
-                    {
-                        continue;
-                    }
-                    baseRing.push({ x: pBase.x, y: pBase.y });
-                    topRing .push({ x: pTop.x,  y: pTop.y  });
-                }
-                if (baseRing.length >= 3 && topRing.length >= 3)
-                {
-                    out.push({ base: baseRing, top: topRing });
-                }
-            }
-        }
-        return out;
     }
 
     //Global display radius from the display-radius slider (50-500 m, default 200); the buildings fetch +
@@ -1647,13 +1553,6 @@ export class HeliosEngine
     private _cachedCanvasCssW = 0;
     private _cachedCanvasCssH = 0;
 
-    //Per-frame projection state is now held by the SceneCamera (refreshed by the renderer's setViewport each
-    //paint), so there's no engine-side matrix cache to invalidate. Kept as a no-op hook for the existing
-    //callers (onAfterDraw + the ResizeObserver) in case a future cache is reintroduced.
-    private _invalidateProjCache(): void
-    {
-        // Intentionally empty — see comment above.
-    }
 
     //Linear ramp on the card's min CSS dimension so the chip cluster expands on a kiosk layout: 1.0 below
     //FLOOR (standard grid cell), ramping to MAX at TOP.
@@ -2387,7 +2286,6 @@ export class HeliosEngine
         this._buildingsFetchKey = '';
         this._homeHourlyData    = null;
         this._dragRotateHandlers    = undefined;
-        this.onContextLost          = undefined;
 
         //Renderer teardown: cancels its rAF, removes its ground holder + scene SVG from the container.
         try { this._renderer?.cleanup(); }

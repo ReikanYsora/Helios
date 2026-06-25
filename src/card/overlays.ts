@@ -30,14 +30,6 @@ export interface SunScene
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
 }
 
-//Screen-space silhouette of one building: projected base and top rings, painted into the cloud-dome SVG mask so the
-//union covers the exact extruded prism even for concave footprints.
-export interface HomeSilhouette
-{
-    base: Array<{ x: number; y: number }>;
-    top:  Array<{ x: number; y: number }>;
-}
-
 //Screen-space anchors for the always-visible chips plus ring edge / home point used by leader lines.
 export interface LabelLayout
 {
@@ -75,7 +67,6 @@ export interface OverlaysHost
 
     _labelLayout:     LabelLayout | null;
     _sunScene:        SunScene | null;
-    _homeSilhouettes: HomeSilhouette[];
 
     readonly shadowRoot: ShadowRoot | null;
     readonly classList:  DOMTokenList;
@@ -104,29 +95,6 @@ function pointEq(
         return false;
     }
     return nearlyEq(a.x, b.x) && nearlyEq(a.y, b.y);
-}
-
-function pointArrayEq(
-    a: Array<{ x: number; y: number }>,
-    b: Array<{ x: number; y: number }>,
-): boolean
-{
-    if (a === b)
-    {
-        return true;
-    }
-    if (a.length !== b.length)
-    {
-        return false;
-    }
-    for (let i = 0; i < a.length; i++)
-    {
-        if (!nearlyEq(a[i].x, b[i].x) || !nearlyEq(a[i].y, b[i].y))
-        {
-            return false;
-        }
-    }
-    return true;
 }
 
 function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
@@ -201,31 +169,6 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     return true;
 }
 
-function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
-{
-    if (a === b)
-    {
-        return true;
-    }
-    if (a.length !== b.length)
-    {
-        return false;
-    }
-    for (let i = 0; i < a.length; i++)
-    {
-        if (!pointArrayEq(a[i].base, b[i].base))
-        {
-            return false;
-        }
-        if (!pointArrayEq(a[i].top,  b[i].top))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-
 //Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per projection).
 //Called on every map transform, once at first weather update (projection matrix ready only after style load), and on
 //every clock tick in live mode (sun position depends on time).
@@ -244,18 +187,11 @@ export function refreshOverlays(host: OverlaysHost): void
     }
 
     const t = host._selectedTime ?? host._now;
-    const nextSun   = host._engine ? host._engine.projectSunScene(t)        : null;
-    const nextHomes = host._engine ? host._engine.projectHomeFootprints()   : [];
-    if (!sunSceneEq       (host._sunScene,        nextSun))
+    const nextSun   = host._engine ? host._engine.projectSunScene(t) : null;
+    if (!sunSceneEq(host._sunScene, nextSun))
     {
-        host._sunScene        = nextSun;
+        host._sunScene = nextSun;
     }
-    if (!homeSilhouettesEq(host._homeSilhouettes, nextHomes))
-    {
-        host._homeSilhouettes = nextHomes;
-    }
-
-    //Weather raster source/layer is owned by the engine + weather mode lifecycle, so this transform path skips it.
 }
 
 

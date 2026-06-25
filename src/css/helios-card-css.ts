@@ -115,55 +115,6 @@ export const heliosCardStyles = css`
         z-index: 55;
     }
 
-    /*  Home hover glow. Same polygons as the building extrusion so it tracks rotation pixel-for-pixel,
-        painted with a drop-shadow bloom. Only opacity animates (GPU-cheap); geometry comes from the
-        engine each frame. */
-    .home-glow-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        /*  SVG stays click-transparent so empty pixels don't capture clicks for chips behind it; only
-            the painted polygons (home-glow-shape below) take pointer events. */
-        pointer-events: none;
-        cursor: pointer;
-        /*  Above basemap + buildings but below the chip cluster (z 8) so the glow never crosses the
-            value chips. */
-        z-index: 6;
-        /*  Faint at rest so the silhouette stays discoverable; hover bumps opacity + drop-shadow for
-            an unmistakable interactive cue. */
-        opacity: 0.25;
-        transition: opacity 0.18s ease, filter 0.18s ease;
-        filter: drop-shadow(0 0 4px var(--primary-color, #03a9f4));
-    }
-    .home-glow-svg.is-hovered
-    {
-        opacity: 0.85;
-        filter: drop-shadow(0 0 8px var(--primary-color, #03a9f4));
-    }
-
-    /*  Touch devices never fire hover, so show the glow permanently at a softer opacity as a tappable
-        hint. */
-    @media (hover: none)
-    {
-        .home-glow-svg { opacity: 0.45; }
-    }
-    .home-glow-svg .home-glow-shape
-    {
-        /*  Translucent halo painted only on hover (parent SVG controls opacity); the home base colour
-            lives on the 3D fill-extrusion in _addBuildings(). */
-        fill: var(--primary-color, #03a9f4);
-        fill-opacity: 0.08;
-        stroke: var(--primary-color, #03a9f4);
-        stroke-width: 1;
-        stroke-linejoin: round;
-        /*  visiblePainted makes the silhouette's painted shape the hit zone, catching clicks on the
-            roof corners that stick out past the centred 120 px circular hitbox. */
-        pointer-events: visiblePainted;
-    }
-
-
     /*  Timeline slides out below the card edge instead of fading. */
     .time-bar
     {
@@ -1341,7 +1292,9 @@ export const heliosCardStyles = css`
         gap: 1px;
         color: var(--sun-cross-color, #ffc107);
         pointer-events: none;
-        z-index: 7;
+        /*  Same layer as the far arc (z 5) it sits on, so the value chips (z 8) stay on top — matches
+            the source card's l-arc-far placement of the sunrise/sunset markers. */
+        z-index: 5;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     }
     .sun-cross-marker ha-icon

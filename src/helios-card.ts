@@ -53,8 +53,7 @@ import
     flowDuration,
     type ArcSegment,
     type SunScene,
-    type LabelLayout,
-    type HomeSilhouette
+    type LabelLayout
 } from './card/overlays';
 import
 {
@@ -397,11 +396,6 @@ export class HeliosCard extends LitElement
     //Screen-space layout of the solar arc, sun and incidence ray. Recomputed via engine.projectSunScene()
     //on every map transform and clock tick (sun moves with time).
     @state() _sunScene: SunScene | null = null;
-    //Per-polygon screen-space silhouettes of the home building(s): each entry holds the projected base
-    //and top ring of one polygon. The card paints both rings plus a quad per outer-ring edge into the
-    //cloud-disc SVG mask, so the union covers the exact extruded prism even for concave footprints.
-    //Re-projected on every map transform so rotation tracks.
-    @state() _homeSilhouettes: HomeSilhouette[] = [];
 
     //Energy dashboard preferences snapshot. Subscribed at connectedCallback, updated on every HA
     //energy_preferences_updated event. Chip refresh helpers read their fallback entity from here.
@@ -457,9 +451,6 @@ export class HeliosCard extends LitElement
     //Not @state: changes go through _applyPeriod(), which requestUpdate()s after dropping store + window.
     _periodPastDays   = DEFAULT_PERIOD_PAST_DAYS;
     _periodFutureDays = DEFAULT_PERIOD_FUTURE_DAYS;
-    //True while the engine is recomputing + rasterising the footprint shadow payload. Drives the spinner
-    //chip top-right so the user knows the shadow layer is still computing.
-    @state() _shadowBusy    = false;
 
     //Flipped by fetchEnergyPrefs after the first parse lands, so the card kicks refreshHaDailyTotals as
     //soon as the HA Energy defaults snapshot appears rather than waiting up to 30 s for the next tick.

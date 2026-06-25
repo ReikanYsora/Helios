@@ -172,7 +172,6 @@ export interface InitHost extends OverlaysHost
     _timeRange:          { start: Date; end: Date } | null;
     _isLiveMode:         boolean;
     _chartSeries:        ChartSeries | null;
-    _shadowBusy:         boolean;
 
     _lastHomeKey:        string;
     _initInflight:       boolean;
@@ -439,24 +438,5 @@ function wireEngineCallbacks(host: InitHost): void
             overlayRaf = null;
             refreshOverlays(host);
         });
-    };
-    //WebGL context-loss handler. Does NOT auto-respawn: when the browser kills our context (typically the per-origin 8-16 cap hit in
-    //editor preview), respawning here fires another getContext that kills another live context, looping until the session drowns in
-    //errors. MapLibre's own context-restored path brings it back on leave/scroll/refocus; otherwise the next user config edit hits the
-    //identity-change branch in updated() and spawns a fresh engine with no cascade in flight.
-    host._engine.onContextLost = () =>
-    {
-        console.warn('[HELIOS] WebGL context lost. Auto-respawn disabled to avoid cascade in editor preview; the canvas will recover on the next user-driven config change.');
-    };
-
-    //Shadow compute (footprint projection + raster paint): the card shows a spinner chip top-right as a "shadows are
-    //coming" signal while the cold-start recompute runs.
-    host._engine.onShadowComputeStart = () =>
-    {
-        host._shadowBusy = true;
-    };
-    host._engine.onShadowComputeEnd = () =>
-    {
-        host._shadowBusy = false;
     };
 }
