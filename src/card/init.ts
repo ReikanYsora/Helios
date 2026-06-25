@@ -26,13 +26,6 @@ export const VISUAL_CONFIG_KEYS = [
     'building-cluster-radius',
     'building-opacity',
     'auto-rotate-enabled',
-    //The 6 BYO-LiDAR keys: any change must invalidate the engine sig so the shadow pipeline reruns against the new provider config.
-    'lidar-local-ndsm-enabled',
-    'lidar-local-ndsm-url',
-    'lidar-local-ndsm-min-lat',
-    'lidar-local-ndsm-max-lat',
-    'lidar-local-ndsm-min-lon',
-    'lidar-local-ndsm-max-lon',
     //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: a slider drag would respawn (teardown + rebuild WebGL) every
     //frame. The editor instead pushes live previews through engine.setCamera* and bakes values into config; the next natural respawn
     //reads them from _initialBearing / _initialPitch.
@@ -183,7 +176,6 @@ export interface InitHost extends OverlaysHost, LoadingTrackerHost
     _isLiveMode:         boolean;
     _chartSeries:        ChartSeries | null;
     _shadowBusy:         boolean;
-    _lidarExposureBusy:  boolean;
     _weatherRateLimited: boolean;
 
     _lastHomeKey:        string;
@@ -411,9 +403,8 @@ function wireEngineCallbacks(host: InitHost): void
         return;
     }
 
-    //Ping Lit so engine-readiness-gated chrome (today: the LiDAR View button, gated on host._engine.getActiveLidarSourceId()) enables
-    //as soon as the engine lands instead of on the next clock tick. The engine isn't a @state property, so this nudge is the only
-    //signal Lit gets that it became truthy.
+    //Ping Lit so engine-readiness-gated chrome enables as soon as the engine lands instead of on the next clock tick.
+    //The engine isn't a @state property, so this nudge is the only signal Lit gets that it became truthy.
     host.requestUpdate();
 
     host._engine.onFetchStart = () =>
@@ -449,12 +440,8 @@ function wireEngineCallbacks(host: InitHost): void
     //refreshOverlays + dome re-projection ran several times per frame (sun arc 96 samples, home silhouettes all footprints, dome
     //648 cells * 4 corners + 96 ribbon samples). The gate caps it at one full pass per frame.
     let overlayRaf: number | null = null;
-    //LiDAR-View and Weather modes hide the HUD via CSS (opacity:0 + pointer-events:none). While there the projected sun arc,
-    //silhouettes and chip anchors are invisible but refreshOverlays still re-projects them on every transform under auto-rotate - the
-    //dominant CPU sink in LiDAR view. Same for dome scenes when their mode is OFF (the toggle re-runs once on enter to refresh).
-    type ModeAwareHost = InitHost & {
-        readonly _cardMode?: 'base' | 'lidar' | 'weather';
-    };
+    //Weather mode hides the HUD via CSS (opacity:0 + pointer-events:none). While there the projected sun arc, silhouettes
+    //and chip anchors are invisible but refreshOverlays still re-projects them on every transform under auto-rotate.
     host._engine.onMapTransform = () =>
     {
         //If paused (off-screen or hidden tab) the browser still fires move events for tile-load completions, but nothing's visible -
@@ -470,12 +457,7 @@ function wireEngineCallbacks(host: InitHost): void
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;
-            const mh = host as ModeAwareHost;
-            //In LiDAR-View the HUD is faded out: skip projecting sun arc, silhouettes, label layout, cloud scene.
-            if (mh._cardMode !== 'lidar')
-            {
-                refreshOverlays(host);
-            }
+            refreshOverlays(host);
         });
     };
     //WebGL context-loss handler. Does NOT auto-respawn: when the browser kills our context (typically the per-origin 8-16 cap hit in
@@ -487,25 +469,15 @@ function wireEngineCallbacks(host: InitHost): void
         console.warn('[HELIOS] WebGL context lost. Auto-respawn disabled to avoid cascade in editor preview; the canvas will recover on the next user-driven config change.');
     };
 
-    //LiDAR shadow compute (engine's WMS round-trip + raster paint): the card shows a spinner chip top-right as a "shadows are coming"
-    //signal during the few seconds the cold-start fetch takes.
+    //Shadow compute (footprint projection + raster paint): the card shows a spinner chip top-right as a "shadows are
+    //coming" signal while the cold-start recompute runs.
     host._engine.onShadowComputeStart = () =>
     {
         host._shadowBusy = true;
-        beginLoadingPhase(host, 'lidar-raster');
     };
     host._engine.onShadowComputeEnd = () =>
     {
         host._shadowBusy = false;
-        endLoadingPhase(host, 'lidar-raster');
-    };
-    //Exposure compute busy flag: same pattern, used by the mode-bar LiDAR button to show a spinner + lock mode-switching while the
-    //irradiance fill computes.
-    host._engine.onLidarExposureBusyChange = (busy: boolean): void =>
-    {
-        host._lidarExposureBusy = busy;
-        if (busy) { beginLoadingPhase(host, 'lidar-exposure'); }
-        else      { endLoadingPhase(host, 'lidar-exposure'); }
     };
 
     //Rate-limit banner trigger: fires when the Open-Meteo home-point fetch transitions in/out of HTTP 429 back-off. The card paints

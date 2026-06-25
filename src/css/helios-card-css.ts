@@ -145,9 +145,9 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Base opacity transition for every overlay that fades out behind a non-base mode (LiDAR fades
-        all to let the dot cloud read on its own). Kept on the unprefixed selectors so the fade runs
-        in both directions; will-change is scoped separately below to avoid pinning idle GPU layers. */
+    /*  Base opacity transition for every overlay that fades out behind a non-base mode (weather fades
+        the HUD). Kept on the unprefixed selectors so the fade runs in both directions; will-change is
+        scoped separately below to avoid pinning idle GPU layers. */
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
@@ -192,7 +192,7 @@ export const heliosCardStyles = css`
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
     }
-    /*  Chips + leaders + arcs fade out behind any non-base mode (LiDAR, weather), keyed on
+    /*  Chips + leaders + arcs fade out behind any non-base mode (weather), keyed on
         overlay-masked so the card's state machine controls the timing. */
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
@@ -233,7 +233,7 @@ export const heliosCardStyles = css`
         opacity: 0;
         pointer-events: none;
     }
-    /*  Top-right mode bar stays through LiDAR (so the user can exit) but hides in weather mode, where
+    /*  Top-right mode bar stays in the base view but hides in weather mode, where
         the only chrome is the centred cloud chips + home exit disc. */
     ha-card.overlay-masked .overlay-top-right
     {
@@ -937,9 +937,9 @@ export const heliosCardStyles = css`
 
 
 
-    /*  Mode bar (Layer / LiDAR / Weather): vertical column of three icon-only toggles, top-right, no
-        backplate. Each button is a transparent 40 px circle (HA toolbar-button recipe, shared with the
-        camera-lock toggle) lighting up brand-blue when active. */
+    /*  Mode bar (Layer / Weather): row of two icon-only toggles, top-right, no backplate. Each button
+        is a transparent 40 px circle (HA toolbar-button recipe, shared with the camera-lock toggle)
+        lighting up brand-blue when active. */
     .mode-bar
     {
         display: inline-flex;
@@ -1006,7 +1006,7 @@ export const heliosCardStyles = css`
         cursor: not-allowed;
         pointer-events: none;
     }
-    /*  Spinning LiDAR icon while shadows compute, sharing the centre spinner's rotation primitive. */
+    /*  Spinning icon while shadows compute, sharing the centre spinner's rotation primitive. */
     .mode-bar-seg .is-spinning
     {
         animation: helios-mode-spin 1s linear infinite;
@@ -1028,7 +1028,7 @@ export const heliosCardStyles = css`
         -webkit-font-smoothing: antialiased;
     }
 
-    /*  Top-right overlay rail hosting the mode-bar toggles. z-index 60 keeps it above the LiDAR canvas
+    /*  Top-right overlay rail hosting the mode-bar toggles. z-index 60 keeps it above the basemap canvas
         (z 30) + centre spinner (z 50) so a toggle is always reachable. pointer-events off on the rail so
         it never steals map interactions; the buttons opt back in. */
     .overlay-top-right
@@ -1219,93 +1219,6 @@ export const heliosCardStyles = css`
     {
         text-align: center;
         opacity: 0.9;
-    }
-
-    /*  LiDAR View opacity slider, shown at the bottom while LiDAR is active. Continuous capsule pill,
-        no ticks since opacity is a free analog tune. */
-
-    .lidar-view-opacity-slider
-    {
-        position: absolute;
-        bottom: 14px;
-        left: 50%;
-        /*  Enters via transition from this off-screen transform; leaves the same way for a smooth slide. */
-        transform: translate(-50%, 60px);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.35s ease, transform 0.35s ease;
-        z-index: 50;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 12px;
-        min-height: 28px;
-        box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 999px;
-    }
-    .lidar-view-opacity-slider.is-active
-    {
-        opacity: 1;
-        transform: translate(-50%, 0);
-        pointer-events: auto;
-    }
-    .lidar-view-opacity-icon
-    {
-        --mdc-icon-size: 16px;
-        color: rgba(255, 255, 255, 0.85);
-        display: inline-flex;
-        align-items: center;
-    }
-    .lidar-view-opacity-icon--low  { opacity: 0.7; }
-    .lidar-view-opacity-icon--high { opacity: 1.0; }
-    .lidar-view-opacity-range
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 160px;
-        height: 4px;
-        background: linear-gradient(to right, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.9) 100%);
-        border-radius: 999px;
-        outline: none;
-        cursor: pointer;
-        margin: 0;
-    }
-    .lidar-view-opacity-range::-webkit-slider-thumb
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--primary-color, #03a9f4);
-        border: 2px solid var(--card-background-color, #ffffff);
-        box-shadow: 0 1px 3px var(--shadow-color);
-        cursor: pointer;
-        position: relative;
-        z-index: 2;
-    }
-    .lidar-view-opacity-range::-moz-range-thumb
-    {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--primary-color, #03a9f4);
-        border: 2px solid var(--card-background-color, #ffffff);
-        box-shadow: 0 1px 3px var(--shadow-color);
-        cursor: pointer;
-        position: relative;
-        z-index: 2;
-    }
-    .lidar-view-opacity-value
-    {
-        min-width: 36px;
-        text-align: right;
-        font-size: var(--ha-font-size-xs, 11px);
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.85);
-        font-variant-numeric: tabular-nums;
     }
 
     /*  Weather mode renders inside MapLibre via a GL custom layer (src/engine/weather-cloud-layer.ts),

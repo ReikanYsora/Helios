@@ -77,7 +77,7 @@ export interface PvComputeContext
 {
     airTempC?: number;   //retained so existing callers compile; no longer affect output (cell-temp derating moved to HA forecast)
     windMs?:   number;   //ditto airTempC
-    shading?:  boolean;  //LiDAR raycast (isPanelShaded in pv-shading.ts): true zeroes the direct beam, keeps diffuse + ground
+    shading?:  boolean;  //Obstacle-shading hook: true zeroes the direct beam, keeps diffuse + ground (currently unset)
     //Measured/forecast GHI W/m² (Open-Meteo shortwave or home sensor). When >= 0 it replaces the analytical Haurwitz ×
     //Kasten-Czeplak magnitude so cloud physics come from the weather model. Undefined keeps the analytical base bit-for-bit.
     ghiWm2?:   number;
@@ -87,8 +87,8 @@ export interface PvComputeContext
     directWm2?:  number;
     diffuseWm2?: number;
     //Plane-of-array W/m² from Open-Meteo global_tilted_irradiance for THIS tilt+azimuth (card/gti.ts). When >= 0 on a tilted
-    //panel it REPLACES the isotropic Liu-Jordan transposition with Open-Meteo's anisotropic (Perez) POA. LiDAR shading still
-    //carves out the beam (estimated from diffuse + ground). Undefined keeps the transposition.
+    //panel it REPLACES the isotropic Liu-Jordan transposition with Open-Meteo's anisotropic (Perez) POA. Obstacle shading
+    //still carves out the beam (estimated from diffuse + ground). Undefined keeps the transposition.
     poaWm2?:     number;
 }
 
@@ -182,7 +182,7 @@ export function computePvPower(
         }
         const diffuseFraction = 1 - directFraction;
 
-        //Shading: LiDAR says an obstacle blocks the sun ray. Direct beam gone; diffuse + ground terms still reach the panel
+        //Shading: an obstacle blocks the sun ray. Direct beam gone; diffuse + ground terms still reach the panel
         //(we don't model an obstacle opaque to diffuse, which needs a sky-view factor the pipeline lacks).
         const directPoa  = ctx?.shading ? 0 : ghiEff * directFraction * Rb;
         const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;

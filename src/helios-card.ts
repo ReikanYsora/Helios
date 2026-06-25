@@ -8,7 +8,6 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
-    DEFAULT_LIDAR_VIEW_OPACITY,
     DEFAULT_PERIOD_PAST_DAYS,
     DEFAULT_PERIOD_FUTURE_DAYS,
     periodPastDays,
@@ -67,7 +66,6 @@ import
     onTimelinePointerMove,
     onTimelinePointerUp
 } from './card/timeline';
-import { enterLidarView, exitLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
 import type { CardMode } from './card/card-mode';
 import { renderLoadingBanner, renderWeatherRateLimitBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
 import { refreshGrid, formatGridValue } from './card/grid';
@@ -412,7 +410,7 @@ export class HeliosCard extends LitElement
     //Screen-space layout of the cloud-cover disc + 100% reference ring, via engine.projectCloudScene() on
     //every map transform and clock tick. A pair of SVG polygons alongside the sun arc, anchored at the
     //home's terrain elevation so the disc stays a true circle (a MapLibre fill layer would warp with the
-    //terrain mesh under high-precision LiDAR shadows).
+    //terrain mesh).
     @state() _cloudScene: CloudScene | null = null;
     //Per-polygon screen-space silhouettes of the home building(s): each entry holds the projected base
     //and top ring of one polygon. The card paints both rings plus a quad per outer-ring edge into the
@@ -474,12 +472,9 @@ export class HeliosCard extends LitElement
     //Not @state: changes go through _applyPeriod(), which requestUpdate()s after dropping store + window.
     _periodPastDays   = DEFAULT_PERIOD_PAST_DAYS;
     _periodFutureDays = DEFAULT_PERIOD_FUTURE_DAYS;
-    //True while the engine is fetching + rasterising the LiDAR shadow payload. Drives the spinner chip
-    //top-right so the user knows the shadow layer is still computing.
+    //True while the engine is recomputing + rasterising the footprint shadow payload. Drives the spinner
+    //chip top-right so the user knows the shadow layer is still computing.
     @state() _shadowBusy    = false;
-    //True while the per-cell irradiance exposure sweep is in flight (idle handle scheduled or chunked rAF
-    //mid-pass). Drives the mode-bar LiDAR icon -> spinner swap and the mode-switch lock.
-    @state() _lidarExposureBusy = false;
 
     //True while the Open-Meteo home-point fetch is stuck in HTTP 429 back-off (via the engine's
     //onWeatherRateLimitChange callback, wired in init.ts). Clears on the next successful refresh; an alert
@@ -507,31 +502,16 @@ export class HeliosCard extends LitElement
     //stay on the direct hass.states path: the store carries bucketed curves, the chips need sample-accurate
     //values a 15 min bucket would lose.
     @state() _unifiedStore: import('./card/unifiedStore').UnifiedDataStore | null = null;
-    //Single source of truth for the card's mode. Drives every transition (slider slide, chip/leader/arc
-    //fade, timeline slide, WebGL dot-cloud fade, Weather SVG fade). Set by the mode-bar click handlers,
-    //reacted to by _handleCardModeChange in updated(). Modes are mutually exclusive.
+    //Single source of truth for the card's mode. Drives every transition (chip/leader/arc fade, timeline
+    //slide, Weather SVG fade). Set by the mode-bar click handlers, reacted to by _handleCardModeChange in
+    //updated(). Modes are mutually exclusive.
     @state() _cardMode: CardMode = 'base';
-    //True while chips/leaders/arcs/timeline are masked behind a non-base mode. Decoupled from _cardMode on
-    //EXIT so the HUD doesn't pop back through still-visible LiDAR dots: LiDAR -> base keeps the mask ON
-    //until the WebGL fade-out completes (fade loop clears it); Weather -> base clears immediately (the
-    //raster is faint enough to read chips through).
+    //True while chips/leaders/arcs/timeline are masked behind a non-base mode. Weather -> base clears
+    //immediately (the raster is faint enough to read chips through).
     @state() _overlayMaskActive = false;
-    //WebGL dot-cloud lifecycle. True on lidar enter, cleared by the fade loop on fade-out completion.
-    //Decoupled from _cardMode so the engine keeps drawing dots through the exit fade.
-    _lidarLayerActive:    boolean = false;
-    //Fade timestamps. Enter eases the dot cloud in over LIDAR_FADE_IN_MS; exit eases out over
-    //LIDAR_FADE_OUT_MS then engine.setLidarViewActive(false) tears the layer down. Null when idle.
-    _lidarFadeInStartMs:  number | null = null;
-    _lidarFadeOutStartMs: number | null = null;
-    _lidarFadeRaf?:       number;
-    //Overall LiDAR View opacity, driven by the bottom slider. Plain field (NOT @state) on purpose: the
-    //drag fires ~50 events/s and a @state coupling would cascade the full render() each time for zero gain
-    //(the slider's .value tracks the drag and the engine push goes straight to the WebGL layer). Defaults
-    //to DEFAULT_LIDAR_VIEW_OPACITY per card lifetime.
-    _lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
 
     //Weather mode overlay lifecycle: keeps the cloud-cover canvas painting through its exit fade after
-    //_cardMode left 'weather'. Cleared by the weather fade loop on completion. Mirrors _lidarLayerActive.
+    //_cardMode left 'weather'. Cleared by the weather fade loop on completion.
     _weatherOverlayVisible: boolean = false;
     _weatherFadeInStartMs:  number | null = null;
     _weatherFadeOutStartMs: number | null = null;
@@ -745,8 +725,8 @@ export class HeliosCard extends LitElement
             + `Helios now resolves these directly from the official Home Assistant Energy dashboard `
             + `(Settings → Dashboards → Energy → your sources). The PV forecast is also read from the `
             + `Energy dashboard's configured solar forecast now, so the card no longer carries any PV `
-            + `install configuration. LiDAR providers and visual options still live in the card YAML, `
-            + `only the entity slots and the forecast config were retired.`;
+            + `install configuration. Only the entity slots and the forecast config were retired; the `
+            + `visual options still live in the card YAML.`;
         try
         {
             this.hass.callService('persistent_notification', 'create', {
@@ -973,23 +953,12 @@ export class HeliosCard extends LitElement
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
         unsubscribeEnergyPrefs(this);
-        if (this._lidarFadeRaf !== undefined)
-        {
-            cancelAnimationFrame(this._lidarFadeRaf);
-            this._lidarFadeRaf = undefined;
-        }
-        //Same for the weather overlay fade + dashboard count-up loops: both self-resubmit via rAF and
-        //close over `this`, so a detached card would otherwise keep calling requestUpdate().
+        //The weather overlay fade + dashboard count-up loops self-resubmit via rAF and close over `this`,
+        //so a detached card would otherwise keep calling requestUpdate().
         if (this._weatherFadeRaf !== undefined)
         {
             cancelAnimationFrame(this._weatherFadeRaf);
             this._weatherFadeRaf = undefined;
-        }
-        if (this._lidarOpacityRaf)
-        {
-            cancelAnimationFrame(this._lidarOpacityRaf);
-            this._lidarOpacityRaf = 0;
-            this._pendingLidarOpacity = null;
         }
         cancelPendingRespawn(this);
         if (this._connectSettleTimer !== undefined)
@@ -1123,14 +1092,11 @@ export class HeliosCard extends LitElement
                 return;
             }
             //Reset mode flags on identity change. _cardMode survives the engine respawn but the engine's
-            //active flags reset on a fresh instance. Without this, a card in LiDAR mode at the old home
-            //carries the is-on chrome to the new home while the new engine skips the fetch, so the next
-            //LiDAR click toggles OFF instead of refreshing. Reset forces a clean re-enter.
+            //active flags reset on a fresh instance, so force a clean base mode at the new home.
             if (identityChanged)
             {
                 this._cardMode           = 'base';
                 this._overlayMaskActive  = false;
-                this._lidarLayerActive   = false;
                 this._weatherOverlayVisible = false;
                 //New home = fresh hydration wave, surface the loading banner again.
                 this._loadingPhases       = new Map();
@@ -1769,13 +1735,9 @@ export class HeliosCard extends LitElement
         const isDark = this._resolveIsDark(themesObj);
         const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
-        //LiDAR View gating: the button stays visible (predictable across homes) but disables when no
-        //provider covers the active home. Read off the engine; null until the engine resolves its first home.
-        const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
         //ha-card classes: theme + a mode-* class from _cardMode + overlay-masked for the chip/leader/arc/
-        //timeline hide rules. The mask LAGS the _cardMode flip on lidar -> base so the HUD doesn't pop back
-        //through the still-visible dot cloud. Weather mode hides chips/leaders/arcs but keeps the bottom
-        //timeline visible (CSS mode-weather exception in helios-card-css.ts) so the user can scrub.
+        //timeline hide rules. Weather mode hides chips/leaders/arcs but keeps the bottom timeline visible
+        //(CSS mode-weather exception in helios-card-css.ts) so the user can scrub.
         const overlayMasked = this._overlayMaskActive;
         //camera-locked swaps the MapLibre grab cursor for the default arrow when the camera is pinned (pan
         //+ rotate disabled, so the open-hand cursor was misleading). Re-evaluated every render.
@@ -1845,53 +1807,23 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-<!--  Top-right mode bar: three glued segments picking
+<!--  Top-right mode bar: two glued segments picking
                       which canvas state the card is in. The default
                       Layer UI is the regular HUD (sun arc, clouds,
-                      leader lines, chips), LiDAR View paints the
-                      cell cloud over a quiet basemap, Ombres paints
-                      the celestial dome of learned residuals above
-                      the home. The three modes are mutually
-                      exclusive; the bar shows which one is active
-                      and lets the user switch in a single click.
-                      Each segment is icon-only with a title
-                      tooltip; the active segment takes the same
+                      leader lines, chips); Weather paints the
+                      per-altitude cloud cover over a quiet basemap.
+                      The modes are mutually exclusive; the bar shows
+                      which one is active and lets the user switch in
+                      a single click. Each segment is icon-only with a
+                      title tooltip; the active segment takes the same
                       scrub-blue plate the clock chip uses while
                       scrubbing, for visual consistency with the
                       other mode-indicating chips.                   -->
                 ${hasHomeCoords ? (() => {
-                    const isLocal     = lidarSourceId === 'local-ndsm';
-                    const hasProvider = lidarSourceId !== null;
-                    //LiDAR readiness: an online provider needs its first fetch before the view is
-                    //meaningful; local nDSM resolves synchronously and never loads. The spinner (disabled
-                    //button) covers BOTH the raster fetch (shadow busy) and the per-cell exposure compute;
-                    //once ready the icon flips to satellite (online) or harddisk (local).
-                    const lidarLoading = hasProvider
-                                       && ((!isLocal && this._shadowBusy)
-                                           || (this._cardMode === 'lidar' && this._lidarExposureBusy));
-                    const lidarReady   = hasProvider && (isLocal || !this._shadowBusy);
-                    const lidarIcon   = !hasProvider ? 'mdi:cloud-off-outline'
-                                       : lidarLoading ? 'mdi:loading'
-                                       : isLocal      ? 'mdi:harddisk'
-                                                      : 'mdi:satellite-variant';
-                    const lidarTitle  = !hasProvider ? 'No LiDAR coverage at this location'
-                                       : lidarLoading ? 'LiDAR view, loading shadows...'
-                                       : isLocal      ? 'LiDAR view, local nDSM'
-                                                      : 'LiDAR view, online provider';
-                    //Cloud mode is a soft per-layer reveal, not a mutually-exclusive view: it doesn't replace
-                    //the Layer UI, so the Layer button stays lit while the cloud chips are revealed.
                     const isLayer    = this._cardMode === 'base';
-                    const isLidar    = this._cardMode === 'lidar';
                     const isWeather  = this._cardMode === 'weather';
-                    //modeLocked is true while a LiDAR exposure sweep is in flight. It gates only the LiDAR
-                    //button's ?disabled (no stacking a second sweep); the Layer + Weather EXIT buttons stay
-                    //enabled so the user can always leave mid-sweep. Wiring ?disabled on the exits too once
-                    //caused a "stuck in LiDAR" bug: a background atmosphere-refresh sweep silently swallowed
-                    //their @click. The exit fade + setLidarViewActive(false) cancel the in-flight sweep.
-                    const modeLocked = isLidar && this._lidarExposureBusy;
                     //Mode-bar click handlers bound once as class fields so Lit sees a stable identity and
-                    //doesn't re-attach the four @click handlers per render.
-                    const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar   : undefined;
+                    //doesn't re-attach the @click handlers per render.
                     const onLayer    = this._onModeLayer;
                     const onWeather  = this._onModeWeather;
                     //Camera lock chip (top-left). Tapping flips the lock and asks the engine to persist the
@@ -1945,17 +1877,6 @@ export class HeliosCard extends LitElement
                                     @click="${onLayer}"
                                 >
                                     <ha-icon icon="mdi:home"></ha-icon>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="mode-bar-seg ${isLidar ? 'is-on' : ''} ${(!lidarReady || modeLocked) ? 'is-disabled' : ''} ${lidarLoading ? 'is-loading' : ''}"
-                                    role="radio"
-                                    aria-checked="${isLidar ? 'true' : 'false'}"
-                                    ?disabled="${!lidarReady || modeLocked}"
-                                    aria-label="${lidarTitle}"
-                                    @click="${onLidar}"
-                                >
-                                    <ha-icon class="${lidarLoading ? 'is-spinning' : ''}" icon="${lidarIcon}"></ha-icon>
                                 </button>
                                 <button
                                     type="button"
@@ -2463,9 +2384,7 @@ export class HeliosCard extends LitElement
                       arc's horizon crossings. Removed: the arc
                       shape itself already communicates "the sun
                       rises here, sets there", the icons added
-                      visual noise and competed with the LiDAR
-                      shadow blobs sitting on the same
-                      horizon line.                                  -->
+                      visual noise on the horizon line.            -->
 
 
                 <!--  Home hover glow, sun-coloured halo around the
@@ -2541,9 +2460,6 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-
-                ${renderLidarViewOpacityPicker(this, this._onLidarOpacityChange)}
-
             </ha-card>
         `;
     }
@@ -2563,49 +2479,13 @@ export class HeliosCard extends LitElement
         this._homeHover = false;
     };
 
-    //LiDAR opacity slider, rAF-coalesced. The native range input fires @input up to ~50 Hz; each call hit
-    //setLidarViewOpacity, triggering a full MapLibre repaint. Coalescing to one rAF caps it at one repaint
-    //per frame with no perceived lag.
-    private _pendingLidarOpacity: number | null = null;
-    private _lidarOpacityRaf:     number       = 0;
-    private _onLidarOpacityChange = (opacity: number): void =>
-    {
-        this._pendingLidarOpacity = opacity;
-        if (this._lidarOpacityRaf)
-        {
-            return;
-        }
-        this._lidarOpacityRaf = requestAnimationFrame(() =>
-        {
-            this._lidarOpacityRaf = 0;
-            const v = this._pendingLidarOpacity;
-            if (v === null)
-            {
-                return;
-            }
-            this._lidarViewOpacity = v;
-            this._engine?.setLidarViewOpacity(v);
-            //Kick a Lit render so the picker's pct text updates through Lit. An earlier imperative
-            //span.textContent write destroyed Lit's marker comments in the span, crashing the next render
-            //and aborting updated() before _handleCardModeChange ran, which left the dot cloud drawing
-            //after a mode switch. This requestUpdate is rAF-coalesced, so it fires at most once per frame.
-            this.requestUpdate();
-        });
-    };
-
-
-    //Bound mode-bar handlers, class fields (stable identity, so Lit doesn't re-attach the four @click
-    //handlers per render). Each drops scrub state via _exitScrubMode first: a mode switch shifts the
-    //timeline, and the absolutely-positioned scrub tooltip would otherwise float orphaned.
+    //Bound mode-bar handlers, class fields (stable identity, so Lit doesn't re-attach the @click handlers
+    //per render). Each drops scrub state via _exitScrubMode first: a mode switch shifts the timeline, and
+    //the absolutely-positioned scrub tooltip would otherwise float orphaned.
     private _onModeLayer = (): void =>
     {
         this._exitScrubMode();
         this._cardMode = 'base';
-    };
-    private _onModeLidar = (): void =>
-    {
-        this._exitScrubMode();
-        this._cardMode = 'lidar';
     };
     private _onModeWeather = (): void =>
     {
@@ -2648,13 +2528,10 @@ export class HeliosCard extends LitElement
     //Mode-transition state machine (see _handleCardModeChange below; the doc comment is split around the
     //inserted _maybeRebuildUnifiedStore). Driven from updated() on a _cardMode change, the (prev, next)
     //switch drives:
-    //  1. _overlayMaskActive: ON on leaving base. OFF on weather -> base immediately (faint dome SVG); OFF
-    //     on lidar -> base only AFTER the dot-cloud fade-out (so HUD chips don't pop through the cloud).
-    //  2. LiDAR enter/exit: enterLidarView() activates the layer + alpha ramp; exitLidarView() fades out,
-    //     the layer is torn down at end-of-fade.
-    //  3. Weather enter/exit: enterWeatherMode() kicks fade-in + camera ease + grid fetch; exitWeatherMode()
+    //  1. _overlayMaskActive: ON on leaving base. OFF on weather -> base immediately (faint overlay).
+    //  2. Weather enter/exit: enterWeatherMode() kicks fade-in + camera ease + grid fetch; exitWeatherMode()
     //     fades out + restores the camera.
-    //CSS animations run on their own classes (.is-active on sliders, .overlay-masked on ha-card).
+    //CSS animations run on their own classes (.overlay-masked on ha-card).
 
     //Unified store refresh: short-circuits when the host store matches the current data version (hash
     //compare), else rebuilds and assigns the @state. Setting it during updated() schedules one follow-up
@@ -2676,26 +2553,6 @@ export class HeliosCard extends LitElement
         if (next !== 'base')
         {
             this._overlayMaskActive = true;
-        }
-
-        if (prev === 'lidar' && next !== 'lidar')
-        {
-            //Always run exitLidarView when leaving LiDAR, no _lidarLayerActive guard: the old guard left
-            //the engine layer drawing on a flag desync. Cheap when the layer was never active (the fade
-            //tick multiplies alpha by _lidarLayerActive, so a false flag collapses alpha to 0 at once).
-            exitLidarView(this);
-        }
-        else if (prev !== 'lidar' && next === 'lidar')
-        {
-            const entered = enterLidarView(this);
-            if (!entered)
-            {
-                //No LiDAR provider covers the active home: bail back to base so the mode-bar chrome doesn't
-                //stay lit, and reset the mask so the chips don't flash hidden for one frame.
-                this._overlayMaskActive = false;
-                this._cardMode          = 'base';
-                return;
-            }
         }
 
         if (prev === 'weather' && next !== 'weather')

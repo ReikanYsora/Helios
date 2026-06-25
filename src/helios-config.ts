@@ -12,7 +12,7 @@ import {
     MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
 } from './constants';
 export {
-    DEFAULT_SUN_COLOR_HEX, DEFAULT_CLOUD_COLOR_HEX, DEFAULT_PV_COLOR_HEX, DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_SUN_COLOR_HEX, DEFAULT_CLOUD_COLOR_HEX, DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_IN_COLOR_HEX, DEFAULT_BATTERY_OUT_COLOR_HEX, DEFAULT_GRID_IMPORT_COLOR_HEX,
     DEFAULT_GRID_EXPORT_COLOR_HEX, DEFAULT_BUILDING_COLOR_HEX, DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
@@ -20,10 +20,8 @@ export {
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
     MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
-    DEFAULT_LIDAR_PRECISION, LIDAR_PRECISION_PITCH_MULT, DEFAULT_SHADOW_OPACITY,
-    DEFAULT_LIDAR_LOCAL_NDSM_ENABLED, DEFAULT_LIDAR_VIEW_OPACITY, LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
+    DEFAULT_SHADOW_OPACITY,
 } from './constants';
-export type { LidarPrecisionLevel } from './constants';
 
 
 //User-facing config passed to setConfig(), read by the engine + editor. Every key is optional and typed
@@ -59,7 +57,7 @@ export interface HeliosConfig
     //Legacy per-layer building radius, retired for `display-radius`. Kept in the type only so the editor's
     //retired-key strip recognises + removes it on save.
     'building-radius'?:        unknown;
-    //Global display radius (m): the distance around the home within which buildings, LiDAR cells and shadows
+    //Global display radius (m): the distance around the home within which buildings and shadows
     //render. Clamped [50,500], default 200. Lowering it is the main perf lever on old phones.
     'display-radius'?:         unknown;
     //Opacity 0..1 of surrounding buildings (home stays 1.0). Default 0.25, a ghost surround for context.
@@ -67,22 +65,10 @@ export interface HeliosConfig
     //Cluster radius (m): buildings within it (or containing the home) are treated as part of the home and
     //painted at full opacity, so attached garages/verandas don't render as transparent neighbours. Default 0.
     'building-cluster-radius'?: unknown;
-    //Cast-shadow master toggle. Default true; false projects no shadows (LiDAR or footprint).
+    //Cast-shadow master toggle. Default true; false projects no shadows from building footprints.
     'shadows-enabled'?:        unknown;
-    //LiDAR raster precision for shadow geometry (only inside provider coverage): 'low' 256, 'medium' 512, 'high' 1024.
-    'lidar-precision'?:       unknown;
     //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
     'shadow-opacity'?:         unknown;
-    //Optional local nDSM GeoTIFF LiDAR provider: a browser-reachable Float32 height-above-ground raster prepared
-    //offline. Selected only when enabled + fully configured + covering the home; otherwise the public provider
-    //chain + footprint mask apply. Keys: enabled (master opt-in, default false), url, and the EPSG:4326 bbox
-    //min/max lat/lon that gate covers(lat,lon) and the RasterGeo extent. Invalid config disables only this provider.
-    'lidar-local-ndsm-enabled'? : unknown;
-    'lidar-local-ndsm-url'?     : unknown;
-    'lidar-local-ndsm-min-lat'? : unknown;
-    'lidar-local-ndsm-max-lat'? : unknown;
-    'lidar-local-ndsm-min-lon'? : unknown;
-    'lidar-local-ndsm-max-lon'? : unknown;
     //Optional home override. Used only when both parse finite + in range (lat -90..90, lon -180..180); else
     //falls back to hass.config. The window.__heliosLocationOverride debug hook still wins over this.
     'home-latitude'?:          unknown;
@@ -121,7 +107,7 @@ export function valueDecimals(config: HeliosConfig | undefined): number
 
 
 //Resolve the global display radius (m) from `display-radius`, clamped to [MIN,MAX], defaulting on invalid.
-//Single source of truth so lowering it shrinks buildings, LiDAR cells and shadows in lockstep.
+//Single source of truth so lowering it shrinks buildings and shadows in lockstep.
 export function displayRadiusM(config: HeliosConfig | undefined): number
 {
     const raw = config?.['display-radius'];

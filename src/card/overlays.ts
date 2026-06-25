@@ -263,9 +263,6 @@ export function refreshOverlays(host: OverlaysHost): void
         host._homeSilhouettes = nextHomes;
     }
 
-    //Lidar is a custom layer now: no per-transform JS projection / canvas redraw. The card only drives fade alpha via
-    //_startLidarFadeLoop; MapLibre re-issues the layer draw on every transform.
-
     //Weather raster source/layer is owned by the engine + weather mode lifecycle, so this transform path skips it.
 }
 

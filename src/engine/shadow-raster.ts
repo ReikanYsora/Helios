@@ -7,17 +7,13 @@ import type maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
 
-//Offscreen raster resolution for the shadow mask, indexed by the user's `lidar-precision` choice. Bigger raster =
-//longer encode/upload/tile re-paint. Trade-offs per level:
-//  - low    , 512x512.   ~4 m/px at worst-case 2 km bbox, chunky but readable. Default for mobile / explicit downgrade.
-//  - medium , 1024x1024. ~2 m/px. Previous default.
-//  - high   , 2048x2048. ~1 m/px, edges land on the LiDAR grid. ~40 ms encode, 4x medium memory; desktop dense scenes.
-import type { LidarPrecisionLevel } from '../helios-config';
-import { SHADOW_RASTER_SIZE_BY_PRECISION } from '../constants';
+//Offscreen raster resolution for the footprint shadow mask. Fixed at 1024x1024 (~2 m/px over a 400 m
+//diameter) now that the LiDAR precision selector is gone; bigger raster = longer encode/upload/tile re-paint.
+import { SHADOW_RASTER_SIZE } from '../constants';
 
-export function shadowRasterSizeFor(level: LidarPrecisionLevel): number
+export function shadowRasterSizeFor(): number
 {
-    return SHADOW_RASTER_SIZE_BY_PRECISION[level] ?? 1024;
+    return SHADOW_RASTER_SIZE;
 }
 
 
@@ -59,7 +55,7 @@ export function shadowBoundsCornersLL(
 //
 //`fadeFullMeters` / `fadeOutMeters` add a radial alpha fall-off centred on home so the hard circular edge stops
 //reading as a boundary: full alpha inside `fadeFullMeters`, ramping linearly to zero between the two radii. Aligned
-//with the LiDAR view fade radii so the two layers share their visual extent.
+//with the building display radius so shadows share the buildings' visual extent.
 export function paintShadowRaster(
     map:            MapLibreMap,
     canvas:         HTMLCanvasElement,

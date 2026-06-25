@@ -6,7 +6,6 @@ import
     type HeliosConfig,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
-    DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
@@ -19,17 +18,6 @@ import
     MAX_VALUE_DECIMALS,
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
-
-
-// Legacy LiDAR View knobs, superseded by the in-card opacity slider. Stripped silently on every config write to keep saved YAML
-// tidy; the runtime already ignores them.
-const LIDAR_VIEW_LEGACY_KEYS = [
-    'lidar-view-point-color',
-    'lidar-view-point-opacity',
-    'lidar-view-wireframe',
-    'lidar-view-wireframe-color',
-    'lidar-view-wireframe-opacity'
-] as const;
 
 
 
@@ -143,8 +131,6 @@ export class HeliosCardEditor extends LitElement
         'pixel-ratio',
         'timeline-enabled',
         'timeline-width-pct',
-        'lidar-view-point-size',
-        'lidar-view-radius',
         'building-radius',
         // Colour identity is fixed by the HA Energy palette (DEFAULT_*_COLOR_HEX in helios-config.ts); the renderer reads no
         // per-card override, so these stale keys get stripped.
@@ -153,8 +139,17 @@ export class HeliosCardEditor extends LitElement
         'pv-color',
         'battery-color',
         'building-color',
-        // LiDAR view styling collapsed into --primary-text-color + the in-card opacity slider. Also stripped on every edit via
-        // LIDAR_VIEW_LEGACY_KEYS; listed here too so a no-op editor open still cleans the YAML.
+        // LiDAR was removed in 2026.7.1 (forecast-based shading works everywhere, no provider inequality). All LiDAR keys are
+        // listed here so an upgrading user's saved YAML self-heals on the next editor open without a one-shot migration.
+        'lidar-precision',
+        'lidar-local-ndsm-enabled',
+        'lidar-local-ndsm-url',
+        'lidar-local-ndsm-min-lat',
+        'lidar-local-ndsm-max-lat',
+        'lidar-local-ndsm-min-lon',
+        'lidar-local-ndsm-max-lon',
+        'lidar-view-point-size',
+        'lidar-view-radius',
         'lidar-view-point-color',
         'lidar-view-point-opacity',
         'lidar-view-wireframe',
@@ -254,21 +249,8 @@ export class HeliosCardEditor extends LitElement
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
         const next = { ...this._cfg, [key]: value } as Record<string, unknown>;
-        // Strip the legacy LiDAR View knobs on any edit so the config self-heals without a one-shot migration.
-        for (const k of LIDAR_VIEW_LEGACY_KEYS)
-        {
-            if (k in next)
-            {
-                delete next[k];
-            }
-        }
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
-    }
-
-    private _str(key: keyof HeliosConfig, e: Event): void
-    {
-        this._update(key, (e.target as HTMLInputElement).value);
     }
 
     // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits as-is; anything
@@ -450,7 +432,7 @@ export class HeliosCardEditor extends LitElement
                         <span class="slider-value">${this._fmtNum(Number(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M), 10)} m</span>
                     </div>
                 </label>
-                <div class="hint">${t.editor.displayRadiusHelp ?? 'Distance autour de la maison dans laquelle les bâtiments, les cellules LiDAR et les ombres sont rendus. Baissez cette valeur (jusqu\'à 50 m) pour fluidifier l\'affichage sur un téléphone ancien ou lent ; montez-la (jusqu\'à 500 m) pour une vue plus large. Par défaut 200 m.'}</div>
+                <div class="hint">${t.editor.displayRadiusHelp ?? 'Distance autour de la maison dans laquelle les bâtiments et les ombres sont rendus. Baissez cette valeur (jusqu\'à 50 m) pour fluidifier l\'affichage sur un téléphone ancien ou lent ; montez-la (jusqu\'à 500 m) pour une vue plus large. Par défaut 200 m.'}</div>
                 <div class="field">
                     <span class="label">${t.editor.autoRotate}</span>
                     <div class="segmented-toggle">
@@ -516,20 +498,6 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.shadowsEnabledHint}</div>
-
-                <label class="field">
-                    <span class="label">${t.editor.lidarPrecision}</span>
-                    <select
-                        class="he-select"
-                        .value="${String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)}"
-                        @change="${(e: Event) => this._update('lidar-precision', (e.target as HTMLSelectElement).value)}"
-                    >
-                        <option value="low"    ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'low'}">${t.editor.lidarPrecisionLow}</option>
-                        <option value="medium" ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'medium'}">${t.editor.lidarPrecisionMedium}</option>
-                        <option value="high"   ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'high'}">${t.editor.lidarPrecisionHigh}</option>
-                    </select>
-                </label>
-                <div class="hint">${t.editor.lidarPrecisionHint}</div>
 
                 <label class="field">
                     <span class="label">${t.editor.shadowOpacity}</span>
@@ -601,84 +569,6 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
 
-                <details class="advanced-section" ?open="${this._openSection === 'lidar'}" @toggle="${(e: Event) => this._onSectionToggle('lidar', e)}">
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:cube-scan"></ha-icon>${t.editor.localLidarSection}</summary>
-                    <div class="hint">${t.editor.localLidarHint}</div>
-                    <div class="hint" style="margin-bottom: 14px;">${renderMarkdownLinks(t.editor.localLidarToolsHint)}</div>
-                    <div class="field">
-                        <span class="label">${t.editor.localLidarEnabled}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${c['lidar-local-ndsm-enabled'] === true ? 'active' : ''}"
-                                @click="${() => this._update('lidar-local-ndsm-enabled', true)}"
-                            >${t.editor.autoRotateOn}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${c['lidar-local-ndsm-enabled'] !== true ? 'active' : ''}"
-                                @click="${() => this._update('lidar-local-ndsm-enabled', false)}"
-                            >${t.editor.autoRotateOff}</button>
-                        </div>
-                    </div>
-                    <label class="field">
-                        <span class="label">${t.editor.localLidarUrl}</span>
-                        <input
-                            type="text"
-                            .value="${String(c['lidar-local-ndsm-url'] ?? '')}"
-                            placeholder="/local/community/Helios/lidar/home-ndsm.tif"
-                            @change="${(e: Event) => this._str('lidar-local-ndsm-url', e)}"
-                        />
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.localLidarMinLat}</span>
-                        <input
-                            type="number"
-                            min="-90"
-                            max="90"
-                            step="any"
-                            placeholder="-33.900000"
-                            .value="${c['lidar-local-ndsm-min-lat'] != null ? String(c['lidar-local-ndsm-min-lat']) : ''}"
-                            @change="${(e: Event) => this._numField('lidar-local-ndsm-min-lat', e)}"
-                        />
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.localLidarMaxLat}</span>
-                        <input
-                            type="number"
-                            min="-90"
-                            max="90"
-                            step="any"
-                            placeholder="-33.890000"
-                            .value="${c['lidar-local-ndsm-max-lat'] != null ? String(c['lidar-local-ndsm-max-lat']) : ''}"
-                            @change="${(e: Event) => this._numField('lidar-local-ndsm-max-lat', e)}"
-                        />
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.localLidarMinLon}</span>
-                        <input
-                            type="number"
-                            min="-180"
-                            max="180"
-                            step="any"
-                            placeholder="151.200000"
-                            .value="${c['lidar-local-ndsm-min-lon'] != null ? String(c['lidar-local-ndsm-min-lon']) : ''}"
-                            @change="${(e: Event) => this._numField('lidar-local-ndsm-min-lon', e)}"
-                        />
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.localLidarMaxLon}</span>
-                        <input
-                            type="number"
-                            min="-180"
-                            max="180"
-                            step="any"
-                            placeholder="151.210000"
-                            .value="${c['lidar-local-ndsm-max-lon'] != null ? String(c['lidar-local-ndsm-max-lon']) : ''}"
-                            @change="${(e: Event) => this._numField('lidar-local-ndsm-max-lon', e)}"
-                        />
-                    </label>
-                </details>
-
                 <details class="advanced-section" ?open="${this._openSection === 'reset'}" @toggle="${(e: Event) => this._onSectionToggle('reset', e)}">
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:refresh"></ha-icon>${t.editor.resetSection}</summary>
                     <div class="hint">${t.editor.resetSectionHint}</div>
@@ -730,20 +620,6 @@ export class HeliosCardEditor extends LitElement
                             <ha-icon icon="mdi:github"></ha-icon>
                             <span>${t.editor.aboutRepoCard}</span>
                         </a>
-                    </div>
-                    <div class="about-row">
-                        <span class="about-label" aria-hidden="true"></span>
-                        <a class="about-row-link" href="https://github.com/ReikanYsora/Helios-Lidar" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:github"></ha-icon>
-                            <span>${t.editor.aboutRepoLidar}</span>
-                        </a>
-                    </div>
-                    <div class="about-block">
-                        <a class="about-link" href="https://helios-lidar.org" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:satellite-variant"></ha-icon>
-                            <span>${t.editor.aboutSiteTitle}</span>
-                        </a>
-                        <p class="about-paragraph">${t.editor.aboutSiteDescription}</p>
                     </div>
                     <div class="about-block about-coffee">
                         <p class="about-paragraph">${t.editor.aboutCoffeeMessage}</p>

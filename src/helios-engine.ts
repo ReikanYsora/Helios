@@ -4,11 +4,7 @@ import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/s
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './engine/buildings';
 import { projectExtrusionShadows } from './engine/shadows';
-import { resolveLidarSource } from './engine/lidar';
-import { RASTER_DEFAULTS } from './engine/lidar/pipeline';
-import { LidarViewLayer } from './engine/lidar-view-layer';
 import { WeatherCloudLayer } from './engine/weather-cloud-layer';
-import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
@@ -31,16 +27,12 @@ import
 import
 {
     type HeliosConfig,
-    type LidarPrecisionLevel,
     DISPLAY_FADE_DELTA_M,
     displayRadiusM,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
-    DEFAULT_LIDAR_PRECISION,
-    LIDAR_PRECISION_PITCH_MULT,
     DEFAULT_SHADOW_OPACITY,
-    DEFAULT_LIDAR_VIEW_OPACITY,
     periodPastDays,
     periodFutureDays,
 } from './helios-config';
@@ -99,11 +91,11 @@ const _liveEngines = new Set<HeliosEngine>();
 
 
 //-----------------------------------------------------------------
-//Shared module-scope caches for parsed fetch payloads (buildings GeoJSON, LiDAR raster). HA re-creates the
-//card element on every config commit, re-allocating the WebGL context, but a fresh engine can pick up the
-//already-parsed data synchronously and skip the parse+projection cost (10-50 ms buildings, 100 ms-1 s
-//LiDAR) that otherwise shows as a preview flash. TTL is wide since the data is static; the key encodes
-//home position + radius + raster size, so any meaningful change invalidates the entry naturally.
+//Shared module-scope cache for parsed building GeoJSON. HA re-creates the card element on every config
+//commit, re-allocating the WebGL context, but a fresh engine can pick up the already-parsed data
+//synchronously and skip the parse+projection cost (10-50 ms) that otherwise shows as a preview flash. TTL
+//is wide since the data is static; the key encodes home position + radius, so any meaningful change
+//invalidates the entry naturally.
 const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
 
 interface SharedBuildingsCacheEntry
@@ -112,20 +104,7 @@ interface SharedBuildingsCacheEntry
     ts:   number;
 }
 
-interface SharedLidarCacheEntry
-{
-    features:    GeoJSON.FeatureCollection;
-    diagnostics: {
-        cellsKept:         number;
-        cellsPerClumpCap:  number;
-        heightRangeM:      [number, number] | null;
-    };
-    raster:      unknown;
-    ts:          number;
-}
-
 const _sharedBuildingsCache: Map<string, SharedBuildingsCacheEntry> = new Map();
-const _sharedLidarCache:     Map<string, SharedLidarCacheEntry>     = new Map();
 
 
 function sharedBuildingsCacheGet(key: string): BuildingsResult | null
@@ -141,22 +120,6 @@ function sharedBuildingsCacheGet(key: string): BuildingsResult | null
         return null;
     }
     return entry.data;
-}
-
-
-function sharedLidarCacheGet(key: string): SharedLidarCacheEntry | null
-{
-    const entry = _sharedLidarCache.get(key);
-    if (!entry)
-    {
-        return null;
-    }
-    if (Date.now() - entry.ts > SHARED_FETCH_CACHE_TTL_MS)
-    {
-        _sharedLidarCache.delete(key);
-        return null;
-    }
-    return entry;
 }
 
 
@@ -190,8 +153,6 @@ export interface WeatherData
     windMs:         number;
 }
 
-type RGB = [number, number, number];
-
 //Mobile detection, used to scale grid density and pixel ratio so older phones keep usable framerates. Computed once at module load.
 const IS_MOBILE = (() =>
 {
@@ -215,44 +176,6 @@ const IS_MOBILE = (() =>
 
 
 
-//Parse a CSS colour ("#rrggbb", "rgb(...)", "rgba(...)", or a getComputedStyle-resolved var) into a
-//0..1 RGB triplet for WebGL uniforms. Returns white on failure (LiDAR view falls back to pre-theme look).
-function parseCssColorToUnitRgb(raw: string): [number, number, number]
-{
-    const s = (raw || '').trim().toLowerCase();
-    if (!s) return [1, 1, 1];
-    if (s.startsWith('#'))
-    {
-        const hex = s.slice(1);
-        if (hex.length === 3 || hex.length === 4)
-        {
-            const r = parseInt(hex[0] + hex[0], 16);
-            const g = parseInt(hex[1] + hex[1], 16);
-            const b = parseInt(hex[2] + hex[2], 16);
-            if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
-        }
-        else if (hex.length === 6 || hex.length === 8)
-        {
-            const r = parseInt(hex.slice(0, 2), 16);
-            const g = parseInt(hex.slice(2, 4), 16);
-            const b = parseInt(hex.slice(4, 6), 16);
-            if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
-        }
-        return [1, 1, 1];
-    }
-    const m = s.match(/^rgba?\s*\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
-    if (m)
-    {
-        const r = parseFloat(m[1]);
-        const g = parseFloat(m[2]);
-        const b = parseFloat(m[3]);
-        if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
-    }
-    return [1, 1, 1];
-}
-
-
-
 //Haversine distance, used to compare two lat/lon pairs in metres.
 
 function geoDistM(lat1: number, lon1: number, lat2: number, lon2: number): number
@@ -264,34 +187,6 @@ function geoDistM(lat1: number, lon1: number, lat2: number, lon2: number): numbe
     const a  = Math.sin(dφ / 2) ** 2
              + Math.cos(lat1 * D) * Math.cos(lat2 * D) * Math.sin(dλ / 2) ** 2;
     return R * 2 * Math.asin(Math.sqrt(a));
-}
-
-//Build a closed-ring polygon approximating a metre-sized geographic circle (MapLibre's `circle` layer is
-//pixel-sized markers, not real discs). 64 segments read as a true circle at our zoom for no measurable
-//cost. Uses the equirectangular metres-per-degree approximation (1° lat ≈ 111320 m, 1° lon ≈ that × cos
-//lat), valid at our few-hundred-metre scale. First point is repeated at the end to close per GeoJSON spec.
-function buildCirclePolygon(
-    centerLon:     number,
-    centerLat:     number,
-    radiusMetres:  number,
-    segments:      number = 64
-): Array<[number, number]>
-{
-    const cosLat = Math.cos(centerLat * Math.PI / 180);
-    const dLat   = radiusMetres / 111_320;
-    const dLon   = radiusMetres / (111_320 * cosLat);
-
-    const ring: Array<[number, number]> = [];
-    for (let i = 0; i < segments; i++)
-    {
-        const a = (i / segments) * 2 * Math.PI;
-        ring.push([
-            centerLon + Math.cos(a) * dLon,
-            centerLat + Math.sin(a) * dLat
-        ]);
-    }
-    ring.push(ring[0]);
-    return ring;
 }
 
 //Cloud disc, chip cluster, camera target and sun-arc tunables now live in constants.ts.
@@ -352,15 +247,6 @@ export class HeliosEngine
     //Skip atmosphere repaint when the sun moved less than 0.5° since
     //last call (≈ 2 min), setPaintProperty isn't free on mobile.
     private _lastAtmosphereAlt = -999;
-
-    //Last sun (alt, az) the LiDAR-View exposure compute ran against. Compute is expensive (50-150 ms), so
-    //it's gated on the same 0.5° delta as the atmosphere plus azimuth (faster near sunrise/sunset). Sentinel
-    //init guarantees the first compute fires when LiDAR View turns on.
-    private _lastLidarExposureAlt: number = -999;
-    private _lastLidarExposureAz:  number = -999;
-    //Handle for the deferred exposure compute (requestIdleCallback, setTimeout fallback on older Safari).
-    //Stored so an in-flight schedule can be cancelled if the sun moves again before it fires.
-    private _exposureIdleHandle:   number | undefined;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
@@ -1332,62 +1218,13 @@ export class HeliosEngine
     private _buildingsFetchKey: string = '';
     private _buildingsAbort?:   AbortController;
 
-    //Last cloud-cover % applied to the disc, cached so projectCloudScene() can re-project on every
-    //transform without round-tripping through _renderForCurrentSelection.
-    private _currentCloudPct: number = 0;
-    //Per-layer breakdown captured at the same instant; sizes the three concentric bands (low->mid->high,
-    //centre to edge) proportionally to each layer's contribution.
-    private _currentCloudLow:  number = 0;
-    private _currentCloudMid:  number = 0;
-    private _currentCloudHigh: number = 0;
-
-    //Consolidated LiDAR shadow regions for the current home+radius+precision. Null until the first fetch;
-    //the shadow projector reads this on every sun-position refresh.
-    private _lidarShadowFeatures: GeoJSON.FeatureCollection | null = null;
-    //Diagnostics from the latest LiDAR shadow fetch, surfaced via window.heliosStats() (cells kept,
-    //per-clump cap, height range).
-    private _lidarShadowDiagnostics:
-        { cellsKept: number; cellsPerClumpCap: number; heightRangeM: [number, number] | null }
-        | null = null;
-    //Fetch-key for the cached shadow features; skips a refetch when the camera nudges but
-    //home/radius/precision are unchanged.
-    private _lidarShadowKey: string = '';
-    //In-flight LiDAR shadow fetch, aborted on home/radius/precision change so a slow IGN response can't
-    //overwrite a fresher request.
-    private _lidarShadowAbort?: AbortController;
-    //Exponential backoff for the LiDAR fetch. Persistent provider errors (CORS, 4xx, network) would
-    //otherwise re-download several MB per sky tick and discard it, hurting framerate. Backoff suppresses
-    //retries against the SAME failed key for a growing window (60 s -> 5 -> 15 -> 30 -> 60 min cap). Any
-    //key change (moved home, edited radius/precision, toggled shadows) bypasses it and retries immediately.
-    private _lidarShadowFailedKey:    string = '';
-    private _lidarShadowFailureCount: number = 0;
-    private _lidarShadowBackoffUntil: number = 0;
-    //Raw height raster + geo for the LiDAR View overlay (projects every cell, threshold-bypassed). Cleared
-    //alongside _lidarShadowFeatures so the two stay in lockstep. Reference to the provider's buffer, no copy.
-    private _lidarRaster:
-        {
-            heights:    Float32Array;
-            terrain?:   Float32Array;
-            rasterSize: number;
-            minLat:     number;
-            maxLat:     number;
-            minLon:     number;
-            maxLon:     number;
-        }
-        | null = null;
-
-    //Custom GPU layer rendering the LiDAR View dot cloud. Owns one Float32 buffer of Mercator triplets per
-    //finite cell, rebuilt only on a new raster; per frame the shader projects + radius-filters in a single
-    //drawArrays(POINTS) call. Replaces the old CPU-bake path that stalled past a few hundred thousand cells.
-    private _lidarViewLayer?: LidarViewLayer;
-
     //Offscreen canvas for rasterising cast shadows before upload to the image source. Lives the whole
     //engine lifetime (no realloc per tick); sized at SHADOW_RASTER_SIZE, bounds recomputed per refresh.
     private _shadowCanvas?: HTMLCanvasElement;
 
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
     //and the refresh runs once on expiry. Curves+chips still update every move; only the costly shadow
-    //raster paint (at lidar-precision: high) is coalesced.
+    //raster paint is coalesced.
     private _selectedTimeShadowTimer: number | null = null;
 
     //Cache of the 96 per-day sun-arc samples. Sun position + clear-sky irradiance depend only on the day
@@ -1416,13 +1253,10 @@ export class HeliosEngine
     //op on a refresh not driven by sun movement.
     private _lastShadowSig?: string;
 
-    //Optional card-side hooks for a busy indicator during the LiDAR shadow compute (WMS + raster paint);
-    //the engine computes silently if unset.
+    //Optional card-side hooks for a busy indicator during the shadow raster paint; the engine computes
+    //silently if unset.
     public onShadowComputeStart?: () => void;
     public onShadowComputeEnd?:   () => void;
-    //Same idea: card swaps the LiDAR mode-bar icon to a spinner and locks mode-switching during an
-    //exposure sweep.
-    public onLidarExposureBusyChange?: (busy: boolean) => void;
 
     constructor(
         container:    HTMLElement,
@@ -1491,7 +1325,7 @@ export class HeliosEngine
             //jumpTo/easeTo fallbacks) can't bypass the floor/ceiling when callers forget to clamp.
             minPitch:        CAMERA_PITCH_MIN_DEG,
             maxPitch:        CAMERA_PITCH_MAX_DEG,
-            //Zoom locked to the resting pose: the 3D camera + LiDAR overlay are tuned for this one altitude.
+            //Zoom locked to the resting pose: the 3D camera is tuned for this one altitude.
             //detail-mode separately raises maxZoom for its dive and resets on exit.
             minZoom:         18,
             maxZoom:         18,
@@ -1861,18 +1695,7 @@ export class HeliosEngine
             : Math.min(Math.max(dpr, 1.5), 2);
     }
 
-    //Read the configured shadow precision, normalising off-spec values to the default.
-    private _lidarPrecisionLevel(): LidarPrecisionLevel
-    {
-        const v = String(this.cfg['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION).toLowerCase();
-        if (v === 'low' || v === 'medium' || v === 'high')
-        {
-            return v as LidarPrecisionLevel;
-        }
-        return DEFAULT_LIDAR_PRECISION;
-    }
-
-    //Master shadow toggle. False = no cast shadows; true = source picked by LiDAR coverage of the home.
+    //Master shadow toggle. False = no cast shadows; true = shadows cast from building footprints.
     private _shadowsEnabled(): boolean
     {
         return this.cfg['shadows-enabled'] !== false;
@@ -2077,10 +1900,6 @@ export class HeliosEngine
             temperatureC:     w.temperatureC,
             windMs:           w.windMs,
         });
-
-        //Refresh the on-ground cloud-cover disc (radius = coverage %, inside a 100% ring); the per-layer
-        //breakdown feeds the three-band split in projectCloudScene.
-        this._updateCloudCoverDisc(w.cloudCover, w.cloudLow, w.cloudMid, w.cloudHigh);
     }
 
     private _onStyleLoad(): void
@@ -2127,7 +1946,6 @@ export class HeliosEngine
         this._initNightShade();
         this._initCloudCoverDisc();
         this._addBuildings();
-        this._initLidarViewLayer();
         this._applyLabelVisibility();
 
         window.clearInterval(this._skyTimer);
@@ -2222,22 +2040,6 @@ export class HeliosEngine
         }
     }
 
-    //Stash cloud cover (pct + per-layer) for projectCloudScene(). Called from _renderForCurrentSelection so
-    //it ticks with both live progression and scrubbing. Disc radius scales linearly with pct (0% invisible,
-    //100% full ring); per-layer values drive the proportional band sizing (low->mid->high, centre to edge).
-    private _updateCloudCoverDisc(
-        cloudPct: number,
-        cloudLow:  number = 0,
-        cloudMid:  number = 0,
-        cloudHigh: number = 0
-    ): void
-    {
-        this._currentCloudPct  = Math.max(0, Math.min(100, cloudPct));
-        this._currentCloudLow  = Math.max(0, Math.min(100, cloudLow));
-        this._currentCloudMid  = Math.max(0, Math.min(100, cloudMid));
-        this._currentCloudHigh = Math.max(0, Math.min(100, cloudHigh));
-    }
-
     //Project the home building(s) into screen-space silhouettes. Each polygon yields a base ring (at
     //render_min_height) and top ring (at render_height); the card paints both plus a quad per outer edge
     //into the SVG mask, covering the exact extruded prism even for concave (L/U) footprints. Per-vertex
@@ -2322,361 +2124,12 @@ export class HeliosEngine
         return out;
     }
 
-    //LiDAR View active flag, pushed by the card on toggle so the raster fetch path runs even when cast
-    //shadows are disabled (otherwise the View overlay would show an empty canvas).
-    private _lidarViewActive: boolean = false;
-    public setLidarViewActive(on: boolean): void
-    {
-        if (on === this._lidarViewActive)
-        {
-            return;
-        }
-        this._lidarViewActive = on;
-        //off->on kicks the fetch so the raster lands; on->off is a no-op (raster stays cached for reuse).
-        if (on)
-        {
-            this._ensureLidarFetched();
-            //Force the next exposure compute to fire on the first sun refresh after the toggle, no matter how stale the cached last-known
-            //sun is. The atmosphere loop runs on a 30 s tick so the user sees the lit / shadowed cells flip in within seconds of opening
-            //LiDAR View.
-            this._lastLidarExposureAlt = -999;
-            this._lastLidarExposureAz  = -999;
-            this._scheduleLidarExposureRecompute();
-        }
-        else
-        {
-            //Clear any pending compute and reset the layer's exposure override so a future re-enable starts from the constant-lit fallback
-            //rather than ghosting the old shadows for a frame.
-            const wasBusy = this._exposureIdleHandle !== undefined || this._exposureChunkRaf !== undefined;
-            if (this._exposureIdleHandle !== undefined)
-            {
-                this._cancelIdleCb(this._exposureIdleHandle);
-                this._exposureIdleHandle = undefined;
-            }
-            if (this._exposureChunkRaf !== undefined)
-            {
-                cancelAnimationFrame(this._exposureChunkRaf);
-                this._exposureChunkRaf = undefined;
-            }
-            this._lidarViewLayer?.setExposure(null);
-            if (wasBusy)
-            {
-                try { this.onLidarExposureBusyChange?.(false); } catch { /* */ }
-            }
-        }
-    }
-
-
-    //Cross-browser requestIdleCallback / cancelIdleCallback. Safari only shipped them in 2024, fall back to setTimeout(0) where the API is
-    //missing so the compute still runs (it just doesn't get the deadline-friendly scheduling perk).
-    private _requestIdleCb(cb: () => void): number
-    {
-        const w = window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
-        if (typeof w.requestIdleCallback === 'function')
-        {
-            return w.requestIdleCallback(cb, { timeout: 2000 });
-        }
-        return window.setTimeout(cb, 0);
-    }
-    private _cancelIdleCb(handle: number): void
-    {
-        const w = window as unknown as { cancelIdleCallback?: (h: number) => void };
-        if (typeof w.cancelIdleCallback === 'function')
-        {
-            w.cancelIdleCallback(handle);
-            return;
-        }
-        window.clearTimeout(handle);
-    }
-
-
-    //rAF token for the LiDAR-View exposure compute. Kicked off via idle callback (so the chunk loop avoids
-    //interactive frames) and chunked through requestAnimationFrame (each frame yields between row-bands), so
-    //wall time matches a single-shot compute but the main thread stays responsive.
-    private _exposureChunkRaf: number | undefined;
-
-    //True while a LiDAR exposure sweep is in flight (idle-queued or rAF-chunked); the card polls it to
-    //show a spinner and lock mode switches mid-compute.
-    public isLidarExposureBusy(): boolean
-    {
-        return this._exposureIdleHandle !== undefined
-            || this._exposureChunkRaf  !== undefined;
-    }
-
-    private _scheduleLidarExposureRecompute(): void
-    {
-        //Pre-compute in idle as soon as the raster lands, regardless of whether LiDAR-View is active. The
-        //compute is long (~200 ms-2 s at high precision); doing it eagerly means the exposure buffer is
-        //already on the layer when the user opens the mode (fade-in shows the finished render, not scaffold).
-        if (!this._lidarRaster || !this._lidarViewLayer)
-        {
-            return;
-        }
-        if (this._exposureIdleHandle !== undefined)
-        {
-            return;
-        }
-        if (this._exposureChunkRaf  !== undefined)
-        {
-            return;
-        }
-        try { this.onLidarExposureBusyChange?.(true); }
-        catch { /* host callback errors must not break the schedule */ }
-        this._exposureIdleHandle = this._requestIdleCb(() =>
-        {
-            this._exposureIdleHandle = undefined;
-            if (!this._lidarRaster || !this._lidarViewLayer)
-            {
-                try { this.onLidarExposureBusyChange?.(false); } catch { /* */ }
-                return;
-            }
-            const sun = getSunPosition(this._selectedTime ?? new Date(), this.homeLat, this.homeLon);
-            if (!sun)
-            {
-                try { this.onLidarExposureBusyChange?.(false); } catch { /* */ }
-                return;
-            }
-            const altDelta = Math.abs(sun.altitude - this._lastLidarExposureAlt);
-            const azDelta  = Math.abs(sun.azimuth  - this._lastLidarExposureAz);
-            if (altDelta < 0.5 && azDelta < 0.5)
-            {
-                //Gate hit, nothing scheduled, release the optimistically-set busy flag.
-                try { this.onLidarExposureBusyChange?.(false); } catch { /* */ }
-                return;
-            }
-            const r = this._lidarRaster;
-            //NdsmRaster shape (heights + rasterSize + bbox + optional terrain), matching _lidarRaster.
-            const rasterRef = {
-                heights:    r.heights,
-                terrain:    r.terrain,
-                rasterSize: r.rasterSize,
-                minLat:     r.minLat,
-                maxLat:     r.maxLat,
-                minLon:     r.minLon,
-                maxLon:     r.maxLon,
-            };
-            const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
-            //Pin the captured raster identity so a mid-sweep provider/precision swap (which moves
-            //this._lidarRaster) lets the tick bail before posting an exposure sized to the dead raster.
-            const capturedRaster = r;
-            //8-row chunks stay under 16 ms even at high precision (~5 M ops/chunk, 4-8 ms), keeping 60 fps;
-            //32-row chunks overran the budget and stuttered to 3-4 fps. rAF overhead per tick is negligible.
-            const CHUNK_ROWS = 8;
-            let j = 0;
-            const tick = (): void =>
-            {
-                if (!this._lidarRaster || !this._lidarViewLayer)
-                {
-                    this._exposureChunkRaf = undefined;
-                    try { this.onLidarExposureBusyChange?.(false); } catch { /* */ }
-                    return;
-                }
-                if (this._lidarRaster !== capturedRaster)
-                {
-                    //Raster swapped under us; drop this sweep and let the next schedule pick up the new one
-                    //(busy flag stays true for it).
-                    this._exposureChunkRaf = undefined;
-                    this._scheduleLidarExposureRecompute();
-                    return;
-                }
-                //Stale-sun bail: aggressive scrubbing during a sweep drifts the closure's sun from the cursor.
-                //Re-sample each tick; past the 0.5° gate, abort so the next schedule produces a fresh exposure
-                //aligned with the cursor instead of locking on a stale frame.
-                const currentSun = getSunPosition(this._selectedTime ?? new Date(), this.homeLat, this.homeLon);
-                if (currentSun
-                 && (Math.abs(currentSun.altitude - sun.altitude) >= 0.5
-                  || Math.abs(currentSun.azimuth  - sun.azimuth)  >= 0.5))
-                {
-                    this._exposureChunkRaf = undefined;
-                    //Reset the gate so the next schedule recomputes on the new sun (this aborted sweep never
-                    //advanced _lastLidarExposureAlt/Az). Stays busy for the next schedule.
-                    this._lastLidarExposureAlt = -999;
-                    this._lastLidarExposureAz  = -999;
-                    this._scheduleLidarExposureRecompute();
-                    return;
-                }
-                const jEnd = Math.min(rasterRef.rasterSize, j + CHUNK_ROWS);
-                computeLidarCellExposureRows(rasterRef, sun.altitude, sun.azimuth, j, jEnd, out);
-                j = jEnd;
-                if (j < rasterRef.rasterSize)
-                {
-                    this._exposureChunkRaf = requestAnimationFrame(tick);
-                    return;
-                }
-                this._exposureChunkRaf = undefined;
-                this._lidarViewLayer.setExposure(out);
-                this._lastLidarExposureAlt = sun.altitude;
-                this._lastLidarExposureAz  = sun.azimuth;
-                try { this.onLidarExposureBusyChange?.(false); } catch { /* */ }
-            };
-            this._exposureChunkRaf = requestAnimationFrame(tick);
-        });
-    }
-
-    //Wire (or rewire after a style reload) the WebGL layer painting the LiDAR View dot cloud. The instance
-    //is created once and reused: setStyle wipes layers but the JS object survives, so we re-add it and
-    //replay the cached buffer + tunables. Every MapLibre call is try/caught because a throwing custom-layer
-    //onAdd can pollute GL state and kill the basemap; we'd rather just disable our overlay. The addLayer is
-    //deferred to the next frame: style.load can fire before the painter bound its buffers, and onAdd against
-    //a half-init context is the "map renders black until refresh" symptom.
-    private _initLidarViewLayer(): void
-    {
-        if (!this.map)
-        {
-            return;
-        }
-        try
-        {
-            if (!this._lidarViewLayer)
-            {
-                this._lidarViewLayer = new LidarViewLayer({
-                    homeLat: this.homeLat,
-                    homeLon: this.homeLon
-                });
-            }
-            this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
-            this._pushLidarViewConfig();
-            this._pushLidarViewFadeRange();
-
-            const layer  = this._lidarViewLayer;
-            const raster = this._lidarRaster;
-            window.requestAnimationFrame(() =>
-            {
-                if (!this.map)
-                {
-                    return;
-                }
-                try
-                {
-                    if (!this.map.getLayer(layer.id))
-                    {
-                        this.map.addLayer(layer);
-                    }
-                    if (raster)
-                    {
-                        layer.setData(raster);
-                    }
-                }
-                catch (err)
-                {
-                    console.warn('[HELIOS] LiDAR view layer attach failed:', err);
-                }
-            });
-        }
-        catch (err)
-        {
-            console.warn('[HELIOS] LiDAR view layer init failed:', err);
-        }
-    }
-
-    //Runtime opacity for the LiDAR View overlay [0..1], from the in-card slider (not config); resets to
-    //DEFAULT per engine. Point size is config-controlled; colours are hard-locked to white in the layer.
-    private _lidarViewOpacity: number = DEFAULT_LIDAR_VIEW_OPACITY;
-
-    //Push LiDAR View tuning to the layer (init, point-size config change, slider move). The slider is
-    //halved (100% -> 50% alpha): full-alpha fill carpets the basemap and hides building topology, so the
-    //0.5 ceiling keeps it readable at max slider.
-    private _pushLidarViewConfig(): void
-    {
-        if (!this._lidarViewLayer)
-        {
-            return;
-        }
-        this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
-        this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
-        this._pushLidarViewColor();
-    }
-
-    //Push the theme's --primary-text-color into the LiDAR View layer (black on light, white on dark). Reads
-    //the computed CSS var off the map container into a 0..1 RGB triplet for the uniform.
-    private _pushLidarViewColor(): void
-    {
-        if (!this._lidarViewLayer)
-        {
-            return;
-        }
-        const host = this.map?.getContainer() ?? document.body;
-        let raw = getComputedStyle(host).getPropertyValue('--primary-text-color').trim();
-        if (!raw)
-        {
-            //Fallback to document root for the variable from a higher scope.
-            raw = getComputedStyle(document.documentElement).getPropertyValue('--primary-text-color').trim();
-        }
-        const rgb = parseCssColorToUnitRgb(raw);
-        this._lidarViewLayer.setViewColor(rgb[0], rgb[1], rgb[2]);
-    }
-
-    //Push the LiDAR view fade range to the layer (init + on display-radius change, since the fade band is
-    //derived from the live radius).
-    private _pushLidarViewFadeRange(): void
-    {
-        if (!this._lidarViewLayer)
-        {
-            return;
-        }
-        const [fullR, fadeR] = this._lidarViewFadeRange();
-        this._lidarViewLayer.setFadeRange(fullR, fadeR);
-    }
-
-    public setLidarViewOpacity(opacity: number): void
-    {
-        const clamped = Math.max(0, Math.min(1, opacity));
-        if (clamped === this._lidarViewOpacity)
-        {
-            return;
-        }
-        this._lidarViewOpacity = clamped;
-        //Direct push, skipping _pushLidarViewConfig: nothing else changes during a slider drag.
-        this._lidarViewLayer?.setOpacity(clamped * 0.5);
-    }
-
-    public getLidarViewOpacity(): number
-    {
-        return this._lidarViewOpacity;
-    }
-
-    //Fade alpha multiplier [0..1] from the card's enter/exit animation; the engine forwards it. 0 (View off)
-    //short-circuits the layer's draw.
-    public setLidarViewFadeAlpha(alpha: number): void
-    {
-        this._lidarViewLayer?.setAlphaFade(alpha);
-    }
-
-    //Distance fall-off bounds for the LiDAR view: full opacity up to one fade-band inside the display
+    //Distance fall-off bounds for the cast-shadow raster: full opacity up to one fade-band inside the display
     //radius, fading out at the radius. Derived from the live radius so all layers stop at the same boundary.
-    private _lidarViewFadeRange(): [fullMeters: number, fadeMeters: number]
+    private _shadowFadeRange(): [fullMeters: number, fadeMeters: number]
     {
         const radius = this._buildingRadiusMeters();
         return [Math.max(0, radius - DISPLAY_FADE_DELTA_M), radius];
-    }
-
-    private _lidarViewPointSizePx(): number
-    {
-        return 1.5;
-    }
-
-    //Id of the LiDAR provider covering the home, or null. Resolved on-demand via resolveLidarSource (not
-    //the cached _lidarSourceId) so it's correct from the first render, regardless of the shadow fetch path.
-    //Memoised on (cfg, lat, lon): the resolver allocates a fresh provider per call and the card calls this
-    //every render, so without caching a ~120 Hz scrub would create 120 provider objects/second.
-    private _resolvedLidarIdCfg?:  HeliosConfig;
-    private _resolvedLidarIdLat?:  number;
-    private _resolvedLidarIdLon?:  number;
-    private _resolvedLidarIdValue: string | null = null;
-    public getActiveLidarSourceId(): string | null
-    {
-        if (this._resolvedLidarIdCfg === this.cfg
-            && this._resolvedLidarIdLat === this.homeLat
-            && this._resolvedLidarIdLon === this.homeLon)
-        {
-            return this._resolvedLidarIdValue;
-        }
-        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
-        this._resolvedLidarIdCfg   = this.cfg;
-        this._resolvedLidarIdLat   = this.homeLat;
-        this._resolvedLidarIdLon   = this.homeLon;
-        this._resolvedLidarIdValue = provider ? provider.id : null;
-        return this._resolvedLidarIdValue;
     }
 
     //Toggle the basemap's symbol layers (labels, POIs, place names) per the show-labels config. Symbol
@@ -2705,7 +2158,7 @@ export class HeliosEngine
         }
     }
 
-    //Global display radius shared by basemap bbox, buildings, LiDAR overlay, raster shadows, projection
+    //Global display radius shared by basemap bbox, buildings, raster shadows, projection
     //clip and MapLibre bounds, so every layer stops at the same boundary. From the display-radius slider
     //(50-500 m, default 200); lowering it shrinks all geometry in lockstep, the main perf lever on old phones.
     private _buildingRadiusMeters(): number
@@ -2985,9 +2438,6 @@ export class HeliosEngine
 
         //Kick off the background buildings fetch; the wired shadow source populates once GeoJSON lands.
         this._ensureBuildingsFetched();
-
-        //Wire the LiDAR shadow pipeline. No-op when shadows are off or the home has no provider coverage.
-        this._ensureLidarFetched();
     }
 
     //Idempotent fetch helper: reuses _buildingsData across style reloads, re-hitting MapTiler only when the
@@ -3065,174 +2515,7 @@ export class HeliosEngine
         });
     }
 
-    //LiDAR shadow pipeline for the current home + precision. Idempotent. Resolves the provider covering the
-    //home; when shadows are on AND a provider matches, fires one radius-based fetch yielding consolidated
-    //shadow polygons; otherwise clears cached features so the next refresh falls back to MapTiler footprints.
-
-    //Reset the whole LiDAR fetch state (key, features, raster, abort, backoff) when the provider becomes
-    //irrelevant (no coverage / shadows off / view off) or on teardown, so a re-enable starts clean.
-    private _resetLidarFetchState(): void
-    {
-        this._lidarShadowFeatures    = null;
-        this._lidarShadowDiagnostics = null;
-        this._lidarShadowKey         = '';
-        this._lidarShadowFailedKey   = '';
-        this._lidarShadowFailureCount = 0;
-        this._lidarShadowBackoffUntil = 0;
-        this._lidarRaster            = null;
-        this._lidarViewLayer?.setData(null);
-        this._lidarShadowAbort?.abort();
-        this._lidarShadowAbort       = undefined;
-    }
-
-    //Backoff schedule for persistent LiDAR fetch failures. 1 → 60 s, 2 → 5 min, 3 → 15 min, 4 → 30 min, 5+ → 60 min cap. Resets to 0
-    //on success or on key change (user reconfiguration).
-    private _lidarBackoffDelayMs(failureCount: number): number
-    {
-        const scheduleSec = [60, 300, 900, 1800, 3600];
-        const i = Math.max(0, Math.min(scheduleSec.length - 1, failureCount - 1));
-        return scheduleSec[i] * 1000;
-    }
-
-    private _ensureLidarFetched(): void
-    {
-        if (!this.map)
-        {
-            return;
-        }
-
-        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
-        //Bail when nothing wants the data: no provider covers the home, OR the user has shadows off AND no LiDAR View open. The View toggle lets the
-        //raster fetch happen even when cast shadows are off, so the View overlay can show data without requiring the user to re-enable shadows just
-        //to inspect.
-        if (!provider || (!this._shadowsEnabled() && !this._lidarViewActive))
-        {
-            this._resetLidarFetchState();
-            return;
-        }
-
-        const level      = this._lidarPrecisionLevel();
-        const radius     = this._buildingRadiusMeters();
-        //rasterSize derives from the provider's native cell pitch, the precision multiplier and the requested radius, so each fetched cell maps to a
-        //real upstream sample rather than a server-side interpolation. Clamped to the pipeline's own [min, max] so a tiny radius can't ask for fewer
-        //cells than the flood fill needs and a huge radius can't blow the WMS payload.
-        const effectivePitch = provider.nativeCellPitchMeters * LIDAR_PRECISION_PITCH_MULT[level];
-        const rawCells       = Math.round((2 * radius) / Math.max(0.01, effectivePitch));
-        const rasterSize     = Math.min(
-            RASTER_DEFAULTS.maxRasterSize,
-            Math.max(RASTER_DEFAULTS.minRasterSize, rawCells)
-        );
-        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}|${provider.id ?? ''}`;
-        //Bail if we already have a fresh successful payload for this key.
-        if (this._lidarShadowKey === key && this._lidarShadowFeatures)
-        {
-            return;
-        }
-        //Bail inside the backoff window for the SAME failed key; a key change is a fresh request and bypasses it.
-        if (this._lidarShadowFailedKey === key && Date.now() < this._lidarShadowBackoffUntil)
-        {
-            return;
-        }
-
-        //Shared-cache short-circuit: the LiDAR fetch is the heaviest network+parse step in boot; a fresh
-        //engine after an editor commit re-pays it end-to-end unless served from here.
-        const sharedLidar = sharedLidarCacheGet(key);
-        if (sharedLidar)
-        {
-            this._lidarShadowKey          = key;
-            this._lidarShadowFeatures     = sharedLidar.features;
-            this._lidarShadowDiagnostics  = sharedLidar.diagnostics;
-            this._lidarRaster             = (sharedLidar.raster as typeof this._lidarRaster) ?? null;
-            this._lidarShadowFailedKey    = '';
-            this._lidarShadowFailureCount = 0;
-            this._lidarShadowBackoffUntil = 0;
-            this._lidarViewLayer?.setData(this._lidarRaster);
-            this._lastLidarExposureAlt    = -999;
-            this._lastLidarExposureAz     = -999;
-            this._scheduleLidarExposureRecompute();
-            this._lastAtmosphereAlt       = -999;
-            this._refreshShadowsAndAtmosphere();
-            return;
-        }
-
-        this._lidarShadowAbort?.abort();
-        const ac = new AbortController();
-        this._lidarShadowAbort = ac;
-        this._lidarShadowKey   = key;
-
-        try { this.onShadowComputeStart?.(); }
-        catch (_) {}
-
-        provider.fetchShadowRegions({
-            homeLat:          this.homeLat,
-            homeLon:          this.homeLon,
-            radiusMeters:     radius,
-            rasterSize,
-            cropRadiusMeters: radius,
-            signal:           ac.signal
-        })
-        .then(res =>
-        {
-            if (ac.signal.aborted || !this.map)
-            {
-                return;
-            }
-            this._lidarShadowFeatures    = res.features;
-            this._lidarShadowDiagnostics = res.diagnostics;
-            this._lidarRaster            = res.raster ?? null;
-            //Promote to the shared cache so a fresh engine after an editor commit can serve from memory.
-            _sharedLidarCache.set(key, {
-                features:    res.features,
-                diagnostics: res.diagnostics,
-                raster:      res.raster ?? null,
-                ts:          Date.now()
-            });
-            //This key is now known-good; reset failure/backoff state.
-            this._lidarShadowFailedKey    = '';
-            this._lidarShadowFailureCount = 0;
-            this._lidarShadowBackoffUntil = 0;
-            //Pump the fresh raster to the LiDAR View layer (no-op until the View is opened: it sits at
-            //alphaFade=0 with the buffer ready). Then pre-compute exposure in idle (zeroing the sun delta
-            //to force it) so the dot cloud is finished when the user opens the mode.
-            this._lidarViewLayer?.setData(this._lidarRaster);
-            this._lastLidarExposureAlt = -999;
-            this._lastLidarExposureAz  = -999;
-            this._scheduleLidarExposureRecompute();
-            //New shadow source: force a full refresh next call rather than waiting for the sun threshold.
-            this._lastAtmosphereAlt = -999;
-            this._refreshShadowsAndAtmosphere();
-        })
-        .catch(err =>
-        {
-            if ((err as { name?: string })?.name === 'AbortError')
-            {
-                return;
-            }
-            //Persistent provider failure: keep _lidarShadowKey as-is (so the cache check doesn't flap) and
-            //record the failed key + a backoff window separately, so the next call bails until the window
-            //expires or the key changes. Otherwise every sky tick / sun-gate cross re-downloads and discards
-            //the whole payload, compounding into a framerate hit on busy pages.
-            this._lidarShadowFeatures    = null;
-            this._lidarShadowDiagnostics = null;
-            this._lidarShadowFailedKey   = this._lidarShadowKey;
-            this._lidarShadowFailureCount++;
-            const delayMs = this._lidarBackoffDelayMs(this._lidarShadowFailureCount);
-            this._lidarShadowBackoffUntil = Date.now() + delayMs;
-            console.warn(`[HELIOS] LiDAR shadow fetch failed (attempt ${this._lidarShadowFailureCount}, next retry in ${Math.round(delayMs / 1000)} s):`, err);
-        })
-        .finally(() =>
-        {
-            if (ac.signal.aborted)
-            {
-                return;
-            }
-            try { this.onShadowComputeEnd?.(); }
-            catch (_) {}
-        });
-    }
-
-    //Push the MapTiler footprints into the building sources. Buildings are always MapTiler-driven; LiDAR is
-    //used only for shadow projection.
+    //Push the MapTiler footprints into the building sources.
     private _pushRenderableSources(): void
     {
         if (!this.map)
@@ -3269,10 +2552,6 @@ export class HeliosEngine
             return;
         }
         this._lastAtmosphereAlt = altitude;
-
-        //Sun moved past the threshold: recompute LiDAR-View exposure so lit/shadowed colouring keeps up
-        //(no-op when View is off, raster unloaded, or a compute is queued).
-        this._scheduleLidarExposureRecompute();
 
         //Night-shade overlay (primary day/night cue): opacity ramps 0 (day) to ~0.65 (deep night), with a
         //warm tint through sunrise/sunset.
@@ -3318,20 +2597,18 @@ export class HeliosEngine
         }
         catch (_) {}
 
-        //Cast-shadow source: off -> empty; LiDAR features -> consolidated regions; else MapTiler footprints.
+        //Cast-shadow source: off -> empty; else MapTiler building footprints.
         try
         {
             const shadowsOn = this._shadowsEnabled();
             const radius    = this._buildingRadiusMeters();
             //Signature of every shadow-raster input; same sig = same image, so skip the project+paint+encode.
             //Alt/az round to 0.1 deg (~6 min) so a scrub doesn't trigger a 20 ms encode every half-second.
-            const lidarRef = this._lidarShadowFeatures;
             const sig =
                 `${shadowsOn ? '1' : '0'}` +
                 `|${altitude.toFixed(1)}|${azimuth.toFixed(1)}` +
                 `|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}` +
                 `|${radius}` +
-                `|L${lidarRef ? lidarRef.features.length : -1}` +
                 `|B${this._buildingsData
                     ? (this._buildingsData.home.features.length
                        + this._buildingsData.surroundings.features.length)
@@ -3340,22 +2617,15 @@ export class HeliosEngine
             {
                 this._lastShadowSig = sig;
                 let input: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-                if (shadowsOn)
+                if (shadowsOn && this._buildingsData)
                 {
-                    if (lidarRef && lidarRef.features.length > 0)
-                    {
-                        input = lidarRef;
-                    }
-                    else if (this._buildingsData)
-                    {
-                        input = {
-                            type:     'FeatureCollection',
-                            features: [
-                                ...this._buildingsData.home.features,
-                                ...this._buildingsData.surroundings.features
-                            ]
-                        };
-                    }
+                    input = {
+                        type:     'FeatureCollection',
+                        features: [
+                            ...this._buildingsData.home.features,
+                            ...this._buildingsData.surroundings.features
+                        ]
+                    };
                 }
                 const projected = projectExtrusionShadows(input,
                 {
@@ -3369,19 +2639,19 @@ export class HeliosEngine
                 });
                 if (this.map)
                 {
-                    //Canvas size from lidar-precision (low/medium = 1024, high = 2048). Recreate only on a
-                    //level change, else reuse across refreshes to avoid allocating 16 MB per minute.
-                    const rasterSize = shadowRasterSizeFor(this._lidarPrecisionLevel());
+                    //Canvas size for the shadow raster. Recreate only on a size change, else reuse across
+                    //refreshes to avoid allocating 16 MB per minute.
+                    const rasterSize = shadowRasterSizeFor();
                     if (!this._shadowCanvas || this._shadowCanvas.width !== rasterSize)
                     {
                         this._shadowCanvas = document.createElement('canvas');
                         this._shadowCanvas.width  = rasterSize;
                         this._shadowCanvas.height = rasterSize;
                     }
-                    //Shadow fade matches the LiDAR view fade radii so all three layers share the same outer
-                    //boundary and the shadow disc isn't a hard circular cut.
+                    //Shadow fade matches the display radius so the building and shadow layers share the same
+                    //outer boundary and the shadow disc isn't a hard circular cut.
                     const radiusM = this._buildingRadiusMeters();
-                    const [fullR, fadeR] = this._lidarViewFadeRange();
+                    const [fullR, fadeR] = this._shadowFadeRange();
                     paintShadowRaster(
                         this.map,
                         this._shadowCanvas,
@@ -4295,26 +3565,6 @@ export class HeliosEngine
         }
     }
 
-    //Read-only view of the currently loaded LiDAR nDSM raster: the same buffer the LiDAR View overlay
-    //paints, plus its bbox, handed as a live reference (caller treats it immutable). Null when no provider
-    //covers the home or the last fetch failed. The optional `terrain` field carries the DTM band when the
-    //source COG ships one (helios-lidar.org 2-band), letting the shading ray-march compare absolute Z so
-    //sloped ground between panel and obstacle counts; absent on every public provider and legacy COGs.
-    public getLidarRaster():
-        | {
-            heights:    Float32Array;
-            terrain?:   Float32Array;
-            rasterSize: number;
-            minLat:     number;
-            maxLat:     number;
-            minLon:     number;
-            maxLon:     number;
-          }
-        | null
-    {
-        return this._lidarRaster;
-    }
-
     //Hourly temperature + wind series aligned with getTimelineSeries' `times`. NaN entries where the model
     //gave no value (callers skip them). Null until a weather payload lands.
     public getAmbientSeries(): {
@@ -4415,9 +3665,7 @@ export class HeliosEngine
     //sun-arc orientation) and the API key never reaches here.
     public getStatsSnapshot(): Record<string, unknown>
     {
-        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
         const shadowsOn = this._shadowsEnabled();
-        const lidarFeatures = this._lidarShadowFeatures;
         const buildingsFootprints = this._buildingsData
             ? {
                 home:         this._buildingsData.home.features.length,
@@ -4429,11 +3677,9 @@ export class HeliosEngine
         {
             shadowSource = 'disabled';
         }
-        else if (lidarFeatures && lidarFeatures.features.length > 0)
-                                                          shadowSource = 'lidar';
         else if (this._buildingsData)
         {
-            shadowSource = 'maptiler';
+            shadowSource = 'footprints';
         }
         else
         {
@@ -4442,19 +3688,15 @@ export class HeliosEngine
 
         return {
             mapReady:             this._mapReady,
-            //Home position omitted; lidarProvider + hemisphere cover the debug cases without leaking the address.
+            //Home position omitted; only the hemisphere is kept (for sun-arc orientation).
             hemisphere:           this.homeLat >= 0 ? 'N' : 'S',
-            lidarProvider:        provider ? provider.id : null,
             shadows:
             {
                 enabled:          shadowsOn,
                 source:           shadowSource,
                 opacity:          this._shadowOpacity(),
-                lidarClumps:      lidarFeatures?.features.length ?? 0,
-                lidarPrecision:   this._lidarPrecisionLevel(),
                 clipRadiusM:      this._buildingRadiusMeters(),
-                lastSigCached:    this._lastShadowSig !== undefined,
-                lidarDiagnostics: this._lidarShadowDiagnostics
+                lastSigCached:    this._lastShadowSig !== undefined
             },
             buildings:
             {
@@ -4498,7 +3740,6 @@ export class HeliosEngine
         const prevCluster     = this._buildingClusterRadiusMeters();
         const prevOpacity     = this._buildingOpacity();
         const prevColor       = this._buildingColor();
-        const prevPrecision   = this._lidarPrecisionLevel();
         const prevShadowOpa   = this._shadowOpacity();
         const prevShadowsOn   = this._shadowsEnabled();
         const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
@@ -4555,17 +3796,12 @@ export class HeliosEngine
             this._addBuildings();
             if (nextRadius !== prevRadius)
             {
-                //Radius also drives camera bounds, LiDAR extent and the fade band: re-clamp bounds, re-push
-                //fade range and invalidate the LiDAR fetch so the whole disc resizes in lockstep.
+                //Radius also drives camera bounds and the shadow fade band: re-clamp bounds and force a
+                //shadow refresh so the whole disc resizes in lockstep.
                 this._applyMapBounds();
-                this._pushLidarViewFadeRange();
-                this._lidarShadowKey          = '';
-                this._lidarShadowFailedKey    = '';
-                this._lidarShadowFailureCount = 0;
-                this._lidarShadowBackoffUntil = 0;
-                this._lidarShadowFeatures     = null;
-                this._lidarShadowDiagnostics  = null;
-                this._ensureLidarFetched();
+                this._lastShadowSig     = undefined;
+                this._lastAtmosphereAlt = -999;
+                this._refreshShadowsAndAtmosphere();
             }
         }
         else
@@ -4591,20 +3827,6 @@ export class HeliosEngine
             }
         }
 
-        //Precision change invalidates the cached shadow features (key includes raster size) and refetches.
-        //Also clear failure/backoff so a precision change after a failure retries immediately.
-        const nextPrecision = this._lidarPrecisionLevel();
-        if (nextPrecision !== prevPrecision)
-        {
-            this._lidarShadowKey          = '';
-            this._lidarShadowFailedKey    = '';
-            this._lidarShadowFailureCount = 0;
-            this._lidarShadowBackoffUntil = 0;
-            this._lidarShadowFeatures     = null;
-            this._lidarShadowDiagnostics  = null;
-            this._ensureLidarFetched();
-        }
-
         //Shadow opacity is a paint-level update on the raster layer.
         const nextShadowOpa = this._shadowOpacity();
         if (nextShadowOpa !== prevShadowOpa)
@@ -4619,24 +3841,14 @@ export class HeliosEngine
             }
         }
 
-        //Master shadow toggle: on -> fetch LiDAR if covered; off -> reset the LiDAR state.
+        //Master shadow toggle: force a shadow refresh so the raster repaints (on) or clears (off).
         const nextShadowsOn = this._shadowsEnabled();
         if (nextShadowsOn !== prevShadowsOn)
         {
-            if (nextShadowsOn)
-            {
-                this._ensureLidarFetched();
-            }
-            else
-            {
-                this._resetLidarFetchState();
-            }
+            this._lastShadowSig     = undefined;
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         }
-
-        //LiDAR View knobs are cheap uniform updates; push unconditionally (the layer no-ops on no change).
-        this._pushLidarViewConfig();
 
         if (this._homeHourlyData && this._mapReady)
         {
@@ -4659,8 +3871,6 @@ export class HeliosEngine
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
-        //Centralised reset also clears failed-key + backoff so a re-init doesn't inherit a stale window.
-        this._resetLidarFetchState();
         this._shadowCanvas           = undefined;
         this._arcInputsCache         = undefined;
         this._lastShadowSig          = undefined;
@@ -4670,19 +3880,6 @@ export class HeliosEngine
             cancelAnimationFrame(this._autoRotateRaf);
             this._autoRotateRaf = undefined;
         }
-        //Cancel the exposure pipeline: the idle callback can fire after cleanup and the rAF loop captures
-        //`this`, so a live token would pin the dead engine + context for an extra frame per chunk.
-        if (this._exposureIdleHandle !== undefined)
-        {
-            this._cancelIdleCb(this._exposureIdleHandle);
-            this._exposureIdleHandle = undefined;
-        }
-        if (this._exposureChunkRaf !== undefined)
-        {
-            cancelAnimationFrame(this._exposureChunkRaf);
-            this._exposureChunkRaf = undefined;
-        }
-        this._lidarViewActive = false;
 
         //Tear-down strategy: explicit + defensive + force-lose. map.remove() alone can't be trusted to
         //release every listener/source/context (iOS Safari leaves closures pinning the dead engine and the
@@ -4771,11 +3968,9 @@ export class HeliosEngine
                 'helios-buildings-home-outline',
                 'helios-buildings-home-outline-glow',
                 'helios-building-shadows',
-                //LiDAR-View custom layer: removeLayer triggers its onRemove() (frees the GPU buffers +
-                //program). On the iOS Safari path where map.remove() skips custom layers, this is the only
-                //thing preventing a leak per respawn.
-                'helios-lidar-view',
-                //Weather-mode cloud shader: same rationale (onRemove frees program, quad VBO, data texture).
+                //Weather-mode cloud shader: removeLayer triggers its onRemove() (frees program, quad VBO,
+                //data texture). On the iOS Safari path where map.remove() skips custom layers, this is the
+                //only thing preventing a leak per respawn.
                 'helios-weather-cloud'
             ])
             {
@@ -4805,10 +4000,6 @@ export class HeliosEngine
         this._buildingsData     = null;
         this._buildingsFetchKey = '';
         this._homeHourlyData    = null;
-        //Drop our LidarViewLayer pointer too (map.remove() frees its GL handles), else a stale instance
-        //pins the dead handles per killed engine and multiplies context pressure on respawn bursts.
-        this._lidarViewLayer        = undefined;
-        this._lidarRaster           = null;
         this._mapCanvas             = undefined;
         this._dragRotateHandlers    = undefined;
         this._mapPinHandler         = undefined;

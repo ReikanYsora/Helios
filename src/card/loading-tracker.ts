@@ -3,8 +3,8 @@
 //time so the banner never re-shows on routine refreshes (mode change, timeline scrub, etc).
 //
 //Each data-fetch entry point maps to ONE phase id below: call beginLoadingPhase at start and
-//endLoadingPhase at completion (success OR failure). Phases register lazily, so a user with no LiDAR
-//or no battery sensor never sees those phases counted.
+//endLoadingPhase at completion (success OR failure). Phases register lazily, so a user with no
+//battery sensor never sees those phases counted.
 //
 //Banner UX: visible from the first phase start until every registered phase is done, then fades out
 //(slide-up + opacity) and stays hidden for the card lifetime so background refreshes never reflash
@@ -26,9 +26,7 @@ export type LoadingPhaseId =
     | 'solar-radiation'
     | 'ha-daily-totals'
     | 'weather-forecast'
-    | 'buildings'
-    | 'lidar-raster'
-    | 'lidar-exposure';
+    | 'buildings';
 
 
 export interface LoadingPhaseState

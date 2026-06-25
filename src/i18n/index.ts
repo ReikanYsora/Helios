@@ -125,8 +125,8 @@ export interface Translations
         pvArrayLongitude:         string;
         pvArrayCoordsHelp:        string;
         pvArrayCoordsPlaceholder: string;
-        //Panel-group height above ground (m). Positions the ray-march origin for the LiDAR-aware
-        //per-array shading check.
+        //Panel-group height above ground (m). Kept for the per-array geometry; no longer used for
+        //obstacle shading now that LiDAR is gone.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
         //Sun-tracking selector per row: 'none' (fixed, default), 'dual-axis' (tilt+azimuth track),
@@ -157,33 +157,14 @@ export interface Translations
         mapStyleMinimal:          string;
         //Shadow options.
         shadowsSection:           string;
-        //Master shadow toggle (LiDAR if available, OpenFreeMap footprints otherwise).
+        //Master shadow toggle (OpenFreeMap building footprints).
         shadowsEnabled:           string;
         shadowsEnabledOn:         string;
         shadowsEnabledOff:        string;
         shadowsEnabledHint:       string;
-        //LiDAR shadow precision: three levels mapped to a raster size in helios-engine. Only
-        //meaningful inside a LiDAR provider's coverage.
-        lidarPrecision:          string;
-        lidarPrecisionLow:       string;
-        lidarPrecisionMedium:    string;
-        lidarPrecisionHigh:      string;
-        lidarPrecisionHint:      string;
         //Cast-shadow opacity, 0..1 slider.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
-        //Collapsible nested section to point Helios at a custom nDSM GeoTIFF; hidden behind
-        //<details>/<summary> so the editor stays simple for users who don't need it.
-        localLidarSection:        string;
-        localLidarHint:           string;
-        //Line under localLidarHint pointing at tools/lidar/ for preparing the nDSM raster offline.
-        localLidarToolsHint:      string;
-        localLidarEnabled:        string;
-        localLidarUrl:            string;
-        localLidarMinLat:         string;
-        localLidarMaxLat:         string;
-        localLidarMinLon:         string;
-        localLidarMaxLon:         string;
         //Reset: one destructive button wiping every cached payload (weather, PV history, sample
         //buffer) and forcing a fresh fetch. Own collapsible section at the editor bottom.
         //resetCacheDone is a transient post-click confirmation on the button.
@@ -192,15 +173,15 @@ export interface Translations
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
-        //About section at the editor bottom: version string, companion site helios-lidar.org, the
-        //two source repos, an appreciation line + Buy Me A Coffee link.
+        //About section at the editor bottom: version string, the source repo, an appreciation line +
+        //Buy Me A Coffee link. (aboutSiteTitle/aboutSiteDescription are unused since the companion-site
+        //link was removed with LiDAR; pending removal in the translation cleanup.)
         aboutSection:             string;
         aboutVersionLabel:        string;
         aboutSiteTitle:           string;
         aboutSiteDescription:     string;
         aboutCodeLabel:           string;
         aboutRepoCard:            string;
-        aboutRepoLidar:           string;
         aboutCoffeeMessage:       string;
         aboutCoffeeLink:          string;
         //Developer block (X profile + LinkedIn), right after the version row.

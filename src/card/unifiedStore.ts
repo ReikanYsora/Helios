@@ -97,7 +97,6 @@ export interface UnifiedStoreHost
     //direction's bucket kWh -> average watts.
     readonly _gridImportChangeSeries: ChangeBucket[] | null;
     readonly _gridExportChangeSeries: ChangeBucket[] | null;
-    readonly _engine?:                { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
     //HA Energy solar forecast (energy-forecast.ts), merged across config entries and time-sorted. Empty when no
     //forecast source is configured (forecast series left all-null, no curve renders).
     readonly _haSolarForecast:        ReadonlyArray<SolarForecastPoint>;

@@ -279,7 +279,7 @@ function clipConvexPolygon(
     return output;
 }
 
-//Andrew's monotone chain. Returns vertices CCW, NOT closed. Exported for the LiDAR pipeline which wraps each consolidated region.
+//Andrew's monotone chain. Returns vertices CCW, NOT closed. Used to wrap each consolidated shadow region.
 export function convexHull(pts: Array<[number, number]>): Array<[number, number]>
 {
     if (pts.length < 3)

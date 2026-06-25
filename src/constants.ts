@@ -11,10 +11,17 @@
 export const DEFAULT_SUN_COLOR_HEX = "#ffc107"; //--amber-color
 export const DEFAULT_CLOUD_COLOR_HEX = "#727272"; //--secondary-text-color (neutral)
 export const DEFAULT_BUILDING_COLOR_HEX = "#cccccc"; //HA neutral-80 from the frontend palette (src/resources/theme/color)
+//HA Energy token hex, mirrored as literals for inline SVG/canvas fills where a CSS var can't be used. Values
+//match the frontend tokens in src/resources/theme/color/color.globals.ts so a Helios card reads as first-party.
+export const DEFAULT_PV_COLOR_HEX           = "#ff9800"; //--energy-solar-color
+export const DEFAULT_GRID_IMPORT_COLOR_HEX  = "#488fc2"; //--energy-grid-consumption-color
+export const DEFAULT_GRID_EXPORT_COLOR_HEX  = "#8353d1"; //--energy-grid-return-color
+export const DEFAULT_BATTERY_IN_COLOR_HEX   = "#f06292"; //--energy-battery-in-color
+export const DEFAULT_BATTERY_OUT_COLOR_HEX  = "#4db6ac"; //--energy-battery-out-color
 
 //=== Display radius + buildings ===
-//Single on-screen radius (m) for buildings, LiDAR cells and shadows. 200 m default; the `display-radius`
-//slider lowers it for perf or raises it for a wider survey. LiDAR fades out over DISPLAY_FADE_DELTA_M.
+//Single on-screen radius (m) for buildings and shadows. 200 m default; the `display-radius`
+//slider lowers it for perf or raises it for a wider survey. Buildings fade out over DISPLAY_FADE_DELTA_M.
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
 export const MIN_DISPLAY_RADIUS_M     = 50;
 export const MAX_DISPLAY_RADIUS_M     = 500;
@@ -64,8 +71,6 @@ export const PV_CHIP_OFFSET_PX     = 70;    //PV chip lift above the home cluste
 //=== Animation / timing ===
 export const WEATHER_FADE_IN_MS  = 600;
 export const WEATHER_FADE_OUT_MS = 280;
-export const LIDAR_FADE_IN_MS    = 380;
-export const LIDAR_FADE_OUT_MS   = 280;
 export const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
 export const AUTO_ROTATE_INACTIVITY_MS = 5_000;
 export const ENGINE_SPAWN_COOLDOWN_MS = 600;
@@ -84,15 +89,11 @@ export const WS_MAX_CONCURRENT_FETCHES = 2;
 export const EQ_EPS_PX = 0.25;
 export const TIMELINE_MAX_TICKS = 7;
 
-//=== LiDAR precision / shadows ===
-export type LidarPrecisionLevel = 'low' | 'medium' | 'high';
-export const DEFAULT_LIDAR_PRECISION: LidarPrecisionLevel = 'medium';
-export const LIDAR_PRECISION_PITCH_MULT: Record<LidarPrecisionLevel, number> = { low: 4, medium: 2, high: 1 };
+//=== Shadows ===
 export const DEFAULT_SHADOW_OPACITY = 0.32;
-export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
-export const DEFAULT_LIDAR_VIEW_OPACITY = 0.25;
-export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M;
-export const SHADOW_RASTER_SIZE_BY_PRECISION: Record<LidarPrecisionLevel, number> = { low: 512, medium: 1024, high: 2048 };
+//Offscreen raster resolution for the footprint shadow mask. ~0.4 m/px over a 400 m diameter; fixed now that
+//the LiDAR precision selector is gone.
+export const SHADOW_RASTER_SIZE = 1024;
 
 //=== Weather fetch ===
 export const WEATHER_PAST_DAYS          = 5;

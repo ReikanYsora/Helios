@@ -696,9 +696,6 @@ export interface ChartHost
     //Mutable hover-cursor position as a percent of the visible range (0..100), null when inactive. Written by the
     //pointer handlers below.
     _chartHoverPct:         number | null;
-    //Exposes the loaded LiDAR raster for the per-array shading raycast. Optional: without it shading falls back to
-    //"no obstacle" and the chart still renders.
-    readonly _engine?:      { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
     //Unified 5-day data source, single point of truth for the production + forecast curves across timeline / radial /
     //dashboard. Null only between mount and first build -> chart degrades to an empty curve.
     readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
