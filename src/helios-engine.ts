@@ -1447,6 +1447,26 @@ export class HeliosEngine
         return this._renderer?.camera.hasViewport ?? false;
     }
 
+    //Move the home to new coordinates IN PLACE: re-tile the basemap, re-fetch the buildings + weather for
+    //the new location and re-cast shadows. The card calls this instead of tearing the engine down and
+    //rebuilding it on a home change (a 2.5D scene has no GL context to recreate).
+    public setHome(lat: number, lon: number): void
+    {
+        if (lat === this.homeLat && lon === this.homeLon)
+        {
+            return;
+        }
+        this.homeLat   = lat;
+        this.homeLon   = lon;
+        this._fetchLat = lat;
+        this._fetchLon = lon;
+        void this._renderer?.setLocation(lat, lon);
+        this._ensureBuildings();
+        this._lastAtmosphereAlt = -999;
+        this._refreshShadowsAndAtmosphere();
+        void this._refreshWeather(lat, lon);
+    }
+
     //True during the post-exit cooldown. Card gates scrubs, engine gates drag-rotate; both read the same
     //clock so the suppression window is symmetric.
     public isUserGestureSuppressed(): boolean

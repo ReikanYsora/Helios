@@ -989,10 +989,11 @@ export class HeliosCard extends LitElement
         const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
         const identityChanged = homeKey !== this._lastHomeKey;
 
-        if (!this._engine || identityChanged)
+        //Create the engine ONCE. A 2.5D scene has no GL context to rebuild, so the element is reused like any
+        //standard HA card: created on first paint, then updated in place — never torn down and respawned.
+        if (!this._engine)
         {
-            //Disconnected guard: HA's edit-mode wrapping fires disconnect + reconnect in the same Lit tick.
-            //Without this, an updated() on a detached element would spawn an engine for a discarded card.
+            //Disconnected guard: edit-mode wrapping can fire updated() on a detached element.
             if (!this.isConnected)
             {
                 return;
@@ -1001,18 +1002,21 @@ export class HeliosCard extends LitElement
             {
                 return;
             }
-            //Spawn straight away for an instant first paint. Edit-mode mount/unmount churn is absorbed
-            //downstream: initEngine() coalesces respawns within its cooldown, and initEngineNow()'s rAF
-            //re-checks isConnected before the heavy build, so a transient mount never allocates an engine.
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
             initEngine(this);
             return;
         }
 
-        //Identity stable: push config down only when the visual config actually changed. Otherwise
-        //updateConfig() runs on every Lit re-render (clock tick, any @state) and rebuilds the GeoJSON of
-        //thousands of points, freezing the page.
+        //Home moved: re-tile + re-fetch in place (no respawn).
+        if (identityChanged)
+        {
+            this._lastHomeKey = homeKey;
+            this._engine.setHome(lat, lon);
+        }
+
+        //Push config down only when the visual config actually changed. Otherwise updateConfig() runs on every
+        //Lit re-render (clock tick, any @state) and rebuilds the GeoJSON of thousands of points.
         const sig = computeConfigSig(this.config);
         if (sig !== this._lastConfigSig)
         {
