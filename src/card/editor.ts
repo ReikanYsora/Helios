@@ -510,7 +510,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'shadows'}" @toggle="${(e: Event) => this._onSectionToggle('shadows', e)}">
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:box-shadow"></ha-icon>${t.editor.shadowsSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gradient-vertical"></ha-icon>${t.editor.shadowsSection}</summary>
                 <div class="field">
                     <span class="label">${t.editor.shadowsEnabled}</span>
                     <div class="segmented-toggle">
