@@ -75,6 +75,9 @@ export class SceneRenderer
     private _growthRaf = 0;
     private _alive = true;
     private _resizeObserver?: ResizeObserver;
+    //Last container size the observer acted on, so a no-op resize notification can't loop into a redraw.
+    private _obsW = -1;
+    private _obsH = -1;
     //Fired after each redraw so the host can re-project its HUD on the same frame.
     public onAfterDraw?: () => void;
 
@@ -97,7 +100,21 @@ export class SceneRenderer
         //transient size (dashboard edit-mode relayout, first paint) and settles a frame or two later, with no
         //data/sun change to trigger another draw. Owning the resize → redraw here guarantees the scene
         //re-projects at the true size the moment the container reaches it, every layout.
-        this._resizeObserver = new ResizeObserver(() => this.scheduleRedraw());
+        //
+        //Only redraw on a REAL size change: a draw repaints the HUD, which the host re-projects (refreshHud),
+        //and that DOM write can fire the observer again. Without this guard the no-op notification re-draws,
+        //re-projects, re-fires — an infinite ResizeObserver loop (visible as the scene flickering every frame).
+        this._resizeObserver = new ResizeObserver((entries) =>
+        {
+            const cr = entries[entries.length - 1]?.contentRect;
+            if (!cr) { return; }
+            const w = Math.round(cr.width);
+            const h = Math.round(cr.height);
+            if (w === this._obsW && h === this._obsH) { return; }
+            this._obsW = w;
+            this._obsH = h;
+            this.scheduleRedraw();
+        });
         this._resizeObserver.observe(container);
     }
 

@@ -193,7 +193,9 @@ export class HeliosEngine
     private _otherErrorStreak = 0;
 
     private _fetchAbortController?: AbortController;
-    private _resizeDebounceTimer?:  number;
+    //Last container size the observer acted on, so a no-op resize notification can't loop into a repaint.
+    private _obsW = -1;
+    private _obsH = -1;
     private _weatherTimer?:         number;
     private _skyTimer?:             number;
     private _resizeObserver?:       ResizeObserver;
@@ -652,23 +654,22 @@ export class HeliosEngine
             this.onMapTransform?.();
         };
 
-        //ResizeObserver fires aggressively on iOS during orientation changes. We coalesce bursts into a
-        //single redraw at the end. The cached CSS dims feed _heliosScale()/_sunArcScale() and the HUD layout.
+        //Keep the cached CSS dims (they feed _heliosScale()/_sunArcScale() + the HUD layout) and the arc-scale
+        //memo fresh on a real size change. The renderer owns the resize→redraw itself, so we don't redraw
+        //here. Guarded on size change: a redraw repaints the HUD, which writes DOM, which can re-fire the
+        //observer — without the guard that no-op notification would loop.
         this._resizeObserver = new ResizeObserver(entries =>
         {
-            const entry = entries[entries.length - 1];
-            if (entry)
-            {
-                const cr = entry.contentRect;
-                this._cachedCanvasCssW = cr.width  || this._cachedCanvasCssW;
-                this._cachedCanvasCssH = cr.height || this._cachedCanvasCssH;
-            }
-            window.clearTimeout(this._resizeDebounceTimer);
-            this._resizeDebounceTimer = window.setTimeout(() =>
-            {
-                this._arcScaleMemo = undefined;
-                this._renderer?.scheduleRedraw();
-            }, 80);
+            const cr = entries[entries.length - 1]?.contentRect;
+            if (!cr) { return; }
+            const w = Math.round(cr.width);
+            const h = Math.round(cr.height);
+            if (w === this._obsW && h === this._obsH) { return; }
+            this._obsW = w;
+            this._obsH = h;
+            this._cachedCanvasCssW = cr.width  || this._cachedCanvasCssW;
+            this._cachedCanvasCssH = cr.height || this._cachedCanvasCssH;
+            this._arcScaleMemo = undefined;
         });
         this._resizeObserver.observe(container);
         //Seed the cached dims so the first HUD layout isn't zero before the observer fires.
@@ -2270,7 +2271,6 @@ export class HeliosEngine
             this._selectedTimeShadowTimer = null;
         }
         window.clearInterval(this._skyTimer);
-        window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
         this._arcInputsCache         = undefined;
