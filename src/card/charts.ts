@@ -1290,10 +1290,12 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 highPts.push({ t: tMs, v: isFinite(hi) ? Math.max(0, hi) : 0 });
             }
         }
+        //Three clearly distinct cloud-grey levels (low = lightest, high = darkest) so the stacked layers read
+        //as separate bands at the higher fill opacity, not one flat grey.
         series = [
-            { pts: lowPts,  color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.35) },
+            { pts: lowPts,  color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
             { pts: midPts,  color: ENERGY_COLOR.cloud(el) },
-            { pts: highPts, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.30) },
+            { pts: highPts, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.50) },
         ];
         fixedMax = 0;
     }
@@ -1406,7 +1408,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             `)}
             <g class="hc-chart-grow">
                 ${drawn.map(d => d.area ? svg`
-                    <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
+                    <path d="${d.area}" fill="${d.color}" fill-opacity="${isStacked ? '0.6' : '0.22'}"></path>
                 ` : nothing)}
                 ${drawn.map(d => d.line ? svg`
                     <path class="hc-chart-line" d="${d.line}" stroke="${d.color}"></path>
