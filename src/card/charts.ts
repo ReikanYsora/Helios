@@ -3,7 +3,7 @@
 
 import { html, svg, nothing, TemplateResult } from 'lit';
 import { type HeliosConfig } from '../helios-config';
-import { ENERGY_COLOR, hueRotate } from './theme-colors';
+import { ENERGY_COLOR, energySolarColor } from './theme-colors';
 import { formatLocalisedNumber, lerpHexToward } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { pvNormalizeToWatts, type PvHistory } from './pv';
@@ -217,19 +217,9 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 }
 
 
-//Hue-rotated palette around the HA Energy `--energy-solar-color` token. Source 0 keeps the base hue; siblings step
-//`360 / N` degrees (a 2-source E/W split lands on opposite hues). The CSS HSL `from` syntax derives the rotation so
-//the colour follows the live theme without parsing resolved RGB; falls back to a fixed orange where unsupported.
-//Exported so the dashboard tooltip can reuse the same per-source colours.
-export function pvSourceColor(index: number, total: number): string
-{
-    if (total <= 1)
-    {
-        return 'var(--energy-solar-color, #ff9800)';
-    }
-    const step = 360 / total;
-    return `hsl(from var(--energy-solar-color, #ff9800) calc(h + ${index * step}) s l)`;
-}
+//Active theme polarity, the way HA's energy cards read it (hass.themes.darkMode) — drives whether the
+//per-source colour ramp brightens or darkens off the base solar token.
+const chartIsDark = (host: ChartHost): boolean => !!host.hass?.themes?.darkMode;
 
 //Per-PV-string production shares at an instant, for the home stacked histogram. Reads each source's raw
 //history (interpolated to the instant), keeps the producing ones, and returns {fraction, #rrggbb colour}
@@ -239,9 +229,9 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
 {
     const map = host._pvHistoryPerEntity;
     if (!map || map.size < 2) { return []; }
-    const ids   = Array.from(map.keys()).sort();
-    const solar = ENERGY_COLOR.pv(host as unknown as Element);
-    const step  = 360 / ids.length;
+    const ids  = Array.from(map.keys()).sort();
+    const el   = host as unknown as Element;
+    const dark = chartIsDark(host);
     //At the live instant the per-source HISTORY (hourly calibration) doesn't reach "now", so read each
     //source's live power straight off its state instead; only fall back to the history when scrubbing the
     //past. ~5 min tolerance covers the gap between now and the freshest data without misclassifying a scrub.
@@ -273,7 +263,8 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
     }
     const total = parts.reduce((s, p) => s + p.v, 0);
     if (total <= 0 || parts.length < 2) { return []; }
-    return parts.map((p) => ({ frac: p.v / total, color: hueRotate(solar, p.idx * step) }));
+    //Same per-source colour ramp as the energy dashboard + the chart curves (HA's getEnergyColor).
+    return parts.map((p) => ({ frac: p.v / total, color: energySolarColor(el, dark, p.idx) }));
 }
 
 
@@ -611,7 +602,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                     ` : nothing}
                     ${perEntityRows.map(prow => html`
                         <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
-                            <span class="tb-hover-tooltip-dot" style="background:${pvSourceColor(prow.colorIdx, perEntityIds.length)}"></span>
+                            <span class="tb-hover-tooltip-dot" style="background:${energySolarColor(host as unknown as Element, chartIsDark(host), prow.colorIdx)}"></span>
                             <span class="tb-hover-tooltip-sublabel">${prow.label}</span>
                             <span class="tb-hover-tooltip-value">${prow.valueText}</span>
                         </div>
@@ -1035,7 +1026,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         perEntityCurves.push({
             id,
             line:  `M ${ePoints.join(' L ')}`,
-            color: pvSourceColor(idx, perEntityIdsForCurves.length),
+            color: energySolarColor(host as unknown as Element, chartIsDark(host), idx),
         });
     }
 

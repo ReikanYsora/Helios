@@ -23,44 +23,72 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
     return fallback;
 }
 
-//Rotate a #rrggbb colour's hue by `deg` degrees, keeping saturation + lightness. Used to spread the home
-//histogram bands around the solar token by source index — the hex twin of pvSourceColor's hsl() rotation,
-//so the prism bands match the per-source chart curves. Returns the input unchanged if it isn't #rrggbb.
-export function hueRotate(hex: string, deg: number): string
+//RGB↔LAB conversion (chroma.js, via HA's common/color), used for the per-energy-source colour ramp below.
+/* eslint-disable @typescript-eslint/naming-convention */
+const Xn = 0.95047;
+const Yn = 1;
+const Zn = 1.08883;
+/* eslint-enable @typescript-eslint/naming-convention */
+const LAB_T0 = 0.137931034;
+const LAB_T1 = 0.206896552;
+const LAB_T2 = 0.12841855;
+const LAB_T3 = 0.008856452;
+const rgbXyz = (c: number): number => { const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4; };
+const xyzLab = (t: number): number => (t > LAB_T3 ? t ** (1 / 3) : t / LAB_T2 + LAB_T0);
+const xyzRgb = (r: number): number => 255 * (r <= 0.00304 ? 12.92 * r : 1.055 * r ** (1 / 2.4) - 0.055);
+const labXyz = (t: number): number => (t > LAB_T1 ? t * t * t : LAB_T2 * (t - LAB_T0));
+
+function hexToRgb(hex: string): [number, number, number]
 {
-    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-    if (!m) { return hex; }
-    const r = parseInt(m[1], 16) / 255;
-    const g = parseInt(m[2], 16) / 255;
-    const b = parseInt(m[3], 16) / 255;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const l = (max + min) / 2;
-    let h = 0;
-    let s = 0;
-    if (max !== min)
+    return [
+        parseInt(hex.slice(1, 3), 16),
+        parseInt(hex.slice(3, 5), 16),
+        parseInt(hex.slice(5, 7), 16),
+    ];
+}
+
+function rgbToLab([r, g, b]: [number, number, number]): [number, number, number]
+{
+    const rr = rgbXyz(r);
+    const gg = rgbXyz(g);
+    const bb = rgbXyz(b);
+    const x = xyzLab((0.4124564 * rr + 0.3575761 * gg + 0.1804375 * bb) / Xn);
+    const y = xyzLab((0.2126729 * rr + 0.7151522 * gg + 0.072175  * bb) / Yn);
+    const z = xyzLab((0.0193339 * rr + 0.119192  * gg + 0.9503041 * bb) / Zn);
+    const l = 116 * y - 16;
+    return [l < 0 ? 0 : l, 500 * (x - y), 200 * (y - z)];
+}
+
+function labToHex([l, a, b]: [number, number, number]): string
+{
+    let y = (l + 16) / 116;
+    let x = y + a / 500;
+    let z = y - b / 200;
+    y = Yn * labXyz(y);
+    x = Xn * labXyz(x);
+    z = Zn * labXyz(z);
+    const r  = Math.round(xyzRgb(3.2404542 * x - 1.5371385 * y - 0.4985314 * z));
+    const g  = Math.round(xyzRgb(-0.969266 * x + 1.8760108 * y + 0.041556  * z));
+    const b2 = Math.round(xyzRgb(0.0556434 * x - 0.2040259 * y + 1.0572252 * z));
+    const h  = (c: number): string => Math.min(255, Math.max(0, c)).toString(16).padStart(2, '0');
+    return '#' + h(r) + h(g) + h(b2);
+}
+
+//Per-energy-source colour, identical to HA Energy's getEnergyColor: source `idx` 0 is the base solar token;
+//higher indices brighten it (dark theme) or darken it (light theme) by 18 LAB-lightness units per step,
+//unless the theme defines an explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for both
+//the per-source chart curves and the home histogram bands so the two always match the energy dashboard.
+export function energySolarColor(host: Element | null | undefined, dark: boolean, idx: number): string
+{
+    if (host)
     {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        h = max === r ? (g - b) / d + (g < b ? 6 : 0)
-          : max === g ? (b - r) / d + 2
-          :             (r - g) / d + 4;
-        h /= 6;
+        const override = getComputedStyle(host).getPropertyValue(`--energy-solar-color-${idx}`).trim();
+        if (override) { return cssHex(host, `--energy-solar-color-${idx}`, '#ff9800'); }
     }
-    h = (((h * 360 + deg) % 360) + 360) % 360 / 360;
-    const hue2rgb = (p: number, q: number, t: number): number =>
-    {
-        if (t < 0) { t += 1; }
-        if (t > 1) { t -= 1; }
-        if (t < 1 / 6) { return p + (q - p) * 6 * t; }
-        if (t < 1 / 2) { return q; }
-        if (t < 2 / 3) { return p + (q - p) * (2 / 3 - t) * 6; }
-        return p;
-    };
-    const q  = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p  = 2 * l - q;
-    const to = (v: number): string => Math.round(v * 255).toString(16).padStart(2, '0');
-    return '#' + to(hue2rgb(p, q, h + 1 / 3)) + to(hue2rgb(p, q, h)) + to(hue2rgb(p, q, h - 1 / 3));
+    const base = cssHex(host, '--energy-solar-color', '#ff9800');
+    if (!idx) { return base; }
+    const lab = rgbToLab(hexToRgb(base));
+    return labToHex([lab[0] + (dark ? 18 : -18) * idx, lab[1], lab[2]]);
 }
 
 //The card's semantic colours, resolved from the HA Energy palette tokens (the same ones HA's own energy
