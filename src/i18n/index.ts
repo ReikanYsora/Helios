@@ -76,6 +76,14 @@ export interface Translations
         //less geometry per frame).
         displayRadius?:               string;
         displayRadiusHelp?:           string;
+        buildingCount?:               string;
+        buildingCountHelp?:           string;
+        buildingRealSize?:            string;
+        buildingRealSizeOn?:          string;
+        buildingRealSizeOff?:         string;
+        buildingRealSizeHint?:        string;
+        buildingHeight?:              string;
+        buildingHeightHelp?:          string;
         //PV install: inverter cap, per-row panel orientation, inverter-cutoff SoC guard, optional
         //solar-radiation override sensor — every install-level knob with no HA Energy equivalent.
         installationSection:      string;

@@ -21,6 +21,8 @@ import {
     BUILDING_CACHE_TTL_MS,
     OVERPASS_RETRY_DELAY_MS,
     OVERPASS_ENDPOINTS,
+    REAL_HEIGHT_CAP_M,
+    REAL_HEIGHT_FALLBACK_M,
     DEG,
 } from '../constants';
 
@@ -29,6 +31,9 @@ export interface FetchBuildingsOptions
     homeLon:      number;
     homeLat:      number;
     radiusMeters: number;
+    maxBuildings?: number;
+    realSize?:    boolean;
+    fixedHeightM?: number;
     signal?:      AbortSignal;
 }
 
@@ -43,6 +48,27 @@ interface OverpassWay
         geometry?: { lat: number; lon: number }[];
     }[];                                                  //multipolygon relations
     tags?:    Record<string, string>;
+}
+
+//Read a building's height (m) from its OSM `tags`: prefer `height` (leading float, e.g. "12", "12 m",
+//"12.5"), else `building:levels` x 3 m/level. Returns null when neither parses or yields a positive value.
+function osmHeightM(tags: Record<string, string> | undefined): number | null
+{
+    if (!tags)
+    {
+        return null;
+    }
+    const h = parseFloat(tags.height);
+    if (Number.isFinite(h) && h > 0)
+    {
+        return h;
+    }
+    const levels = parseFloat(tags['building:levels']);
+    if (Number.isFinite(levels) && levels > 0)
+    {
+        return levels * 3;
+    }
+    return null;
 }
 
 //Ray-casting point-in-polygon for one footprint (local metres); true if (x, y) is inside.
@@ -91,20 +117,26 @@ function cacheKey(lat: number, lng: number, radius: number): string
 
 //Parse Overpass `elements` into ranked scene Building[]. Each ring lat/lon -> local metres east/north
 //relative to the home, centroid computed, ranked by distance-to-footprint, nearest MAX_BUILDINGS kept.
-function parseBuildings(ways: OverpassWay[], lat: number, lng: number): Building[]
+function parseBuildings(
+    ways: OverpassWay[],
+    lat:  number,
+    lng:  number,
+    opts: { maxBuildings?: number; realSize?: boolean; fixedHeightM?: number } = {}
+): Building[]
 {
     const perLat = 111_320;
     const perLon = 111_320 * Math.cos(lat * DEG);
     const buildings: Building[] = [];
 
     //Collect outer rings: simple `way` buildings + the outer ring(s) of multipolygon `relation` buildings.
-    //Dense cities map whole blocks as relations — without these the home can be missing.
-    const rings: { lat: number; lon: number }[][] = [];
+    //Dense cities map whole blocks as relations — without these the home can be missing. Each ring carries its
+    //element's `tags` so the per-building height can read the OSM height/levels.
+    const rings: { geometry: { lat: number; lon: number }[]; tags?: Record<string, string> }[] = [];
     for (const el of ways)
     {
         if (el.type === 'way' && el.geometry)
         {
-            rings.push(el.geometry);
+            rings.push({ geometry: el.geometry, tags: el.tags });
         }
         else if (el.type === 'relation' && el.members)
         {
@@ -112,13 +144,18 @@ function parseBuildings(ways: OverpassWay[], lat: number, lng: number): Building
             {
                 if (m.geometry && (m.role === 'outer' || !m.role))
                 {
-                    rings.push(m.geometry);
+                    rings.push({ geometry: m.geometry, tags: el.tags });
                 }
             }
         }
     }
 
-    for (const geometry of rings)
+    //Per-building height: real OSM heights (capped, with a fallback for untagged buildings) when realSize is
+    //on, otherwise a uniform fixed prism. realSize defaults true when undefined; the caller always passes it.
+    const realSize     = opts.realSize !== false;
+    const fixedHeightM = opts.fixedHeightM ?? FIXED_BUILDING_HEIGHT_M;
+
+    for (const { geometry, tags } of rings)
     {
         const footprint: Point[] = geometry.map((n) => [
             (n.lon - lng) * perLon,
@@ -156,9 +193,12 @@ function parseBuildings(ways: OverpassWay[], lat: number, lng: number): Building
             centerX += x;
             centerY += y;
         }
+        const height = realSize
+            ? Math.min(REAL_HEIGHT_CAP_M, osmHeightM(tags) ?? REAL_HEIGHT_FALLBACK_M)
+            : fixedHeightM;
         buildings.push({
             footprint,
-            height:  FIXED_BUILDING_HEIGHT_M, //OSM heights ignored (tall ones break the framing)
+            height,
             isHome:  false,
             centerX: centerX / footprint.length,
             centerY: centerY / footprint.length,
@@ -174,7 +214,7 @@ function parseBuildings(ways: OverpassWay[], lat: number, lng: number): Building
         dist.set(bld, distanceToHome(bld.footprint));
     }
     buildings.sort((a, b) => dist.get(a)! - dist.get(b)!);
-    const kept = buildings.slice(0, MAX_BUILDINGS);
+    const kept = buildings.slice(0, opts.maxBuildings ?? MAX_BUILDINGS);
     markHome(kept);
     return kept;
 }
@@ -272,7 +312,11 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
                 throw new Error(String(response.status));
             }
             const data      = (await response.json()) as { elements?: OverpassWay[] };
-            const buildings = parseBuildings(data.elements ?? [], lat, lng);
+            const buildings = parseBuildings(data.elements ?? [], lat, lng, {
+                maxBuildings: opts.maxBuildings,
+                realSize:     opts.realSize,
+                fixedHeightM: opts.fixedHeightM,
+            });
             if (buildings.length)
             {
                 try

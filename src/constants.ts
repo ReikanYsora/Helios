@@ -23,7 +23,7 @@ export const DEG = Math.PI / 180;
 //Single on-screen radius (m) for buildings and shadows. 200 m default; the `display-radius`
 //slider lowers it for perf or raises it for a wider survey. Buildings fade out over DISPLAY_FADE_DELTA_M.
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
-export const MIN_DISPLAY_RADIUS_M     = 50;
+export const MIN_DISPLAY_RADIUS_M     = 0;
 export const MAX_DISPLAY_RADIUS_M     = 500;
 export const DISPLAY_FADE_DELTA_M     = 50;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;  //ghost surround; home stays 1.0
@@ -113,6 +113,15 @@ export const DENSE_FRACTION    = 0.6;
 //TTL, the per-mirror retry delay, and the two CORS Overpass mirrors tried in order.
 export const FIXED_BUILDING_HEIGHT_M = 6;
 export const MAX_BUILDINGS           = 50;
+export const DEFAULT_BUILDING_COUNT  = 50;
+export const MIN_BUILDING_COUNT      = 10;
+export const MAX_BUILDING_COUNT      = 100;
+export const DEFAULT_BUILDING_REAL_SIZE = true;
+export const MIN_BUILDING_HEIGHT_M   = 3;
+export const MAX_BUILDING_HEIGHT_M   = 10;
+//OSM-height cap (m) so a nearby tower can't dominate the 2.5D framing; untagged buildings fall back.
+export const REAL_HEIGHT_CAP_M       = 25;
+export const REAL_HEIGHT_FALLBACK_M  = 6;
 export const FALLBACK_HOUSE_HALF_W   = 5;
 export const FALLBACK_HOUSE_HALF_D   = 4;
 export const BUILDING_CACHE_TTL_MS   = 30 * DAY_MS;

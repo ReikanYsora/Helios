@@ -21,6 +21,9 @@ export const VISUAL_CONFIG_KEYS = [
     //display-radius / cluster-radius invalidate cache and refetch; opacity is a cheap paint-property update.
     'display-radius',
     'building-cluster-radius',
+    'building-count',
+    'building-real-size',
+    'building-height',
     'building-opacity',
     'auto-rotate-enabled',
     //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: a slider drag would respawn (teardown + rebuild the engine) every

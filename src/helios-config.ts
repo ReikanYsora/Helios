@@ -10,6 +10,8 @@ import {
     DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
     DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
     MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
+    DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
+    FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
 } from './constants';
 export {
     DEFAULT_BUILDING_OPACITY,
@@ -19,6 +21,9 @@ export {
     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
     MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
     DEFAULT_SHADOW_OPACITY,
+    DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
+    DEFAULT_BUILDING_REAL_SIZE,
+    FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
 } from './constants';
 
 
@@ -56,6 +61,14 @@ export interface HeliosConfig
     //Cluster radius (m): buildings within it (or containing the home) are treated as part of the home and
     //painted at full opacity, so attached garages/verandas don't render as transparent neighbours. Default 0.
     'building-cluster-radius'?: unknown;
+    //How many of the nearest buildings to keep around the home. Clamped [10,100], default 50. Replaces the
+    //hardcoded MAX_BUILDINGS — lowering it is a perf lever, raising it widens the surround.
+    'building-count'?:         unknown;
+    //When true (default), buildings are extruded to their real OSM heights (capped). When false, every
+    //building uses the fixed `building-height` prism so the framing stays uniform.
+    'building-real-size'?:     unknown;
+    //Fixed prism height (m) used for every building when `building-real-size` is false. Clamped [3,10], default 6.
+    'building-height'?:        unknown;
     //Cast-shadow master toggle. Default true; false projects no shadows from building footprints.
     'shadows-enabled'?:        unknown;
     //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
@@ -131,5 +144,39 @@ export function periodFutureDays(config: HeliosConfig | undefined): number
     const r = Math.round(n);
     if (r < MIN_PERIOD_FUTURE_DAYS) { return MIN_PERIOD_FUTURE_DAYS; }
     if (r > MAX_PERIOD_FUTURE_DAYS) { return MAX_PERIOD_FUTURE_DAYS; }
+    return r;
+}
+
+
+//Resolve how many nearest buildings to keep from `building-count`, clamped [MIN,MAX], defaulting on invalid.
+export function buildingCount(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['building-count'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return DEFAULT_BUILDING_COUNT; }
+    const r = Math.round(n);
+    if (r < MIN_BUILDING_COUNT) { return MIN_BUILDING_COUNT; }
+    if (r > MAX_BUILDING_COUNT) { return MAX_BUILDING_COUNT; }
+    return r;
+}
+
+
+//Resolve the real-OSM-height toggle from `building-real-size`; defaults TRUE (only an explicit false disables it).
+export function buildingRealSize(config: HeliosConfig | undefined): boolean
+{
+    return config?.['building-real-size'] !== false;
+}
+
+
+//Resolve the fixed prism height (m) from `building-height`, clamped [MIN,MAX], defaulting on invalid. Used only
+//when `building-real-size` is false.
+export function buildingFixedHeightM(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['building-height'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return FIXED_BUILDING_HEIGHT_M; }
+    const r = Math.round(n);
+    if (r < MIN_BUILDING_HEIGHT_M) { return MIN_BUILDING_HEIGHT_M; }
+    if (r > MAX_BUILDING_HEIGHT_M) { return MAX_BUILDING_HEIGHT_M; }
     return r;
 }

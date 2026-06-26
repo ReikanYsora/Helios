@@ -18,6 +18,9 @@ import
     DEFAULT_SHADOW_OPACITY,
     periodPastDays,
     periodFutureDays,
+    buildingCount,
+    buildingRealSize,
+    buildingFixedHeightM,
 } from './helios-config';
 
 
@@ -1099,7 +1102,11 @@ export class HeliosEngine
         }
         const radius        = this._buildingRadiusMeters();
         const clusterRadius = this._buildingClusterRadiusMeters();
-        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${clusterRadius}`;
+        const count         = buildingCount(this.cfg);
+        const realSize      = buildingRealSize(this.cfg);
+        const fixedHeightM  = buildingFixedHeightM(this.cfg);
+        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${clusterRadius}`
+                  + `|${count}|${realSize}|${fixedHeightM}`;
 
         if (this._buildingsData && this._buildingsFetchKey === key)
         {
@@ -1133,6 +1140,9 @@ export class HeliosEngine
             homeLon:      this.homeLon,
             homeLat:      this.homeLat,
             radiusMeters: radius,
+            maxBuildings: count,
+            realSize:     realSize,
+            fixedHeightM: fixedHeightM,
             signal:       ac.signal
         })
         .then(result =>

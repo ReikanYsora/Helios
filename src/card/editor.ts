@@ -13,6 +13,12 @@ import
     DEFAULT_DISPLAY_RADIUS_M,
     MIN_DISPLAY_RADIUS_M,
     MAX_DISPLAY_RADIUS_M,
+    DEFAULT_BUILDING_COUNT,
+    MIN_BUILDING_COUNT,
+    MAX_BUILDING_COUNT,
+    FIXED_BUILDING_HEIGHT_M,
+    MIN_BUILDING_HEIGHT_M,
+    MAX_BUILDING_HEIGHT_M,
     DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS,
     MAX_VALUE_DECIMALS,
@@ -394,21 +400,6 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'map'}" @toggle="${(e: Event) => this._onSectionToggle('map', e)}">
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.editor.uiAndMapSection}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.displayRadius ?? 'Rayon d\'affichage'}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min="${MIN_DISPLAY_RADIUS_M}"
-                            max="${MAX_DISPLAY_RADIUS_M}"
-                            step="10"
-                            .value="${String(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M)}"
-                            @input="${(e: Event) => this._numSlider('display-radius', e)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M), 10)} m</span>
-                    </div>
-                </label>
-                <div class="hint">${t.editor.displayRadiusHelp ?? 'Distance autour de la maison dans laquelle les bâtiments et les ombres sont rendus. Baissez cette valeur (jusqu\'à 50 m) pour fluidifier l\'affichage sur un téléphone ancien ou lent ; montez-la (jusqu\'à 500 m) pour une vue plus large. Par défaut 200 m.'}</div>
                 <div class="field">
                     <span class="label">${t.editor.autoRotate}</span>
                     <div class="segmented-toggle">
@@ -430,6 +421,68 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'buildings'}" @toggle="${(e: Event) => this._onSectionToggle('buildings', e)}">
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
+                <label class="field">
+                    <span class="label">${t.editor.displayRadius ?? 'Display radius'}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range"
+                            min="${MIN_DISPLAY_RADIUS_M}"
+                            max="${MAX_DISPLAY_RADIUS_M}"
+                            step="10"
+                            .value="${String(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M)}"
+                            @input="${(e: Event) => this._numSlider('display-radius', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M), 10)} m</span>
+                    </div>
+                </label>
+                <div class="hint">${t.editor.displayRadiusHelp ?? 'Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home.'}</div>
+                <label class="field">
+                    <span class="label">${t.editor.buildingCount ?? 'Building count'}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range"
+                            min="${MIN_BUILDING_COUNT}"
+                            max="${MAX_BUILDING_COUNT}"
+                            step="5"
+                            .value="${String(c['building-count'] ?? DEFAULT_BUILDING_COUNT)}"
+                            @input="${(e: Event) => this._numSlider('building-count', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['building-count'] ?? DEFAULT_BUILDING_COUNT), 5)}</span>
+                    </div>
+                </label>
+                <div class="hint">${t.editor.buildingCountHelp ?? 'Maximum number of nearby buildings to draw. Lower it to lighten rendering on a slow device.'}</div>
+                <div class="field">
+                    <span class="label">${t.editor.buildingRealSize ?? 'Real building heights'}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['building-real-size'] !== false) ? 'active' : ''}"
+                            @click="${() => this._update('building-real-size', true)}"
+                        >${t.editor.buildingRealSizeOn ?? 'On'}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['building-real-size'] === false) ? 'active' : ''}"
+                            @click="${() => this._update('building-real-size', false)}"
+                        >${t.editor.buildingRealSizeOff ?? 'Off'}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.'}</div>
+                ${c['building-real-size'] === false ? html`
+                    <label class="field">
+                        <span class="label">${t.editor.buildingHeight ?? 'Building height'}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range"
+                                min="${MIN_BUILDING_HEIGHT_M}"
+                                max="${MAX_BUILDING_HEIGHT_M}"
+                                step="0.5"
+                                .value="${String(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M)}"
+                                @input="${(e: Event) => this._numSlider('building-height', e)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M), 0.5)} m</span>
+                        </div>
+                    </label>
+                ` : nothing}
                 <label class="field">
                     <span class="label">${t.editor.buildingClusterRadius}</span>
                     <div class="slider-row">
