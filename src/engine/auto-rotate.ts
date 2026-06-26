@@ -6,7 +6,7 @@
 //per-frame increment so speed is constant across refresh rates and survives
 //tab-throttling without visible jumps.
 
-import type { SceneRenderer } from '../scene/renderer';
+import type { SceneRenderer } from './renderer';
 import type { HeliosConfig } from '../helios-config';
 import { AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS } from '../constants';
 

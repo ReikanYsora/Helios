@@ -1,5 +1,5 @@
 import { css, unsafeCSS } from 'lit';
-import { GROUND_FADE_START } from '../scene/tiles';
+import { GROUND_FADE_START } from '../engine/tiles';
 
 //Visual styles for HeliosCard. Grouped by feature (layout, timeline,
 //overlays, solar arc, tooltips).

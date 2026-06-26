@@ -4,7 +4,7 @@
 
 import type { HeliosEngine } from '../helios-engine';
 import { EQ_EPS_PX } from '../constants';
-import { arcColor } from '../scene/colors';
+import { arcColor } from '../engine/colors';
 
 
 //One arc sample from engine.projectSunScene(): (x,y) for placement, nearness/belowHorizon for visual modulation,

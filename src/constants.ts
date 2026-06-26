@@ -15,7 +15,7 @@ export const HOUR_MS = 3_600_000;
 export const DAY_MS  = 86_400_000;
 
 //=== Math ===
-//Card-side degrees→radians factor. The scene module keeps its own DEG in scene/constants.ts so the two
+//Card-side degrees→radians factor. The scene engine keeps its own DEG in engine/constants.ts so the two
 //layers stay independent; the duplication across the two is intentional.
 export const DEG = Math.PI / 180;
 

@@ -1,6 +1,6 @@
-//Tunables for the self-contained 2.5D scene module. Kept separate from the card/engine constants.ts so
-//scene/ stays a standalone, card-agnostic unit: nothing here depends on the card and nothing outside
-//scene/ needs to reach in.
+//Tunables for the self-contained 2.5D scene engine. Kept separate from the card-level constants.ts so the
+//engine stays a standalone, card-agnostic unit: nothing here depends on the card and nothing outside the
+//engine needs to reach in.
 
 //=== Camera + projection ===
 //Pitch bounds shared by the editor, drag-rotate and the initial-pose clamp. MIN = nearly top-down,
