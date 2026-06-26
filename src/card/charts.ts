@@ -1389,15 +1389,24 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     {
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
+        //Stacked: the dot rides the cumulative TOP of each band (the stacked curve), not the raw value, so it
+        //sits on the visible boundary. Unstacked: the dot rides the series' own value.
+        let cum = 0;
         for (const s of series)
         {
             if (s.pts.length < 1) { continue; }
             const v = interpAt(s.pts.map(p => new Date(p.t)), s.pts.map(p => p.v), hoverMs);
-            if (isFinite(v))
+            if (!isFinite(v)) { continue; }
+            if (isStacked)
+            {
+                cum += Math.max(0, v);
+                hoverDots.push({ y: yOf(cum), color: s.color });
+            }
+            else
             {
                 hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
-                showHover = true;
             }
+            showHover = true;
         }
     }
 
