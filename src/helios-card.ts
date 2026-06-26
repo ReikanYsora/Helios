@@ -308,6 +308,9 @@ export class HeliosCard extends LitElement
 
     @property({ attribute: false }) public hass!: any;
     @property({ attribute: false }) config!: HeliosConfig;
+    //Set by HA on the editor's live-preview card. HA rebuilds that card on every keystroke, so intro
+    //animations (prism rise, timeline curve grow) are suppressed while it is true.
+    @property({ attribute: false }) public preview = false;
 
     @state() _engine?:        HeliosEngine;
     @state() _now             = new Date();
@@ -1624,6 +1627,7 @@ export class HeliosCard extends LitElement
         const cardClasses = [
             cardThemeClass,
             cameraLocked      ? 'camera-locked'  : '',
+            this.preview      ? 'helios-edit'    : '',
         ].filter(Boolean).join(' ');
 
         return html`

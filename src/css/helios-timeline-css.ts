@@ -86,6 +86,8 @@ export const heliosTimelineStyles = css`
     {
         .hc-chart-grow { animation: none; }
     }
+    /*  Editor preview rebuilds the card on every keystroke; skip the intro grow so it doesn't replay. */
+    ha-card.helios-edit .hc-chart-grow { animation: none; }
 
     /*  Stroke-only outline over the filled area so peaks read cleanly where the gradient fades.
         0.7 px hairline: a wider stroke self-overlapped on high-variation days and smudged dense

@@ -90,11 +90,6 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 }
 
 
-//Locations whose prism-rise has already played this page session. A re-created engine (editor commit,
-//dashboard edit toggle, tab re-entry) for the same place updates in place at full height instead of
-//replaying the grow animation — so editing an option is instant, not a re-grow.
-const _grownLocations = new Set<string>();
-
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
@@ -573,6 +568,10 @@ export class HeliosEngine
     private _buildingsData:   Building[] | null    = null;
     private _buildingsRaw:    RawBuilding[] | null = null;
     private _buildingsLocKey: string               = '';
+    //One-shot prism-rise guard (plays once the first time footprints land).
+    private _grown = false;
+    //Editor-preview mode: HA rebuilds the preview card on every keystroke, so intro animations are skipped.
+    private readonly _editMode: boolean;
     private _buildingsAbort?: AbortController;
 
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
@@ -607,7 +606,8 @@ export class HeliosEngine
         config:       HeliosConfig,
         haCoords:     [number, number],
         haElevation?: number,
-        initialIsDark = false
+        initialIsDark = false,
+        editMode      = false
     )
     {
         this.homeLat = haCoords[1];
@@ -615,7 +615,8 @@ export class HeliosEngine
         this.homeElevation = (typeof haElevation === 'number' && Number.isFinite(haElevation))
             ? haElevation
             : undefined;
-        this.cfg     = { ...config };
+        this.cfg      = { ...config };
+        this._editMode = editMode;
 
         bumpStat('enginesCreated');
 
@@ -1229,14 +1230,15 @@ export class HeliosEngine
         }
         const buildings = this._buildingsData ?? [];
         this._renderer.setBuildings(buildings);
-        //Play the prism rise once per location per page session (the renderer defaults to full height, so a
-        //skipped grow just shows the buildings immediately). Keyed module-level so a re-created engine for the
-        //same place doesn't replay it on every editor commit / edit-mode toggle.
-        const locKey = this._buildingsLocationKey();
-        if (buildings.length && !_grownLocations.has(locKey))
+        //Play the prism rise once, the first time footprints land. Skipped in edit/preview mode (the renderer
+        //defaults to full height) so the editor's per-keystroke card rebuild doesn't replay it.
+        if (buildings.length && !this._grown)
         {
-            _grownLocations.add(locKey);
-            this._renderer.animateGrowth();
+            this._grown = true;
+            if (!this._editMode)
+            {
+                this._renderer.animateGrowth();
+            }
         }
     }
 
