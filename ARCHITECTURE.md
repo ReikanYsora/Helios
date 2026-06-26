@@ -1,946 +1,285 @@
-# HELIOS, architecture
+# HELIOS — Architecture
 
-HELIOS is a Home Assistant Lovelace custom card that visualises solar
-conditions at a home in real time: sun arc, irradiance, cloud cover,
-3D buildings with cast shadows, optional PV production with a
-learning forecast, optional home-battery state, optional grid IN /
-OUT, all stitched onto a 3D MapLibre map centred on the home and
-reflected in a scrubbable 5-day timeline. The top-right mode bar
-gates the basemap between three views: Layer (default UI), LiDAR
-(per-cell irradiance dot cloud) and Weather (top-down camera with
-a live RainViewer precipitation radar overlay). A click on the home
-drops into a detail dashboard built around a radial sundial card
-with Today / Tomorrow / Battery sections.
-
-The 3D basemap and the building footprints come from
-**[OpenFreeMap](https://openfreemap.org/)** (free vector tiles built
-from OpenStreetMap data via the OpenMapTiles schema, no API key, no
-signup, no rate limit). Weather forecasts come from
-**[Open-Meteo](https://open-meteo.com/)** (also free, no key). LiDAR
-shadow data comes from national open-data programmes credited
-per-country in the LiDAR section below. None of these services
-require an account, so HELIOS ships and runs without any user
-configuration of credentials.
-
-For a chronological account of what changed across releases see
-[CHANGELOG.md](./CHANGELOG.md). For end-user documentation see
-[README.md](./README.md).
-
-External contributors who have shaped surfaces of the card beyond the
-core author:
-
-* **[@jourdant](https://github.com/jourdant)** , generic BYO local
-  nDSM LiDAR provider ([PR #5](https://github.com/ReikanYsora/Helios/pull/5))
-  and matching Python preparation toolchain
-  ([PR #11](https://github.com/ReikanYsora/Helios/pull/11)), idea
-  credited to [@stephenwq](https://github.com/stephenwq).
-* **[@i6media](https://github.com/i6media)** (Frank Boon) , optional
-  `home-latitude` / `home-longitude` overrides
-  ([PR #9](https://github.com/ReikanYsora/Helios/pull/9)) and the
-  multi-orientation PV layout (`pv-arrays`)
-  ([PR #10](https://github.com/ReikanYsora/Helios/pull/10)) for
-  installs with panels split across several roofs / orientations.
+This document describes how the Helios card is put together: the
+card / engine split, the 2.5D rendering pipeline, the data layer, the
+view modes, and the conventions every subsystem follows. For the
+user-facing feature list and configuration, see [README.md](./README.md);
+for per-release notes, see [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
-## What HELIOS does
+## 1. Overview
 
-HELIOS is a Home Assistant Lovelace card that visualises solar
-conditions at the user's home. The full picture sits on a single
-3D MapLibre map:
+Helios is a single self-contained Lovelace card. There is no backend and
+no build-time data: everything runs in the browser, talking to Home
+Assistant over the WebSocket API and to a few public services (Open-Meteo
+for weather, CARTO for the basemap, OpenStreetMap / Overpass for buildings).
 
-* **Sun arc**, the sun's full 24 h trajectory across the sky,
-  projected onto the screen with depth (thicker stroke when in
-  front of the camera, thinner behind). Split into two passes:
-  below-horizon dots render behind the home chip cluster so the
-  home stays readable through the night half of the loop;
-  above-horizon segments + sun disc + W/m² chip render in front
-  of every chip so the live sun always dominates the stack.
-* **Sun disc with halo**, the live position on the arc. Four
-  concentric layers, painted back-to-front: an irradiance-driven
-  halo (SVG `radialGradient`, 100 % alpha at the centre, 0 % at
-  the rim, peak alpha = `sqrt(irradiance/1000) × 0.55`); a
-  background tint; an inner fill whose radius scales with
-  irradiance; an outer rim.
-* **Incidence ray**, dashed line from the sun to the PV chip,
-  animated to flow at a speed proportional to live irradiance.
-  Snaps to the side of the PV chip facing the sun.
-* **Solar irradiance chip**, pinned above the sun disc, shows the
-  live W/m² figure. Reads from the configured
-  `solar-radiation-entity` for live + past timestamps when one is
-  set; falls back to the model otherwise. Future timestamps
-  always come from the model.
-* **Weather mode**, top-right mode bar (Layer / LiDAR / Weather).
-  Weather tilts the camera to a top-down framing around the home
-  and overlays live RainViewer precipitation radar on the basemap,
-  luminance-inverted to grayscale (light rain reads as light grey,
-  storm as dark grey). Three cloud-layer chips (low / mid / high)
-  appear under the mode bar so the per-altitude Open-Meteo coverage
-  reads at a glance alongside the radar. Live-only, no scrub
-  timeline; the mode-bar handler resets the card to live on entry.
-  Refreshes every 5 minutes while the mode stays on.
-* **Home halo**, a soft sun-coloured glow under the focal home
-  outline so the building reads at a glance even on a busy basemap.
-* **PV production chip** *(optional)*, when the HA Energy dashboard
-  declares a Solar production source, a chip above the home shows
-  the *instantaneous* production in W or kW. Cumulative-energy
-  sources (kWh) are differentiated to watts on the fly over a
-  rolling 60 s window; power-native sources are read directly.
-* **PV → home animated leader**, a vertical dashed line in the
-  configured PV colour from the PV chip's bottom edge down to a
-  small anchor bead on the home. Dashes flow toward the home at a
-  speed proportional to current production over the user's
-  theoretical peak (100 × `pvCalibK` when calibrated, 5 kW
-  fallback). Static and arrow-less when production is 0.
-* **PV array markers**, when `pv-arrays` entries carry their own
-  GPS coordinates (more than 10 m away from the home), a small
-  solar-panel icon in the configured PV colour marks each panel
-  location on the map. Useful when panels sit elsewhere than the
-  home, ground-mounted in a clearing while the house is under
-  trees.
-* **Home battery chips** *(optional)*, when the HA Energy dashboard
-  declares Home Battery Storage sources, State-of-Charge and signed
-  instantaneous Power flank the PV chip. Multi-bank declarations
-  collapse into one SoC chip (capacity-weighted average) and one
-  Power chip (signed sum) so the readouts stay single across
-  multi-vendor setups. Each chip connects to PV by an L-shaped
-  leader whose foot lands at 25 % / 75 % of the PV chip's width;
-  the Power leader's dashes flow with the sign of the live power.
-* **Grid IN / OUT chips** *(optional)*, when the HA Energy dashboard
-  declares Grid consumption / Return to grid sources, two chips
-  flank the home cluster on the opposite side of the PV chip.
-  Multi-tariff installs (HP / HC peak / off-peak indexes like
-  Linky EASF01 + EASF02) are handled natively when the Energy
-  block carries multiple sources per slot; the chip surfaces the
-  most recently incrementing index. Cumulative kWh meters are
-  differentiated to watts on the fly over a bracketed slope; the
-  LIVE chip mirrors the Energy dashboard's `stat_rate` when
-  configured. An animated bead rides each leader at a speed
-  proportional to power.
-* **Detail dashboard with radial sundial card**, click the home to
-  dive into a chip-styled overlay built around a radial sundial
-  card: an annular instrument that lays out the day on a 24 h ring
-  with concentric tracks for production, battery and cloud cover,
-  sunrise / sunset markers anchored on the dial, hover dots that
-  snap every series to the same instant, and a live cursor that
-  traces the current hour. A second view (bandeau toggle) swaps
-  the dial for a full-day production curve whose Y-axis is locked
-  to the install's peak power, so a sunny vs cloudy day reads on
-  the same scale. Today / Tomorrow / Battery surface as a CoverFlow
-  strip above the chart so the user swipes between them. Click
-  outside to exit.
-* **LiDAR View overlay**, a GPU-resident dot cloud of every loaded
-  LiDAR cell, painted in screen space by a MapLibre custom layer.
-  Toggle from the top-right rail (hidden when no provider covers
-  the home). Optional wireframe overlay. Re-rasterised by MapLibre
-  on every transform with no JS-side redraw, so panning and
-  rotating through a dense forest stay smooth.
-* **Date/time chip**, top-LEFT of the card, follows the timeline
-  cursor (live or scrubbed).
-* **Back-to-live button**, top-RIGHT rail, mirrors the date/time
-  chip on the opposite edge. Shows only while scrubbing. Shares
-  its column with the LiDAR View toggle when both are active.
-* **Timeline**, bottom of the card, 5 days wide (2 past + today +
-  2 forecast). Dual-area chart with irradiance (top) and cloud
-  cover (bottom) sharing a midline that doubles as a date axis. A
-  second chart for PV production appears above when the HA Energy
-  dashboard carries a Solar source. Click or drag to scrub; the
-  whole map reflects the selected instant in real time.
-* **Boot progress banner**, replaces the previous spinner on cold
-  start. A themed banner pinned to the top of the card surfaces a
-  per-phase fill (energy prefs, PV history, battery history, grid
-  history, solar radiation, daily totals, weather forecast,
-  buildings, LiDAR raster, LiDAR exposure) so the user reads
-  exactly which fetch is in flight. Latches itself off after the
-  first complete pass so routine background refreshes do not flash
-  it back up.
-* **OpenMeteo rate-limit alert banner**, surfaces under the loading
-  banner whenever the Open-Meteo home-point fetch trips an HTTP
-  429 back-off. Themed with HA's `--warning-color` palette so the
-  alert nature reads at a glance. Disappears the moment the next
-  fetch lands.
+The code splits cleanly in two:
+
+* **The card** (`src/helios-card.ts` + `src/card/*`) — a Lit element that
+  owns the DOM, the Home Assistant `hass` object, the configuration, and
+  every data-fetch subsystem (energy, weather-derived series, charts). It
+  decides *what* to show.
+* **The engine** (`src/helios-engine.ts` + `src/engine/*`) — a
+  framework-agnostic class that owns the 2.5D scene: the tilted basemap,
+  the camera, the projection, and the SVG painter for buildings, shadows
+  and night shade. It decides *how* the scene is drawn and projected.
+
+The card feeds the engine a few setters (home location, sun time, palette,
+buildings, period) and reads back projected screen-space geometry to place
+its HUD. The engine never imports Lit and never reads `hass`; the card
+never does trigonometry. The seam between them is a handful of public
+methods plus per-frame callbacks (`onMapTransform`, `onWeatherUpdate`).
+
+```
+hass ──▶ helios-card.ts ──▶ card/* subsystems (energy, store, charts, clock)
+              │
+              ├─ setHome / setSun / setBuildings / setPeriod / setPalette
+              ▼
+        helios-engine.ts ──▶ engine/* (renderer, projection, tiles, sun, weather, buildings)
+              │
+              └─ onMapTransform()/onWeatherUpdate() ──▶ card re-projects its HUD
+```
 
 ---
 
-## Project structure
+## 2. The 2.5D rendering engine
 
-```
-Helios/
-├── .github/
-│   └── workflows/                       HACS validation + release attach + helios-lidar deploy
-├── dist/                                Generated by `npm run build` (committed for HACS)
-│   └── helios.js                        Single bundle
-├── src/
-│   ├── helios-card.ts                   Lit element, render orchestrator, HA + Lit lifecycle
-│   ├── helios-engine.ts                 MapLibre engine orchestrator
-│   ├── helios-config.ts                 HeliosConfig schema + DEFAULT_* constants
-│   ├── vite-env.d.ts                    __HELIOS_VERSION__ global typed
-│   ├── card/
-│   │   ├── pv.ts                        PV live state, history fetch, rate derivation, multi-array parser
-│   │   ├── battery.ts                   Multi-bank parser + SoC + power live + history aggregation
-│   │   ├── grid.ts                      Grid live + history + HA Energy slot resolution
-│   │   ├── energy-prefs.ts              HA Energy dashboard preferences subscription + cache
-│   │   ├── radiation.ts                 Solar-radiation sensor override + engine push
-│   │   ├── calibration.ts               Forecast calibration, actual / predicted ratio over 5 days
-│   │   ├── unifiedStore.ts              5-day data store: 480-bucket source of truth for the dashboard
-│   │   ├── dashboard.ts                 Detail-mode panel: CoverFlow Today / Tomorrow / Battery strip
-│   │   ├── dashboardRadial.ts           Radial sundial card + graph view (annular tracks + hover dots)
-│   │   ├── weatherMode.ts               Weather mode lifecycle: camera tilt + RainViewer overlay
-│   │   ├── charts.ts                    Timeline charts (irradiance, PV) + day labels
-│   │   ├── overlays.ts                  Screen-space projections (sun arc, home silhouettes)
-│   │   ├── timeline.ts                  Clock tick + scrub pointer handlers
-│   │   ├── lidar-view.ts                LiDAR-View toggle + fade rAF loop + opacity picker
-│   │   ├── loading-tracker.ts           Per-phase boot progress banner + visibility latch
-│   │   ├── cloud-icons.ts               Cloud-cover icon picker for the weather mode-bar button
-│   │   ├── equipment.ts                 Equipment chip layout helpers (PV / battery / grid)
-│   │   ├── card-mode.ts                 Mode-bar identifier type (base / lidar / weather)
-│   │   ├── ws-timeout.ts                Bounded WebSocket timeout helper for HA callWS
-│   │   ├── init.ts                      Engine bootstrap + visibility observer + home coords
-│   │   ├── format.ts                    cfgHex, formatDate, locale-aware number, hex math
-│   │   └── editor.ts                    <helios-card-editor> + <helios-color-picker> + About section
-│   ├── engine/
-│   │   ├── sun.ts                       Solar position + Haurwitz / Kasten-Czeplak / Liu-Jordan math
-│   │   ├── pv-thermal.ts                Sandia NOCT cell-temp + temp-coefficient derating
-│   │   ├── pv-shading.ts                nDSM raycast (per-array shading + per-cell chunked exposure)
-│   │   ├── weather.ts                   Open-Meteo multi-model fetch + cache + back-off
-│   │   ├── buildings.ts                 OpenFreeMap planet tile fetch + radius / cluster filter
-│   │   ├── shadows.ts                   Ground-projected shadow polygons (flat-opacity)
-│   │   ├── shadow-raster.ts             Offscreen canvas rasteriser for the shadow image source
-│   │   ├── lighting.ts                  Day/night colour modulation (night-shade, building, light)
-│   │   ├── auto-rotate.ts               Idle camera orbit rAF loop
-│   │   ├── camera-bounds.ts             Pitch min / max / rest constants shared by every camera entry point
-│   │   ├── detail-mode.ts               Detail-mode camera dive (zoom + pitch + bearing)
-│   │   ├── lidar-view-layer.ts          MapLibre WebGL custom layer (dots + wireframe + irradiance fill)
-│   │   ├── lidar.ts                     LidarSource interface + REGISTERED provider registry
-│   │   └── lidar/
-│   │       ├── pipeline.ts              Flood-fill + convex-hull pipeline (shared by every provider)
-│   │       ├── geotiff.ts               Float32 GeoTIFF fetch + DSM-DTM helpers
-│   │       ├── aaigrid.ts               Arc/Info ASCII grid parser (subset of providers)
-│   │       ├── proj.ts                  Lightweight EPSG → WGS84 reprojection helpers
-│   │       ├── proxy.ts                 CORS / SSL workaround for providers behind picky endpoints
-│   │       ├── local-ndsm.ts            Generic BYO nDSM provider built from card config
-│   │       └── providers/               One file per country / region; 10 registered + 4 dormant
-│   │           ├── fr.ts                IGN HD (metropolitan France + Corsica), BIL float32  [registered]
-│   │           ├── uk.ts                Defra LiDAR Composite (England), GeoTIFF DSM + DTM   [registered]
-│   │           ├── es.ts                IGN España PNOA-LiDAR MDSn (peninsular Spain)        [registered]
-│   │           ├── nl.ts                PDOK AHN4 (Netherlands), GeoTIFF DSM + DTM           [registered]
-│   │           ├── no.ts                Kartverket NHM (Norway + Svalbard), ArcGIS GeoTIFF   [registered]
-│   │           ├── de-nrw.ts            Geobasis NRW nDOM (Nordrhein-Westfalen), WCS         [registered]
-│   │           ├── de-bb-be.ts          LGB bDOM + DGM (Brandenburg + Berlin), WCS 2.0.1     [registered]
-│   │           ├── pl.ts                GUGiK NMPT (Poland), WCS 2.0.1, EPSG:4326 native     [registered]
-│   │           ├── ca.ts                NRCan HRDEM Mosaic (Canada), WCS 1.1.1               [registered]
-│   │           ├── us-vt.ts             VCGI nDSM (Vermont, USA), ArcGIS exportImage         [registered]
-│   │           ├── at-stmk.ts           Land Steiermark ALS                                  [DORMANT, see lidar.ts]
-│   │           ├── at-tirol.ts          Land Tirol ALS                                       [DORMANT, see lidar.ts]
-│   │           ├── de-bw.ts             LGL INSPIRE DOM5 + DGM1 (Baden-Württemberg)          [DORMANT, see lidar.ts]
-│   │           └── be-fl.ts             AGIV DHMV II (Flanders)                              [DORMANT, see lidar.ts]
-│   ├── css/
-│   │   ├── helios-card-css.ts           Runtime card styles (map, chips, charts, DoF veil, sliders)
-│   │   └── helios-card-editor-css.ts    Editor + color-picker + About section styles
-│   └── i18n/
-│       ├── index.ts                     Resolver + Translations interface (typed)
-│       └── locales/                     63 files, one per HA frontend translation surface
-├── hacs.json                            HACS manifest
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-├── README.md                            User-facing docs
-├── CHANGELOG.md                         Per-release notes
-├── ARCHITECTURE.md                      This file
-└── LICENSE                              GPL-3.0-or-later
-```
+Helios renders a faux-3D ("2.5D") scene with **no WebGL**. The illusion is
+a tilted raster basemap with every overlay projected on top in SVG so it
+stays glued to the rotating ground.
 
-The Python preparation toolchain (raw LAZ / LAS → 2-band COG, what the helios-lidar.org companion site uses server-side) lives in the standalone [Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar) repository and is no longer part of this tree. Contributors working on the card never need to touch the Python side; contributors working on the LiDAR preparation pipeline never need to touch this card-side tree either. Two repos, two concerns, kept loosely coupled by the documented 2-band COG output format the card consumes.
+### Ground plane — `engine/tiles.ts`, `engine/renderer.ts`
 
+The basemap is a grid of **CARTO raster tiles** (`*.basemaps.cartocdn.com/
+rastertiles/{light,dark}_nolabels/...`) stitched onto an HTML `<canvas>`.
+The style follows the active Home Assistant theme (light vs dark), probed
+from `hass.themes.darkMode`. The canvas is then tilted and turned with a
+single CSS `rotateX(pitch) rotateZ(bearing)` transform about the home's
+pixel position, so the ground reads as a plane viewed from an angle.
 
-## Code organisation
+### Camera + projection — `engine/projection.ts`
 
-Three files sit at the root of `src/`: the two entry points HACS and
-HA need to find (`helios-card.ts`, `helios-engine.ts`) and the
-configuration schema shared between them (`helios-config.ts`).
-Everything else is grouped under `card/` or `engine/` by ownership.
+`SceneCamera` is the keystone. All scene coordinates are **local metres
+relative to the home origin** (+east, +north, +up). Per frame the host
+calls `setViewport(w, h)` to bake the trig basis and the home's screen
+anchor, then `project(east, north, up)` maps any point to screen pixels
+through *bearing → pitch → perspective*. This is the exact inverse of the
+ground canvas's CSS transform, which is what keeps the SVG overlays welded
+to the basemap as the camera turns. `project3()` additionally returns the
+camera-space depth for painter's-algorithm sorting and label fading.
 
-### card/* and engine/* subsystems
+### Scene SVG — `engine/renderer.ts`
 
-Each subsystem under `card/` and `engine/` is a focused module that
-owns one piece of functionality: data fetch, render, input, util,
-lifecycle on the card side; physics, geometry, animation, layer on
-the engine side. Modules export plain functions; they do not
-extend the card class or the engine class.
+`SceneRenderer` owns the DOM inside the card's `#map-container`: the ground
+canvas plus a screen-space `<svg>` it repaints each frame with the
+occluding geometry — the night-shade wash, the cast shadows, and the
+extruded buildings. It coalesces redraws into one `requestAnimationFrame`
+pass, owns its own `ResizeObserver`, and fires `onAfterDraw` so the card
+can re-project its HUD in lock-step. Colour math (night shade, building
+tint, day / night blends) lives in `engine/colors.ts`.
 
-Subsystem modules talk to their parent (the card or the engine)
-through a small **host interface** declared in the module itself.
-The interface lists exactly the fields and methods the module
-touches on `this`, no more. The card and the engine satisfy these
-interfaces structurally, so a call site looks like:
+### Buildings — `engine/buildings.ts`
 
-```ts
-// In helios-card.ts
-import { refreshPv } from './card/pv';
+Footprints are fetched once from **OpenStreetMap via Overpass** for the
+home location, parsed to local-metre polygons with a height (real OSM
+height / `building:levels`, or a fixed prism), and cached in
+`localStorage`. Interpretation (radius filter, nearest-N count, real-vs-
+fixed height, home-cluster radius) is a pure pass re-run in memory on any
+option change — no re-fetch. The home building(s) extrude opaque; the
+surroundings extrude at the configured opacity. Each footprint also casts
+a ground shadow from the current sun azimuth / altitude.
 
-protected updated(): void {
-    refreshPv(this);   // `this` satisfies card/pv.ts's PvHost
-}
-```
+### Sun + shadows — `engine/sun.ts`
 
-The pattern keeps three things in balance:
-
-* **Lit reactivity stays natural.** The card still owns its
-  `@state` fields; assignments from inside a subsystem module hit
-  the same Lit setter and trigger a re-render exactly as an inline
-  assignment would.
-* **No indirection at runtime.** Calling `refreshPv(this)` is a
-  direct function call. No service classes, no mixin gymnastics,
-  no `requestUpdate()` ceremony.
-* **Each module's surface is explicit.** Reading the `PvHost`
-  interface tells you everything the PV subsystem can touch on the
-  card.
-
-A handful of state fields therefore had to lose the `private`
-modifier so a host interface could declare them. The underscore
-prefix (`_pvCurrent`, `_lastHomeKey`, `_detailDiveRaf`, ...) stays
-as the convention marking them as internal-to-the-card; they are
-not part of the user-facing API.
-
-### Render functions vs handlers vs data services
-
-Three call shapes recur across the card subsystems:
-
-* **Pure render**: `renderChart(host): TemplateResult`. Reads host
-  state, returns a Lit template. No mutation. Card render() calls
-  it inline (`${renderChart(this)}`).
-* **Event handler**: `onTimelinePointerDown(host, e)`. Reads the
-  event, mutates host state, optionally sets up an
-  `addEventListener` chain. Card render() wires it as an arrow
-  (`@pointerdown="${(e) => onTimelinePointerDown(this, e)}"`).
-* **Data service**: `refreshPv(host)`, `fetchPvHistory(host, ...)`.
-  Called from lifecycle hooks (`updated()`, intervals). Reads
-  hass / config / time range, mutates the corresponding `@state`
-  buckets, kicks the engine when needed.
-
-The dashboard module composes all three: its `renderDashboard`
-returns a template, its `handleHomeClick` / `handleExitDetail` are
-event handlers, and its `computeTodayHourly` / `computeBatteryToday`
-are pure data services consumed by both the templates and the
-diagnostic snapshot.
-
-
-## Module responsibilities
-
-### Entry points + shared config
-
-* **`helios-card.ts`**, top-level Lit element. Owns the `render()`
-  orchestrator, the `@state` fields, the HA card API
-  (`setConfig`, `getCardSize`, `getGridOptions`), the Lit
-  lifecycle hooks (`connectedCallback`, `disconnectedCallback`,
-  `updated`), and the public `resetDataCache()` method that the
-  editor's reset button drives through a window-level event bus.
-  Delegates the substantive work to `card/*` modules.
-* **`helios-engine.ts`**, top-level engine class. Owns the
-  MapLibre instance, the GeoJSON sources / layers, the weather
-  pipeline orchestration, the screen-space projections, the
-  per-array PV markers, and the public API consumed by the card
-  (`onWeatherUpdate`, `projectSunScene`, `setSelectedTime`,
-  `getTimelineSeries`, `getLidarRaster`, `getAmbientSeries`,
-  `setLidarViewActive`, `resetDataCache`, etc.). Delegates focused
-  subsystems to `engine/*` modules.
-* **`helios-config.ts`**, `HeliosConfig` interface (every editor
-  / YAML option) + `DEFAULT_*` constants. Imported by both the
-  card and the engine so neither owns the schema.
-
-### card/* subsystems
-
-* **`card/pv.ts`**, PV live state polling, history fetch, rolling
-  sample buffer, instantaneous-rate derivation (handles cumulative
-  energy via differentiation with a 3 min quantization-noise
-  anchor), kWp calibration, per-array orientation + optional
-  coordinate parsing, weighted clear-sky forecast, chip formatter,
-  one-time wipe of the legacy auto-calibration buffer.
-* **`card/battery.ts`**, mirror of `card/pv.ts` for the home
-  battery: SoC + signed power live polling, single-call history
-  fetch (both entities bundled into one WS round-trip), invert
-  preference, scrub-time sampling, chip formatter, today's
-  charge / discharge aggregation.
-* **`card/radiation.ts`**, optional `solar-radiation-entity`
-  bridge: pulls live + history, pushes the merged sample set to
-  the engine so its irradiance model prefers the physical sensor
-  over Open-Meteo for the live + past portions of the chart.
-* **`card/charts.ts`**, the two SVG cards under the map: the
-  irradiance + cloud mirror chart, the optional PV production
-  chart, the timeline cursors (live + scrub), the day-label
-  chips with per-day kWh totals, and the aggregation helper that
-  produces those totals from the observed history + forecast model.
-* **`card/dashboard.ts`**, the detail-mode panel orchestrator: the
-  CoverFlow strip (Today / Tomorrow / Battery cards swiped between)
-  rendered above the main chart card, the home click / exit handlers
-  that toggle detail mode, and the per-card data services that
-  populate each tile (produced kWh, refined forecast, dual peak
-  readouts, charge / discharge totals).
-* **`card/dashboardRadial.ts`**, the radial sundial card under the
-  CoverFlow strip and the alternate graph view the bandeau toggle
-  flips between. Renders the 24 h annular dial with concentric
-  tracks (production, battery, cloud cover), sunrise / sunset
-  markers, hover dots that snap every series to the same instant,
-  and a live cursor on the current hour. Graph view shares the
-  same X-axis but replaces the dial with a full-day production
-  curve whose Y-axis is locked to the installation's peak power.
-* **`card/weatherMode.ts`**, the Weather mode lifecycle. Owns the
-  enter / exit fade rAF loop, kicks `engine.enterWeatherCamera()`
-  + `engine.ensureRainViewerFrame()` + `engine.attachRainViewerOverlay()`
-  on enter, detaches on exit. Pure orchestrator; the camera tilt,
-  the tile fetching and the MapLibre raster source / layer all live
-  on the engine.
-* **`card/unifiedStore.ts`**, the 5-day data store: a 480-bucket
-  source of truth for every per-time signal the dashboard cards,
-  the radial sundial, the graph view and the main UI timeline read
-  from. Built once after the underlying fetches land, hashed
-  against the source array identities, rebuilt only when a fetch
-  lands. Live numeric chips deliberately stay on the direct
-  `hass.states` path.
-* **`card/grid.ts`**, grid IN / OUT chip live state, history fetch
-  + buffer, HA Energy slot resolution (reads the import / export /
-  combined-signed-power slots declared on the Energy block),
-  cumulative-energy differentiation to watts, scrub-time sampling,
-  chip formatter, today's import / export aggregation.
-* **`card/loading-tracker.ts`**, per-phase boot progress banner
-  state machine. Phases register lazily as the install needs them
-  (`energy-prefs`, `pv-history`, `battery-history`, `grid-history`,
-  `solar-radiation`, `ha-daily-totals`, `weather-forecast`,
-  `buildings`, `lidar-raster`, `lidar-exposure`); the banner
-  latches off after the first complete pass so routine background
-  refreshes do not flash it back up.
-* **`card/cloud-icons.ts`**, cloud-cover icon picker for the
-  Weather mode-bar button. Returns the closest mdi cloud glyph to
-  the current home-point cloud-cover percentage so the icon reads
-  the sky state at a glance before the mode is even opened.
-* **`card/equipment.ts`**, equipment chip layout helpers. Resolves
-  the per-chip cluster geometry (PV / battery / grid) the overlay
-  renderer uses to anchor leaders and beads.
-* **`card/card-mode.ts`**, the `CardMode` discriminated string
-  literal (`'base' | 'lidar' | 'weather'`) the mode-bar handlers
-  flip between.
-* **`card/calibration.ts`**, the forecast learning loop. Iterates
-  over the last 5 completed days, computes `actual / predicted`
-  per day, filters out days with too little predicted production
-  to give a stable ratio, averages the surviving ratios, clamps to
-  [0.5, 1.5] and returns a `{ ratio, daysUsed }` pair. Pure
-  function consumed by `dashboard.ts` to render the "refined"
-  annotation; null when fewer than 2 past days carry enough data.
-* **`card/ws-timeout.ts`**, thin wrapper around `hass.callWS`
-  with two responsibilities. First, it races each call against a
-  30 s budget so a stalled recorder rejects with a typed
-  `WsTimeoutError` instead of hanging the card on its loading
-  state forever (the Victron Cerbo at 1 Hz case where the
-  SQLite consumer saturated and history queries never returned).
-  Second, a module-level FIFO semaphore caps the number of
-  in-flight history / statistics fetches at 2 so Helios stays a
-  good citizen of the dashboard when other recorder-bound cards
-  (apex-charts, mini-graph) read the same single-threaded
-  consumer in parallel. Excess fetches queue and fire as slots
-  free. Each caller catches the timeout and renders a degraded
-  state (live chips still update from `hass.states`, the chart's
-  past portion blanks until the next refresh cycle).
-* **`card/energy-prefs.ts`**, long-running subscription to HA's
-  Energy dashboard preferences (`energy/get_prefs` + the
-  `energy_preferences_updated` event). Parses the resolved config
-  into a `{ pv-power, grid-import, grid-export, battery-power,
-  battery-soc }` defaults snapshot cached on the host. This is the
-  **primary entity-resolution path**: PV / grid / battery chips
-  resolve their wiring from this snapshot, no longer from per-card
-  YAML keys. The HA Energy dashboard is the single source of truth
-  for which sensor each chip reads.
-* **`card/overlays.ts`**, screen-space projections refreshed on
-  every map transform and clock tick: sun arc samples, sun
-  position, home silhouettes, label anchors.
-  Plus `setAnimationsPaused` (IntersectionObserver hook),
-  `buildArcSegments` (pairs arc samples into stroke-ready
-  segments), and `flowDuration` (rate-to-duration easing used by
-  the leader and sun-ray animations).
-* **`card/timeline.ts`**, the 30-second clock tick, the timeline
-  scrub pointer handlers (down / move / up + apply), and the
-  back-to-live action that snaps the cursor back to "now".
-* **`card/lidar-view.ts`**, the LiDAR View overlay enter / exit
-  fade rAF loop and the bottom-of-card opacity slider that
-  live-tunes the dot cloud alpha. State is owned by the card
-  (`_cardMode`, `_lidarFadeInStartMs`, `_lidarFadeOutStartMs`);
-  the module orchestrates the transitions and pushes the
-  composited alpha to the engine's WebGL layer.
-* **`card/init.ts`**, the lifecycle helpers the card's
-  `connectedCallback` / `updated` delegate to:
-  `getHomeCoords(config, hass)` (3-tier override resolver),
-  `computeConfigSig(config)` (cheap visual-config hash that gates
-  `engine.updateConfig`), `initVisibilityObserver(host)`,
-  `initEngine(host)` (debounced wrapper that defers MapLibre
-  construction 500 ms so editor-preview churn doesn't burn WebGL
-  contexts), and `initEngineNow(host)` (the actual construction +
-  callback wiring).
-* **`card/format.ts`**, dependency-free formatting and validation
-  helpers: `cfgHex` (hex validator), `formatDate` (locale-
-  independent token formatter), `formatLocalisedNumber`
-  (Intl.NumberFormat with fallback), `darkenHex`, `lerpHexToward`.
-  Imported by every render module + the editor.
-* **`card/editor.ts`**, `<helios-card-editor>` (visual editor
-  rendered inside HA's dashboard editor, every section
-  collapsible, only one open at a time) + `<helios-color-picker>`
-  (custom palette + hex picker that side-steps the iOS Safari
-  `<input type="color">` crash inside HA's nested Shadow DOM).
-  Hosts the per-array PV layout repeatable section, the reset
-  data cache control, and a `window.dispatchEvent` bridge so the
-  editor doesn't need a direct handle on the card.
-
-### engine/* subsystems
-
-* **`engine/sun.ts`**, `getSunPosition`, `computePvPower`,
-  `computeIrradianceWm2` and the supporting Haurwitz / Kasten-
-  Czeplak / Liu-Jordan math. `computePvPower` also accepts a
-  `PvComputeContext` carrying optional `airTempC` + `windMs` +
-  `shading`, which it forwards to `pv-thermal.ts` for cell-temp
-  derating and to the caller for direct-beam zeroing on shaded
-  arrays. Pure functions; no DOM, no map. Shared between the
-  engine (live + forecast) and the card's PV forecast renderer.
-* **`engine/pv-thermal.ts`**, Sandia NOCT cell-temperature model
-  + linear temperature-coefficient derating. `cellTemperatureC()`
-  estimates the cell temp from air temperature, plane-of-array
-  irradiance and wind speed; `thermalDerating()` returns the
-  multiplicative output factor at the resulting cell temp
-  (γ_pmp = −0.0040 /°C by default). Both pure functions.
-* **`engine/pv-shading.ts`**, per-array LiDAR-aware shading check.
-  `sampleNdsmAt()` bilinear-samples the loaded nDSM raster at
-  arbitrary lon/lat; `sampleDtmAt()` does the same for the optional
-  DTM band shipped by 2-band COGs from helios-lidar.org v1.6.3+.
-  `isPanelShaded()` ray-marches from a panel position along the sun
-  direction (2 m step, 200 m reach) and returns true the first time
-  the local terrain + obstacle stack exceeds the sun ray's altitude.
-  When the raster carries a DTM band, the ray-march compares both
-  the ray and the obstacle in absolute Z anchored at the panel's
-  local ground; without one, it falls back to the flat-ground
-  geometry used in v1.6.2 and earlier (covers every public provider
-  + legacy single-band local COGs). Pure functions.
-* **`engine/weather.ts`**, `fetchHomePointData` and friends:
-  multi-model Open-Meteo fetch with median fusion, regional model
-  selection, in-browser cache, 429 back-off schedule, plus
-  `clearWeatherCache()` used by the editor's reset button. The
-  fetch covers 30 past days + today + 2 forecast days; the
-  timeline UI clips back to the last 2 past days for scrub
-  precision, the deeper past payload feeds the 5-day forecast
-  calibration ratio. Hourly variables include
-  `shortwave_radiation_instant`, the three split cloud layers,
-  `weather_code`, and the `temperature_2m` + `wind_speed_10m`
-  pair that feeds the PV thermal-derating model. No DOM, no map.
-* **`engine/lidar-view-layer.ts` + RainViewer overlay**, the
-  engine also owns the RainViewer tile source + layer attached
-  during Weather mode (`ensureRainViewerFrame()` polls the public
-  `weather-maps.json` index for the latest live frame,
-  `attachRainViewerOverlay()` wires the MapLibre raster tile
-  source + layer with `raster-saturation: -1` + the
-  brightness-min/max luminance inversion that flips light rain
-  to light grey and heavy rain to dark grey,
-  `detachRainViewerOverlay()` tears both down on mode exit). A
-  5 min refresh timer keeps the displayed frame at most one
-  RainViewer half-period behind reality.
-* **`engine/buildings.ts`**, OpenFreeMap planet vector-tile fetch
-  around the home (snapshot URL resolved once via the `/planet`
-  TileJSON, cached for the page lifetime). Decodes tiles with
-  `@mapbox/vector-tile`, splits MultiPolygons, filters features
-  by haversine distance, identifies the home cluster, returns
-  two GeoJSON `FeatureCollection`s.
-* **`engine/shadows.ts`**, `projectExtrusionShadows`: takes a
-  building / region FeatureCollection plus the sun position and
-  returns flat-opacity ground shadow polygons (one convex hull
-  per input region). Output is Sutherland-Hodgman clipped against
-  the building visibility disc so cast shadows never extend past
-  the rendered surroundings.
-* **`engine/shadow-raster.ts`**, the offscreen canvas pipeline
-  that turns the projected shadow polygons into a PNG fed to
-  MapLibre's ImageSource. Painting every polygon solid black
-  means overlapping regions stay black (no alpha stacking); the
-  layer's `raster-opacity` then applies a single per-pixel
-  opacity matching the user setting exactly. Also exports
-  `shadowBoundsCornersLL` (lat/lon corners for the image source)
-  and `BLANK_SHADOW_DATA_URL` (transparent 1x1 PNG used as the
-  initial bind).
-* **`engine/lighting.ts`**, day-night colour math driven by sun
-  altitude: `nightShadeForAltitude` (overlay colour + opacity
-  ramped across astronomical / nautical / civil twilight and
-  sunrise / sunset wash), `buildingColorForAltitude` (extrusion
-  colour blended from the configured base towards a cool dark
-  ink at night and a warm tint at golden hour),
-  `sunLightPolarFromAltitude` (MapLibre directional-light polar
-  angle clamp). Pure formulas; the engine applies the values to
-  paint properties and `setLight`.
-* **`engine/auto-rotate.ts`**, the idle-camera orbit rAF loop.
-  Rotation runs in the opposite direction to the sun's apparent
-  motion, paused for 5 s after every user gesture and gated on
-  the `auto-rotate-enabled` config toggle + `!_detailMode`. Time-
-  based delta integration so the rotation speed stays constant
-  across 60 Hz / 120 Hz displays and across tab-throttling.
-* **`engine/detail-mode.ts`**, the home-click camera dive: a
-  single smoothstep tween over zoom + pitch + bearing driven by
-  jumpTo on every rAF tick (sidesteps MapLibre's bearing
-  normalisation which would collapse a wide spin to its shortest
-  equivalent). Plus the 600 ms post-exit cooldown that gates
-  fresh gestures so the dismiss click can't bleed into an
-  immediate scrub on the timeline behind the panel.
-* **`engine/lidar-view-layer.ts`**, the MapLibre custom layer
-  that draws every loaded LiDAR cell as a small dot in screen
-  space, with optional wireframe overlay. WebGL-resident,
-  re-rasterised by MapLibre on every transform with no JS-side
-  redraw. Driven by `engine.setLidarViewActive(boolean)` and
-  `engine.setLidarViewFadeAlpha(0..1)`. Theme-aware colours,
-  distance fade, configurable display radius decoupled from the
-  building visibility disc so the dot cloud can extend past the
-  rendered buildings (the trees that cast the surrounding shadows
-  often sit beyond the building disc).
-* **`engine/lidar.ts`**, `LidarSource` interface + `LIDAR_SOURCES`
-  provider registry + `findLidarSource(lat, lon)` + `resolveLidarSource(lat, lon, cfg)`
-  helpers. Also hosts the validator for the six `lidar-local-ndsm-*`
-  BYO keys. Adding a country means dropping a new file under
-  `./engine/lidar/providers/` and importing it into the registry.
-* **`engine/lidar/pipeline.ts`**, the shared post-processing
-  every provider routes through: classify cells above a height
-  threshold (with optional circular crop), size-capped 8-connected
-  flood fill so dense forests decompose into many small clumps,
-  one convex hull per clump emitted as a `Polygon` feature with
-  `render_height = mean(clump cells)`. Identical output shape to
-  OpenFreeMap building footprints, so the rest of the engine
-  doesn't care which side fed the polygons.
-* **`engine/lidar/geotiff.ts`**, `fetchFloat32GeoTiff` for the
-  WMS / WCS / ArcGIS endpoints that serve `image/tiff` (everyone
-  except IGN's BIL fast path) plus `subtractRasters` (DSM minus
-  DTM → height-above-ground) and `maxRasters` (used by Spain to
-  merge vegetation and building MDSn coverages). The `geotiff`
-  package is the only third-party dependency added for LiDAR
-  support; its lazy-loaded codecs (pako, zstd, lerc, jpeg, lzw)
-  are inlined into the single-file bundle by Vite
-  `inlineDynamicImports`.
-* **`engine/lidar/local-ndsm.ts`**, generic BYO nDSM provider
-  built on demand from card config (not registered in
-  `LIDAR_SOURCES`). Geotiff decoding uses
-  `fetchFloat32GeoTiffWithNoData()` (a sibling of
-  `fetchFloat32GeoTiff()` that also returns the GDAL_NODATA
-  sentinel so nodata cells can be mapped to NaN before the
-  shared pipeline runs). Contributed by
-  [@jourdant](https://github.com/jourdant) in
-  [PR #5](https://github.com/ReikanYsora/Helios/pull/5),
-  original idea credited to
-  [@stephenwq](https://github.com/stephenwq). Unlocks coverage
-  in any region with raw LiDAR data available offline (initial
-  use case: NSW Australia).
-* **`engine/lidar/providers/*.ts`**, one file per country / region.
-  Single-fetch normalised-raster providers (height-above-ground
-  natively): France (BIL float32), Germany-NRW (Geobasis nDOM),
-  Poland (GUGiK NMPT, EPSG:4326 native), Canada (NRCan HRDEM DSM
-  via WCS 1.1.1). Two-fetch DSM-minus-DTM providers: England /
-  Netherlands / Norway / Austria-Styria. MAX-merge provider:
-  Spain (PNOA MDSn vegetation + buildings). Each provider ends
-  by handing a single height raster to `pipeline.ts` for
-  post-processing. The full worldwide registry of integrated
-  providers, candidates pending integration and explicitly-
-  incompatible sources lives in [LIDAR_SOURCES.md](https://github.com/ReikanYsora/Helios-Lidar/blob/main/LIDAR_SOURCES.md)
-  on the companion Helios-Lidar repository.
+`engine/sun.ts` computes the solar position (altitude / azimuth) and the
+clear-sky irradiance (Haurwitz 1945 + Kasten-Czeplak 1980 cloud
+attenuation), and the card uses it to drive the sun arc, the disc, and the
+shadow direction. Cast shadows are projected from the building footprints
+along the sun vector and painted as depth-sorted SVG polygons by the
+renderer; they fade as the sun nears the horizon.
 
 ---
 
-## Algorithms
+## 3. View modes
 
-### Solar position
+The card has three modes (`_viewMode`), switched from the top-left rail.
+A CSS class on `<ha-card>` (`mode-clock` / `mode-lidar`) fades the layers
+that don't belong to the active mode.
 
-`getSunPosition(date, lat, lon)` returns altitude / azimuth. The
-implementation uses a simplified declination + equation of time,
-with hour-angle normalisation so longitudes far from Greenwich
-(NYC, Tokyo, Sydney) stay correct. Validated against the NOAA SPA
-reference: mean altitude error 0.30°, mean azimuth error 0.36°
-across 376 sample points.
+### Scene (default)
 
-### Clear-sky irradiance
+The full live 3D view: tilted basemap, extruded buildings, cast shadows,
+night shade, the sun arc (a back pass of below-horizon dots and a front
+pass of the daylight arc + disc + ray + irradiance readout), the home pill
+and its orbiting chip cluster (PV, battery SoC + power, grid, custom
+entity), and the timeline below.
 
-Haurwitz (1945): `GHI_clear = 1098 · cos(z) · exp(-0.059 / cos(z))`
-W/m², where `z` is the solar zenith angle. MAE ~62 W/m² versus
-PVGIS / NREL benchmarks across full-day curves at varied latitudes.
+The HUD is **projected, not laid out**: `card/hud.ts` asks the engine for
+the screen-space anchors of the home, the chip cluster and the sun scene
+every frame (`onMapTransform`), and the card renders absolutely-positioned
+chips + SVG leaders at those coordinates. Each chip has a leader to the
+home with an animated **bead** whose direction and speed encode the live
+flow. Clicking a chip points the timeline chart at that metric.
 
-### Cloud attenuation
+### Clock — `card/energy-clock.ts`
 
-Kasten-Czeplak (1980) cubic: `GHI_actual / GHI_clear = 1 - 0.75 ·
-(cloud/100)^3.4`. The cloud cover used here is the *effective*
-ground-perception value (see below), not the satellite-view total
-from Open-Meteo.
+A 24-hour radial instrument. Each selected metric is binned into 24
+hours-of-day over the rolling window and drawn as a ring of bars (one per
+hour) projected flat on the same ground plane. The right-hand rail is a
+**multi-select filter**: every active metric adds one **concentric ring**
+(outer = first selected, nesting inward on fixed slots so adding / removing
+a filter never re-spaces the others). Hovering or tapping a bar lights the
+whole hour slice across rings, dims the rest, and shows one tooltip row per
+metric; a faint clock-face guide (centre hub + 24 spokes) and an N / S
+compass keep it legible as the dial rotates with the camera. Rings grow in
+on selection (staggered sweep) and shrink out on removal. The bars are
+built as a raw SVG string and injected imperatively each frame, the same
+trick the renderer uses for buildings, to stay cheap under rotation.
 
-### Effective cloud cover
+### LiDAR (early, opt-in)
 
-The raw `cloud_cover` field from Open-Meteo measures the satellite-
-view total. For ground-level shortwave attenuation, low cloud
-weighs much more than high cloud. HELIOS computes:
-
-```
-effective_cover = clamp(low + 0.6·mid + 0.2·high, 0, 100)
-```
-
-### Multi-model weather fusion
-
-Every Open-Meteo fetch queries one global model (ECMWF IFS 0.25°)
-plus the most accurate regional model for the home's location
-(AROME-France, UKMO UK, DWD ICON-D2, ItaliaMeteo, MET Nordic,
-NOAA HRRR, KMA LDPS, JMA MSM, BOM ACCESS-G, or ECMWF + GFS
-elsewhere). Per-timestep median fusion absorbs single-model
-outliers (low-cloud pegs, irradiance spikes).
-
-### PV instantaneous rate
-
-For cumulative-energy sensors (`Wh`/`kWh`), the card maintains a
-5-minute rolling buffer of state samples and differentiates over a
-~60 s window. The differentiation also holds a 3 min anchor when
-samples arrive faster than that, so the integer-Wh quantization
-noise of typical HA recorders doesn't translate into phantom
-power spikes (a 1 Wh delta over 10 s would otherwise read as
-360 W; with the anchor it averages cleanly across enough samples
-to converge on the true rate). Power sensors (`W`/`kW`) are read
-directly from `hass.states`.
-
-### Forecast calibration
-
-The dashboard's "refined" annotation under each PRÉVU figure comes
-from a small daily ratio averaged over the last 5 completed days.
-For each day in [J-1, J-5]:
-
-* `predicted_kwh` = integrate `pct × kWp` over the day's hourly
-  weather samples (re-run of the model the dashboard uses for
-  the future, applied to the stored past).
-* `actual_kwh` = sum the observed PV history over the same day
-  (deltas for cumulative-energy sensors, trapezoidal integration
-  for power sensors).
-* Skip days where `predicted_kwh < 2 kWh` (cloudy days don't
-  carry enough signal to give a stable ratio).
-* `ratio = actual / predicted`, clamped to [0.5, 1.5] so a
-  one-off sensor outage can't poison the average.
-
-If 2 or more valid daily ratios survive, the average is returned;
-otherwise `null` (the refined annotation is hidden). The
-calibration captures static biases that the pure model can't see:
-Open-Meteo cloud over- / under-prediction in your area, panel
-soiling, install orientation that the configured azimuth doesn't
-perfectly capture, inverter losses, etc.
-
-`PAST_DAYS` in `engine/weather.ts` is set to 30 so the calibration
-loop has enough history to average over even when a few days fall
-below the 2 kWh stability threshold; the timeline UI clips back to
-2 past days via `_getTimeRange()` so the slider stays scrubbable
-at a usable granularity.
-
-### Display radius + home cluster
-
-At engine init, `helios-buildings.ts` fetches OpenFreeMap planet
-vector tile(s) covering a bbox around the home (1–4 tiles at z=14).
-The tile URL template is resolved once at startup from the public
-TileJSON at `https://tiles.openfreemap.org/planet`; OpenFreeMap
-rotates the underlying snapshot path every few weeks, so caching
-the template per page lifetime keeps the engine pointed at
-whatever snapshot is current. Each tile's `building` source-layer is
-decoded (OpenMapTiles schema, so `render_height` and
-`render_min_height` are present); MultiPolygon
-features are split into independent Polygon features. Then each
-feature is classified:
-
-- If the polygon contains the home point OR its centroid is within
-  `building-cluster-radius` of the home → home cluster.
-- Else if its centroid is within `DEFAULT_DISPLAY_RADIUS_M` (200 m,
-  the single shared display radius for buildings + LiDAR + raster
-  shadows) → surroundings.
-- Else discarded.
-
-The home cluster is emitted as one `FeatureCollection`, painted at
-full opacity. Surroundings are another `FeatureCollection`, painted
-at the configured opacity. Both share the same `fill-extrusion-color`
-modulated by sun altitude.
-
-### LiDAR shadow consolidation
-
-When `shadows-enabled` is true AND a LiDAR provider covers the home,
-the engine resolves the matching `LidarSource` via
-`findLidarSource(lat, lon)` and calls its `fetchShadowRegions()` with
-the home position, the building visibility radius and a raster size
-driven by `lidar-precision` (256² / 512² / 1024²).
-
-Each provider does one (France: BIL float32 from IGN's
-`IGNF_LIDAR-HD_MNH_*` WMS; Germany-NRW: pre-computed nDOM from the
-Geobasis WCS) or two (UK / NL / NO: GeoTIFF DSM minus DTM; Spain:
-vegetation MDSn merged with buildings MDSn via MAX) upstream
-fetches, decodes them client-side and hands a single height raster
-to the shared post-processing pipeline. Then:
-
-- **Filter.** Cells with `5 ≤ h ≤ 100 m` pass the height threshold.
-  Cells beyond `radiusMeters` haversine from the home are dropped
-  (circular crop).
-- **Flood-fill with size cap.** 8-connected BFS, but each component
-  stops growing once it reaches `TARGET_COMPONENT_AREA_M2 / cellArea`
-  cells (~80 m² physical). When the cap hits, leftover neighbours
-  are picked up by the outer scan loop as fresh seeds, so a dense
-  forest decomposes into many small clumps instead of one giant
-  region. The cell cap is recomputed per precision from the actual
-  pixel pitch so the physical clump size stays consistent.
-- **Convex hull per clump.** For each clump, take the convex hull of
-  the cells' four corners and emit one Polygon with `render_height
-  = mean(clump cells)`. The hull is an irregular, non-axis-aligned
-  polygon, so cast shadows from many overlapping clumps alpha-
-  composite into a continuous dappled pattern instead of looking
-  like a grid-aligned tile mosaic. Single-cell or near-single-cell
-  components (< `MIN_COMPONENT_CELLS`) are dropped so noise from
-  the height threshold doesn't render as speckled dots.
-
-Polygon count: typically a few hundred to a few thousand clumps per
-fetch, scaling with the wooded area covered rather than the raster
-resolution.
-
-Those polygons feed `projectExtrusionShadows` exactly like the
-OpenFreeMap building footprints do when no provider covers the
-home. The result is then clipped to the building visibility disc
-(see Shadow clipping below).
-
-### Shadow clipping
-
-`projectExtrusionShadows` accepts optional `clipCenterLat`,
-`clipCenterLon`, `clipRadiusMeters`. When provided, it builds a
-64-vertex CCW polygon approximating the disc and runs
-Sutherland-Hodgman against each emitted shadow polygon. The shadow
-trail of a tall region near the edge of the visibility radius
-(which would extend hundreds of metres past the buildings) gets
-clipped to the same circle as the rendered surroundings.
+Appears only when a valid local nDSM is configured (`hasLocalLidar`). The
+mode currently hides everything but the rail; the wireframe view and the
+LiDAR-based shadow path are in active development. The CSS lives in
+`css/helios-card-lidar-css.ts` with a `.lidar-overlay` seam reserved for
+the future layer.
 
 ---
 
-## Configuration
+## 4. The data layer
 
-```yaml
-type: custom:helios-card
-```
+Every number on the card comes from one of three places: the **HA Energy
+dashboard** (solar / grid / battery), **Open-Meteo** (irradiance, cloud,
+temperature, wind), or an optional **irradiance sensor**. They converge
+into a single rolling-window store that every graph reads.
 
-No keys, no signup. The basemap comes from OpenFreeMap (free vector
-tiles) and weather from Open-Meteo (free, no key). See the full
-option table in [README.md](./README.md). Every field is editable
-visually; numeric options are sliders so out-of-range values can't
-be entered.
+### HA Energy dashboard — `card/energy-prefs.ts`
 
----
+Helios does not take per-card entity keys. It subscribes to
+`energy/get_prefs` and resolves the solar / grid / battery / forecast slots
+from the user's Energy dashboard config — the same slots the official
+Energy card reads — re-fetching on `energy_preferences_updated`. Live chips
+read the configured rate sensors (or differentiate a cumulative meter to
+watts over a short rolling window); the past curves read the recorder's
+pre-computed `change` metric (`card/energy-stats.ts`), the exact numbers
+the Energy dashboard shows, so the two surfaces agree to the watt-hour.
+`card/pv.ts`, `card/battery.ts`, `card/grid.ts` own the live + history
+resolution per source; `card/energy-forecast.ts` reads the dashboard's
+configured solar-forecast provider.
 
-## Diagnostics
+### Weather — `engine/weather.ts`
 
-The bundle exposes a single global command for in-browser debugging:
+One fetch per home point against Open-Meteo, fusing a global model with the
+best regional model for the location and taking the **per-timestep median**
+to reject single-model outliers. It returns hourly irradiance
+(`shortwave_radiation_instant`), the three cloud layers (collapsed to an
+*effective* cover of `low + 0.6·mid + 0.2·high`), temperature and wind.
+Cached in `localStorage` with a short TTL and exponential back-off on HTTP
+429.
 
-```js
-window.heliosStats()
-```
+### Irradiance override — `card/irradiance.ts`
 
-Runs against every `<helios-card>` currently mounted on the page and
-returns a JSON-safe snapshot AND prints a grouped console dump. Each
-card section contains:
+When `solar-irradiance-entity` is set, its recorder history + live state
+replace the Open-Meteo model for past + present timestamps (forecast hours
+stay on the model, since a sensor has no future).
 
-- **config**, the live `setConfig` payload (JSON-safe and OK to
-  paste publicly, no API keys are ever stored).
-- **engine**, the engine's own snapshot: home lat/lon, resolved
-  LiDAR provider (or `null` when out of coverage), shadow source
-  (`disabled` / `lidar` / `openfreemap` / `pending`), shadow
-  opacity and LiDAR clump count, building footprints count,
-  weather samples, active timeline range, cache state for the
-  per-day sun arc and the last shadow signature.
+### Unified store — `card/unifiedStore.ts`
 
-A `lifecycle` block aggregates module-level counters maintained by
-the engine (`window.__heliosStats`): engines created vs cleaned up,
-WebGL context-lost events, building fetches fired, etc. Useful for
-diagnosing leaks across config edits and reloads.
+The single source of truth for every graph. It bucketises the rolling
+window (J-2 → J+2 by default) at the configured cadence
+(`display-update-frequency-per-hour`, default 4 = 15 min) into parallel
+series: `irradiance`, `cloud`, `production`, `forecast`, `battery`,
+`batterySoc`, `gridImport`, `gridExport`. Weather is interpolated from its
+hourly samples; the energy series are filled from the recorder `change`
+buckets (past only, null in the future); the forecast is a stepped hourly
+curve. A `dataVersion` hash lets consumers detect "same store as last
+frame" and skip the rebuild; it rolls over at midnight. Read-side
+accessors (`valueAt`, `sliceForRange`) give the charts and the clock a
+consistent view regardless of cadence.
 
-`heliosStats()` does not mutate any state; it can be invoked from
-the user's console at any time.
+### Charts — `card/charts.ts`
 
-Two companion helpers let developers reproduce visual issues on a
-different home location without touching HA's config:
-
-```js
-setHeliosLocation(lat, lon)   // override home for every live card
-clearHeliosLocation()         // revert to hass.config
-```
-
-The override lives on `window.__heliosLocationOverride` only; a page
-refresh always restores HA's home.
-
-A reset-from-the-card path is also exposed: the editor's "Reset
-data cache" button fires a `helios-data-cache-reset` window event;
-every live card listens for it and calls its public
-`resetDataCache()` method, which wipes the cached Open-Meteo
-payload, drops the in-memory PV history and triggers a fresh fetch.
-Home Assistant data is never touched.
-
----
-
-## Build & publish
-
-```bash
-npm install
-npm run typecheck       # strict TS
-npm run build           # produces dist/helios.js
-```
-
-To publish a release:
-
-1. Make sure `dist/helios.js` is committed (HACS needs the prebuilt
-   bundle).
-2. Tag the commit and push:
-   ```bash
-   git tag vX.Y.Z
-   git push origin vX.Y.Z
-   ```
-3. Create a GitHub Release (HACS needs a Release, not just a tag).
-   The `release.yml` workflow rebuilds `dist/helios.js` from the
-   tagged commit and attaches it to the release.
+The timeline is a re-targetable SVG chart over the store. `_chartTarget`
+selects the series-set: production (+ dashed forecast + per-string stacked
+breakdown), consumption, grid (import / export), battery (charge /
+discharge), battery SoC, irradiance, cloud (three stacked bands) or the
+custom entity. It draws day separators, night-zone hatching, a future
+mask, the live + the scrub cursors, and a hover tooltip whose icons take
+each series' colour.
 
 ---
 
-## Known limitations
+## 5. Custom entity — `card/custom-entity.ts`
 
-* **Equatorial azimuth**, peak ~9° error near the equator at the
-  solstices because of the simplified declination formula.
-  Acceptable for the visual hillshade direction; if higher precision
-  is ever needed, swap in a NOAA-SPA implementation.
-* **OpenFreeMap availability**, the basemap, glyphs, sprites and
-  building tiles all come from OpenFreeMap's public CDN. There's no
-  per-user rate limit, but the project is run by a single
-  organisation; if their CDN goes down, the basemap stops loading
-  for everyone. No commercial SLA is offered.
-* **LiDAR coverage**, ten providers registered today (France IGN
-  HD, England Defra, Spain IGN, Netherlands PDOK, Norway Kartverket,
-  Germany NRW, Germany Brandenburg + Berlin LGB, Poland GUGiK,
-  Canada NRCan HRDEM, USA Vermont VCGI). Four additional providers
-  (Austria Steiermark, Austria Tirol, Germany Baden-Württemberg,
-  Belgium Flanders) live in `engine/lidar/providers/` but are NOT
-  in the registry, the DSM-DTM subtraction quality on those feeds
-  was below the bar set by the existing nDSM providers (per-pixel
-  subtraction amplifies noise on building edges and over vegetation).
-  They can be re-enabled by adding them back to LIDAR_SOURCES once a
-  cleaner data path is identified. Out-of-coverage homes fall back
-  to OpenFreeMap building footprints (buildings only, no vegetation),
-  so the visual works worldwide but trees / hedges only cast shadows
-  in covered countries. Users in uncovered regions with access to
-  raw LiDAR data can host their own nDSM GeoTIFF and have Helios use
-  it as the shadow source via the BYO `lidar-local-ndsm-*` config
-  (prepared most easily via the companion site at
-  [helios-lidar.org](https://helios-lidar.org)).
-* **WebGL contexts on long-lived dashboards**, browsers cap
-  concurrent WebGL contexts at 8–16. Helios releases its context
-  cleanly on every re-init via `WEBGL_lose_context`, but if you
-  stack many MapLibre-backed cards in the same dashboard you may
-  hit the limit; the browser will then recycle aggressively and
-  performance can degrade. Setting `map-style: minimal` (lighter
-  Positron basemap) and lowering `display-update-frequency-per-hour`
-  helps on such setups.
-* **Forecast calibration scope**, the refined value in the
-  dashboard captures static biases between the model and observed
-  production (cloud forecast skew, soiling, orientation, inverter
-  losses) but doesn't model time-of-day shading (terrain shadows,
-  tall trees east / west of the panels). For installs with strong
-  morning or evening shading, the refined number can still over-
-  estimate during the shaded hours.
-* **PV array map markers vs. forecast cloud cover**, when
-  `pv-arrays` entries carry their own GPS, the forecast uses those
-  per-array coordinates for the sun position math but the cloud
-  cover is still fetched at the home location. For panels within
-  the same Open-Meteo grid cell (typically 1–10 km) this is
-  exact; for panels several kilometres away, the cloud values
-  may differ slightly from the panel's true micro-weather.
+A user-picked power or energy entity surfaced two ways: as a red chip
+(top-left, above the grid chip) with a leader + a sign-driven bead in scene
+mode, and as a selectable metric (its own ring) in clock mode. The resolver
+handles both wirings: an instantaneous power reading is shown signed
+directly; a cumulative energy meter is shown in its native unit. The chip's
+icon is the editor override, else the entity's own icon, else a generic
+glyph; its colour is the HA frontend's named red.
+
+---
+
+## 6. Persistence
+
+Two things survive a reload, both keyed per home (or per `cache-id` when
+set, so two cards on one home stay independent):
+
+* **The saved view** — view mode, the selected clock filters, and the
+  selected chip — written to `localStorage` by the card on change and on
+  teardown, restored once coordinates resolve.
+* **The camera pose** — bearing, pitch and the lock flag — written by the
+  engine on drag-end and on teardown (capturing an auto-rotated bearing
+  too), and read back at boot so the scene reopens exactly as it was left.
+
+A hidden `cache-id` is auto-generated by the editor the first time a card
+is configured, and a runtime registry gives a pasted duplicate (same id) a
+stable distinct slot, so copies never share a saved view.
+
+---
+
+## 7. Code organisation
+
+Every `card/*` and `engine/*` module exports **plain functions** (plus the
+two top-level classes). Subsystems don't import the card or the engine
+directly; instead each declares a small **structural host interface** in
+its own file describing exactly the fields it reads or mutates, and the
+card / engine satisfies it structurally. This keeps each subsystem testable
+in isolation and makes the dependency surface explicit at the call site —
+e.g. `charts.ts` declares a `ChartHost` with just the store + series it
+needs, and the card *is* a `ChartHost` by shape, not by inheritance.
+
+Configuration is a flat, optional, kebab-case key map (`HeliosConfig`) with
+a resolver helper per key in `helios-config.ts` that clamps + defaults the
+raw value, so a malformed YAML value degrades gracefully instead of
+throwing. The editor (`card/editor.ts`) is a hand-rolled accordion of
+native controls + Home Assistant entity / icon pickers; it writes the same
+flat config back via `config-changed`.
+
+Internationalisation (`src/i18n/`) is a strict-typed `Translations`
+interface with one locale file per language (en, fr today), picked by
+`hass.language` with an English fallback.
+
+---
+
+## 8. Lifecycle, in short
+
+1. `setConfig()` validates + stores the config; the editor auto-assigns a
+   `cache-id` on first configure.
+2. On first paint with resolved home coordinates, the card constructs the
+   engine once; later it updates the engine **in place** (home move, option
+   change) rather than respawning it.
+3. The engine boots the basemap, fetches buildings + weather, arms the
+   60 s atmosphere refresh and the optional auto-rotate loop, and starts
+   firing `onMapTransform` per frame.
+4. The card subscribes to the Energy dashboard, fetches the per-source
+   live + history, builds the unified store, and renders the HUD / charts /
+   clock from it. A 30 s tick advances the live cursor and refreshes daily
+   totals.
+5. On disconnect the engine teardown is deferred briefly (HA edit-mode
+   churn fires disconnect + reconnect in one tick); a real removal tears
+   down the renderer, timers and observers, after persisting the view +
+   pose.

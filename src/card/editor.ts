@@ -105,6 +105,20 @@ export class HeliosCardEditor extends LitElement
     public setConfig(config: HeliosConfig): void
     {
         this._cfg = { ...config };
+        //Assign a hidden, per-card cache id the first time the card is configured (placed via the UI, which
+        //opens this editor). It keeps each card's saved view isolated and is never shown or editable. Deferred
+        //so we don't dispatch config-changed inside the host's setConfig call stack; guarded so it fires once.
+        if (!this._cfg['cache-id'])
+        {
+            const id = `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
+            setTimeout(() =>
+            {
+                if (!this._cfg['cache-id'])
+                {
+                    this._update('cache-id', id);
+                }
+            }, 0);
+        }
     }
 
     public connectedCallback(): void
@@ -265,6 +279,22 @@ export class HeliosCardEditor extends LitElement
         return u === 'W/m²' || u === 'W/m2';
     };
 
+    //Custom-entity picker filter: any power (W/kW/MW) or energy (Wh/kWh/MWh) entity, by device_class or unit.
+    private _customEntityFilter = (entity: any): boolean =>
+    {
+        if (!entity || !entity.attributes)
+        {
+            return false;
+        }
+        const dc = String(entity.attributes.device_class ?? '');
+        if (dc === 'power' || dc === 'energy')
+        {
+            return true;
+        }
+        const u = String(entity.attributes.unit_of_measurement ?? '').trim().toLowerCase();
+        return u === 'w' || u === 'kw' || u === 'mw' || u === 'wh' || u === 'kwh' || u === 'mwh';
+    };
+
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -330,6 +360,33 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.autoRotateHint}</div>
+
+                <div class="field field-block">
+                    <span class="label">${t.editor.customEntity}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c['custom-entity'] ?? '')}"
+                            .includeDomains="${['sensor', 'input_number', 'number']}"
+                            .entityFilter="${this._customEntityFilter}"
+                            @value-changed="${(e: CustomEvent) => this._update('custom-entity', e.detail.value ?? '')}"
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.customEntityHelp}</div>
+                ${String(c['custom-entity'] ?? '') !== '' ? html`
+                    <div class="field field-block">
+                        <span class="label">${t.editor.customEntityIcon}</span>
+                        ${this._pickerReady ? html`
+                            <ha-icon-picker
+                                .hass="${this.hass}"
+                                .value="${String(c['custom-entity-icon'] ?? '')}"
+                                @value-changed="${(e: CustomEvent) => this._update('custom-entity-icon', e.detail.value ?? '')}"
+                            ></ha-icon-picker>
+                        ` : nothing}
+                    </div>
+                ` : nothing}
 
                 </details>
 

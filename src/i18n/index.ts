@@ -112,6 +112,9 @@ export interface Translations
         //for live + past irradiance; forecast hours always fall through to the model.
         solarIrradianceEntity:     string;
         solarIrradianceEntityHelp: string;
+        customEntity:              string;
+        customEntityHelp:          string;
+        customEntityIcon:          string;
         //Surrounding buildings: cluster radius grows the home group to include attached outbuildings,
         //opacity sets neighbour transparency, colour is the base tint for every building.
         buildingsSection:         string;

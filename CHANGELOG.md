@@ -5,6 +5,75 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## 2026.7.1
+
+> Full rework. Helios is rebuilt on a self-contained **2.5D engine** with **no WebGL**: a tilted
+> CARTO raster basemap with every overlay — buildings, shadows, sun arc, chips and leaders —
+> projected on top in SVG. The card is lighter, spins up on any device, and gains a new **clock
+> mode**, a **custom-entity chip**, and the groundwork for a **local-LiDAR mode**.
+
+### New rendering engine (no WebGL)
+
+The MapLibre / WebGL stack is gone. The scene is now drawn by `engine/renderer.ts` +
+`engine/projection.ts`: a basemap canvas tilted with a single CSS `rotateX/rotateZ` transform,
+and a screen-space SVG repainted each frame with the night shade, the cast shadows and the
+extruded buildings. Every HUD overlay is projected through the shared `SceneCamera` so it stays
+welded to the rotating ground. Basemap tiles come from CARTO (light / dark, no key), themed to
+the active HA theme.
+
+### Scene mode
+
+The live 3D view: sun arc (back + front passes), live sun disc + irradiance halo, incidence ray,
+sunrise / sunset markers, and the home pill with its orbiting chip cluster — PV, battery SoC +
+power, grid — each with a leader to the home and an animated bead that encodes the live flow.
+Cast shadows project from the OpenStreetMap building footprints; an opt-in idle auto-rotation
+turns the scene counter to the sun. Clicking a chip points the timeline below at that metric.
+
+### Clock mode
+
+A new 24-hour radial instrument. Each metric is binned into 24 hours-of-day and stood up as a
+ring of bars on the ground plane. The right-hand rail is a **multi-select filter**: every active
+metric adds its own **concentric ring** on fixed slots, so adding / removing one never re-spaces
+the others. Hover or tap a slice to light up that hour across every ring (the rest dim) and read
+each metric's value in the tooltip; a clock-face guide and an N / S compass keep it legible as it
+rotates, with grow-in / shrink-out sweeps on selection.
+
+### Custom-entity chip
+
+Pick any power (W/kW/MW) or energy (Wh/kWh/MWh) entity in the editor and Helios surfaces it as a
+red chip top-left with a leader + a sign-driven bead (home → entity on a positive value, entity →
+home on a negative one), and as its own metric in clock mode. The displayed icon follows an
+editor override, then the entity's own icon.
+
+### Saved view + per-card isolation
+
+The view mode, the selected clock filters, the selected chip, the camera pose and the lock now
+persist per home (and restore exactly on reopen). A hidden, auto-generated `cache-id` keeps two
+cards on the same home independent, and a runtime registry gives a pasted copy its own slot so
+duplicates never share state.
+
+### Timeline + data
+
+The bottom timeline is a single re-targetable chart over a rolling-window store
+(`card/unifiedStore.ts`), drawing production (+ dashed forecast + per-string breakdown),
+consumption, grid, battery, battery SoC, irradiance, cloud or the custom entity, with day
+separators, night zones, a future mask and scrub. Solar / grid / battery wiring continues to be
+resolved from the HA Energy dashboard; weather stays on Open-Meteo's multi-model median.
+
+### Local LiDAR (early)
+
+A `lidar-local-ndsm-*` config family lets you point Helios at your own nDSM GeoTIFF, which unlocks
+a third **LiDAR view mode** button. The wireframe view and the LiDAR-based shadow path are in
+active development. Buildings + shadows otherwise come from the OpenStreetMap footprints
+everywhere.
+
+### Removed
+
+The Weather mode + RainViewer radar overlay, the radial-sundial detail dashboard and its
+camera-dive, the WebGL LiDAR-View dot cloud and the bundled national LiDAR providers, the boot
+progress banner and the rate-limit alert banner are all gone, along with the `map-style`,
+`show-labels`, `pv-arrays` / `pv-tilt` / `pv-azimuth` and `lidar-precision` config keys.
+
 ## v1.8.4 (2026-06-11)
 
 > Data-correctness cycle. The v1.8.3 switch to the HA Energy dashboard as the single source of

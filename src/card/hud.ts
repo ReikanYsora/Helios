@@ -37,6 +37,8 @@ export interface LabelLayout
     batterySocLabel:   { x: number; y: number };
     batteryPowerLabel: { x: number; y: number };
     gridLabel:         { x: number; y: number };
+    //Custom-entity chip anchor (top-left, above the grid chip).
+    customLabel:       { x: number; y: number };
     home:              { x: number; y: number };
     //Home roof top (home lat/lon at altitude render_height): leader drops here so it follows the roof under resize/pitch.
     homeRoof:          { x: number; y: number };
@@ -110,6 +112,7 @@ function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
         && pointEq(a.batterySocLabel,   b.batterySocLabel)
         && pointEq(a.batteryPowerLabel, b.batteryPowerLabel)
         && pointEq(a.gridLabel,         b.gridLabel)
+        && pointEq(a.customLabel,       b.customLabel)
         && pointEq(a.home,              b.home)
         //homeAnchorPoints is a long SVG points string; direct string equality captures every vertex delta cheaply.
         && a.homeAnchorPoints === b.homeAnchorPoints;

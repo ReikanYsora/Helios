@@ -185,6 +185,12 @@ export interface InitHost extends HudHost
     //Current HA theme polarity, used to seed a new engine so its basemap builds at the right style first time.
     themeIsDark(): boolean;
     requestUpdate(): void;
+    //Per-card storage discriminator (cache id + any duplicate suffix), fed to the engine for its pose key.
+    _effectiveCacheId?(): string;
+
+    //Energy-clock mode: when active, each transform frame also re-projects the hour cylinders.
+    _viewMode?: 'scene' | 'clock' | 'lidar';
+    _paintClock?(): void;
 }
 
 
@@ -286,7 +292,7 @@ export function initEngineNow(host: InitHost): void
         //installs - the engine and aux fetch then omit &elevation= and let Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
 
-        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.themeIsDark(), host.preview === true);
+        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.themeIsDark(), host.preview === true, host._effectiveCacheId?.() ?? '');
         wireEngineCallbacks(host);
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
         //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).
@@ -344,6 +350,9 @@ function wireEngineCallbacks(host: InitHost): void
         {
             overlayRaf = null;
             refreshHud(host);
+            //Clock mode rides the same camera: re-project its cylinders on every transform so they stay
+            //glued to the rotating basemap.
+            if (host._viewMode === 'clock') { host._paintClock?.(); }
         });
     };
 }

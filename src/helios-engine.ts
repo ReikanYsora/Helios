@@ -339,8 +339,16 @@ export class HeliosEngine
     //Camera pose persistence via localStorage keyed on home coords. Lovelace doesn't persist config-changed
     //from a live card (only the editor preview), so YAML round-trip isn't an option. 3-decimal rounding
     //(~111 m) separates neighbouring homes while tolerating GPS jitter.
+    //Per-card storage discriminator (the card's effective cache id, including any duplicate `#N` suffix). Set
+    //by the card; empty keys the pose on the home coordinates instead.
+    public cacheKey = '';
     private _cameraPoseStorageKey(): string
     {
+        const id = this.cacheKey.trim();
+        if (id)
+        {
+            return `helios:camera-pose:${id}`;
+        }
         const lat = Math.round(this.homeLat * 1000) / 1000;
         const lon = Math.round(this.homeLon * 1000) / 1000;
         return `helios:camera-pose:${lat}:${lon}`;
@@ -434,6 +442,22 @@ export class HeliosEngine
         const clamped = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, deg));
         this._renderer.setCameraPitch(clamped);
     }
+    //Persist the camera's CURRENT bearing/pitch (with the live lock flag) to localStorage, so reopening the
+    //dashboard restores the exact view. Called on drag-end and by the card on teardown (captures an
+    //auto-rotated bearing too). No-op before the renderer exists.
+    public persistCameraPose(): void
+    {
+        if (!this._renderer)
+        {
+            return;
+        }
+        this._writeStoredPose({
+            bearing: this._renderer.getCameraBearing(),
+            pitch:   this._renderer.getCameraPitch(),
+            locked:  this.isCameraLocked(),
+        });
+    }
+
     //Toggle the lock at runtime (no respawn). The custom drag handlers re-check isCameraLocked() per
     //pointerdown. Mutates cfg in-place and refreshes localStorage for the next boot.
     public setCameraLocked(locked: boolean): void
@@ -608,7 +632,8 @@ export class HeliosEngine
         haCoords:     [number, number],
         haElevation?: number,
         initialIsDark = false,
-        editMode      = false
+        editMode      = false,
+        cacheKey      = ''
     )
     {
         this.homeLat = haCoords[1];
@@ -618,6 +643,8 @@ export class HeliosEngine
             : undefined;
         this.cfg      = { ...config };
         this._editMode = editMode;
+        //Set before _initMapInstance: the renderer reads the stored camera pose (keyed on cacheKey) at boot.
+        this.cacheKey = cacheKey;
 
         bumpStat('enginesCreated');
 
@@ -759,6 +786,8 @@ export class HeliosEngine
             activeId     = null;
             try { container.releasePointerCapture(e.pointerId); }
             catch (_) {}
+            //Persist the pose the user just dragged to, so a return restores the same view.
+            this.persistCameraPose();
         };
         container.addEventListener('pointerdown',   onDown);
         container.addEventListener('pointermove',   onMove);
@@ -1486,6 +1515,8 @@ export class HeliosEngine
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
         gridLabel:         { x: number; y: number };
+        //Custom-entity chip anchor: top-left, above the grid chip (mirrors battery-power on the right).
+        customLabel:       { x: number; y: number };
         home:              { x: number; y: number };
         //Projected roof-top of the home building (home at render_height), the drop-leader's bottom endpoint
         //so the line lands on the roof at any size/pitch/zoom. Falls back to ground home when unresolved.
@@ -1562,9 +1593,12 @@ export class HeliosEngine
         //on the Power chip, not the home.
         const batteryPowerY     = clusterY - CHIP_STACK_GAP_PX / 2;
         const batterySocY       = clusterY + CHIP_STACK_GAP_PX / 2;
-        //Left column: the grid chip sits low (bottom-left), mirroring the battery SoC chip on the right.
+        //Left column: the grid chip sits low (bottom-left), mirroring the battery SoC chip on the right; the
+        //custom-entity chip sits above it (top-left), mirroring the battery Power chip.
         const gridXLeft         = home.x - CHIP_SIDE_X_OFFSET_PX;
         const gridY             = clusterY + CHIP_STACK_GAP_PX / 2;
+        const customXLeft       = home.x - CHIP_SIDE_X_OFFSET_PX;
+        const customY           = clusterY - CHIP_STACK_GAP_PX / 2;
 
         //PV home-anchor ground disc as a polygon: sample N points on a circle of PV_HOME_ANCHOR_RADIUS_M
         //around the home, project each, and express relative to the home so the SVG can translate-to-home.
@@ -1606,6 +1640,7 @@ export class HeliosEngine
             batterySocLabel:   { x: batteryXRight,  y: batterySocY  },
             batteryPowerLabel: { x: batteryXRight,  y: batteryPowerY},
             gridLabel:         { x: gridXLeft,      y: gridY        },
+            customLabel:       { x: customXLeft,    y: customY      },
             home:              { x: home.x,         y: clusterY     },
             homeRoof:          { x: home.x,         y: roofY        },
             homeAnchorPoints:  anchorPts.join(' '),

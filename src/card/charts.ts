@@ -3,13 +3,14 @@
 
 import { html, svg, nothing, TemplateResult } from 'lit';
 import { type HeliosConfig } from '../helios-config';
-import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward } from './format';
+import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward, cssHex } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { pvNormalizeToWatts, type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { sliceForRange, valueAt } from './unifiedStore';
 import { sumChangeForDay, type ChangeBucket } from './energy-stats';
+import { resolveCustomEntityIcon } from './custom-entity';
 
 
 
@@ -466,6 +467,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
     const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
+    const customV    = host._customEntityHistory
+        ? interpAt(host._customEntityHistory.times, host._customEntityHistory.values, atMs)
+        : NaN;
     const pv   = pvValueAtTime(host, atMs);
 
     //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling).
@@ -514,7 +518,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     }
     const hasPv = isFinite(pv.value);
 
-    //Scrub tooltip icons inherit the active theme colour (see .tb-hover-tooltip-icon).
+    //Each tooltip row's icon takes the colour of the series it represents (matching the chart curves) so the
+    //readout is scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the
+    //three stacked band shades in renderTargetChart.
+    const el             = host as unknown as Element;
+    const cloudBase      = ENERGY_COLOR.cloud(el);
+    const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
+    const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
 
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
@@ -591,19 +601,19 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                 ${target === 'production' ? html`
                     ${showProduction && dayKwhText ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:solar-power-variant"></ha-icon>
                             <span class="tb-hover-tooltip-value">${dayKwhText}</span>
                         </div>
                     ` : nothing}
                     ${showForecast && dayKwhText ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:crystal-ball"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:crystal-ball"></ha-icon>
                             <span class="tb-hover-tooltip-value">${dayKwhText}</span>
                         </div>
                     ` : nothing}
                     ${hasPv ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:solar-power"></ha-icon>
                             <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
                         </div>
                     ` : nothing}
@@ -617,20 +627,20 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                 ` : nothing}
                 ${target === 'consumption' && hasConsumption ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:home-lightning-bolt"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.consumption(el)}" icon="mdi:home-lightning-bolt"></ha-icon>
                         <span class="tb-hover-tooltip-value">${kw(consumptionW)}</span>
                     </div>
                 ` : nothing}
                 ${target === 'grid' ? html`
                     ${isFinite(gridImpW) && gridImpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:transmission-tower-export"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridImport(el)}" icon="mdi:transmission-tower-export"></ha-icon>
                             <span class="tb-hover-tooltip-value">${kw(gridImpW)}</span>
                         </div>
                     ` : nothing}
                     ${isFinite(gridExpW) && gridExpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:transmission-tower-import"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridExport(el)}" icon="mdi:transmission-tower-import"></ha-icon>
                             <span class="tb-hover-tooltip-value">${kw(gridExpW)}</span>
                         </div>
                     ` : nothing}
@@ -638,46 +648,52 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                 ${target === 'battery' ? html`
                     ${isFinite(battW) && battW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:battery-arrow-up"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryIn(el)}" icon="mdi:battery-arrow-up"></ha-icon>
                             <span class="tb-hover-tooltip-value">${kw(battW)}</span>
                         </div>
                     ` : nothing}
                     ${isFinite(battW) && battW <= -1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:battery-arrow-down"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery-arrow-down"></ha-icon>
                             <span class="tb-hover-tooltip-value">${kw(-battW)}</span>
                         </div>
                     ` : nothing}
                 ` : nothing}
                 ${target === 'battery-soc' && isFinite(battSocV) ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:battery"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery"></ha-icon>
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, battSocV)))} %</span>
                     </div>
                 ` : nothing}
                 ${target === 'irradiance' && isFinite(irrV) ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.sun(el)}" icon="mdi:white-balance-sunny"></ha-icon>
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
                     </div>
                 ` : nothing}
+                ${target === 'custom' && isFinite(customV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, '--red-color', '#f44336')}" icon="${resolveCustomEntityIcon(host.hass, host.config)}"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, Math.abs(customV) / 1000, 1)} kW</span>
+                    </div>
+                ` : nothing}
                 ${target === 'cloud' ? html`
-                    ${isFinite(cloudLowV) ? html`
+                    ${isFinite(cloudHighV) ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:format-vertical-align-bottom"></ha-icon>
-                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudHighColor}" icon="mdi:format-vertical-align-top"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudHighV)))} %</span>
                         </div>
                     ` : nothing}
                     ${isFinite(cloudMidV) ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:format-vertical-align-center"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudBase}" icon="mdi:format-vertical-align-center"></ha-icon>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudMidV)))} %</span>
                         </div>
                     ` : nothing}
-                    ${isFinite(cloudHighV) ? html`
+                    ${isFinite(cloudLowV) ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" icon="mdi:format-vertical-align-top"></ha-icon>
-                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudHighV)))} %</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudLowColor}" icon="mdi:format-vertical-align-bottom"></ha-icon>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
                         </div>
                     ` : nothing}
                 ` : nothing}
@@ -712,7 +728,7 @@ export interface ChartSeries
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (+ dashed
 //forecast + per-source breakdown) is default; 'grid'/'battery' draw two-direction flows (accent = dominant side);
 //'irradiance' draws W/m² on a fixed 0..1000 scale.
-export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud';
+export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud' | 'custom';
 
 //Structural surface the host card exposes. `_chartHoverPct` is intentionally writable (hover handlers mutate it on
 //pointermove/leave); all other fields stay read-only.
@@ -748,6 +764,8 @@ export interface ChartHost
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
     readonly _batterySocHistory: { times: Date[]; values: number[] } | null;
+    //Custom-entity hourly history (values in W) for the 'custom' target curve. Null when unconfigured.
+    readonly _customEntityHistory?: { times: Date[]; values: number[] } | null;
     //Active bottom-chart target. Drives which series renderBottomChart draws; defaults to 'production'.
     readonly _chartTarget?: ChartTarget;
 }
@@ -1165,6 +1183,7 @@ export function chartAccentColor(host: ChartHost): string
     if (target === 'irradiance') { return ENERGY_COLOR.sun(el); }
     if (target === 'cloud')      { return ENERGY_COLOR.cloud(el); }
     if (target === 'battery-soc'){ return ENERGY_COLOR.batteryOut(el); }
+    if (target === 'custom')     { return cssHex(el, '--red-color', '#f44336'); }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
@@ -1301,6 +1320,25 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         series   = [{ pts, color: ENERGY_COLOR.batteryOut(el) }];
         fixedMax = 100;
     }
+    else if (target === 'custom')
+    {
+        //Custom entity over the window, from the fetched hourly history (values in W). One red curve,
+        //magnitude only so a signed sensor reads as a single area; the axis auto-scales.
+        const hist = host._customEntityHistory;
+        const pts: Array<{ t: number; v: number }> = [];
+        if (hist)
+        {
+            for (let i = 0; i < hist.times.length; i++)
+            {
+                const tMs = hist.times[i].getTime();
+                if (tMs < startMs || tMs > endMsAbs) { continue; }
+                const v = hist.values[i];
+                if (!isFinite(v)) { continue; }
+                pts.push({ t: tMs, v: Math.abs(v) });
+            }
+        }
+        series = [{ pts, color: cssHex(el, '--red-color', '#f44336') }];
+    }
     else if (target === 'cloud')
     {
         //Cloud-cover bands from the hourly weather series, low -> mid -> high. Built at the SAME times so they
@@ -1340,9 +1378,12 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         fixedMax = 1000;
     }
 
-    //Stacked when multiple series share the same x-points (the cloud bands): each band continues above the one
-    //below, so the areas read as layers instead of overlapping.
-    const isStacked = series.length > 1
+    //Among the generic targets only the cloud bands stack (low + mid + high layer up to the total sky cover);
+    //per-source PV stacks in renderPvChart. The two-direction targets (grid import/export, battery
+    //charge/discharge) draw both areas from the baseline so each flow reads on its own — stacking them would
+    //sum two opposite flows into a meaningless total.
+    const isStacked = target === 'cloud'
+        && series.length > 1
         && series.every(s => s.pts.length === series[0].pts.length && s.pts.length >= 2);
 
     //Y scale: fixed where set, else auto — to the stacked total when stacked, else the per-series running max.

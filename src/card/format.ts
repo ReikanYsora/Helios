@@ -38,6 +38,45 @@ export function formatLocalisedNumber(
 }
 
 
+//HA's am/pm decision (mirror of the frontend's useAmPm): the user's explicit 12/24-hour choice from
+//hass.locale.time_format, falling back to the language/system default by probing the runtime. Kept in
+//step with HA so a time we format reads exactly as the rest of the dashboard does.
+function haUseAmPm(locale: { time_format?: string; language?: string } | undefined): boolean
+{
+    const tf = locale?.time_format;
+    if (tf === '12') { return true; }
+    if (tf === '24') { return false; }
+    //'language' or 'system' (or unset): probe the runtime, honouring the chosen language for 'language'.
+    const testLang = tf === 'language' ? locale?.language : undefined;
+    try
+    {
+        const probe = new Date().toLocaleString(testLang);
+        return probe.includes('AM') || probe.includes('PM');
+    }
+    catch (_)
+    {
+        return false;
+    }
+}
+
+//Format a time the way the HA frontend's formatTime does: hour + minute in the user's language, honouring
+//their 12/24-hour setting. No time-zone conversion — callers pass a local Date for the clock face, so the
+//hour shown is the one meant, not a zone-shifted one.
+export function formatHaTime(hass: any, date: Date): string
+{
+    const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
+    const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: haUseAmPm(locale) };
+    try
+    {
+        return new Intl.DateTimeFormat(locale?.language, opts).format(date);
+    }
+    catch (_)
+    {
+        return new Intl.DateTimeFormat(undefined, opts).format(date);
+    }
+}
+
+
 //Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every
 //chip prints the same unit/precision regardless of the source sensor's native unit. Input is watts.
 //`signed` prefixes an explicit + / − (figure-dash) so battery charge reads apart from discharge.

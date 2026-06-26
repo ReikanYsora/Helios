@@ -53,6 +53,9 @@ export const MAX_PERIOD_FUTURE_DAYS     = 14;
 //Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart) — a stable warm yellow rather
 //than the theme's --warning-color, which skews orange under many themes.
 export const SUN_COLOR_HEX = '#ffc107';
+//Custom-entity chip identity: the HA frontend's named red (--red-color), with its hex as the literal
+//fallback. Used for the chip border, its leader and bead.
+export const CUSTOM_ENTITY_COLOR = 'var(--red-color, #f44336)';
 
 
 //=== Camera ===

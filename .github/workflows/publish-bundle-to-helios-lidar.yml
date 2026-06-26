@@ -1,23 +1,16 @@
 #  Auto-publish the freshly-built helios.js bundle to helios-lidar.org
-#  every time a release is published on this repo. The site embeds a
-#  live demo card on the homepage + the coverage browser, both loading
-#  the bundle from /static/helios-card-bundle.js. A dedicated /beta page
-#  runs whatever prerelease is the most recent on GitHub from a separate
-#  /static/beta/helios-card-bundle.js path so stable visitors and beta
-#  testers stay on independent channels.
+#  every time a STABLE release is published on this repo. The site embeds
+#  a live demo card on the homepage + the coverage browser, both loading
+#  the bundle from /static/helios-card-bundle.js.
 #
 #  Trigger: release.published. GitHub fires this event for both full
-#  releases AND prereleases. Two jobs split the work by channel:
+#  releases AND prereleases, but the single publish-stable job runs ONLY
+#  for stable releases — prereleases (-alpha. / -beta. / -rc.) deploy
+#  nothing, so cutting a beta never touches the site.
 #
-#    * publish-stable    only runs when the release is NOT a prerelease,
-#                        writes to the stable channel (/static/*)
-#    * publish-prerelease only runs when the release IS a prerelease,
-#                        writes to the beta channel (/static/beta/*)
-#
-#  Manual workflow_dispatch is guarded the same way by parsing the tag
-#  shape (-alpha. / -beta. / -rc. → prerelease, everything else → stable)
-#  so the Actions UI can pick the right channel without an explicit
-#  selector.
+#  Manual workflow_dispatch republishes the latest stable bundle without
+#  cutting a new tag (e.g. after a server restore); the same guard ignores
+#  prerelease tags.
 #
 #  Secrets required on the repo:
 #    HELIOS_LIDAR_HOST      VPS hostname or IPv4
@@ -114,82 +107,3 @@ jobs:
             rm -f /tmp/helios-card-bundle.js
             ls -la /var/helios-lidar/frontend/helios-card-bundle.js
             ls -la /var/helios-lidar/app/frontend/helios-card-bundle.js
-
-  publish-prerelease:
-    runs-on: ubuntu-latest
-    #  Prerelease channel. Runs only when the release IS a prerelease.
-    #  For workflow_dispatch we infer prerelease-ness from the tag
-    #  shape; presence of -alpha. / -beta. / -rc. means prerelease.
-    if: >-
-      (github.event_name == 'release' && github.event.release.prerelease == true)
-      || (github.event_name == 'workflow_dispatch'
-          && (contains(inputs.release_tag, '-alpha.')
-              || contains(inputs.release_tag, '-beta.')
-              || contains(inputs.release_tag, '-rc.')))
-    steps:
-      - name: Resolve release tag
-        id: tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if [ -n "${{ github.event.release.tag_name }}" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-          elif [ -n "${{ inputs.release_tag }}" ]; then
-            TAG="${{ inputs.release_tag }}"
-          else
-            TAG=$(gh release list --repo "${{ github.repository }}" \
-                    --limit 30 --json tagName,isPrerelease \
-                    --jq 'map(select(.isPrerelease == true)) | .[0].tagName')
-          fi
-          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
-            echo "No prerelease tag could be resolved, aborting" >&2
-            exit 1
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Resolved prerelease tag: $TAG"
-
-      - name: Download helios.js from the prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh release download "${{ steps.tag.outputs.tag }}" \
-            --repo "${{ github.repository }}" \
-            --pattern 'helios.js' \
-            --output helios-card-bundle.js
-          ls -la helios-card-bundle.js
-          if [ ! -s helios-card-bundle.js ]; then
-            echo "Downloaded bundle is empty, aborting" >&2
-            exit 1
-          fi
-          SIZE=$(stat -c%s helios-card-bundle.js)
-          if [ "$SIZE" -lt 100000 ]; then
-            echo "Downloaded bundle is suspiciously small ($SIZE bytes), aborting" >&2
-            exit 1
-          fi
-
-      - name: SCP bundle to Helios-Lidar VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host:     ${{ secrets.HELIOS_LIDAR_HOST }}
-          username: ${{ secrets.HELIOS_LIDAR_USER }}
-          password: ${{ secrets.HELIOS_LIDAR_PASSWORD }}
-          source:   'helios-card-bundle.js'
-          target:   '/tmp/'
-          overwrite: true
-
-      - name: Move bundle into both /beta frontend dirs
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host:     ${{ secrets.HELIOS_LIDAR_HOST }}
-          username: ${{ secrets.HELIOS_LIDAR_USER }}
-          password: ${{ secrets.HELIOS_LIDAR_PASSWORD }}
-          script: |
-            set -e
-            echo '${{ secrets.HELIOS_LIDAR_PASSWORD }}' | sudo -S mkdir -p /var/helios-lidar/frontend/beta /var/helios-lidar/app/frontend/beta
-            echo '${{ secrets.HELIOS_LIDAR_PASSWORD }}' | sudo -S cp /tmp/helios-card-bundle.js /var/helios-lidar/frontend/beta/helios-card-bundle.js
-            echo '${{ secrets.HELIOS_LIDAR_PASSWORD }}' | sudo -S cp /tmp/helios-card-bundle.js /var/helios-lidar/app/frontend/beta/helios-card-bundle.js
-            rm -f /tmp/helios-card-bundle.js
-            ls -la /var/helios-lidar/frontend/beta/helios-card-bundle.js
-            ls -la /var/helios-lidar/app/frontend/beta/helios-card-bundle.js

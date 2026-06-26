@@ -1,5 +1,6 @@
 import { css, unsafeCSS } from 'lit';
 import { GROUND_FADE_START } from '../engine/tiles';
+import { CUSTOM_ENTITY_COLOR } from '../constants';
 
 //Visual styles for HeliosCard. Grouped by feature (layout, timeline,
 //overlays, solar arc, tooltips).
@@ -119,6 +120,7 @@ export const heliosCardStyles = css`
     .pv-pct-label,
     .battery-pct-label,
     .grid-label,
+    .custom-label,
     .solar-pct-label,
     .cloud-chip,
     .home-pill
@@ -150,6 +152,7 @@ export const heliosCardStyles = css`
     .pv-pct-label,
     .battery-pct-label,
     .grid-label,
+    .custom-label,
     .solar-pct-label,
     .cloud-chip,
     .home-pill
@@ -224,12 +227,12 @@ export const heliosCardStyles = css`
     /*  View mode. Clock fades every layer but the basemap (and the top-left controls); Scene restores them.
         The basemap (.scene-ground-holder) lives inside #map-container alongside .scene-svg, so the scene SVG
         is faded by name while the map container itself (and the holder) stay. */
-    ha-card > :not(#map-container):not(.overlay-top-left):not(.time-bar),
+    ha-card > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right),
     ha-card .scene-svg
     {
         transition: opacity var(--ha-animation-duration-slow, 350ms) ease;
     }
-    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar),
+    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right),
     ha-card.mode-clock .scene-svg
     {
         opacity: 0;
@@ -267,6 +270,7 @@ export const heliosCardStyles = css`
     .pv-pct-label ha-icon,
     .battery-pct-label ha-icon,
     .grid-label ha-icon,
+    .custom-label ha-icon,
     .cloud-chip ha-icon,
     .solar-pct-label ha-icon
     {
@@ -281,6 +285,7 @@ export const heliosCardStyles = css`
     .pv-pct-label[role="button"],
     .battery-pct-label[role="button"],
     .grid-label[role="button"],
+    .custom-label[role="button"],
     .solar-pct-label[role="button"]
     {
         pointer-events: auto;
@@ -302,6 +307,11 @@ export const heliosCardStyles = css`
     {
         box-shadow: 0 1px 3px var(--shadow-color),
                     0 0 12px color-mix(in srgb, var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2)) 70%, transparent);
+    }
+    .custom-label.is-chart-active
+    {
+        box-shadow: 0 1px 3px var(--shadow-color),
+                    0 0 12px color-mix(in srgb, var(--custom-leader-color, ${unsafeCSS(CUSTOM_ENTITY_COLOR)}) 70%, transparent);
     }
     .solar-pct-label.is-chart-active
     {
@@ -338,9 +348,20 @@ export const heliosCardStyles = css`
         color:        var(--primary-text-color, #212121);
         border-color: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
     }
-    /*  Full-size overlay SVGs for the home-cluster leaders (grid, PV→home, battery). Identical box;
+    /*  Custom-entity chip, same pill recipe; red border + red leader from --custom-leader-color. Icon-only,
+        like the cluster's other chips — the icon (override / entity / generic) carries the identity. */
+    .custom-label
+    {
+        z-index: 8;
+        justify-content: center;
+        pointer-events: none;
+        color:        var(--primary-text-color, #212121);
+        border-color: var(--custom-leader-color, ${unsafeCSS(CUSTOM_ENTITY_COLOR)});
+    }
+    /*  Full-size overlay SVGs for the home-cluster leaders (grid, custom, PV→home, battery). Identical box;
         each hosts its own coloured path(s) defined below. */
     .grid-leader-svg,
+    .custom-leader-svg,
     .pv-home-leader-svg,
     .battery-leader-svg
     {
@@ -353,7 +374,8 @@ export const heliosCardStyles = css`
     }
     /*  Single grid leader; stroke + bead fill from the inline --grid-leader-color, so one path serves
         both import (blue) and export (purple). */
-    .grid-leader-line
+    .grid-leader-line,
+    .custom-leader-line
     {
         stroke-width: 1;
         stroke-linecap: round;

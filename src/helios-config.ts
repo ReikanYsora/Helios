@@ -80,6 +80,82 @@ export interface HeliosConfig
     //Optional live irradiance sensor (W/m²) at the home, preferred over the Open-Meteo model for the "now"
     //reading in live mode. Past + forecast still come from the model.
     'solar-irradiance-entity'?: unknown;
+    //Optional user-picked power/energy entity surfaced as the red "custom" chip (top-left, above grid) and a
+    //clock-mode metric. Empty = no chip. The displayed name follows the entity's friendly name.
+    'custom-entity'?:           unknown;
+    //Optional MDI icon override for the custom entity (chip + clock medallion/button). Empty falls back to the
+    //entity's own icon, then a generic glyph.
+    'custom-entity-icon'?:      unknown;
+    //Optional per-card cache id. When set, the saved view (mode, selected filters, camera pose, lock) is keyed
+    //on it instead of the home coordinates, so two cards on the same home keep independent state (e.g. one in
+    //scene mode, one in clock mode). Empty = shared per-home cache (the default).
+    'cache-id'?:                unknown;
+    //Optional local nDSM (normalised Digital Surface Model) GeoTIFF: a single browser-reachable raster the
+    //user points Helios at for true LiDAR shadows + the LiDAR view mode. Enabled gates everything; the URL +
+    //EPSG:4326 bounding box must all be present and ordered for the source to be considered defined.
+    'lidar-local-ndsm-enabled'?: unknown;
+    'lidar-local-ndsm-url'?:     unknown;
+    'lidar-local-ndsm-min-lat'?: unknown;
+    'lidar-local-ndsm-max-lat'?: unknown;
+    'lidar-local-ndsm-min-lon'?: unknown;
+    'lidar-local-ndsm-max-lon'?: unknown;
+}
+
+
+//Validated local-nDSM config (url + ordered EPSG:4326 bbox), or null when not fully/validly defined. Single
+//source of truth for "is a local LiDAR defined" — gates the LiDAR view mode, the LiDAR shadows and the editor.
+export interface LocalLidarConfig
+{
+    url:    string;
+    minLat: number;
+    maxLat: number;
+    minLon: number;
+    maxLon: number;
+}
+export function localLidarConfig(config: HeliosConfig | undefined): LocalLidarConfig | null
+{
+    if (config?.['lidar-local-ndsm-enabled'] !== true)
+    {
+        return null;
+    }
+    const url = config?.['lidar-local-ndsm-url'];
+    if (typeof url !== 'string' || !url.trim())
+    {
+        return null;
+    }
+    const minLat = Number(config?.['lidar-local-ndsm-min-lat']);
+    const maxLat = Number(config?.['lidar-local-ndsm-max-lat']);
+    const minLon = Number(config?.['lidar-local-ndsm-min-lon']);
+    const maxLon = Number(config?.['lidar-local-ndsm-max-lon']);
+    if (![minLat, maxLat, minLon, maxLon].every(Number.isFinite))
+    {
+        return null;
+    }
+    if (maxLat <= minLat || maxLon <= minLon)
+    {
+        return null;
+    }
+    return { url: url.trim(), minLat, maxLat, minLon, maxLon };
+}
+export function hasLocalLidar(config: HeliosConfig | undefined): boolean
+{
+    return localLidarConfig(config) !== null;
+}
+
+
+//Resolved custom-entity id (empty string when unset). A plain string read; the chip/clock gate on emptiness.
+export function customEntityId(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['custom-entity'];
+    return typeof raw === 'string' ? raw.trim() : '';
+}
+
+
+//Resolved per-card cache id (empty string when unset). Isolates the saved view between same-home cards.
+export function cacheId(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['cache-id'];
+    return typeof raw === 'string' ? raw.trim() : '';
 }
 
 
