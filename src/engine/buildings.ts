@@ -2,14 +2,19 @@
 //self-sourced Overpass data fetch that turns the home's surroundings into ready-to-extrude footprints, and
 //the faux-3D building + shadow PAINTERS that draw those footprints.
 //
-//Data fetch: we ask the OpenStreetMap Overpass API for every `way["building"]` and multipolygon
-//`relation["building"]` within the radius, convert each ring lat/lon -> local metres (east/north) relative
-//to the home, keep the nearest MAX_BUILDINGS COMPLETE footprints, and flag the building that contains the
-//home GPS (else the nearest) as isHome. When Overpass yields nothing — offline, both mirrors down, or
-//genuinely no mapped buildings — we fall back to a single standard house at the origin so the scene always
-//has a home to draw. Fetched once per (home, radius) tuple and cached in localStorage (the home doesn't
-//move), so a reload doesn't re-hit Overpass. Heights are real OSM heights (capped) under realSize, else a
-//uniform fixed prism.
+//Data flow: split into FETCH-ONCE-AT-MAX + INTERPRET-ON-READ so a building-OPTION tweak (radius, count,
+//height, cluster) never re-hits Overpass — it re-interprets cached raw data instantly.
+//  - fetchRawBuildings(): ask the OpenStreetMap Overpass API for every `way["building"]` and multipolygon
+//    `relation["building"]` within the MAX radius, convert each ring lat/lon -> local metres (east/north)
+//    relative to the home, keep the nearest MAX_BUILDING_COUNT COMPLETE footprints as option-INDEPENDENT
+//    RawBuilding[] (no height cap, no count slice, no home flag). Cached in localStorage keyed on the home
+//    LOCATION only (the home doesn't move), so a reload — or any option change — doesn't re-fetch.
+//  - interpretBuildings(): apply the editor options to the cached raw data in memory — filter to the radius,
+//    slice the count, resolve per-building height (real OSM capped under realSize, else a fixed prism), and
+//    mark the home (the building containing/nearest the GPS) plus any building whose centroid is within the
+//    cluster radius of it (attached outbuildings join the home set). When the raw set is empty — offline,
+//    both mirrors down, or genuinely no mapped buildings — we fall back to a single standard house at the
+//    origin so the scene always has a home to draw.
 //
 //Painters: buildings are extruded prisms drawn with a per-face painter's algorithm (depth-sorted,
 //screen-space back-face culled); shadows are each footprint's cast envelope flattened by one group-opacity.
@@ -20,7 +25,8 @@ import { mixHex, hexByte, tintedRgba, pointsAttr, type Point } from './colors';
 import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M } from './constants';
 import {
     FIXED_BUILDING_HEIGHT_M,
-    MAX_BUILDINGS,
+    MAX_BUILDING_COUNT,
+    MAX_DISPLAY_RADIUS_M,
     FALLBACK_HOUSE_HALF_W,
     FALLBACK_HOUSE_HALF_D,
     BUILDING_CACHE_TTL_MS,
@@ -69,15 +75,16 @@ export interface HomeAppearance
 //Overpass data fetch — self-sourced footprints around the home.
 //---------------------------------------------------------------------------------------------------------
 
-export interface FetchBuildingsOptions
+//Option-INDEPENDENT, JSON-serialisable raw building parsed once at the MAX radius. interpretBuildings()
+//turns these into render-ready Building[] per the editor options; nothing here depends on radius/count/
+//height/cluster, so it's cached by LOCATION only and reused across every option change.
+export interface RawBuilding
 {
-    homeLon:      number;
-    homeLat:      number;
-    radiusMeters: number;
-    maxBuildings?: number;
-    realSize?:    boolean;
-    fixedHeightM?: number;
-    signal?:      AbortSignal;
+    footprint:  Point[];        //metres east/north relative to the home, CCW, open ring
+    centerX:    number;         //centroid east
+    centerY:    number;         //centroid north
+    distanceM:  number;         //distance from the home to the footprint (0 if it contains the home)
+    osmHeightM: number | null;  //raw uncapped OSM height/levels, null when untagged
 }
 
 //One Overpass element: a `way` carries its ring in `.geometry`; a multipolygon `relation` carries its
@@ -152,30 +159,32 @@ function distanceToHome(polygon: Point[]): number
     return nearest;
 }
 
-//localStorage cache key — rounded home position + radius, so any meaningful move invalidates the entry.
-function cacheKey(lat: number, lng: number, radius: number): string
+//localStorage cache key — rounded home position only (the "bld2" prefix retires the old radius/option-keyed
+//`helios-bld:` entries, which we never read). The home doesn't move, so one entry serves every option set.
+function cacheKey(lat: number, lng: number): string
 {
-    return `helios-bld:${lat.toFixed(4)}:${lng.toFixed(4)}:${radius}`;
+    return `helios-bld2:${lat.toFixed(4)}:${lng.toFixed(4)}`;
 }
 
-//Parse Overpass `elements` into ranked scene Building[]. Each ring lat/lon -> local metres east/north
-//relative to the home, centroid computed, ranked by distance-to-footprint, nearest MAX_BUILDINGS kept.
-function parseBuildings(
-    ways: OverpassWay[],
-    lat:  number,
-    lng:  number,
-    opts: { maxBuildings?: number; realSize?: boolean; fixedHeightM?: number } = {}
-): Building[]
+//Parse Overpass `elements` into option-INDEPENDENT RawBuilding[]. Each ring lat/lon -> local metres
+//east/north relative to the home, centroid + distance-to-footprint + raw OSM height computed, ranked by
+//distance, nearest MAX_BUILDING_COUNT kept. No height cap, fixed height, count slice, or home flag here —
+//those are interpret's job, so the same raw data serves any option set.
+export function parseRawBuildings(
+    elements: OverpassWay[],
+    lat:      number,
+    lng:      number
+): RawBuilding[]
 {
     const perLat = 111_320;
     const perLon = 111_320 * Math.cos(lat * DEG);
-    const buildings: Building[] = [];
+    const buildings: RawBuilding[] = [];
 
     //Collect outer rings: simple `way` buildings + the outer ring(s) of multipolygon `relation` buildings.
     //Dense cities map whole blocks as relations — without these the home can be missing. Each ring carries its
-    //element's `tags` so the per-building height can read the OSM height/levels.
+    //element's `tags` so the per-building raw OSM height can read the height/levels.
     const rings: { geometry: { lat: number; lon: number }[]; tags?: Record<string, string> }[] = [];
-    for (const el of ways)
+    for (const el of elements)
     {
         if (el.type === 'way' && el.geometry)
         {
@@ -192,11 +201,6 @@ function parseBuildings(
             }
         }
     }
-
-    //Per-building height: real OSM heights (capped, with a fallback for untagged buildings) when realSize is
-    //on, otherwise a uniform fixed prism. realSize defaults true when undefined; the caller always passes it.
-    const realSize     = opts.realSize !== false;
-    const fixedHeightM = opts.fixedHeightM ?? FIXED_BUILDING_HEIGHT_M;
 
     for (const { geometry, tags } of rings)
     {
@@ -236,52 +240,21 @@ function parseBuildings(
             centerX += x;
             centerY += y;
         }
-        const height = realSize
-            ? Math.min(REAL_HEIGHT_CAP_M, osmHeightM(tags) ?? REAL_HEIGHT_FALLBACK_M)
-            : fixedHeightM;
         buildings.push({
             footprint,
-            height,
-            isHome:  false,
-            centerX: centerX / footprint.length,
-            centerY: centerY / footprint.length,
+            centerX:    centerX / footprint.length,
+            centerY:    centerY / footprint.length,
+            distanceM:  distanceToHome(footprint),
+            osmHeightM: osmHeightM(tags),
         });
     }
 
-    //Keep the nearest MAX_BUILDINGS, COMPLETE buildings only (whole footprints, never clipped — OSM returns
-    //full geometry even for buildings only partly inside the radius). Rank by distance to the FOOTPRINT
-    //(0 when it contains the home), so a large building wrapping the home is never dropped.
-    const dist = new Map<Building, number>();
-    for (const bld of buildings)
-    {
-        dist.set(bld, distanceToHome(bld.footprint));
-    }
-    buildings.sort((a, b) => dist.get(a)! - dist.get(b)!);
-    const kept = buildings.slice(0, opts.maxBuildings ?? MAX_BUILDINGS);
-    markHome(kept);
-    return kept;
-}
-
-//"The home" = the building that CONTAINS the GPS point (distance 0), else the nearest footprint. Recomputed
-//on every load — including from cache — so a stale cached isHome can't persist.
-function markHome(buildings: Building[]): void
-{
-    let nearest = -1;
-    let best    = Infinity;
-    for (let i = 0; i < buildings.length; i++)
-    {
-        buildings[i].isHome = false;
-        const d = distanceToHome(buildings[i].footprint);
-        if (d < best)
-        {
-            best    = d;
-            nearest = i;
-        }
-    }
-    if (nearest >= 0)
-    {
-        buildings[nearest].isHome = true;
-    }
+    //Keep the nearest MAX_BUILDING_COUNT, COMPLETE buildings only (whole footprints, never clipped — OSM
+    //returns full geometry even for buildings only partly inside the radius). Rank by distance to the
+    //FOOTPRINT (0 when it contains the home), so a large building wrapping the home is never dropped. This
+    //bounds the cached payload and covers any count the user can pick.
+    buildings.sort((a, b) => a.distanceM - b.distanceM);
+    return buildings.slice(0, MAX_BUILDING_COUNT);
 }
 
 //A single standard detached house centred on the home, for offline / no-result fallback.
@@ -304,28 +277,33 @@ function fallbackHouse(): Building
     };
 }
 
-//Fetch building footprints around the home and return ready-to-extrude scene Building[]. Serves a fresh
-//localStorage cache first, then tries each Overpass mirror in turn; on total failure (offline, both mirrors
-//down, no mapped buildings) returns the single fallback house so the scene always has a home. Respects
-//opts.signal — an abort propagates as an AbortError the caller already swallows.
-export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Promise<Building[]>
+//Fetch the option-INDEPENDENT raw footprints around the home, at the MAX display radius, as RawBuilding[].
+//Serves a fresh localStorage cache first (keyed on LOCATION only, so it's reused across every option set),
+//then tries each Overpass mirror in turn; on total failure (offline, both mirrors down, no mapped
+//buildings) returns [] — interpretBuildings() supplies the fallback house, so the cache never holds it.
+//Respects `signal` — an abort propagates as an AbortError the caller already swallows.
+export async function fetchRawBuildings(
+    homeLat: number,
+    homeLon: number,
+    signal?: AbortSignal
+): Promise<RawBuilding[]>
 {
-    const lat    = opts.homeLat;
-    const lng    = opts.homeLon;
-    const radius = Math.max(1, Math.round(opts.radiusMeters));
-    const key    = cacheKey(lat, lng, radius);
+    const lat    = homeLat;
+    const lng    = homeLon;
+    //Always query the widest radius the user can pick; interpret narrows it per option on read.
+    const radius = Math.round(MAX_DISPLAY_RADIUS_M);
+    const key    = cacheKey(lat, lng);
 
-    //Cache hit: reuse the stored footprints (re-marking the home from current logic, so a stale cached
-    //isHome can't persist). The cache never holds the fallback house — only real Overpass results.
+    //Cache hit: reuse the stored raw footprints directly. No home flag here — that's interpret's job now.
+    //The cache never holds the fallback house, only real Overpass results.
     try
     {
         const raw    = localStorage.getItem(key);
         const cached = raw
-            ? (JSON.parse(raw) as { time: number; buildings: Building[] })
+            ? (JSON.parse(raw) as { time: number; buildings: RawBuilding[] })
             : null;
         if (cached?.buildings?.length && Date.now() - cached.time < BUILDING_CACHE_TTL_MS)
         {
-            markHome(cached.buildings);
             return cached.buildings;
         }
     }
@@ -347,7 +325,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
                 endpoint + '?data=' + encodeURIComponent(overpassQuery),
                 {
                     referrerPolicy: 'no-referrer', //don't leak the HA instance URL to Overpass
-                    signal:         opts.signal,
+                    signal,
                 }
             );
             if (!response.ok)
@@ -355,11 +333,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
                 throw new Error(String(response.status));
             }
             const data      = (await response.json()) as { elements?: OverpassWay[] };
-            const buildings = parseBuildings(data.elements ?? [], lat, lng, {
-                maxBuildings: opts.maxBuildings,
-                realSize:     opts.realSize,
-                fixedHeightM: opts.fixedHeightM,
-            });
+            const buildings = parseRawBuildings(data.elements ?? [], lat, lng);
             if (buildings.length)
             {
                 try
@@ -375,7 +349,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         }
         catch (err)
         {
-            //Propagate aborts so a rapid radius change cancels cleanly (the caller swallows AbortError).
+            //Propagate aborts so a rapid location change cancels cleanly (the caller swallows AbortError).
             if ((err as { name?: string })?.name === 'AbortError')
             {
                 throw err;
@@ -389,9 +363,88 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     }
     /* eslint-enable no-await-in-loop */
 
-    //Every mirror failed or returned nothing: fall back to the standard house, NOT cached (a later retry
-    //or config change can still recover the real buildings).
-    return [fallbackHouse()];
+    //Every mirror failed or returned nothing: return empty, NOT cached (a later retry can still recover the
+    //real buildings). interpretBuildings() turns this into the single fallback house.
+    return [];
+}
+
+//Options interpretBuildings() applies to the cached raw data, on read. All cheap + in-memory: a change to
+//any of these re-interprets instantly with no Overpass re-fetch.
+export interface InterpretBuildingsOptions
+{
+    radiusM:        number;
+    count:          number;
+    realSize:       boolean;
+    fixedHeightM:   number;
+    clusterRadiusM: number;
+}
+
+//Turn option-INDEPENDENT RawBuilding[] into render-ready Building[] per the editor options. Pure + cheap:
+//filter to the radius, slice the count, resolve per-building height, and mark the home + its cluster. Called
+//on every option change (no re-fetch) as well as once per fresh raw fetch.
+export function interpretBuildings(
+    raw:  RawBuilding[],
+    opts: InterpretBuildingsOptions
+): Building[]
+{
+    //No raw data (offline, both mirrors down, or genuinely no mapped buildings): the single fallback house.
+    if (raw.length === 0)
+    {
+        return [fallbackHouse()];
+    }
+
+    //Filter to the display radius (raw is distance-sorted, so this is a prefix). Radius 0 leaves nothing, so
+    //keep the single nearest raw building — the home itself always shows.
+    let kept = raw.filter((b) => b.distanceM <= opts.radiusM);
+    if (kept.length === 0)
+    {
+        kept = [raw[0]];
+    }
+
+    //Take the nearest `count` (raw is already distance-sorted).
+    kept = kept.slice(0, Math.max(0, opts.count));
+    if (kept.length === 0)
+    {
+        kept = [raw[0]];
+    }
+
+    //Resolve per-building height: real OSM heights (capped, with a fallback for untagged buildings) when
+    //realSize is on, otherwise a uniform fixed prism. isHome resolved below.
+    const buildings: Building[] = kept.map((b) => ({
+        footprint: b.footprint,
+        height:    opts.realSize
+            ? Math.min(REAL_HEIGHT_CAP_M, b.osmHeightM ?? REAL_HEIGHT_FALLBACK_M)
+            : opts.fixedHeightM,
+        isHome:    false,
+        centerX:   b.centerX,
+        centerY:   b.centerY,
+    }));
+
+    //Mark the home: the building with the smallest distanceM (it's first after the sort), then every other
+    //kept building whose centroid is within clusterRadiusM of it (attached outbuildings join the home set).
+    //clusterRadiusM 0 = just the single home building.
+    const homeIdx = 0;
+    buildings[homeIdx].isHome = true;
+    const home    = buildings[homeIdx];
+    const cluster = Math.max(0, opts.clusterRadiusM);
+    if (cluster > 0)
+    {
+        for (let i = 0; i < buildings.length; i++)
+        {
+            if (i === homeIdx)
+            {
+                continue;
+            }
+            const dx = buildings[i].centerX - home.centerX;
+            const dy = buildings[i].centerY - home.centerY;
+            if (Math.hypot(dx, dy) <= cluster)
+            {
+                buildings[i].isHome = true;
+            }
+        }
+    }
+
+    return buildings;
 }
 
 //---------------------------------------------------------------------------------------------------------

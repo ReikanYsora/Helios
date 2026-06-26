@@ -1,8 +1,8 @@
 import { SceneRenderer } from './engine/renderer';
-import { type Building } from './engine/buildings';
+import { type Building, type RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
-import { fetchBuildingsAroundHome } from './engine/buildings';
+import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
@@ -67,21 +67,22 @@ const _liveEngines = new Set<HeliosEngine>();
 
 
 //-----------------------------------------------------------------
-//Shared module-scope cache for parsed building footprints. HA re-creates the card element on every config
-//commit; a fresh engine picks up the already-parsed data synchronously and skips the parse+projection
-//cost. TTL is wide since the data is static; the key encodes home position + radius, so any meaningful
-//change invalidates the entry naturally. SHARED_FETCH_CACHE_TTL_MS lives in constants.ts.
+//Shared module-scope cache for the RAW (option-independent) building footprints. HA re-creates the card
+//element on every config commit; a fresh engine picks up the already-fetched raw data synchronously and
+//skips the Overpass round-trip + parse. TTL is wide since the data is static; the key is the home LOCATION
+//only, so a building-option change reuses the same entry (interpret applies the options in memory).
+//SHARED_FETCH_CACHE_TTL_MS lives in constants.ts.
 
 interface SharedBuildingsCacheEntry
 {
-    data: Building[];
+    data: RawBuilding[];
     ts:   number;
 }
 
 const _sharedBuildingsCache: Map<string, SharedBuildingsCacheEntry> = new Map();
 
 
-function sharedBuildingsCacheGet(key: string): Building[] | null
+function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 {
     const entry = _sharedBuildingsCache.get(key);
     if (!entry)
@@ -217,7 +218,7 @@ export class HeliosEngine
     public onFetchStart?:    () => void;
     public onFetchEnd?:      () => void;
     public onWeatherUpdate?: (data: WeatherData) => void;
-    //Buildings fetch lifecycle (around fetchBuildingsAroundHome) for the loading banner.
+    //Buildings fetch lifecycle (around fetchRawBuildings) for the loading banner.
     public onBuildingsFetchStart?: () => void;
     public onBuildingsFetchEnd?:   () => void;
 
@@ -504,13 +505,17 @@ export class HeliosEngine
     };
 
 
-    //Cached building fetch around the home. The home doesn't move during a session, so fetch once and
-    //reuse across style reloads instead of re-hitting Overpass. Invalidated when building-radius changes.
-    private _buildingsData:     Building[] | null = null;
-    private _buildingsFetchKey: string = '';
+    //Building lifecycle: LOCATION drives the FETCH, OPTIONS drive the INTERPRET. _buildingsRaw holds the
+    //option-independent footprints fetched once at the max radius (the home doesn't move during a session,
+    //so we fetch once and reuse across style reloads instead of re-hitting Overpass); _buildingsLocKey is
+    //the location key they were fetched for. _buildingsData is the INTERPRETED Building[] the renderer draws,
+    //recomputed in memory on every option change with no re-fetch.
+    private _buildingsData:   Building[] | null    = null;
+    private _buildingsRaw:    RawBuilding[] | null = null;
+    private _buildingsLocKey: string               = '';
     //Guards the one-shot prism-rise animation so it plays once per buildings load, not on every repaint.
     private _grown = false;
-    private _buildingsAbort?:   AbortController;
+    private _buildingsAbort?: AbortController;
 
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
     //and the refresh runs once on expiry. Curves+chips still update every move; only the costly shadow
@@ -758,8 +763,8 @@ export class HeliosEngine
         this._mapReady = true;
 
         //Push any buildings already in hand (shared cache) and start the background fetch otherwise.
-        this._pushRenderableSources();
-        this._ensureBuildingsFetched();
+        this._applyBuildings();
+        this._ensureBuildings();
 
         window.clearInterval(this._skyTimer);
         this._lastAtmosphereAlt = -999;
@@ -1077,83 +1082,63 @@ export class HeliosEngine
         return this._cssHex('--primary-text-color', '#cccccc');
     }
 
-    //Push the current building data into the renderer (it extrudes home + surroundings itself) and kick off
-    //the background fetch. The renderer paints opacity/colour/shadows from its palette + sun, so we just
-    //feed the footprints once data is in hand.
-    private _addBuildings(): void
+    //Location-keyed key for the raw fetch + shared cache. Options are deliberately absent: a building-option
+    //change keeps the same key, so it never triggers a re-fetch — only a re-interpret.
+    private _buildingsLocationKey(): string
     {
-        bumpStat('addBuildingsCalls');
-        if (!this._renderer)
-        {
-            return;
-        }
-        this._pushRenderableSources();
-        //Kick off the background buildings fetch; the renderer re-paints once the footprints land.
-        this._ensureBuildingsFetched();
+        return `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}`;
     }
 
-    //Idempotent fetch helper: reuses _buildingsData across re-inits, re-hitting Overpass only when the
-    //home position or radius changed.
-    private _ensureBuildingsFetched(): void
+    //Ensure the raw footprints for the current LOCATION are in hand, then interpret + render them. Re-fetches
+    //Overpass only when the home location changed; a pure option change finds the raw data already present
+    //and just re-interprets via _applyBuildings (no network).
+    private _ensureBuildings(): void
     {
         if (!this._renderer)
         {
             return;
         }
-        const radius        = this._buildingRadiusMeters();
-        const clusterRadius = this._buildingClusterRadiusMeters();
-        const count         = buildingCount(this.cfg);
-        const realSize      = buildingRealSize(this.cfg);
-        const fixedHeightM  = buildingFixedHeightM(this.cfg);
-        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${clusterRadius}`
-                  + `|${count}|${realSize}|${fixedHeightM}`;
+        const locKey = this._buildingsLocationKey();
 
-        if (this._buildingsData && this._buildingsFetchKey === key)
+        //Same location, raw already in hand: just re-interpret with the current options (no fetch).
+        if (this._buildingsRaw && this._buildingsLocKey === locKey)
         {
+            this._applyBuildings();
             return;
         }
 
-        //Shared-cache short-circuit: a fresh engine after an editor commit would re-parse the Overpass
-        //footprints unless served from here (the localStorage cache lives in engine/buildings.ts).
-        const sharedBuildings = sharedBuildingsCacheGet(key);
-        if (sharedBuildings)
+        //Shared-cache short-circuit: a fresh engine after an editor commit reuses the raw footprints another
+        //engine already fetched for this location (the localStorage cache lives in engine/buildings.ts).
+        const sharedRaw = sharedBuildingsCacheGet(locKey);
+        if (sharedRaw)
         {
-            this._buildingsFetchKey = key;
-            this._buildingsData     = sharedBuildings;
-            this._pushRenderableSources();
+            this._buildingsRaw    = sharedRaw;
+            this._buildingsLocKey = locKey;
+            this._applyBuildings();
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
             return;
         }
 
-        //Abort any in-flight request so a rapid radius change doesn't race a stale fetch into the sources.
+        //Abort any in-flight request so a rapid location change doesn't race a stale fetch into the sources.
         this._buildingsAbort?.abort();
         const ac = new AbortController();
-        this._buildingsAbort   = ac;
-        this._buildingsFetchKey = key;
+        this._buildingsAbort = ac;
         bumpStat('buildingFetchStarts');
 
         try { this.onBuildingsFetchStart?.(); } catch (_) {}
 
-        fetchBuildingsAroundHome(
-        {
-            homeLon:      this.homeLon,
-            homeLat:      this.homeLat,
-            radiusMeters: radius,
-            maxBuildings: count,
-            realSize:     realSize,
-            fixedHeightM: fixedHeightM,
-            signal:       ac.signal
-        })
+        fetchRawBuildings(this.homeLat, this.homeLon, ac.signal)
         .then(result =>
         {
             if (ac.signal.aborted || !this._renderer)
             {
                 return;
             }
-            this._buildingsData = result;
-            _sharedBuildingsCache.set(key, { data: result, ts: Date.now() });
-            this._pushRenderableSources();
+            this._buildingsRaw    = result;
+            this._buildingsLocKey = locKey;
+            _sharedBuildingsCache.set(locKey, { data: result, ts: Date.now() });
+            this._applyBuildings();
             //Buildings just arrived; bypass the "sun hardly moved" guard so the next call repaints a full
             //pass (the renderer re-extrudes + re-casts shadows from the new footprints).
             this._lastAtmosphereAlt = -999;
@@ -1173,9 +1158,28 @@ export class HeliosEngine
         });
     }
 
-    //Hand the current footprints to the renderer (it extrudes home + surroundings and casts their shadows
-    //itself). Empty until the Overpass fetch resolves; fetchBuildingsAroundHome already returns scene
-    //Building[] (fixed 6 m prisms, home flagged), so nothing to convert here.
+    //Interpret the raw footprints with the CURRENT options (radius/count/real-size/height/cluster) and hand
+    //the result to the renderer (it extrudes home + surroundings and casts their shadows itself). Pure +
+    //cheap, so this is the re-render path for every building-option change — no Overpass round-trip.
+    private _applyBuildings(): void
+    {
+        if (!this._renderer)
+        {
+            return;
+        }
+        this._buildingsData = interpretBuildings(this._buildingsRaw ?? [], {
+            radiusM:        this._buildingRadiusMeters(),
+            count:          buildingCount(this.cfg),
+            realSize:       buildingRealSize(this.cfg),
+            fixedHeightM:   buildingFixedHeightM(this.cfg),
+            clusterRadiusM: this._buildingClusterRadiusMeters(),
+        });
+        this._pushRenderableSources();
+    }
+
+    //Hand the current interpreted footprints to the renderer (it extrudes home + surroundings and casts
+    //their shadows itself). interpretBuildings always returns at least the fallback house, so this is empty
+    //only before the first interpret pass.
     private _pushRenderableSources(): void
     {
         if (!this._renderer)
@@ -2165,7 +2169,6 @@ export class HeliosEngine
     {
         bumpStat('updateConfigCalls');
         const prevRadius      = this._buildingRadiusMeters();
-        const prevCluster     = this._buildingClusterRadiusMeters();
         const prevShadowOpa   = this._shadowOpacity();
         const prevShadowsOn   = this._shadowsEnabled();
         const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
@@ -2188,21 +2191,17 @@ export class HeliosEngine
             return;
         }
 
-        //Building updates: radius/cluster changes invalidate the footprints and refetch via _addBuildings. The
-        //renderer re-extrudes from the new footprints; there are no per-layer paint properties to poke.
-        const nextRadius  = this._buildingRadiusMeters();
-        const nextCluster = this._buildingClusterRadiusMeters();
-        if (nextRadius !== prevRadius || nextCluster !== prevCluster)
+        //Building option updates (radius/count/real-size/height/cluster): re-interpret the cached raw
+        //footprints in memory via _ensureBuildings -> _applyBuildings. The location key is unchanged, so this
+        //never re-hits Overpass; the renderer re-extrudes from the freshly interpreted Building[]. We always
+        //re-interpret (cheap) rather than diffing every option key — _applyBuildings is pure and idempotent.
+        const nextRadius = this._buildingRadiusMeters();
+        this._ensureBuildings();
+        if (nextRadius !== prevRadius)
         {
-            this._buildingsData     = null;
-            this._buildingsFetchKey = '';
-            this._addBuildings();
-            if (nextRadius !== prevRadius)
-            {
-                //Radius also drives the shadow fade band: force a refresh so the whole disc resizes in step.
-                this._lastAtmosphereAlt = -999;
-                this._refreshShadowsAndAtmosphere();
-            }
+            //Radius also drives the shadow fade band: force a refresh so the whole disc resizes in step.
+            this._lastAtmosphereAlt = -999;
+            this._refreshShadowsAndAtmosphere();
         }
 
         //Shadow opacity / master toggle / building opacity: re-resolve the whole palette (cheap) so the
@@ -2259,7 +2258,8 @@ export class HeliosEngine
 
         //Drop heavy instance state.
         this._buildingsData     = null;
-        this._buildingsFetchKey = '';
+        this._buildingsRaw      = null;
+        this._buildingsLocKey   = '';
         this._homeHourlyData    = null;
         this._dragRotateHandlers    = undefined;
 
