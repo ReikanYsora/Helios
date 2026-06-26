@@ -378,17 +378,11 @@ export const heliosCardStyles = css`
     .solar-svg .solar-ray-bead
     {
         opacity: 0.95;
-        stroke: var(--card-background-color, #ffffff);
+        /*  1 px border in the theme's text colour (adapts on both themes), so every bead reads as a circled
+            marker like the chart hover dots. */
+        stroke: var(--primary-text-color, #212121);
         stroke-width: 1;
-        stroke-opacity: 0.85;
         paint-order: stroke fill;
-    }
-    ha-card.theme-dark .pv-home-leader-bead,
-    ha-card.theme-dark .battery-leader-bead,
-    ha-card.theme-dark .solar-svg .solar-ray-bead
-    {
-        stroke: var(--card-background-color, #191a1b);
-        stroke-opacity: 0.95;
     }
 
 
