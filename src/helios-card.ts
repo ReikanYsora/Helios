@@ -460,6 +460,8 @@ export class HeliosCard extends LitElement
 
 
     private _timer?:           number;
+    //Deferred engine teardown handle: lets the engine survive HA's edit-mode disconnect+reconnect thrash.
+    private _engineTeardownTimer?: number;
     _lastHomeKey       = '';
     _lastConfigSig     = '';
     _initInflight      = false;
@@ -851,6 +853,13 @@ export class HeliosCard extends LitElement
     {
         super.connectedCallback();
         _liveCards.add(this);
+        //Quick reconnect (HA edit-mode thrash): cancel the deferred engine teardown so the live engine is
+        //kept instead of being destroyed and respawned.
+        if (this._engineTeardownTimer !== undefined)
+        {
+            window.clearTimeout(this._engineTeardownTimer);
+            this._engineTeardownTimer = undefined;
+        }
         //Reset the daily-totals kickoff flag so a remount re-fires refreshHaDailyTotals when the HA Energy
         //defaults snapshot lands again.
         this._dailyTotalsKicked = false;
@@ -893,15 +902,22 @@ export class HeliosCard extends LitElement
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
         unsubscribeEnergyPrefs(this);
-        //Engine cleanup on disconnect. The editor preview pane destroys + recreates the card on every
-        //config-changed commit, so we accept a fresh engine per commit. The live dashboard tile is not
-        //recreated, so it keeps its engine across re-renders.
-        if (this._engine !== undefined)
+        //HA's dashboard edit-mode wrapping fires disconnect + reconnect repeatedly (same Lit tick). Tearing
+        //the engine down here and respawning on reconnect churned the engine create/destroy loop that froze
+        //the page. Defer the teardown instead: a quick reconnect (the edit-mode thrash) cancels it in
+        //connectedCallback and the live engine survives untouched; a real removal lets it fire.
+        if (this._engine !== undefined && this._engineTeardownTimer === undefined)
         {
-            this._engine.cleanup();
-            this._engine = undefined;
+            this._engineTeardownTimer = window.setTimeout(() =>
+            {
+                this._engineTeardownTimer = undefined;
+                this._engine?.cleanup();
+                this._engine = undefined;
+            }, 400);
         }
-        this._lastHomeKey   = '';
+        //NOTE: _lastHomeKey is intentionally NOT reset here. The home always resolves to a value (HA config
+        //or the user override), and a genuine coordinate change is caught naturally by getHomeCoords on the
+        //next updated(); clearing it forced identityChanged=true on every reconnect and re-spawned the engine.
         this._initInflight  = false;
     }
 
