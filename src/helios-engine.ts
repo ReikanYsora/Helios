@@ -90,6 +90,12 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 }
 
 
+//Locations whose prism-rise has already played this page session. A re-created engine (editor commit,
+//dashboard edit toggle, tab re-entry) for the same place updates in place at full height instead of
+//replaying the grow animation — so editing an option is instant, not a re-grow.
+const _grownLocations = new Set<string>();
+
+
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
 //Source of the irradiance shown in the PV legend, in precedence order:
@@ -565,8 +571,6 @@ export class HeliosEngine
     private _buildingsData:   Building[] | null    = null;
     private _buildingsRaw:    RawBuilding[] | null = null;
     private _buildingsLocKey: string               = '';
-    //Guards the one-shot prism-rise animation so it plays once per buildings load, not on every repaint.
-    private _grown = false;
     private _buildingsAbort?: AbortController;
 
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
@@ -1225,16 +1229,14 @@ export class HeliosEngine
         }
         const buildings = this._buildingsData ?? [];
         this._renderer.setBuildings(buildings);
-        //Play the prism rise once, the first time real footprints land. Re-arm if the buildings ever go
-        //empty so a re-fetch replays it.
-        if (buildings.length && !this._grown)
+        //Play the prism rise once per location per page session (the renderer defaults to full height, so a
+        //skipped grow just shows the buildings immediately). Keyed module-level so a re-created engine for the
+        //same place doesn't replay it on every editor commit / edit-mode toggle.
+        const locKey = this._buildingsLocationKey();
+        if (buildings.length && !_grownLocations.has(locKey))
         {
-            this._grown = true;
+            _grownLocations.add(locKey);
             this._renderer.animateGrowth();
-        }
-        else if (!buildings.length)
-        {
-            this._grown = false;
         }
     }
 

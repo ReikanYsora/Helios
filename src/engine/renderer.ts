@@ -118,6 +118,20 @@ export class SceneRenderer
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);
         this.scheduleRedraw();
+        //A spawn during a relayout (dashboard edit-mode toggle, tab re-entry, cold load) can land its first
+        //draw at a transient viewport — and when the net container size ends up unchanged, no resize event
+        //follows to re-centre. Redraw once the layout has settled so the scene never stays projected from a
+        //smaller, off-centre viewport.
+        this._redrawNextFrame();
+    }
+
+    //One redraw on the next frame, after the current layout pass has settled.
+    private _redrawNextFrame(): void
+    {
+        requestAnimationFrame(() =>
+        {
+            if (this._alive) { this.scheduleRedraw(); }
+        });
     }
 
     public setBuildings(buildings: Building[]): void
