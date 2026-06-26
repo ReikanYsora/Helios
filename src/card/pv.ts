@@ -88,8 +88,11 @@ export interface PvHost
 
 interface PvStatsCacheEntry
 {
-    stats: PvHistory;
-    ts:    number;
+    stats:     PvHistory;
+    //Per-source breakdown cached alongside the aggregate so a cache hit restores it too — otherwise the
+    //home histogram + per-source curves keep a stale map after revisiting a period.
+    perEntity: Map<string, PvHistory>;
+    ts:        number;
 }
 
 const _pvCalibStatsCache:     Map<string, PvStatsCacheEntry>   = new Map();
@@ -300,7 +303,8 @@ export function refreshPv(host: PvHost): void
             const cachedCalib = pvStatsCacheGet(_pvCalibStatsCache, calibKey);
             if (cachedCalib)
             {
-                host._pvCalibStats = cachedCalib.stats;
+                host._pvCalibStats       = cachedCalib.stats;
+                host._pvHistoryPerEntity = cachedCalib.perEntity;
             }
             else
             {
@@ -534,7 +538,7 @@ export async function fetchPvStatistics(
         host[targetSlot] = stats;
         if (cacheKey)
         {
-            cache.set(cacheKey, { stats, ts: Date.now() });
+            cache.set(cacheKey, { stats, perEntity: perMap, ts: Date.now() });
         }
     }
     catch (e)
