@@ -594,6 +594,17 @@ export function renderBuildings(
                 const hi = rings[k + 1];
                 wall += `<polygon points="${pointsAttr([lo[i], lo[next], hi[next], hi[i]])}" fill="${fill[k]}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
             }
+            //Histogram separations: a crisp horizontal edge at each colour boundary, so the stacked bands read
+            //as distinct layers on the home prism (mirrors the chart's stacked areas).
+            if (homeBands && fill.length > 1)
+            {
+                for (let k = 1; k < fill.length; k++)
+                {
+                    const r   = rings[k];
+                    const sep = tintedRgba(mixHex(homeBands[k - 1].color, '#000000', 0.45), altitude, 0.95);
+                    wall += `<line x1="${r[i][0].toFixed(2)}" y1="${r[i][1].toFixed(2)}" x2="${r[next][0].toFixed(2)}" y2="${r[next][1].toFixed(2)}" stroke="${sep}" stroke-width="0.9"/>`;
+                }
+            }
             const midE = (fp[i][0] + fp[next][0]) / 2;
             const midN = (fp[i][1] + fp[next][1]) / 2;
             faces.push({ depth: cam.project3(midE, midN, h / 2).depth, svg: wall });
