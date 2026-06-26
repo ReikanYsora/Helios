@@ -1268,29 +1268,34 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'cloud')
     {
-        //Cloud-cover bands from the hourly weather series (not the bucketed store): low/mid/high layers on a fixed
-        //0..100 % scale, light -> dark cloud-grey shades.
+        //Cloud-cover bands from the hourly weather series, low -> mid -> high. Built at the SAME times so they
+        //index-align and stack cleanly (each band continues above the one below); the Y axis auto-scales to the
+        //stacked total. Light -> dark cloud-grey shades.
         const cs = host._chartSeries;
-        const csPts = (arr: ReadonlyArray<number>): Array<{ t: number; v: number }> =>
+        const lowPts:  Array<{ t: number; v: number }> = [];
+        const midPts:  Array<{ t: number; v: number }> = [];
+        const highPts: Array<{ t: number; v: number }> = [];
+        if (cs)
         {
-            if (!cs) { return []; }
-            const out: Array<{ t: number; v: number }> = [];
             for (let i = 0; i < cs.times.length; i++)
             {
                 const tMs = cs.times[i].getTime();
                 if (tMs < startMs || tMs > endMsAbs) { continue; }
-                const v = arr[i];
-                if (v === undefined || !isFinite(v)) { continue; }
-                out.push({ t: tMs, v });
+                const lo = cs.cloudLow[i];
+                const mi = cs.cloudMid[i];
+                const hi = cs.cloudHigh[i];
+                if (!(isFinite(lo) || isFinite(mi) || isFinite(hi))) { continue; }
+                lowPts.push( { t: tMs, v: isFinite(lo) ? Math.max(0, lo) : 0 });
+                midPts.push( { t: tMs, v: isFinite(mi) ? Math.max(0, mi) : 0 });
+                highPts.push({ t: tMs, v: isFinite(hi) ? Math.max(0, hi) : 0 });
             }
-            return out;
-        };
+        }
         series = [
-            { pts: csPts(cs?.cloudLow  ?? []), color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.35) },
-            { pts: csPts(cs?.cloudMid  ?? []), color: ENERGY_COLOR.cloud(el) },
-            { pts: csPts(cs?.cloudHigh ?? []), color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.30) },
+            { pts: lowPts,  color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.35) },
+            { pts: midPts,  color: ENERGY_COLOR.cloud(el) },
+            { pts: highPts, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.30) },
         ];
-        fixedMax = 100;
+        fixedMax = 0;
     }
     else
     {
@@ -1298,31 +1303,77 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         fixedMax = 1000;
     }
 
-    //Y scale: fixed where set, else auto to the running max across series (min 1 to avoid divide-by-zero on an
-    //all-zero window).
+    //Stacked when multiple series share the same x-points (the cloud bands): each band continues above the one
+    //below, so the areas read as layers instead of overlapping.
+    const isStacked = series.length > 1
+        && series.every(s => s.pts.length === series[0].pts.length && s.pts.length >= 2);
+
+    //Y scale: fixed where set, else auto — to the stacked total when stacked, else the per-series running max.
     let yMax = fixedMax;
     if (yMax <= 0)
     {
         yMax = 1;
-        for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
+        if (isStacked)
+        {
+            const N = series[0].pts.length;
+            for (let j = 0; j < N; j++)
+            {
+                let total = 0;
+                for (const s of series) { total += s.pts[j].v; }
+                if (total > yMax) { yMax = total; }
+            }
+        }
+        else
+        {
+            for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
+        }
     }
     //Leave a sliver of headroom at the top so a curve's peak never kisses the timeline's top edge.
     const TOP_HEADROOM_PX = 10;
     const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
 
-    const drawn = series.map(s =>
+    let drawn: Array<{ area: string; line: string; color: string; total: number }>;
+    if (isStacked)
     {
-        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, total: sum(s.pts) }; }
-        const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
-        const x0 = xOf(s.pts[0].t);
-        const xN = xOf(s.pts[s.pts.length - 1].t);
-        return {
-            area:  `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
-            line:  `M ${pp.join(' L ')}`,
-            color: s.color,
-            total: sum(s.pts),
-        };
-    });
+        const N = series[0].pts.length;
+        const lower = new Array<number>(N).fill(0);
+        drawn = series.map(s =>
+        {
+            const up: string[] = [];
+            const lo: string[] = [];
+            for (let j = 0; j < N; j++)
+            {
+                const y0 = lower[j];
+                const y1 = y0 + s.pts[j].v;
+                lower[j] = y1;
+                up.push(`${xOf(s.pts[j].t).toFixed(2)},${yOf(y1).toFixed(2)}`);
+                lo.push(`${xOf(s.pts[j].t).toFixed(2)},${yOf(y0).toFixed(2)}`);
+            }
+            const line = `M ${up.join(' L ')}`;
+            return {
+                area:  `M ${up.join(' L ')} L ${lo.reverse().join(' L ')} Z`,
+                line,
+                color: s.color,
+                total: sum(s.pts),
+            };
+        });
+    }
+    else
+    {
+        drawn = series.map(s =>
+        {
+            if (s.pts.length < 2) { return { area: '', line: '', color: s.color, total: sum(s.pts) }; }
+            const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
+            const x0 = xOf(s.pts[0].t);
+            const xN = xOf(s.pts[s.pts.length - 1].t);
+            return {
+                area:  `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
+                line:  `M ${pp.join(' L ')}`,
+                color: s.color,
+                total: sum(s.pts),
+            };
+        });
+    }
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
