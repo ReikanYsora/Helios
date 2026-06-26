@@ -521,6 +521,17 @@ export async function fetchPvStatistics(
             perEntity.push({ times, values });
         }
 
+        //Expose the per-source breakdown (keyed by entity id) for the per-string chart curves, the scrub
+        //tooltip rows, and the home histogram. Same native-unit shape as the aggregate — consumers handle
+        //the cumulative→power differentiation. Previously this breakdown was aggregated then discarded, so
+        //those three surfaces only ever saw the summed series.
+        const perMap = new Map<string, PvHistory>();
+        for (let i = 0; i < entityIds.length; i++)
+        {
+            perMap.set(entityIds[i], perEntity[i]);
+        }
+        host._pvHistoryPerEntity = perMap;
+
         const stats: PvHistory = aggregatePvHistoriesLkcf(perEntity, cumulative);
         host[targetSlot] = stats;
         if (cacheKey)

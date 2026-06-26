@@ -247,7 +247,9 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
     {
         const ph = map.get(ids[i]);
         if (!ph) { continue; }
-        const v = interpAt(ph.times, ph.values, atMs);
+        //Instantaneous power per source (pvValueAtTime differentiates cumulative meters and returns a unit
+        //consistent across sources), so the shares reflect current production, not cumulative totals.
+        const v = pvValueAtTime(host, atMs, ph).value;
         if (isFinite(v) && v > 0) { parts.push({ v, idx: i }); }
     }
     const total = parts.reduce((s, p) => s + p.v, 0);
