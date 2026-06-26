@@ -860,7 +860,7 @@ export class HeliosEngine
             dark:            this._cardIsDark,
             home:            this._cssHex('--energy-grid-consumption-color', '#488fc2'),
             neighbor:        this._cssHex('--primary-text-color', '#dddddd'),
-            sun:             this._cssHex('--warning-color', '#ffc107'),
+            sun:             '#ffc107',
             shadow:          this._cssHex('--shadow-color', '#000000'),
             shadowOpacity:   this._shadowsEnabled() ? this._shadowOpacity() : 0,
             neighborOpacity: this._buildingOpacity(),
