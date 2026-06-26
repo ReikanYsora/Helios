@@ -270,9 +270,14 @@ export class SceneRenderer
     private _draw(): void
     {
         if (!this._alive) { return; }
-        const width  = this._container.clientWidth  || 0;
-        const height = this._container.clientHeight || 0;
-        if (width === 0 || height === 0) { return; }
+        //Draw against the ResizeObserver's measured content-box, not a live clientWidth read: clientWidth
+        //sampled mid-layout (first paint, edit-mode relayout) returns a tiny transient size and the camera
+        //then centres the whole scene on ~(0,0) — the top-left "first bad frame". The observer only ever
+        //reports settled, post-layout sizes, and re-fires _draw on each real change. Until it has measured a
+        //real size (both > 0) there is nothing valid to paint, so bail.
+        const width  = this._obsW;
+        const height = this._obsH;
+        if (width <= 0 || height <= 0) { return; }
 
         this.camera.setViewport(width, height);
 

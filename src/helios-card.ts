@@ -473,7 +473,7 @@ export class HeliosCard extends LitElement
     //config or the timeline range change identity. Without it, every overlay @state mutation would re-run
     //the chain on every map move during auto-rotate (hundreds of allocations per frame for no new data).
     private _lastRefreshHassRef:           unknown = undefined;
-    private _lastRefreshConfigRef:         unknown = undefined;
+    private _lastRefreshConfigSig:         string | undefined = undefined;
     private _lastRefreshTimeRangeRef:      unknown = undefined;
     private _lastRefreshEnergyDefaultsRef: unknown = undefined;
 
@@ -1005,17 +1005,20 @@ export class HeliosCard extends LitElement
         }
 
         //Refresh chain gate: the per-entity helpers are pure functions of hass.states + config + time
-        //range. Lit calls updated() on every @state mutation (every auto-rotate reprojection), so without
-        //this gate the chain re-runs at 60+ Hz for no new data. Skip when none of those moved.
+        //range. Lit calls updated() on every @state mutation (every HUD re-projection), so without this gate
+        //the chain re-runs at 60+ Hz for no new data. Config is compared by content SIGNATURE, not object
+        //reference: the dashboard editor hands the card a fresh-but-equivalent config object on every push,
+        //and a reference check would flip the gate every frame and spin the refresh chain (and its fetches)
+        //into a loop. Skip when none of these moved.
         if (this.hass === this._lastRefreshHassRef
-            && this.config === this._lastRefreshConfigRef
+            && sig === this._lastRefreshConfigSig
             && this._timeRange === this._lastRefreshTimeRangeRef
             && this._energyDefaults === this._lastRefreshEnergyDefaultsRef)
         {
             return;
         }
         this._lastRefreshHassRef           = this.hass;
-        this._lastRefreshConfigRef         = this.config;
+        this._lastRefreshConfigSig         = sig;
         this._lastRefreshTimeRangeRef      = this._timeRange;
         this._lastRefreshEnergyDefaultsRef = this._energyDefaults;
 

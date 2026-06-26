@@ -214,12 +214,12 @@ export function initVisibilityObserver(host: InitHost): void
         {
             const h = host as unknown as {
                 _lastRefreshHassRef?:           unknown;
-                _lastRefreshConfigRef?:         unknown;
+                _lastRefreshConfigSig?:         string;
                 _lastRefreshTimeRangeRef?:      unknown;
                 _lastRefreshEnergyDefaultsRef?: unknown;
             };
             h._lastRefreshHassRef           = undefined;
-            h._lastRefreshConfigRef         = undefined;
+            h._lastRefreshConfigSig         = undefined;
             h._lastRefreshTimeRangeRef      = undefined;
             h._lastRefreshEnergyDefaultsRef = undefined;
             host.requestUpdate();

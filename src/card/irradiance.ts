@@ -165,7 +165,11 @@ export function refreshIrradiance(host: IrradianceHost): void
     // day). Anchoring on timeline end would put fetchStart in the future and the inner clamp would leave the slot empty.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    const cap          = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
+    //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders. An
+    //unquantised Date.now() anchor changes every millisecond, so the key never matches and the fetch
+    //re-fires on every render. The 6 h window is an approximate freshness cap, so the slop is harmless.
+    const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
+    const cap          = new Date(anchorMs - RAW_WINDOW_H * 3_600_000);
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
     const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
     const fetchKey = `${entity}@${rangeKey}`;

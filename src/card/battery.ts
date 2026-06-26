@@ -238,7 +238,11 @@ export function refreshBattery(host: BatteryHost): void
     //`Date.now()` so the inner clamp in fetchBatteryHistory never tips into the future.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    const rawStart     = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
+    //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders. An
+    //unquantised Date.now() anchor changes every millisecond, so the key never matches and the fetch
+    //re-fires on every render. The 6 h window is an approximate freshness cap, so the slop is harmless.
+    const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
+    const rawStart     = new Date(anchorMs - RAW_WINDOW_H * 3_600_000);
     const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
     const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
     //Fetch key carries every wired entity (sorted) so adding/removing a bank flips the key and invalidates the snapshot. Same shape
