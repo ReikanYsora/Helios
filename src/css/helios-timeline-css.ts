@@ -196,7 +196,6 @@ export const heliosTimelineStyles = css`
         height: 6px;
         border-radius: 50%;
         box-sizing: border-box;
-        /*  1 px border in the theme's text colour, like every other bead. */
         border: 1px solid var(--primary-text-color, #212121);
         transform: translate(-50%, -50%);
         pointer-events: none;

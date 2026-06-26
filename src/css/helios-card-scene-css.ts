@@ -378,8 +378,6 @@ export const heliosCardStyles = css`
     .solar-svg .solar-ray-bead
     {
         opacity: 0.95;
-        /*  1 px border in the theme's text colour (adapts on both themes), so every bead reads as a circled
-            marker like the chart hover dots. */
         stroke: var(--primary-text-color, #212121);
         stroke-width: 1;
         paint-order: stroke fill;
