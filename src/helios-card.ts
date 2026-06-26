@@ -497,9 +497,8 @@ export class HeliosCard extends LitElement
             throw new Error('Invalid HELIOS configuration');
         }
         this.config = { ...config };
-        //Seed the rolling-window span from the config period keys. A change re-applies without respawning
-        //the engine: the period follows the camera pattern (dedicated setter, NOT in VISUAL_CONFIG_KEYS),
-        //so editing it never tears down the engine.
+        //Seed the rolling-window span from the config period keys. A change re-applies in place via
+        //_applyPeriod (the period is a dedicated setter, not in VISUAL_CONFIG_KEYS).
         const past   = periodPastDays(this.config);
         const future = periodFutureDays(this.config);
         if (past !== this._periodPastDays || future !== this._periodFutureDays)
@@ -853,8 +852,7 @@ export class HeliosCard extends LitElement
     {
         super.connectedCallback();
         _liveCards.add(this);
-        //Quick reconnect (HA edit-mode thrash): cancel the deferred engine teardown so the live engine is
-        //kept instead of being destroyed and respawned.
+        //Quick reconnect (HA edit-mode thrash): cancel the deferred engine teardown so the live engine is kept.
         if (this._engineTeardownTimer !== undefined)
         {
             window.clearTimeout(this._engineTeardownTimer);
@@ -902,10 +900,8 @@ export class HeliosCard extends LitElement
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
         unsubscribeEnergyPrefs(this);
-        //HA's dashboard edit-mode wrapping fires disconnect + reconnect repeatedly (same Lit tick). Tearing
-        //the engine down here and respawning on reconnect churned the engine create/destroy loop that froze
-        //the page. Defer the teardown instead: a quick reconnect (the edit-mode thrash) cancels it in
-        //connectedCallback and the live engine survives untouched; a real removal lets it fire.
+        //HA's edit-mode wrapping fires disconnect + reconnect in the same tick. Defer the engine teardown so a
+        //quick reconnect (cancelled in connectedCallback) keeps the live engine; only a real removal lets it fire.
         if (this._engine !== undefined && this._engineTeardownTimer === undefined)
         {
             this._engineTeardownTimer = window.setTimeout(() =>
@@ -989,8 +985,8 @@ export class HeliosCard extends LitElement
         const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
         const identityChanged = homeKey !== this._lastHomeKey;
 
-        //Create the engine ONCE. A 2.5D scene has no GL context to rebuild, so the element is reused like any
-        //standard HA card: created on first paint, then updated in place — never torn down and respawned.
+        //Create the engine once, the first time the card paints. It is then updated in place: setHome() on a
+        //coordinate change, updateConfig() on an option change.
         if (!this._engine)
         {
             //Disconnected guard: edit-mode wrapping can fire updated() on a detached element.
@@ -1008,7 +1004,7 @@ export class HeliosCard extends LitElement
             return;
         }
 
-        //Home moved: re-tile + re-fetch in place (no respawn).
+        //Home moved: re-tile + re-fetch for the new coordinates.
         if (identityChanged)
         {
             this._lastHomeKey = homeKey;

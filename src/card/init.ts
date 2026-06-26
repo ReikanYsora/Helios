@@ -10,9 +10,9 @@ import { refreshHud, setAnimationsPaused, type HudHost } from './hud';
 import type { ChartSeries } from './charts';
 
 
-//Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine without a full
-//respawn. Exhaustive on purpose - a missing key would leave a slider-dragged value stale until the next natural respawn. Card-only
-//state and identity inputs (home coords flip identity via `_engineIdentitySig`) are out. Colours come from the HA Energy palette.
+//Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine in place.
+//Exhaustive on purpose - a missing key would leave a slider-dragged value stale until the next engine creation. Card-only
+//state and identity inputs (home coords) are out. Colours come from the HA Energy palette.
 export const VISUAL_CONFIG_KEYS = [
     //When set, feeds the engine sensor samples that override Open-Meteo for live + past irradiance; a change must refresh so the
     //override (or its absence) is picked up immediately.
@@ -26,9 +26,8 @@ export const VISUAL_CONFIG_KEYS = [
     'building-height',
     'building-opacity',
     'auto-rotate-enabled',
-    //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: a slider drag would respawn (teardown + rebuild the engine) every
-    //frame. The editor instead pushes live previews through engine.setCamera* and bakes values into config; the next natural respawn
-    //reads them from _initialBearing / _initialPitch.
+    //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: the editor pushes live previews through engine.setCamera* and
+    //bakes the values into config; a fresh engine reads them from _initialBearing / _initialPitch.
 ] as const;
 
 
@@ -244,11 +243,9 @@ export function initVisibilityObserver(host: InitHost): void
 }
 
 
-//Spawn the engine. Engines are plain canvas-2D + SVG (no scarce WebGL context), so there's no spawn
-//rate limit: editor-preview churn is absorbed for free by the rAF + isConnected re-check inside
-//initEngineNow() — a card recreated on every config commit is disconnected before its frame fires, so
-//only the latest, still-mounted card actually builds. _initInflight stops updated() from firing a
-//second initEngine() while that rAF is in flight.
+//Create the engine on the next frame, once #map-container is in the shadow DOM and laid out (so the camera
+//seeds from a real size). _initInflight stops updated() from firing a second initEngine() while the rAF is
+//in flight. Called once per card; the engine is updated in place afterwards.
 export function initEngine(host: InitHost): void
 {
     host._initInflight = true;
@@ -256,14 +253,12 @@ export function initEngine(host: InitHost): void
 }
 
 
-//Build the engine and wire engine-side callbacks back into card state. Runs once per (home, identity) tuple and replaces
-//any previous engine. Bails early if the container or hass.config isn't ready; the caller retries on the next Lit cycle.
+//Build the engine + wire its callbacks back into card state. Bails (clearing the inflight flag so the caller
+//retries next Lit cycle) if the card detached or the container / hass.config / coords aren't ready yet.
 export function initEngineNow(host: InitHost): void
 {
     requestAnimationFrame(() =>
     {
-        //isConnected gate: the rAF gap can land after a dashboard edit-mode unmount. Spawning for a card no longer in the DOM
-        //wastes a full engine build with no visible canvas and feeds the editor-mode cascade.
         const cardEl = host as unknown as {
             shadowRoot:  ShadowRoot | null;
             isConnected: boolean;
@@ -286,54 +281,24 @@ export function initEngineNow(host: InitHost): void
             return;
         }
         const { lat, lon } = coords;
-        //User-defined home altitude (m ASL) from HA General settings; may be undefined on older/unconfigured installs - the engine
-        //and aux fetch then simply omit &elevation= and let Open-Meteo fall back to its own DEM.
+        //User-defined home altitude (m ASL) from HA General settings; may be undefined on older/unconfigured
+        //installs - the engine and aux fetch then omit &elevation= and let Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
 
-        const hadPreviousEngine = host._engine !== undefined;
-        host._engine?.cleanup();
-        host._engine = undefined;
-        //Defensive: clear anything the previous engine left in the container (canvas, overlay nodes) before the rebuild.
-        while (container.firstChild)
+        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.themeIsDark());
+        wireEngineCallbacks(host);
+        //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
+        //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).
+        if (!host._timeRange)
         {
-            container.removeChild(container.firstChild);
+            host._timeRange = host._engine.getTimelineRange();
         }
-
-        const spawnNewEngine = (): void =>
-        {
-            //Re-check defensively: the inter-frame gap could land after a card disconnect, so a torn-down card never spawns.
-            if (!host.config || !host.hass?.config)
-            {
-                host._initInflight = false;
-                return;
-            }
-            host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.themeIsDark());
-            wireEngineCallbacks(host);
-            //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first frame instead of
-            //staying hidden until the first weather push - which can be delayed/skipped on a slow or rate-limited load (an aborted
-            //fetch returns without firing onWeatherUpdate). onWeatherUpdate upgrades this to the real data-derived window on arrival.
-            if (!host._timeRange)
-            {
-                host._timeRange = host._engine.getTimelineRange();
-            }
-            host._initInflight = false;
-        };
-
-        if (hadPreviousEngine)
-        {
-            //Skip one frame between teardown and rebuild so the previous engine's cleanup fully settles before the next one allocates;
-            //building in the same tick can render black. The ~16ms is invisible (editor preview already debounced).
-            requestAnimationFrame(spawnNewEngine);
-            return;
-        }
-
-        spawnNewEngine();
+        host._initInflight = false;
     });
 }
 
 
-//Wires every engine-side callback into card state. Extracted so both spawn paths (immediate, and rAF-deferred after a previous
-//cleanup) share identical wiring. Assumes host._engine was just assigned and is non-null.
+//Wires every engine-side callback into card state. Assumes host._engine was just assigned and is non-null.
 function wireEngineCallbacks(host: InitHost): void
 {
     if (!host._engine)

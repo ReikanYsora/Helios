@@ -1447,9 +1447,8 @@ export class HeliosEngine
         return this._renderer?.camera.hasViewport ?? false;
     }
 
-    //Move the home to new coordinates IN PLACE: re-tile the basemap, re-fetch the buildings + weather for
-    //the new location and re-cast shadows. The card calls this instead of tearing the engine down and
-    //rebuilding it on a home change (a 2.5D scene has no GL context to recreate).
+    //Move the home to new coordinates: re-tile the basemap, re-fetch the buildings + weather for the new
+    //location, and re-cast shadows.
     public setHome(lat: number, lon: number): void
     {
         if (lat === this.homeLat && lon === this.homeLon)
