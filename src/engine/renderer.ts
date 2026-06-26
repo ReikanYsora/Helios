@@ -77,6 +77,7 @@ export class SceneRenderer
     private _rafToken = 0;
     private _growthRaf = 0;
     private _alive = true;
+    private _resizeObserver?: ResizeObserver;
     //Fired after each redraw so the host can re-project its HUD on the same frame.
     public onAfterDraw?: () => void;
 
@@ -94,6 +95,14 @@ export class SceneRenderer
         this._sceneSvg.setAttribute('class', 'scene-svg');
         container.appendChild(this._groundHolder);
         container.appendChild(this._sceneSvg);
+
+        //The camera centres on width/2 × height/2, so a draw taken before the container has its final size
+        //lands the whole scene in the top-left. The container often starts at 0×0 (the first draw bails) or a
+        //transient size (dashboard edit-mode relayout, first paint) and settles a frame or two later, with no
+        //data/sun change to trigger another draw. Owning the resize → redraw here guarantees the scene
+        //re-projects at the true size the moment the container reaches it, every layout.
+        this._resizeObserver = new ResizeObserver(() => this.scheduleRedraw());
+        this._resizeObserver.observe(container);
     }
 
     //Resolve + build the CARTO basemap for a home position. The position is retained so a theme flip can
@@ -282,6 +291,8 @@ export class SceneRenderer
     public cleanup(): void
     {
         this._alive = false;
+        this._resizeObserver?.disconnect();
+        this._resizeObserver = undefined;
         if (this._rafToken) { cancelAnimationFrame(this._rafToken); this._rafToken = 0; }
         if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
         if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
