@@ -13,6 +13,7 @@ import
 } from './helios-config';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
+import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { darkenHex } from './card/format';
 import { ENERGY_COLOR } from './card/theme-colors';
 import
@@ -2313,5 +2314,5 @@ export class HeliosCard extends LitElement
         this.requestUpdate();
     };
 
-    static styles = heliosCardStyles;
+    static styles = [heliosCardStyles, heliosTimelineStyles];
 }
