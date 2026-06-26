@@ -159,7 +159,7 @@ export const heliosCardStyles = css`
     }
 
     /*  Camera-lock toggle, top-left. 40 px circle; brand-blue pastille appears when locked. */
-    .camera-lock-btn
+    .overlay-btn
     {
         appearance: none;
         -webkit-appearance: none;
@@ -186,15 +186,15 @@ export const heliosCardStyles = css`
         -webkit-tap-highlight-color: transparent;
         transition: background-color 0.15s, color 0.15s;
     }
-    .camera-lock-btn:hover,
-    .camera-lock-btn:focus,
-    .camera-lock-btn:focus-visible,
-    .camera-lock-btn:active
+    .overlay-btn:hover,
+    .overlay-btn:focus,
+    .overlay-btn:focus-visible,
+    .overlay-btn:active
     {
         outline: 0 !important;
         box-shadow: none !important;
     }
-    .camera-lock-btn ha-icon
+    .overlay-btn ha-icon
     {
         --mdc-icon-size: 22px;
         color: inherit;
@@ -202,27 +202,42 @@ export const heliosCardStyles = css`
         align-items: center;
         pointer-events: none;
     }
-    .camera-lock-btn:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
-    .camera-lock-btn:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
-    .camera-lock-btn.is-on
+    .overlay-btn:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
+    .overlay-btn:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
+    .overlay-btn.is-on
     {
         background: var(--primary-color, #03a9f4);
         color: var(--text-on-primary-color, #ffffff);
     }
-    .camera-lock-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
-    .camera-lock-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
+    .overlay-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
+    .overlay-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
     /*  Disabled state: button stays visible to show the lock state but is inert,
         greyed out with no hover/active feedback. */
-    .camera-lock-btn.is-disabled,
-    .camera-lock-btn[disabled]
+    .overlay-btn.is-disabled,
+    .overlay-btn[disabled]
     {
         opacity: 0.45;
         cursor: default;
         pointer-events: none;
     }
 
-    /*  Top-left rail hosting the camera-lock toggle. pointer-events off on
-        the rail; the button opts back in so it doesn't steal map interactions. */
+    /*  View mode. Clock fades every layer but the basemap (and the top-left controls); Scene restores them.
+        The basemap (.scene-ground-holder) lives inside #map-container alongside .scene-svg, so the scene SVG
+        is faded by name while the map container itself (and the holder) stay. */
+    ha-card > :not(#map-container):not(.overlay-top-left),
+    ha-card .scene-svg
+    {
+        transition: opacity var(--ha-animation-duration-slow, 350ms) ease;
+    }
+    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left),
+    ha-card.mode-clock .scene-svg
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /*  Top-left rail hosting the mode toggles + camera-lock. pointer-events off on
+        the rail; the buttons opt back in so they don't steal map interactions. */
     .overlay-top-left
     {
         position: absolute;

@@ -422,6 +422,9 @@ export class HeliosCard extends LitElement
     //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
     //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
     @state() _chartTarget: ChartTarget = 'production';
+    //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap (the clock
+    //view is built on top later). Scene is the default.
+    @state() private _viewMode: 'scene' | 'clock' = 'scene';
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -1628,6 +1631,7 @@ export class HeliosCard extends LitElement
             cardThemeClass,
             cameraLocked      ? 'camera-locked'  : '',
             this.preview      ? 'helios-edit'    : '',
+            this._viewMode === 'clock' ? 'mode-clock' : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -1694,11 +1698,31 @@ export class HeliosCard extends LitElement
                 ${hasHomeCoords ? (() => {
                     const cameraLocked  = this._isCameraLocked();
                     const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
+                    const sceneOn       = this._viewMode === 'scene';
+                    const clockOn       = this._viewMode === 'clock';
                     return html`
                         <div class="overlay-top-left">
                             <button
                                 type="button"
-                                class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
+                                class="overlay-btn ${sceneOn ? 'is-on' : ''}"
+                                aria-pressed="${sceneOn ? 'true' : 'false'}"
+                                title="Scene"
+                                @click="${() => this._setViewMode('scene')}"
+                            >
+                                <ha-icon icon="mdi:image-filter-hdr"></ha-icon>
+                            </button>
+                            <button
+                                type="button"
+                                class="overlay-btn ${clockOn ? 'is-on' : ''}"
+                                aria-pressed="${clockOn ? 'true' : 'false'}"
+                                title="Clock"
+                                @click="${() => this._setViewMode('clock')}"
+                            >
+                                <ha-icon icon="mdi:clock-outline"></ha-icon>
+                            </button>
+                            <button
+                                type="button"
+                                class="overlay-btn ${cameraLocked ? 'is-on' : ''}"
                                 aria-pressed="${cameraLocked ? 'true' : 'false'}"
                                 @click="${this._onCameraLockToggle}"
                             >
@@ -2281,6 +2305,15 @@ export class HeliosCard extends LitElement
     }
     //Lock-button click: flip the engine's lock state; the engine persists bearing, pitch and lock flag to
     //localStorage (HA's lovelace doesn't persist config-changed from a live card). The next reload restores.
+    private _setViewMode(mode: 'scene' | 'clock'): void
+    {
+        if (this._viewMode === mode)
+        {
+            return;
+        }
+        this._viewMode = mode;
+    }
+
     private _onCameraLockToggle = (): void =>
     {
         if (!this._engine)
