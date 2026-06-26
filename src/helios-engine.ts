@@ -858,8 +858,8 @@ export class HeliosEngine
         });
     }
 
-    //Card -> engine theme polarity. The renderer tints its painted geometry (night-shade, building faces)
-    //from the resolved theme palette; a CSS filter darkens the CARTO tiles.
+    //Card -> engine theme polarity. Drives the resolved palette (night-shade, building faces) and the
+    //CARTO basemap style (light/dark tiles).
     public setCardThemeIsDark(isDark: boolean): void
     {
         if (this._cardIsDark === isDark)

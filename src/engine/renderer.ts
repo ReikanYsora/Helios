@@ -50,9 +50,12 @@ export class SceneRenderer
     private readonly _sceneSvg:     SVGSVGElement;
     private readonly _targetHeightM: number;
 
-    private _ground?:    Ground;
-    private _groundLat?: number;
-    private _groundLon?: number;
+    private _ground?:     Ground;
+    private _groundLat?:  number;
+    private _groundLon?:  number;
+    //Increments per build so a slower in-flight tile fetch can't overwrite a newer one (the boot build and
+    //a theme-flip rebuild race otherwise, and whichever resolves last would win).
+    private _groundToken = 0;
     private _buildings: Building[] = [];
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
@@ -100,8 +103,9 @@ export class SceneRenderer
         this._groundLat = lat;
         this._groundLon = lon;
         this.camera.pxPerMetre = pxPerMetreFor(lat);
+        const token  = ++this._groundToken;
         const ground = await buildGround(lat, lon, this._palette.dark);
-        if (!this._alive) { return; }
+        if (!this._alive || token !== this._groundToken) { return; }
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);
         this.scheduleRedraw();

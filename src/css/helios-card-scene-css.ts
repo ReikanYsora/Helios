@@ -536,7 +536,7 @@ export const heliosCardStyles = css`
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 1px;
+        gap: 4px;
         color: var(--sun-cross-color, #ffc107);
         pointer-events: none;
         /*  Same layer as the far arc (z 5) it sits on, so the value chips (z 8) stay on top. */
