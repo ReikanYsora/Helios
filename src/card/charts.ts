@@ -6,7 +6,7 @@ import { type HeliosConfig } from '../helios-config';
 import { ENERGY_COLOR, hueRotate } from './theme-colors';
 import { formatLocalisedNumber, lerpHexToward } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
-import { type PvHistory } from './pv';
+import { pvNormalizeToWatts, type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { sliceForRange, valueAt } from './unifiedStore';
@@ -242,14 +242,33 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
     const ids   = Array.from(map.keys()).sort();
     const solar = ENERGY_COLOR.pv(host as unknown as Element);
     const step  = 360 / ids.length;
+    //At the live instant the per-source HISTORY (hourly calibration) doesn't reach "now", so read each
+    //source's live power straight off its state instead; only fall back to the history when scrubbing the
+    //past. ~5 min tolerance covers the gap between now and the freshest data without misclassifying a scrub.
+    const live  = atMs >= Date.now() - 5 * 60_000;
     const parts: { v: number; idx: number }[] = [];
     for (let i = 0; i < ids.length; i++)
     {
-        const ph = map.get(ids[i]);
-        if (!ph) { continue; }
-        //Instantaneous power per source (pvValueAtTime differentiates cumulative meters and returns a unit
-        //consistent across sources), so the shares reflect current production, not cumulative totals.
-        const v = pvValueAtTime(host, atMs, ph).value;
+        const id = ids[i];
+        let v = NaN;
+        if (live)
+        {
+            //Power (stat_rate) sources read directly; cumulative-only sources normalise to 0 here and drop
+            //to the history branch below (which differentiates them).
+            const so = host.hass?.states?.[id];
+            if (so)
+            {
+                const raw = parseFloat(so.state);
+                if (isFinite(raw)) { v = pvNormalizeToWatts(raw, String(so.attributes?.unit_of_measurement ?? '')); }
+            }
+        }
+        if (!(isFinite(v) && v > 0))
+        {
+            //Scrub, or a live read that yielded nothing: instantaneous power from the per-source history
+            //(pvValueAtTime differentiates cumulative meters, in a unit consistent across sources).
+            const ph = map.get(id);
+            if (ph) { v = pvValueAtTime(host, atMs, ph).value; }
+        }
         if (isFinite(v) && v > 0) { parts.push({ v, idx: i }); }
     }
     const total = parts.reduce((s, p) => s + p.v, 0);
