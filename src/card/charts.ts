@@ -1044,6 +1044,38 @@ export function renderPvChart(host: ChartHost): TemplateResult
         showHover = isFinite(hoverY) || isFinite(hoverYPred);
     }
 
+    //Per-source hover dots: one dot riding the top of each stacked band at the hover instant, in the band's
+    //colour, so the curves carry the same dot vocabulary as the cloud chart.
+    const sourceHoverDots: Array<{ y: number; color: string }> = [];
+    if (showHover && hoverPct !== null && stackedAreas.length > 0)
+    {
+        const hoverMs    = startMs + (hoverPct / 100) * rangeMs;
+        const aggAtHover = interpAt(samples.map(s => s.t), samples.map(s => s.v), hoverMs);
+        if (isFinite(aggAtHover) && aggAtHover > 0)
+        {
+            const rawAtHover = perEntityIdsForCurves.map(id =>
+            {
+                const ph = host._pvHistoryPerEntity.get(id);
+                if (!ph) { return 0; }
+                const v = pvValueAtTime(host, hoverMs, ph).value;
+                return isFinite(v) && v > 0 ? v : 0;
+            });
+            const total = rawAtHover.reduce((a, b) => a + b, 0);
+            if (total > 0)
+            {
+                let cumShare = 0;
+                for (let s = 0; s < perEntityIdsForCurves.length; s++)
+                {
+                    cumShare += rawAtHover[s] / total;
+                    sourceHoverDots.push({
+                        y:     yOf(cumShare * aggAtHover),
+                        color: energySolarColor(host as unknown as Element, chartIsDark(host), s),
+                    });
+                }
+            }
+        }
+    }
+
     return html`
         <svg
             class="hc-chart-svg"
@@ -1102,6 +1134,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
         ${showHover && isFinite(hoverYPred) ? html`
             <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverYPred / H * 100).toFixed(2)}%; background: ${predictedPvColor};"></div>
         ` : nothing}
+        ${sourceHoverDots.map(d => html`
+            <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(d.y / H * 100).toFixed(2)}%; background: ${d.color};"></div>
+        `)}
     `;
 }
 
