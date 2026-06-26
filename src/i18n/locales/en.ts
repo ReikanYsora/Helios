@@ -96,7 +96,7 @@ export const en: Translations = {
         buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
         buildingClusterRadius: 'Home cluster radius',
         buildingOpacity:       'Surrounding opacity',
-        shadowsSection:        'LiDAR & shading',
+        shadowsSection:        'Shadows',
         shadowsEnabled:        'Show shadows',
         shadowsEnabledOn:      'Shown',
         shadowsEnabledOff:     'Hidden',

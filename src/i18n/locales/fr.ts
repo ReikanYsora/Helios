@@ -95,7 +95,7 @@ export const fr: Translations = {
         buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d\'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».',
         buildingClusterRadius: 'Rayon de regroupement maison',
         buildingOpacity:       'Opacité des bâtiments voisins',
-        shadowsSection:        'LiDAR & ombres',
+        shadowsSection:        'Ombres',
         shadowsEnabled:        'Afficher les ombres',
         shadowsEnabledOn:      'Affichées',
         shadowsEnabledOff:     'Masquées',
