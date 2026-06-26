@@ -952,7 +952,11 @@ export class HeliosCard extends LitElement
         if (this._engine
             && (_changedProperties.has('_chartTarget')
                 || _changedProperties.has('_selectedTime')
-                || _changedProperties.has('hass')))
+                || _changedProperties.has('hass')
+                //Energy/PV data lands via callWS subscriptions that requestUpdate() WITHOUT touching hass,
+                //but they rebuild the unified store — so watch it too, else the default (PV) home never picks
+                //up its colour + per-source bands until the user clicks a chip.
+                || _changedProperties.has('_unifiedStore')))
         {
             this._updateHomeAppearance(_changedProperties.has('_chartTarget'));
         }
@@ -2157,22 +2161,39 @@ export class HeliosCard extends LitElement
                       Unlike the HA card it does NOT enter weather mode: clicking it re-targets the timeline
                       chart to the cloud cover (three altitude-band curves), same chip <-> chart coupling as
                       the other chips. Anchored off the sun so it tracks the irradiance chip.  -->
-                ${showSunLabel && this._cloudCover >= 0 ? html`
-                    <div
-                        class="cloud-chip-leader"
-                        style="left:${(sunScene!.sun.x + 40).toFixed(1)}px; top:${(sunScene!.sun.y - 34).toFixed(1)}px"
-                    ></div>
-                    <div
-                        class="cloud-chip ${this._chartTarget === 'cloud' ? 'is-chart-active' : ''}"
-                        style="left:${(sunScene!.sun.x + 84).toFixed(1)}px; top:${(sunScene!.sun.y - 34).toFixed(1)}px"
-                        role="button"
-                        tabindex="0"
-                        @click=${() => this._setChartTarget('cloud')}
-                    >
-                        <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
-                        <span>${Math.round(this._cloudCover)} %</span>
-                    </div>
-                ` : nothing}
+                ${showSunLabel && this._cloudCover >= 0 ? (() =>
+                {
+                    //Cloud chip sits to the RIGHT of the irradiance chip by default; if the pair is too close
+                    //to the card's right edge for it to fit, it flips to the LEFT (and the leader mirrors).
+                    //When neither side fits, take whichever has more room. Falls back to right before the
+                    //viewport width is known.
+                    const sx     = sunScene!.sun.x;
+                    const sy     = sunScene!.sun.y - 34;
+                    const cardW  = this._engine?.getViewportWidth() ?? 0;
+                    const EXTENT = 130; //sun.x → the cloud chip's far edge on either side
+                    const roomRight = cardW <= 0 || sx + EXTENT <= cardW - 8;
+                    const roomLeft  = sx - EXTENT >= 8;
+                    const side      = roomRight ? 1 : (roomLeft ? -1 : (sx < cardW / 2 ? 1 : -1));
+                    //14 px-wide leader: anchored at sx+40 on the right, ending at sx-40 on the left.
+                    const leaderX = side > 0 ? sx + 40 : sx - 54;
+                    const chipX   = sx + side * 84;
+                    return html`
+                        <div
+                            class="cloud-chip-leader"
+                            style="left:${leaderX.toFixed(1)}px; top:${sy.toFixed(1)}px"
+                        ></div>
+                        <div
+                            class="cloud-chip ${this._chartTarget === 'cloud' ? 'is-chart-active' : ''}"
+                            style="left:${chipX.toFixed(1)}px; top:${sy.toFixed(1)}px"
+                            role="button"
+                            tabindex="0"
+                            @click=${() => this._setChartTarget('cloud')}
+                        >
+                            <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
+                            <span>${Math.round(this._cloudCover)} %</span>
+                        </div>
+                    `;
+                })() : nothing}
 
                 <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
                       each horizon crossing, like the source Solar scene card.  -->

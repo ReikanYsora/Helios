@@ -484,6 +484,11 @@ export class HeliosEngine
     //constant so the sun-arc-scale memo key + any zoom-aware callers keep a stable value.
     public getCameraZoom():    number { return 18; }
 
+    //Cached CSS width of the scene viewport (px), maintained on resize so HUD layout can read it without
+    //forcing a mid-frame layout flush. 0 until the first measure. Used by the card to decide which side of
+    //the irradiance chip the cloud chip fits on.
+    public getViewportWidth(): number { return this._cachedCanvasCssW; }
+
 
     //Auto-rotation: when idle a few seconds the map slowly orbits the home counter to the sun's motion
     //(~1.5°/s). Any interaction resets the inactivity timer, pausing then resuming from the new bearing.
