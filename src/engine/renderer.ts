@@ -116,6 +116,17 @@ export class SceneRenderer
             this.scheduleRedraw();
         });
         this._resizeObserver.observe(container);
+
+        //Seed the camera from the container's current size. The container is already laid out when the
+        //renderer is built (the card element is reused; the engine is created once), so the camera projects
+        //against a real viewport from the first frame instead of the (0,0) seed — which would flash the whole
+        //HUD into the top-left corner for a frame.
+        const w0 = container.clientWidth;
+        const h0 = container.clientHeight;
+        if (w0 > 0 && h0 > 0)
+        {
+            this.camera.setViewport(w0, h0);
+        }
     }
 
     //Resolve + build the CARTO basemap for a home position. The position is retained so a theme flip can

@@ -36,6 +36,9 @@ export class SceneCamera
     //Screen-space anchor of the home (local origin), recomputed by setViewport each frame.
     public centreX = 0;
     public centreY = 0;
+    //False until the first setViewport with a real size. Consumers gate on it so nothing projects against
+    //the seed centre (0,0) — which would briefly throw the whole HUD into the top-left corner.
+    public hasViewport = false;
 
     //Cached trig basis, recomputed by setViewport. Seeded to the default pose so a project() before the
     //first setViewport() still returns a sane value rather than NaN.
@@ -59,6 +62,7 @@ export class SceneCamera
         const bearing = this.bearingDeg * DEG;
         this.centreX = width / 2;
         this.centreY = height / 2;
+        this.hasViewport = true;
         this._cosB = Math.cos(bearing);
         this._sinB = Math.sin(bearing);
         this._cosT = Math.cos(tilt);

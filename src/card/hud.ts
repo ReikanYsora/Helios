@@ -178,6 +178,12 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
 //budget collapses.
 export function refreshHud(host: HudHost): void
 {
+    //Don't project until the camera knows its viewport: every projection would otherwise centre on the
+    //(0,0) seed and flash the whole HUD into the top-left corner for a frame.
+    if (host._engine && !host._engine.isViewportReady())
+    {
+        return;
+    }
     const nextLabel = host._engine?.projectHomeLabelLayout() ?? null;
     if (!labelLayoutEq(host._labelLayout, nextLabel))
     {

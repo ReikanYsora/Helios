@@ -1440,6 +1440,13 @@ export class HeliosEngine
         return this._paused;
     }
 
+    //True once the camera has measured a real viewport. The HUD gates on it so its projections never centre
+    //on the (0,0) seed (which would flash the whole HUD into the top-left for a frame).
+    public isViewportReady(): boolean
+    {
+        return this._renderer?.camera.hasViewport ?? false;
+    }
+
     //True during the post-exit cooldown. Card gates scrubs, engine gates drag-rotate; both read the same
     //clock so the suppression window is symmetric.
     public isUserGestureSuppressed(): boolean
