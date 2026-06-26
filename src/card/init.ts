@@ -6,7 +6,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
-import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
+import { refreshHud, setAnimationsPaused, type HudHost } from './hud';
 import type { ChartSeries } from './charts';
 import { ENGINE_SPAWN_COOLDOWN_MS, GLOBAL_SPAWN_COOLDOWN_MS } from '../constants';
 
@@ -164,9 +164,9 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
 }
 
 
-//Structural surface the host card exposes to this module. Extends OverlaysHost so refreshOverlays(host) lands cleanly inside the
+//Structural surface the host card exposes to this module. Extends HudHost so refreshHud(host) lands cleanly inside the
 //engine callbacks; the rest is the engine + init lifecycle state the bootstrap mutates.
-export interface InitHost extends OverlaysHost
+export interface InitHost extends HudHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
@@ -414,11 +414,11 @@ function wireEngineCallbacks(host: InitHost): void
         host._chartSeries        = host._engine?.getTimelineSeries() ?? null; //hourly series the chart canvas plots
         //First weather update is also our cue for the initial label layout: by now the map style has loaded and the projection matrix
         //is available. Subsequent transforms refresh via onMapTransform.
-        refreshOverlays(host);
+        refreshHud(host);
     };
     //Cloud-disc hover is wired directly on the SVG via @mousemove/@mouseleave (render path's solar-svg), so no engine callback for it.
     //rAF-coalesced overlay refresh: the engine fires transform events in bursts of 5-10/frame during inertial pan; without coalescing,
-    //refreshOverlays + dome re-projection ran several times per frame (sun arc 96 samples, home silhouettes all footprints, dome
+    //refreshHud + dome re-projection ran several times per frame (sun arc 96 samples, home silhouettes all footprints, dome
     //648 cells * 4 corners + 96 ribbon samples). The gate caps it at one full pass per frame.
     let overlayRaf: number | null = null;
     host._engine.onMapTransform = () =>
@@ -436,7 +436,7 @@ function wireEngineCallbacks(host: InitHost): void
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;
-            refreshOverlays(host);
+            refreshHud(host);
         });
     };
 }

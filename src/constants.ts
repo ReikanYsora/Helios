@@ -15,8 +15,7 @@ export const HOUR_MS = 3_600_000;
 export const DAY_MS  = 86_400_000;
 
 //=== Math ===
-//Card-side degrees→radians factor. The scene engine keeps its own DEG in engine/constants.ts so the two
-//layers stay independent; the duplication across the two is intentional.
+//Single shared degrees→radians factor for the card and scene engine.
 export const DEG = Math.PI / 180;
 
 //=== Display radius + buildings ===
@@ -28,7 +27,6 @@ export const MAX_DISPLAY_RADIUS_M     = 500;
 export const DISPLAY_FADE_DELTA_M     = 50;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;  //ghost surround; home stays 1.0
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = legacy single-polygon home detection
-export const HOME_FALLBACK_M                   = 30;    //fallback home half-size when no footprint resolves
 
 //=== Data cadence + value precision ===
 //Buckets/hour for the unified store + every graph. 4 = 15 min; clamp [1,12] (12 = the recorder's 5-min floor).
@@ -89,8 +87,6 @@ export const TIMELINE_MAX_TICKS = 7;
 
 //=== Shadows ===
 export const DEFAULT_SHADOW_OPACITY = 0.32;
-//Offscreen raster resolution for the footprint shadow mask. ~0.4 m/px over a 400 m diameter; fixed.
-export const SHADOW_RASTER_SIZE = 1024;
 
 //=== Weather fetch ===
 export const WEATHER_PAST_DAYS          = 5;
@@ -132,9 +128,7 @@ export const OVERPASS_ENDPOINTS = [
 ];
 
 //=== Engine lifecycle ===
-//Cap on simultaneously-live HeliosEngine instances (evict the oldest beyond it so orphaned preview cards
-//don't pile up) and the TTL of the shared module-scope parsed-buildings cache.
-export const MAX_LIVE_ENGINES          = 4;
+//TTL of the shared module-scope parsed-buildings cache.
 export const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
 
 //=== Weather cache ===
@@ -153,3 +147,48 @@ export const LAB_T0 = 0.137931034;
 export const LAB_T1 = 0.206896552;
 export const LAB_T2 = 0.12841855;
 export const LAB_T3 = 0.008856452;
+
+
+//Tunables for the self-contained 2.5D scene engine. The engine stays a standalone, card-agnostic unit:
+//nothing below depends on the card, and the engine modules reach up here via ../constants.
+
+//=== Camera + projection ===
+//Pitch bounds shared by the editor, drag-rotate and the initial-pose clamp. MIN = nearly top-down,
+//MAX = nearly horizontal. Default pose faces the sun's side so it sits at the top of the frame at noon.
+//NEAR_PLANE is the near-plane margin as a fraction of PERSPECTIVE (clamps/culls points at the camera);
+//PERSPECTIVE is the projection + CSS depth in px shared by the ground transform and project3.
+export const PITCH_MIN      = 5;
+export const PITCH_MAX      = 65;
+export const DEFAULT_BEARING = 180;
+export const DEFAULT_TILT    = 50;
+export const NEAR_PLANE      = 0.15;
+export const PERSPECTIVE     = 1200;
+
+//=== Basemap tiles ===
+//Tile pixel size, ground-canvas radius/zoom, the edge-fade start (% of the closest side, consumed by the
+//card CSS), and the WGS84 Earth circumference + metres-per-degree-latitude used for the local-metre math.
+export const TILE_PX             = 256;
+export const GROUND_RADIUS       = 3;
+export const GROUND_ZOOM         = 18;
+export const GROUND_FADE_START   = 90;
+export const EARTH_CIRCUMFERENCE_M = 40075016.686;
+export const METRES_PER_DEG_LAT  = 111_320;
+
+//=== Renderer ===
+//Camera aim point above the home (m), the dark-theme CSS filter that tints the light CARTO tiles, and the
+//SVG namespace for the scene's screen-space overlay.
+export const DEFAULT_TARGET_HEIGHT_M = 3;
+export const DARK_FILTER = 'invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4)';
+export const SVG_NS = 'http://www.w3.org/2000/svg';
+
+//=== Renderer shadows ===
+//Shadows fade in near the horizon (full at SHADOW_FADE_DEG above it); a cast shadow is capped at MAX_SHADOW_M
+//so a low sun doesn't streak a shadow across the whole disc.
+export const SHADOW_FADE_DEG = 10;
+export const MAX_SHADOW_M    = 50;
+
+//=== Scene animation (ms / easing) ===
+//Building-rise window (matches the HA energy graphs) and the home retarget squash/grow timings.
+export const GROWTH_RISE_MS  = 500;
+export const HOME_SQUASH_MS  = 220;
+export const HOME_GROW_MS    = 300;

@@ -5,13 +5,13 @@
 //structural TimelineHost interface and Lit's reactivity falls out on every assignment.
 
 import type { HeliosConfig } from '../helios-config';
-import { refreshOverlays, type OverlaysHost } from './overlays';
+import { refreshHud, type HudHost } from './hud';
 import type { HeliosEngine } from '../helios-engine';
 import type { ChartSeries } from './charts';
 
 
-//Structural surface the host card exposes here. Extends OverlaysHost so the clock tick can fire refreshOverlays(host) on the same value.
-export interface TimelineHost extends OverlaysHost
+//Structural surface the host card exposes here. Extends HudHost so the clock tick can fire refreshHud(host) on the same value.
+export interface TimelineHost extends HudHost
 {
     readonly config:    HeliosConfig | undefined;
     readonly _engine?:  HeliosEngine;
@@ -66,9 +66,9 @@ export function tick(host: TimelineHost): void
         }
         host._chartSeries = host._engine.getTimelineSeries() ?? host._chartSeries;
     }
-    //The sun moves with time, so refresh its screen-space position. The other refreshOverlays parts are camera-driven and won't change here,
+    //The sun moves with time, so refresh its screen-space position. The other refreshHud parts are camera-driven and won't change here,
     //but recomputing them is cheap and keeps the path uniform.
-    refreshOverlays(host);
+    refreshHud(host);
 }
 
 

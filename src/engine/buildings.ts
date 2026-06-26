@@ -22,7 +22,7 @@
 
 import { SceneCamera, PERSPECTIVE, NEAR_PLANE } from './projection';
 import { mixHex, hexByte, tintedRgba, pointsAttr, type Point } from './colors';
-import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M } from './constants';
+import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M } from '../constants';
 import {
     FIXED_BUILDING_HEIGHT_M,
     MAX_BUILDING_COUNT,
@@ -36,7 +36,7 @@ import {
     REAL_HEIGHT_FALLBACK_M,
 } from '../constants';
 //Re-exported so existing importers of SHADOW_FADE_DEG from './buildings' keep resolving.
-export { SHADOW_FADE_DEG } from './constants';
+export { SHADOW_FADE_DEG } from '../constants';
 
 //---------------------------------------------------------------------------------------------------------
 //Types

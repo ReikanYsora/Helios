@@ -55,7 +55,7 @@ import
     type ArcSegment,
     type SunScene,
     type LabelLayout
-} from './card/overlays';
+} from './card/hud';
 import
 {
     tick,

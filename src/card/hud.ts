@@ -1,4 +1,4 @@
-//Screen-space overlay subsystem: pulls fresh projections from the engine (sun arc, cloud dome, home silhouettes,
+//Screen-space HUD subsystem: pulls fresh projections from the engine (sun arc, cloud dome, home silhouettes,
 //label anchors), maps sun arc samples into stroke segments, gates SMIL play-state on card visibility, and exposes
 //the "flow duration" easing that ramps animation speed with the live production rate.
 
@@ -56,9 +56,9 @@ export interface ArcSegment
 }
 
 
-//Surface the host card exposes: engine + scene state (mutated by refreshOverlays) plus the DOM surface
+//Surface the host card exposes: engine + scene state (mutated by refreshHud) plus the DOM surface
 //setAnimationsPaused needs (shadowRoot/classList satisfied natively by LitElement/HTMLElement).
-export interface OverlaysHost
+export interface HudHost
 {
     readonly _engine?:      HeliosEngine;
     readonly _selectedTime: Date | null;
@@ -176,7 +176,7 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
 //rate (up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields; Safari re-arms
 //the SMIL clock on every path mutation, so without these guards the clock state grows over ~10-15 s of drag and frame
 //budget collapses.
-export function refreshOverlays(host: OverlaysHost): void
+export function refreshHud(host: HudHost): void
 {
     const nextLabel = host._engine?.projectHomeLabelLayout() ?? null;
     if (!labelLayoutEq(host._labelLayout, nextLabel))
@@ -196,7 +196,7 @@ export function refreshOverlays(host: OverlaysHost): void
 //Pause/resume CSS keyframe + SMIL animations when the card scrolls in/out of view. CSS side: toggle .helios-paused
 //(keyed off by the card stylesheet). SMIL side: walk the shadow tree calling (un)pauseAnimations() on every SVG root;
 //both are no-ops where unsupported, so no feature detection needed.
-export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
+export function setAnimationsPaused(host: HudHost, paused: boolean): void
 {
     host.classList.toggle('helios-paused', paused);
     const root = host.shadowRoot;

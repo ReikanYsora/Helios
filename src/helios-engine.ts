@@ -7,7 +7,7 @@ import { startAutoRotateLoop } from './engine/auto-rotate';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
-    MAX_LIVE_ENGINES, SHARED_FETCH_CACHE_TTL_MS,
+    SHARED_FETCH_CACHE_TTL_MS,
 } from './constants';
 import
 {
@@ -59,11 +59,6 @@ function bumpStat(key: keyof HeliosStats): void
 }
 
 
-//Cap on simultaneously-live HeliosEngine instances. HA's editor spawns a fresh preview card per config
-//edit without reliably firing disconnectedCallback, so orphaned engines accumulate. We track live engines
-//in a Set and evict the oldest before exceeding the cap. MAX_LIVE_ENGINES lives in constants.ts.
-
-const _liveEngines = new Set<HeliosEngine>();
 
 
 //-----------------------------------------------------------------
@@ -559,23 +554,6 @@ export class HeliosEngine
         this.cfg     = { ...config };
 
         bumpStat('enginesCreated');
-
-        //Evict the oldest live engine at the cap. Set iteration is insertion order, so the first value is
-        //the longest-lived, typically an orphaned editor-preview engine the user can't see.
-        while (_liveEngines.size >= MAX_LIVE_ENGINES)
-        {
-            const oldest = _liveEngines.values().next().value;
-            if (!oldest)
-            {
-                break;
-            }
-            console.warn('[HELIOS] WebGL context cap reached, force-cleaning the oldest engine');
-            try { oldest.cleanup(); }
-            catch (_) {}
-            //cleanup() removes it from the set; defensive delete in case it threw first.
-            _liveEngines.delete(oldest);
-        }
-        _liveEngines.add(this);
 
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
@@ -2222,7 +2200,6 @@ export class HeliosEngine
     public cleanup(): void
     {
         bumpStat('enginesCleanedUp');
-        _liveEngines.delete(this);
         this._clearWeatherTimer();
         if (this._selectedTimeShadowTimer !== null)
         {
