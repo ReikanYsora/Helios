@@ -17,7 +17,7 @@ import { ENGINE_SPAWN_COOLDOWN_MS, GLOBAL_SPAWN_COOLDOWN_MS } from '../constants
 export const VISUAL_CONFIG_KEYS = [
     //When set, feeds the engine sensor samples that override Open-Meteo for live + past irradiance; a change must refresh so the
     //override (or its absence) is picked up immediately.
-    'solar-radiation-entity',
+    'solar-irradiance-entity',
     //Building option keys: a change triggers updateConfig -> _ensureBuildings -> _applyBuildings, which
     //re-interprets the cached raw footprints in memory (no Overpass re-fetch — the location key is unchanged).
     'display-radius',

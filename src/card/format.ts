@@ -72,6 +72,53 @@ export function energyToKwh(value: number, unit: string): number
 }
 
 
+//Convert a POWER RATE into watts on a unit-agnostic scale. Lives here (not pv.ts) so it sits next to the
+//other unit converters and the shared formatter below; pv.ts re-exports it so existing import sites hold.
+//
+//Contract: `value` MUST already be an instantaneous power rate (W/kW/MW). Cumulative-energy (Wh/kWh/MWh) must be
+//differentiated caller-side first. Passing a raw cumulative reading returns 0 (pausing animation rather than
+//mis-scaling kWh as watts) — an intentional wiring trap for future callers.
+export function pvNormalizeToWatts(value: number, unit: string): number
+{
+    const lu = (unit || '').toLowerCase();
+    if (lu === 'kw')
+    {
+        return value * 1000;
+    }
+    if (lu === 'mw')
+    {
+        return value * 1_000_000;
+    }
+    if (lu === 'w')
+    {
+        return value;
+    }
+    return 0;
+}
+
+
+//Shared chip value formatter: power sources (W/kW/MW) print kW, energy sources (Wh/kWh/MWh) print kWh, both
+//locale-aware at the configured precision so chips read uniform regardless of the source sensor's native unit.
+//An unknown unit keeps the entity's own unit string but still honours the decimal setting. Callers add their
+//own null-handling / signing around this.
+export function formatEntityValue(hass: any, value: number, unit: string, decimals: number): string
+{
+    const u  = (unit || '').trim();
+    const lu = u.toLowerCase();
+
+    if (lu === 'w' || lu === 'kw' || lu === 'mw')
+    {
+        return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals);
+    }
+    if (lu === 'wh' || lu === 'kwh' || lu === 'mwh')
+    {
+        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals);
+    }
+    const formatted = formatLocalisedNumber(hass, value, decimals);
+    return u ? `${formatted} ${u}` : formatted;
+}
+
+
 //Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged, 1 = pure black). Multiplicative per
 //channel, keeping hue intact. Derives the darker sun-disc rim from the configured sun colour so the
 //rim stays visible without a second config key.

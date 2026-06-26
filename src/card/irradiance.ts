@@ -1,11 +1,11 @@
 // Solar-irradiance override subsystem.
 //
-// When `solar-radiation-entity` is wired to a physical W/m² sensor, its samples beat the weather model for the live + past
+// When `solar-irradiance-entity` is wired to a physical W/m² sensor, its samples beat the weather model for the live + past
 // portions of the irradiance pipeline. Fetches history, keeps the live sample fresh each refresh cycle, and pushes the merged
 // set into the engine via setSolarRadiationSamples().
 //
-// Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_solarRadiation*` fields; functions here
-// read/write them through the structural RadiationHost interface.
+// Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_irradiance*` fields; functions here
+// read/write them through the structural IrradianceHost interface.
 
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
@@ -15,24 +15,24 @@ import { RADIATION_CACHE_TTL_MS } from '../constants';
 
 // Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip.
 
-interface RadiationHistoryCacheEntry
+interface IrradianceHistoryCacheEntry
 {
-    history: RadiationHistory;
+    history: IrradianceHistory;
     ts:      number;
 }
 
-const _radiationHistoryCache: Map<string, RadiationHistoryCacheEntry> = new Map();
+const _irradianceHistoryCache: Map<string, IrradianceHistoryCacheEntry> = new Map();
 
-function radiationHistoryCacheGet(key: string): RadiationHistoryCacheEntry | null
+function irradianceHistoryCacheGet(key: string): IrradianceHistoryCacheEntry | null
 {
-    const e = _radiationHistoryCache.get(key);
+    const e = _irradianceHistoryCache.get(key);
     if (!e)
     {
         return null;
     }
     if (Date.now() - e.ts > RADIATION_CACHE_TTL_MS)
     {
-        _radiationHistoryCache.delete(key);
+        _irradianceHistoryCache.delete(key);
         return null;
     }
     return e;
@@ -40,9 +40,9 @@ function radiationHistoryCacheGet(key: string): RadiationHistoryCacheEntry | nul
 
 
 // Wipe the module cache. Called from the card's `resetDataCache()` hook.
-export function clearRadiationModuleCaches(): void
+export function clearIrradianceModuleCaches(): void
 {
-    _radiationHistoryCache.clear();
+    _irradianceHistoryCache.clear();
 }
 
 
@@ -72,14 +72,14 @@ function parseStatBoundary(raw: unknown): number | null
 }
 
 
-// Parse a statistics payload into a RadiationHistory. Irradiance sensors are `state_class: measurement` reporting instantaneous
+// Parse a statistics payload into an IrradianceHistory. Irradiance sensors are `state_class: measurement` reporting instantaneous
 // W/m²; the `mean` column carries the bucket-averaged value, anchored at the bucket midpoint to match the engine's W/m² assumption.
 //
 // We deliberately do NOT fall back to `state`: a few installs surface irradiance as a cumulative MJ/m² counter
 // (`state_class: total_increasing`), so `state` is monotonically increasing. Pushing that would feed the engine values that look
 // like 10000+ W/m² and distort every downstream derivation (5-day calibration ratio, refined forecast, irradiance chip). Buckets
 // with null `mean` are skipped; an empty slot degrades to the raw-history fallback (which handles its own unit semantics).
-function parseRadiationStats(arr: any[]): RadiationHistory
+function parseIrradianceStats(arr: any[]): IrradianceHistory
 {
     const times:  Date[]   = [];
     const values: number[] = [];
@@ -110,49 +110,49 @@ function parseRadiationStats(arr: any[]): RadiationHistory
 
 
 // Historical irradiance series: parallel times[]/values[]. Values are W/m² as the sensor reports them; the engine consumes that unit directly.
-export interface RadiationHistory
+export interface IrradianceHistory
 {
     times:  Date[];
     values: number[];
 }
 
 // Structural surface the host card exposes to this module.
-export interface RadiationHost
+export interface IrradianceHost
 {
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _engine?:   HeliosEngine;
 
-    _solarRadiationHistory:  RadiationHistory | null;
-    _solarRadiationFetchKey: string;
-    _solarRadiationFetching: boolean;
+    _irradianceHistory:  IrradianceHistory | null;
+    _irradianceFetchKey: string;
+    _irradianceFetching: boolean;
 }
 
 
 // Live + history refresh, called from the card every lifecycle cycle. Fast-paths exit early with no entity configured; the engine
 // is then notified so it drops back to its built-in irradiance sources.
-export function refreshSolarRadiation(host: RadiationHost): void
+export function refreshIrradiance(host: IrradianceHost): void
 {
-    const entity = String(host.config?.['solar-radiation-entity'] ?? '').trim();
+    const entity = String(host.config?.['solar-irradiance-entity'] ?? '').trim();
 
     if (!entity || !host.hass)
     {
         // Clear everything when the entity is removed so the engine drops back to its built-in irradiance sources.
-        if (host._solarRadiationHistory !== null)
+        if (host._irradianceHistory !== null)
         {
-            host._solarRadiationHistory = null;
+            host._irradianceHistory = null;
         }
-        host._solarRadiationFetchKey = '';
+        host._irradianceFetchKey = '';
         host._engine?.setSolarRadiationSamples(null);
         return;
     }
 
     // Push the latest live state on every Lit cycle to keep the engine's "now" sample fresh; the engine de-dupes on sort, so the
     // cost is tiny even at sub-minute tick rates.
-    pushSolarRadiationToEngine(host);
+    pushIrradianceToEngine(host);
 
-    if (!host._timeRange || host._solarRadiationFetching)
+    if (!host._timeRange || host._irradianceFetching)
     {
         return;
     }
@@ -169,21 +169,21 @@ export function refreshSolarRadiation(host: RadiationHost): void
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
     const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
     const fetchKey = `${entity}@${rangeKey}`;
-    if (fetchKey === host._solarRadiationFetchKey)
+    if (fetchKey === host._irradianceFetchKey)
     {
         return;
     }
-    host._solarRadiationFetchKey = fetchKey;
+    host._irradianceFetchKey = fetchKey;
 
     // Cache hit short-circuits the WS round-trip on navigation. Invalidates on TTL (15 min) or any entity/range change (which flips the fetch key).
-    const cached = radiationHistoryCacheGet(fetchKey);
+    const cached = irradianceHistoryCacheGet(fetchKey);
     if (cached)
     {
-        host._solarRadiationHistory = cached.history;
-        pushSolarRadiationToEngine(host);
+        host._irradianceHistory = cached.history;
+        pushIrradianceToEngine(host);
         return;
     }
-    fetchSolarRadiationHistory(host, entity, fetchStart, host._timeRange.end, fetchKey);
+    fetchIrradianceHistory(host, entity, fetchStart, host._timeRange.end, fetchKey);
 }
 
 
@@ -192,29 +192,29 @@ export function refreshSolarRadiation(host: RadiationHost): void
 //
 // Dirty-flag gate: inputs are stable between hass pushes and fetches, so we hash (history identity, state identity, entity) and
 // skip the rebuild when nothing changed. Without it, auto-rotate rebuilds ~700 sample objects per render (move events mutate
-// overlay @state -> updated() -> refreshSolarRadiation), causing massive GC churn.
-const _pushedRadiationKey = new WeakMap<RadiationHost, {
+// overlay @state -> updated() -> refreshIrradiance), causing massive GC churn.
+const _pushedIrradianceKey = new WeakMap<IrradianceHost, {
     histRef: unknown;
     stateRef: unknown;
     entity: string;
 }>();
 
-export function pushSolarRadiationToEngine(host: RadiationHost): void
+export function pushIrradianceToEngine(host: IrradianceHost): void
 {
     if (!host._engine)
     {
         return;
     }
-    const entity = String(host.config?.['solar-radiation-entity'] ?? '').trim();
+    const entity = String(host.config?.['solar-irradiance-entity'] ?? '').trim();
     if (!entity || !host.hass)
     {
         host._engine.setSolarRadiationSamples(null);
-        _pushedRadiationKey.delete(host);
+        _pushedIrradianceKey.delete(host);
         return;
     }
-    const hist     = host._solarRadiationHistory;
+    const hist     = host._irradianceHistory;
     const stateRef = host.hass.states?.[entity];
-    const cached = _pushedRadiationKey.get(host);
+    const cached = _pushedIrradianceKey.get(host);
     if (cached
         && cached.histRef  === hist
         && cached.stateRef === stateRef
@@ -242,14 +242,14 @@ export function pushSolarRadiationToEngine(host: RadiationHost): void
         }
     }
     host._engine.setSolarRadiationSamples(samples.length > 0 ? samples : null);
-    _pushedRadiationKey.set(host, { histRef: hist, stateRef, entity });
+    _pushedIrradianceKey.set(host, { histRef: hist, stateRef, entity });
 }
 
 
 // Fetch the irradiance history: defensive parsing across HA's compaction / minimal_response variants. W/m² values are taken
 // as-is; the sensor is expected to expose irradiance in the unit the engine consumes, no normalisation step.
-export async function fetchSolarRadiationHistory(
-    host:     RadiationHost,
+export async function fetchIrradianceHistory(
+    host:     IrradianceHost,
     entityId: string,
     start:    Date,
     end:      Date,
@@ -260,36 +260,36 @@ export async function fetchSolarRadiationHistory(
     {
         return;
     }
-    host._solarRadiationFetching = true;
+    host._irradianceFetching = true;
     try
     {
         const now = new Date();
         const fetchEnd = end > now ? now : end;
         if (start >= fetchEnd)
         {
-            host._solarRadiationHistory = { times: [], values: [] };
-            pushSolarRadiationToEngine(host);
+            host._irradianceHistory = { times: [], values: [] };
+            pushIrradianceToEngine(host);
             return;
         }
 
         // Try statistics first. HA-convention irradiance sensors expose `state_class: measurement` and land in LTS automatically,
         // so the stats path scales to high-frequency feeds at near-zero cost. Falls back to raw history for non-LTS custom sensors,
         // at the cost of recorder bandwidth on the slim 2-day window.
-        let history: RadiationHistory = { times: [], values: [] };
+        let history: IrradianceHistory = { times: [], values: [] };
         const statsResult: any = await callWSWithTimeout<any>(host.hass, {
             type:           'recorder/statistics_during_period',
             start_time:     start.toISOString(),
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  [entityId],
             period:         '5minute',
-            // Mean only. The parser refuses the cumulative `state` field (see parseRadiationStats). Cumulative-counter entities
+            // Mean only. The parser refuses the cumulative `state` field (see parseIrradianceStats). Cumulative-counter entities
             // land empty here and the raw-history fallback below takes over.
             types:          ['mean'],
         });
         const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
         if (statsArr.length > 0)
         {
-            history = parseRadiationStats(statsArr);
+            history = parseIrradianceStats(statsArr);
         }
         else
         {
@@ -302,32 +302,32 @@ export async function fetchSolarRadiationHistory(
                 no_attributes:            true,
                 significant_changes_only: true,
             });
-            history = parseRawRadiationHistory((rawResult && rawResult[entityId]) ?? []);
+            history = parseRawIrradianceHistory((rawResult && rawResult[entityId]) ?? []);
         }
 
-        host._solarRadiationHistory = history;
-        pushSolarRadiationToEngine(host);
+        host._irradianceHistory = history;
+        pushIrradianceToEngine(host);
         if (cacheKey)
         {
-            _radiationHistoryCache.set(cacheKey, { history, ts: Date.now() });
+            _irradianceHistoryCache.set(cacheKey, { history, ts: Date.now() });
         }
     }
     catch (e)
     {
         if (e instanceof WsTimeoutError)
         {
-            console.warn(`[HELIOS] solar radiation fetch timed out (${e.timeoutMs} ms), engine falls back to Open-Meteo for the past window.`);
+            console.warn(`[HELIOS] irradiance fetch timed out (${e.timeoutMs} ms), engine falls back to Open-Meteo for the past window.`);
         }
         else
         {
-            console.warn('[HELIOS] Solar radiation history fetch failed:', e);
+            console.warn('[HELIOS] Irradiance history fetch failed:', e);
         }
-        host._solarRadiationHistory = { times: [], values: [] };
-        pushSolarRadiationToEngine(host);
+        host._irradianceHistory = { times: [], values: [] };
+        pushIrradianceToEngine(host);
     }
     finally
     {
-        host._solarRadiationFetching = false;
+        host._irradianceFetching = false;
     }
 }
 
@@ -335,7 +335,7 @@ export async function fetchSolarRadiationHistory(
 // Raw-history parser, kept for the statistics fallback path. Tolerates the compact `s`/`lu` and verbose `state`/`last_updated`
 // shapes, drops `unavailable`/`unknown`/empty samples, and falls back to the previous timestamp on a missing `lu` (HA compaction
 // can omit it on consecutive identical samples).
-function parseRawRadiationHistory(arr: any[]): RadiationHistory
+function parseRawIrradianceHistory(arr: any[]): IrradianceHistory
 {
     const times:  Date[]   = [];
     const values: number[] = [];

@@ -12,7 +12,7 @@
 //the chip falls back to the average power of the latest completed 5-minute change bucket.
 
 import { pvNormalizeToWatts } from './pv';
-import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } from './format';
+import { formatEntityValue } from './format';
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 
@@ -205,19 +205,9 @@ function parseNumericState(raw: unknown): number | null
 
 
 //Format the grid chip value: power sources in kW, energy sources in kWh, at the configured precision
-//and locale-aware. Empty string when null so callers can collapse the chip.
+//and locale-aware. Empty string when null so callers can collapse the chip. Thin wrapper over the shared formatter.
 export function formatGridValue(hass: any, value: number | null, unit: string, decimals: number): string
 {
     if (value === null) { return ''; }
-    const u = unit.toLowerCase();
-    if (u === 'w' || u === 'kw' || u === 'mw')
-    {
-        return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals);
-    }
-    if (u === 'wh' || u === 'kwh' || u === 'mwh')
-    {
-        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals);
-    }
-    //Unknown unit: raw value at the configured precision + whatever unit HA reported.
-    return unit ? `${formatLocalisedNumber(hass, value, decimals)} ${unit}` : String(value);
+    return formatEntityValue(hass, value, unit, decimals);
 }

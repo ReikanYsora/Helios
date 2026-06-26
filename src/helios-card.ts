@@ -33,7 +33,7 @@ import
     resolveBatteryEntities,
     clearBatteryModuleCaches
 } from './card/battery';
-import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
+import { refreshIrradiance, clearIrradianceModuleCaches } from './card/irradiance';
 import
 {
     renderBottomChart,
@@ -389,12 +389,12 @@ export class HeliosCard extends LitElement
     @state() _batteryDischargeChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
     _batteryChangeFetchKey = '';
     _batteryChangeFetching = false;
-    //Solar-radiation entity history, populated when solar-radiation-entity is configured. Recorder
+    //Irradiance entity history, populated when solar-irradiance-entity is configured. Recorder
     //samples over the timeline range, merged with the live state, pushed to the engine via
     //setSolarRadiationSamples. Plain field (no @state): render never reads it, the engine owns lookup.
-    _solarRadiationHistory: { times: Date[]; values: number[] } | null = null;
-    _solarRadiationFetchKey = '';
-    _solarRadiationFetching = false;
+    _irradianceHistory: { times: Date[]; values: number[] } | null = null;
+    _irradianceFetchKey = '';
+    _irradianceFetching = false;
     //Screen-space layout of the solar arc, sun and incidence ray. Recomputed via engine.projectSunScene()
     //on every map transform and clock tick (sun moves with time).
     @state() _sunScene: SunScene | null = null;
@@ -473,7 +473,7 @@ export class HeliosCard extends LitElement
     private _cachedIsDarkThemesRef: unknown = undefined;
     private _cachedIsDark = false;
 
-    //Refresh-chain gate: updated() re-runs the PV/Battery/Grid/Radiation refreshers only when hass,
+    //Refresh-chain gate: updated() re-runs the PV/Battery/Grid/Irradiance refreshers only when hass,
     //config or the timeline range change identity. Without it, every overlay @state mutation would re-run
     //the chain on every map move during auto-rotate (hundreds of allocations per frame for no new data).
     private _lastRefreshHassRef:           unknown = undefined;
@@ -809,13 +809,13 @@ export class HeliosCard extends LitElement
         this._batteryChargeChangeSeries   = null;
         this._batteryDischargeChangeSeries = null;
         this._batteryChangeFetchKey       = '';
-        this._solarRadiationHistory       = null;
-        this._solarRadiationFetchKey      = '';
+        this._irradianceHistory           = null;
+        this._irradianceFetchKey          = '';
         //Drop the module-level caches too, else the next refresh rehydrates from the cross-mount cache with
         //the exact stale entry the user just cleared.
         clearPvModuleCaches();
         clearBatteryModuleCaches();
-        clearRadiationModuleCaches();
+        clearIrradianceModuleCaches();
         clearEnergyStatsCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot, refetches.
         this._engine?.resetDataCache();
@@ -1063,7 +1063,7 @@ export class HeliosCard extends LitElement
         refreshPv(this);
         refreshBattery(this);
         refreshGrid(this);
-        refreshSolarRadiation(this);
+        refreshIrradiance(this);
         //Solar forecast: read natively from HA's Energy dashboard (energy/solar_forecast). Non-fatal; with
         //no forecast source configured the call returns empty and the curve doesn't render. On the refresh
         //chain (which energy-prefs changes re-trip), so a freshly configured source lands next pass.

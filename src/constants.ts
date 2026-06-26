@@ -108,7 +108,6 @@ export const DENSE_FRACTION    = 0.6;
 //the cap on nearest footprints kept, the local-mode fallback house half-extents, the localStorage cache
 //TTL, the per-mirror retry delay, and the two CORS Overpass mirrors tried in order.
 export const FIXED_BUILDING_HEIGHT_M = 6;
-export const MAX_BUILDINGS           = 50;
 export const DEFAULT_BUILDING_COUNT  = 50;
 export const MIN_BUILDING_COUNT      = 10;
 export const MAX_BUILDING_COUNT      = 100;

@@ -216,7 +216,7 @@ export class HeliosEngine
     public onBuildingsFetchStart?: () => void;
     public onBuildingsFetchEnd?:   () => void;
 
-    //Irradiance samples from a HA solar-radiation sensor (history + live state), sorted ascending by time.
+    //Irradiance samples from a HA irradiance sensor (history + live state), sorted ascending by time.
     //Null = no entity or no usable samples (model irradiance used unchanged). Each is W/m², treated as
     //ground-truth shortwave irradiance at the home in the same units as shortwave_radiation_instant, so it
     //slots into the pipeline unscaled. Lookup is nearest-neighbour within a strict ±30 min window; outside
@@ -257,7 +257,7 @@ export class HeliosEngine
 
         //Skip the re-render when the dataset is unchanged. The card pushes samples every Lit cycle; without
         //this guard each push fires onWeatherUpdate -> updated() -> push again, an infinite loop that
-        //freezes the dashboard the moment a solar-radiation entity is selected.
+        //freezes the dashboard the moment an irradiance entity is selected.
         if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next))
         {
             return;

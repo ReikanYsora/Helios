@@ -110,8 +110,8 @@ export interface Translations
         inverterCutoffSocPctHelp:   string;
         //Optional W/m² sensor override (Ecowitt / Davis / PWS). When wired, preferred over Open-Meteo
         //for live + past irradiance; forecast hours always fall through to the model.
-        solarRadiationEntity:     string;
-        solarRadiationEntityHelp: string;
+        solarIrradianceEntity:     string;
+        solarIrradianceEntityHelp: string;
         //Surrounding buildings: cluster radius grows the home group to include attached outbuildings,
         //opacity sets neighbour transparency, colour is the base tint for every building.
         buildingsSection:         string;

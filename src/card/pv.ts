@@ -5,7 +5,9 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
-import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } from './format';
+import { pvNormalizeToWatts, formatEntityValue } from './format';
+//Re-export so battery/grid/charts/helios-card keep importing pvNormalizeToWatts from './pv'.
+export { pvNormalizeToWatts } from './format';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
 import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
@@ -633,55 +635,14 @@ export function currentPvRate(host: PvHost): PvRate | null
 }
 
 
-//Convert a POWER RATE into watts, to drive animation speeds on a unit-agnostic scale (leader-line dash flow saturates at a fixed
-//wattage regardless of sensor unit).
-//
-//Contract: `value` MUST already be an instantaneous power rate (W/kW/MW). Cumulative-energy (Wh/kWh/MWh) must be differentiated
-//caller-side via pvRateAtTime/currentPvRate first. Passing a raw cumulative reading returns 0 (pausing the animation rather than
-//mis-scaling kWh as watts) — an intentional wiring trap for future callers.
-export function pvNormalizeToWatts(value: number, unit: string): number
-{
-    const lu = (unit || '').toLowerCase();
-    if (lu === 'kw')
-    {
-        return value * 1000;
-    }
-    if (lu === 'mw')
-    {
-        return value * 1_000_000;
-    }
-    if (lu === 'w')
-    {
-        return value;
-    }
-    return 0;
-}
-
-
-
-
 
 
 
 
 
 //Format a PV reading for the chip below the home. Power auto-rescales W -> kW so 4500 W prints "4.5 kW"; energy keeps its native
-//unit with one decimal (daily totals sit in the 0-50 kWh band where one decimal is right).
+//unit with one decimal (daily totals sit in the 0-50 kWh band where one decimal is right). Thin wrapper over the shared formatter.
 export function formatPvValue(hass: any, value: number, unit: string, decimals: number): string
 {
-    const u  = (unit || '').trim();
-    const lu = u.toLowerCase();
-
-    //Power always prints kW, energy kWh, both at configured precision, so the chip reads uniform regardless of native unit.
-    if (lu === 'w' || lu === 'kw' || lu === 'mw')
-    {
-        return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals);
-    }
-    if (lu === 'wh' || lu === 'kwh' || lu === 'mwh')
-    {
-        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals);
-    }
-    //Arbitrary units: keep the entity's own unit string but still honour the global decimal setting.
-    const formatted = formatLocalisedNumber(hass, value, decimals);
-    return u ? `${formatted} ${u}` : formatted;
+    return formatEntityValue(hass, value, unit, decimals);
 }

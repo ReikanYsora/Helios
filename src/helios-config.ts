@@ -61,8 +61,8 @@ export interface HeliosConfig
     //Cluster radius (m): buildings within it (or containing the home) are treated as part of the home and
     //painted at full opacity, so attached garages/verandas don't render as transparent neighbours. Default 0.
     'building-cluster-radius'?: unknown;
-    //How many of the nearest buildings to keep around the home. Clamped [10,100], default 50. Replaces the
-    //hardcoded MAX_BUILDINGS — lowering it is a perf lever, raising it widens the surround.
+    //How many of the nearest buildings to keep around the home. Clamped [10,100], default 50. Lowering it is
+    //a perf lever, raising it widens the surround.
     'building-count'?:         unknown;
     //When true (default), buildings are extruded to their real OSM heights (capped). When false, every
     //building uses the fixed `building-height` prism so the framing stays uniform.
@@ -79,7 +79,7 @@ export interface HeliosConfig
     'home-longitude'?:         unknown;
     //Optional live irradiance sensor (W/m²) at the home, preferred over the Open-Meteo model for the "now"
     //reading in live mode. Past + forecast still come from the model.
-    'solar-radiation-entity'?: unknown;
+    'solar-irradiance-entity'?: unknown;
 }
 
 

@@ -104,93 +104,7 @@ export class HeliosCardEditor extends LitElement
 
     public setConfig(config: HeliosConfig): void
     {
-        // Strip retired keys on editor open so stale config can't carry ghost behaviour into a fresh card frame.
-        const sanitised = HeliosCardEditor._sanitiseConfig({ ...config });
-        const changed   = !HeliosCardEditor._configEq(config, sanitised);
-        this._cfg = sanitised;
-        // If anything was trimmed, push the cleaned config back to HA so the YAML reflects the schema now, not on the next edit.
-        if (changed)
-        {
-            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: sanitised } }));
-        }
-    }
-
-    // Retired config keys scrubbed from saved YAML on the next editor open, so a stale option can't carry ghost behaviour
-    // into a fresh card frame.
-    private static _RETIRED_KEYS: string[] = [
-        'card-theme',
-        'card-theme-light',
-        'card-theme-dark',
-        // Map style + label toggle: the basemap is a fixed unlabeled CARTO raster, so neither option does anything.
-        'map-style',
-        'show-labels',
-        // Entity slots the HA Energy dashboard already declares; the runtime resolves these from `energy/get_prefs` instead.
-        // See helios-card.ts setConfig for the user-facing migration notification.
-        'pv-power-entity',
-        'grid-import-entity',
-        'grid-export-entity',
-        'grid-power-entity',
-        'grid-power-invert',
-        'battery-soc-entity',
-        'battery-power-entity',
-        'battery-power-invert',
-        'batteries',
-        'timeline-consumption-enabled',
-        'date-format',
-        'time-format',
-        'pixel-ratio',
-        'timeline-enabled',
-        'timeline-width-pct',
-        'building-radius',
-        // Colour identity is fixed by the HA Energy palette (DEFAULT_*_COLOR_HEX in helios-config.ts); the renderer reads no
-        // per-card override, so these keys get stripped.
-        'sun-color',
-        'cloud-color',
-        'pv-color',
-        'battery-color',
-        'building-color',
-        // Shading is forecast-based and carries no per-area config; these keys self-heal out of an upgrading user's saved
-        // YAML on the next editor open.
-        'lidar-precision',
-        'lidar-local-ndsm-enabled',
-        'lidar-local-ndsm-url',
-        'lidar-local-ndsm-min-lat',
-        'lidar-local-ndsm-max-lat',
-        'lidar-local-ndsm-min-lon',
-        'lidar-local-ndsm-max-lon',
-        'lidar-view-point-size',
-        'lidar-view-radius',
-        'lidar-view-point-color',
-        'lidar-view-point-opacity',
-        'lidar-view-wireframe',
-        'lidar-view-wireframe-color',
-        'lidar-view-wireframe-opacity',
-    ];
-    private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
-    {
-        const out = { ...config } as Record<string, unknown>;
-        for (const k of HeliosCardEditor._RETIRED_KEYS)
-        {
-            if (k in out)
-            {
-                delete out[k];
-            }
-        }
-        return out as HeliosConfig;
-    }
-    private static _configEq(a: HeliosConfig, b: HeliosConfig): boolean
-    {
-        const aKeys = Object.keys(a).sort();
-        const bKeys = Object.keys(b).sort();
-        if (aKeys.length !== bKeys.length)
-        {
-            return false;
-        }
-        for (let i = 0; i < aKeys.length; i++) if (aKeys[i] !== bKeys[i])
-        {
-            return false;
-        }
-        return true;
+        this._cfg = { ...config };
     }
 
     public connectedCallback(): void
@@ -337,7 +251,7 @@ export class HeliosCardEditor extends LitElement
 
     // Solar-irradiance entity filter: accepts the `irradiance` device class plus any sensor reporting W/m². The unit fallback covers
     // template sensors (e.g. Ecowitt) that don't declare a device_class.
-    private _solarRadiationEntityFilter = (entity: any): boolean =>
+    private _solarIrradianceEntityFilter = (entity: any): boolean =>
     {
         if (!entity || !entity.attributes)
         {
@@ -581,19 +495,19 @@ export class HeliosCardEditor extends LitElement
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:solar-power-variant"></ha-icon>${t.editor.installationSection}</summary>
                 <div class="hint">${renderMarkdownLinks(t.editor.installationHint)}</div>
                 <div class="field field-block">
-                    <span class="label">${t.editor.solarRadiationEntity}</span>
+                    <span class="label">${t.editor.solarIrradianceEntity}</span>
                     ${this._pickerReady ? html`
                         <ha-entity-picker
                             allow-custom-entity
                             .hass="${this.hass}"
-                            .value="${String(c['solar-radiation-entity'] ?? '')}"
+                            .value="${String(c['solar-irradiance-entity'] ?? '')}"
                             .includeDomains="${['sensor', 'input_number']}"
-                            .entityFilter="${this._solarRadiationEntityFilter}"
-                            @value-changed="${(e: CustomEvent) => this._update('solar-radiation-entity', e.detail.value ?? '')}"
+                            .entityFilter="${this._solarIrradianceEntityFilter}"
+                            @value-changed="${(e: CustomEvent) => this._update('solar-irradiance-entity', e.detail.value ?? '')}"
                         ></ha-entity-picker>
                     ` : nothing}
                 </div>
-                <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
+                <div class="field-help">${t.editor.solarIrradianceEntityHelp}</div>
 
                 </details>
 
