@@ -13,7 +13,6 @@ import { renderBuildings, renderShadows, type Building, type ScenePalette, type 
 import { nightShade } from './colors';
 import {
     SVG_NS,
-    DEFAULT_TARGET_HEIGHT_M,
     GROWTH_RISE_MS,
     HOME_SQUASH_MS,
     HOME_GROW_MS,
@@ -29,7 +28,6 @@ export interface SceneRendererOptions
     sun?:           string;
     shadow?:        string;
     shadowOpacity?: number;
-    targetHeightM?: number;
 }
 
 export interface ScenePaletteFull extends ScenePalette
@@ -48,7 +46,6 @@ export class SceneRenderer
     private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
     private readonly _sceneSvg:     SVGSVGElement;
-    private readonly _targetHeightM: number;
 
     private _ground?:     Ground;
     private _groundLat?:  number;
@@ -84,7 +81,6 @@ export class SceneRenderer
     public constructor(container: HTMLElement, opts: SceneRendererOptions = {})
     {
         this._container = container;
-        this._targetHeightM = opts.targetHeightM ?? DEFAULT_TARGET_HEIGHT_M;
         if (opts.sun)           { this._palette.sun = opts.sun; }
         if (opts.shadow)        { this._palette.shadow = opts.shadow; }
         if (opts.shadowOpacity != null) { this._palette.shadowOpacity = opts.shadowOpacity; }
@@ -118,20 +114,6 @@ export class SceneRenderer
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);
         this.scheduleRedraw();
-        //A spawn during a relayout (dashboard edit-mode toggle, tab re-entry, cold load) can land its first
-        //draw at a transient viewport — and when the net container size ends up unchanged, no resize event
-        //follows to re-centre. Redraw once the layout has settled so the scene never stays projected from a
-        //smaller, off-centre viewport.
-        this._redrawNextFrame();
-    }
-
-    //One redraw on the next frame, after the current layout pass has settled.
-    private _redrawNextFrame(): void
-    {
-        requestAnimationFrame(() =>
-        {
-            if (this._alive) { this.scheduleRedraw(); }
-        });
     }
 
     public setBuildings(buildings: Building[]): void
@@ -275,7 +257,7 @@ export class SceneRenderer
         const height = this._container.clientHeight || 0;
         if (width === 0 || height === 0) { return; }
 
-        this.camera.setViewport(width, height, this._targetHeightM);
+        this.camera.setViewport(width, height);
 
         //Tilt + turn the basemap about the home, then translate the home onto the screen-space centre.
         if (this._ground)

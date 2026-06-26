@@ -51,17 +51,14 @@ export class SceneCamera
         this.tiltDeg    = Math.min(PITCH_MAX, Math.max(PITCH_MIN, tiltDeg));
     }
 
-    //Recompute the centre + trig basis for one frame. targetHeightM lifts the aim point above the home so
-    //the house sits lower in the frame with headroom for the sun arc.
-    public setViewport(width: number, height: number, targetHeightM: number): void
+    //Recompute the centre + trig basis for one frame. The camera aims at the home origin, so the home
+    //anchors at the exact centre of the viewport.
+    public setViewport(width: number, height: number): void
     {
-        const tilt     = this.tiltDeg * DEG;
-        const bearing  = this.bearingDeg * DEG;
-        const targetPx = targetHeightM * this.pxPerMetre;
+        const tilt    = this.tiltDeg * DEG;
+        const bearing = this.bearingDeg * DEG;
         this.centreX = width / 2;
-        //Near-plane clamp (as in project3) so a large targetHeightM can't blow up the centre.
-        const centreDenom = Math.max(PERSPECTIVE - targetPx * Math.cos(tilt), PERSPECTIVE * NEAR_PLANE);
-        this.centreY = height / 2 + targetPx * Math.sin(tilt) * (PERSPECTIVE / centreDenom);
+        this.centreY = height / 2;
         this._cosB = Math.cos(bearing);
         this._sinB = Math.sin(bearing);
         this._cosT = Math.cos(tilt);

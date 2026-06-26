@@ -4,7 +4,7 @@ import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/s
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
 import {
-    CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
+    CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
 } from './constants';
@@ -640,7 +640,6 @@ export class HeliosEngine
             sun:           '#ffc107',
             shadow:        '#000000',
             shadowOpacity: this._shadowOpacity(),
-            targetHeightM: CAMERA_TARGET_HEIGHT_M,
         });
         this._renderer.setCameraBearing(this._initialBearing());
         this._renderer.setCameraPitch(this._initialPitch());

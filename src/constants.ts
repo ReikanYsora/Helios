@@ -50,8 +50,6 @@ export const MAX_PERIOD_FUTURE_DAYS     = 14;
 
 
 //=== Camera ===
-//Frame a point this high above the home so the house sits lower with headroom for the arc.
-export const CAMERA_TARGET_HEIGHT_M = 10;
 //Pitch bounds shared by the engine pose policy, drag-rotate, the editor and the initial-pose clamp.
 //MIN = mostly top-down, MAX = nearly horizontal, REST = default.
 export const CAMERA_PITCH_MIN_DEG  = 15;
@@ -172,8 +170,6 @@ export const EARTH_CIRCUMFERENCE_M = 40075016.686;
 export const METRES_PER_DEG_LAT  = 111_320;
 
 //=== Renderer ===
-//Camera aim point above the home (m), the dark-theme CSS filter that tints the light CARTO tiles, and the
-export const DEFAULT_TARGET_HEIGHT_M = 3;
 //SVG namespace for the scene's screen-space overlay.
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
