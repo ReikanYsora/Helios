@@ -73,6 +73,11 @@ function findSunCrossing(
 //Per-day night intervals clipped to the visible range, each a (sunset[N] -> sunrise[N+1]) pair as
 //{ startPct, endPct } for `renderTimelineNightZones`. The walk pads one day each side so leading/trailing night
 //chunks still resolve when the window doesn't start/end on a solar boundary.
+//Memo for computeNightIntervals: the night zones depend only on the window + home coords, which are stable
+//across the frequent scrub + auto-rotate renders (those move _selectedTime / the camera, not _timeRange).
+//Without this the ~700 getSunPosition calls below ran on every one of those renders.
+let _nightMemo: { key: string; out: Array<{ startPct: number; endPct: number }> } | null = null;
+
 function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPct: number }>
 {
     const range = host._timeRange;
@@ -91,6 +96,11 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
     if (rangeMs <= 0)
     {
         return [];
+    }
+    const memoKey = `${startMs}|${endMs}|${coords.lat.toFixed(4)}|${coords.lon.toFixed(4)}`;
+    if (_nightMemo && _nightMemo.key === memoKey)
+    {
+        return _nightMemo.out;
     }
 
     type Crossing = { ms: number; kind: 'sunrise' | 'sunset' };
@@ -161,6 +171,7 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
             });
         }
     }
+    _nightMemo = { key: memoKey, out };
     return out;
 }
 

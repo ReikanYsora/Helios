@@ -72,6 +72,10 @@ function labToHex([l, a, b]: [number, number, number]): string
 //higher indices brighten it (dark theme) or darken it (light theme) by 18 LAB-lightness units per step,
 //unless the theme defines an explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for both
 //the per-source chart curves and the home histogram bands so the two always match the energy dashboard.
+//Memo for the deterministic LAB ramp step, keyed by base+dark+idx — the per-source colours are recomputed
+//on every chart/tooltip/histogram render, but the conversion only depends on those three.
+const _solarRampMemo = new Map<string, string>();
+
 export function energySolarColor(host: Element | null | undefined, dark: boolean, idx: number): string
 {
     if (host)
@@ -81,8 +85,15 @@ export function energySolarColor(host: Element | null | undefined, dark: boolean
     }
     const base = cssHex(host, '--energy-solar-color', '#ff9800');
     if (!idx) { return base; }
-    const lab = rgbToLab(hexToRgb(base));
-    return labToHex([lab[0] + (dark ? 18 : -18) * idx, lab[1], lab[2]]);
+    const key = `${base}|${dark}|${idx}`;
+    let out = _solarRampMemo.get(key);
+    if (out === undefined)
+    {
+        const lab = rgbToLab(hexToRgb(base));
+        out = labToHex([lab[0] + (dark ? 18 : -18) * idx, lab[1], lab[2]]);
+        _solarRampMemo.set(key, out);
+    }
+    return out;
 }
 
 //The card's semantic colours, resolved from the HA Energy palette tokens (the same ones HA's own energy
