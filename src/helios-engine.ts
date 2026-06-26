@@ -3,11 +3,10 @@ import { type Building, type RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
-import { startAutoRotateLoop } from './engine/auto-rotate';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
-    SHARED_FETCH_CACHE_TTL_MS,
+    SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
 } from './constants';
 import
 {
@@ -489,6 +488,66 @@ export class HeliosEngine
     _autoRotateRaf?:           number;
     _autoRotateLastFrame:      number = 0;
     _autoRotateLastUserAction: number = 0;
+    //Bearing integrated in our own float; round-tripping through getCameraBearing() would quantise the
+    //sub-degree increment into jitter.
+    private _autoRotateBearing?: number;
+
+    //Smooth time-based auto-rotation around the home, counter to the sun's apparent motion so camera and
+    //sun visually counter-orbit. Idempotent rAF loop; pauses for AUTO_ROTATE_INACTIVITY_MS after every user
+    //gesture, then resumes from the camera's current bearing. Integrates in seconds (delta-time) so the
+    //speed is constant across refresh rates. Self-terminates when the renderer goes away or rotation is
+    //disabled; updateConfig re-arms it when the toggle/lock flips back.
+    private _startAutoRotateLoop(): void
+    {
+        if (this._autoRotateRaf !== undefined || !this._renderer)
+        {
+            return;
+        }
+        this._autoRotateLastFrame      = performance.now();
+        this._autoRotateLastUserAction = 0;
+        this._autoRotateBearing        = this._renderer.getCameraBearing();
+
+        const tick = (t: number): void =>
+        {
+            const renderer = this._renderer;
+            if (!renderer)
+            {
+                this._autoRotateRaf = undefined;
+                return;
+            }
+            const dt = Math.max(0, t - this._autoRotateLastFrame) / 1000;
+            this._autoRotateLastFrame = t;
+
+            const sinceUser = Date.now() - this._autoRotateLastUserAction;
+            //Defaults OFF: rotation is opt-in (it can distract and, in scrub mode, blurs "did the camera
+            //move or did time pass?"). camera-locked also suppresses it.
+            const autoRotateEnabled = this.cfg['auto-rotate-enabled'] === true;
+            const cameraLocked      = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+            if (!autoRotateEnabled || cameraLocked)
+            {
+                this._autoRotateRaf = undefined;
+                return;
+            }
+            if (sinceUser >= AUTO_ROTATE_INACTIVITY_MS)
+            {
+                //Negative delta: bearing decreases (camera CCW), map content drifts CW, opposite the sun.
+                //Re-sync from the live camera right when the user stops touching it, else a mid-loop drag snaps back.
+                if (this._autoRotateBearing === undefined || sinceUser - AUTO_ROTATE_INACTIVITY_MS < 16)
+                {
+                    this._autoRotateBearing = renderer.getCameraBearing();
+                }
+                this._autoRotateBearing -= AUTO_ROTATE_DEG_PER_SEC * dt;
+                renderer.setCameraBearing(this._autoRotateBearing);
+            }
+            else
+            {
+                //While paused, track the live camera so a resume picks up from the edited pose.
+                this._autoRotateBearing = renderer.getCameraBearing();
+            }
+            this._autoRotateRaf = requestAnimationFrame(tick);
+        };
+        this._autoRotateRaf = requestAnimationFrame(tick);
+    }
 
     //Single-pointer drag-rotate (left-click on desktop, one-finger drag on touch). Bound to the renderer's
     //container element.
@@ -754,7 +813,7 @@ export class HeliosEngine
             this._refreshShadowsAndAtmosphere();
         }, 60_000);
 
-        startAutoRotateLoop(this);
+        this._startAutoRotateLoop();
 
         if (this._homeHourlyData)
         {
@@ -2157,7 +2216,7 @@ export class HeliosEngine
         const prevPermitsRotation = prevAutoRotateOn && !prevCameraLocked;
         if (nowPermitsRotation && !prevPermitsRotation && this._renderer)
         {
-            startAutoRotateLoop(this);
+            this._startAutoRotateLoop();
         }
 
         if (!this._renderer)
