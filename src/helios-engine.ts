@@ -33,7 +33,6 @@ interface HeliosStats
     styleReloads:             number;
     addBuildingsCalls:        number;
     buildingFetchStarts:      number;
-    contextLostEvents:        number;
 }
 function bumpStat(key: keyof HeliosStats): void
 {
@@ -50,8 +49,7 @@ function bumpStat(key: keyof HeliosStats): void
             updateConfigCalls:   0,
             styleReloads:        0,
             addBuildingsCalls:   0,
-            buildingFetchStarts: 0,
-            contextLostEvents:   0
+            buildingFetchStarts: 0
         };
     }
     w.__heliosStats[key] = (w.__heliosStats[key] ?? 0) + 1;

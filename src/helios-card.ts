@@ -79,7 +79,6 @@ import
     computeConfigSig,
     getHomeCoords,
     initEngine,
-    cancelPendingRespawn,
     initVisibilityObserver
 } from './card/init';
 //Side-effect import: registers <helios-card-editor> as a custom element.
@@ -464,9 +463,6 @@ export class HeliosCard extends LitElement
     _lastHomeKey       = '';
     _lastConfigSig     = '';
     _initInflight      = false;
-    //Timestamp of the last engine spawn. onContextLost bails when losses arrive faster than ~2 s apart,
-    //since respawning at that cadence would just thrash live engines.
-    _lastEngineSpawnAt = 0;
 
     //Cached theme polarity. The fallback path (getComputedStyle + regex) forces a style flush, too costly
     //per render. Result only changes on theme polarity flip / style reload, so cache by themesObj identity.
@@ -851,20 +847,10 @@ export class HeliosCard extends LitElement
         };
     }
 
-    //Wall-clock timestamp of the last connect. The engine spawn defers a short delay after connect so a
-    //dashboard edit-mode transition (which rapidly destroys + recreates the card) doesn't spawn a fresh
-    //engine per transient mount.
-    private _connectedAt = 0;
-    //Handle for the deferred requestUpdate() armed by the connect-settle branch in updated(). Cleared in
-    //disconnectedCallback so a card unmounted before it fires can't re-spawn an engine for a detached card
-    //(the secondary leak path on top of the edit-mode wrapping cycle).
-    private _connectSettleTimer: number | undefined;
-
     public connectedCallback(): void
     {
         super.connectedCallback();
         _liveCards.add(this);
-        this._connectedAt = performance.now();
         //Reset the daily-totals kickoff flag so a remount re-fires refreshHaDailyTotals when the HA Energy
         //defaults snapshot lands again.
         this._dailyTotalsKicked = false;
@@ -907,12 +893,6 @@ export class HeliosCard extends LitElement
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
         unsubscribeEnergyPrefs(this);
-        cancelPendingRespawn(this);
-        if (this._connectSettleTimer !== undefined)
-        {
-            window.clearTimeout(this._connectSettleTimer);
-            this._connectSettleTimer = undefined;
-        }
         //Engine cleanup on disconnect. The editor preview pane destroys + recreates the card on every
         //config-changed commit, so we accept a fresh engine per commit. The live dashboard tile is not
         //recreated, so it keeps its engine across re-renders.
@@ -1005,30 +985,9 @@ export class HeliosCard extends LitElement
             {
                 return;
             }
-            //Mount-debounce: entering edit mode destroys + recreates the card several times in the first
-            //few hundred ms. Defer the first spawn so a card that mounts and unmounts within
-            //CONNECT_SETTLE_MS never allocates an engine.
-            const sinceConnect = performance.now() - this._connectedAt;
-            const CONNECT_SETTLE_MS = 1000;
-            if (sinceConnect < CONNECT_SETTLE_MS)
-            {
-                //Reuse one deferred wake-up so rapid Lit updates don't enqueue several timers. Cancelled in
-                //disconnectedCallback so a card unmounted mid-defer never re-spawns.
-                if (this._connectSettleTimer !== undefined)
-                {
-                    window.clearTimeout(this._connectSettleTimer);
-                }
-                this._connectSettleTimer = window.setTimeout(() =>
-                {
-                    this._connectSettleTimer = undefined;
-                    if (!this.isConnected)
-                    {
-                        return;
-                    }
-                    this.requestUpdate();
-                }, CONNECT_SETTLE_MS - sinceConnect + 16);
-                return;
-            }
+            //Spawn straight away for an instant first paint. Edit-mode mount/unmount churn is absorbed
+            //downstream: initEngine() coalesces respawns within its cooldown, and initEngineNow()'s rAF
+            //re-checks isConnected before the heavy build, so a transient mount never allocates an engine.
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
             initEngine(this);

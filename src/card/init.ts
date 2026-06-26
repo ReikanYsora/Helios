@@ -8,7 +8,6 @@ import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
 import { refreshHud, setAnimationsPaused, type HudHost } from './hud';
 import type { ChartSeries } from './charts';
-import { ENGINE_SPAWN_COOLDOWN_MS, GLOBAL_SPAWN_COOLDOWN_MS } from '../constants';
 
 
 //Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine without a full
@@ -179,9 +178,6 @@ export interface InitHost extends HudHost
 
     _lastHomeKey:        string;
     _initInflight:       boolean;
-    //performance.now() of the most recent spawn. The spawn throttle reads it to refuse respawns that arrive faster than the engine
-    //can tear down and rebuild, so a burst of config edits can't cascade into a respawn loop.
-    _lastEngineSpawnAt:  number;
     _visibilityObserver?: IntersectionObserver;
     //Document visibilitychange listener, stored on the host so disconnectedCallback can removeEventListener cleanly (per-card instance).
     _onVisibilityChange?: () => void;
@@ -248,70 +244,14 @@ export function initVisibilityObserver(host: InitHost): void
 }
 
 
-//Construct an engine. shouldHaveEngine() has already absorbed visibility/editor-preview/tab-hidden debouncing upstream, so go
-//straight to initEngineNow() (a second debounce would just add a 500ms stall to first paints). Sets _initInflight so updated()
-//doesn't fire a second initEngine() while the rAF inside initEngineNow() is in flight.
-//Hard throttle: refuse to respawn if the previous spawn is younger than ENGINE_SPAWN_COOLDOWN_MS. HA's editor preview fires
-//setConfig() bursts (10+/s), and a fresh engine teardown + rebuild can't keep up at that cadence. 600ms safely covers one
-//teardown while still feeling instant.
-const _pendingRespawnTimers = new WeakMap<InitHost, number>();
-
-//Global spawn rate limit across ALL helios-card instances: dashboard edit mode can hold many cards alive, each starting up
-//independently still bursts. Anything beyond one fresh engine per 800ms is rejected.
-let _globalLastSpawnAt = 0;
-
-//Called from disconnectedCallback so a pending deferred respawn can't fire after teardown (which would spawn an engine for a card
-//with no shadow root).
-export function cancelPendingRespawn(host: InitHost): void
-{
-    const t = _pendingRespawnTimers.get(host);
-    if (t !== undefined)
-    {
-        window.clearTimeout(t);
-        _pendingRespawnTimers.delete(host);
-    }
-}
-
-
+//Spawn the engine. Engines are plain canvas-2D + SVG (no scarce WebGL context), so there's no spawn
+//rate limit: editor-preview churn is absorbed for free by the rAF + isConnected re-check inside
+//initEngineNow() — a card recreated on every config commit is disconnected before its frame fires, so
+//only the latest, still-mounted card actually builds. _initInflight stops updated() from firing a
+//second initEngine() while that rAF is in flight.
 export function initEngine(host: InitHost): void
 {
-    const now    = performance.now();
-    const lastAt = host._lastEngineSpawnAt ?? 0;
-    const delta  = now - lastAt;
-    const sinceGlobalSpawn = now - _globalLastSpawnAt;
-    //Per-card cooldown OR global rate limit can force a deferral; the global limit wins when several cards race during an edit-mode transition.
-    const needDefer = (delta < ENGINE_SPAWN_COOLDOWN_MS && lastAt > 0)
-                   || sinceGlobalSpawn < GLOBAL_SPAWN_COOLDOWN_MS;
-    if (needDefer)
-    {
-        //Coalesce rapid respawn requests into ONE deferred spawn after the cooldown; clear any prior pending one so we never enqueue
-        //more than one wake-up (latest config wins).
-        const prev = _pendingRespawnTimers.get(host);
-        if (prev !== undefined)
-        {
-            window.clearTimeout(prev);
-        }
-        host._initInflight = true;
-        const perCardWait = lastAt > 0 ? ENGINE_SPAWN_COOLDOWN_MS - delta : 0;
-        const globalWait  = GLOBAL_SPAWN_COOLDOWN_MS - sinceGlobalSpawn;
-        const wait        = Math.max(perCardWait, globalWait, 0) + 16;
-        const t = window.setTimeout(() =>
-        {
-            _pendingRespawnTimers.delete(host);
-            //If the card unmounted while the cooldown ran, release the inflight flag and bail before the heavy spawn path.
-            const hostEl = host as unknown as { isConnected?: boolean };
-            if (hostEl.isConnected === false)
-            {
-                host._initInflight = false;
-                return;
-            }
-            initEngineNow(host);
-        }, wait);
-        _pendingRespawnTimers.set(host, t);
-        return;
-    }
     host._initInflight = true;
-    _globalLastSpawnAt = now;
     initEngineNow(host);
 }
 
@@ -368,7 +308,6 @@ export function initEngineNow(host: InitHost): void
                 return;
             }
             host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.themeIsDark());
-            host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);
             //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first frame instead of
             //staying hidden until the first weather push - which can be delayed/skipped on a slow or rate-limited load (an aborted
