@@ -224,12 +224,12 @@ export const heliosCardStyles = css`
     /*  View mode. Clock fades every layer but the basemap (and the top-left controls); Scene restores them.
         The basemap (.scene-ground-holder) lives inside #map-container alongside .scene-svg, so the scene SVG
         is faded by name while the map container itself (and the holder) stay. */
-    ha-card > :not(#map-container):not(.overlay-top-left),
+    ha-card > :not(#map-container):not(.overlay-top-left):not(.time-bar),
     ha-card .scene-svg
     {
         transition: opacity var(--ha-animation-duration-slow, 350ms) ease;
     }
-    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left),
+    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar),
     ha-card.mode-clock .scene-svg
     {
         opacity: 0;

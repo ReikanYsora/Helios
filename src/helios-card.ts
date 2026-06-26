@@ -1709,7 +1709,7 @@ export class HeliosCard extends LitElement
                                 title="Scene"
                                 @click="${() => this._setViewMode('scene')}"
                             >
-                                <ha-icon icon="mdi:image-filter-hdr"></ha-icon>
+                                <ha-icon icon="mdi:weather-sunny"></ha-icon>
                             </button>
                             <button
                                 type="button"
