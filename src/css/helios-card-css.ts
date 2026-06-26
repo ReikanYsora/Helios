@@ -723,11 +723,46 @@ export const heliosCardStyles = css`
 
 
 
+    /*  ============================================================
+        HUD chips: ONE shared box recipe for all six floating pills so they
+        render at identical height, min-width, padding and font. Only the
+        DISTINCT bits (border-colour, z-index, colour, pointer behaviour,
+        active-glow, ha-icon, per-chip states) live in the per-chip rules
+        below. Do not re-declare the box geometry per chip.
+        ============================================================ */
+    .pv-pct-label,
+    .battery-pct-label,
+    .grid-label,
+    .solar-pct-label,
+    .cloud-chip,
+    .home-pill
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        box-sizing: border-box;
+        min-width: 76px;
+        padding: 3px 10px;
+        border: 2px solid;
+        border-radius: 999px;
+        background: var(--card-background-color, #ffffff);
+        background-clip: padding-box;
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        box-shadow: 0 1px 3px var(--shadow-color);
+    }
+
     /*  Crisp-text rule for chips translated onto the home anchor: the 50 % anchor + -50 % translate
         lands them at a fractional pixel, so geometricPrecision + antialiased smoothing keeps the
         glyphs sharp. */
     .pv-pct-label,
     .battery-pct-label,
+    .grid-label,
     .solar-pct-label
     {
         text-rendering: geometricPrecision;
@@ -817,27 +852,11 @@ export const heliosCardStyles = css`
         regardless of how wide the value reads. */
     .pv-pct-label
     {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
         z-index: 8;
-        display: inline-flex;
-        align-items: center;
         justify-content: center;
-        gap: 4px;
-        min-width: 76px;
-        box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
-        color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--pv-leader-color, var(--energy-solar-color, #ff9800));
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-size:    var(--ha-font-size-s, 12px);
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        white-space: nowrap;
+        pointer-events: none;
+        color:        var(--primary-text-color, #212121);
+        border-color: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
     }
 
     .pv-pct-label ha-icon
@@ -857,8 +876,6 @@ export const heliosCardStyles = css`
     {
         pointer-events: auto;
         cursor: pointer;
-        /*  Clip the card-background to the padding box so it doesn't bleed under the coloured border. */
-        background-clip: padding-box;
     }
     /*  Active target: a soft halo in the chip's own metric colour so the chip-to-chart coupling reads
         at a glance. */
@@ -894,27 +911,11 @@ export const heliosCardStyles = css`
     /*  Battery SoC and Power chips, same compact pill recipe as the PV chip. */
     .battery-pct-label
     {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
         z-index: 8;
-        display: inline-flex;
-        align-items: center;
         justify-content: center;
-        gap: 4px;
-        min-width: 76px;
-        box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
-        color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-size:    var(--ha-font-size-s, 12px);
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        white-space: nowrap;
+        pointer-events: none;
+        color:        var(--primary-text-color, #212121);
+        border-color: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
     }
 
     .battery-pct-label ha-icon
@@ -930,29 +931,11 @@ export const heliosCardStyles = css`
         with it. */
     .grid-label
     {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
         z-index: 8;
-        display: inline-flex;
-        align-items: center;
         justify-content: center;
-        gap: 4px;
-        min-width: 76px;
-        box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
-        color: var(--primary-text-color, #212121);
-        border: 2px solid var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        white-space: nowrap;
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
+        pointer-events: none;
+        color:        var(--primary-text-color, #212121);
+        border-color: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
     }
     .grid-label ha-icon
     {
@@ -1074,34 +1057,14 @@ export const heliosCardStyles = css`
         the home reads as the single energy hub, like HA's Energy distribution card. */
     .home-pill
     {
-        position: absolute;
-        transform: translate(-50%, -50%);
         z-index: 9;
-        display: inline-flex;
         flex-direction: row;
-        align-items: center;
         justify-content: center;
-        gap: 4px;
-        /*  Horizontal stadium: home glyph + live usage side by side. min-width/height match the leader
-            dock half-extents (38/14 px) so the leaders meet the visible pill edge. */
-        min-width: 76px;
-        height: 28px;
-        box-sizing: border-box;
-        padding: 0 10px;
-        background: var(--card-background-color, #ffffff);
-        background-clip: padding-box;
         color: var(--primary-color, #03a9f4);
-        border: 2px solid var(--primary-color, #03a9f4);
-        border-radius: 999px;
+        border-color: var(--primary-color, #03a9f4);
         /*  Clickable: the home is the consumption chip, retargeting the bottom chart to home usage. */
         pointer-events: auto;
         cursor: pointer;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
         /*  Keep the mask fade and ease the hover glow in/out. */
         transition: opacity 0.35s ease, box-shadow 0.2s ease;
     }
@@ -1191,26 +1154,11 @@ export const heliosCardStyles = css`
         chart to the cloud bands. Same recipe + active glow as the other chips. */
     .cloud-chip
     {
-        position: absolute;
-        transform: translate(-50%, -50%);
         z-index: 11;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
         pointer-events: auto;
         cursor: pointer;
-        background: var(--card-background-color, #ffffff);
-        background-clip: padding-box;
         color: var(--primary-text-color, #212121);
-        border: 2px solid var(--secondary-text-color, #727272);
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-        box-shadow: 0 1px 3px var(--shadow-color);
+        border-color: var(--secondary-text-color, #727272);
     }
     .cloud-chip ha-icon
     {
@@ -1284,30 +1232,19 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Solar irradiance label pinned above the live sun, same chip language as the cloud/PV chips. */
+    /*  Solar irradiance label pinned above the live sun, same chip language as the cloud/PV chips.
+        Distinct from the shared base: it anchors above the sun, so it uses a -100% vertical translate
+        instead of the shared -50%, and sits higher in the stack. */
     .solar-pct-label
     {
-        position: absolute;
         transform: translate(-50%, -100%);
         pointer-events: none;
         /*  Above the arc-front lines (z 11) so an arc segment never crosses the W/m² readout; the sun
             disc (z 12) still paints on top. */
         z-index: 13;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        background: var(--card-background-color, #ffffff);
-        color:      var(--primary-text-color, #212121);
+        color: var(--primary-text-color, #212121);
         /*  Sun chip uses the HA amber token so it stays distinct from the PV production chip (orange). */
-        border:     2px solid var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-size:    var(--ha-font-size-s, 12px);
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        white-space: nowrap;
+        border-color: var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
     }
 
     .solar-pct-label ha-icon
@@ -1382,7 +1319,9 @@ export const heliosCardStyles = css`
         .pv-pct-label,
         .battery-pct-label,
         .grid-label,
-        .solar-pct-label
+        .solar-pct-label,
+        .cloud-chip,
+        .home-pill
         {
             font-size: var(--ha-font-size-m, 14px);
             padding: 4px 12px;
@@ -1390,7 +1329,9 @@ export const heliosCardStyles = css`
         .pv-pct-label ha-icon,
         .battery-pct-label ha-icon,
         .grid-label ha-icon,
-        .solar-pct-label ha-icon
+        .solar-pct-label ha-icon,
+        .cloud-chip ha-icon,
+        .home-pill ha-icon
         {
             --mdc-icon-size: 18px;
         }
