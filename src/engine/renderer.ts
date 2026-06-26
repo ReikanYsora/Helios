@@ -14,7 +14,6 @@ import { nightShade } from './colors';
 import {
     SVG_NS,
     DEFAULT_TARGET_HEIGHT_M,
-    DARK_FILTER,
     GROWTH_RISE_MS,
     HOME_SQUASH_MS,
     HOME_GROW_MS,
@@ -51,7 +50,9 @@ export class SceneRenderer
     private readonly _sceneSvg:     SVGSVGElement;
     private readonly _targetHeightM: number;
 
-    private _ground?:   Ground;
+    private _ground?:    Ground;
+    private _groundLat?: number;
+    private _groundLon?: number;
     private _buildings: Building[] = [];
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
@@ -92,11 +93,14 @@ export class SceneRenderer
         container.appendChild(this._sceneSvg);
     }
 
-    //Resolve + build the CARTO basemap for a home position.
+    //Resolve + build the CARTO basemap for a home position. The position is retained so a theme flip can
+    //re-tile with the matching light/dark style.
     public async setLocation(lat: number, lon: number): Promise<void>
     {
+        this._groundLat = lat;
+        this._groundLon = lon;
         this.camera.pxPerMetre = pxPerMetreFor(lat);
-        const ground = await buildGround(lat, lon);
+        const ground = await buildGround(lat, lon, this._palette.dark);
         if (!this._alive) { return; }
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);
@@ -150,7 +154,13 @@ export class SceneRenderer
 
     public setPalette(p: Partial<ScenePaletteFull>): void
     {
+        const darkFlipped = p.dark !== undefined && p.dark !== this._palette.dark;
         this._palette = { ...this._palette, ...p };
+        //A theme flip swaps the CARTO basemap style, so re-tile the ground at the retained position.
+        if (darkFlipped && this._groundLat !== undefined && this._groundLon !== undefined)
+        {
+            void this.setLocation(this._groundLat, this._groundLon);
+        }
         this.scheduleRedraw();
     }
 
@@ -246,8 +256,6 @@ export class SceneRenderer
             const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
             this._ground.el.style.transformOrigin = transformOrigin;
             this._ground.el.style.transform = transform;
-            //Dark theme: tint the (light) CARTO tiles to a dark map via a CSS filter.
-            this._ground.el.style.filter = this._palette.dark ? DARK_FILTER : 'none';
             this._ground.fade.style.transformOrigin = transformOrigin;
             this._ground.fade.style.transform = transform;
         }

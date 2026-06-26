@@ -175,9 +175,8 @@ export const METRES_PER_DEG_LAT  = 111_320;
 
 //=== Renderer ===
 //Camera aim point above the home (m), the dark-theme CSS filter that tints the light CARTO tiles, and the
-//SVG namespace for the scene's screen-space overlay.
 export const DEFAULT_TARGET_HEIGHT_M = 3;
-export const DARK_FILTER = 'invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4)';
+//SVG namespace for the scene's screen-space overlay.
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
 //=== Renderer shadows ===

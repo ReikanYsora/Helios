@@ -1,6 +1,7 @@
-//Basemap ground plane for the 2.5D scene renderer. Stitches CARTO Voyager raster tiles into one
-//seam-free <canvas>, which the renderer then tilts + turns via a CSS 3D transform (see
-//SceneCamera.groundTransform).
+//Basemap ground plane for the 2.5D scene renderer. Stitches CARTO raster tiles into one seam-free
+//<canvas>, which the renderer then tilts + turns via a CSS 3D transform (see
+//SceneCamera.groundTransform). The light/dark theme picks the matching CARTO style so the basemap
+//reads natively in both — no client-side recolour.
 //
 //Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane.
 
@@ -46,11 +47,13 @@ export interface Ground
     size:  number;
 }
 
-//CORS-friendly CARTO subdomain rotation; referrerPolicy keeps the HA instance URL off the tile CDN.
-function tileUrl(x: number, y: number, zoom: number): string
+//CARTO style per theme: unlabeled light or dark basemap. CORS-friendly subdomain rotation;
+//referrerPolicy keeps the HA instance URL off the tile CDN.
+function tileUrl(x: number, y: number, zoom: number, dark: boolean): string
 {
-    const sub = 'abcd'[(x + y) % 4];
-    return `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/${zoom}/${x}/${y}.png`;
+    const sub   = 'abcd'[(x + y) % 4];
+    const style = dark ? 'dark_nolabels' : 'light_nolabels';
+    return `https://${sub}.basemaps.cartocdn.com/rastertiles/${style}/${zoom}/${x}/${y}.png`;
 }
 
 //Build the ground plane: stitch the CARTO tile grid into one canvas. Resolves once every tile has loaded
@@ -58,6 +61,7 @@ function tileUrl(x: number, y: number, zoom: number): string
 export async function buildGround(
     lat:  number,
     lng:  number,
+    dark: boolean,
     zoom: number = GROUND_ZOOM
 ): Promise<Ground>
 {
@@ -94,7 +98,7 @@ export async function buildGround(
                     };
                     img.onerror = (): void => resolve();
                     img.referrerPolicy = 'no-referrer';
-                    img.src = tileUrl(x, y, zoom);
+                    img.src = tileUrl(x, y, zoom, dark);
                 }));
             }
         }
