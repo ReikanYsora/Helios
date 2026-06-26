@@ -93,11 +93,11 @@ export class SceneRenderer
         container.appendChild(this._sceneSvg);
     }
 
-    //Resolve + build the basemap for a home position. `live` fetches CARTO tiles; otherwise a flat plane.
-    public async setLocation(lat: number, lon: number, live: boolean): Promise<void>
+    //Resolve + build the CARTO basemap for a home position.
+    public async setLocation(lat: number, lon: number): Promise<void>
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
-        const ground = await buildGround(lat, lon, live);
+        const ground = await buildGround(lat, lon);
         if (!this._alive) { return; }
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);

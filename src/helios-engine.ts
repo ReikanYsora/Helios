@@ -723,7 +723,7 @@ export class HeliosEngine
         this._refreshWeather();
     }
 
-    //Async bootstrap: resolve the CARTO basemap for the home (live tiles when online, flat plane otherwise),
+    //Async bootstrap: resolve the CARTO basemap for the home,
     //then mark ready, feed buildings + sun, and kick off the periodic atmosphere refresh + auto-rotate loop.
     private async _bootstrapRenderer(): Promise<void>
     {
@@ -734,11 +734,7 @@ export class HeliosEngine
         }
         try
         {
-            await renderer.setLocation(
-                this.homeLat,
-                this.homeLon,
-                typeof navigator !== 'undefined' ? navigator.onLine : true
-            );
+            await renderer.setLocation(this.homeLat, this.homeLon);
         }
         catch (err)
         {

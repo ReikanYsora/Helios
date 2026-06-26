@@ -64,20 +64,13 @@ export const heliosCardStyles = css`
         transform-style: preserve-3d;
         pointer-events: none;
     }
-    /*  Basemap tile canvas (live CARTO tiles) or its flat-plane fallback. Positioned by the renderer's
-        transform-origin + transform; sized in JS to the stitched tile grid. */
-    .ground,
-    .ground-flat
+    /*  Basemap tile canvas (CARTO tiles). Positioned by the renderer's transform-origin + transform;
+        sized in JS to the stitched tile grid. */
+    .ground
     {
         position: absolute;
         top: 0;
         left: 0;
-    }
-    /*  Privacy/offline flat ground: no tiles, just the themed card background so the scene still reads as
-        a first-party tile (the buildings + arc draw on top). */
-    .ground-flat
-    {
-        background: var(--ha-card-background, var(--card-background-color, #fff));
     }
     /*  Edge fade: same size + transform as the ground, a radial gradient that's transparent out to 90%
         (GROUND_FADE_START) then dissolves to the themed card background, turning the square tile grid into
@@ -505,9 +498,12 @@ export const heliosCardStyles = css`
 
     /*  Cloud chip on the sun → home line: a grey pill showing live cover, clickable to re-target the
         chart to the cloud bands. Same recipe + active glow as the other chips. */
+    /*  Cloud chip is the only chip with a custom width: it's just a short percentage, so it sizes to its
+        content (no fixed width) and reads about half as wide as the others, saving space. */
     .cloud-chip
     {
         z-index: 11;
+        width: auto;
         pointer-events: auto;
         cursor: pointer;
         color: var(--primary-text-color, #212121);

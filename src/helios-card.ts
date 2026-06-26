@@ -2180,9 +2180,10 @@ export class HeliosCard extends LitElement
                     const bottomY = sunScene!.sun.y - 22;                       //shared chip baseline
                     const midY    = bottomY - HeliosCard.CHIP_HALF_H_PX;        //chips' centre, for the leader
                     const cardW   = this._engine?.getViewportWidth() ?? 0;
-                    const HALF    = HeliosCard.CHIP_HALF_W_PX;                  //both chips are a fixed width
+                    const HALF    = HeliosCard.CHIP_HALF_W_PX;                  //irradiance chip half-width
                     const CONN    = 16;                                         //leader length bridging the edges
-                    const far     = HALF + CONN + 2 * HALF;                     //sun.x → the cloud's far edge
+                    const CLOUD_W = 76;                                         //cloud chip content-width upper bound
+                    const far     = HALF + CONN + CLOUD_W;                      //sun.x → the cloud's far edge
                     const roomRight = cardW <= 0 || sx + far <= cardW - 8;
                     const roomLeft  = sx - far >= 8;
                     const side      = roomRight ? 1 : (roomLeft ? -1 : (sx < cardW / 2 ? 1 : -1));

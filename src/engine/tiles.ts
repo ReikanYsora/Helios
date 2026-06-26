@@ -1,7 +1,6 @@
 //Basemap ground plane for the 2.5D scene renderer. Stitches CARTO Voyager raster tiles into one
 //seam-free <canvas>, which the renderer then tilts + turns via a CSS 3D transform (see
-//SceneCamera.groundTransform). In privacy/offline mode (or a total tile failure) it degrades to a flat
-//themed plane.
+//SceneCamera.groundTransform).
 //
 //Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane.
 
@@ -36,8 +35,8 @@ export function metresPerDegree(homeLat: number): { perLon: number; perLat: numb
 
 export interface Ground
 {
-    //The basemap element to transform: a <canvas> in live mode, a themed <div> in flat/fallback mode.
-    el:    HTMLElement;
+    //The basemap tile canvas to transform.
+    el:    HTMLCanvasElement;
     //Edge-fade overlay, transformed identically so the disc dissolves into the card background.
     fade:  HTMLDivElement;
     //Home position in canvas px (the transform-origin the renderer pins the home to).
@@ -54,21 +53,11 @@ function tileUrl(x: number, y: number, zoom: number): string
     return `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/${zoom}/${x}/${y}.png`;
 }
 
-function buildFlatGround(size: number): HTMLDivElement
-{
-    const flat = document.createElement('div');
-    flat.className = 'ground ground-flat';
-    flat.style.width  = `${size}px`;
-    flat.style.height = `${size}px`;
-    return flat;
-}
-
-//Build the ground plane. `live` fetches CARTO tiles; otherwise (or on total failure) returns the flat
-//themed plane. Resolves once every tile has loaded or errored so the first transform has real pixels.
+//Build the ground plane: stitch the CARTO tile grid into one canvas. Resolves once every tile has loaded
+//or errored so the first transform has real pixels. Helios is online-only, so there's no offline fallback.
 export async function buildGround(
     lat:  number,
     lng:  number,
-    live: boolean,
     zoom: number = GROUND_ZOOM
 ): Promise<Ground>
 {
@@ -81,45 +70,36 @@ export async function buildGround(
     const homeX  = (tileX - firstX) * TILE_PX;
     const homeY  = (tileY - firstY) * TILE_PX;
 
-    let el: HTMLElement | undefined;
-    if (live)
+    const el = document.createElement('canvas');
+    el.width  = size;
+    el.height = size;
+    el.className = 'ground';
+    const ctx = el.getContext('2d');
+    if (ctx)
     {
-        const canvas = document.createElement('canvas');
-        canvas.width  = size;
-        canvas.height = size;
-        canvas.className = 'ground';
-        const ctx = canvas.getContext('2d');
-        if (ctx)
+        const loads: Promise<void>[] = [];
+        for (let col = 0; col < across; col++)
         {
-            let loaded = 0;
-            const loads: Promise<void>[] = [];
-            for (let col = 0; col < across; col++)
+            for (let row = 0; row < across; row++)
             {
-                for (let row = 0; row < across; row++)
+                const x = firstX + col;
+                const y = firstY + row;
+                loads.push(new Promise<void>((resolve) =>
                 {
-                    const x = firstX + col;
-                    const y = firstY + row;
-                    loads.push(new Promise<void>((resolve) =>
+                    const img = new Image();
+                    img.onload = (): void =>
                     {
-                        const img = new Image();
-                        img.onload = (): void =>
-                        {
-                            ctx.drawImage(img, col * TILE_PX, row * TILE_PX, TILE_PX, TILE_PX);
-                            loaded += 1;
-                            resolve();
-                        };
-                        img.onerror = (): void => resolve();
-                        img.referrerPolicy = 'no-referrer';
-                        img.src = tileUrl(x, y, zoom);
-                    }));
-                }
+                        ctx.drawImage(img, col * TILE_PX, row * TILE_PX, TILE_PX, TILE_PX);
+                        resolve();
+                    };
+                    img.onerror = (): void => resolve();
+                    img.referrerPolicy = 'no-referrer';
+                    img.src = tileUrl(x, y, zoom);
+                }));
             }
-            await Promise.all(loads);
-            //Every tile failed (offline / blocked): fall back to the flat plane, not a blank canvas.
-            if (loaded > 0) { el = canvas; }
         }
+        await Promise.all(loads);
     }
-    if (!el) { el = buildFlatGround(size); }
 
     //Edge fade: same size + transform as the ground, dissolving its borders into the card background.
     const fade = document.createElement('div');
