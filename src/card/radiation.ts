@@ -156,8 +156,8 @@ export function refreshSolarRadiation(host: RadiationHost): void
     {
         return;
     }
-    // Narrow raw-window cap, mirrors the PV side (fetchPvHistory): a per-second W/m² sensor over a multi-day timeline would drag
-    // the HA recorder for the whole fetch and block other cards reading the same entity. The chart only needs accurate live data
+    // Narrow raw-window cap: a per-second W/m² sensor over a multi-day timeline would drag the HA recorder for the whole fetch
+    // and block other cards reading the same entity. The chart only needs accurate live data
     // at the head of the curve; older past values are interpolated from the engine's resampled series. 6 h gives the W/m² tooltip
     // enough resolution while keeping the recorder responsive.
     //
@@ -246,8 +246,8 @@ export function pushSolarRadiationToEngine(host: RadiationHost): void
 }
 
 
-// Mirrors fetchPvHistory: same payload shape and defensive parsing across HA's compaction / minimal_response variants. W/m² values
-// are taken as-is; the sensor is expected to expose irradiance in the unit the engine consumes, no normalisation step.
+// Fetch the irradiance history: defensive parsing across HA's compaction / minimal_response variants. W/m² values are taken
+// as-is; the sensor is expected to expose irradiance in the unit the engine consumes, no normalisation step.
 export async function fetchSolarRadiationHistory(
     host:     RadiationHost,
     entityId: string,

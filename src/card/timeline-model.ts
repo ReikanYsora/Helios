@@ -1,5 +1,5 @@
-//Adaptive timeline model (ported from the HA energy-solar-overview card): tick granularity (hours/days/
-//weeks/months) follows the visible span. Fed [start, end]; outputs labels + separators + dayBoundaries.
+//Adaptive timeline model: tick granularity (hours/days/weeks/months) follows the visible span. Fed
+//[start, end]; outputs labels + separators + dayBoundaries.
 
 
 import { TIMELINE_MAX_TICKS, HOUR_MS, DAY_MS } from '../constants';
@@ -68,7 +68,7 @@ function startOfMonth(d: Date): Date
 }
 
 
-//Build the adaptive tick/label model for a visible window. Span thresholds + thinning mirror the HA card.
+//Build the adaptive tick/label model for a visible window.
 export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TIMELINE_MAX_TICKS): TimelineModel
 {
     const total    = end.getTime() - start.getTime() || 1;

@@ -228,8 +228,8 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 }
 
 
-//Active theme polarity, the way HA's energy cards read it (hass.themes.darkMode) — drives whether the
-//per-source colour ramp brightens or darkens off the base solar token.
+//Active theme polarity (hass.themes.darkMode) — drives whether the per-source colour ramp brightens or
+//darkens off the base solar token.
 const chartIsDark = (host: ChartHost): boolean => !!host.hass?.themes?.darkMode;
 
 //Per-PV-string production shares at an instant, for the home stacked histogram. Reads each source's raw
@@ -274,7 +274,7 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
     }
     const total = parts.reduce((s, p) => s + p.v, 0);
     if (total <= 0 || parts.length < 2) { return []; }
-    //Same per-source colour ramp as the energy dashboard + the chart curves (HA's getEnergyColor).
+    //Same per-source colour ramp as the chart curves.
     return parts.map((p) => ({ frac: p.v / total, color: energySolarColor(el, dark, p.idx) }));
 }
 
@@ -371,8 +371,8 @@ export function pvValueAtTime(
             if (isCumulative)
             {
                 //_pvCalibStats carries the meter's cumulative `state` (kWh) per LTS bucket for energy sensors, NOT
-                //power (same contract dashboard.ts relies on). Differentiate the bracketing pair into average power
-                //like the raw-history branch; reading cumulative straight through inflates the readout ~1000x.
+                //power. Differentiate the bracketing pair into average power; reading cumulative straight through
+                //inflates the readout ~1000x.
                 for (let i = 1; i < calib.times.length; i++)
                 {
                     const t1 = calib.times[i].getTime();
@@ -417,8 +417,7 @@ export function pvValueAtTime(
     }
 
     //Forecast for future hours: read the store's CORRECTED forecast at the cursor instant (same series the dotted
-    //curve draws and the dashboard headline integrates), so the tooltip never disagrees with its line. Already
-    //cap-clipped and correction-applied, no local model loop.
+    //curve draws), so the tooltip never disagrees with its line. Already cap-clipped and correction-applied.
     const store = host._unifiedStore;
     if (store)
     {
@@ -470,8 +469,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
     const pv   = pvValueAtTime(host, atMs);
 
-    //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling, like the
-    //HA card). Grid/battery read from the store at the cursor instant (watts; kw() formats to kW; null -> NaN).
+    //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling).
+    //Grid/battery read from the store at the cursor instant (watts; kw() formats to kW; null -> NaN).
     const target   = host._chartTarget ?? 'production';
     const store    = host._unifiedStore;
     const gridImpW = store ? (valueAt(store.gridImport, store, atMs) ?? NaN) : NaN;
@@ -516,8 +515,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     }
     const hasPv = isFinite(pv.value);
 
-    //Scrub tooltip icons inherit the active theme colour (see .tb-hover-tooltip-icon); the legacy per-series
-    //DEFAULT_*_COLOR_HEX tints are no longer applied here.
+    //Scrub tooltip icons inherit the active theme colour (see .tb-hover-tooltip-icon).
 
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
@@ -527,8 +525,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 
     //Day total split observed/forecast by cursor-vs-"now" (not the day boundary), so later-today hours show the
     //full-day forecast and earlier hours the production so far. Today's past prefers recorder-backed
-    //`_haSolarTodayKwh` (matches the dashboard chip), else local trapezoidal integration; future stays on
-    //`computeDailyKwhTotals`.
+    //`_haSolarTodayKwh`, else local trapezoidal integration; future stays on `computeDailyKwhTotals`.
     const dayKey = new Date(atDate);
     dayKey.setHours(0, 0, 0, 0);
     const todayKey = new Date();
@@ -734,21 +731,20 @@ export interface ChartHost
     //installs carry one entry equal to the aggregate; multi-source carry one per HA Energy source.
     readonly _pvHistoryPerEntity: Map<string, PvHistory>;
     //Hourly LTS series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` (same
-    //window, far fewer rows on high-frequency installs). Null while fetching / empty when not LTS-tracked -> consumer
-    //degrades to `_pvHistory`.
+    //window, far fewer rows on high-frequency installs). Null while fetching / empty when not LTS-tracked -> degrades
+    //to `_pvHistory`.
     readonly _pvCalibStats:   PvHistory | null;
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
-    //Today's produced kWh from the recorder `change` statistic over the `stat_energy_from` arrays, so the tooltip
-    //matches the dashboard chip. Null when unconfigured or pre-first-call -> tooltip falls back to trapezoidal
-    //integration over `_pvHistory`.
+    //Today's produced kWh from the recorder `change` statistic over the `stat_energy_from` arrays. Null when
+    //unconfigured or pre-first-call -> tooltip falls back to trapezoidal integration over `_pvHistory`.
     readonly _haSolarTodayKwh?: number | null;
     //Mutable hover-cursor position as a percent of the visible range (0..100), null when inactive. Written by the
     //pointer handlers below.
     _chartHoverPct:         number | null;
-    //Unified 5-day data source, single point of truth for the production + forecast curves across timeline / radial /
-    //dashboard. Null only between mount and first build -> chart degrades to an empty curve.
+    //Unified 5-day data source, single point of truth for the production + forecast curves. Null only between mount
+    //and first build -> chart degrades to an empty curve.
     readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
@@ -778,7 +774,6 @@ export function interpAt(times: Date[], values: number[], targetMs: number): num
         return isFinite(v) ? v : NaN;
     }
     //Binary search the bracketing pair in O(log n) (early returns above guarantee times[0] < targetMs < times[n-1]).
-    //Replaces a linear scan that was hot on 1 Hz sensors (~21,600 entries over 6 h, interpAt twice per render).
     let lo = 0;
     let hi = n - 1;
     while (hi - lo > 1)
@@ -866,7 +861,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     const pvColor = ENERGY_COLOR.pv(el);
     //Theme-aware "predicted" shade for the dashed forecast curve: light theme blends toward black, dark toward white,
-    //so it stays a readable softer line on either plate. Mirrors the dashboard's predictedColor logic.
+    //so it stays a readable softer line on either plate.
     const isDarkTheme       = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
     const predictedPvColor  = isDarkTheme
         ? lerpHexToward(pvColor, '#ffffff', 0.55)
@@ -882,7 +877,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //before the first build -> empty frame.
     const lu = (host._pvUnit || '').toLowerCase();
     const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-    //Keep the cumulative flag referenced (warning silence); the store now handles cumulative->W internally.
+    //The store handles cumulative->W internally; keep these referenced to silence unused warnings.
     void isCumulativeEnergy;
     void hist;
     const store = host._unifiedStore;
@@ -1141,7 +1136,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
 
 //Re-targetable bottom chart. Production keeps its dedicated renderer (forecast + per-source breakdown +
-//native-unit scaling); other targets go through the generic renderer below. Matches the HA energy-solar-overview card.
+//native-unit scaling); other targets go through the generic renderer below.
 export function renderBottomChart(host: ChartHost): TemplateResult
 {
     const target = host._chartTarget ?? 'production';

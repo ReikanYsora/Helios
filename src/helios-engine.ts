@@ -57,21 +57,17 @@ function bumpStat(key: keyof HeliosStats): void
 
 
 //Cap on simultaneously-live HeliosEngine instances. HA's editor spawns a fresh preview card per config
-//edit without reliably firing disconnectedCallback, so orphaned engines accumulate and exhaust WebGL
-//contexts (Safari mobile caps ~8, causing FPS drift / iOS black-screen). We track live engines in a Set
-//and evict the oldest before exceeding the cap. 4 leaves room for live card + HA preview + transients
-//without evicting the live card (2 fired on the first edit); browser per-origin caps are ~8-16. The cap
-//itself (MAX_LIVE_ENGINES) lives in constants.ts.
+//edit without reliably firing disconnectedCallback, so orphaned engines accumulate. We track live engines
+//in a Set and evict the oldest before exceeding the cap. MAX_LIVE_ENGINES lives in constants.ts.
 
 const _liveEngines = new Set<HeliosEngine>();
 
 
 //-----------------------------------------------------------------
 //Shared module-scope cache for parsed building footprints. HA re-creates the card element on every config
-//commit, re-allocating the WebGL context, but a fresh engine can pick up the already-parsed data
-//synchronously and skip the parse+projection cost (10-50 ms) that otherwise shows as a preview flash. TTL
-//is wide since the data is static; the key encodes home position + radius, so any meaningful change
-//invalidates the entry naturally. The TTL (SHARED_FETCH_CACHE_TTL_MS) lives in constants.ts.
+//commit; a fresh engine picks up the already-parsed data synchronously and skips the parse+projection
+//cost. TTL is wide since the data is static; the key encodes home position + radius, so any meaningful
+//change invalidates the entry naturally. SHARED_FETCH_CACHE_TTL_MS lives in constants.ts.
 
 interface SharedBuildingsCacheEntry
 {
@@ -165,8 +161,8 @@ function weatherCodeToIntensity(code: number, pct: number): CloudIntensity
 
 export class HeliosEngine
 {
-    //2.5D canvas/SVG renderer that replaces MapLibre. Owns its own DOM inside #map-container and the
-    //SceneCamera every projection routes through.
+    //2.5D canvas/SVG renderer. Owns its own DOM inside #map-container and the SceneCamera every projection
+    //routes through.
     _renderer?: SceneRenderer;
     homeLat:  number;
     homeLon:  number;
@@ -185,14 +181,13 @@ export class HeliosEngine
     private _homeHourlyData: SampleHourly | null = null;
     private _selectedTime:  Date | null       = null;
 
-    //Skip atmosphere repaint when the sun moved less than 0.5° since
-    //last call (≈ 2 min), setPaintProperty isn't free on mobile.
+    //Skip atmosphere repaint when the sun moved less than 0.5° since last call (≈ 2 min).
     private _lastAtmosphereAlt = -999;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
     //Consecutive non-429 failure count (5xx, network, JSON parse). Drives a graduated back-off so an
-    //outage no longer retries at a flat 60 s cadence and piles up IP-rate-limit traffic. Resets on success.
+    //outage doesn't retry at a flat cadence and pile up IP-rate-limit traffic. Resets on success.
     private _otherErrorStreak = 0;
 
     private _fetchAbortController?: AbortController;
@@ -382,8 +377,8 @@ export class HeliosEngine
             //Silent-degrade like the reader; only cross-reload persistence is lost, live state is intact.
         }
     }
-    //Resting pose at map init: localStorage (runtime lock chip) first, then legacy YAML camera-*-deg keys,
-    //then the hemisphere-aware default (south up in NH, north up in SH). Wrapped/clamped against stale reads.
+    //Resting pose at init: localStorage (runtime lock chip) first, then the YAML camera-*-deg keys, then
+    //the hemisphere-aware default (south up in NH, north up in SH). Wrapped/clamped against stale reads.
     private _initialBearing(): number
     {
         const stored = this._readStoredPose();
@@ -409,7 +404,7 @@ export class HeliosEngine
         return CAMERA_PITCH_REST_DEG;
     }
     //True when drag-rotate/pitch and idle auto-orbit are all suppressed (locked pose). localStorage flag
-    //(live lock chip) first, then legacy YAML key.
+    //(live lock chip) first, then the YAML key.
     public isCameraLocked(): boolean
     {
         const stored = this._readStoredPose();
@@ -480,8 +475,8 @@ export class HeliosEngine
     //Live pose readers so the editor pre-fills its sliders with the current view, not the committed YAML.
     public getCameraBearing(): number { return this._renderer ? this._renderer.getCameraBearing() : this.getDefaultBearing(); }
     public getCameraPitch():   number { return this._renderer ? this._renderer.getCameraPitch()   : this.getDefaultPitch(); }
-    //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return the legacy MapLibre zoom
-    //constant so the sun-arc-scale memo key + any zoom-aware callers keep a stable value.
+    //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
+    //sun-arc-scale memo key + any zoom-aware callers keep a stable value.
     public getCameraZoom():    number { return 18; }
 
     //Cached CSS width of the scene viewport (px), maintained on resize so HUD layout can read it without
@@ -497,7 +492,7 @@ export class HeliosEngine
     _autoRotateLastUserAction: number = 0;
 
     //Single-pointer drag-rotate (left-click on desktop, one-finger drag on touch). Bound to the renderer's
-    //container element rather than a WebGL canvas.
+    //container element.
     private _dragRotateHandlers?: {
         canvas:  HTMLElement;
         onDown:  (e: PointerEvent) => void;
@@ -558,7 +553,7 @@ export class HeliosEngine
         bumpStat('enginesCreated');
 
         //Evict the oldest live engine at the cap. Set iteration is insertion order, so the first value is
-        //the longest-lived, typically an orphaned editor-preview engine the user can no longer see.
+        //the longest-lived, typically an orphaned editor-preview engine the user can't see.
         while (_liveEngines.size >= MAX_LIVE_ENGINES)
         {
             const oldest = _liveEngines.values().next().value;
@@ -587,7 +582,7 @@ export class HeliosEngine
     {
         //Spin up the 2.5D renderer. It builds its own DOM (ground holder + scene SVG) inside the container,
         //owns the SceneCamera every projection routes through, and paints night-shade + cast shadows +
-        //extruded buildings itself. The home blue + shadow colour/opacity are merged into its palette.
+        //extruded buildings itself. The home colour + shadow colour/opacity are merged into its palette.
         this._container = container;
         this._renderer = new SceneRenderer(container, {
             sun:           '#ffc107',
@@ -749,9 +744,8 @@ export class HeliosEngine
         this._onRendererReady();
     }
 
-    //Called once the renderer's basemap has resolved: the analogue of MapLibre's style.load. Feeds the
-    //(possibly already-cached) buildings, paints the first atmosphere pass, arms the 60 s refresh and
-    //auto-rotate loop, and renders the current selection.
+    //Called once the renderer's basemap has resolved. Feeds the (possibly already-cached) buildings, paints
+    //the first atmosphere pass, arms the 60 s refresh and auto-rotate loop, and renders the current selection.
     private _onRendererReady(): void
     {
         if (!this._renderer)
@@ -808,8 +802,8 @@ export class HeliosEngine
         return fallback;
     }
 
-    //Push the full scene palette to the renderer from the live HA theme tokens (matching the source Solar
-    //scene card's colour wiring) + the building-opacity config. Re-run on init and on every theme flip.
+    //Push the full scene palette to the renderer from the live HA theme tokens + the building-opacity
+    //config. Re-run on init and on every theme flip.
     private _resolvePalette(): void
     {
         this._renderer?.setPalette({
@@ -824,7 +818,7 @@ export class HeliosEngine
     }
 
     //Card -> engine theme polarity. The renderer tints its painted geometry (night-shade, building faces)
-    //from the resolved theme palette; no basemap style swap (a CSS filter darkens the CARTO tiles instead).
+    //from the resolved theme palette; a CSS filter darkens the CARTO tiles.
     public setCardThemeIsDark(isDark: boolean): void
     {
         if (this._cardIsDark === isDark)
@@ -1081,8 +1075,8 @@ export class HeliosEngine
     }
 
     //Push the current building data into the renderer (it extrudes home + surroundings itself) and kick off
-    //the background fetch. The renderer paints opacity/colour/shadows from its palette + sun, so there are no
-    //per-layer MapLibre sources to build here anymore — just feed the footprints once data is in hand.
+    //the background fetch. The renderer paints opacity/colour/shadows from its palette + sun, so we just
+    //feed the footprints once data is in hand.
     private _addBuildings(): void
     {
         bumpStat('addBuildingsCalls');
@@ -1195,9 +1189,8 @@ export class HeliosEngine
 
 
     //Drive the renderer's sun position for the current (live or scrubbed) time. The renderer paints
-    //night-shade, building face shading and cast shadows itself from this azimuth/altitude — so what was a
-    //multi-pass MapLibre paint (setPaintProperty + setLight + shadow raster encode) is now one cheap setter.
-    //The ≥1.5° altitude throttle (~6 min of motion) is kept since it's free and avoids needless redraws.
+    //night-shade, building face shading and cast shadows itself from this azimuth/altitude via one setter.
+    //The ≥1.5° altitude throttle (~6 min of motion) avoids needless redraws.
     private _refreshShadowsAndAtmosphere(): void
     {
         if (!this._renderer)
@@ -1499,11 +1492,8 @@ export class HeliosEngine
         const ANCHOR_SAMPLES          = 48;
         const anchorLatPerM = 1 / 111_320;
         const anchorLonPerM = anchorLatPerM / cosLat;
-        //Reuse a single instance-level scratch array + string buffer
-        //instead of allocating a 48-entry array of template literals
-        //per call. This function fires on every map move during
-        //auto-rotate, and the cumulative string allocations were a
-        //measurable freeze source under longer rotations.
+        //Reuse a single instance-level scratch array + string buffer instead of allocating a 48-entry array
+        //per call; this function fires on every map move during auto-rotate.
         const anchorPts = this._anchorPtsBuf;
         if (anchorPts.length !== ANCHOR_SAMPLES)
         {
@@ -1524,7 +1514,7 @@ export class HeliosEngine
                 anchorPts[i] = '0,0';
                 continue;
             }
-            //Direct number-to-string concat with one decimal of precision; toFixed allocates a fresh Number-stringification per call which compounds.
+            //Direct number-to-string concat with one decimal of precision (cheaper than toFixed per call).
             const dx = ((p.x - home.x) * 100 | 0) / 100;
             const dy = ((p.y - home.y) * 100 | 0) / 100;
             anchorPts[i] = dx + ',' + dy;
@@ -1541,9 +1531,7 @@ export class HeliosEngine
         };
     }
 
-    //Scratch array for the PV home-anchor SVG points. Reused across
-    //projectHomeLabelLayout() calls so the 48-entry string array no
-    //longer gets allocated on every move.
+    //Scratch array for the PV home-anchor SVG points, reused across projectHomeLabelLayout() calls.
     private _anchorPtsBuf: string[] = [];
 
     //Cached container CSS dimensions, fed by the ResizeObserver. Drives _heliosScale()/_sunArcScale() and
@@ -1670,12 +1658,11 @@ export class HeliosEngine
     //grid-tuned pixel size and reads as a tiny dot on a giant curve on a fullscreen canvas).
     public getSunArcScale(): number { return this._sunArcScale(); }
 
-    //Keystone projection: lon/lat/altitude -> screen px via the SceneCamera (replaces MapLibre's transform
-    //matrix). Every card-facing projection method (projectSunScene, projectHomeFootprints,
-    //projectHomeLabelLayout, getSunArcScale, _applyCameraTargetPadding) routes through here unchanged.
-    //Coordinates are converted to local metres relative to the home, then the camera's project3() returns
-    //{x, y, depth}. The camera basis is refreshed each frame by the renderer's _draw (setViewport), so this
-    //is a cheap per-point transform with no per-frame cache needed.
+    //Keystone projection: lon/lat/altitude -> screen px via the SceneCamera. Every card-facing projection
+    //method (projectSunScene, projectHomeFootprints, projectHomeLabelLayout, getSunArcScale,
+    //_applyCameraTargetPadding) routes through here. Coordinates are converted to local metres relative to
+    //the home, then the camera's project3() returns {x, y, depth}. The camera basis is refreshed each frame
+    //by the renderer's _draw (setViewport), so this is a cheap per-point transform with no per-frame cache.
     private _projectScenePoint(
         lon: number, lat: number, altitudeM: number
     ): { x: number; y: number; depth: number } | null
@@ -1859,8 +1846,7 @@ export class HeliosEngine
         if (sunScreen.depth > dMax) { dMax = sunScreen.depth; }
         const dRange = (dMax - dMin) || 1;
         //SceneCamera.project3 returns depth = cameraZ, where LARGER = nearer the camera (it magnifies in the
-        //perspective divide) — the opposite of MapLibre's old `w` depth. So nearness peaks at dMax (closest);
-        //no `1 -` (that was the MapLibre convention and inverted the near/far layer split after the swap).
+        //perspective divide). So nearness peaks at dMax (closest); no `1 -` inversion.
         const nearnessOf = (d: number) => (d - dMin) / dRange;
 
         const arc = raw.map(p => ({

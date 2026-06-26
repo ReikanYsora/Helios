@@ -1,11 +1,11 @@
-//Unified 5-day data source: the single source of truth for every per-time signal the dashboard cards, radial
-//sundial, graph view and main timeline read. Built ONCE after the underlying fetches land, cached on the host,
-//then sliced/re-sampled by consumers at look-up time. Live numeric chips stay on the direct hass.states path; every
-//other surface that draws or hovers a curve uses this source.
+//Unified 5-day data source: the single source of truth for every per-time signal the card draws or hovers. Built
+//ONCE after the underlying fetches land, cached on the host, then sliced/re-sampled by consumers at look-up time.
+//Live numeric chips stay on the direct hass.states path; every other surface that draws or hovers a curve uses this
+//source.
 //
 //Cadence: one knob (`display-update-frequency-per-hour`, 1-60, default 4) controls both the storage cadence and the
 //render cadence of every graph. Higher = more precise curves at the cost of CPU/rebuild + memory/series. The forecast
-//curve is the exception: sourced from HA's Energy dashboard at its native hourly cadence, read into buckets as a
+//curve is the exception: sourced from HA's Energy solar forecast at its native hourly cadence, read into buckets as a
 //stepped hourly curve (each bucket reads the wh of the HA forecast hour it falls inside).
 //
 //Window: J-2 to J+2 = 5 days x (24 x bucketsPerHour) buckets/series. Origin storeStartMs = local midnight of
@@ -16,8 +16,8 @@
 //forecast W (HA Energy solar forecast, hourly stepped), battery W (signed, history), batterySoc % (live only, current
 //bucket), gridImport/gridExport W (slope of cumulative kWh meter).
 //
-//Forecast is a peer of production, not a fallback: the dial overlays forecast as a dashed line on top of the
-//production fill; the two series are never mixed inside a single value.
+//Forecast is a peer of production, not a fallback: forecast renders as a dashed line on top of the production fill;
+//the two series are never mixed inside a single value.
 
 import type { HeliosConfig } from '../helios-config';
 import { displayUpdateFrequencyPerHour } from '../helios-config';
@@ -266,7 +266,7 @@ function buildForecast(host: UnifiedStoreHost, storeStartMs: number, storeEndMs:
 
 //Battery net power per bucket, "positive = charging". Charge watts from the stat_energy_to `change` series, discharge
 //from stat_energy_from; net = charge - discharge. Two separate meters make the sign structural, so charging is never
-//lost (the old bug where a single signed sensor only surfaced discharge). Future buckets null.
+//lost. Future buckets null.
 function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
     const charge    = changeSeriesToWatts(host._batteryChargeChangeSeries,    storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
@@ -409,8 +409,8 @@ export function isStoreFresh(host: UnifiedStoreHost, store: UnifiedDataStore | n
 
 
 //---------------------------------------------------------------------------------------------------
-//Read-side accessors. Every consumer (radial dial, graph view, timeline) goes through these so bucket arithmetic and
-//the interpolation contract stay in one place.
+//Read-side accessors. Every consumer goes through these so bucket arithmetic and the interpolation contract stay in
+//one place.
 //---------------------------------------------------------------------------------------------------
 
 
@@ -434,8 +434,8 @@ export function valueAt(series: ReadonlyArray<number | null>, store: UnifiedData
 
 
 //Integrate the forecast series (watts/bucket) over [dayStartMs, dayEndMs) into kWh at store cadence: each non-null
-//bucket contributes watts x stepHours / 1000. Single source for every forecast kWh figure (headline, CoverFlow cards,
-//day-strip chips) so they all match the timeline curve. Null when no bucket in range carried a value.
+//bucket contributes watts x stepHours / 1000. Single source for every forecast kWh figure (headline, day-strip chips)
+//so they all match the timeline curve. Null when no bucket in range carried a value.
 export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): number | null
 {
     const series = store.forecast;

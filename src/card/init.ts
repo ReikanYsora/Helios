@@ -13,7 +13,7 @@ import { ENGINE_SPAWN_COOLDOWN_MS, GLOBAL_SPAWN_COOLDOWN_MS } from '../constants
 
 //Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine without a full
 //respawn. Exhaustive on purpose - a missing key would leave a slider-dragged value stale until the next natural respawn. Card-only
-//state and identity inputs (home coords flip identity via `_engineIdentitySig`) are out. Colours are fixed by the HA Energy palette.
+//state and identity inputs (home coords flip identity via `_engineIdentitySig`) are out. Colours come from the HA Energy palette.
 export const VISUAL_CONFIG_KEYS = [
     //When set, feeds the engine sensor samples that override Open-Meteo for live + past irradiance; a change must refresh so the
     //override (or its absence) is picked up immediately.
@@ -23,7 +23,7 @@ export const VISUAL_CONFIG_KEYS = [
     'building-cluster-radius',
     'building-opacity',
     'auto-rotate-enabled',
-    //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: a slider drag would respawn (teardown + rebuild WebGL) every
+    //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: a slider drag would respawn (teardown + rebuild the engine) every
     //frame. The editor instead pushes live previews through engine.setCamera* and bakes values into config; the next natural respawn
     //reads them from _initialBearing / _initialPitch.
 ] as const;
@@ -175,8 +175,8 @@ export interface InitHost extends OverlaysHost
 
     _lastHomeKey:        string;
     _initInflight:       boolean;
-    //performance.now() of the most recent spawn. onContextLost bails when losses arrive faster than the engine stabilises (browser
-    //thrashing its WebGL context pool); respawning at that cadence cascades, so the throttle breaks the loop and lets it settle.
+    //performance.now() of the most recent spawn. The spawn throttle reads it to refuse respawns that arrive faster than the engine
+    //can tear down and rebuild, so a burst of config edits can't cascade into a respawn loop.
     _lastEngineSpawnAt:  number;
     _visibilityObserver?: IntersectionObserver;
     //Document visibilitychange listener, stored on the host so disconnectedCallback can removeEventListener cleanly (per-card instance).
@@ -246,12 +246,12 @@ export function initVisibilityObserver(host: InitHost): void
 //straight to initEngineNow() (a second debounce would just add a 500ms stall to first paints). Sets _initInflight so updated()
 //doesn't fire a second initEngine() while the rAF inside initEngineNow() is in flight.
 //Hard throttle: refuse to respawn if the previous spawn is younger than ENGINE_SPAWN_COOLDOWN_MS. HA's editor preview fires
-//setConfig() bursts (10+/s), each respawn allocating a fresh MapLibre WebGL context that the browser's 8-16 slots can't keep up with
-//("too many active WebGL contexts"). 600ms safely covers one MapLibre teardown + GL slot release while still feeling instant.
+//setConfig() bursts (10+/s), and a fresh engine teardown + rebuild can't keep up at that cadence. 600ms safely covers one
+//teardown while still feeling instant.
 const _pendingRespawnTimers = new WeakMap<InitHost, number>();
 
 //Global spawn rate limit across ALL helios-card instances: dashboard edit mode can hold many cards alive, each starting up
-//independently still bursts past the WebGL slot pool. Anything beyond one fresh engine per 800ms is rejected.
+//independently still bursts. Anything beyond one fresh engine per 800ms is rejected.
 let _globalLastSpawnAt = 0;
 
 //Called from disconnectedCallback so a pending deferred respawn can't fire after teardown (which would spawn an engine for a card
@@ -310,14 +310,14 @@ export function initEngine(host: InitHost): void
 }
 
 
-//Build the MapLibre engine and wire engine-side callbacks back into card state. Runs once per (home, identity) tuple and replaces
+//Build the engine and wire engine-side callbacks back into card state. Runs once per (home, identity) tuple and replaces
 //any previous engine. Bails early if the container or hass.config isn't ready; the caller retries on the next Lit cycle.
 export function initEngineNow(host: InitHost): void
 {
     requestAnimationFrame(() =>
     {
         //isConnected gate: the rAF gap can land after a dashboard edit-mode unmount. Spawning for a card no longer in the DOM
-        //allocates a WebGL context with no visible canvas and feeds the editor-mode cascade.
+        //wastes a full engine build with no visible canvas and feeds the editor-mode cascade.
         const cardEl = host as unknown as {
             shadowRoot:  ShadowRoot | null;
             isConnected: boolean;
@@ -347,8 +347,7 @@ export function initEngineNow(host: InitHost): void
         const hadPreviousEngine = host._engine !== undefined;
         host._engine?.cleanup();
         host._engine = undefined;
-        //Defensive: clear anything MapLibre left in the container (canvas, telemetry div, marker root). Old MapLibre revisions
-        //occasionally left a dead canvas that stacked a second 3D context on the new one.
+        //Defensive: clear anything the previous engine left in the container (canvas, overlay nodes) before the rebuild.
         while (container.firstChild)
         {
             container.removeChild(container.firstChild);
@@ -377,9 +376,8 @@ export function initEngineNow(host: InitHost): void
 
         if (hadPreviousEngine)
         {
-            //Firefox's WebGL context release isn't synchronous: after WEBGL_lose_context.loseContext() in cleanup() the context lingers
-            //in the pool one more frame, so allocating the next engine in the same tick can fail to bind and render black. Skipping one
-            //frame gives Firefox time to release. Chrome doesn't need it but the ~16ms is invisible (editor preview already debounced).
+            //Skip one frame between teardown and rebuild so the previous engine's cleanup fully settles before the next one allocates;
+            //building in the same tick can render black. The ~16ms is invisible (editor preview already debounced).
             requestAnimationFrame(spawnNewEngine);
             return;
         }
@@ -415,12 +413,10 @@ function wireEngineCallbacks(host: InitHost): void
         refreshOverlays(host);
     };
     //Cloud-disc hover is wired directly on the SVG via @mousemove/@mouseleave (render path's solar-svg), so no engine callback for it.
-    //rAF-coalesced overlay refresh: MapLibre fires move events in bursts of 5-10/frame during inertial pan; without coalescing,
+    //rAF-coalesced overlay refresh: the engine fires transform events in bursts of 5-10/frame during inertial pan; without coalescing,
     //refreshOverlays + dome re-projection ran several times per frame (sun arc 96 samples, home silhouettes all footprints, dome
     //648 cells * 4 corners + 96 ribbon samples). The gate caps it at one full pass per frame.
     let overlayRaf: number | null = null;
-    //Weather mode hides the HUD via CSS (opacity:0 + pointer-events:none). While there the projected sun arc, silhouettes
-    //and chip anchors are invisible but refreshOverlays still re-projects them on every transform under auto-rotate.
     host._engine.onMapTransform = () =>
     {
         //If paused (off-screen or hidden tab) the browser still fires move events for tile-load completions, but nothing's visible -

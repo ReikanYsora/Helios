@@ -628,8 +628,8 @@ export const heliosCardStyles = css`
         padding: 0 2px 4px;
         pointer-events: none;
     }
-    /*  Active-target indicator (mirrors HA's chart-indicator): icon of the current chart target, keyed
-        so it fades in on each re-target. */
+    /*  Active-target indicator: icon of the current chart target, keyed so it fades in on each
+        re-target. */
     .tb-chart-indicator
     {
         display: inline-flex;
@@ -1249,8 +1249,7 @@ export const heliosCardStyles = css`
         gap: 1px;
         color: var(--sun-cross-color, #ffc107);
         pointer-events: none;
-        /*  Same layer as the far arc (z 5) it sits on, so the value chips (z 8) stay on top — matches
-            the source card's l-arc-far placement of the sunrise/sunset markers. */
+        /*  Same layer as the far arc (z 5) it sits on, so the value chips (z 8) stay on top. */
         z-index: 5;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     }

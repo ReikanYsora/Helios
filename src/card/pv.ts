@@ -13,7 +13,8 @@ import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
 
 //Resolve the live PV entity from the HA Energy solar source. Prefers `stat_rate` (signed W/kW) over cumulative `stat_energy_from`
 //(kWh) so the chart plots live power directly instead of through trapezoidal differentiation (flat-topped on sparse meters).
-//Empty string = no solar source configured (chip + chart hidden). Multi-source installs collapse to the first entry for now.
+//Empty string = no solar source configured (chip + chart hidden). Multi-source installs use the first entry here; live aggregation
+//across every wired source happens in refreshPv.
 export function resolvePvLiveEntity(defaults: EnergyDefaults): string
 {
     if (defaults.solarStatRates.length > 0)
@@ -65,8 +66,8 @@ export interface PvHost
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
     //Hourly LTS series feeding the 5-day forecast calibration. Same times[]/values[] shape as `_pvHistory`, via
     //`recorder/statistics_during_period` period:'hour' over 5 days. Power sensors land as bucket means; cumulative-energy as
-    //bucket-end `state`. ~120 rows, far lighter on the recorder than the raw path. Null when LTS unavailable (no `state_class`,
-    //LTS disabled); calibration then degrades to the narrower `_pvHistory` window.
+    //bucket-end `state`. ~120 rows, light on the recorder. Null when LTS unavailable (no `state_class`, LTS disabled);
+    //calibration then degrades to the narrower `_pvHistory` window.
     _pvCalibStats:          PvHistory | null;
     _pvCalibStatsFetchKey:  string;
     _pvCalibStatsFetching:  boolean;
@@ -144,8 +145,8 @@ export function refreshPv(host: PvHost): void
     }
 
     //Multi-source LIVE aggregation. A split E/W install (one solar source per string in HA Energy) sees the SUM of every wired
-    //stat_rate / stat_energy_from on chip, tooltip and headline instead of just the first entry. The history fetch + scrub-past
-    //path stays single-entity (uses `entity` above) until the recorder+interpolation refactor sums `_pvHistory`.
+    //stat_rate / stat_energy_from on chip, tooltip and headline. The history fetch + scrub-past path stays single-entity
+    //(uses `entity` above).
     const liveEntities = host._energyDefaults.solarStatRates.length > 0
         ? host._energyDefaults.solarStatRates
         : host._energyDefaults.solarStatEnergyFroms;
@@ -226,9 +227,9 @@ export function refreshPv(host: PvHost): void
             //without this the curve flatlines at the last hour boundary while the chip keeps ticking. The next full fetch
             //replaces the array wholesale.
             //
-            //In-place push, not spread: live state ticks ~50x/sec while the fetch key holds for an hour, so the old
-            //spread-then-reassign reallocated and grew the arrays unbounded. Push mutates in place (Lit re-renders off the live
-            //state assignment above, not `_pvHistory` identity); we trim entries that drift before `_timeRange.start`.
+            //In-place push, not spread: live state ticks ~50x/sec while the fetch key holds for an hour, so spreading would
+            //reallocate and grow the arrays unbounded. Push mutates in place (Lit re-renders off the live state assignment
+            //above, not `_pvHistory` identity); we trim entries that drift before `_timeRange.start`.
             const hist = host._pvHistory;
             if (hist)
             {
@@ -277,19 +278,18 @@ export function refreshPv(host: PvHost): void
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
 
-    //Raw-history fetch was removed (see below); LTS now covers the past portion. Build the shared entity set + fetch-key part
-    //here so the calibration path keys against the same set — a drift would re-fetch on every refresh, defeating the cadence.
+    //Shared entity set + fetch-key part, so the calibration path keys against the same set — a drift would re-fetch on every
+    //refresh, defeating the cadence.
     const sortedLive   = [...liveEntities].sort();
     const fetchKeyPart = sortedLive.length > 0 ? sortedLive.join(',') : entity;
 
-    //Raw `history/history_during_period` fetch removed. The card is wired to HA Energy end-to-end (daily totals via recorder
-    //`change`, headlines via `_haSolarTodayKwh`, calibration via `_pvCalibStats`, live chip via `hass.states[entity]`), so the
-    //heavy 6 h 1 Hz raw scan (single biggest WS round-trip: ~5-10 MB on a 4-source Victron, single-threaded SQLite scan on every
-    //mount) is no longer load-bearing. The chart blends `_pvCalibStats` for any portion `_pvHistory` does not cover; with
-    //`_pvHistory` empty the whole past flows through LTS, and the right-edge live tail is still pushed from `hass.states[entity]`.
+    //The card is wired to HA Energy end-to-end (daily totals via recorder `change`, headlines via `_haSolarTodayKwh`,
+    //calibration via `_pvCalibStats`, live chip via `hass.states[entity]`). The chart blends `_pvCalibStats` for any portion
+    //`_pvHistory` does not cover; with `_pvHistory` empty the whole past flows through LTS, and the right-edge live tail is
+    //pushed from `hass.states[entity]`.
 
-    //Hourly LTS for calibration (5 days). Multi-source aggregation matches the old raw path so the calibration ratio is learned
-    //against the SUMMED predicted-vs-actual instead of first-entity-only.
+    //Hourly LTS for calibration (5 days). Multi-source aggregation sums per source so the calibration ratio is learned against
+    //the SUMMED predicted-vs-actual instead of first-entity-only.
     if (!host._pvCalibStatsFetching)
     {
         const calibStart = new Date(today0.getTime() - 5 * DAY_MS);
@@ -522,8 +522,7 @@ export async function fetchPvStatistics(
 
         //Expose the per-source breakdown (keyed by entity id) for the per-string chart curves, the scrub
         //tooltip rows, and the home histogram. Same native-unit shape as the aggregate — consumers handle
-        //the cumulative→power differentiation. Previously this breakdown was aggregated then discarded, so
-        //those three surfaces only ever saw the summed series.
+        //the cumulative→power differentiation.
         const perMap = new Map<string, PvHistory>();
         for (let i = 0; i < entityIds.length; i++)
         {

@@ -1,7 +1,7 @@
 //Theme colour resolution for the card. Wherever a colour must be a concrete string — canvas chart
 //fills, inline SVG attributes — rather than a CSS var(), we resolve the live HA theme token off a host
 //element's computed style, so a user's custom theme flows through and we don't hardcode hex. A literal
-//fallback covers the case where the token is unset. Mirrors the source Solar scene card's colour wiring.
+//fallback covers the case where the token is unset.
 
 import { Xn, Yn, Zn, LAB_T0, LAB_T1, LAB_T2, LAB_T3 } from '../constants';
 

@@ -124,7 +124,7 @@ export const OVERPASS_ENDPOINTS = [
 
 //=== Engine lifecycle ===
 //Cap on simultaneously-live HeliosEngine instances (evict the oldest beyond it so orphaned preview cards
-//don't exhaust WebGL contexts) and the TTL of the shared module-scope parsed-buildings cache.
+//don't pile up) and the TTL of the shared module-scope parsed-buildings cache.
 export const MAX_LIVE_ENGINES          = 4;
 export const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
 

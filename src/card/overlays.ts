@@ -172,9 +172,9 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
 //every clock tick in live mode (sun position depends on time).
 //
 //Each assignment is gated by an equality check: Lit dirty-checks @state by identity, so a fresh-identity assignment with
-//identical content still triggers a full re-render. During manual rotation MapLibre fires move events at pointer rate
-//(up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields; Safari re-arms the
-//SMIL clock on every path mutation, so without these guards the clock state grows over ~10-15 s of drag and frame
+//identical content still triggers a full re-render. During manual rotation the engine fires transform events at pointer
+//rate (up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields; Safari re-arms
+//the SMIL clock on every path mutation, so without these guards the clock state grows over ~10-15 s of drag and frame
 //budget collapses.
 export function refreshOverlays(host: OverlaysHost): void
 {
@@ -242,8 +242,8 @@ export function buildArcSegments(
         out.push({
             x1: a.x, y1: a.y,
             x2: b.x, y2: b.y,
-            //Time-of-day arc colour (grey under the horizon, warm near it, amber high), matching the
-            //source Solar scene card. `sunColor` is the live --warning-color amber the high arc takes.
+            //Time-of-day arc colour (grey under the horizon, warm near it, amber high). `sunColor` is the
+            //live --warning-color amber the high arc takes.
             color:        arcColor(0.5 * (a.altitude + b.altitude), sunColor),
             nearness:     0.5 * (a.nearness + b.nearness),
             belowHorizon: a.belowHorizon || b.belowHorizon

@@ -1,10 +1,9 @@
-//Basemap ground plane for the 2.5D scene renderer — replaces MapLibre's raster/vector basemap. Stitches
-//CARTO Voyager raster tiles into one seam-free <canvas>, which the renderer then tilts + turns via a CSS
-//3D transform (see SceneCamera.groundTransform). In privacy/offline mode (or a total tile failure) it
-//degrades to a flat themed plane. Ported from the Home Assistant frontend Solar scene card.
+//Basemap ground plane for the 2.5D scene renderer. Stitches CARTO Voyager raster tiles into one
+//seam-free <canvas>, which the renderer then tilts + turns via a CSS 3D transform (see
+//SceneCamera.groundTransform). In privacy/offline mode (or a total tile failure) it degrades to a flat
+//themed plane.
 //
-//Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane, mirroring how the
-//MapLibre attribution rail was handled.
+//Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane.
 
 import { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, EARTH_CIRCUMFERENCE_M, METRES_PER_DEG_LAT, DEG } from './constants';
 //Re-exported so existing importers (e.g. the card CSS imports GROUND_FADE_START from './tiles') keep resolving.

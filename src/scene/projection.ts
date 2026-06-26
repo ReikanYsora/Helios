@@ -1,12 +1,10 @@
-//Faux-3D ("2.5D") camera + projection for the Helios scene renderer — the keystone that replaces
-//MapLibre's camera + map.project(). Ported from the Home Assistant frontend Solar scene card's
-//_project3 technique: a tilted ground plane (CSS rotateX/rotateZ applied to the basemap tile canvas)
-//with every overlay (buildings, shadows, sun arc, chips) projected on top by a hand-rolled
-//bearing → pitch → perspective transform, so the SVG content stays glued to the rotating basemap.
+//Faux-3D ("2.5D") camera + projection for the Helios scene renderer — the keystone of the scene. A
+//tilted ground plane (CSS rotateX/rotateZ on the basemap tile canvas) with every overlay (buildings,
+//shadows, sun arc, chips) projected on top by a bearing → pitch → perspective transform, so the SVG
+//content stays glued to the rotating basemap.
 //
 //All coordinates are LOCAL METRES relative to the home origin: +east, +north, +up. The lat/lng →
-//local-metre conversion (and tile math) lives in ./tiles. This module is pure and card-agnostic so the
-//two 2026.7.1 cards can share one camera.
+//local-metre conversion (and tile math) lives in ./tiles. Pure and card-agnostic, shared by both cards.
 
 import { PITCH_MIN, PITCH_MAX, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE, DEG } from './constants';
 //Re-exported so existing importers of these symbols from './projection' keep resolving.
@@ -54,14 +52,14 @@ export class SceneCamera
     }
 
     //Recompute the centre + trig basis for one frame. targetHeightM lifts the aim point above the home so
-    //the house sits lower in the frame with headroom for the sun arc (mirrors the source card's centreY).
+    //the house sits lower in the frame with headroom for the sun arc.
     public setViewport(width: number, height: number, targetHeightM: number): void
     {
         const tilt     = this.tiltDeg * DEG;
         const bearing  = this.bearingDeg * DEG;
         const targetPx = targetHeightM * this.pxPerMetre;
         this.centreX = width / 2;
-        //Same near-plane clamp as project3 so a large targetHeightM can't blow up the centre.
+        //Near-plane clamp (as in project3) so a large targetHeightM can't blow up the centre.
         const centreDenom = Math.max(PERSPECTIVE - targetPx * Math.cos(tilt), PERSPECTIVE * NEAR_PLANE);
         this.centreY = height / 2 + targetPx * Math.sin(tilt) * (PERSPECTIVE / centreDenom);
         this._cosB = Math.cos(bearing);

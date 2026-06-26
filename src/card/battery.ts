@@ -1,7 +1,7 @@
 //Home-battery subsystem: live SoC + power polling, history fetch, scrub-time sampling, today's energy aggregation, chip formatting.
 //
-//Single-source model: the user wires their battery on the HA Energy dashboard (per-source lists of `stat_rate`, `stat_energy_from`,
-//`stat_energy_to`, `stat_soc`); Helios reads the first entry of each. Multi-source aggregation lives in the HA Energy dashboard now.
+//The user wires their battery on the HA Energy dashboard (per-source lists of `stat_rate`, `stat_energy_from`, `stat_energy_to`,
+//`stat_soc`). Live reads aggregate across every wired bank (sum for power, mean for SoC).
 
 import { formatPowerKw } from './format';
 import { pvNormalizeToWatts } from './pv';
@@ -139,9 +139,9 @@ export function refreshBattery(host: BatteryHost): void
     }
 
     //Live SoC: clamped to [0, 100] since some BMS briefly report 100.5% during absorption or dip negative near calibration. Power
-    //normalised to watts so consumers work in one unit. Multi-bank SoC averaging mirrors HA frontend
-    //(hui-energy-distribution-card.ts:213-225): arithmetic mean of every wired `stat_soc`, NaN filtered, single-bank collapses to
-    //the one value. Capacity-weighted average from HA core PR #172817 lands once the field exists in the storage schema.
+    //normalised to watts so consumers work in one unit. Multi-bank SoC is the arithmetic mean of every wired `stat_soc` (NaN
+    //filtered, single-bank collapses to the one value); capacity-weighted averaging is not yet possible (no capacity field in the
+    //storage schema).
     let nextSoc: number | null = null;
     const socEntities = host._energyDefaults.batteryStatSocs;
     if (socEntities.length > 0)

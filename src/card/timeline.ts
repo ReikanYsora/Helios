@@ -73,7 +73,7 @@ export function tick(host: TimelineHost): void
 
 
 //Start scrubbing on pointer-down. Captures the pointer so subsequent moves and the eventual up land on the same track regardless of drag
-//position. Swallowed during the engine's post-exit cooldown so the click that dismissed the dashboard panel can't bleed into a scrub.
+//position. Swallowed during the engine's post-gesture cooldown so a click that ended a previous interaction can't bleed into a scrub.
 export function onTimelinePointerDown(host: TimelineHost, e: PointerEvent): void
 {
     if (!host._timeRange)

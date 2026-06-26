@@ -1,9 +1,5 @@
-//Self-sourced building footprints around the home, via the OpenStreetMap Overpass API.
-//
-//Earlier this module fetched OpenFreeMap planet basemap tiles and decoded their binary building layer,
-//which dragged in a tile decoder + a polygon intermediate. The 2.5D renderer only ever needs local-metre
-//footprints, so we now query Overpass directly (the same path as the reference "Snapshot" Solar scene
-//card) and hand back ready-to-extrude scene Building[].
+//Self-sourced building footprints around the home, via the OpenStreetMap Overpass API. Returns
+//ready-to-extrude scene Building[] in local metres, which is all the 2.5D renderer needs.
 //
 //We ask Overpass for every `way["building"]` and multipolygon `relation["building"]` within the radius,
 //convert each ring lat/lon -> local metres (east/north) relative to the home, keep the nearest

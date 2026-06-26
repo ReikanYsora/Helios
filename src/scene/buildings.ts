@@ -1,8 +1,7 @@
-//Faux-3D building + shadow painters for the 2.5D scene renderer — replaces MapLibre's fill-extrusion +
-//raster shadow layers. Buildings are extruded prisms drawn with a per-face painter's algorithm (depth-
-//sorted, screen-space back-face culled); shadows are each footprint's cast envelope flattened by one
-//group-opacity. Pure functions over a SceneCamera + local-metric footprints. Ported from the Home
-//Assistant frontend Solar scene card.
+//Faux-3D building + shadow painters for the 2.5D scene renderer. Buildings are extruded prisms drawn
+//with a per-face painter's algorithm (depth-sorted, screen-space back-face culled); shadows are each
+//footprint's cast envelope flattened by one group-opacity. Pure functions over a SceneCamera +
+//local-metric footprints.
 
 import { SceneCamera, PERSPECTIVE, NEAR_PLANE } from './projection';
 import { mixHex, hexByte, tintedRgba, pointsAttr, type Point } from './colors';
@@ -26,14 +25,14 @@ export interface ScenePalette
     dark:     boolean;
 }
 
-//Per-frame appearance of the HOME prism only (neighbours are unaffected). All optional: an empty object
-//renders the home as a solid `palette.home` block at full `growth`, i.e. the default behaviour.
+//Per-frame appearance of the HOME prism only (neighbours unaffected). All optional; an empty object
+//renders a solid `palette.home` block at full `growth`.
 export interface HomeAppearance
 {
-    //Solid fill colour for the home prism — the active chip's colour. Defaults to palette.home.
+    //Solid fill colour — the active chip's colour. Defaults to palette.home.
     color?:  string;
-    //Stacked histogram: one band per producing PV string, `frac` summing to ~1, ordered bottom→top. With
-    //2+ bands the home paints as a vertical stack instead of a solid block (tallest band = top producer).
+    //Stacked histogram: one band per producing PV string, `frac` summing to ~1, bottom→top. With 2+ bands
+    //the home paints as a vertical stack instead of a solid block.
     bands?:  { frac: number; color: string }[];
     //Extra height multiplier (0..1) for the squash/grow-on-retarget animation; multiplies `growth`.
     growth?: number;
@@ -77,10 +76,9 @@ export function renderShadows(
 }
 
 //Extrude + paint the buildings far→near. `altitude` is the sun altitude (deg) for the time-of-day tint;
-//`growth` ∈ [0,1] animates the prisms rising on first load. `neighborOpacity` (0..1, from the card's
-//building-opacity config) sets how solid the surrounding (non-home) prisms read. `home` customises the
-//home prism only: its solid colour follows the active chip, an extra growth multiplier drives the
-//squash/grow on retarget, and 2+ bands turn it into a vertical stacked histogram (one per PV string).
+//`growth` ∈ [0,1] animates the prisms rising on first load. `neighborOpacity` (0..1) sets how solid the
+//surrounding (non-home) prisms read. `home` customises the home prism only (colour, growth multiplier,
+//and optional 2+ band histogram).
 export function renderBuildings(
     cam:             SceneCamera,
     buildings:       Building[],
@@ -102,9 +100,8 @@ export function renderBuildings(
         .filter((o) => o.cameraZ < nearCull)
         .sort((a, b) => a.depth - b.depth);
 
-    //Neighbours use the raw colour (NOT altitude-tinted): the night shading would darken it to near the
-    //dark-theme background and make them vanish. Opacity is driven by the card's building-opacity config
-    //(neighborOpacity) so the user controls how solid the surrounding context reads.
+    //Neighbours use the raw colour (NOT altitude-tinted): the night shading would darken them to near the
+    //dark-theme background and make them vanish. Opacity (neighborOpacity) is user-controlled.
     const nb     = palette.neighbor;
     const nbRgba = (op: number): string =>
         `rgba(${hexByte(nb, 1)},${hexByte(nb, 3)},${hexByte(nb, 5)},${Math.max(0, Math.min(1, op)).toFixed(3)})`;
@@ -200,13 +197,12 @@ export function renderBuildings(
 }
 
 //---------------------------------------------------------------------------------------------------------
-//Footprint geometry helpers. Kept local to the building painters: they are the only consumers of these
-//footprint utilities. Ported from the Home Assistant frontend Solar scene card.
+//Footprint geometry helpers. Kept local to the building painters, their only consumers.
 //---------------------------------------------------------------------------------------------------------
 
-//Drop only TRULY collinear (redundant) vertices — common in OSM footprints where a straight wall is
-//split by extra points — so a wall stays ONE quad with no false vertical edge bisecting it. The 0.05 m
-//threshold (perpendicular distance off the line through the neighbours) keeps every real corner.
+//Drop only TRULY collinear vertices (common in OSM footprints) so a straight wall stays ONE quad with no
+//false vertical edge bisecting it. The 0.05 m threshold (perpendicular distance off the line through the
+//neighbours) keeps every real corner.
 function simplifyFootprint(points: Point[]): Point[]
 {
     const n = points.length;

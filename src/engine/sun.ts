@@ -75,7 +75,7 @@ export interface PanelOrientation
 //Optional context refining the PV estimate; every field opt-in, empty context preserves the original Haurwitz/Liu-Jordan output.
 export interface PvComputeContext
 {
-    airTempC?: number;   //retained so existing callers compile; no longer affect output (cell-temp derating moved to HA forecast)
+    airTempC?: number;   //accepted so existing callers compile; does not affect output (cell-temp derating lives in the HA forecast)
     windMs?:   number;   //ditto airTempC
     shading?:  boolean;  //Obstacle-shading hook: true zeroes the direct beam, keeps diffuse + ground (currently unset)
     //Measured/forecast GHI W/m² (Open-Meteo shortwave or home sensor). When >= 0 it replaces the analytical Haurwitz ×

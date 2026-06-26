@@ -14,14 +14,13 @@ export interface SampleHourly
     cloudHigh:   number[];
     weatherCode: number[];
     shortwave:   number[];
-    //Beam (direct) + diffuse shortwave on the horizontal plane, W/m², -1 sentinel. No longer fetched (the old PV
-    //forecast that consumed the split is gone, forecast now comes from HA); kept so cache + chart-series plumbing
-    //doesn't have to change. Same applies to snowDepth/temperature/windSpeed below.
+    //Beam (direct) + diffuse shortwave on the horizontal plane, W/m², -1 sentinel. Unused (forecast comes from
+    //HA); kept so cache + chart-series plumbing doesn't have to change. Same for snowDepth/temperature/windSpeed.
     directRad:   number[];
     diffuseRad:  number[];
-    snowDepth:   number[];   //ground snow depth, metres, NaN-padded. No longer fetched.
-    temperature: number[];   //2 m air temp, °C, NaN-padded. No longer fetched.
-    windSpeed:   number[];   //10 m wind speed, m/s, NaN-padded. No longer fetched.
+    snowDepth:   number[];   //ground snow depth, metres, NaN-padded. Unused.
+    temperature: number[];   //2 m air temp, °C, NaN-padded. Unused.
+    windSpeed:   number[];   //10 m wind speed, m/s, NaN-padded. Unused.
 }
 
 
@@ -296,8 +295,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //Variables we ask Open-Meteo for. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged over
 //the preceding one), matching our visual time cursor; it powers the live irradiance chip and sun-arc colouring. The split
 //cloud variables keep the total cloud_cover for rendering and let us detect the low-layer "fog spike" failure mode. The
-//PV forecast is now read natively from HA, so the radiation split, snow depth, temperature and wind (old physical
-//forecast only) are no longer requested.
+//PV forecast is read natively from HA, so the radiation split, snow depth, temperature and wind are not requested.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover',

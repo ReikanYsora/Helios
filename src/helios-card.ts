@@ -293,8 +293,8 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_FAR    = 10.0;
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
-    //Home pill is a horizontal stadium (like the other chips + the HA card), not a circle. Half-extents
-    //of its outline; leaders dock against this stadium so they all meet the same focal energy node.
+    //Home pill is a horizontal stadium (like the other chips), not a circle. Half-extents of its outline;
+    //leaders dock against this stadium so they all meet the same focal energy node.
     private static readonly HOME_PILL_HALF_WIDTH_PX  = 38;
     private static readonly HOME_PILL_HALF_HEIGHT_PX = 14;
     //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
@@ -337,7 +337,7 @@ export class HeliosCard extends LitElement
     _pvCalibStatsFetching  = false;
     //Recorder change series for the solar meter(s): canonical past-production source for the unified
     //store + chip scrub. Reset-corrected, unit-normalised kWh per 5-min bucket, same as the HA Energy
-    //dashboard. Replaces the client-side counter differentiation.
+    //dashboard.
     @state() _pvChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
     _pvChangeSeriesFetchKey  = '';
     _pvChangeSeriesFetching  = false;
@@ -361,7 +361,6 @@ export class HeliosCard extends LitElement
     @state() _gridExportUnit:    string        = '';
     //Recorder change series for the grid import/export meters: canonical past-power source for the
     //unified store + scrub. Reset-corrected kWh per 5-min bucket, same as the HA Energy dashboard.
-    //Replaces the per-entity rolling slope buffers.
     @state() _gridImportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
     @state() _gridExportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
     _gridImportChangeFetchKey = '';
@@ -416,7 +415,7 @@ export class HeliosCard extends LitElement
     //is outside; drives the hover guide line, per-curve dots and the tooltip chip.
     @state() _chartHoverPct: number | null = null;
     //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
-    //(production by default, then grid/battery/irradiance). Cloud is weather-mode only, never a target.
+    //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
     @state() _chartTarget: ChartTarget = 'production';
     @state() _chartSeries: {
         times:        Date[];
@@ -463,7 +462,7 @@ export class HeliosCard extends LitElement
     _lastConfigSig     = '';
     _initInflight      = false;
     //Timestamp of the last engine spawn. onContextLost bails when losses arrive faster than ~2 s apart,
-    //which means the browser is thrashing the WebGL pool, respawning at that cadence just feeds the fire.
+    //since respawning at that cadence would just thrash live engines.
     _lastEngineSpawnAt = 0;
 
     //Cached theme polarity. The fallback path (getComputedStyle + regex) forces a style flush, too costly
@@ -499,7 +498,7 @@ export class HeliosCard extends LitElement
         this.config = { ...config };
         //Seed the rolling-window span from the config period keys. A change re-applies without respawning
         //the engine: the period follows the camera pattern (dedicated setter, NOT in VISUAL_CONFIG_KEYS),
-        //so editing it never tears down the WebGL context.
+        //so editing it never tears down the engine.
         const past   = periodPastDays(this.config);
         const future = periodFutureDays(this.config);
         if (past !== this._periodPastDays || future !== this._periodFutureDays)
@@ -523,7 +522,7 @@ export class HeliosCard extends LitElement
         {
             this._timeRange = tr;
             //Scrub cursor now outside the new window: snap back to live so the scene doesn't freeze on an
-            //instant no longer reachable on the bar.
+            //instant unreachable on the bar.
             if (this._selectedTime
                 && (this._selectedTime.getTime() < tr.start.getTime()
                  || this._selectedTime.getTime() > tr.end.getTime()))
@@ -851,9 +850,8 @@ export class HeliosCard extends LitElement
     }
 
     //Wall-clock timestamp of the last connect. The engine spawn defers a short delay after connect so a
-    //dashboard edit-mode transition (which rapidly destroys + recreates the card) doesn't allocate a fresh
-    //WebGL context per transient mount. Without the defer, entering edit mode looped through 50+ context
-    //allocations in under a second and hit the browser's per-page WebGL cap.
+    //dashboard edit-mode transition (which rapidly destroys + recreates the card) doesn't spawn a fresh
+    //engine per transient mount.
     private _connectedAt = 0;
     //Handle for the deferred requestUpdate() armed by the connect-settle branch in updated(). Cleared in
     //disconnectedCallback so a card unmounted before it fires can't re-spawn an engine for a detached card
@@ -871,7 +869,7 @@ export class HeliosCard extends LitElement
         tick(this);
         //30 s tick: the clock shows HH:MM, the sun moves ~0.13°/refresh (smooth) and the 5-day live cursor
         //advances ~6 px per 30 s. PV/battery live readings update on hass state changes, not this tick, so
-        //they stay real-time. Cuts wake-ups 30× vs the previous 1 Hz cadence.
+        //they stay real-time.
         this._timer = window.setInterval(() =>
         {
             tick(this);
@@ -914,9 +912,9 @@ export class HeliosCard extends LitElement
             this._connectSettleTimer = undefined;
         }
         //Engine cleanup on disconnect. HA's editor preview pane destroys + recreates the card on every
-        //config-changed commit (hui-card.ts:195, hard-coded, no opt-out). We accept a fresh MapLibre +
-        //WebGL context per commit, the same trade-off apexcharts-card / mini-graph-card / Mushroom make.
-        //The live dashboard tile is NOT recreated (hui-card takes _updateElement when preview === false).
+        //config-changed commit (hui-card.ts:195, hard-coded, no opt-out), so we accept a fresh engine per
+        //commit. The live dashboard tile is NOT recreated (hui-card takes _updateElement when preview ===
+        //false).
         if (this._engine !== undefined)
         {
             this._engine.cleanup();
@@ -935,9 +933,9 @@ export class HeliosCard extends LitElement
     _onVisibilityChange?: () => void;
 
 
-    //Engine init policy: re-init only when an identity input changes (API key, home coordinates, map
-    //style). Container reflow just resizes the existing engine; we never tear down the MapLibre stack for
-    //a sibling re-render (it would trash the user's in-progress editor edits).
+    //Engine init policy: re-init only when an identity input changes (home coordinates). Container reflow
+    //just resizes the existing engine; we never tear down the engine for a sibling re-render (it would
+    //trash the user's in-progress editor edits).
     protected updated(_changedProperties: PropertyValues): void
     {
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
@@ -1007,8 +1005,8 @@ export class HeliosCard extends LitElement
                 return;
             }
             //Mount-debounce: entering edit mode destroys + recreates the card several times in the first
-            //few hundred ms, flooding the per-page WebGL cap. Defer the first spawn so a card that mounts
-            //and unmounts within CONNECT_SETTLE_MS never allocates a context.
+            //few hundred ms. Defer the first spawn so a card that mounts and unmounts within
+            //CONNECT_SETTLE_MS never allocates an engine.
             const sinceConnect = performance.now() - this._connectedAt;
             const CONNECT_SETTLE_MS = 1000;
             if (sinceConnect < CONNECT_SETTLE_MS)
@@ -1285,7 +1283,7 @@ export class HeliosCard extends LitElement
         const pvWattsNow = (pvRate !== null)
             ? pvNormalizeToWatts(pvRate.value, pvRate.unit)
             : 0;
-        //PV leader flow saturates at a fixed 5 kW reference (the install nameplate is no longer configured).
+        //PV leader flow saturates at a fixed 5 kW reference.
         const pvPeakRefW  = 5000;
         const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
         const pvIdle         = !(pvWattsNow > 0);
@@ -1534,7 +1532,7 @@ export class HeliosCard extends LitElement
         const showSun   = hasHomeCoords && sunScene !== null && sunScene.arc.length >= 2;
 
         //Fixed colour design system. The sun colour paints the arc, the disc rim and the irradiance fill.
-        //The on-ground cloud disc is painted via MapLibre engine-side, so no cloud hex is needed here.
+        //The on-ground cloud disc is painted engine-side, so no cloud hex is needed here.
         const sunColor      = ENERGY_COLOR.sun(this);
         const sunRimColor   = darkenHex(sunColor, 0.20);
         const arcSegments   = showSun ? buildArcSegments(sunScene!.arc, sunColor) : [];
@@ -1627,8 +1625,8 @@ export class HeliosCard extends LitElement
         const isDark = this._resolveIsDark(themesObj);
         const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
-        //camera-locked swaps the MapLibre grab cursor for the default arrow when the camera is pinned (pan
-        //+ rotate disabled, so the open-hand cursor was misleading). Re-evaluated every render.
+        //camera-locked swaps the grab cursor for the default arrow when the camera is pinned (pan + rotate
+        //disabled, so the open-hand cursor would be misleading). Re-evaluated every render.
         const cameraLocked = this._isCameraLocked();
         const cardClasses = [
             cardThemeClass,
@@ -1759,12 +1757,8 @@ export class HeliosCard extends LitElement
                       because PV and the home share the same X anchor
                       so a straight segment is the right vocabulary.
                       Hidden when no PV entity is configured.  -->
-                <!--  No ground ring around the home: the previous
-                      projected disc fought with the cloud-cover
-                      overlay and the HA-Energy-blue home silhouette
-                      below already carries the footprint identity.
-                      Slot kept so the home stack stays vertically
-                      anchored for the leaders below. -->
+                <!--  Empty slot kept so the home stack stays
+                      vertically anchored for the leaders below. -->
                 ${nothing}
 
                 ${showPvLabel ? (() => {
@@ -2031,13 +2025,11 @@ export class HeliosCard extends LitElement
                 <!--  Ray + bead live in their own SVG below the chip
                       family (z 7 < pv-pct-label z 8) so the PV chip's
                       background always occludes the ray endpoint at
-                      the chip border. The sun disc itself stays in
-                      the depth-split SVG below so it still passes in
-                      front of / behind the home cluster depending on
-                      camera bearing, but the ray no longer rides
-                      OVER the production chip when the sun's near
-                      half of the sky brings the disc above the chip
-                      stack. -->
+                      the chip border. The sun disc stays in the
+                      depth-split SVG below so it passes in front of /
+                      behind the home cluster depending on camera
+                      bearing, while the ray never rides over the
+                      production chip. -->
                 ${showSun && showRay ? html`
                     <svg class="solar-svg solar-ray-svg"
                          style="--solar-daylight:${sunScene!.daylight}">
@@ -2158,9 +2150,9 @@ export class HeliosCard extends LitElement
 
                 <!--  Cloud chip: a standalone pill just to the RIGHT of the irradiance chip, joined by a
                       short fixed cloud-coloured leader, showing the live cloud cover with a dynamic glyph.
-                      Unlike the HA card it does NOT enter weather mode: clicking it re-targets the timeline
-                      chart to the cloud cover (three altitude-band curves), same chip <-> chart coupling as
-                      the other chips. Anchored off the sun so it tracks the irradiance chip.  -->
+                      Clicking it re-targets the timeline chart to the cloud cover (three altitude-band
+                      curves), same chip <-> chart coupling as the other chips. Anchored off the sun so it
+                      tracks the irradiance chip.  -->
                 ${showSunLabel && this._cloudCover >= 0 ? (() =>
                 {
                     //Cloud chip sits to the RIGHT of the irradiance chip by default; if the pair is too close
@@ -2196,7 +2188,7 @@ export class HeliosCard extends LitElement
                 })() : nothing}
 
                 <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
-                      each horizon crossing, like the source Solar scene card.  -->
+                      each horizon crossing.  -->
                 ${showSun && sunScene ? html`
                     ${this._renderSunCrossing(sunScene.sunrise, sunScene.home, 'mdi:weather-sunset-up',   sunColor)}
                     ${this._renderSunCrossing(sunScene.sunset,  sunScene.home, 'mdi:weather-sunset-down', sunColor)}
@@ -2278,7 +2270,7 @@ export class HeliosCard extends LitElement
         }
     };
     //Camera lock state for the top-left lock button. Delegates to the engine (which prefers localStorage
-    //over the legacy YAML flag), so the icon always matches what MapLibre is doing.
+    //over the YAML flag), so the icon always matches the engine's lock state.
     private _isCameraLocked(): boolean
     {
         if (this._engine)

@@ -623,8 +623,8 @@ var e,t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         padding: 0 2px 4px;
         pointer-events: none;
     }
-    /*  Active-target indicator (mirrors HA's chart-indicator): icon of the current chart target, keyed
-        so it fades in on each re-target. */
+    /*  Active-target indicator: icon of the current chart target, keyed so it fades in on each
+        re-target. */
     .tb-chart-indicator
     {
         display: inline-flex;
@@ -1244,8 +1244,7 @@ var e,t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         gap: 1px;
         color: var(--sun-cross-color, #ffc107);
         pointer-events: none;
-        /*  Same layer as the far arc (z 5) it sits on, so the value chips (z 8) stay on top — matches
-            the source card's l-arc-far placement of the sunrise/sunset markers. */
+        /*  Same layer as the far arc (z 5) it sits on, so the value chips (z 8) stay on top. */
         z-index: 5;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     }
@@ -2457,12 +2456,8 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       because PV and the home share the same X anchor
                       so a straight segment is the right vocabulary.
                       Hidden when no PV entity is configured.  -->
-                <!--  No ground ring around the home: the previous
-                      projected disc fought with the cloud-cover
-                      overlay and the HA-Energy-blue home silhouette
-                      below already carries the footprint identity.
-                      Slot kept so the home stack stays vertically
-                      anchored for the leaders below. -->
+                <!--  Empty slot kept so the home stack stays
+                      vertically anchored for the leaders below. -->
                 ${G}
 
                 ${p?(()=>{const e=t.pvLabel.x,i=t.pvLabel.y+11,n=this._nudgeToHomePill(e,i,t.home.x,t.home.y);return B`
@@ -2715,13 +2710,11 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                 <!--  Ray + bead live in their own SVG below the chip
                       family (z 7 < pv-pct-label z 8) so the PV chip's
                       background always occludes the ray endpoint at
-                      the chip border. The sun disc itself stays in
-                      the depth-split SVG below so it still passes in
-                      front of / behind the home cluster depending on
-                      camera bearing, but the ray no longer rides
-                      OVER the production chip when the sun's near
-                      half of the sky brings the disc above the chip
-                      stack. -->
+                      the chip border. The sun disc stays in the
+                      depth-split SVG below so it passes in front of /
+                      behind the home cluster depending on camera
+                      bearing, while the ray never rides over the
+                      production chip. -->
                 ${fe&&Le?B`
                     <svg class="solar-svg solar-ray-svg"
                          style="--solar-daylight:${be.daylight}">
@@ -2817,9 +2810,9 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
 
                 <!--  Cloud chip: a standalone pill just to the RIGHT of the irradiance chip, joined by a
                       short fixed cloud-coloured leader, showing the live cloud cover with a dynamic glyph.
-                      Unlike the HA card it does NOT enter weather mode: clicking it re-targets the timeline
-                      chart to the cloud cover (three altitude-band curves), same chip <-> chart coupling as
-                      the other chips. Anchored off the sun so it tracks the irradiance chip.  -->
+                      Clicking it re-targets the timeline chart to the cloud cover (three altitude-band
+                      curves), same chip <-> chart coupling as the other chips. Anchored off the sun so it
+                      tracks the irradiance chip.  -->
                 ${Ce&&this._cloudCover>=0?(()=>{const e=be.sun.x,t=be.sun.y-34,i=this._engine?.getViewportWidth()??0,r=i<=0||e+130<=i-8?1:e-130>=8?-1:e<i/2?1:-1,n=e+84*r;return B`
                         <div
                             class="cloud-chip-leader"
@@ -2838,7 +2831,7 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                     `})():G}
 
                 <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
-                      each horizon crossing, like the source Solar scene card.  -->
+                      each horizon crossing.  -->
                 ${fe&&be?B`
                     ${this._renderSunCrossing(be.sunrise,be.home,"mdi:weather-sunset-up",Ae)}
                     ${this._renderSunCrossing(be.sunset,be.home,"mdi:weather-sunset-down",Ae)}

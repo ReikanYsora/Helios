@@ -2,10 +2,9 @@
 //each source's `stat_energy_from`, export meter = `stat_energy_to`, optional live signed-power
 //sensor = `stat_rate` / `power_config.stat_rate`.
 //
-//Past series (timeline, dashboard graph, scrub) read the recorder's pre-computed `change` metric on
-//the directional meters (same data as HA's energy-stats.ts). Import and export are SEPARATE meters,
-//so each direction's watts come from its own meter with no sign inference or shared-buffer slope,
-//keeping every surface consistent.
+//Past series (timeline + scrub) read the recorder's pre-computed `change` metric on the directional
+//meters, the same metric HA Energy consumes. Import and export are SEPARATE meters, so each direction's
+//watts come from its own meter with no sign inference or shared-buffer slope.
 //
 //Live "now" prefers the signed `stat_rate` sensor (entity state), summed across sources and split
 //into import (net >= 0) / export (net < 0), like the HA Energy live tile. Per-source inversion is

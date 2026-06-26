@@ -72,8 +72,8 @@ export interface Translations
         //Decimal-precision slider (0-3) for value readouts. Optional; falls back to inline English.
         valueDecimals?:               string;
         valueDecimalsHelp?:           string;
-        //Global display radius slider (50-500 m). Optional, FR-only for now; perf lever (smaller
-        //disc = less geometry per frame). Re-added in v1.8.4.
+        //Global display radius slider (50-500 m). Optional, FR-only; perf lever (smaller disc =
+        //less geometry per frame).
         displayRadius?:               string;
         displayRadiusHelp?:           string;
         //PV install: inverter cap, per-row panel orientation, inverter-cutoff SoC guard, optional
@@ -113,8 +113,7 @@ export interface Translations
         pvArrayLongitude:         string;
         pvArrayCoordsHelp:        string;
         pvArrayCoordsPlaceholder: string;
-        //Panel-group height above ground (m). Kept for the per-array geometry; no longer used for
-        //obstacle shading now that LiDAR is gone.
+        //Panel-group height above ground (m), for the per-array geometry.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
         //Sun-tracking selector per row: 'none' (fixed, default), 'dual-axis' (tilt+azimuth track),
@@ -142,7 +141,7 @@ export interface Translations
         buildingOpacity:          string;
         //Shadow options.
         shadowsSection:           string;
-        //Master shadow toggle (OpenFreeMap building footprints).
+        //Master shadow toggle (building footprints).
         shadowsEnabled:           string;
         shadowsEnabledOn:         string;
         shadowsEnabledOff:        string;
@@ -159,8 +158,7 @@ export interface Translations
         resetCacheWarning:        string;
         resetCacheDone:           string;
         //About section at the editor bottom: version string, the source repo, an appreciation line +
-        //Buy Me A Coffee link. (aboutSiteTitle/aboutSiteDescription are unused since the companion-site
-        //link was removed with LiDAR; pending removal in the translation cleanup.)
+        //Buy Me A Coffee link. (aboutSiteTitle/aboutSiteDescription are unused.)
         aboutSection:             string;
         aboutVersionLabel:        string;
         aboutSiteTitle:           string;

@@ -98,7 +98,7 @@ export class HeliosCardEditor extends LitElement
 
     public setConfig(config: HeliosConfig): void
     {
-        // Strip legacy/removed keys on editor open so stale config can't carry ghost behaviour into a fresh card frame.
+        // Strip retired keys on editor open so stale config can't carry ghost behaviour into a fresh card frame.
         const sanitised = HeliosCardEditor._sanitiseConfig({ ...config });
         const changed   = !HeliosCardEditor._configEq(config, sanitised);
         this._cfg = sanitised;
@@ -109,13 +109,13 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
-    // Legacy/removed keys scrubbed on the next editor open. Grows as keys are retired across versions.
+    // Retired config keys scrubbed from saved YAML on the next editor open, so a stale option can't carry ghost behaviour
+    // into a fresh card frame.
     private static _RETIRED_KEYS: string[] = [
         'card-theme',
         'card-theme-light',
         'card-theme-dark',
-        // Map style + label toggle: the basemap is now a fixed unlabeled CARTO raster, so neither option does
-        // anything. Stripped on the next editor open.
+        // Map style + label toggle: the basemap is a fixed unlabeled CARTO raster, so neither option does anything.
         'map-style',
         'show-labels',
         // Entity slots the HA Energy dashboard already declares; the runtime resolves these from `energy/get_prefs` instead.
@@ -137,14 +137,14 @@ export class HeliosCardEditor extends LitElement
         'timeline-width-pct',
         'building-radius',
         // Colour identity is fixed by the HA Energy palette (DEFAULT_*_COLOR_HEX in helios-config.ts); the renderer reads no
-        // per-card override, so these stale keys get stripped.
+        // per-card override, so these keys get stripped.
         'sun-color',
         'cloud-color',
         'pv-color',
         'battery-color',
         'building-color',
-        // LiDAR was removed in 2026.7.1 (forecast-based shading works everywhere, no provider inequality). All LiDAR keys are
-        // listed here so an upgrading user's saved YAML self-heals on the next editor open without a one-shot migration.
+        // Shading is forecast-based and carries no per-area config; these keys self-heal out of an upgrading user's saved
+        // YAML on the next editor open.
         'lidar-precision',
         'lidar-local-ndsm-enabled',
         'lidar-local-ndsm-url',

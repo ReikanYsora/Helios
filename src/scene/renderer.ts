@@ -1,12 +1,12 @@
-//SceneRenderer — the card-agnostic 2.5D renderer that replaces MapLibre. It owns two sibling elements
-//inside the host container: a ground holder (the tilted basemap tile canvas + edge fade, driven by a CSS
-//3D transform) and a screen-space scene <svg> it repaints each frame with the occluding geometry
-//(night-shade wash, cast shadows, extruded buildings). The host drives data (location, buildings, sun,
-//palette) and pose (bearing/pitch), then calls redraw(); per-frame work is rAF-coalesced.
+//SceneRenderer — the card-agnostic 2.5D renderer. It owns two sibling elements inside the host
+//container: a ground holder (the tilted basemap tile canvas + edge fade, driven by a CSS 3D transform)
+//and a screen-space scene <svg> it repaints each frame with the occluding geometry (night-shade wash,
+//cast shadows, extruded buildings). The host drives data (location, buildings, sun, palette) and pose
+//(bearing/pitch), then calls redraw(); per-frame work is rAF-coalesced.
 //
 //What it deliberately does NOT own: the HUD (chips, leaders, sun arc, timeline). Those are card-specific
-//and sit in their own SVG layer above this one — the host projects them through `camera`. Both 2026.7.1
-//cards share this renderer; each adds its own HUD.
+//and sit in their own SVG layer above this one — the host projects them through `camera`. Shared by both
+//cards; each adds its own HUD.
 
 import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
