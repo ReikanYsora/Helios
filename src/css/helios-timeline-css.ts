@@ -111,7 +111,7 @@ export const heliosTimelineStyles = css`
 
     /*  Per-source PV curves on multi-source installs. Drawn under the aggregate at lower opacity as
         background context. Stroke colour comes from the inline attribute (HA Energy's per-source ramp,
-        see energySolarColor in theme-colors.ts) so the curve matches its tooltip-row pastille + the
+        see energySolarColor in format.ts) so the curve matches its tooltip-row pastille + the
         home histogram band. */
     .hc-chart-line-source
     {

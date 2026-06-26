@@ -14,8 +14,7 @@ import
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
-import { darkenHex } from './card/format';
-import { ENERGY_COLOR } from './card/theme-colors';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon } from './card/format';
 import
 {
     refreshPv,
@@ -72,7 +71,6 @@ import {
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
-import { cloudCoverIcon } from './card/cloud-icons';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost } from './card/unifiedStore';

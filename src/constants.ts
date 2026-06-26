@@ -6,7 +6,7 @@
 
 
 //Drawing colours are not constants: every colour is resolved at runtime from the live HA theme tokens —
-//the scene palette via the engine, the chips + charts via ENERGY_COLOR (card/theme-colors.ts) — so a
+//the scene palette via the engine, the chips + charts via ENERGY_COLOR (card/format.ts) — so a
 //user's custom theme flows through with no hardcoded hex. The LAB conversion factors that ramp those
 //tokens live in the "Colour-space conversion" group below.
 

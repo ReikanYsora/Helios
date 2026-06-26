@@ -3,8 +3,7 @@
 
 import { html, svg, nothing, TemplateResult } from 'lit';
 import { type HeliosConfig } from '../helios-config';
-import { ENERGY_COLOR, energySolarColor } from './theme-colors';
-import { formatLocalisedNumber, lerpHexToward } from './format';
+import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { pvNormalizeToWatts, type PvHistory } from './pv';
 import { getHomeCoords } from './init';
