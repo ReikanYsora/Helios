@@ -736,9 +736,11 @@ var e,t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         transform: translate(-50%, -50%);
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 4px;
         box-sizing: border-box;
-        min-width: 76px;
+        /*  Fixed width so every chip is identical; content centres within it. */
+        width: 96px;
         padding: 3px 10px;
         border: 2px solid;
         border-radius: 999px;
@@ -758,11 +760,6 @@ var e,t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     .pv-pct-label,
     .battery-pct-label,
     .grid-label,
-    .solar-pct-label
-    {
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
-    }
 
     /*  Camera-lock toggle, top-left. Same 40 px circle recipe as the toolbar-button recipe; brand-blue
         pastille appears when locked. */
@@ -1083,16 +1080,10 @@ var e,t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         display: inline-flex;
         align-items: center;
     }
-    /*  Live home consumption, second line inside the hub. Tabular figures keep the digits steady. */
+    /*  Live home-consumption value; inherits the shared chip font so it matches the other chips' text. */
     .home-pill-usage
     {
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 700;
-        line-height: 1.1;
         color: var(--primary-text-color, #212121);
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-        letter-spacing: -0.2px;
     }
 
     .solar-svg-back        { z-index: 4; }
@@ -1234,6 +1225,8 @@ var e,t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     {
         transform: translate(-50%, -100%);
         pointer-events: none;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
         /*  Above the arc-front lines (z 11) so an arc segment never crosses the W/m² readout; the sun
             disc (z 12) still paints on top. */
         z-index: 13;
@@ -1311,25 +1304,6 @@ var e,t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
         so it flips on the card's own width, not the viewport's. */
     @container helios-card (min-width: 900px)
     {
-        .pv-pct-label,
-        .battery-pct-label,
-        .grid-label,
-        .solar-pct-label,
-        .cloud-chip,
-        .home-pill
-        {
-            font-size: var(--ha-font-size-m, 14px);
-            padding: 4px 12px;
-        }
-        .pv-pct-label ha-icon,
-        .battery-pct-label ha-icon,
-        .grid-label ha-icon,
-        .solar-pct-label ha-icon,
-        .cloud-chip ha-icon,
-        .home-pill ha-icon
-        {
-            --mdc-icon-size: 18px;
-        }
         .tb-day-strip-date
         {
             font-size: clamp(8px, 5.5cqw, var(--ha-font-size-s, 12px));
@@ -2762,14 +2736,14 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       Clicking it re-targets the timeline chart to the cloud cover (three altitude-band
                       curves), same chip <-> chart coupling as the other chips. Anchored off the sun so it
                       tracks the irradiance chip.  -->
-                ${Pe&&this._cloudCover>=0?(()=>{const e=fe.sun.x,t=fe.sun.y-22-pa.CHIP_HALF_H_PX,i=this._engine?.getViewportWidth()??0,r=Math.max(38,26+3*`${Te} W/m²`.length),n=r+4+14+4+64,o=i<=0||e+n<=i-8?1:e-n>=8?-1:e<i/2?1:-1,s=o>0?e+r+4+14+4:e-r-4-14-4,l=o>0?"translate(0, -50%)":"translate(-100%, -50%)";return B`
+                ${Pe&&this._cloudCover>=0?(()=>{const e=fe.sun.x,t=fe.sun.y-22,i=t-pa.CHIP_HALF_H_PX,r=this._engine?.getViewportWidth()??0,n=pa.CHIP_HALF_W_PX,o=n+16+2*n,s=r<=0||e+o<=r-8?1:e-o>=8?-1:e<r/2?1:-1,l=s>0?e+n+16:e-n-16,d=s>0?"translate(0, -100%)":"translate(-100%, -100%)";return B`
                         <div
                             class="cloud-chip-leader"
-                            style="left:${(o>0?e+r+4:e-r-4-14).toFixed(1)}px; top:${t.toFixed(1)}px"
+                            style="left:${(s>0?e+n:e-n-16).toFixed(1)}px; top:${i.toFixed(1)}px; width:${16}px"
                         ></div>
                         <div
                             class="cloud-chip ${"cloud"===this._chartTarget?"is-chart-active":""}"
-                            style="left:${s.toFixed(1)}px; top:${t.toFixed(1)}px; transform:${l}"
+                            style="left:${l.toFixed(1)}px; top:${t.toFixed(1)}px; transform:${d}"
                             role="button"
                             tabindex="0"
                             @click=${()=>this._setChartTarget("cloud")}
@@ -2818,4 +2792,4 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                 `:G}
 
             </ha-card>
-        `}_maybeRebuildUnifiedStore(){(function isStoreFresh(e,t){return!!t&&t.dataVersion===computeDataVersion(e)})(this,this._unifiedStore)||(this._unifiedStore=buildUnifiedStore(this))}_isCameraLocked(){return!!this._engine&&this._engine.isCameraLocked()}},pa=ua,ua.OUTLINE_FAR=1.5,ua.OUTLINE_NEAR=5,ua.SEGMENT_FAR=1,ua.SEGMENT_NEAR=4,ua.SUN_R_FAR=10,ua.SUN_R_NEAR=20,ua.SUN_RIM_WIDTH=1.5,ua.CHIP_HALF_H_PX=12,ua.HOME_PILL_HALF_WIDTH_PX=38,ua.HOME_PILL_HALF_HEIGHT_PX=14,ua.SUN_FILL_OPACITY_BG=.2,ua.NIGHT_STROKE_FACTOR=.5,ua._LEGACY_ENTITY_KEYS=["pv-power-entity","grid-import-entity","grid-export-entity","grid-power-entity","grid-power-invert","battery-soc-entity","battery-power-entity","battery-power-invert","batteries"],ua.styles=$e,ua);__decorate([n$1({attribute:!1}),__decorateMetadata("design:type",Object)],ga.prototype,"hass",void 0),__decorate([n$1({attribute:!1}),__decorateMetadata("design:type",Object)],ga.prototype,"config",void 0),__decorate([r$1(),__decorateMetadata("design:type",void 0===Fe?Object:Fe)],ga.prototype,"_engine",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_now",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_cloudCover",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_labelLayout",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvCurrent",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_pvUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvHistory",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvCalibStats",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Array)],ga.prototype,"_haSolarForecast",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batterySoc",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryPower",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_batteryPowerUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridImportValue",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_gridImportUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridExportValue",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_gridExportUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridImportChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridExportChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batterySocHistory",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryPowerHistory",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryChargeChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryDischargeChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_sunScene",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_energyDefaults",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haSolarTodayKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haGridImportTodayKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haGridExportTodayKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haBatteryChargedKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haBatteryDischargedKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_homeHover",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_chartHoverPct",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_chartTarget",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_chartSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_timeRange",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_selectedTime",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_isLiveMode",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_unifiedStore",void 0),ga=pa=__decorate([t$2("helios-card")],ga);export{ga as HeliosCard};
+        `}_maybeRebuildUnifiedStore(){(function isStoreFresh(e,t){return!!t&&t.dataVersion===computeDataVersion(e)})(this,this._unifiedStore)||(this._unifiedStore=buildUnifiedStore(this))}_isCameraLocked(){return!!this._engine&&this._engine.isCameraLocked()}},pa=ua,ua.OUTLINE_FAR=1.5,ua.OUTLINE_NEAR=5,ua.SEGMENT_FAR=1,ua.SEGMENT_NEAR=4,ua.SUN_R_FAR=10,ua.SUN_R_NEAR=20,ua.SUN_RIM_WIDTH=1.5,ua.CHIP_HALF_W_PX=48,ua.CHIP_HALF_H_PX=12,ua.HOME_PILL_HALF_WIDTH_PX=38,ua.HOME_PILL_HALF_HEIGHT_PX=14,ua.SUN_FILL_OPACITY_BG=.2,ua.NIGHT_STROKE_FACTOR=.5,ua._LEGACY_ENTITY_KEYS=["pv-power-entity","grid-import-entity","grid-export-entity","grid-power-entity","grid-power-invert","battery-soc-entity","battery-power-entity","battery-power-invert","batteries"],ua.styles=$e,ua);__decorate([n$1({attribute:!1}),__decorateMetadata("design:type",Object)],ga.prototype,"hass",void 0),__decorate([n$1({attribute:!1}),__decorateMetadata("design:type",Object)],ga.prototype,"config",void 0),__decorate([r$1(),__decorateMetadata("design:type",void 0===Fe?Object:Fe)],ga.prototype,"_engine",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_now",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_cloudCover",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_labelLayout",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvCurrent",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_pvUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvHistory",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvCalibStats",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_pvChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Array)],ga.prototype,"_haSolarForecast",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batterySoc",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryPower",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_batteryPowerUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridImportValue",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_gridImportUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridExportValue",void 0),__decorate([r$1(),__decorateMetadata("design:type",String)],ga.prototype,"_gridExportUnit",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridImportChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_gridExportChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batterySocHistory",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryPowerHistory",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryChargeChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_batteryDischargeChangeSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_sunScene",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_energyDefaults",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haSolarTodayKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haGridImportTodayKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haGridExportTodayKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haBatteryChargedKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_haBatteryDischargedKwh",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_homeHover",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_chartHoverPct",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_chartTarget",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_chartSeries",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_timeRange",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_selectedTime",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_isLiveMode",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],ga.prototype,"_unifiedStore",void 0),ga=pa=__decorate([t$2("helios-card")],ga);export{ga as HeliosCard};

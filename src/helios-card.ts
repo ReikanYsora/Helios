@@ -293,7 +293,9 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_FAR    = 10.0;
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
-    //Half the rendered chip height (px): the cloud chip centres on this above the irradiance chip's anchor.
+    //Chip geometry shared with the CSS (chips have a fixed 96px width): half-width docks the cloud chip past
+    //the irradiance chip's edge, half-height centres the connecting leader on their shared mid-line.
+    private static readonly CHIP_HALF_W_PX = 48;
     private static readonly CHIP_HALF_H_PX = 12;
     //Home pill is a horizontal stadium (like the other chips), not a circle. Half-extents of its outline;
     //leaders dock against this stadium so they all meet the same focal energy node.
@@ -2171,35 +2173,32 @@ export class HeliosCard extends LitElement
                       tracks the irradiance chip.  -->
                 ${showSunLabel && this._cloudCover >= 0 ? (() =>
                 {
-                    //Cloud chip is centred on the irradiance chip's vertical mid-line and docks just past its
-                    //RIGHT edge via a short leader. If that would overflow the card's right edge it flips to
-                    //the LEFT edge (leader + chip mirrored); when neither side fits, the roomier one wins.
+                    //The cloud chip shares the irradiance chip's baseline (both bottom-anchored at sun.y-22,
+                    //identical fixed width) and docks just past its edge, joined by a short cloud-coloured
+                    //leader. It defaults to the RIGHT edge and flips to the LEFT when the cloud's far edge
+                    //would overflow the card; when neither side fits, the roomier one wins.
                     const sx      = sunScene!.sun.x;
-                    //Irradiance chip is bottom-anchored at sun.y - 22, so its centre sits ~CHIP_HALF_H above.
-                    const cy      = sunScene!.sun.y - 22 - HeliosCard.CHIP_HALF_H_PX;
+                    const bottomY = sunScene!.sun.y - 22;                       //shared chip baseline
+                    const midY    = bottomY - HeliosCard.CHIP_HALF_H_PX;        //chips' centre, for the leader
                     const cardW   = this._engine?.getViewportWidth() ?? 0;
-                    //Estimate the irradiance chip's half-width from its text (floored at the shared min-width)
-                    //so the leader docks against its real edge instead of a fixed guess.
-                    const irrHalf = Math.max(38, 26 + `${sunWm2Round} W/m²`.length * 3);
-                    const GAP = 4;
-                    const LEAD = 14;  //matches the .cloud-chip-leader width
-                    const CLOUD_W = 64;  //widest cloud chip ("100 %") for the overflow test
-                    const span    = irrHalf + GAP + LEAD + GAP + CLOUD_W;
-                    const roomRight = cardW <= 0 || sx + span <= cardW - 8;
-                    const roomLeft  = sx - span >= 8;
+                    const HALF    = HeliosCard.CHIP_HALF_W_PX;                  //both chips are a fixed width
+                    const CONN    = 16;                                         //leader length bridging the edges
+                    const far     = HALF + CONN + 2 * HALF;                     //sun.x → the cloud's far edge
+                    const roomRight = cardW <= 0 || sx + far <= cardW - 8;
+                    const roomLeft  = sx - far >= 8;
                     const side      = roomRight ? 1 : (roomLeft ? -1 : (sx < cardW / 2 ? 1 : -1));
-                    const leaderLeft = side > 0 ? sx + irrHalf + GAP : sx - irrHalf - GAP - LEAD;
-                    const chipLeft   = side > 0 ? sx + irrHalf + GAP + LEAD + GAP : sx - irrHalf - GAP - LEAD - GAP;
-                    //Anchor the cloud chip by the edge nearest the irradiance chip so the leader meets it.
-                    const chipTransform = side > 0 ? 'translate(0, -50%)' : 'translate(-100%, -50%)';
+                    const leaderLeft = side > 0 ? sx + HALF : sx - HALF - CONN;
+                    const chipLeft   = side > 0 ? sx + HALF + CONN : sx - HALF - CONN;
+                    //Bottom-align with the irradiance chip; anchor by the edge nearest it so the leader meets it.
+                    const chipTransform = side > 0 ? 'translate(0, -100%)' : 'translate(-100%, -100%)';
                     return html`
                         <div
                             class="cloud-chip-leader"
-                            style="left:${leaderLeft.toFixed(1)}px; top:${cy.toFixed(1)}px"
+                            style="left:${leaderLeft.toFixed(1)}px; top:${midY.toFixed(1)}px; width:${CONN}px"
                         ></div>
                         <div
                             class="cloud-chip ${this._chartTarget === 'cloud' ? 'is-chart-active' : ''}"
-                            style="left:${chipLeft.toFixed(1)}px; top:${cy.toFixed(1)}px; transform:${chipTransform}"
+                            style="left:${chipLeft.toFixed(1)}px; top:${bottomY.toFixed(1)}px; transform:${chipTransform}"
                             role="button"
                             tabindex="0"
                             @click=${() => this._setChartTarget('cloud')}

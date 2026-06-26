@@ -741,9 +741,11 @@ export const heliosCardStyles = css`
         transform: translate(-50%, -50%);
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 4px;
         box-sizing: border-box;
-        min-width: 76px;
+        /*  Fixed width so every chip is identical; content centres within it. */
+        width: 96px;
         padding: 3px 10px;
         border: 2px solid;
         border-radius: 999px;
@@ -763,11 +765,6 @@ export const heliosCardStyles = css`
     .pv-pct-label,
     .battery-pct-label,
     .grid-label,
-    .solar-pct-label
-    {
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
-    }
 
     /*  Camera-lock toggle, top-left. Same 40 px circle recipe as the toolbar-button recipe; brand-blue
         pastille appears when locked. */
@@ -1088,16 +1085,10 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
     }
-    /*  Live home consumption, second line inside the hub. Tabular figures keep the digits steady. */
+    /*  Live home-consumption value; inherits the shared chip font so it matches the other chips' text. */
     .home-pill-usage
     {
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 700;
-        line-height: 1.1;
         color: var(--primary-text-color, #212121);
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-        letter-spacing: -0.2px;
     }
 
     .solar-svg-back        { z-index: 4; }
@@ -1239,6 +1230,8 @@ export const heliosCardStyles = css`
     {
         transform: translate(-50%, -100%);
         pointer-events: none;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
         /*  Above the arc-front lines (z 11) so an arc segment never crosses the W/m² readout; the sun
             disc (z 12) still paints on top. */
         z-index: 13;
@@ -1316,25 +1309,6 @@ export const heliosCardStyles = css`
         so it flips on the card's own width, not the viewport's. */
     @container helios-card (min-width: 900px)
     {
-        .pv-pct-label,
-        .battery-pct-label,
-        .grid-label,
-        .solar-pct-label,
-        .cloud-chip,
-        .home-pill
-        {
-            font-size: var(--ha-font-size-m, 14px);
-            padding: 4px 12px;
-        }
-        .pv-pct-label ha-icon,
-        .battery-pct-label ha-icon,
-        .grid-label ha-icon,
-        .solar-pct-label ha-icon,
-        .cloud-chip ha-icon,
-        .home-pill ha-icon
-        {
-            --mdc-icon-size: 18px;
-        }
         .tb-day-strip-date
         {
             font-size: clamp(8px, 5.5cqw, var(--ha-font-size-s, 12px));
