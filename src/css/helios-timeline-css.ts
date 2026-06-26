@@ -3,10 +3,10 @@ import { css } from 'lit';
 //Timeline styles for HeliosCard: the bottom time-bar / scrubber, the two stacked
 //charts (curves, day separators, hover guide + dots, future mask, night zones),
 //the hover tooltip, the day-strip footer and the period selector. Split out of
-//helios-card-css.ts to keep that file focused on the map, HUD chips, solar arc and
+//helios-card-scene-css.ts to keep that file focused on the map, HUD chips, solar arc and
 //home cluster. Both stylesheets share the same shadow root, so card-level custom
 //properties (--card-background-color, --shadow-color, --rgb-primary-text-color, ...)
-//defined on :host / ha-card in helios-card-css.ts resolve here unchanged.
+//defined on :host / ha-card in helios-card-scene-css.ts resolve here unchanged.
 export const heliosTimelineStyles = css`
     /*  Timeline, pinned to the bottom of the card. The whole bar accepts pointer events for scrub.
         Slides out below the card edge (transform) instead of fading when hidden. */

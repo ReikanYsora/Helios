@@ -1,7 +1,7 @@
 import { css } from 'lit';
 
 //Styles for the config editor. Kept separate from the runtime card's
-//helios-card-css.ts so editor and card never share selectors.
+//helios-card-scene-css.ts so editor and card never share selectors.
 //Single export: `editorStyles`, applied to <helios-card-editor>.
 
 

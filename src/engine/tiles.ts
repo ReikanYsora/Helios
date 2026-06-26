@@ -5,7 +5,7 @@
 //Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane.
 
 import { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, EARTH_CIRCUMFERENCE_M, METRES_PER_DEG_LAT, DEG } from '../constants';
-//Re-exported so existing importers (e.g. the card CSS imports GROUND_FADE_START from './tiles') keep resolving.
+//Re-exported so importers (e.g. the card CSS imports GROUND_FADE_START from './tiles') keep resolving.
 export { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, GROUND_FADE_START } from '../constants';
 
 //Screen px per real metre at the ground plane for a given latitude + tile zoom. Drives SceneCamera.pxPerMetre.

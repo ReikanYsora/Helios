@@ -14,26 +14,6 @@ export const en: Translations = {
     cardName:        'Helios',
     cardDescription: '☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home',
 
-    detail:
-    {
-        exitHint: 'Tap anywhere to exit',
-
-        tileProductionLabel:  'Production',
-        dayLabelToday:        'Today',
-        dayLabelYesterday:    'Yesterday',
-        dayLabelDayBefore:    '2 days ago',
-        dayLabelTomorrow:     'Tomorrow',
-        dayLabelDayAfter:     'In 2 days',
-        radialProductionLabel: 'Production',
-        radialBatteryLabel:    'Battery',
-        radialCloudLabel:      'Cloud',
-        radialIrradianceLabel: 'Irradiance',
-        radialBackToLive:      'Back to live',
-        dashViewRadialLabel:   'Radial view',
-        dashViewGraphLabel:    'Graph view',
-        dashForecastLabel:     'Forecast',
-    },
-
     period:
     {
         rangeLabel:    'Time range',

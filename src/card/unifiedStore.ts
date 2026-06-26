@@ -69,7 +69,7 @@ export interface UnifiedDataStore
 
 
 //Structural host surface required to build the store: the union of what every per-metric builder reads. The actual
-//card / dashboard host implements a superset.
+//card host implements a superset.
 export interface UnifiedStoreHost
 {
     readonly config:                  HeliosConfig | undefined;
@@ -219,7 +219,7 @@ function buildCloud(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: nu
 //Production = past actual only, no model fallback. Sourced from the recorder `change` metric on the solar meter(s)
 //(_pvChangeSeries) — the exact data the HA Energy dashboard consumes: each 5-min bucket's reset-corrected,
 //unit-normalised kWh -> average watts (kWh * 1000 / bucket-hours). No client-side differentiation or unit classification,
-//so a 15-min SolarEdge counter or daily-reset meter is handled natively by the recorder.
+//so a coarse-reporting or daily-reset meter is handled natively by the recorder.
 //
 //Store buckets are always >= the 5-min source period (data-interval caps at 12/hour = 5 min), so each store bucket
 //aggregates whole source buckets and the conversion is exact. Past gaps interpolated; future buckets stay null so the

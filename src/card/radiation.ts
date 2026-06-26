@@ -1,8 +1,8 @@
-// Solar-radiation override subsystem.
+// Solar-irradiance override subsystem.
 //
-// When `solar-radiation-entity` is wired to a physical W/m² sensor (Ecowitt / Davis / PWS), its samples beat Open-Meteo for
-// the live + past portions of the irradiance pipeline. Fetches history, keeps the live sample fresh each refresh cycle, and
-// pushes the merged set into the engine via setSolarRadiationSamples().
+// When `solar-radiation-entity` is wired to a physical W/m² sensor, its samples beat the weather model for the live + past
+// portions of the irradiance pipeline. Fetches history, keeps the live sample fresh each refresh cycle, and pushes the merged
+// set into the engine via setSolarRadiationSamples().
 //
 // Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_solarRadiation*` fields; functions here
 // read/write them through the structural RadiationHost interface.
@@ -75,9 +75,9 @@ function parseStatBoundary(raw: unknown): number | null
 // Parse a statistics payload into a RadiationHistory. Irradiance sensors are `state_class: measurement` reporting instantaneous
 // W/m²; the `mean` column carries the bucket-averaged value, anchored at the bucket midpoint to match the engine's W/m² assumption.
 //
-// We deliberately do NOT fall back to `state`: a few installs surface radiation as a cumulative MJ/m² counter
+// We deliberately do NOT fall back to `state`: a few installs surface irradiance as a cumulative MJ/m² counter
 // (`state_class: total_increasing`), so `state` is monotonically increasing. Pushing that would feed the engine values that look
-// like 10000+ W/m² and distort every downstream derivation (5-day calibration ratio, "affiné" forecast, irradiance chip). Buckets
+// like 10000+ W/m² and distort every downstream derivation (5-day calibration ratio, refined forecast, irradiance chip). Buckets
 // with null `mean` are skipped; an empty slot degrades to the raw-history fallback (which handles its own unit semantics).
 function parseRadiationStats(arr: any[]): RadiationHistory
 {

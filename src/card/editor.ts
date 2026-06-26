@@ -335,7 +335,7 @@ export class HeliosCardEditor extends LitElement
         return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
     }
 
-    // Solar-radiation entity filter: accepts the `irradiance` device class plus any sensor reporting W/m². The unit fallback covers
+    // Solar-irradiance entity filter: accepts the `irradiance` device class plus any sensor reporting W/m². The unit fallback covers
     // template sensors (e.g. Ecowitt) that don't declare a device_class.
     private _solarRadiationEntityFilter = (entity: any): boolean =>
     {

@@ -14,18 +14,18 @@ export interface SampleHourly
     cloudHigh:   number[];
     weatherCode: number[];
     shortwave:   number[];
-    //Beam (direct) + diffuse shortwave on the horizontal plane, W/m², -1 sentinel. Unused (forecast comes from
-    //HA); kept so cache + chart-series plumbing doesn't have to change. Same for snowDepth/temperature/windSpeed.
+    //Beam (direct) + diffuse shortwave irradiance on the horizontal plane, W/m², -1 sentinel. Kept so cache +
+    //chart-series plumbing stays stable even when unread. Same for snowDepth/temperature/windSpeed.
     directRad:   number[];
     diffuseRad:  number[];
-    snowDepth:   number[];   //ground snow depth, metres, NaN-padded. Unused.
-    temperature: number[];   //2 m air temp, °C, NaN-padded. Unused.
-    windSpeed:   number[];   //10 m wind speed, m/s, NaN-padded. Unused.
+    snowDepth:   number[];   //ground snow depth, metres, NaN-padded.
+    temperature: number[];   //2 m air temp, °C, NaN-padded.
+    windSpeed:   number[];   //10 m wind speed, m/s, NaN-padded.
 }
 
 
-//Forecast window, back-off tables, cache TTL/precision now live in constants.ts. Aliased on import so the in-file
-//usages below stay unchanged; the two back-off tables are also re-exported because helios-engine.ts imports them here.
+//Forecast window, back-off tables, cache TTL/precision live in constants.ts. Aliased on import so the in-file usages
+//below stay unchanged; the two back-off tables are also re-exported because helios-engine.ts imports them here.
 import {
     WEATHER_PAST_DAYS          as PAST_DAYS,
     WEATHER_FORECAST_DAYS      as FORECAST_DAYS,
@@ -124,8 +124,8 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 }
 
 
-//In-browser cache. Precision is fixed to 'high'; the tag stays in the key so re-introducing a precision toggle later
-//won't collide with existing cached payloads. CACHE_KEY_PREFIX lives in constants.ts.
+//In-browser cache. The precision tag is part of the key so payloads at different precisions never collide.
+//CACHE_KEY_PREFIX lives in constants.ts.
 
 
 //Module-level diagnostics walked by window.heliosStats() so a power user can audit network/cache/dedup ratios over a
@@ -168,10 +168,10 @@ interface CachedPayload
         cloudHigh:   number[];
         weatherCode: number[];
         shortwave:   number[];
-        directRad?:   number[];   //optional: older caches predate the direct / diffuse fetch
+        directRad?:   number[];   //optional: a cache entry may omit these extra series
         diffuseRad?:  number[];
-        snowDepth?:   number[];   //optional: older caches predate the snow-depth fetch
-        temperature?: number[];   //optional: older caches predate this field
+        snowDepth?:   number[];
+        temperature?: number[];
         windSpeed?:   number[];
     };
 }
@@ -244,8 +244,8 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudHigh:   p.cloudHigh   ?? [],
             weatherCode: p.weatherCode ?? [],
             shortwave:   p.shortwave   ?? [],
-            //Older caches predate these fetches; empty arrays read as -1/NaN per index downstream, so consumers fall back
-            //cleanly (tilt split → cloud-derived path; thermal derating → multiplier 1 → legacy Haurwitz output).
+            //A cache entry may omit these series; empty arrays read as -1/NaN per index downstream, so consumers fall back
+            //cleanly (tilt split → cloud-derived path; thermal derating → multiplier 1 → analytical Haurwitz output).
             directRad:   p.directRad   ?? [],
             diffuseRad:  p.diffuseRad  ?? [],
             snowDepth:   p.snowDepth   ?? [],
@@ -295,7 +295,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //Variables we ask Open-Meteo for. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged over
 //the preceding one), matching our visual time cursor; it powers the live irradiance chip and sun-arc colouring. The split
 //cloud variables keep the total cloud_cover for rendering and let us detect the low-layer "fog spike" failure mode. The
-//PV forecast is read natively from HA, so the radiation split, snow depth, temperature and wind are not requested.
+//PV forecast is read natively from Home Assistant, so the irradiance split, snow depth, temperature and wind are not requested.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover',

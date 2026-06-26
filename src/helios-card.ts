@@ -12,7 +12,7 @@ import
     valueDecimals
 } from './helios-config';
 import { pickTranslations } from './i18n';
-import { heliosCardStyles } from './css/helios-card-css';
+import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon } from './card/format';
 import
@@ -428,7 +428,7 @@ export class HeliosCard extends LitElement
         cloudLow:     number[];
         cloudMid:     number[];
         cloudHigh:    number[];
-        //Hourly horizontal beam + diffuse radiation in W/m², -1 where not decomposed. Feeds the PV tilt
+        //Hourly horizontal beam + diffuse irradiance in W/m², -1 where not decomposed. Feeds the PV tilt
         //transposition's direct/diffuse split.
         directRad:    number[];
         diffuseRad:   number[];
@@ -823,16 +823,15 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Masonry sizing. 1 unit = 50 px so 15 ≈ 750 px, leaving the basemap ~480 px after the timeline's
-    //~150 px. 12 (≈600 px) was a cramped 16:9 letterbox at the default Lovelace column width.
+    //Masonry sizing. 1 unit = 50 px so 15 ≈ 750 px, leaving the basemap ~480 px after the timeline's ~150 px.
     public getCardSize(): number
     {
         return 15;
     }
 
-    //Sections-view sizing (current). 1 row ≈ 56 px, 1 col ≈ 30 px (section width 360 px). 12 cols x 8 rows
-    //is the section editor's ceiling AND the card's minimum: the CoverFlow needs the full width to fan its
-    //five cards, and the bandeau + 2x2 stats grid + chart need all 8 rows. Smaller squished the cards.
+    //Sections-view sizing. 1 row ≈ 56 px, 1 col ≈ 30 px (section width 360 px). 12 cols × 8 rows is both the
+    //section editor's ceiling and the card's minimum: the basemap, chip cluster and timeline need the full
+    //width and all 8 rows to stay legible.
     public getGridOptions(): {
         rows:        number;
         columns:     number;
@@ -914,10 +913,9 @@ export class HeliosCard extends LitElement
             window.clearTimeout(this._connectSettleTimer);
             this._connectSettleTimer = undefined;
         }
-        //Engine cleanup on disconnect. HA's editor preview pane destroys + recreates the card on every
-        //config-changed commit (hui-card.ts:195, hard-coded, no opt-out), so we accept a fresh engine per
-        //commit. The live dashboard tile is NOT recreated (hui-card takes _updateElement when preview ===
-        //false).
+        //Engine cleanup on disconnect. The editor preview pane destroys + recreates the card on every
+        //config-changed commit, so we accept a fresh engine per commit. The live dashboard tile is not
+        //recreated, so it keeps its engine across re-renders.
         if (this._engine !== undefined)
         {
             this._engine.cleanup();
@@ -1084,8 +1082,8 @@ export class HeliosCard extends LitElement
 
 
     //Page-visibility listener that invalidates the cached theme probe when the tab returns to foreground.
-    //HA can push a hass with stale themes for one frame after resume (mobile users saw the card stuck on
-    //the old polarity after a backgrounded theme flip), so we drop the cache and force a re-render.
+    //HA can push a hass with stale themes for one frame after resume, so we drop the cache and force a
+    //re-render to pick up a theme polarity flip that happened while backgrounded.
     private _onPageVisibilityForTheme = (): void =>
     {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible')
@@ -1159,7 +1157,7 @@ export class HeliosCard extends LitElement
 
     //Nearest point on the home pill's stadium outline to (chipX, chipY): the straight top/bottom edge over
     //the middle, the rounded end-cap arc beyond it. All chip leaders dock here so the home reads as the
-    //focal energy node, mirroring HA's Energy distribution card.
+    //focal energy node.
     private _nudgeToHomePill(
         chipX: number, chipY: number,
         homeX: number, homeY: number,
@@ -1355,17 +1353,16 @@ export class HeliosCard extends LitElement
         const batterySocText = showSocChip
             ? `${Math.round(activeBatterySoc!)} %`
             : '';
-        //Chip uses HA's "Power sources" sign convention (discharge positive, charge negative).
+        //Chip uses the HA energy dashboard sign convention (discharge positive, charge negative).
         //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
-        //coherent with the HA Energy dashboard. Colour + leader direction below keep the physical sign.
+        //coherent with the dashboard. Colour + leader direction below keep the physical sign.
         const batteryPowerText = showPowerChip
             ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec)
             : '';
 
-        //Home consumption chip. Same derivation as HA's "Now" Power usage header
-        //(hui-power-sankey-card._computePowerData):
+        //Home consumption chip:
         //  used_total = from_grid + solar + from_battery - to_grid - to_battery
-        //over the card's scrub-aware per-family values, so the chip matches HA live AND follows the scrub.
+        //over the card's scrub-aware per-family values, so the chip follows the scrub.
         //Families contribute only when they have a reading; nothing wired -> chip hides. Clamped at zero
         //(a small negative is meter skew).
         const usagePvW = (!pvScrubFuture && pvActiveRate !== null)
@@ -1590,13 +1587,12 @@ export class HeliosCard extends LitElement
         //the PV leader (0.8 s) to stay readable at peak irradiance.
         const sunFlowDuration = flowDuration(sunWm2, 1000, 0.8);
 
-        //Solar-ray target. Without snapping, a sun below the chip pulled the ray through the chip's top,
-        //which looked broken; the block below anchors the ray to the nearest point of the PV chip outline.
+        //Solar-ray target: anchor the ray to the nearest point of the PV chip outline so a sun below the chip
+        //doesn't draw the ray through the chip body.
         let sunRayTargetX = sunScene?.home.x ?? 0;
         let sunRayTargetY = sunScene?.home.y ?? 0;
         //Anchor the ray to the nearest point of the PV chip's stadium outline (centred at pvLabel, straight
-        //middle + two end-caps of radius PV_HALF_HEIGHT_PX) so it glides along the outline as the sun arcs,
-        //matching the HA Energy distribution card's closest-border-point docking.
+        //middle + two end-caps of radius PV_HALF_HEIGHT_PX) so it glides along the outline as the sun arcs.
         if (layout && sunScene && pvEntityId)
         {
             const cx = layout.pvLabel.x;
@@ -1793,10 +1789,8 @@ export class HeliosCard extends LitElement
                             <!--  Moving bead, a small filled disc rides
                                   the leader from the PV chip to the
                                   home, at a speed proportional to live
-                                  production (same vocabulary as the
-                                  Home Assistant energy-distribution
-                                  card). No rotate="auto" needed since
-                                  a disc has no orientation.  -->
+                                  production. No rotate="auto" needed
+                                  since a disc has no orientation.  -->
                             <circle
                                 class="pv-home-leader-bead"
                                 r="3"
@@ -2218,21 +2212,13 @@ export class HeliosCard extends LitElement
 
 
 
-                <!--  Home pill: a small circular node painted exactly
-                      at the projected home centre. Every chip leader
-                      docks against its border so the cluster reads as
-                      a single energy hub, the same vocabulary HA's
-                      Energy distribution card uses for its central
-                      home node.                                       -->
+                <!--  Home pill: the hub the whole chip cluster orbits,
+                      painted at the projected home centre with no
+                      drop-leader so every chip leader docks straight
+                      against its border. Hosts two stacked lines: the
+                      home glyph on top and the live home consumption
+                      below.                                           -->
                 ${hasHomeCoords && layout !== null ? html`
-                    <!--  Home pill, the hub the whole chip cluster orbits.
-                          Hosts two stacked lines: the home glyph on top and
-                          the live home consumption below. The value mirrors
-                          the official Energy "Now" header (Power usage), same
-                          client-side formula over the same HA Energy sources,
-                          so the two surfaces always agree. It sits at the
-                          centre of the cluster with no drop-leader, the chips
-                          dock straight against its border.                -->
                     <div
                         class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this._homeHover ? 'is-hovered' : ''} ${this._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"

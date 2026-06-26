@@ -72,7 +72,7 @@ export interface PvHost
     _pvCalibStatsFetchKey:  string;
     _pvCalibStatsFetching:  boolean;
     //Recorder `change` series for the solar energy meter(s), 5-minute buckets. Canonical past-production source for the unified
-    //store (timeline + dashboard graph) and chip scrub: the recorder returns reset-corrected, unit-normalised kWh per bucket,
+    //store (timeline graphs) and chip scrub: the recorder returns reset-corrected, unit-normalised kWh per bucket,
     //the same metric HA Energy consumes, so plotted production matches HA without client-side differentiation. Null pre-fetch.
     _pvChangeSeries:         ChangeBucket[] | null;
     _pvChangeSeriesFetchKey: string;
@@ -318,7 +318,7 @@ export function refreshPv(host: PvHost): void
 
     //Past-production curve for the unified store + chip scrub. From the recorder `change` metric on the solar ENERGY meter(s)
     //(`stat_energy_from`), exactly like HA Energy: reset-corrected, unit-normalised kWh per 5-min bucket, divided by bucket
-    //duration for average watts. No client-side differentiation, so 15-min SolarEdge or daily-reset meters work natively.
+    //duration for average watts. No client-side differentiation, so coarse-reporting or daily-reset meters work natively.
     const changeIds = host._energyDefaults.solarStatEnergyFroms;
     if (changeIds.length > 0 && !host._pvChangeSeriesFetching)
     {
@@ -355,8 +355,8 @@ export function refreshPv(host: PvHost): void
 //O(entities * timestamps). Works for both power sensors (instantaneous) and cumulative kWh.
 //
 //`cumulative` enables per-entity baselining: each entity is baselined at its first observed value in the window before summing.
-//Without it, an entity coming online mid-window (a Victron MPPT booting at 13:00 with a lifetime 1000 kWh) injects a phantom
-//1000 kWh jump that today-kWh integration attributes to "today". Baselined, each entity contributes 0 at first appearance and
+//Without it, an entity coming online mid-window with a large lifetime total injects a phantom
+//cumulative jump that today-kWh integration attributes to "today". Baselined, each entity contributes 0 at first appearance and
 //only its delta from there. Power sensors MUST use `cumulative: false` — baselining a W reading yields meaningless "delta-W".
 function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = false): PvHistory
 {
@@ -369,7 +369,7 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = 
         return perEntity[0];
     }
     //Union of all timestamps, sorted ascending. Set+sort beats merge-of-sorted because histories can carry tens of thousands of
-    //1 Hz samples each, and the Set dedupes coincident timestamps.
+    //samples each, and the Set dedupes coincident timestamps.
     const tsSet = new Set<number>();
     for (const h of perEntity)
     {
@@ -424,7 +424,7 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = 
 
 
 //Pull an LTS series from HA's `recorder/statistics_during_period` WS command. Trades raw resolution for a ~100x smaller payload,
-//keeping the recorder responsive on installs reporting several samples per second (Victron Cerbo and friends). Populates
+//keeping the recorder responsive on installs reporting several samples per second. Populates
 //`host._pvCalibStats` for the 5-day forecast calibration.
 //
 //Field selection by unit: power sensors carry the bucket mean; cumulative-energy (Wh/kWh/MWh) carry their reading in `state`. We
@@ -605,9 +605,8 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 
 //Live "now" PV rate, sourced like the HA Energy live tile:
 //  - With a power sensor (`stat_rate`), read its state directly, summed across every wired stat_rate. The real-time value HA shows.
-//  - Cumulative-only install (e.g. SolarEdge, no power sensor): fall back to the average power of the latest completed 5-min
-//    recorder `change` bucket — the closest HA-consistent live read, fixing the old "stuck at 0 W" where a 15-min counter never
-//    filled the rolling buffer's window.
+//  - Cumulative-only install (no power sensor): fall back to the average power of the latest completed 5-min
+//    recorder `change` bucket — the closest HA-consistent live read, so a coarse counter still shows a "now" value.
 //Returns null when neither yields a value, so the caller hides the chip rather than printing the lifetime cumulative total.
 export function currentPvRate(host: PvHost): PvRate | null
 {

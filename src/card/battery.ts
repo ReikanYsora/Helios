@@ -234,7 +234,7 @@ export function refreshBattery(host: BatteryHost): void
     }
     //Two-tier window. LTS arm uses `visibleStart` (full visible timeline) so today's charged/discharged kWh integrate across the
     //full day; LTS is near-free on the recorder. Raw arm uses `rawStart`, capped at 6 h, firing only when LTS is empty (custom
-    //sensor without `state_class`) since a wider window on a 1 Hz BMS without LTS would drag the recorder. Both anchors are off
+    //sensor without `state_class`) since a wider raw window on a high-frequency BMS would drag the recorder. Both anchors are off
     //`Date.now()` so the inner clamp in fetchBatteryHistory never tips into the future.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
@@ -421,14 +421,14 @@ function parseStatBoundary(raw: unknown): number | null
 }
 
 
-//History fetch for the battery overlay. Tries `recorder/statistics_during_period` first: the only path that scales on a >1 Hz Victron
-//BMS (5-min buckets, ~576 rows per 2-day window vs ~150-200k raw). When the entity has no LTS tracking (no `state_class`) the stats
-//array is empty and we fall back to raw `history/history_during_period` with `significant_changes_only` for custom/non-measurement
-//entities. SoC + power entities are bundled into one WS roundtrip when both are configured.
+//History fetch for the battery overlay. Tries `recorder/statistics_during_period` first: the only path that scales on a
+//high-frequency BMS (5-min buckets, ~576 rows per 2-day window vs ~150-200k raw). When the entity has no LTS tracking (no
+//`state_class`) the stats array is empty and we fall back to raw `history/history_during_period` with `significant_changes_only`
+//for custom/non-measurement entities. SoC + power entities are bundled into one WS roundtrip when both are configured.
 //
-//aggregateBatteryLkcf: last-known-carry-forward aggregator across N banks. Mirrors `aggregatePvHistoriesLkcf` in pv.ts plus two
-//battery hooks: a per-entity `transform` (flip sign on `stat_rate_inverted` wirings before the sum) and a `reducer` (`sum` for
-//power, `mean` for SoC). Walks the union of all timestamps in O(entities * union), sub-ms even at 1 Hz BMS cadence.
+//aggregateBatteryLkcf: last-known-carry-forward aggregator across N banks, plus two battery hooks: a per-entity `transform`
+//(flip sign on `stat_rate_inverted` wirings before the sum) and a `reducer` (`sum` for power, `mean` for SoC). Walks the union
+//of all timestamps in O(entities * union), sub-ms even at high BMS cadence.
 function aggregateBatteryLkcf(
     perEntity: BatteryHistory[],
     reducer:   'sum' | 'mean',
@@ -527,7 +527,7 @@ export async function fetchBatteryHistory(
 
         //LTS arm uses the broader `ltsStart` (usually visible start, often midnight or earlier) so today's charged/discharged kWh
         //integrate across the full day. The raw fallback below uses the narrower `rawStart` so a non-LTS entity doesn't pull a
-        //multi-day raw scan on a 1 Hz BMS.
+        //multi-day raw scan on a high-frequency BMS.
         const statsResult: any = await callWSWithTimeout<any>(host.hass, {
             type:           'recorder/statistics_during_period',
             start_time:     ltsStart.toISOString(),
@@ -551,7 +551,7 @@ export async function fetchBatteryHistory(
         else
         {
             //No entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
-            //`significant_changes_only` for server-side dedup; raw arm capped at `rawStart` (6 h) so a 1 Hz BMS doesn't drag the recorder.
+            //`significant_changes_only` for server-side dedup; raw arm capped at `rawStart` (6 h) so a high-frequency BMS doesn't drag the recorder.
             const rawResult: any = await callWSWithTimeout<any>(host.hass, {
                 type:                     'history/history_during_period',
                 start_time:               rawStart.toISOString(),

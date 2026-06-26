@@ -122,7 +122,7 @@ export interface WeatherData
     windMs:         number;
 }
 
-//Cloud disc, chip cluster, camera target and sun-arc tunables now live in constants.ts.
+//Cloud disc, chip cluster, camera target and sun-arc tunables live in constants.ts.
 
 
 function weatherCodeToIntensity(code: number, pct: number): CloudIntensity
@@ -617,9 +617,9 @@ export class HeliosEngine
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
 
-        //Create the map immediately regardless of container size: deferring until a ResizeObserver/
-        //IntersectionObserver reported "ready" left the map null forever in some layouts (Masonry) where
-        //neither observer fired. The post-load triple-resize + 5 s tile watchdog cover any 0x0-at-init case.
+        //Create the map immediately regardless of container size: in some layouts (Masonry) neither the
+        //ResizeObserver nor the IntersectionObserver fires, so deferring until one reports "ready" would
+        //leave the map null. The post-load resize handling covers any 0×0-at-init case.
         this._initMapInstance(container, haCoords);
     }
 
@@ -1221,8 +1221,8 @@ export class HeliosEngine
         }
         const buildings = this._buildingsData ?? [];
         this._renderer.setBuildings(buildings);
-        //Play the prism rise once, the first time real footprints land (matching the HA energy graphs,
-        //which re-animate on tab entry). Re-arm if the buildings ever go empty so a re-fetch replays it.
+        //Play the prism rise once, the first time real footprints land. Re-arm if the buildings ever go
+        //empty so a re-fetch replays it.
         if (buildings.length && !this._grown)
         {
             this._grown = true;
@@ -1263,7 +1263,7 @@ export class HeliosEngine
         this._renderer.setSun(azimuth, altitude);
     }
 
-    //Precision fixed to 'high' (multi-model median); kept so the engine stays precision-aware for a future tier.
+    //Precision fixed to 'high' (multi-model median).
     private _resolvedPrecision(): 'standard' | 'high'
     {
         return 'high';
@@ -1533,8 +1533,7 @@ export class HeliosEngine
 
         //PV home-anchor ground disc as a polygon: sample N points on a circle of PV_HOME_ANCHOR_RADIUS_M
         //around the home, project each, and express relative to the home so the SVG can translate-to-home.
-        //Flat on the ground, it projects to an ellipse under pitch like the rest of the map. 4 m matches the
-        //visual weight of the HA Energy distribution card's home node.
+        //Flat on the ground, it projects to an ellipse under pitch like the rest of the map.
         const PV_HOME_ANCHOR_RADIUS_M = 4.0;
         const ANCHOR_SAMPLES          = 48;
         const anchorLatPerM = 1 / 111_320;
@@ -2066,7 +2065,7 @@ export class HeliosEngine
         cloudLow:     number[];
         cloudMid:     number[];
         cloudHigh:    number[];
-        //Per-hour beam + diffuse radiation W/m² (-1 where unsupplied), so card/pv.ts can transpose a tilted
+        //Per-hour beam + diffuse irradiance W/m² (-1 where unsupplied), so card/pv.ts can transpose a tilted
         //array on the real direct/diffuse split instead of the cloud-derived fraction.
         directRad:    number[];
         diffuseRad:   number[];

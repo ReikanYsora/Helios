@@ -1,9 +1,8 @@
 //Solar position and irradiance math: pure functions, no DOM/map. Validated against NOAA SPA over a year × 8 latitudes
-//(mean alt error 0.30°, az 0.36°, max alt ~1°); the simplified declination dominates the error but stays well under the
-//visual fidelity needed for hillshade direction and the W/m² estimate.
+//(mean alt error 0.30°, az 0.36°, max alt ~1°), well under the fidelity needed for shadow direction and the W/m² estimate.
 
 //Sun altitude/azimuth (degrees, azimuth clockwise from north) at a UTC instant for a lat/lon point.
-//Single-entry cache: many render passes in one Lit cycle (atmosphere, shadows, PV legend) ask for the same (time, home)
+//Single-entry cache: many render passes in one render cycle (atmosphere, shadows, PV legend) ask for the same (time, home)
 //tuple in succession. Key includes 6-decimal lat/lon so two cards at distinct homes don't poison each other.
 let _sunCacheKey: string | null = null;
 let _sunCacheValue: { altitude: number; azimuth: number } | null = null;
@@ -81,7 +80,7 @@ export interface PvComputeContext
     //Measured/forecast GHI W/m² (Open-Meteo shortwave or home sensor). When >= 0 it replaces the analytical Haurwitz ×
     //Kasten-Czeplak magnitude so cloud physics come from the weather model. Undefined keeps the analytical base bit-for-bit.
     ghiWm2?:   number;
-    //Measured/forecast beam + diffuse on the HORIZONTAL plane (Open-Meteo direct + diffuse radiation). When BOTH >= 0 they
+    //Measured/forecast beam + diffuse irradiance on the horizontal plane (Open-Meteo direct + diffuse). When both >= 0 they
     //replace the cloud-derived direct/diffuse split in the transposition with the real ratio. Ignored on a horizontal panel
     //(GHI already is POA) and when either is missing.
     directWm2?:  number;

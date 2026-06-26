@@ -295,7 +295,7 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
 //  - battery: { type: 'battery', stat_energy_from, stat_energy_to, stat_soc?, power_config? }
 //
 //`power_config.stat_rate` is the post-2026 grid/battery live-power slot; the top-level grid `stat_rate` is the legacy
-//slot the official sankey card still serves. We read both so any encountered config maps cleanly.
+//slot HA still serves. We read both so any encountered config maps cleanly.
 export function parseEnergyPrefs(prefs: {
     energy_sources?: Array<Record<string, unknown>>;
 }): EnergyDefaults

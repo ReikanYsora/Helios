@@ -10,35 +10,6 @@ export interface Translations
 {
     cardName:        string;
     cardDescription: string;
-    //Detail dashboard, opened by clicking the home: camera eases in (zoom + pitch), a full-card
-    //overlay takes over while the pre-existing HUD fades out.
-    detail:
-    {
-        exitHint:  string;       //close-button aria-label
-
-        //CoverFlow dashboard panel. Keys are OPTIONAL: the renderer falls back to the inline
-        //English text via `??` when the active locale lacks them.
-        tileProductionLabel?:   string; //'Production'
-        dayLabelToday?:         string; //'Today'
-        dayLabelYesterday?:     string; //'Yesterday'
-        dayLabelDayBefore?:     string; //'2 days ago'
-        dayLabelTomorrow?:      string; //'Tomorrow'
-        dayLabelDayAfter?:      string; //'In 2 days'
-        //Radial dial chip strip badges.
-        radialProductionLabel?: string; //'Production'
-        radialBatteryLabel?:    string; //'Battery'
-        radialCloudLabel?:      string; //'Cloud'
-        radialIrradianceLabel?: string; //'Irradiance'
-        //"Back to live" button: clears the parked hover cursor and snaps the dial to its live
-        //read-out (aria label + visible text).
-        radialBackToLive?:      string; //'Back to live'
-        //View-mode toggle in the CoverFlow bandeau (aria label + title; icon is a glyph).
-        dashViewRadialLabel?:   string; //'Radial view'
-        dashViewGraphLabel?:    string; //'Graph view'
-        //Mini-card label above the graph view's forecast value (daily kWh, or the hovered hour's
-        //instantaneous W).
-        dashForecastLabel?:     string; //'Forecast'
-    };
 
     //In-card rolling-period selector on the timeline. Optional; renderer falls back to English.
     period?:
@@ -85,7 +56,7 @@ export interface Translations
         buildingHeight?:              string;
         buildingHeightHelp?:          string;
         //PV install: inverter cap, per-row panel orientation, inverter-cutoff SoC guard, optional
-        //solar-radiation override sensor — every install-level knob with no HA Energy equivalent.
+        //solar-irradiance override sensor — every install-level knob with no HA Energy equivalent.
         installationSection:      string;
         //Section-top hint: entity wiring (production, grid, battery) lives in HA Energy now; this
         //section only adds install details that improve forecast accuracy.
@@ -181,87 +152,14 @@ export interface Translations
     };
 }
 
-//Locale registry mirroring HA's 64 built-in languages. pickTranslations walks the hass.language tag
-//through this map, falling back to English. Regional variants (en-GB, pt-BR, es-419, sr-Latn,
-//zh-Hans, zh-Hant) get their own entry so dialect phrasing wins over the language root.
-import { af } from './locales/af';
-import { ar } from './locales/ar';
-import { bg } from './locales/bg';
-import { bn } from './locales/bn';
-import { bs } from './locales/bs';
-import { ca } from './locales/ca';
-import { cs } from './locales/cs';
-import { cy } from './locales/cy';
-import { da } from './locales/da';
-import { de } from './locales/de';
-import { el } from './locales/el';
+//Locale registry. Only English + French ship for now; the full language set is regenerated before
+//release. pickTranslations walks the hass.language tag through this map, falling back to English.
 import { en } from './locales/en';
-import { enGB } from './locales/en-GB';
-import { eo } from './locales/eo';
-import { es } from './locales/es';
-import { es419 } from './locales/es-419';
-import { et } from './locales/et';
-import { eu } from './locales/eu';
-import { fa } from './locales/fa';
-import { fi } from './locales/fi';
 import { fr } from './locales/fr';
-import { fy } from './locales/fy';
-import { gl } from './locales/gl';
-import { gsw } from './locales/gsw';
-import { he } from './locales/he';
-import { hi } from './locales/hi';
-import { hr } from './locales/hr';
-import { hu } from './locales/hu';
-import { hy } from './locales/hy';
-import { id } from './locales/id';
-//`is` is a TS contextual keyword that confuses the parser at module scope; the locale file exports
-//`is_`, the map below keys it as the natural `is` tag.
-import { is_ } from './locales/is';
-import { it } from './locales/it';
-import { ja } from './locales/ja';
-import { ka } from './locales/ka';
-import { ko } from './locales/ko';
-import { lb } from './locales/lb';
-import { lt } from './locales/lt';
-import { lv } from './locales/lv';
-import { ml } from './locales/ml';
-import { nb } from './locales/nb';
-import { nl } from './locales/nl';
-import { nn } from './locales/nn';
-import { no } from './locales/no';
-import { pl } from './locales/pl';
-import { pt } from './locales/pt';
-import { ptBR } from './locales/pt-BR';
-import { ro } from './locales/ro';
-import { ru } from './locales/ru';
-import { si } from './locales/si';
-import { sk } from './locales/sk';
-import { sl } from './locales/sl';
-import { sr } from './locales/sr';
-import { srLatn } from './locales/sr-Latn';
-import { sv } from './locales/sv';
-import { ta } from './locales/ta';
-import { te } from './locales/te';
-import { th } from './locales/th';
-import { tr } from './locales/tr';
-import { uk } from './locales/uk';
-import { ur } from './locales/ur';
-import { vi } from './locales/vi';
-import { zhHans } from './locales/zh-Hans';
-import { zhHant } from './locales/zh-Hant';
 
 const LOCALES: Record<string, Translations> =
 {
-    af, ar, bg, bn, bs, ca, cs, cy, da, de, el, en, eo, es, et, eu, fa, fi, fr, fy, gl, gsw,
-    he, hi, hr, hu, hy, id, it, ja, ka, ko, lb, lt, lv, ml, nb, nl, nn, no, pl, pt, ro, ru, si,
-    sk, sl, sr, sv, ta, te, th, tr, uk, ur, vi,
-    'is':      is_,
-    'en-GB':   enGB,
-    'es-419':  es419,
-    'pt-BR':   ptBR,
-    'sr-Latn': srLatn,
-    'zh-Hans': zhHans,
-    'zh-Hant': zhHant,
+    en, fr,
 };
 
 const FALLBACK: Translations = en;

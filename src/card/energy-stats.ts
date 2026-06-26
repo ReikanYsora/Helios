@@ -193,9 +193,9 @@ export function changeSeriesToWatts(
 
 
 //Deriving live power from a `change` series must cope with two meter types:
-//  - FINE (Shelly, P1, Victron): counter advances every few seconds, so every 5-min bucket carries energy and the
+//  - FINE: counter advances every few seconds, so every 5-min bucket carries energy and the
 //    latest bucket alone is the responsive, correct read.
-//  - COARSE (SolarEdge, every 15 min): counter only advances on report, so the recorder lands the whole 15-min delta
+//  - COARSE (reports every 15 min): counter only advances on report, so the recorder lands the whole 15-min delta
 //    in ONE bucket and zeroes the other two; the latest bucket then reads 0 two-thirds of the time and ~3x one-third.
 //We distinguish by density of non-zero buckets in a probe window: dense => fine (read latest direct), sparse =>
 //coarse (average the probe window so the lone delta spreads over its real interval). Fine installs are untouched.

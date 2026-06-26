@@ -4,9 +4,8 @@
 //cast shadows, extruded buildings). The host drives data (location, buildings, sun, palette) and pose
 //(bearing/pitch), then calls redraw(); per-frame work is rAF-coalesced.
 //
-//What it deliberately does NOT own: the HUD (chips, leaders, sun arc, timeline). Those are card-specific
-//and sit in their own SVG layer above this one — the host projects them through `camera`. Shared by both
-//cards; each adds its own HUD.
+//It does not own the HUD (chips, leaders, sun arc, timeline): those are card-specific and sit in their own
+//SVG layer above this one, projected through `camera`.
 
 import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
@@ -121,9 +120,9 @@ export class SceneRenderer
         this._growth = Math.max(0, Math.min(1, growth));
     }
 
-    //Play the one-off building rise: prisms grow from the ground to full height (0 -> 1, cubic-out) over
-    //500 ms, the same window the HA energy graphs animate in. Instant under prefers-reduced-motion. The
-    //host replays it whenever buildings (re)arrive or the tab is re-entered, so it matches the graphs.
+    //Play the one-off building rise: prisms grow from the ground to full height (0 -> 1, cubic-out),
+    //matching the energy dashboard graph animation. Instant under prefers-reduced-motion. The host replays
+    //it whenever buildings (re)arrive or the tab is re-entered, so it stays in step with the graphs.
     public animateGrowth(): void
     {
         if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }

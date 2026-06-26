@@ -1,20 +1,19 @@
-//Everything "buildings" for the 2.5D scene: the shared Building/ScenePalette/HomeAppearance types, the
-//self-sourced Overpass data fetch that turns the home's surroundings into ready-to-extrude footprints, and
-//the faux-3D building + shadow PAINTERS that draw those footprints.
+//Buildings for the 2.5D scene: the Building/ScenePalette/HomeAppearance types, the Overpass data fetch that
+//turns the home's surroundings into ready-to-extrude footprints, and the faux-3D building + shadow painters.
 //
-//Data flow: split into FETCH-ONCE-AT-MAX + INTERPRET-ON-READ so a building-OPTION tweak (radius, count,
+//Data flow splits into fetch-once-at-max + interpret-on-read so a building-option tweak (radius, count,
 //height, cluster) never re-hits Overpass — it re-interprets cached raw data instantly.
 //  - fetchRawBuildings(): ask the OpenStreetMap Overpass API for every `way["building"]` and multipolygon
-//    `relation["building"]` within the MAX radius, convert each ring lat/lon -> local metres (east/north)
-//    relative to the home, keep the nearest MAX_BUILDING_COUNT COMPLETE footprints as option-INDEPENDENT
+//    `relation["building"]` within the max radius, convert each ring lat/lon -> local metres (east/north)
+//    relative to the home, keep the nearest MAX_BUILDING_COUNT complete footprints as option-independent
 //    RawBuilding[] (no height cap, no count slice, no home flag). Cached in localStorage keyed on the home
-//    LOCATION only (the home doesn't move), so a reload — or any option change — doesn't re-fetch.
+//    location only (the home doesn't move), so a reload — or any option change — doesn't re-fetch.
 //  - interpretBuildings(): apply the editor options to the cached raw data in memory — filter to the radius,
 //    slice the count, resolve per-building height (real OSM capped under realSize, else a fixed prism), and
-//    mark the home (the building containing/nearest the GPS) plus any building whose centroid is within the
-//    cluster radius of it (attached outbuildings join the home set). When the raw set is empty — offline,
-//    both mirrors down, or genuinely no mapped buildings — we fall back to a single standard house at the
-//    origin so the scene always has a home to draw.
+//    mark the home (the building containing/nearest the position) plus any building whose centroid is within
+//    the cluster radius of it (attached outbuildings join the home set). When the raw set is empty (offline,
+//    all mirrors down, or no mapped buildings) it falls back to a single standard house at the origin so the
+//    scene always has a home to draw.
 //
 //Painters: buildings are extruded prisms drawn with a per-face painter's algorithm (depth-sorted,
 //screen-space back-face culled); shadows are each footprint's cast envelope flattened by one group-opacity.
@@ -35,7 +34,7 @@ import {
     REAL_HEIGHT_CAP_M,
     REAL_HEIGHT_FALLBACK_M,
 } from '../constants';
-//Re-exported so existing importers of SHADOW_FADE_DEG from './buildings' keep resolving.
+//Re-exported so importers of SHADOW_FADE_DEG from './buildings' keep resolving.
 export { SHADOW_FADE_DEG } from '../constants';
 
 //---------------------------------------------------------------------------------------------------------
@@ -75,9 +74,9 @@ export interface HomeAppearance
 //Overpass data fetch — self-sourced footprints around the home.
 //---------------------------------------------------------------------------------------------------------
 
-//Option-INDEPENDENT, JSON-serialisable raw building parsed once at the MAX radius. interpretBuildings()
+//Option-independent, JSON-serialisable raw building parsed once at the max radius. interpretBuildings()
 //turns these into render-ready Building[] per the editor options; nothing here depends on radius/count/
-//height/cluster, so it's cached by LOCATION only and reused across every option change.
+//height/cluster, so it's cached by location only and reused across every option change.
 export interface RawBuilding
 {
     footprint:  Point[];        //metres east/north relative to the home, CCW, open ring
@@ -159,14 +158,14 @@ function distanceToHome(polygon: Point[]): number
     return nearest;
 }
 
-//localStorage cache key — rounded home position only (the "bld2" prefix retires the old radius/option-keyed
-//`helios-bld:` entries, which we never read). The home doesn't move, so one entry serves every option set.
+//localStorage cache key — rounded home position only. The home doesn't move, so one entry serves every
+//option set.
 function cacheKey(lat: number, lng: number): string
 {
     return `helios-bld2:${lat.toFixed(4)}:${lng.toFixed(4)}`;
 }
 
-//Parse Overpass `elements` into option-INDEPENDENT RawBuilding[]. Each ring lat/lon -> local metres
+//Parse Overpass `elements` into option-independent RawBuilding[]. Each ring lat/lon -> local metres
 //east/north relative to the home, centroid + distance-to-footprint + raw OSM height computed, ranked by
 //distance, nearest MAX_BUILDING_COUNT kept. No height cap, fixed height, count slice, or home flag here —
 //those are interpret's job, so the same raw data serves any option set.
@@ -277,11 +276,11 @@ function fallbackHouse(): Building
     };
 }
 
-//Fetch the option-INDEPENDENT raw footprints around the home, at the MAX display radius, as RawBuilding[].
-//Serves a fresh localStorage cache first (keyed on LOCATION only, so it's reused across every option set),
-//then tries each Overpass mirror in turn; on total failure (offline, both mirrors down, no mapped
-//buildings) returns [] — interpretBuildings() supplies the fallback house, so the cache never holds it.
-//Respects `signal` — an abort propagates as an AbortError the caller already swallows.
+//Fetch the option-independent raw footprints around the home, at the max display radius, as RawBuilding[].
+//Serves a fresh localStorage cache first (keyed on location only, so it's reused across every option set),
+//then tries each Overpass mirror in turn; on total failure (offline, all mirrors down, no mapped buildings)
+//returns [] — interpretBuildings() supplies the fallback house, so the cache never holds it. Respects
+//`signal` — an abort propagates as an AbortError the caller already swallows.
 export async function fetchRawBuildings(
     homeLat: number,
     homeLon: number,
@@ -294,8 +293,8 @@ export async function fetchRawBuildings(
     const radius = Math.round(MAX_DISPLAY_RADIUS_M);
     const key    = cacheKey(lat, lng);
 
-    //Cache hit: reuse the stored raw footprints directly. No home flag here — that's interpret's job now.
-    //The cache never holds the fallback house, only real Overpass results.
+    //Cache hit: reuse the stored raw footprints directly. No home flag here — that's interpret's job. The
+    //cache never holds the fallback house, only real Overpass results.
     try
     {
         const raw    = localStorage.getItem(key);
@@ -368,7 +367,7 @@ export async function fetchRawBuildings(
     return [];
 }
 
-//Options interpretBuildings() applies to the cached raw data, on read. All cheap + in-memory: a change to
+//Options interpretBuildings() applies to the cached raw data, on read. All cheap and in-memory: a change to
 //any of these re-interprets instantly with no Overpass re-fetch.
 export interface InterpretBuildingsOptions
 {
@@ -379,7 +378,7 @@ export interface InterpretBuildingsOptions
     clusterRadiusM: number;
 }
 
-//Turn option-INDEPENDENT RawBuilding[] into render-ready Building[] per the editor options. Pure + cheap:
+//Turn option-independent RawBuilding[] into render-ready Building[] per the editor options. Pure and cheap:
 //filter to the radius, slice the count, resolve per-building height, and mark the home + its cluster. Called
 //on every option change (no re-fetch) as well as once per fresh raw fetch.
 export function interpretBuildings(

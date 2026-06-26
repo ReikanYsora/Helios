@@ -31,7 +31,7 @@ export default defineConfig({
         target: 'es2020',
         lib:
         {
-            entry:    'src/helios-card-scene.ts',
+            entry:    'src/helios-card.ts',
             formats:  ['es'],
             fileName: () => 'helios.js'
         },

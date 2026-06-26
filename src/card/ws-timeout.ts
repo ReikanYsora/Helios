@@ -1,7 +1,7 @@
 //Thin wrapper around `hass.callWS` that rejects an in-flight promise after a configurable timeout.
 //
 //Helios's history/statistics fetches are the slowest WS round-trips the card issues, and on a
-//recorder under heavy load (the Victron Cerbo case saturated the SQLite connection) they never
+//recorder under heavy load (a saturated SQLite connection) they never
 //complete, pinning the card on its loading state forever. With this wrapper a stuck fetch rejects
 //once the budget elapses; each caller catches it and renders a degraded state (live chips still
 //update from `hass.states`, the chart history line just drops until the next attempt).

@@ -7,7 +7,7 @@
 //local-metre conversion (and tile math) lives in ./tiles. Pure and card-agnostic, shared by both cards.
 
 import { PITCH_MIN, PITCH_MAX, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE, DEG } from '../constants';
-//Re-exported so existing importers of these symbols from './projection' keep resolving.
+//Re-exported so importers of these symbols from './projection' keep resolving.
 export { PITCH_MIN, PITCH_MAX, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE } from '../constants';
 
 export interface ProjectedPoint

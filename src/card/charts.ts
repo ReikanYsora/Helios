@@ -697,7 +697,7 @@ export interface ChartSeries
     cloudLow:     number[];
     cloudMid:     number[];
     cloudHigh:    number[];
-    //Hourly horizontal beam + diffuse radiation (W/m²), -1 where the model didn't decompose. Feeds tilt
+    //Hourly horizontal beam + diffuse irradiance (W/m²), -1 where the model didn't decompose. Feeds tilt
     //transposition with the real direct/diffuse split; non-transposing consumers ignore them.
     directRad:    number[];
     diffuseRad:   number[];
@@ -1007,7 +1007,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
         const ePoints: string[] = [];
         //Lighter decimation than the aggregate (~750 points): background curves need less resolution and short path
-        //strings keep 4-source / 1 Hz installs under the browser path limit.
+        //strings keep high-frequency multi-source installs under the browser path limit.
         const stride = Math.max(1, Math.floor(eTimes.length / 750));
         for (let i = 0; i < eTimes.length; i += stride)
         {
