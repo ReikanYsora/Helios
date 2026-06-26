@@ -2,10 +2,7 @@
 //weeks/months) follows the visible span. Fed [start, end]; outputs labels + separators + dayBoundaries.
 
 
-const HOUR_MS = 3_600_000;
-const DAY_MS  = 24 * HOUR_MS;
-
-import { TIMELINE_MAX_TICKS } from '../constants';
+import { TIMELINE_MAX_TICKS, HOUR_MS, DAY_MS } from '../constants';
 export { TIMELINE_MAX_TICKS };
 
 export type TimelineKind = 'intraday' | 'days' | 'weeks' | 'months';

@@ -5,9 +5,19 @@
 //resolvers (displayRadiusM, valueDecimals, periodPastDays...).
 
 
-//Colours are no longer constants: every drawing colour is resolved at runtime from the live HA theme
-//tokens — the scene palette via the engine's _cssHex (helios-engine.ts), the chips + charts via
-//ENERGY_COLOR (card/theme-colors.ts) — so a user's custom theme flows through with no hardcoded hex.
+//Drawing colours are not constants: every colour is resolved at runtime from the live HA theme tokens —
+//the scene palette via the engine, the chips + charts via ENERGY_COLOR (card/theme-colors.ts) — so a
+//user's custom theme flows through with no hardcoded hex. The LAB conversion factors that ramp those
+//tokens live in the "Colour-space conversion" group below.
+
+//=== Time units ===
+export const HOUR_MS = 3_600_000;
+export const DAY_MS  = 86_400_000;
+
+//=== Math ===
+//Card-side degrees→radians factor. The scene module keeps its own DEG in scene/constants.ts so the two
+//layers stay independent; the duplication across the two is intentional.
+export const DEG = Math.PI / 180;
 
 //=== Display radius + buildings ===
 //Single on-screen radius (m) for buildings and shadows. 200 m default; the `display-radius`
@@ -44,7 +54,7 @@ export const MAX_PERIOD_FUTURE_DAYS     = 14;
 //=== Camera ===
 //Frame a point this high above the home so the house sits lower with headroom for the arc.
 export const CAMERA_TARGET_HEIGHT_M = 10;
-//Pitch bounds shared by the MapLibre constructor, drag-rotate, the editor and the initial-pose clamp.
+//Pitch bounds shared by the engine pose policy, drag-rotate, the editor and the initial-pose clamp.
 //MIN = mostly top-down, MAX = nearly horizontal, REST = default.
 export const CAMERA_PITCH_MIN_DEG  = 15;
 export const CAMERA_PITCH_MAX_DEG  = 55;
@@ -79,8 +89,7 @@ export const TIMELINE_MAX_TICKS = 7;
 
 //=== Shadows ===
 export const DEFAULT_SHADOW_OPACITY = 0.32;
-//Offscreen raster resolution for the footprint shadow mask. ~0.4 m/px over a 400 m diameter; fixed now that
-//the LiDAR precision selector is gone.
+//Offscreen raster resolution for the footprint shadow mask. ~0.4 m/px over a 400 m diameter; fixed.
 export const SHADOW_RASTER_SIZE = 1024;
 
 //=== Weather fetch ===
@@ -96,3 +105,42 @@ export const OTHER_ERROR_BACKOFF_MS: readonly number[] = [1 * 60_000, 5 * 60_000
 export const CHANGE_REFRESH_MS = 60_000;
 export const COARSE_PROBE_MS   = 15 * 60_000;
 export const DENSE_FRACTION    = 0.6;
+
+
+//=== Buildings / Overpass ===
+//Fixed prism height (m) for every building (OSM heights ignored — tall ones break the faux-3D framing),
+//the cap on nearest footprints kept, the local-mode fallback house half-extents, the localStorage cache
+//TTL, the per-mirror retry delay, and the two CORS Overpass mirrors tried in order.
+export const FIXED_BUILDING_HEIGHT_M = 6;
+export const MAX_BUILDINGS           = 50;
+export const FALLBACK_HOUSE_HALF_W   = 5;
+export const FALLBACK_HOUSE_HALF_D   = 4;
+export const BUILDING_CACHE_TTL_MS   = 30 * DAY_MS;
+export const OVERPASS_RETRY_DELAY_MS = 1200;
+export const OVERPASS_ENDPOINTS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+
+//=== Engine lifecycle ===
+//Cap on simultaneously-live HeliosEngine instances (evict the oldest beyond it so orphaned preview cards
+//don't exhaust WebGL contexts) and the TTL of the shared module-scope parsed-buildings cache.
+export const MAX_LIVE_ENGINES          = 4;
+export const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
+
+//=== Weather cache ===
+//localStorage key prefix for the cached Open-Meteo forecasts.
+export const CACHE_KEY_PREFIX = 'helios-weather-cache:';
+
+//=== Colour-space conversion (CIE D65 / LAB) ===
+//D65 white-point tristimulus values and the LAB piecewise-transfer thresholds, used by the RGB↔LAB
+//conversion that drives the per-energy-source colour ramp.
+/* eslint-disable @typescript-eslint/naming-convention */
+export const Xn = 0.95047;
+export const Yn = 1;
+export const Zn = 1.08883;
+/* eslint-enable @typescript-eslint/naming-convention */
+export const LAB_T0 = 0.137931034;
+export const LAB_T1 = 0.206896552;
+export const LAB_T2 = 0.12841855;
+export const LAB_T3 = 0.008856452;

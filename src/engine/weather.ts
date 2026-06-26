@@ -32,6 +32,7 @@ import {
     WEATHER_FORECAST_DAYS      as FORECAST_DAYS,
     WEATHER_CACHE_TTL_MS       as CACHE_TTL_MS,
     WEATHER_CACHE_KEY_DECIMALS as CACHE_KEY_DECIMALS,
+    CACHE_KEY_PREFIX,
 } from '../constants';
 export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../constants';
 
@@ -125,8 +126,7 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 
 
 //In-browser cache. Precision is fixed to 'high'; the tag stays in the key so re-introducing a precision toggle later
-//won't collide with existing cached payloads.
-const CACHE_KEY_PREFIX = 'helios-weather-cache:';
+//won't collide with existing cached payloads. CACHE_KEY_PREFIX lives in constants.ts.
 
 
 //Module-level diagnostics walked by window.heliosStats() so a power user can audit network/cache/dedup ratios over a

@@ -12,13 +12,14 @@ import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
 import { nightShade } from './colors';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-//Camera aim point above the home (m): lifts the home lower in the frame with headroom for the HUD arc.
-const DEFAULT_TARGET_HEIGHT_M = 3;
-//Dark-theme tint for the (always-light) CARTO basemap, applied as a CSS filter on the ground element so
-//the tiles read as a dark map. Same recipe as the source Solar scene card.
-const DARK_FILTER = 'invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4)';
+import {
+    SVG_NS,
+    DEFAULT_TARGET_HEIGHT_M,
+    DARK_FILTER,
+    GROWTH_RISE_MS,
+    HOME_SQUASH_MS,
+    HOME_GROW_MS,
+} from './constants';
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
 const prefersReducedMotion = (): boolean =>
@@ -140,7 +141,7 @@ export class SceneRenderer
         const tick = (now: number): void =>
         {
             if (!this._alive) { this._growthRaf = 0; return; }
-            const t = Math.min(1, (now - start) / 500);
+            const t = Math.min(1, (now - start) / GROWTH_RISE_MS);
             this._growth = 1 - (1 - t) ** 3;
             this.scheduleRedraw();
             this._growthRaf = t < 1 ? requestAnimationFrame(tick) : 0;
@@ -174,8 +175,8 @@ export class SceneRenderer
             this.scheduleRedraw();
             return;
         }
-        const DOWN = 220;
-        const UP   = 300;
+        const DOWN = HOME_SQUASH_MS;
+        const UP   = HOME_GROW_MS;
         const start = performance.now();
         const tick = (now: number): void =>
         {

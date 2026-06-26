@@ -17,6 +17,16 @@
 
 import { type Building } from '../scene/buildings';
 import { type Point } from '../scene/colors';
+import {
+    FIXED_BUILDING_HEIGHT_M,
+    MAX_BUILDINGS,
+    FALLBACK_HOUSE_HALF_W,
+    FALLBACK_HOUSE_HALF_D,
+    BUILDING_CACHE_TTL_MS,
+    OVERPASS_RETRY_DELAY_MS,
+    OVERPASS_ENDPOINTS,
+    DEG,
+} from '../constants';
 
 export interface FetchBuildingsOptions
 {
@@ -25,26 +35,6 @@ export interface FetchBuildingsOptions
     radiusMeters: number;
     signal?:      AbortSignal;
 }
-
-//Fixed prism height (m) for every building — OSM render heights are deliberately ignored (tall ones break
-//the faux-3D framing). Helios already drew every footprint at 6 m.
-const FIXED_BUILDING_HEIGHT_M = 6;
-//Keep only the nearest N complete footprints — dense blocks would otherwise flood the scene.
-const MAX_BUILDINGS = 50;
-//Half-extents of the local-mode fallback house (~10 x 8 m), centred on the home.
-const FALLBACK_HOUSE_HALF_W = 5;
-const FALLBACK_HOUSE_HALF_D = 4;
-//localStorage cache: the home is static, so a 30-day TTL keeps reloads off Overpass.
-const BUILDING_CACHE_TTL_MS = 30 * 86_400_000;
-//A failed mirror waits this long before the next mirror is tried.
-const OVERPASS_RETRY_DELAY_MS = 1200;
-//Two CORS mirrors (the main one rate-limits under load), tried in order.
-const OVERPASS_ENDPOINTS = [
-    'https://overpass-api.de/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-];
-
-const DEG = Math.PI / 180;
 
 //One Overpass element: a `way` carries its ring in `.geometry`; a multipolygon `relation` carries its
 //rings in `.members[].geometry` (we keep the outer ones).

@@ -6,12 +6,9 @@
 
 import { SceneCamera, PERSPECTIVE, NEAR_PLANE } from './projection';
 import { mixHex, hexByte, tintedRgba, pointsAttr, type Point } from './colors';
-
-const DEG = Math.PI / 180;
-//Shadows fade in near the horizon (full at SHADOW_FADE_DEG above it) so they don't pop at dawn/dusk.
-export const SHADOW_FADE_DEG = 10;
-//Cap a cast shadow at 50 m so a low sun doesn't streak a shadow across the whole disc.
-const MAX_SHADOW_M = 50;
+import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M } from './constants';
+//Re-exported so existing importers of SHADOW_FADE_DEG from './buildings' keep resolving.
+export { SHADOW_FADE_DEG } from './constants';
 
 export interface Building
 {

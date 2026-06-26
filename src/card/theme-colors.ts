@@ -3,6 +3,8 @@
 //element's computed style, so a user's custom theme flows through and we don't hardcode hex. A literal
 //fallback covers the case where the token is unset. Mirrors the source Solar scene card's colour wiring.
 
+import { Xn, Yn, Zn, LAB_T0, LAB_T1, LAB_T2, LAB_T3 } from '../constants';
+
 //Resolve a CSS custom property to #rrggbb off the host's computed style. Accepts #rgb / #rrggbb /
 //rgb()/rgba(); falls back when the token is empty or unparseable.
 export function cssHex(host: Element | null | undefined, token: string, fallback: string): string
@@ -24,15 +26,7 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
 }
 
 //RGB↔LAB conversion (chroma.js, via HA's common/color), used for the per-energy-source colour ramp below.
-/* eslint-disable @typescript-eslint/naming-convention */
-const Xn = 0.95047;
-const Yn = 1;
-const Zn = 1.08883;
-/* eslint-enable @typescript-eslint/naming-convention */
-const LAB_T0 = 0.137931034;
-const LAB_T1 = 0.206896552;
-const LAB_T2 = 0.12841855;
-const LAB_T3 = 0.008856452;
+//The D65 white-point + LAB transfer thresholds live in constants.ts.
 const rgbXyz = (c: number): number => { const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4; };
 const xyzLab = (t: number): number => (t > LAB_T3 ? t ** (1 / 3) : t / LAB_T2 + LAB_T0);
 const xyzRgb = (r: number): number => 255 * (r <= 0.00304 ? 12.92 * r : 1.055 * r ** (1 / 2.4) - 0.055);

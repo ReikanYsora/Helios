@@ -7,9 +7,7 @@
 //unit conversion (`units: { energy: 'kWh' }` normalises Wh/kWh/MWh server-side). Helios's only math is
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number Helios shows the same number.
 
-import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION } from '../constants';
-
-const HOUR_MS = 3_600_000;
+import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, HOUR_MS, DAY_MS } from '../constants';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
@@ -314,7 +312,7 @@ function periodMs(period: StatPeriod): number
 {
     if (period === '5minute') { return 5 * 60_000; }
     if (period === 'hour')    { return HOUR_MS; }
-    return 24 * HOUR_MS;
+    return DAY_MS;
 }
 
 

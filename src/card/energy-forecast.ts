@@ -3,11 +3,7 @@
 //a requestUpdate once the parsed result lands.
 
 import type { EnergyDefaults } from './energy-prefs';
-import { FORECAST_THROTTLE_MS } from '../constants';
-
-
-const HOUR_MS = 3_600_000;
-const DAY_MS  = 86_400_000;
+import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../constants';
 
 
 //One hourly forecast point. For an hourly wh value the average power across the hour in watts equals the wh number

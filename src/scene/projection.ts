@@ -8,19 +8,9 @@
 //local-metre conversion (and tile math) lives in ./tiles. This module is pure and card-agnostic so the
 //two 2026.7.1 cards can share one camera.
 
-//Pitch bounds shared by the editor, drag-rotate and the initial-pose clamp. MIN = nearly top-down,
-//MAX = nearly horizontal.
-export const PITCH_MIN = 5;
-export const PITCH_MAX = 65;
-//Default pose: bearing faces the sun's side (south in the N hemisphere; the renderer flips it to north
-//in the S from the home latitude), so the sun sits at the top of the frame at solar noon.
-export const DEFAULT_BEARING = 180;
-export const DEFAULT_TILT = 50;
-//Near-plane margin as a fraction of PERSPECTIVE: points within it are clamped and geometry past it is
-//culled, which kills the smear a point at/behind the camera would otherwise produce.
-export const NEAR_PLANE = 0.15;
-//Projection + CSS depth in px, shared by the ground transform and project3 so content tracks the plane.
-export const PERSPECTIVE = 1200;
+import { PITCH_MIN, PITCH_MAX, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE, DEG } from './constants';
+//Re-exported so existing importers of these symbols from './projection' keep resolving.
+export { PITCH_MIN, PITCH_MAX, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE } from './constants';
 
 export interface ProjectedPoint
 {
@@ -35,8 +25,6 @@ export interface GroundTransform
     transform:       string;
     transformOrigin: string;
 }
-
-const DEG = Math.PI / 180;
 
 //Stateful per-frame camera. The host sets the pose + scale, calls setViewport() once per frame to bake
 //the trig basis + screen-space home anchor, then projects any number of points cheaply.

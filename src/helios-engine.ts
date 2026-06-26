@@ -7,6 +7,7 @@ import { startAutoRotateLoop } from './engine/auto-rotate';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG, CAMERA_TARGET_HEIGHT_M,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
+    MAX_LIVE_ENGINES, SHARED_FETCH_CACHE_TTL_MS,
 } from './constants';
 import
 {
@@ -59,8 +60,8 @@ function bumpStat(key: keyof HeliosStats): void
 //edit without reliably firing disconnectedCallback, so orphaned engines accumulate and exhaust WebGL
 //contexts (Safari mobile caps ~8, causing FPS drift / iOS black-screen). We track live engines in a Set
 //and evict the oldest before exceeding the cap. 4 leaves room for live card + HA preview + transients
-//without evicting the live card (2 fired on the first edit); browser per-origin caps are ~8-16.
-const MAX_LIVE_ENGINES = 4;
+//without evicting the live card (2 fired on the first edit); browser per-origin caps are ~8-16. The cap
+//itself (MAX_LIVE_ENGINES) lives in constants.ts.
 
 const _liveEngines = new Set<HeliosEngine>();
 
@@ -70,8 +71,7 @@ const _liveEngines = new Set<HeliosEngine>();
 //commit, re-allocating the WebGL context, but a fresh engine can pick up the already-parsed data
 //synchronously and skip the parse+projection cost (10-50 ms) that otherwise shows as a preview flash. TTL
 //is wide since the data is static; the key encodes home position + radius, so any meaningful change
-//invalidates the entry naturally.
-const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
+//invalidates the entry naturally. The TTL (SHARED_FETCH_CACHE_TTL_MS) lives in constants.ts.
 
 interface SharedBuildingsCacheEntry
 {

@@ -8,7 +8,7 @@ import type { EnergyDefaults } from './energy-prefs';
 import { formatLocalisedNumber, formatPowerKw, formatEnergyKwh, energyToKwh } from './format';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
-import { PV_CACHE_TTL_MS } from '../constants';
+import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
 
 
 //Resolve the live PV entity from the HA Energy solar source. Prefers `stat_rate` (signed W/kW) over cumulative `stat_energy_from`
@@ -274,7 +274,6 @@ export function refreshPv(host: PvHost): void
         return;
     }
     const fetchEnd = host._timeRange.end;
-    const HOUR_MS  = 3_600_000;
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
 
@@ -293,7 +292,7 @@ export function refreshPv(host: PvHost): void
     //against the SUMMED predicted-vs-actual instead of first-entity-only.
     if (!host._pvCalibStatsFetching)
     {
-        const calibStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
+        const calibStart = new Date(today0.getTime() - 5 * DAY_MS);
         const calibKey   = `${fetchKeyPart}@h|${calibStart.getTime()}|${fetchEnd.getTime()}`;
         if (calibKey !== host._pvCalibStatsFetchKey)
         {
@@ -319,7 +318,7 @@ export function refreshPv(host: PvHost): void
     const changeIds = host._energyDefaults.solarStatEnergyFroms;
     if (changeIds.length > 0 && !host._pvChangeSeriesFetching)
     {
-        const seriesStart = new Date(today0.getTime() - 2 * 24 * HOUR_MS);
+        const seriesStart = new Date(today0.getTime() - 2 * DAY_MS);
         const sortedChange = [...changeIds].sort();
         //The refresh anchor re-arms the gate once per CHANGE_REFRESH_MS. fetchEnd alone only moves on time-range shifts (weather
         //refresh, midnight rollover) — too coarse: it froze the past curve and the cumulative-only chip fallback for hours.

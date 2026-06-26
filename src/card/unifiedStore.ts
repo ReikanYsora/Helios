@@ -25,13 +25,10 @@ import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
 import { forecastWattsAt, type SolarForecastPoint } from './energy-forecast';
+import { HOUR_MS, DAY_MS } from '../constants';
 
 //Re-export so graph consumers (e.g. SVG path builders walking bucketsPerHour) can query the cadence directly.
 export { displayUpdateFrequencyPerHour } from '../helios-config';
-
-
-const HOUR_MS = 3_600_000;
-const DAY_MS  = 24 * HOUR_MS;
 
 //Per-build cadence bundle, derived from config once at the top of buildUnifiedStore and threaded through every
 //per-metric builder so bucket arithmetic stays consistent across passes.
