@@ -1,7 +1,7 @@
 //Formatting/validation helpers shared between the card render path and the visual editor. Kept
 //dependency-free so any card-side module can pull them in without dragging Lit or engine symbols along.
 
-import { Xn, Yn, Zn, LAB_T0, LAB_T1, LAB_T2, LAB_T3 } from '../constants';
+import { Xn, Yn, Zn, LAB_T0, LAB_T1, LAB_T2, LAB_T3, SUN_COLOR_HEX } from '../constants';
 
 
 //Format a number with the user's locale (decimal mark, grouping). Falls back to locale-independent
@@ -286,8 +286,6 @@ export const ENERGY_COLOR = {
     gridExport: (h: Element | null | undefined): string => cssHex(h, '--energy-grid-return-color', '#8353d1'),
     batteryIn:  (h: Element | null | undefined): string => cssHex(h, '--energy-battery-in-color', '#f06292'),
     batteryOut: (h: Element | null | undefined): string => cssHex(h, '--energy-battery-out-color', '#4db6ac'),
-    //Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart): a stable warm yellow rather
-    //than the theme's --warning-color, which skews orange under many themes.
-    sun:        (_h: Element | null | undefined): string => '#ffc107',
+    sun:        (_h: Element | null | undefined): string => SUN_COLOR_HEX,
     cloud:      (h: Element | null | undefined): string => cssHex(h, '--secondary-text-color', '#727272'),
 } as const;

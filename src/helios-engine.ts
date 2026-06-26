@@ -7,6 +7,7 @@ import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
+    SUN_COLOR_HEX,
 } from './constants';
 import
 {
@@ -640,7 +641,7 @@ export class HeliosEngine
         //extruded buildings itself. The home colour + shadow colour/opacity are merged into its palette.
         this._container = container;
         this._renderer = new SceneRenderer(container, {
-            sun:           '#ffc107',
+            sun:           SUN_COLOR_HEX,
             shadow:        '#000000',
             shadowOpacity: this._shadowOpacity(),
         });
@@ -860,7 +861,7 @@ export class HeliosEngine
             dark:            this._cardIsDark,
             home:            this._cssHex('--energy-grid-consumption-color', '#488fc2'),
             neighbor:        this._cssHex('--primary-text-color', '#dddddd'),
-            sun:             '#ffc107',
+            sun:             SUN_COLOR_HEX,
             shadow:          this._cssHex('--shadow-color', '#000000'),
             shadowOpacity:   this._shadowsEnabled() ? this._shadowOpacity() : 0,
             neighborOpacity: this._buildingOpacity(),

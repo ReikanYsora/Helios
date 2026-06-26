@@ -49,6 +49,12 @@ export const MIN_PERIOD_FUTURE_DAYS     = 0;
 export const MAX_PERIOD_FUTURE_DAYS     = 14;
 
 
+//=== Colours ===
+//Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart) — a stable warm yellow rather
+//than the theme's --warning-color, which skews orange under many themes.
+export const SUN_COLOR_HEX = '#ffc107';
+
+
 //=== Camera ===
 //Pitch bounds shared by the engine pose policy, drag-rotate, the editor and the initial-pose clamp.
 //MIN = mostly top-down, MAX = nearly horizontal, REST = default.
