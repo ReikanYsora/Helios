@@ -53,8 +53,8 @@ export class SceneRenderer
     private _ground?:     Ground;
     private _groundLat?:  number;
     private _groundLon?:  number;
-    //Increments per build so a slower in-flight tile fetch can't overwrite a newer one (the boot build and
-    //a theme-flip rebuild race otherwise, and whichever resolves last would win).
+    //Increments per build so a slower in-flight tile fetch can't overwrite a newer one — guards a rapid
+    //theme re-flip landing while the previous re-tile is still fetching.
     private _groundToken = 0;
     private _buildings: Building[] = [];
     private _sun = { azimuth: 0, altitude: 0 };

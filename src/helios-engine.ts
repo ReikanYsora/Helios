@@ -602,7 +602,8 @@ export class HeliosEngine
         container:    HTMLElement,
         config:       HeliosConfig,
         haCoords:     [number, number],
-        haElevation?: number
+        haElevation?: number,
+        initialIsDark = false
     )
     {
         this.homeLat = haCoords[1];
@@ -616,6 +617,10 @@ export class HeliosEngine
 
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
+
+        //Seed the theme polarity before the renderer spins up so the boot basemap fetches the matching
+        //CARTO style on the first pass — no light→dark re-tile after the fact.
+        this._cardIsDark = initialIsDark;
 
         //Create the map immediately regardless of container size: in some layouts (Masonry) neither the
         //ResizeObserver nor the IntersectionObserver fires, so deferring until one reports "ready" would
@@ -821,7 +826,8 @@ export class HeliosEngine
         }
     }
 
-    //_cardIsDark is pushed by the card every Lit update so the renderer's tint follows the HA theme.
+    //Theme polarity: seeded at construction, then pushed by the card on every Lit update so the palette +
+    //basemap style follow the HA theme.
     private _cardIsDark: boolean = false;
     //The card-side host element (#map-container) the renderer mounts into; carries the cascaded HA theme
     //CSS custom properties we resolve the scene palette from.

@@ -186,6 +186,8 @@ export interface InitHost extends HudHost
     //Document visibilitychange listener, stored on the host so disconnectedCallback can removeEventListener cleanly (per-card instance).
     _onVisibilityChange?: () => void;
 
+    //Current HA theme polarity, used to seed a new engine so its basemap builds at the right style first time.
+    themeIsDark(): boolean;
     requestUpdate(): void;
 }
 
@@ -365,7 +367,7 @@ export function initEngineNow(host: InitHost): void
                 host._initInflight = false;
                 return;
             }
-            host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+            host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.themeIsDark());
             host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);
             //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first frame instead of

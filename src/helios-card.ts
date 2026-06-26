@@ -1100,23 +1100,33 @@ export class HeliosCard extends LitElement
     //setCardThemeIsDark runs every call so a mid-session engine spawn stays in sync.
     private _resolveIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
     {
-        let isDark: boolean;
-        if (themesObj && typeof themesObj.darkMode === 'boolean')
-        {
-            isDark = themesObj.darkMode;
-        }
-        else if (this._cachedIsDarkThemesRef === themesObj)
-        {
-            isDark = this._cachedIsDark;
-        }
-        else
-        {
-            isDark = this._probeIsDarkFromCss();
-            this._cachedIsDarkThemesRef = themesObj;
-            this._cachedIsDark = isDark;
-        }
+        const isDark = this._computeIsDark(themesObj);
         this._engine?.setCardThemeIsDark(isDark);
         return isDark;
+    }
+
+    //Pure polarity resolution (no engine push). Authoritative hass.themes.darkMode, else the cached/fresh
+    //luminance probe. Reused to seed a freshly spawned engine before its basemap builds.
+    private _computeIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
+    {
+        if (themesObj && typeof themesObj.darkMode === 'boolean')
+        {
+            return themesObj.darkMode;
+        }
+        if (this._cachedIsDarkThemesRef === themesObj)
+        {
+            return this._cachedIsDark;
+        }
+        const isDark = this._probeIsDarkFromCss();
+        this._cachedIsDarkThemesRef = themesObj;
+        this._cachedIsDark = isDark;
+        return isDark;
+    }
+
+    //Current theme polarity, used to seed a new engine at construction.
+    public themeIsDark(): boolean
+    {
+        return this._computeIsDark((this.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes);
     }
 
 
