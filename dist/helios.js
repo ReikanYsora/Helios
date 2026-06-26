@@ -2330,8 +2330,8 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                 <ha-icon icon="${i}"></ha-icon>
                 <span>${u}</span>
             </div>
-        `}render(){const e=null!==getHomeCoords(this.config,this.hass),t=this._labelLayout,i=resolvePvLiveEntity(this._energyDefaults),r=ENERGY_COLOR_pv(this),n=!this._isLiveMode&&null!==this._selectedTime,o=n&&this._selectedTime.getTime()>Date.now()+6e4,s=""!==i&&null!==t?n?function pvRateAtTime(e,t){const i=wattsAtFromChangeSeries(e._pvChangeSeries,t.getTime());return null===i?null:{value:Math.max(0,i),unit:"W"}}(this,this._selectedTime):null!==this._pvCurrent?function currentPvRate(e){const t=e._energyDefaults.solarStatRates;if(t.length>0){let i=0,r=!1;for(const n of t){const t=e.hass?.states?.[n];if(!t)continue;const o=parseFloat(t.state);isFinite(o)&&(i+=pvNormalizeToWatts(o,String(t.attributes?.unit_of_measurement??"")),r=!0)}if(r)return{value:Math.max(0,i),unit:"W"}}const i=latestWattsFromChangeSeries(e._pvChangeSeries,Date.now());return null===i?null:{value:Math.max(0,i),unit:"W"}}(this):null:null;let l=null;if(o&&""!==i&&null!==t&&this._unifiedStore){const e=valueAt(this._unifiedStore.forecast,this._unifiedStore,this._selectedTime.getTime());null!==e&&e>0&&(l={value:e,unit:"W"})}const d=o&&null!==l,u=d?l:s,p=e&&null!==t&&""!==i&&null!==u&&(!o||d),c=function valueDecimals(e){const t=e?.["value-decimals"],i="number"==typeof t?t:"string"==typeof t?parseFloat(t):NaN;if(!Number.isFinite(i))return 1;const r=Math.round(i);return r<0?0:r>3?3:r}(this.config),m=p?(d?"≈ ":"")+function formatPvValue(e,t,i,r){const n=(i||"").trim(),o=n.toLowerCase();if("w"===o||"kw"===o||"mw"===o)return formatPowerKw(e,pvNormalizeToWatts(t,i),r);if("wh"===o||"kwh"===o||"mwh"===o)return formatEnergyKwh(e,energyToKwh(t,i),r);const s=formatLocalisedNumber(e,t,r);return n?`${s} ${n}`:s}(this.hass,u.value,u.unit,c):"",g=null!==s?pvNormalizeToWatts(s.value,s.unit):0,v=flowDuration(g,5e3,.5),y=!(g>0),b=resolveBatteryEntities(this._energyDefaults),f=null!==b.socEntity,A=null!==b.powerEntity,w=!this._isLiveMode&&null!==this._selectedTime,z=w&&this._selectedTime.getTime()>Date.now()+6e4,H=w&&!z?this._selectedTime.getTime():null,j=null!==H?wattsAtFromChangeSeries(this._gridImportChangeSeries,H):this._gridImportValue,L=null!==H?wattsAtFromChangeSeries(this._gridExportChangeSeries,H):this._gridExportValue,D=null===j?null:Math.max(0,j),_=null===L?null:Math.max(0,L),T=null!==H?"W":this._gridImportUnit,C=null!==H?"W":this._gridExportUnit,P=w?function batterySampleAtTime(e,t){if(!e||0===e.times.length)return null;const i=t.getTime(),r=e.times[0].getTime(),n=e.times[e.times.length-1].getTime();if(i<r||i>n+6e4)return null;let o=e.times.length-1;for(let s=0;s<e.times.length;s++)if(e.times[s].getTime()>i){o=s-1;break}return o<0&&(o=0),e.values[o]}(this._batterySocHistory,this._selectedTime):this._batterySoc;let R;if(w){const e=this._selectedTime.getTime(),t=wattsAtFromChangeSeries(this._batteryChargeChangeSeries,e),i=wattsAtFromChangeSeries(this._batteryDischargeChangeSeries,e);R=null===t&&null===i?null:Math.max(0,t??0)-Math.max(0,i??0)}else R=this._batteryPower;const M=w?"W":this._batteryPowerUnit,E=e&&null!==t&&!z&&f&&null!==P,O=e&&null!==t&&!z&&A&&null!==R,F=E?`${Math.round(P)} %`:"",I=O?function formatBatteryPower(e,t,i,r){return formatPowerKw(e,pvNormalizeToWatts(t,i),r,!0)}(this.hass,-R,M,c):"",$=o||null===u?null:pvNormalizeToWatts(u.value,u.unit),W=null!==D||null!==_?(D??0)-(_??0):null,q=O?R:null,U=null===$&&null===W&&null===q?null:Math.max(0,($??0)+(W??0)-(q??0)),Y=e&&null!==t&&!z&&null!==U,Z=Y?formatGridValue(this.hass,U,"W",c):"",J=O&&R>0,Q=O&&R<0,X=J?"var(--energy-battery-in-color, #f06292)":"var(--energy-battery-out-color, #4db6ac)",ee=O?Math.abs(pvNormalizeToWatts(R,M)):0,ae=O&&ee<5,te=flowDuration(ee,5e3),buildLPathToHome=(e,i,r)=>{if(!t)return"";const n=t.home.x,o=t.home.y,s=n>e?1:-1,l=o>i?1:-1,d=e+s*r,u=i,p=n-13*s,c=o-l*pa.HOME_PILL_HALF_HEIGHT_PX,m=Math.min(12,Math.abs(p-d)/2,Math.abs(c-u)/2),g=p-s*m,v=u+l*m;return`M ${d.toFixed(1)},${u.toFixed(1)} L ${g.toFixed(1)},${u.toFixed(1)} Q ${p.toFixed(1)},${u.toFixed(1)} ${p.toFixed(1)},${v.toFixed(1)} L ${p.toFixed(1)},${c.toFixed(1)}`},ie=t?.batterySocLabel.x??0,re=t?.batterySocLabel.y??0,ne=t?.batteryPowerLabel.x??0,oe=t?.batteryPowerLabel.y??0,se=t?`M ${ie.toFixed(1)},${(re-14).toFixed(1)} L ${ne.toFixed(1)},${(oe+14).toFixed(1)}`:"",le=t&&Q?buildLPathToHome(ie,re,22):"",de=t&&J&&p?((e,t,i,r,n)=>{const o=i>e?1:-1,s=r>t?1:-1,l=Math.min(12,Math.abs(i-e)/2,Math.abs(r-t)/2);if(n){const n=r-s*l,d=e+o*l;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${e.toFixed(1)},${n.toFixed(1)} Q ${e.toFixed(1)},${r.toFixed(1)} ${d.toFixed(1)},${r.toFixed(1)} L ${i.toFixed(1)},${r.toFixed(1)}`}const d=i-o*l,u=t+s*l;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${d.toFixed(1)},${t.toFixed(1)} Q ${i.toFixed(1)},${t.toFixed(1)} ${i.toFixed(1)},${u.toFixed(1)} L ${i.toFixed(1)},${r.toFixed(1)}`})(t.pvLabel.x+14,t.pvLabel.y+11,ne-30,oe,!0):"",ue=buildLPathToHome(t?.gridLabel.x??0,t?.gridLabel.y??0,22),pe=null!==this._gridImportValue?Math.abs(pvNormalizeToWatts(this._gridImportValue,this._gridImportUnit)):0,ce=null!==this._gridExportValue?Math.abs(pvNormalizeToWatts(this._gridExportValue,this._gridExportUnit)):0,proportionalBeadDur=(e,t)=>{const i=Math.max(e,1);return Math.min(8,Math.max(1.2,1.2*t/i))},me=pe<5?null:proportionalBeadDur(pe,5e3),ge=ce<5?null:proportionalBeadDur(ce,1e3),ve=(D??0)>=(_??0),ke=ve?"var(--energy-grid-consumption-color, #488fc2)":"var(--energy-grid-return-color, #8353d1)",ye=ve?me:ge,be=this._sunScene,fe=e&&null!==be&&be.arc.length>=2,Ae=ENERGY_COLOR_sun(this),we=function darkenHex(e,t){const i=1-Math.max(0,Math.min(1,t)),r=Math.round(parseInt(e.slice(1,3),16)*i),n=Math.round(parseInt(e.slice(3,5),16)*i),o=Math.round(parseInt(e.slice(5,7),16)*i),h=e=>e.toString(16).padStart(2,"0");return`#${h(r)}${h(n)}${h(o)}`}(Ae,.2),ze=fe?function buildArcSegments(e,t){const i=[];for(let r=0;r<e.length-1;r++){const n=e[r],o=e[r+1];i.push({x1:n.x,y1:n.y,x2:o.x,y2:o.y,color:arcColor(.5*(n.altitude+o.altitude),t),nearness:.5*(n.nearness+o.nearness),belowHorizon:n.belowHorizon||o.belowHorizon})}return i}(be.arc,Ae):[],He=this._arcBackBuf,je=this._arcFrontBuf,Se=this._arcFrontNearBuf;He.length=0,je.length=0,Se.length=0;for(let B=0;B<ze.length;B++){const e=ze[B];e.belowHorizon?He.push(e):e.nearness>=.5?Se.push(e):je.push(e)}const Le=fe&&be.sun.altitude>0,De=be?.sun.irradiance??0,_e=Math.round(De),Te=Math.sqrt(Math.max(0,Math.min(1,De/1e3))),Ce=fe&&be.sun.altitude>0,xe=flowDuration(De,1e3,.8);let Pe=be?.home.x??0,Re=be?.home.y??0;if(t&&be&&i){const e=t.pvLabel.x,i=t.pvLabel.y,r=28,n=11,o=be.sun.x-e,s=be.sun.y-i,l=Math.max(0,r-n);if(Math.abs(o)<=l)Pe=be.sun.x,Re=i+(s>=0?1:-1)*n;else{const t=e+(o>=0?1:-1)*l,r=i,s=be.sun.x-t,d=be.sun.y-r,u=Math.sqrt(s*s+d*d)||1;Pe=t+n*s/u,Re=r+n*d/u}}const Me=this.hass?.themes;return B`
-            <ha-card class="${[this._resolveIsDark(Me)?"theme-dark":"theme-light",this._isCameraLocked()?"camera-locked":""].filter(Boolean).join(" ")}">
+        `}render(){const e=null!==getHomeCoords(this.config,this.hass),t=this._labelLayout,i=resolvePvLiveEntity(this._energyDefaults),r=ENERGY_COLOR_pv(this),n=!this._isLiveMode&&null!==this._selectedTime,o=n&&this._selectedTime.getTime()>Date.now()+6e4,s=""!==i&&null!==t?n?function pvRateAtTime(e,t){const i=wattsAtFromChangeSeries(e._pvChangeSeries,t.getTime());return null===i?null:{value:Math.max(0,i),unit:"W"}}(this,this._selectedTime):null!==this._pvCurrent?function currentPvRate(e){const t=e._energyDefaults.solarStatRates;if(t.length>0){let i=0,r=!1;for(const n of t){const t=e.hass?.states?.[n];if(!t)continue;const o=parseFloat(t.state);isFinite(o)&&(i+=pvNormalizeToWatts(o,String(t.attributes?.unit_of_measurement??"")),r=!0)}if(r)return{value:Math.max(0,i),unit:"W"}}const i=latestWattsFromChangeSeries(e._pvChangeSeries,Date.now());return null===i?null:{value:Math.max(0,i),unit:"W"}}(this):null:null;let l=null;if(o&&""!==i&&null!==t&&this._unifiedStore){const e=valueAt(this._unifiedStore.forecast,this._unifiedStore,this._selectedTime.getTime());null!==e&&e>0&&(l={value:e,unit:"W"})}const d=o&&null!==l,u=d?l:s,p=e&&null!==t&&""!==i&&null!==u&&(!o||d),c=function valueDecimals(e){const t=e?.["value-decimals"],i="number"==typeof t?t:"string"==typeof t?parseFloat(t):NaN;if(!Number.isFinite(i))return 1;const r=Math.round(i);return r<0?0:r>3?3:r}(this.config),m=p?(d?"≈ ":"")+function formatPvValue(e,t,i,r){const n=(i||"").trim(),o=n.toLowerCase();if("w"===o||"kw"===o||"mw"===o)return formatPowerKw(e,pvNormalizeToWatts(t,i),r);if("wh"===o||"kwh"===o||"mwh"===o)return formatEnergyKwh(e,energyToKwh(t,i),r);const s=formatLocalisedNumber(e,t,r);return n?`${s} ${n}`:s}(this.hass,u.value,u.unit,c):"",g=null!==s?pvNormalizeToWatts(s.value,s.unit):0,v=flowDuration(g,5e3,.5),y=!(g>0),b=resolveBatteryEntities(this._energyDefaults),f=null!==b.socEntity,A=null!==b.powerEntity,w=!this._isLiveMode&&null!==this._selectedTime,z=w&&this._selectedTime.getTime()>Date.now()+6e4,H=w&&!z?this._selectedTime.getTime():null,j=null!==H?wattsAtFromChangeSeries(this._gridImportChangeSeries,H):this._gridImportValue,L=null!==H?wattsAtFromChangeSeries(this._gridExportChangeSeries,H):this._gridExportValue,D=null===j?null:Math.max(0,j),_=null===L?null:Math.max(0,L),T=null!==H?"W":this._gridImportUnit,C=null!==H?"W":this._gridExportUnit,P=w?function batterySampleAtTime(e,t){if(!e||0===e.times.length)return null;const i=t.getTime(),r=e.times[0].getTime(),n=e.times[e.times.length-1].getTime();if(i<r||i>n+6e4)return null;let o=e.times.length-1;for(let s=0;s<e.times.length;s++)if(e.times[s].getTime()>i){o=s-1;break}return o<0&&(o=0),e.values[o]}(this._batterySocHistory,this._selectedTime):this._batterySoc;let R;if(w){const e=this._selectedTime.getTime(),t=wattsAtFromChangeSeries(this._batteryChargeChangeSeries,e),i=wattsAtFromChangeSeries(this._batteryDischargeChangeSeries,e);R=null===t&&null===i?null:Math.max(0,t??0)-Math.max(0,i??0)}else R=this._batteryPower;const M=w?"W":this._batteryPowerUnit,E=e&&null!==t&&!z&&f&&null!==P,O=e&&null!==t&&!z&&A&&null!==R,F=E?`${Math.round(P)} %`:"",I=O?function formatBatteryPower(e,t,i,r){return formatPowerKw(e,pvNormalizeToWatts(t,i),r,!0)}(this.hass,-R,M,c):"",$=o||null===u?null:pvNormalizeToWatts(u.value,u.unit),W=null!==D||null!==_?(D??0)-(_??0):null,q=O?R:null,U=null===$&&null===W&&null===q?null:Math.max(0,($??0)+(W??0)-(q??0)),Y=e&&null!==t&&!z&&null!==U,Z=Y?formatGridValue(this.hass,U,"W",c):"",J=O&&R>0,Q=O&&R<0,X=J?"var(--energy-battery-in-color, #f06292)":"var(--energy-battery-out-color, #4db6ac)",ee=O?Math.abs(pvNormalizeToWatts(R,M)):0,ae=O&&ee<5,te=flowDuration(ee,5e3),buildLPathToHome=(e,i,r)=>{if(!t)return"";const n=t.home.x,o=t.home.y,s=n>e?1:-1,l=o>i?1:-1,d=e+s*r,u=i,p=n-13*s,c=o-l*pa.HOME_PILL_HALF_HEIGHT_PX,m=Math.min(12,Math.abs(p-d)/2,Math.abs(c-u)/2),g=p-s*m,v=u+l*m;return`M ${d.toFixed(1)},${u.toFixed(1)} L ${g.toFixed(1)},${u.toFixed(1)} Q ${p.toFixed(1)},${u.toFixed(1)} ${p.toFixed(1)},${v.toFixed(1)} L ${p.toFixed(1)},${c.toFixed(1)}`},ie=t?.batterySocLabel.x??0,re=t?.batterySocLabel.y??0,ne=t?.batteryPowerLabel.x??0,oe=t?.batteryPowerLabel.y??0,se=t&&O?`M ${ie.toFixed(1)},${(re-14).toFixed(1)} L ${ne.toFixed(1)},${(oe+14).toFixed(1)}`:"",le=t&&Q?buildLPathToHome(ie,re,22):"",de=t&&E&&!O&&!Q?buildLPathToHome(ie,re,22):"",ue=t&&J&&p?((e,t,i,r,n)=>{const o=i>e?1:-1,s=r>t?1:-1,l=Math.min(12,Math.abs(i-e)/2,Math.abs(r-t)/2);if(n){const n=r-s*l,d=e+o*l;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${e.toFixed(1)},${n.toFixed(1)} Q ${e.toFixed(1)},${r.toFixed(1)} ${d.toFixed(1)},${r.toFixed(1)} L ${i.toFixed(1)},${r.toFixed(1)}`}const d=i-o*l,u=t+s*l;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${d.toFixed(1)},${t.toFixed(1)} Q ${i.toFixed(1)},${t.toFixed(1)} ${i.toFixed(1)},${u.toFixed(1)} L ${i.toFixed(1)},${r.toFixed(1)}`})(t.pvLabel.x+14,t.pvLabel.y+11,ne-30,oe,!0):"",pe=buildLPathToHome(t?.gridLabel.x??0,t?.gridLabel.y??0,22),ce=null!==this._gridImportValue?Math.abs(pvNormalizeToWatts(this._gridImportValue,this._gridImportUnit)):0,me=null!==this._gridExportValue?Math.abs(pvNormalizeToWatts(this._gridExportValue,this._gridExportUnit)):0,proportionalBeadDur=(e,t)=>{const i=Math.max(e,1);return Math.min(8,Math.max(1.2,1.2*t/i))},ge=ce<5?null:proportionalBeadDur(ce,5e3),ve=me<5?null:proportionalBeadDur(me,1e3),ke=(D??0)>=(_??0),ye=ke?"var(--energy-grid-consumption-color, #488fc2)":"var(--energy-grid-return-color, #8353d1)",be=ke?ge:ve,fe=this._sunScene,Ae=e&&null!==fe&&fe.arc.length>=2,we=ENERGY_COLOR_sun(this),ze=function darkenHex(e,t){const i=1-Math.max(0,Math.min(1,t)),r=Math.round(parseInt(e.slice(1,3),16)*i),n=Math.round(parseInt(e.slice(3,5),16)*i),o=Math.round(parseInt(e.slice(5,7),16)*i),h=e=>e.toString(16).padStart(2,"0");return`#${h(r)}${h(n)}${h(o)}`}(we,.2),He=Ae?function buildArcSegments(e,t){const i=[];for(let r=0;r<e.length-1;r++){const n=e[r],o=e[r+1];i.push({x1:n.x,y1:n.y,x2:o.x,y2:o.y,color:arcColor(.5*(n.altitude+o.altitude),t),nearness:.5*(n.nearness+o.nearness),belowHorizon:n.belowHorizon||o.belowHorizon})}return i}(fe.arc,we):[],je=this._arcBackBuf,Se=this._arcFrontBuf,Le=this._arcFrontNearBuf;je.length=0,Se.length=0,Le.length=0;for(let B=0;B<He.length;B++){const e=He[B];e.belowHorizon?je.push(e):e.nearness>=.5?Le.push(e):Se.push(e)}const De=Ae&&fe.sun.altitude>0,_e=fe?.sun.irradiance??0,Te=Math.round(_e),Ce=Math.sqrt(Math.max(0,Math.min(1,_e/1e3))),xe=Ae&&fe.sun.altitude>0,Pe=flowDuration(_e,1e3,.8);let Re=fe?.home.x??0,Me=fe?.home.y??0;if(t&&fe&&i){const e=t.pvLabel.x,i=t.pvLabel.y,r=28,n=11,o=fe.sun.x-e,s=fe.sun.y-i,l=Math.max(0,r-n);if(Math.abs(o)<=l)Re=fe.sun.x,Me=i+(s>=0?1:-1)*n;else{const t=e+(o>=0?1:-1)*l,r=i,s=fe.sun.x-t,d=fe.sun.y-r,u=Math.sqrt(s*s+d*d)||1;Re=t+n*s/u,Me=r+n*d/u}}const Ee=this.hass?.themes;return B`
+            <ha-card class="${[this._resolveIsDark(Ee)?"theme-dark":"theme-light",this._isCameraLocked()?"camera-locked":""].filter(Boolean).join(" ")}">
 
                 <div id="map-container"></div>
 
@@ -2421,12 +2421,12 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       half of the loop. Above-horizon segments, the
                       ray, the disc and the W/m² readout move to the
                       FRONT pass at the end of the overlay stack.  -->
-                ${fe&&He.length>0?B`
+                ${Ae&&je.length>0?B`
                     <svg
                         class="solar-svg solar-svg-back"
-                        style="--solar-daylight:${be.daylight}"
+                        style="--solar-daylight:${fe.daylight}"
                     >
-                        ${He.map(e=>K`
+                        ${je.map(e=>K`
                             <line
                                 class="solar-arc-outline solar-arc-night"
                                 x1="${e.x1}" y1="${e.y1}"
@@ -2434,7 +2434,7 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                                 stroke-width="${(pa.OUTLINE_FAR+(pa.OUTLINE_NEAR-pa.OUTLINE_FAR)*e.nearness)*pa.NIGHT_STROKE_FACTOR}"
                             ></line>
                         `)}
-                        ${He.map(e=>K`
+                        ${je.map(e=>K`
                             <line
                                 class="solar-arc-segment solar-arc-night"
                                 x1="${e.x1}" y1="${e.y1}"
@@ -2512,11 +2512,19 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                             hairline between the two stacked chips. No
                             animation: SoC is a level, not a flow.
                         -->
-                        ${E?K`
+                        ${se?K`
                             <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${X}"
                                 d="${se}"
+                            ></path>
+                        `:G}
+                        <!--  SoC → home static connector when the SoC chip is the only battery chip. -->
+                        ${de?K`
+                            <path
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${X}"
+                                d="${de}"
                             ></path>
                         `:G}
                         <!--
@@ -2551,12 +2559,12 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                             colour with a bead flowing toward the
                             battery, so the user sees the PV feeding it.
                         -->
-                        ${de?K`
+                        ${ue?K`
                             <path
                                 class="pv-home-leader-line"
                                 style="--pv-leader-color:${r}"
                                 fill="none"
-                                d="${de}"
+                                d="${ue}"
                             ></path>
                             ${ae?G:K`
                                 <circle
@@ -2567,7 +2575,7 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                                     <animateMotion
                                         dur="${te}s"
                                         repeatCount="indefinite"
-                                        path="${de}"
+                                        path="${ue}"
                                     ></animateMotion>
                                 </circle>
                             `}
@@ -2610,34 +2618,34 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       stays crisp under camera rotation.               -->
                 ${!e||null===t||null===D&&null===_||z?G:B`
                     <svg class="grid-leader-svg">
-                        <path class="grid-leader-line" style="stroke:${ke}" d="${ue}" />
+                        <path class="grid-leader-line" style="stroke:${ye}" d="${pe}" />
                         <!--  Single bead on the active flow. Import
                               flows grid → home (default traversal),
                               export flows home → grid (keyPoints 1;0
                               reverses it). Dropped when the active side
                               is idle, no misleading motion.           -->
-                        ${null!==ye?ve?K`
-                            <circle class="grid-leader-bead" r="3" style="fill:${ke}">
-                                <animateMotion dur="${ye.toFixed(2)}s" repeatCount="indefinite"
-                                               path="${ue}" />
+                        ${null!==be?ke?K`
+                            <circle class="grid-leader-bead" r="3" style="fill:${ye}">
+                                <animateMotion dur="${be.toFixed(2)}s" repeatCount="indefinite"
+                                               path="${pe}" />
                             </circle>
                         `:K`
-                            <circle class="grid-leader-bead" r="3" style="fill:${ke}">
-                                <animateMotion dur="${ye.toFixed(2)}s" repeatCount="indefinite"
+                            <circle class="grid-leader-bead" r="3" style="fill:${ye}">
+                                <animateMotion dur="${be.toFixed(2)}s" repeatCount="indefinite"
                                                keyPoints="1;0" keyTimes="0;1"
-                                               path="${ue}" />
+                                               path="${pe}" />
                             </circle>
                         `:G}
                     </svg>
                     <div
                         class="grid-label ${"grid"===this._chartTarget?"is-chart-active":""}"
-                        style="left:${t.gridLabel.x}px; top:${t.gridLabel.y}px; --grid-leader-color:${ke}"
+                        style="left:${t.gridLabel.x}px; top:${t.gridLabel.y}px; --grid-leader-color:${ye}"
                         role="button"
                         tabindex="0"
                         @click=${()=>this._setChartTarget("grid")}
                     >
-                        <ha-icon icon="${ve?"mdi:transmission-tower-export":"mdi:transmission-tower-import"}"></ha-icon>
-                        <span>${formatGridValue(this.hass,ve?D??0:_??0,ve?T:C,c)}</span>
+                        <ha-icon icon="${ke?"mdi:transmission-tower-export":"mdi:transmission-tower-import"}"></ha-icon>
+                        <span>${formatGridValue(this.hass,ke?D??0:_??0,ke?T:C,c)}</span>
                     </div>
                 `}
 
@@ -2649,12 +2657,12 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       chips so a chip cluster doesn't get crossed by
                       an arc segment that visually sits "in the back
                       half" of the sky. -->
-                ${fe&&je.length>0?B`
+                ${Ae&&Se.length>0?B`
                     <svg
                         class="solar-svg solar-svg-front-far"
-                        style="--solar-daylight:${be.daylight}"
+                        style="--solar-daylight:${fe.daylight}"
                     >
-                        ${je.map(e=>K`
+                        ${Se.map(e=>K`
                             <line
                                 class="solar-arc-outline"
                                 x1="${e.x1}" y1="${e.y1}"
@@ -2662,7 +2670,7 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                                 stroke-width="${pa.OUTLINE_FAR+(pa.OUTLINE_NEAR-pa.OUTLINE_FAR)*e.nearness}"
                             ></line>
                         `)}
-                        ${je.map(e=>K`
+                        ${Se.map(e=>K`
                             <line
                                 class="solar-arc-segment"
                                 x1="${e.x1}" y1="${e.y1}"
@@ -2682,12 +2690,12 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       always reads on top of the HUD on its near side.
                       The card is named Helios, the sun must dominate
                       visually wherever it is. -->
-                ${fe&&Se.length>0?B`
+                ${Ae&&Le.length>0?B`
                     <svg
                         class="solar-svg solar-svg-front-near"
-                        style="--solar-daylight:${be.daylight}"
+                        style="--solar-daylight:${fe.daylight}"
                     >
-                        ${Se.map(e=>K`
+                        ${Le.map(e=>K`
                             <line
                                 class="solar-arc-outline"
                                 x1="${e.x1}" y1="${e.y1}"
@@ -2695,7 +2703,7 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                                 stroke-width="${pa.OUTLINE_FAR+(pa.OUTLINE_NEAR-pa.OUTLINE_FAR)*e.nearness}"
                             ></line>
                         `)}
-                        ${Se.map(e=>K`
+                        ${Le.map(e=>K`
                             <line
                                 class="solar-arc-segment"
                                 x1="${e.x1}" y1="${e.y1}"
@@ -2715,15 +2723,15 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       behind the home cluster depending on camera
                       bearing, while the ray never rides over the
                       production chip. -->
-                ${fe&&Le?B`
+                ${Ae&&De?B`
                     <svg class="solar-svg solar-ray-svg"
-                         style="--solar-daylight:${be.daylight}">
+                         style="--solar-daylight:${fe.daylight}">
                         <line
                             class="solar-ray"
-                            style="--sun-flow-duration:${xe}s"
-                            x1="${be.sun.x}"  y1="${be.sun.y}"
-                            x2="${Pe}"    y2="${Re}"
-                            stroke="${Ae}"
+                            style="--sun-flow-duration:${Pe}s"
+                            x1="${fe.sun.x}"  y1="${fe.sun.y}"
+                            x2="${Re}"    y2="${Me}"
+                            stroke="${we}"
                         ></line>
                         <!--  Bead uses an absolute-coordinate path
                               with cx / cy left at the default 0
@@ -2734,56 +2742,56 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                         <circle
                             class="solar-ray-bead"
                             r="3"
-                            fill="${Ae}"
+                            fill="${we}"
                         >
                             <animateMotion
-                                dur="${xe}s"
+                                dur="${Pe}s"
                                 repeatCount="indefinite"
-                                path="M ${be.sun.x},${be.sun.y} L ${Pe},${Re}"
+                                path="M ${fe.sun.x},${fe.sun.y} L ${Re},${Me}"
                             ></animateMotion>
                         </circle>
                     </svg>
                 `:G}
 
-                ${fe?B`
+                ${Ae?B`
                     <svg
-                        class="solar-svg solar-svg-sun ${be.sun.nearness>=.5?"solar-svg-sun-near":"solar-svg-sun-far"}"
-                        style="--solar-daylight:${be.daylight}"
+                        class="solar-svg solar-svg-sun ${fe.sun.nearness>=.5?"solar-svg-sun-near":"solar-svg-sun-far"}"
+                        style="--solar-daylight:${fe.daylight}"
                     >
-                        ${(()=>{const e=this._engine?.getSunArcScale()??1,t=Math.min((pa.SUN_R_FAR+(pa.SUN_R_NEAR-pa.SUN_R_FAR)*be.sun.nearness)*e,22),i=t*Te,r=3*t;return K`
+                        ${(()=>{const e=this._engine?.getSunArcScale()??1,t=Math.min((pa.SUN_R_FAR+(pa.SUN_R_NEAR-pa.SUN_R_FAR)*fe.sun.nearness)*e,22),i=t*Ce,r=3*t;return K`
                                 <defs>
                                     <radialGradient id="solar-halo-grad">
-                                        <stop offset="0%"   stop-color="${Ae}" stop-opacity="${.55*Te}"></stop>
-                                        <stop offset="100%" stop-color="${Ae}" stop-opacity="0"></stop>
+                                        <stop offset="0%"   stop-color="${we}" stop-opacity="${.55*Ce}"></stop>
+                                        <stop offset="100%" stop-color="${we}" stop-opacity="0"></stop>
                                     </radialGradient>
                                 </defs>
                                 <circle
                                     class="solar-sun-halo"
-                                    cx="${be.sun.x}" cy="${be.sun.y}"
+                                    cx="${fe.sun.x}" cy="${fe.sun.y}"
                                     r="${r}"
                                     fill="url(#solar-halo-grad)"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"
-                                    cx="${be.sun.x}" cy="${be.sun.y}"
+                                    cx="${fe.sun.x}" cy="${fe.sun.y}"
                                     r="${t}"
-                                    fill="${Ae}"
+                                    fill="${we}"
                                     fill-opacity="${pa.SUN_FILL_OPACITY_BG}"
                                 ></circle>
                                 <circle
                                     class="solar-sun-fill"
-                                    cx="${be.sun.x}" cy="${be.sun.y}"
+                                    cx="${fe.sun.x}" cy="${fe.sun.y}"
                                     r="${i}"
-                                    fill="${Ae}"
-                                    stroke="${we}"
+                                    fill="${we}"
+                                    stroke="${ze}"
                                     stroke-width="0.5"
                                 ></circle>
                                 <circle
                                     class="solar-sun-rim"
-                                    cx="${be.sun.x}" cy="${be.sun.y}"
+                                    cx="${fe.sun.x}" cy="${fe.sun.y}"
                                     r="${t}"
                                     fill="none"
-                                    stroke="${Ae}"
+                                    stroke="${we}"
                                     stroke-width="${pa.SUN_RIM_WIDTH}"
                                 ></circle>
                             `})()}
@@ -2795,16 +2803,16 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       read as a matched pair of cartographic readouts.
                       Lands after the front-pass arc so the readout
                       sits on top of the sun glyph as well.  -->
-                ${Ce?B`
+                ${xe?B`
                     <div
                         class="solar-pct-label ${"irradiance"===this._chartTarget?"is-chart-active":""}"
-                        style="left:${be.sun.x}px; top:${be.sun.y-22}px"
+                        style="left:${fe.sun.x}px; top:${fe.sun.y-22}px"
                         role="button"
                         tabindex="0"
                         @click=${()=>this._setChartTarget("irradiance")}
                     >
                         <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
-                        <span>${_e} W/m²</span>
+                        <span>${Te} W/m²</span>
                     </div>
                 `:G}
 
@@ -2813,7 +2821,7 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
                       Clicking it re-targets the timeline chart to the cloud cover (three altitude-band
                       curves), same chip <-> chart coupling as the other chips. Anchored off the sun so it
                       tracks the irradiance chip.  -->
-                ${Ce&&this._cloudCover>=0?(()=>{const e=be.sun.x,t=be.sun.y-34,i=this._engine?.getViewportWidth()??0,r=i<=0||e+130<=i-8?1:e-130>=8?-1:e<i/2?1:-1,n=e+84*r;return B`
+                ${xe&&this._cloudCover>=0?(()=>{const e=fe.sun.x,t=fe.sun.y-34,i=this._engine?.getViewportWidth()??0,r=i<=0||e+130<=i-8?1:e-130>=8?-1:e<i/2?1:-1,n=e+84*r;return B`
                         <div
                             class="cloud-chip-leader"
                             style="left:${(r>0?e+40:e-54).toFixed(1)}px; top:${t.toFixed(1)}px"
@@ -2832,9 +2840,9 @@ return new Date((l+d)/2)}var ra=null;function renderTimelineNightZones(e){const 
 
                 <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
                       each horizon crossing.  -->
-                ${fe&&be?B`
-                    ${this._renderSunCrossing(be.sunrise,be.home,"mdi:weather-sunset-up",Ae)}
-                    ${this._renderSunCrossing(be.sunset,be.home,"mdi:weather-sunset-down",Ae)}
+                ${Ae&&fe?B`
+                    ${this._renderSunCrossing(fe.sunrise,fe.home,"mdi:weather-sunset-up",we)}
+                    ${this._renderSunCrossing(fe.sunset,fe.home,"mdi:weather-sunset-down",we)}
                 `:G}
 
 

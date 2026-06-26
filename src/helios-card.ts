@@ -1467,12 +1467,18 @@ export class HeliosCard extends LitElement
         const powerChipY = layout?.batteryPowerLabel.y ?? 0;
         //SoC -> Power chip: same battery, so the SoC leader docks on the Power chip, not the home. Straight
         //vertical hairline between their facing edges (SoC below Power). No flow, it's a level.
-        const socLeaderPath = layout
+        //SoC -> Power hairline: only when BOTH battery chips show, else it would point at an empty slot.
+        const socLeaderPath = (layout && showPowerChip)
             ? `M ${socChipX.toFixed(1)},${(socChipY - BATTERY_HALF_HEIGHT_PX).toFixed(1)} L ${powerChipX.toFixed(1)},${(powerChipY + BATTERY_HALF_HEIGHT_PX).toFixed(1)}`
             : '';
         //SoC -> home: the battery->home discharge flow (rounded L + bead), only while discharging. It
         //leaves the SoC chip (lower, nearest the home) so the Power chip stays a clean top node PV feeds.
         const dischargeLeaderPath = (layout && batteryDischarging)
+            ? buildLPathToHome(socChipX, socChipY, 22)
+            : '';
+        //SoC-only installs (no Power chip): a static connector docks the lone SoC chip to the home hub like
+        //every other chip, instead of leaving it floating. Skipped while discharging (that leader docks it).
+        const socHomeLeaderPath = (layout && showSocChip && !showPowerChip && !batteryDischarging)
             ? buildLPathToHome(socChipX, socChipY, 22)
             : '';
         //PV -> Power chip, only while charging: an inverted L dropping from the PV chip then right into the
@@ -1823,11 +1829,19 @@ export class HeliosCard extends LitElement
                             hairline between the two stacked chips. No
                             animation: SoC is a level, not a flow.
                         -->
-                        ${showSocChip ? svg`
+                        ${socLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${socLeaderPath}"
+                            ></path>
+                        ` : nothing}
+                        <!--  SoC → home static connector when the SoC chip is the only battery chip. -->
+                        ${socHomeLeaderPath ? svg`
+                            <path
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${batteryLeaderColor}"
+                                d="${socHomeLeaderPath}"
                             ></path>
                         ` : nothing}
                         <!--
