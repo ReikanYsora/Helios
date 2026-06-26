@@ -43,7 +43,6 @@ export class SceneRenderer
 {
     public readonly camera = new SceneCamera();
 
-    private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
     private readonly _sceneSvg:     SVGSVGElement;
 
@@ -83,7 +82,6 @@ export class SceneRenderer
 
     public constructor(container: HTMLElement, opts: SceneRendererOptions = {})
     {
-        this._container = container;
         if (opts.sun)           { this._palette.sun = opts.sun; }
         if (opts.shadow)        { this._palette.shadow = opts.shadow; }
         if (opts.shadowOpacity != null) { this._palette.shadowOpacity = opts.shadowOpacity; }
