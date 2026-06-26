@@ -952,87 +952,58 @@ export function renderPvChart(host: ChartHost): TemplateResult
         line = `M ${points.join(' L ')}`;
     }
 
-    //Per-source curves: one light polyline per HA Energy source under the aggregate line (background context), hue
-    //matching the tooltip pastille for a row <-> curve link. Skipped on single-source installs (the lone entry equals
-    //the aggregate). Same cumulative-differentiation rule as the aggregate, so a 4× stat_energy_from setup paints as
-    //4 power curves, not climbing kWh ramps.
+    //Per-source STACKED areas (multi-source installs): each source's share of the aggregate at every bucket,
+    //stacked so the filled areas sum to the aggregate and never overlap. Same per-source colour ramp as the
+    //home histogram (energySolarColor by sorted index). Single-source installs keep the plain aggregate area.
     const perEntityIdsForCurves = host._pvHistoryPerEntity.size > 1
         ? Array.from(host._pvHistoryPerEntity.keys()).sort()
         : [];
-    const perEntityCurves: Array<{ id: string; line: string; color: string }> = [];
-    for (let idx = 0; idx < perEntityIdsForCurves.length; idx++)
+    const stackedAreas: Array<{ color: string; path: string }> = [];
+    if (perEntityIdsForCurves.length > 1 && samples.length >= 2)
     {
-        const id = perEntityIdsForCurves[idx];
-        const ph = host._pvHistoryPerEntity.get(id);
-        if (!ph)
+        const elc   = host as unknown as Element;
+        const darkc = chartIsDark(host);
+        const S = perEntityIdsForCurves.length;
+        const N = samples.length;
+        //Each source's instantaneous power at every aggregate-sample time (pvValueAtTime differentiates
+        //cumulative meters and floors below the horizon, in a unit consistent across sources).
+        const raw: number[][] = [];
+        for (let s = 0; s < S; s++)
         {
-            continue;
-        }
-        let eTimes:  Date[]   = ph.times;
-        let eValues: number[] = ph.values;
-        if (isCumulativeEnergy && eTimes.length >= 2)
-        {
-            const MIN_DTH = 0.05;
-            const dT: Date[]   = [];
-            const dV: number[] = [];
-            let prevIdx = 0;
-            for (let i = 1; i < eTimes.length; i++)
+            const ph  = host._pvHistoryPerEntity.get(perEntityIdsForCurves[s]);
+            const arr = new Array<number>(N).fill(0);
+            if (ph)
             {
-                const dtH = (eTimes[i].getTime() - eTimes[prevIdx].getTime()) / 3_600_000;
-                if (dtH <= 0)
+                for (let j = 0; j < N; j++)
                 {
-                    continue;
+                    const v = pvValueAtTime(host, samples[j].t.getTime(), ph).value;
+                    arr[j] = isFinite(v) && v > 0 ? v : 0;
                 }
-                if (dtH > 6)
-                {
-                    prevIdx = i;
-                    continue;
-                }
-                const dv = eValues[i] - eValues[prevIdx];
-                if (dv < 0)
-                {
-                    prevIdx = i;
-                    continue;
-                }
-                if (dtH < MIN_DTH)
-                {
-                    continue;
-                }
-                dT.push(eTimes[i]);
-                dV.push(dv / dtH);
-                prevIdx = i;
             }
-            eTimes  = dT;
-            eValues = dV;
+            raw.push(arr);
         }
-        const ePoints: string[] = [];
-        //Lighter decimation than the aggregate (~750 points): background curves need less resolution and short path
-        //strings keep high-frequency multi-source installs under the browser path limit.
-        const stride = Math.max(1, Math.floor(eTimes.length / 750));
-        for (let i = 0; i < eTimes.length; i += stride)
+        //Stack each source as its share of the aggregate, so the stack top tracks the aggregate curve exactly.
+        const lower = new Array<number>(N).fill(0);
+        for (let s = 0; s < S; s++)
         {
-            const t = eTimes[i];
-            const v = eValues[i];
-            const tMs = t.getTime();
-            if (tMs < startMs || tMs > endMsAbs)
+            const up: string[] = [];
+            const lo: string[] = [];
+            for (let j = 0; j < N; j++)
             {
-                continue;
+                let total = 0;
+                for (let k = 0; k < S; k++) { total += raw[k][j]; }
+                const share = total > 0 ? raw[s][j] / total : 0;
+                const y0 = lower[j];
+                const y1 = y0 + share * samples[j].v;
+                lower[j] = y1;
+                up.push(`${xOf(samples[j].t).toFixed(2)},${yOf(y1).toFixed(2)}`);
+                lo.push(`${xOf(samples[j].t).toFixed(2)},${yOf(y0).toFixed(2)}`);
             }
-            if (!isFinite(v))
-            {
-                continue;
-            }
-            ePoints.push(`${xOf(t).toFixed(2)},${yOf(v).toFixed(2)}`);
+            stackedAreas.push({
+                color: energySolarColor(elc, darkc, s),
+                path:  `M ${up.join(' L ')} L ${lo.reverse().join(' L ')} Z`,
+            });
         }
-        if (ePoints.length < 2)
-        {
-            continue;
-        }
-        perEntityCurves.push({
-            id,
-            line:  `M ${ePoints.join(' L ')}`,
-            color: energySolarColor(host as unknown as Element, chartIsDark(host), idx),
-        });
     }
 
     let predictedLine = '';
@@ -1087,20 +1058,21 @@ export function renderPvChart(host: ChartHost): TemplateResult
                 ></line>
             `)}
             <g class="hc-chart-grow">
-                ${area ? svg`
-                    <path
-                        d="${area}"
-                        fill="${pvColor}"
-                        fill-opacity="0.25"
-                    ></path>
-                ` : nothing}
-                ${perEntityCurves.map(c => svg`
-                    <path
-                        class="hc-chart-line hc-chart-line-source"
-                        d="${c.line}"
-                        stroke="${c.color}"
-                    ></path>
-                `)}
+                ${stackedAreas.length > 0
+                    ? stackedAreas.map(a => svg`
+                        <path
+                            d="${a.path}"
+                            fill="${a.color}"
+                            fill-opacity="0.55"
+                        ></path>
+                    `)
+                    : (area ? svg`
+                        <path
+                            d="${area}"
+                            fill="${pvColor}"
+                            fill-opacity="0.25"
+                        ></path>
+                    ` : nothing)}
                 ${line ? svg`
                     <path
                         class="hc-chart-line"

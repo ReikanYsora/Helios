@@ -1352,7 +1352,7 @@ return new Date((l+c)/2)}var it=null;function renderTimelineNightZones(e){const 
                 `:K}
             </div>
         </div>
-    `}function interpAt(e,t,i){const r=Math.min(e.length,t.length);if(0===r)return NaN;if(i<=e[0].getTime())return isFinite(t[0])?t[0]:NaN;if(i>=e[r-1].getTime()){const e=t[r-1];return isFinite(e)?e:NaN}let o=0,n=r-1;for(;n-o>1;){const t=o+n>>1;e[t].getTime()<=i?o=t:n=t}const s=e[o].getTime(),l=e[n].getTime(),c=t[o],d=t[n];if(!isFinite(c)||!isFinite(d))return NaN;const u=l-s;return u<=0?d:c+(d-c)*(i-s)/u}function renderPvChart(e){const t=e,i=e._timeRange;e._pvHistory;const r=1e3,o=100;if(!i)return U`<svg class="hc-chart-svg" viewBox="0 0 ${r} ${o}" preserveAspectRatio="none"></svg>`;const n=i.start.getTime(),s=i.end.getTime()-n;if(s<=0)return U`<svg class="hc-chart-svg" viewBox="0 0 ${r} ${o}" preserveAspectRatio="none"></svg>`;const l=ENERGY_COLOR_pv(t),c=e.hass?.themes?.darkMode?lerpHexToward(l,"#ffffff",.55):lerpHexToward(l,"#000000",.35),d=i.end.getTime(),u=buildTimelineModel(i.start,i.end).dayBoundaries.map(e=>e*r),p=(e._pvUnit||"").toLowerCase(),g="wh"===p||"kwh"===p||"mwh"===p,m=e._unifiedStore,f=m?function sliceForRange(e,t,i){const r=Math.max(e.storeStartMs,t),o=Math.min(e.storeEndMs,i);if(o<=r)return{times:[],production:[],forecast:[],cloud:[],irradiance:[]};const n=e.stepMs,s=Math.floor((r-e.storeStartMs)/n),l=[],c=[],d=[],u=[],p=[];for(let g=e.storeStartMs+s*n+n/2;g<o;g+=n)g<r||(l.push(new Date(g)),c.push(valueAt(e.production,e,g)),d.push(valueAt(e.forecast,e,g)),u.push(valueAt(e.cloud,e,g)),p.push(valueAt(e.irradiance,e,g)));return{times:l,production:c,forecast:d,cloud:u,irradiance:p}}(m,n,d):null,xOf=e=>(e.getTime()-n)/s*r,y=(()=>{const e=g?"kwh"===p?"kw":"mwh"===p?"mw":"wh"===p?"w":"":p;return"kw"===e?.001:"mw"===e?1e-6:1})(),b=[];if(f)for(let L=0;L<f.times.length;L++){const e=f.production[L];null!==e&&isFinite(e)&&b.push({t:f.times[L],v:e*y})}const v=[];if(f)for(let L=0;L<f.times.length;L++){const e=f.forecast[L];null===e||!isFinite(e)||e<=0||v.push({t:f.times[L],v:e*y})}let _=1;for(const L of b)L.v>_&&(_=L.v);for(const L of v)L.v>_&&(_=L.v);const yOf=e=>o-90*Math.max(0,Math.min(1,e/_)),w=b.map(e=>`${xOf(e.t).toFixed(2)},${yOf(e.v).toFixed(2)}`);let $="",M="";if(w.length>=2){const e=xOf(b[0].t),t=xOf(b[b.length-1].t);$=`M ${e},100 L ${w.join(" L ")} L ${t},100 Z`,M=`M ${w.join(" L ")}`}const T=e._pvHistoryPerEntity.size>1?Array.from(e._pvHistoryPerEntity.keys()).sort():[],C=[];for(let L=0;L<T.length;L++){const t=T[L],i=e._pvHistoryPerEntity.get(t);if(!i)continue;let r=i.times,o=i.values;if(g&&r.length>=2){const e=.05,t=[],i=[];let n=0;for(let s=1;s<r.length;s++){const l=(r[s].getTime()-r[n].getTime())/36e5;if(l<=0)continue;if(l>6){n=s;continue}const c=o[s]-o[n];c<0?n=s:l<e||(t.push(r[s]),i.push(c/l),n=s)}r=t,o=i}const s=[],l=Math.max(1,Math.floor(r.length/750));for(let e=0;e<r.length;e+=l){const t=r[e],i=o[e],l=t.getTime();l<n||l>d||isFinite(i)&&s.push(`${xOf(t).toFixed(2)},${yOf(i).toFixed(2)}`)}s.length<2||C.push({id:t,line:`M ${s.join(" L ")}`,color:energySolarColor(e,chartIsDark(e),L)})}let F="";v.length>=2&&(F=`M ${v.map(e=>`${xOf(e.t).toFixed(2)},${yOf(e.v).toFixed(2)}`).join(" L ")}`);const A=e._chartHoverPct;let H=0,E=NaN,D=NaN,R=!1;if(null!==A&&A>=0&&A<=100){H=A/100*r;const e=n+A/100*s,t=b.length>0?b[b.length-1].t.getTime():-1/0;if(b.length>=1&&e<=t){const t=interpAt(b.map(e=>e.t),b.map(e=>e.v),e);isFinite(t)&&(E=yOf(Math.max(0,t)))}if(v.length>=1){const t=interpAt(v.map(e=>e.t),v.map(e=>e.v),e);isFinite(t)&&(D=yOf(Math.max(0,t)))}R=isFinite(E)||isFinite(D)}return U`
+    `}function interpAt(e,t,i){const r=Math.min(e.length,t.length);if(0===r)return NaN;if(i<=e[0].getTime())return isFinite(t[0])?t[0]:NaN;if(i>=e[r-1].getTime()){const e=t[r-1];return isFinite(e)?e:NaN}let o=0,n=r-1;for(;n-o>1;){const t=o+n>>1;e[t].getTime()<=i?o=t:n=t}const s=e[o].getTime(),l=e[n].getTime(),c=t[o],d=t[n];if(!isFinite(c)||!isFinite(d))return NaN;const u=l-s;return u<=0?d:c+(d-c)*(i-s)/u}function renderPvChart(e){const t=e,i=e._timeRange;e._pvHistory;const r=1e3,o=100;if(!i)return U`<svg class="hc-chart-svg" viewBox="0 0 ${r} ${o}" preserveAspectRatio="none"></svg>`;const n=i.start.getTime(),s=i.end.getTime()-n;if(s<=0)return U`<svg class="hc-chart-svg" viewBox="0 0 ${r} ${o}" preserveAspectRatio="none"></svg>`;const l=ENERGY_COLOR_pv(t),c=e.hass?.themes?.darkMode?lerpHexToward(l,"#ffffff",.55):lerpHexToward(l,"#000000",.35),d=i.end.getTime(),u=buildTimelineModel(i.start,i.end).dayBoundaries.map(e=>e*r),p=(e._pvUnit||"").toLowerCase(),g="wh"===p||"kwh"===p||"mwh"===p,m=e._unifiedStore,f=m?function sliceForRange(e,t,i){const r=Math.max(e.storeStartMs,t),o=Math.min(e.storeEndMs,i);if(o<=r)return{times:[],production:[],forecast:[],cloud:[],irradiance:[]};const n=e.stepMs,s=Math.floor((r-e.storeStartMs)/n),l=[],c=[],d=[],u=[],p=[];for(let g=e.storeStartMs+s*n+n/2;g<o;g+=n)g<r||(l.push(new Date(g)),c.push(valueAt(e.production,e,g)),d.push(valueAt(e.forecast,e,g)),u.push(valueAt(e.cloud,e,g)),p.push(valueAt(e.irradiance,e,g)));return{times:l,production:c,forecast:d,cloud:u,irradiance:p}}(m,n,d):null,xOf=e=>(e.getTime()-n)/s*r,y=(()=>{const e=g?"kwh"===p?"kw":"mwh"===p?"mw":"wh"===p?"w":"":p;return"kw"===e?.001:"mw"===e?1e-6:1})(),b=[];if(f)for(let L=0;L<f.times.length;L++){const e=f.production[L];null!==e&&isFinite(e)&&b.push({t:f.times[L],v:e*y})}const v=[];if(f)for(let L=0;L<f.times.length;L++){const e=f.forecast[L];null===e||!isFinite(e)||e<=0||v.push({t:f.times[L],v:e*y})}let _=1;for(const L of b)L.v>_&&(_=L.v);for(const L of v)L.v>_&&(_=L.v);const yOf=e=>o-90*Math.max(0,Math.min(1,e/_)),w=b.map(e=>`${xOf(e.t).toFixed(2)},${yOf(e.v).toFixed(2)}`);let $="",M="";if(w.length>=2){const e=xOf(b[0].t),t=xOf(b[b.length-1].t);$=`M ${e},100 L ${w.join(" L ")} L ${t},100 Z`,M=`M ${w.join(" L ")}`}const T=e._pvHistoryPerEntity.size>1?Array.from(e._pvHistoryPerEntity.keys()).sort():[],C=[];if(T.length>1&&b.length>=2){const t=e,i=chartIsDark(e),r=T.length,o=b.length,n=[];for(let l=0;l<r;l++){const t=e._pvHistoryPerEntity.get(T[l]),i=new Array(o).fill(0);if(t)for(let r=0;r<o;r++){const o=pvValueAtTime(e,b[r].t.getTime(),t).value;i[r]=isFinite(o)&&o>0?o:0}n.push(i)}const s=new Array(o).fill(0);for(let e=0;e<r;e++){const l=[],c=[];for(let t=0;t<o;t++){let i=0;for(let e=0;e<r;e++)i+=n[e][t];const o=i>0?n[e][t]/i:0,d=s[t],u=d+o*b[t].v;s[t]=u,l.push(`${xOf(b[t].t).toFixed(2)},${yOf(u).toFixed(2)}`),c.push(`${xOf(b[t].t).toFixed(2)},${yOf(d).toFixed(2)}`)}C.push({color:energySolarColor(t,i,e),path:`M ${l.join(" L ")} L ${c.reverse().join(" L ")} Z`})}}let F="";v.length>=2&&(F=`M ${v.map(e=>`${xOf(e.t).toFixed(2)},${yOf(e.v).toFixed(2)}`).join(" L ")}`);const A=e._chartHoverPct;let H=0,E=NaN,D=NaN,R=!1;if(null!==A&&A>=0&&A<=100){H=A/100*r;const e=n+A/100*s,t=b.length>0?b[b.length-1].t.getTime():-1/0;if(b.length>=1&&e<=t){const t=interpAt(b.map(e=>e.t),b.map(e=>e.v),e);isFinite(t)&&(E=yOf(Math.max(0,t)))}if(v.length>=1){const t=interpAt(v.map(e=>e.t),v.map(e=>e.v),e);isFinite(t)&&(D=yOf(Math.max(0,t)))}R=isFinite(E)||isFinite(D)}return U`
         <svg
             class="hc-chart-svg"
             viewBox="0 0 ${r} ${o}"
@@ -1366,20 +1366,19 @@ return new Date((l+c)/2)}var it=null;function renderTimelineNightZones(e){const 
                 ></line>
             `)}
             <g class="hc-chart-grow">
-                ${$?B`
-                    <path
-                        d="${$}"
-                        fill="${l}"
-                        fill-opacity="0.25"
-                    ></path>
-                `:K}
-                ${C.map(e=>B`
-                    <path
-                        class="hc-chart-line hc-chart-line-source"
-                        d="${e.line}"
-                        stroke="${e.color}"
-                    ></path>
-                `)}
+                ${C.length>0?C.map(e=>B`
+                        <path
+                            d="${e.path}"
+                            fill="${e.color}"
+                            fill-opacity="0.55"
+                        ></path>
+                    `):$?B`
+                        <path
+                            d="${$}"
+                            fill="${l}"
+                            fill-opacity="0.25"
+                        ></path>
+                    `:K}
                 ${M?B`
                     <path
                         class="hc-chart-line"
