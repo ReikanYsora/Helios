@@ -1,14 +1,14 @@
-//Local-nDSM shadow casters: decode a single browser-reachable nDSM (normalised Digital Surface Model)
-//GeoTIFF into ground-shadow casters for the 2.5D scene. The config bbox IS the raster frame — geotiff.js
-//force-resamples the band to a square grid (nearest-neighbour), so the TIFF's own georeferencing is ignored
-//and every cell maps straight to a lat/lon from the bbox.
+//Local-nDSM decode + shadow casters for the 2.5D scene. Decodes a browser-reachable nDSM (normalised Digital
+//Surface Model) GeoTIFF into a height raster, then consolidates it into ground-shadow casters.
 //
-//Pipeline (decode -> clump -> casters): read band 1 (height above ground), normalise to metres with NaN for
-//no-data, flood-fill the above-threshold cells into size-capped 8-connected components, and wrap each
-//component's cells into one convex-hull footprint with the component's mean height. The footprints are in
-//LOCAL METRES east/north relative to the home — the same frame building footprints use — so they feed the
-//SAME shadow projector (renderShadows) the buildings do. Buildings still render as prisms; only the SHADOW
-//casters change when a local LiDAR is configured.
+//Two reusable stages so the LiDAR view (wireframe + points) can share the decode:
+//  fetchNdsmRaster  -> reads ONLY the display-radius window of the GeoTIFF (so every cell lands inside the
+//                      visible disc at ~native pitch instead of being spread thin across a large bbox) and
+//                      returns the height grid + that window's geo frame.
+//  rasterToCasters  -> flood-fills the above-threshold cells into size-capped components and wraps each into a
+//                      convex-hull footprint (LOCAL METRES east/north from the home) with the component's mean
+//                      height — the same frame building footprints use, so they feed the SAME shadow projector
+//                      (renderShadows). Buildings still render as prisms; only the SHADOW casters change.
 //
 //Self-contained engine module: no card imports, and buildings.ts never imports this (one-way dependency).
 //geotiff is loaded via a dynamic import so it executes only for LiDAR users.
@@ -32,9 +32,24 @@ function clamp(v: number, lo: number, hi: number): number
     return Math.max(lo, Math.min(hi, v));
 }
 
-export interface NdsmCasterOptions
+//A decoded nDSM grid covering the display window, with that window's geo frame (north = row 0). heights are
+//metres above ground (NaN = no-data / skip). Reused by the shadow casters and the LiDAR view.
+export interface NdsmRaster
+{
+    heights: Float32Array;
+    size:    number;
+    minLat:  number;
+    maxLat:  number;
+    minLon:  number;
+    maxLon:  number;
+    homeLat: number;
+    homeLon: number;
+}
+
+export interface NdsmFetchOptions
 {
     url:     string;
+    //Configured EPSG:4326 bbox = the GeoTIFF's geo frame.
     minLat:  number;
     maxLat:  number;
     minLon:  number;
@@ -42,20 +57,16 @@ export interface NdsmCasterOptions
     homeLat:    number;
     homeLon:    number;
     radiusM:    number;
-    //Square nDSM grid edge (cells/side). Resolved from the LiDAR shadow quality by the caller.
+    //Square grid edge (cells/side) the window is resampled to. Resolved from the LiDAR shadow quality.
     rasterSize: number;
     signal?: AbortSignal;
 }
 
-//Decode the nDSM at the bbox and return ground-shadow casters in local metres. Throws on a failed fetch /
-//decode; the caller swallows the error and falls back to footprint shadows.
-export async function fetchNdsmCasters(opts: NdsmCasterOptions): Promise<ShadowCaster[]>
+//Decode the GeoTIFF, reading only the display-radius window. Throws on a failed fetch/decode or a window that
+//doesn't intersect the bbox; the caller swallows it and falls back to footprint shadows.
+export async function fetchNdsmRaster(opts: NdsmFetchOptions): Promise<NdsmRaster>
 {
     const { url, minLat, maxLat, minLon, maxLon, homeLat, homeLon, radiusM, rasterSize, signal } = opts;
-
-    //The raster frame is the bbox, force-resampled to a square grid; the caller sizes it from the LiDAR
-    //shadow quality (higher = finer shadows, heavier).
-    const size = rasterSize;
 
     const response = await fetch(url, { signal });
     if (!response.ok)
@@ -67,8 +78,40 @@ export async function fetchNdsmCasters(opts: NdsmCasterOptions): Promise<ShadowC
     const { fromArrayBuffer } = await import('geotiff');
     const tiff  = await fromArrayBuffer(buf);
     const image = await tiff.getImage();
+    const imgW  = image.getWidth();
+    const imgH  = image.getHeight();
     const noData = image.getGDALNoData?.();
+
+    //Display window around the home (radius -> degrees), clamped to the bbox so we never read outside the file.
+    const cosHome = Math.cos(homeLat * DEG);
+    const dLat = radiusM / M_PER_DEG_LAT;
+    const dLon = radiusM / (M_PER_DEG_LAT * cosHome);
+    const wMinLon = Math.max(minLon, homeLon - dLon);
+    const wMaxLon = Math.min(maxLon, homeLon + dLon);
+    const wMinLat = Math.max(minLat, homeLat - dLat);
+    const wMaxLat = Math.min(maxLat, homeLat + dLat);
+    if (wMaxLon <= wMinLon || wMaxLat <= wMinLat)
+    {
+        throw new Error('lidar bbox does not cover the home');
+    }
+
+    //Window edges -> image pixels (x: lon min->max left->right; y: lat max->min top->bottom), snapped to whole
+    //pixels. The snapped pixel rect is converted back to its exact geo frame so each cell's lat/lon is accurate.
+    const lonToPx = (lon: number): number => (lon - minLon) / (maxLon - minLon) * imgW;
+    const latToPx = (lat: number): number => (maxLat - lat) / (maxLat - minLat) * imgH;
+    const left   = clamp(Math.floor(lonToPx(wMinLon)), 0, imgW - 1);
+    const right  = clamp(Math.ceil(lonToPx(wMaxLon)),  left + 1, imgW);
+    const top    = clamp(Math.floor(latToPx(wMaxLat)), 0, imgH - 1);
+    const bottom = clamp(Math.ceil(latToPx(wMinLat)),  top + 1, imgH);
+
+    const frameMinLon = minLon + (left   / imgW) * (maxLon - minLon);
+    const frameMaxLon = minLon + (right  / imgW) * (maxLon - minLon);
+    const frameMaxLat = maxLat - (top    / imgH) * (maxLat - minLat);
+    const frameMinLat = maxLat - (bottom / imgH) * (maxLat - minLat);
+
+    const size = rasterSize;
     const rasters = await image.readRasters({
+        window:     [left, top, right, bottom],
         width:      size,
         height:     size,
         interleave: false,
@@ -76,29 +119,31 @@ export async function fetchNdsmCasters(opts: NdsmCasterOptions): Promise<ShadowC
     });
     const band = (rasters as unknown as ArrayLike<number>[])[0];
 
-    //Normalise into metres-above-ground: no-data / non-finite -> NaN; negatives clamped to 0 (sub-ground
-    //decode noise); everything else kept.
+    //Normalise to metres-above-ground: no-data / non-finite -> NaN; negatives clamped to 0 (sub-ground noise).
     const heights = new Float32Array(size * size);
     for (let k = 0; k < heights.length; k++)
     {
         const v = band[k];
-        if (v === noData || !Number.isFinite(v))
-        {
-            heights[k] = NaN;
-        }
-        else if (v < 0)
-        {
-            heights[k] = 0;
-        }
-        else
-        {
-            heights[k] = v;
-        }
+        if (v === noData || !Number.isFinite(v)) { heights[k] = NaN; }
+        else if (v < 0)                          { heights[k] = 0; }
+        else                                     { heights[k] = v; }
     }
 
-    //Per-cell geography. Row j = 0 is the NORTH edge. Cell pitch in degrees -> the centre lat/lon -> local
-    //metres east/north from the home (matches how building footprints are built), so the casters land in the
-    //same frame the projector expects.
+    return {
+        heights, size,
+        minLat: frameMinLat, maxLat: frameMaxLat, minLon: frameMinLon, maxLon: frameMaxLon,
+        homeLat, homeLon,
+    };
+}
+
+//Consolidate a decoded raster into ground-shadow casters (local metres). Cells outside the radius (the window
+//corners) are dropped by the circular crop.
+export function rasterToCasters(raster: NdsmRaster, radiusM: number): ShadowCaster[]
+{
+    const { heights, size, minLat, maxLat, minLon, maxLon, homeLat, homeLon } = raster;
+
+    //Per-cell geography. Row j = 0 is the NORTH edge. Cell centre lat/lon -> local metres east/north from the
+    //home (matches how building footprints are built), so the casters land in the frame the projector expects.
     const pxLat   = (maxLat - minLat) / size;
     const pxLon   = (maxLon - minLon) / size;
     const cosHome = Math.cos(homeLat * DEG);
@@ -120,9 +165,9 @@ export async function fetchNdsmCasters(opts: NdsmCasterOptions): Promise<ShadowC
         }
     }
 
-    //Component size cap from the cell area, so a coarser raster keeps a comparable physical clump size.
+    //Component cap from the cell area, so a coarser raster keeps a comparable physical clump size.
     const cellAreaM2          = (pxLat * M_PER_DEG_LAT) ** 2;
-    const maxCellsPerComponent = clamp(Math.round(TARGET_COMPONENT_AREA_M2 / cellAreaM2), 4, 80);
+    const maxCellsPerComponent = clamp(Math.round(TARGET_COMPONENT_AREA_M2 / Math.max(0.01, cellAreaM2)), 4, 80);
     const r2                  = radiusM * radiusM;
 
     const valid = (idx: number): boolean =>
@@ -196,7 +241,7 @@ export async function fetchNdsmCasters(opts: NdsmCasterOptions): Promise<ShadowC
         let cy = 0;
         for (const idx of cells)
         {
-            const e = localE[idx];
+            const e  = localE[idx];
             const nn = localN[idx];
             cx += e;
             cy += nn;
@@ -214,4 +259,11 @@ export async function fetchNdsmCasters(opts: NdsmCasterOptions): Promise<ShadowC
     }
 
     return casters;
+}
+
+//Decode + consolidate in one call (the engine's shadow path). Throws on failure; the caller falls back.
+export async function fetchNdsmCasters(opts: NdsmFetchOptions): Promise<ShadowCaster[]>
+{
+    const raster = await fetchNdsmRaster(opts);
+    return rasterToCasters(raster, opts.radiusM);
 }
