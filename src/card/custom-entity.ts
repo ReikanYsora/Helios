@@ -1,8 +1,9 @@
-//User-picked "custom" entity for the red chip + leader bead. Resolves its live value, sign and display
-//string, handling BOTH wirings carefully: an instantaneous reading (power, W/kW/MW) shows its signed state
-//directly, a cumulative reading (energy, Wh/kWh/MWh) shows its running total — each labelled in the right
-//unit by the shared formatter. The sign drives the bead direction (positive = home → chip, negative = chip
-//→ home); the magnitude drives its cadence.
+//User-picked "custom" entity for the red chip + leader bead. The chip shows the value at the active instant
+//(live now, or the timeline scrub target), as POWER (kW) — never an energy meter's lifetime total. A power
+//entity (W/kW/MW) reads its instantaneous state; a cumulative-energy entity (Wh/kWh/MWh) is differentiated to
+//average watts (see customChipWatts + refreshCustomEntity). resolveCustomEntityLive still supplies the chip's
+//name + presence. The value's sign drives the bead direction (positive = home → chip, negative = chip →
+//home); its magnitude drives the cadence.
 
 import { formatEntityValue, pvNormalizeToWatts, energyToKwh } from './format';
 import { type HeliosConfig, customEntityId } from '../helios-config';
@@ -55,6 +56,46 @@ export function resolveCustomEntityLive(hass: any, entityId: string): CustomEnti
         signedValue: raw,
         magnitudeW,
     };
+}
+
+//Step-sample the WATTS history (built by refreshCustomEntity) at an instant: the last bucket at or before it.
+//Null when there's no history or the instant sits outside it (hourly buckets, so allow up to 1 h past the last).
+export function customSampleAtTime(hist: { times: Date[]; values: number[] } | null, timeMs: number): number | null
+{
+    if (!hist || hist.times.length === 0) { return null; }
+    if (timeMs < hist.times[0].getTime() || timeMs > hist.times[hist.times.length - 1].getTime() + 3_600_000) { return null; }
+    let idx = hist.times.length - 1;
+    for (let i = 0; i < hist.times.length; i++)
+    {
+        if (hist.times[i].getTime() > timeMs) { idx = i - 1; break; }
+    }
+    return hist.values[idx < 0 ? 0 : idx];
+}
+
+//Instantaneous W-equivalent for the chip at the active instant — NEVER the lifetime total. Scrub: the W
+//history (mean for power, change-differentiated for energy) at that instant. Live: a power entity reads its
+//state directly (already instantaneous); a cumulative-energy entity has no meaningful instantaneous state, so
+//it falls back to the latest derived-power bucket from the history.
+export function customChipWatts(
+    hass: any,
+    entityId: string,
+    history: { times: Date[]; values: number[] } | null,
+    selectedTimeMs: number | null
+): number | null
+{
+    if (!entityId) { return null; }
+    if (selectedTimeMs !== null) { return customSampleAtTime(history, selectedTimeMs); }
+    const st = hass?.states?.[entityId];
+    if (!st) { return null; }
+    const unit = String(st.attributes?.unit_of_measurement ?? '');
+    const dc   = String(st.attributes?.device_class ?? '');
+    const isEnergy = dc === 'energy' || ENERGY_UNITS.has(unit.trim().toLowerCase());
+    if (isEnergy)
+    {
+        return history && history.values.length > 0 ? history.values[history.values.length - 1] : null;
+    }
+    const raw = parseFloat(st.state);
+    return isFinite(raw) ? pvNormalizeToWatts(raw, unit) : null;
 }
 
 //Resolve the icon to show for the custom entity: the user's editor override, else the entity's own icon,

@@ -99,6 +99,20 @@ export const heliosCardEnergyClockCss = css`
         --mdc-icon-size: 16px;
         flex: none;
     }
+    /*  Per-entity breakdown row: optional source label, then the value pushed flush right so the column of
+        numbers aligns regardless of label width. */
+    .clock-tip-label
+    {
+        color: var(--secondary-text-color);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 140px;
+    }
+    .clock-tip-val
+    {
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+    }
     .clock-tip-total
     {
         font-weight: 600;

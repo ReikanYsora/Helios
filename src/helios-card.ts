@@ -14,7 +14,7 @@ import
     cacheId,
     hasLocalLidar
 } from './helios-config';
-import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity } from './card/custom-entity';
+import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { CUSTOM_ENTITY_COLOR } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
@@ -24,8 +24,8 @@ import { heliosCardLidarCss } from './css/helios-card-lidar-css';
 import {
     type ClockData, type ClockHit, type ClockRingInput,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
-    projectClockFrame, clockHitTest, clockHourTotal, formatClockValue,
-    CLOCK_GROW_MS,
+    projectClockFrame, clockHitTest, clockSlotTotal, formatClockValue,
+    CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR,
 } from './card/energy-clock';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime } from './card/format';
 import
@@ -455,9 +455,9 @@ export class HeliosCard extends LitElement
     @state() _clockTargets: ChartTarget[] = [];
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     @state() private _clockData: ClockData[] = [];
-    //Hovered hour slice; lights every ring's bar at that hour + drives the multi-metric tooltip. null = off.
-    @state() private _clockHoverHour: number | null = null;
-    //Screen-space hit segments (each cylinder's axis), refreshed every paint for the hover test.
+    //Hovered 15-min slot; lights every ring's area at that slot + drives the multi-metric tooltip. null = off.
+    @state() private _clockHoverSlot: number | null = null;
+    //Screen-space hit segments (each slot's axis), refreshed every paint for the hover test.
     private _clockHits: ClockHit[] = [];
     private _clockHoverX = 0;
     private _clockHoverY = 0;
@@ -478,10 +478,10 @@ export class HeliosCard extends LitElement
     private _clockSlotFrom = new Map<ChartTarget, number>();
     private _clockSlideStart = 0;
     private _clockAnimSeq = 0;
-    //Slice-focus dim: _clockDim ramps 0..1 (others fade toward 0.5) while _clockDimHour is focused; it
+    //Slice-focus dim: _clockDim ramps 0..1 (others fade toward 0.5) while _clockDimSlot is focused; it
     //persists through the fade-out so the dimmed bars + the focused spoke ramp back smoothly.
     private _clockDim = 0;
-    private _clockDimHour: number | null = null;
+    private _clockDimSlot: number | null = null;
     private _clockDimSeq  = 0;
     @query('ha-card') private _haCard?: HTMLElement;
     @query('.clock-svg') private _clockSvg?: SVGSVGElement;
@@ -1058,7 +1058,7 @@ export class HeliosCard extends LitElement
             {
                 this._rebuildClockData();
             }
-            if (_changedProperties.has('_clockHoverHour'))
+            if (_changedProperties.has('_clockHoverSlot'))
             {
                 this._startClockDim();
             }
@@ -1637,16 +1637,21 @@ export class HeliosCard extends LitElement
         const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
         const customLeaderColor = CUSTOM_ENTITY_COLOR;
         const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
+        //Value at the active instant (scrub target in the past, else live now), in WATTS, shown as kW — never
+        //an energy meter's lifetime total (customChipWatts differentiates cumulative energy to average power).
+        const customScrubMs = (!this._isLiveMode && this._selectedTime !== null) ? this._selectedTime.getTime() : null;
+        const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customEntityHistory, customScrubMs);
+        const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec);
         const CUSTOM_BEAD_CAP_W     = 5000;
         const CUSTOM_BEAD_MIN_DUR_S = 1.2;
         const CUSTOM_BEAD_MAX_DUR_S = 8.0;
         const CUSTOM_BEAD_IDLE_W    = 5;
-        const customMagW   = customLive ? customLive.magnitudeW : 0;
-        const customBeadDur = (!customLive || customMagW < CUSTOM_BEAD_IDLE_W)
+        const customMagW   = customW === null ? 0 : Math.abs(customW);
+        const customBeadDur = (customW === null || customMagW < CUSTOM_BEAD_IDLE_W)
             ? null
             : Math.min(CUSTOM_BEAD_MAX_DUR_S, Math.max(CUSTOM_BEAD_MIN_DUR_S,
                 CUSTOM_BEAD_MIN_DUR_S * CUSTOM_BEAD_CAP_W / Math.max(customMagW, 1)));
-        const customPositive = customLive ? customLive.signedValue >= 0 : true;
+        const customPositive = customW === null ? true : customW >= 0;
 
         //Solar-arc overlay: sun trajectory, current position and incidence ray to the home, all
         //pre-projected to screen space via projectSunScene(). Hidden until the engine is ready.
@@ -1778,8 +1783,8 @@ export class HeliosCard extends LitElement
                             { l: 'N', c: 'var(--red-color, #f44336)' },
                             { l: 'S', c: 'var(--primary-text-color, #212121)' },
                         ].map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
-                        ${this._clockHoverHour !== null
-                            ? this._renderClockTooltip(this._clockHoverHour)
+                        ${this._clockHoverSlot !== null
+                            ? this._renderClockTooltip(this._clockHoverSlot)
                             : nothing}
                     </div>
                 ` : nothing}
@@ -2162,7 +2167,7 @@ export class HeliosCard extends LitElement
                         @click=${() => this._setChartTarget('custom')}
                     >
                         <ha-icon icon="${customIcon}"></ha-icon>
-                        <span>${customLive!.display}</span>
+                        <span>${customDisplay}</span>
                     </div>
                 ` : nothing}
 
@@ -2618,19 +2623,19 @@ export class HeliosCard extends LitElement
     }
 
     //Slice-focus dim fade: ramp _clockDim toward 1 while an hour is focused (others fade to 0.5), back to 0
-    //when the hover/tap ends. _clockDimHour is kept through the fade-out so the dimmed bars + the focused
+    //when the hover/tap ends. _clockDimSlot is kept through the fade-out so the dimmed bars + the focused
     //spoke ramp back smoothly. Instant in preview / reduced motion.
     private _startClockDim(): void
     {
-        if (this._clockHoverHour !== null)
+        if (this._clockHoverSlot !== null)
         {
-            this._clockDimHour = this._clockHoverHour;
+            this._clockDimSlot = this._clockHoverSlot;
         }
-        const target = this._clockHoverHour !== null ? 1 : 0;
+        const target = this._clockHoverSlot !== null ? 1 : 0;
         if (this.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
         {
             this._clockDim = target;
-            if (target === 0) { this._clockDimHour = null; }
+            if (target === 0) { this._clockDimSlot = null; }
             this._scheduleClockPaint();
             return;
         }
@@ -2654,7 +2659,7 @@ export class HeliosCard extends LitElement
             else
             {
                 this._clockDim = target;
-                if (target === 0) { this._clockDimHour = null; }
+                if (target === 0) { this._clockDimSlot = null; }
                 this._paintClock();
             }
         };
@@ -2911,8 +2916,8 @@ export class HeliosCard extends LitElement
         }
         const frame = projectClockFrame(
             camera, rings,
-            this._clockHoverHour,
-            this._clockDimHour, this._clockDim,
+            this._clockHoverSlot,
+            this._clockDimSlot, this._clockDim,
         );
         svgEl.innerHTML = frame.svg;
         this._clockHits = frame.hits;
@@ -2971,9 +2976,9 @@ export class HeliosCard extends LitElement
         }
         if (e.buttons !== 0)
         {
-            if (this._clockHoverHour !== null)
+            if (this._clockHoverSlot !== null)
             {
-                this._clockHoverHour = null;
+                this._clockHoverSlot = null;
                 this._clockTapSticky = false;
             }
             return;
@@ -2988,9 +2993,9 @@ export class HeliosCard extends LitElement
         this._clockHoverY = e.clientY - rect.top;
         const hit = clockHitTest(this._clockHits, this._clockHoverX, this._clockHoverY);
         this._clockTapSticky = false;
-        if (hit !== this._clockHoverHour)
+        if (hit !== this._clockHoverSlot)
         {
-            this._clockHoverHour = hit;   //@state change -> tooltip render + repaint via updated()
+            this._clockHoverSlot = hit;   //@state change -> tooltip render + repaint via updated()
         }
         else if (hit !== null)
         {
@@ -3001,11 +3006,11 @@ export class HeliosCard extends LitElement
     private _onClockHoverEnd = (): void =>
     {
         //Leaving the surface only dismisses a mouse hover; a tapped (sticky) tooltip stays until tapped away.
-        if (this._clockHoverHour === null || this._clockTapSticky)
+        if (this._clockHoverSlot === null || this._clockTapSticky)
         {
             return;
         }
-        this._clockHoverHour = null;
+        this._clockHoverSlot = null;
     };
 
     //Touch: remember where the gesture began so a tap can be told from a drag-rotate on release.
@@ -3052,12 +3057,12 @@ export class HeliosCard extends LitElement
         if (hit !== null)
         {
             this._clockTapSticky = true;
-            this._clockHoverHour = hit;
+            this._clockHoverSlot = hit;
         }
         else
         {
             this._clockTapSticky = false;
-            this._clockHoverHour = null;
+            this._clockHoverSlot = null;
         }
     };
 
@@ -3070,25 +3075,46 @@ export class HeliosCard extends LitElement
 
     //Hover tooltip for an hour slice: a time-band header, then one row per active filter (its coloured icon
     //+ its total value at that hour). Position is set inline then clamped in _paintClock.
-    private _renderClockTooltip(hour: number): TemplateResult
+    private _renderClockTooltip(slot: number): TemplateResult
     {
         if (this._clockData.length === 0)
         {
             return html``;
         }
-        const next = String((hour + 1) % 24).padStart(2, '0');
+        //15-minute slot range, e.g. "14:15 – 14:30" (the end wraps past midnight).
+        const totalSlots = 24 * CLOCK_SLOTS_PER_HOUR;
+        const stepMin    = 60 / CLOCK_SLOTS_PER_HOUR;
+        const fmt = (sl: number): string =>
+            `${String(Math.floor(sl / CLOCK_SLOTS_PER_HOUR) % 24).padStart(2, '0')}:${String((sl % CLOCK_SLOTS_PER_HOUR) * stepMin).padStart(2, '0')}`;
         return html`
             <div
                 class="clock-tip"
                 style="left:${this._clockHoverX}px;top:${this._clockHoverY}px"
             >
-                <div class="clock-tip-head">${String(hour).padStart(2, '0')}:00 – ${next}:00</div>
+                <div class="clock-tip-head">${fmt(slot)} – ${fmt((slot + 1) % totalSlots)}</div>
                 ${this._clockData.map(data => {
                     const meta = clockTargetMeta(this, data.target);
+                    //Multi-entity metrics (PV per source, cloud low/mid/high, grid import/export, battery
+                    //charge/discharge) break down to one row per contributing layer, each with its own glyph,
+                    //colour and (for PV) source name. Single-layer metrics keep one row with the metric total.
+                    if (data.layers.length > 1) {
+                        const rows = data.layers
+                            .map(l => ({ l, v: Math.max(0, l.values[slot] ?? 0) }))
+                            .filter(r => r.v > 0);
+                        if (rows.length > 0) {
+                            return html`${rows.map(({ l, v }) => html`
+                                <div class="clock-tip-row">
+                                    <ha-icon icon="${l.icon}" style="color:${l.color}"></ha-icon>
+                                    ${l.label ? html`<span class="clock-tip-label">${l.label}</span>` : nothing}
+                                    <span class="clock-tip-val">${formatClockValue(this, data, v)}</span>
+                                </div>
+                            `)}`;
+                        }
+                    }
                     return html`
                         <div class="clock-tip-row">
                             <ha-icon icon="${meta.icon}" style="color:${meta.color}"></ha-icon>
-                            <span>${formatClockValue(this, data, clockHourTotal(data, hour))}</span>
+                            <span class="clock-tip-val">${formatClockValue(this, data, clockSlotTotal(data, slot))}</span>
                         </div>
                     `;
                 })}
