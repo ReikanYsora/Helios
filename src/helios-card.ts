@@ -1584,10 +1584,7 @@ export class HeliosCard extends LitElement
                         ${Array.from({ length: 24 }, (_unused, h) => html`
                             <div class="clock-hour-label">${this._formatClockHour(h)}</div>
                         `)}
-                        ${[
-                            { l: 'N', c: 'var(--red-color, #f44336)' },
-                            { l: 'S', c: 'var(--primary-text-color, #212121)' },
-                        ].map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
+                        ${this._compassLabels().map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
                         ${this._clockHoverSlot !== null
                             ? this._renderClockTooltip(this._clockHoverSlot)
                             : nothing}
@@ -2961,6 +2958,20 @@ export class HeliosCard extends LitElement
     private _formatClockHour(h: number): string
     {
         return formatHaTime(this.hass, new Date(2000, 0, 1, h));
+    }
+
+    //Localised compass letters in the SAME order projectClockFrame/clockCompass emit them (N, E, S, W), so each
+    //div lines up with frame.compass[i] when _paintClock positions them. North is the red needle.
+    private _compassLabels(): { l: string; c: string }[]
+    {
+        const tc   = pickTranslations(this.hass?.language).clock;
+        const text = 'var(--primary-text-color, #212121)';
+        return [
+            { l: tc.compassN, c: 'var(--red-color, #f44336)' },
+            { l: tc.compassE, c: text },
+            { l: tc.compassS, c: text },
+            { l: tc.compassW, c: text },
+        ];
     }
 
 

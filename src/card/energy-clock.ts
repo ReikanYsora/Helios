@@ -608,7 +608,7 @@ function stackedColumn(
 //sampled at a few sub-angles and projected through the camera, so the sector reads as a curved slice in the
 //2.5D view. Filled translucent in the focused metric's colour (neutral white when none), ramped by `dim` so
 //it fades in/out with the rest of the focus. Drawn in the guide pass, UNDER the cylinders.
-function clockWedge(camera: SceneCamera, outerR: number, hour: number, color: string, dim: number): string
+function clockWedge(camera: SceneCamera, outerR: number, hour: number, dim: number): string
 {
     const innerR = outerR * CLOCK_HUB_R_FRAC;
     const outerW = outerR * CLOCK_SPOKE_OUTER_FRAC;
@@ -628,8 +628,9 @@ function clockWedge(camera: SceneCamera, outerR: number, hour: number, color: st
         const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), 0);
         pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`);
     }
+    //Same colour as the guide lines (theme text), at a reduced fill opacity vs the strokes.
     const op = (0.15 * dim).toFixed(3);
-    return `<polygon points="${pts.join(' ')}" fill="${color}" fill-opacity="${op}"/>`;
+    return `<polygon points="${pts.join(' ')}" fill="var(--primary-text-color, #212121)" fill-opacity="${op}"/>`;
 }
 
 //Clock-face guide laid flat on the ground (under the cylinders): a faint centre ring + a spoke per hour
@@ -663,7 +664,8 @@ function clockGuide(camera: SceneCamera, outerR: number, focusHour: number | nul
         const a  = (h / 24) * 2 * Math.PI;
         const p1 = camera.project(hubR * Math.sin(a), hubR * Math.cos(a), 0);
         const p2 = camera.project(tipR * Math.sin(a), tipR * Math.cos(a), 0);
-        const focused = h === focusHour;
+        //Both bounding spokes of the focused hour wedge (H and H+1) light up.
+        const focused = focusHour !== null && (h === focusHour || h === (focusHour + 1) % 24);
         const op = focused ? CLOCK_GUIDE_OPACITY + (1 - CLOCK_GUIDE_OPACITY) * dim : CLOCK_GUIDE_OPACITY;
         svg += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${col}" stroke-opacity="${op.toFixed(3)}" stroke-width="${focused ? '1.5' : '1'}"/>`;
     }
@@ -779,7 +781,7 @@ export function projectClockFrame(
     //Spoke + wedge focus are area-only; histogram keeps its prior guide (no focused spoke) and per-bar highlight.
     const focusHour = (mode === 'area' && dimSlot !== null) ? Math.floor(dimSlot / _slotsPerHour) : null;
     const wedge = (focusHour !== null && dim > 0)
-        ? clockWedge(camera, outerR, focusHour, rings[0]?.data.color ?? '#ffffff', dim)
+        ? clockWedge(camera, outerR, focusHour, dim)
         : '';
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
     return {

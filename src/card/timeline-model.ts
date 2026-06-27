@@ -136,7 +136,7 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
         }
         c = next(c);
     }
-    const separators = thin(allSeps);
+    let separators = thin(allSeps);
 
     let labels: TimelineSeparator[];
     if (labelMode === 'boundary')
@@ -162,6 +162,15 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
             p = pEndDate;
         }
         labels = thin(allLabels);
+    }
+
+    //Months: align the gridlines with the NAMED months — one separator at the start of each shown label —
+    //instead of thinning boundaries independently (which dropped lines onto the unlabelled months).
+    if (kind === 'months')
+    {
+        separators = labels
+            .map(l => ({ frac: (l.date.getTime() - start.getTime()) / total, date: l.date }))
+            .filter(s => s.frac > 0 && s.frac < 1);
     }
 
     //Midnight gridlines, only when individual days read clearly.
