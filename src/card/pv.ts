@@ -9,7 +9,7 @@ import { pvNormalizeToWatts, formatEntityValue } from './format';
 //Re-export so battery/grid/charts/helios-card keep importing pvNormalizeToWatts from './pv'.
 export { pvNormalizeToWatts } from './format';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
-import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
 
 
@@ -57,6 +57,8 @@ export interface PvHost
     readonly _energyDefaults: import('./energy-prefs').EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
     readonly _periodPastDays: number;
+    //Recorder period for the change-series, per the active timeline mode (5-min / hour / day).
+    readonly _storeFetchPeriod: StatPeriod;
 
     requestUpdate(): void;
 
@@ -337,7 +339,7 @@ export function refreshPv(host: PvHost): void
         {
             host._pvChangeSeriesFetchKey = changeKey;
             host._pvChangeSeriesFetching = true;
-            void fetchChangeSeries(host.hass, sortedChange, seriesStart.getTime(), fetchEnd.getTime(), '5minute')
+            void fetchChangeSeries(host.hass, sortedChange, seriesStart.getTime(), fetchEnd.getTime(), host._storeFetchPeriod)
                 .then((series) =>
                 {
                     if (series !== null) { host._pvChangeSeries = series; }

@@ -8,6 +8,7 @@ import type { HeliosConfig } from '../helios-config';
 import { refreshHud, type HudHost } from './hud';
 import type { HeliosEngine } from '../helios-engine';
 import type { ChartSeries } from './charts';
+import { TIMELINE_MODES, type TimelineMode } from './timeline-modes';
 
 
 //Structural surface the host card exposes here. Extends HudHost so the clock tick can fire refreshHud(host) on the same value.
@@ -21,6 +22,8 @@ export interface TimelineHost extends HudHost
     _isLiveMode:        boolean;
     _now:               Date;
     _chartSeries:       ChartSeries | null;
+    //Active timeline mode — drives the scrub snapping (free for Now, hourly for a week, day-at-noon for month/year).
+    readonly _timelineMode: TimelineMode;
 
     //Hover cursor position on the timeline charts. The scrub handler writes it in lock-step with _selectedTime so the hover tooltip +
     //per-curve dots follow a touch drag on mobile, where the chart-card pointer handlers don't fire once the time-bar captures the pointer.
@@ -170,7 +173,26 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
         }
     }
 
-    const t = new Date(tMs);
+    //Per-mode snapping: Now stays free (fluid replay of the day); a week steps to the nearest local hour;
+    //month/year step to the hovered day pinned at the spec's hour (12:00), so the scrub reads day by day.
+    const spec = TIMELINE_MODES[host._timelineMode];
+    let snappedMs = tMs;
+    if (spec.snapMs > 0)
+    {
+        const d = new Date(tMs);
+        if (spec.snapHour !== null)
+        {
+            d.setHours(spec.snapHour, 0, 0, 0);
+        }
+        else
+        {
+            if (d.getMinutes() >= 30) { d.setHours(d.getHours() + 1); }
+            d.setMinutes(0, 0, 0);
+        }
+        snappedMs = d.getTime();
+    }
+
+    const t = new Date(snappedMs);
     if (host._selectedTime && host._selectedTime.getTime() === t.getTime())
     {
         return;
@@ -178,7 +200,8 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
 
     host._selectedTime  = t;
     host._isLiveMode    = false;
-    host._chartHoverPct = frac * 100;
+    //Cursor dot tracks the SNAPPED instant so it lands on the bucket the scrub resolved to.
+    host._chartHoverPct = ((snappedMs - host._timeRange.start.getTime()) / rangeMs) * 100;
     host._engine?.setSelectedTime(t);
 }
 

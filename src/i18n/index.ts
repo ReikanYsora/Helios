@@ -14,10 +14,11 @@ export interface Translations
     //In-card rolling-period selector on the timeline. Optional; renderer falls back to English.
     period?:
     {
-        rangeLabel?:    string; //'Time range' (aria-label on the selector group)
-        today?:         string; //'Today'
-        configDefault?: string; //'Default' (returns to the configured span)
-        last7Days?:     string; //'7 d'
+        rangeLabel?: string; //'Time range' (aria-label on the selector group)
+        now?:        string; //'Now' (today + tomorrow)
+        week?:       string; //'1 week'
+        month?:      string; //'1 month'
+        year?:       string; //'1 year'
     };
 
     editor:

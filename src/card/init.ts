@@ -172,6 +172,10 @@ export interface InitHost extends HudHost
 
     _engine?:            HeliosEngine;
     _cloudCover:         number;
+    //Active rolling window (days), so a fresh engine is seeded with the restored mode's span before its first
+    //getTimelineRange().
+    readonly _periodPastDays:   number;
+    readonly _periodFutureDays: number;
     _timeRange:          { start: Date; end: Date } | null;
     _isLiveMode:         boolean;
     _chartSeries:        ChartSeries | null;
@@ -294,6 +298,9 @@ export function initEngineNow(host: InitHost): void
 
         host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host._effectiveCacheId?.() ?? '');
         wireEngineCallbacks(host);
+        //Seed the engine with the active (possibly restored) window before getTimelineRange(), so a card that
+        //loads straight into week/month/year frames the right span from the first paint.
+        host._engine.setPeriodDays(host._periodPastDays, host._periodFutureDays);
         //Restored straight into clock mode: render the home alone immediately (slices follow once data lands).
         if (host._viewMode === 'clock') { host._engine.setHomeOnly(true); }
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first

@@ -14,10 +14,11 @@ export const fr: Translations = {
 
     period:
     {
-        rangeLabel:    'Période',
-        today:         'Aujourd\'hui',
-        configDefault: 'Défaut',
-        last7Days:     '7 j',
+        rangeLabel: 'Période',
+        now:   'Now',
+        week:  '1 semaine',
+        month: '1 mois',
+        year:  '1 an',
     },
 
     editor:

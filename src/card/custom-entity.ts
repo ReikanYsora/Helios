@@ -8,6 +8,7 @@
 import { formatEntityValue, pvNormalizeToWatts, energyToKwh } from './format';
 import { type HeliosConfig, customEntityId } from '../helios-config';
 import { callWSWithTimeout } from './ws-timeout';
+import type { StatPeriod } from './energy-stats';
 
 export interface CustomEntityLive
 {
@@ -112,12 +113,14 @@ export function resolveCustomEntityIcon(hass: any, config: HeliosConfig | undefi
 }
 
 
-//Host surface for the hourly history fetch (clock ring + timeline curve). Mirrors the battery SoC fetch.
+//Host surface for the history fetch (clock ring + timeline curve). Mirrors the battery SoC fetch.
 export interface CustomEntityHost
 {
     hass:                 any;
     config:               HeliosConfig | undefined;
     _timeRange:           { start: Date; end: Date } | null;
+    //Recorder period per the active timeline mode (5-min / hour / day), so a long window stays light.
+    _storeFetchPeriod:    StatPeriod;
     _customEntityHistory: { times: Date[]; values: number[] } | null;
     _customEntityKey:     string;
     requestUpdate():      void;
@@ -146,7 +149,8 @@ export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
         host._customEntityHistory = { times: [], values: [] };
         return;
     }
-    const key = `${id}|${start.getTime()}|${end.getTime()}`;
+    const period = host._storeFetchPeriod;
+    const key = `${id}|${start.getTime()}|${end.getTime()}|${period}`;
     if (key === host._customEntityKey) { return; }
     host._customEntityKey = key;
 
@@ -157,9 +161,9 @@ export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
             start_time:    start.toISOString(),
             end_time:      end.toISOString(),
             statistic_ids: [id],
-            //5-minute short-term statistics: real fine data for a power/energy meter (kept ~10 days, which
-            //covers the rolling window). The differentiation below reads each bucket's own duration.
-            period:        '5minute',
+            //Period follows the active mode (5-min for Now / hourly for a week / daily for month+year), so a
+            //long window stays light. The differentiation below reads each bucket's own duration.
+            period,
             //Normalise so `mean` lands in watts and `change` in kWh regardless of the sensor's native unit.
             types:         ['mean', 'change'],
             units:         { energy: 'kWh', power: 'W' },

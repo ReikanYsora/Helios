@@ -7,7 +7,7 @@ import { formatPowerKw } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
-import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { BATTERY_CACHE_TTL_MS } from '../constants';
 
 
@@ -77,6 +77,8 @@ export interface BatteryHost
     readonly _energyDefaults: EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
     readonly _periodPastDays: number;
+    //Recorder period for the change-series + SoC stats, per the active timeline mode (5-min / hour / day).
+    readonly _storeFetchPeriod: StatPeriod;
 
     requestUpdate(): void;
 
@@ -298,8 +300,8 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     host._batteryChangeFetchKey = key;
     host._batteryChangeFetching = true;
     void Promise.all([
-        sortedCharge.length    > 0 ? fetchChangeSeries(host.hass, sortedCharge,    startMs, endMs, '5minute') : Promise.resolve(null),
-        sortedDischarge.length > 0 ? fetchChangeSeries(host.hass, sortedDischarge, startMs, endMs, '5minute') : Promise.resolve(null),
+        sortedCharge.length    > 0 ? fetchChangeSeries(host.hass, sortedCharge,    startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
+        sortedDischarge.length > 0 ? fetchChangeSeries(host.hass, sortedDischarge, startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
     ]).then(([charge, discharge]) =>
     {
         if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
@@ -541,7 +543,7 @@ export async function fetchBatteryHistory(
             start_time:     ltsStart.toISOString(),
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  ids,
-            period:         '5minute',
+            period:         host._storeFetchPeriod,
             //Both fields: a cumulative-kWh-as-power wiring has `mean: null` per bucket, so asking for `state` too lets the parser
             //cover both wirings in one round-trip.
             types:          ['mean', 'state'],

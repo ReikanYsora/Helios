@@ -16,10 +16,11 @@ export const en: Translations = {
 
     period:
     {
-        rangeLabel:    'Time range',
-        today:         'Today',
-        configDefault: 'Default',
-        last7Days:     '7 d',
+        rangeLabel: 'Time range',
+        now:   'Now',
+        week:  '1 week',
+        month: '1 month',
+        year:  '1 year',
     },
 
     editor:

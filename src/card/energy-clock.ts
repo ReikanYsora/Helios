@@ -10,10 +10,17 @@ import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, c
 import { type UnifiedDataStore } from './unifiedStore';
 import { customEntityId } from '../helios-config';
 import { resolveCustomEntityIcon, resolveCustomEntityLive } from './custom-entity';
+import type { ClockHourly } from './clock-hourly';
 
 //Structural surface the clock reads off the card. It already satisfies ChartHost (the bottom chart consumes
 //it); themeIsDark resolves the live palette polarity for the per-source colour ramp.
-export type ClockHost = ChartHost & { themeIsDark(): boolean };
+export type ClockHost = ChartHost & {
+    themeIsDark(): boolean;
+    _weatherAvailable: boolean;
+    //Decoupled hourly profile, present only when the store is sub-hourly (month/year) + clock mode. When set,
+    //buildClockData reads it instead of the daily store so the dial still shows an hour-of-day shape.
+    _clockHourly: import('./clock-hourly').ClockHourly | null;
+};
 
 //Ring geometry, expressed as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
@@ -142,6 +149,16 @@ function fillGaps(v: number[]): number[]
     return out;
 }
 
+//Expand a 24-value hour-of-day profile (decoupled hourly clock source) to the dial's per-slot resolution by
+//holding each hour's value across its slots — so the histogram reads the exact hourly value and the area
+//steps at hourly resolution (which is all the data carries on a long window).
+function expandHourly(hourly: number[]): number[]
+{
+    const out = new Array<number>(CLOCK_SLOTS);
+    for (let i = 0; i < CLOCK_SLOTS; i++) { out[i] = Math.max(0, hourly[Math.floor(i / CLOCK_SLOTS_PER_HOUR)] ?? 0); }
+    return out;
+}
+
 //Bin one store series into per-slot averages of its absolute value (export/charge come back negative); empty
 //slots stay NaN so fillGaps can interpolate them rather than reading as a zero spike.
 function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[]
@@ -183,8 +200,9 @@ export function availableClockTargets(host: ClockHost): ChartTarget[]
     if (hasSoc)     { out.push('battery-soc'); }
     if (hasBattery) { out.push('battery'); }
     if (hasGrid)    { out.push('grid'); }
-    if (hasSignal(store?.irradiance)) { out.push('irradiance'); }
-    if (hasSignal(store?.cloud))      { out.push('cloud'); }
+    //Weather metrics only when the active mode offers them (off for month/year).
+    if (host._weatherAvailable && hasSignal(store?.irradiance)) { out.push('irradiance'); }
+    if (host._weatherAvailable && hasSignal(store?.cloud))      { out.push('cloud'); }
     //Custom entity sits last, present whenever it's configured (its ring may be sparse until history lands).
     if (customEntityId(host.config))  { out.push('custom'); }
     return out;
@@ -229,12 +247,41 @@ export function clockTargetLabel(host: ClockHost, target: ChartTarget): string
 }
 
 
+//Build layers from the decoupled hourly profile (month/year, where the store is daily): each metric expands
+//its 24 hour-of-day averages to the dial's slots. Production is aggregate here (no per-source split on a
+//long-window average); weather metrics aren't offered in these modes, so they fall through to empty.
+function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHourly): ClockData
+{
+    const el   = host as unknown as Element;
+    const meta = clockTargetMeta(host, target);
+    const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData => ({ target, color: meta.color, unit, layers });
+    const one  = (color: string, icon: string, v: number[]): ClockLayer => ({ color, icon, label: '', values: expandHourly(v) });
+    switch (target)
+    {
+        case 'production':  return data('power', [one(ENERGY_COLOR.pv(el), 'mdi:solar-power', h.pv)]);
+        case 'consumption': return data('power', [one(ENERGY_COLOR.consumption(el), 'mdi:home-lightning-bolt', h.consumption)]);
+        case 'grid':        return data('power', [
+            one(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', h.gridImport),
+            one(ENERGY_COLOR.gridExport(el), 'mdi:transmission-tower-export', h.gridExport),
+        ]);
+        case 'battery':     return data('power', [
+            one(ENERGY_COLOR.batteryOut(el), 'mdi:battery-arrow-up',   h.batteryDischarge),
+            one(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', h.batteryCharge),
+        ]);
+        case 'battery-soc': return data('percent', [one(ENERGY_COLOR.batteryOut(el), 'mdi:battery', h.soc)]);
+        case 'custom':      return data('power', [one(meta.color, meta.icon, h.custom)]);
+        default:            return data(target === 'irradiance' ? 'irradiance' : 'power', []);
+    }
+}
+
 //Build the stacked layers for the active metric. Production keeps a per-PV-string breakdown (plus a forecast
 //layer covering hours with no actuals yet); every other metric reuses the store series the timeline draws,
-//binned by hour-of-day — same numbers, same colours. Each layer is a 24-value hour-of-day series the
-//projection sweeps into a continuous filled area around the dial.
+//binned by hour-of-day — same numbers, same colours. On a long window the daily store carries no intraday
+//shape, so a decoupled hourly profile (host._clockHourly) takes over.
 export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
 {
+    if (host._clockHourly) { return buildClockDataHourly(host, target, host._clockHourly); }
+
     const store  = host._unifiedStore;
     const el     = host as unknown as Element;
     const dark   = host.themeIsDark();
@@ -418,6 +465,24 @@ function hourlyOf(values: number[]): number[]
     return out;
 }
 
+//Busiest stacked total of a ring in the given mode (slot total for area, hourly total for histogram). Drives
+//the per-UNIT shared ceiling, so two metrics in the same unit are plotted on the exact same axis — a 2 kW and
+//a 5 kW power metric read at the right relative heights instead of both filling their own ring.
+function ringMax(data: ClockData, mode: ClockMode): number
+{
+    let m = 0;
+    if (mode === 'histogram')
+    {
+        const hourly = data.layers.map(L => hourlyOf(L.values));
+        for (let h = 0; h < 24; h++) { let t = 0; for (const hv of hourly) { t += Math.max(0, hv[h]); } m = Math.max(m, t); }
+    }
+    else
+    {
+        for (let sl = 0; sl < CLOCK_SLOTS; sl++) { let t = 0; for (const L of data.layers) { t += Math.max(0, L.values[sl] ?? 0); } m = Math.max(m, t); }
+    }
+    return m;
+}
+
 //Rectangular bar footprint (metres) for histogram mode, oriented to `angle`: `hr` half-depth along the radius
 //(rings sit flush), `ht` half-width along the tangent. Four sides — cheap to redraw each rotation frame.
 function foot(cx: number, cy: number, hr: number, ht: number, angle: number): Array<[number, number]>
@@ -576,13 +641,19 @@ export function projectClockFrame(
         transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (h / 24) * 360 + 180}deg)`,
     }));
 
+    //Shared per-UNIT ceiling: every ring of the same unit normalises against the busiest among them, so
+    //same-unit metrics share one axis (no read dissonance). Different units keep their own ceiling.
+    const unitMax = new Map<string, number>();
+    for (const ring of rings) { const u = ring.data.unit; unitMax.set(u, Math.max(unitMax.get(u) ?? 0, ringMax(ring.data, mode))); }
+
     const hits:  ClockHit[]  = [];
     const faces: ClockFace[] = [];
     rings.forEach((ring, ri) =>
     {
         const R = outerR * ringRadiusFrac(ring.slot);
-        if (mode === 'histogram') { projectHistogramRing(camera, R, outerR, ring, ri, maxHm, minEdge, ppm, dimSlot, dim, faces, hits); }
-        else                      { projectAreaRing(camera, R, ring, ri, maxHm, dimSlot, dim, faces, hits); }
+        const ceiling = unitMax.get(ring.data.unit) ?? 0;
+        if (mode === 'histogram') { projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits); }
+        else                      { projectAreaRing(camera, R, ring, ri, maxHm, ceiling, dimSlot, dim, faces, hits); }
     });
     faces.sort((a, b) => a.depth - b.depth);
 
@@ -602,15 +673,16 @@ export function projectClockFrame(
 //AREA sub-mode: a continuous stacked area swept over the 15-min slots. Fills sit at a very transparent base
 //(the curve lines stay full opacity); the hovered slot's slice ramps to full opacity + a bright glowing line.
 function projectAreaRing(
-    camera: SceneCamera, R: number, ring: ClockRingInput, ri: number, maxHm: number,
+    camera: SceneCamera, R: number, ring: ClockRingInput, ri: number, maxHm: number, ceiling: number,
     dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
 ): void
 {
     const data = ring.data;
     const totalAt = (sl: number): number => data.layers.reduce((s, L) => s + Math.max(0, L.values[sl] ?? 0), 0);
-    let maxTotal = 0;
+    //Normalise against the shared per-unit ceiling, not the ring's own max, so same-unit metrics share an axis.
+    const zScale = ceiling > 0 ? (maxHm * ring.heightScale) / ceiling : 0;
+    let maxTotal = 0;   //own max — only to detect a truly empty ring (baseline circle)
     for (let sl = 0; sl < CLOCK_SLOTS; sl++) { maxTotal = Math.max(maxTotal, totalAt(sl)); }
-    const zScale = maxTotal > 0 ? (maxHm * ring.heightScale) / maxTotal : 0;
 
     for (let sl = 0; sl < CLOCK_SLOTS; sl++)
     {
@@ -671,16 +743,15 @@ function projectAreaRing(
 //bar is the value over H..H+1). The hovered bar glows; the others dim. Grow / slide / exit ride on the ring's
 //animation scalars exactly like the area mode.
 function projectHistogramRing(
-    camera: SceneCamera, R: number, outerR: number, ring: ClockRingInput, ri: number, maxHm: number,
+    camera: SceneCamera, R: number, outerR: number, ring: ClockRingInput, ri: number, maxHm: number, ceiling: number,
     minEdge: number, ppm: number, dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
 ): void
 {
     const data   = ring.data;
     const hourly = data.layers.map(L => hourlyOf(L.values));   //[layer][24]
     const totalAt = (h: number): number => hourly.reduce((s, hv) => s + Math.max(0, hv[h]), 0);
-    let maxTotal = 0;
-    for (let h = 0; h < 24; h++) { maxTotal = Math.max(maxTotal, totalAt(h)); }
-    const zScale = maxTotal > 0 ? (maxHm * ring.heightScale) / maxTotal : 0;
+    //Normalise against the shared per-unit ceiling so same-unit metrics' bars are directly comparable.
+    const zScale = ceiling > 0 ? (maxHm * ring.heightScale) / ceiling : 0;
     const halfRadial = ringSpacingM(outerR) * BAR_RADIAL_FRAC;
     const halfTan    = (BAR_TANGENT_FRAC * minEdge) / ppm * ringRadiusFrac(ring.slot);
     const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);

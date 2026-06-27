@@ -15,7 +15,8 @@ export const heliosTimelineStyles = css`
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
         position: absolute;
-        bottom: 6px;
+        /*  Sits above the period-mode band (which is pinned at bottom: 6px). */
+        bottom: calc(var(--tb-band-h, 36px) + 12px);
         /*  Centred via left/right gutters, not translateX(-50%): the transform promoted the bar into a
             compositor layer that rasterised the inner SVG charts at fractional resolution = blur. */
         left: 8px;
@@ -500,57 +501,41 @@ export const heliosTimelineStyles = css`
 
     /*  Header row above the chart: active-target indicator left, period selector right. pointer-events:
         none so the band stays transparent to map rotation; the children re-enable events. */
-    .tb-header
+    /*  Period-mode band: a separate strip below the timeline, its own card frame — same width (8 px gutters),
+        radius and themed border as the timeline card. Pinned to the bottom; the timeline sits above it. Stays
+        visible in clock mode. --tb-band-h keeps the timeline's bottom offset in sync. */
+    .tb-band
     {
+        position: absolute;
+        bottom: 6px;
+        left: 8px;
+        right: 8px;
+        height: var(--tb-band-h, 36px);
+        z-index: 1000;
+        box-sizing: border-box;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 0 2px 4px;
-        pointer-events: none;
-    }
-    /*  Active-target indicator: icon of the current chart target, keyed so it fades in on each
-        re-target. */
-    .tb-chart-indicator
-    {
-        display: inline-flex;
-        align-items: center;
-        /*  Same chip frame as the period selector so the two header controls read as one family. */
-        padding: 2px 6px;
-        border-radius: 8px;
+        justify-content: center;
+        padding: 0 6px;
         background: var(--card-background-color, #ffffff);
-        box-shadow: 0 1px 3px var(--shadow-color);
-        /*  Icon in the text ink, not the accent colour. */
-        color: var(--primary-text-color, #212121);
-        pointer-events: none;
-    }
-    .tb-chart-indicator ha-icon
-    {
-        --mdc-icon-size: 18px;
-        color: inherit;
-        display: block;
-        animation: tb-chart-indicator-fade 250ms ease;
-    }
-    @keyframes tb-chart-indicator-fade
-    {
-        from { opacity: 0; }
-        to   { opacity: 1; }
-    }
-    @media (prefers-reduced-motion: reduce)
-    {
-        .tb-chart-indicator ha-icon { animation: none; }
-    }
-    /*  Rolling-period selector: compact text segmented control with the shared on-primary active
-        recipe so the controls read as one family. */
-    .tb-period-selector
-    {
-        display: inline-flex;
-        gap: 2px;
-        padding: 2px;
-        border-radius: 8px;
-        background: var(--card-background-color, #ffffff);
+        border: var(--ha-border-width-sm, 1px) solid
+            var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
+        border-radius: var(--ha-border-radius-lg, 8px);
         box-shadow: 0 1px 3px var(--shadow-color);
         pointer-events: auto;
+        touch-action: none;
+    }
+    /*  Period selector: a full-width segmented control filling the band (equal segments). */
+    .tb-period-selector
+    {
+        display: flex;
+        flex: 1;
+        gap: 4px;
+        pointer-events: auto;
+    }
+    .tb-band .tb-period-seg
+    {
+        flex: 1;
     }
     .tb-period-seg
     {

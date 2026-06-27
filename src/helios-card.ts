@@ -5,16 +5,14 @@ import { HeliosEngine } from './helios-engine';
 import
 {
     type HeliosConfig,
-    DEFAULT_PERIOD_PAST_DAYS,
-    DEFAULT_PERIOD_FUTURE_DAYS,
-    periodPastDays,
-    periodFutureDays,
     valueDecimals,
     customEntityId,
     cacheId,
     hasLocalLidar
 } from './helios-config';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
+import { refreshClockHourly, type ClockHourly } from './card/clock-hourly';
+import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER } from './card/timeline-modes';
 import { CUSTOM_ENTITY_COLOR } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
@@ -84,7 +82,7 @@ import {
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
-import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
+import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod } from './card/energy-stats';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost } from './card/unifiedStore';
 import
@@ -403,6 +401,10 @@ export class HeliosCard extends LitElement
         values: number[];
     } | null = null;
     _customEntityKey = '';
+    //Decoupled hourly clock profile (hour-of-day averages), built only in clock mode on a sub-hourly store
+    //(month/year). Null otherwise — buildClockData then reads the store. _clockHourlyKey dedupes refetches.
+    @state() _clockHourly: ClockHourly | null = null;
+    _clockHourlyKey = '';
     @state() _batteryPowerHistory: {
         times:  Date[];
         values: number[];
@@ -489,7 +491,6 @@ export class HeliosCard extends LitElement
     @query('.clock-svg') private _clockSvg?: SVGSVGElement;
     @queryAll('.clock-hour-label') private _clockLabels!: NodeListOf<HTMLElement>;
     @queryAll('.clock-compass-label') private _clockCompassLabels!: NodeListOf<HTMLElement>;
-    @query('.clock-tip') private _clockTip?: HTMLElement;
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -512,12 +513,14 @@ export class HeliosCard extends LitElement
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
-    //Active rolling-window span (days of history/forecast around today). Seeded from config period keys
-    //in setConfig, pushed to the engine via setPeriodDays(), read by buildUnifiedStore. The in-card
-    //selector overrides these at runtime via _setPeriod(); single runtime source of truth for the window.
+    //Active timeline mode (now / week / month / year). Drives the window + store cadence + fetch period +
+    //scrub snapping (see card/timeline-modes.ts). Persisted per card; the toggle lives in the bottom band.
+    @state() _timelineMode: TimelineMode = 'now';
+    //Active rolling-window span (days of history/forecast around today), derived from the mode. Pushed to the
+    //engine via setPeriodDays(), read by buildUnifiedStore. Single runtime source of truth for the window.
     //Not @state: changes go through _applyPeriod(), which requestUpdate()s after dropping store + window.
-    _periodPastDays   = DEFAULT_PERIOD_PAST_DAYS;
-    _periodFutureDays = DEFAULT_PERIOD_FUTURE_DAYS;
+    _periodPastDays   = TIMELINE_MODES.now.pastDays;
+    _periodFutureDays = TIMELINE_MODES.now.futureDays;
 
     //Flipped by fetchEnergyPrefs after the first parse lands, so the card kicks refreshHaDailyTotals as
     //soon as the HA Energy defaults snapshot appears rather than waiting up to 30 s for the next tick.
@@ -568,16 +571,8 @@ export class HeliosCard extends LitElement
             throw new Error('Invalid HELIOS configuration');
         }
         this.config = { ...config };
-        //Seed the rolling-window span from the config period keys. A change re-applies in place via
-        //_applyPeriod (the period is a dedicated setter, not in VISUAL_CONFIG_KEYS).
-        const past   = periodPastDays(this.config);
-        const future = periodFutureDays(this.config);
-        if (past !== this._periodPastDays || future !== this._periodFutureDays)
-        {
-            this._periodPastDays   = past;
-            this._periodFutureDays = future;
-            this._applyPeriod();
-        }
+        //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, not
+        //the old config period keys, so setConfig no longer seeds it.
         this._warnIfLegacyEntityKeys(config);
     }
 
@@ -604,18 +599,43 @@ export class HeliosCard extends LitElement
         this.requestUpdate();
     }
 
-    //In-card period selector -> set the rolling window and re-apply. No-op when the span is already active
-    //so tapping the current preset doesn't churn a store rebuild.
-    private _setPeriod(pastDays: number, futureDays: number): void
+    //Timeline mode selector (Now / 1 week / 1 month / 1 year). Derives the window from the mode spec, applies
+    //it (drops + rebuilds the store at the mode's cadence), persists, and — when in clock mode, where the band
+    //stays visible — replays the dial grow so the change animates.
+    private _setTimelineMode(mode: TimelineMode): void
     {
-        if (this._periodPastDays === pastDays && this._periodFutureDays === futureDays)
+        if (this._timelineMode === mode) { return; }
+        this._timelineMode = mode;
+        const spec = TIMELINE_MODES[mode];
+        this._periodPastDays   = spec.pastDays;
+        this._periodFutureDays = spec.futureDays;
+        //Entering a no-weather mode: drop weather metrics from the clock filters + retarget the chart off them.
+        if (!spec.weather)
         {
-            return;
+            this._clockTargets = this._clockTargets.filter(t => t !== 'irradiance' && t !== 'cloud');
+            if (this._chartTarget === 'irradiance' || this._chartTarget === 'cloud')
+            {
+                this._chartTarget = this._clockTargets[0] ?? 'production';
+            }
         }
-        this._periodPastDays   = pastDays;
-        this._periodFutureDays = futureDays;
         this._applyPeriod();
+        this._persistUiState();
+        if (this._viewMode === 'clock')
+        {
+            const now = Date.now();
+            this._clockGrowStart.clear();
+            this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
+            this._clockAnimate();
+        }
     }
+
+    //Recorder period for the energy change-series, per the active mode (5-min for Now, hourly for a week,
+    //daily for month/year) — so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
+    get _storeFetchPeriod(): StatPeriod { return TIMELINE_MODES[this._timelineMode].fetchPeriod; }
+
+    //Whether weather (irradiance + cloud) is offered in the active mode. Off for month/year (Open-Meteo only
+    //reaches ~16 days), where the focus is energy. Hides those chips + clock-rail buttons + chart targets.
+    get _weatherAvailable(): boolean { return TIMELINE_MODES[this._timelineMode].weather; }
 
     //Chip -> bottom-chart re-targeting. Points the chart at the clicked metric; no-op when already there.
     private _setChartTarget = (target: ChartTarget): void =>
@@ -669,43 +689,17 @@ export class HeliosCard extends LitElement
         this._engine.setHomeAppearance(colors[0], bands, false);
     }
 
-    //Active-target indicator left of the timeline header: the current chart's icon, tinted with the active
-    //accent. Keyed on the target so the glyph fades in on each re-target.
-    private _renderChartIndicator(): TemplateResult
-    {
-        const icons: Record<ChartTarget, string> = {
-            production:    'mdi:solar-power',
-            consumption:   'mdi:home-lightning-bolt',
-            grid:          'mdi:transmission-tower',
-            battery:       'mdi:lightning-bolt',
-            'battery-soc': 'mdi:battery',
-            irradiance:    'mdi:white-balance-sunny',
-            cloud:         'mdi:cloud',
-            custom:        resolveCustomEntityIcon(this.hass, this.config),
-        };
-        const icon = icons[this._chartTarget] ?? 'mdi:chart-line';
-        return html`
-            <div class="tb-chart-indicator">
-                ${keyed(this._chartTarget, html`<ha-icon icon="${icon}"></ha-icon>`)}
-            </div>
-        `;
-    }
-
-    //Compact rolling-period selector on the timeline: three presets (today, the configured default, last 7
-    //days), active one highlighted by matching the live span. Pointer-down is swallowed so tapping a preset
-    //never starts a scrub on the parent .time-bar.
+    //Timeline mode selector: Now / 1 week / 1 month / 1 year. The active mode is highlighted. Pointer-down is
+    //swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
-        const t       = pickTranslations(this.hass?.language);
-        const past    = this._periodPastDays;
-        const future  = this._periodFutureDays;
-        const cfgPast = periodPastDays(this.config);
-        const cfgFut  = periodFutureDays(this.config);
-        const presets: { label: string; past: number; future: number }[] = [
-            { label: t.period?.today         ?? 'Today',   past: 0,       future: 0      },
-            { label: t.period?.configDefault ?? 'Default', past: cfgPast, future: cfgFut },
-            { label: t.period?.last7Days     ?? '7 d',     past: 6,       future: 1      },
-        ];
+        const t = pickTranslations(this.hass?.language);
+        const labels: Record<TimelineMode, string> = {
+            now:   t.period?.now   ?? 'Now',
+            week:  t.period?.week  ?? '1 week',
+            month: t.period?.month ?? '1 month',
+            year:  t.period?.year  ?? '1 year',
+        };
         return html`
             <div
                 class="tb-period-selector"
@@ -713,12 +707,12 @@ export class HeliosCard extends LitElement
                 aria-label="${t.period?.rangeLabel ?? 'Time range'}"
                 @pointerdown="${(e: Event) => e.stopPropagation()}"
             >
-                ${presets.map(p => html`
+                ${TIMELINE_MODE_ORDER.map(m => html`
                     <button
                         type="button"
-                        class="tb-period-seg ${past === p.past && future === p.future ? 'is-on' : ''}"
-                        @click="${() => this._setPeriod(p.past, p.future)}"
-                    >${p.label}</button>
+                        class="tb-period-seg ${this._timelineMode === m ? 'is-on' : ''}"
+                        @click="${() => this._setTimelineMode(m)}"
+                    >${labels[m]}</button>
                 `)}
             </div>
         `;
@@ -1076,7 +1070,8 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_unifiedStore')
                 || _changedProperties.has('_chartSeries')
                 || _changedProperties.has('_batterySocHistory')
-                || _changedProperties.has('_customEntityHistory');
+                || _changedProperties.has('_customEntityHistory')
+                || _changedProperties.has('_clockHourly');
             if (inputsChanged)
             {
                 this._rebuildClockData();
@@ -1193,6 +1188,9 @@ export class HeliosCard extends LitElement
         //Custom entity: hourly history for the timeline curve + clock ring (fire-and-forget; keyed so an
         //unchanged window is a no-op).
         void refreshCustomEntity(this);
+        //Decoupled hourly clock profile — only does work in clock mode on a long (month/year) window; clears
+        //itself otherwise. Keyed so an unchanged window is a no-op.
+        void refreshClockHourly(this);
         //Solar forecast: read natively from HA's Energy dashboard (energy/solar_forecast). Non-fatal; with
         //no forecast source configured the call returns empty and the curve doesn't render. On the refresh
         //chain (which energy-prefs changes re-trip), so a freshly configured source lands next pass.
@@ -1734,7 +1732,9 @@ export class HeliosCard extends LitElement
         const sunWm2          = sunScene?.sun.irradiance ?? 0;
         const sunWm2Round     = Math.round(sunWm2);
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
-        const showSunLabel    = showSun && sunScene!.sun.altitude > 0;
+        //The W/m² readout + cloud chip are weather; hidden in modes without it (month/year). The sun
+        //disc/arc (pure geometry) stays.
+        const showSunLabel    = showSun && sunScene!.sun.altitude > 0 && this._weatherAvailable;
         //Solar-ray dash-flow duration, same scale as the PV leader so both streams pulse coherently;
         //saturates at 1000 W/m². The ray spans the whole card, so its saturated pace is a touch slower than
         //the PV leader (0.8 s) to stay readable at peak irradiance.
@@ -1819,20 +1819,6 @@ export class HeliosCard extends LitElement
                             ? this._renderClockTooltip(this._clockHoverSlot)
                             : nothing}
                     </div>
-                    <!--  Sub-mode toggle (top-centre): a sliding knob in a pill, left = histogram, right = area
-                          curve. Click flips the mode (persisted per card).  -->
-                    <div
-                        class="clock-submode mode-${this._clockSubMode}"
-                        role="button"
-                        tabindex="0"
-                        aria-label="${this._clockSubMode === 'area' ? 'Area curve' : 'Histogram'}"
-                        @click=${() => this._toggleClockSubMode()}
-                        @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleClockSubMode(); } }}
-                    >
-                        <span class="cs-knob"></span>
-                        <ha-icon class="cs-opt cs-histogram" icon="mdi:chart-bar"></ha-icon>
-                        <ha-icon class="cs-opt cs-area" icon="mdi:chart-areaspline"></ha-icon>
-                    </div>
                 ` : nothing}
 
                 ${hasHomeCoords && this._timeRange && this._viewMode === 'scene' ? html`
@@ -1840,25 +1826,6 @@ export class HeliosCard extends LitElement
                         class="time-bar"
                         @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
                     >
-                        <!--  Header row just above the chart: the active-target indicator on the left
-                              (what the timeline currently shows) and the rolling-period selector on the
-                              right, at the same height. The selector swallows its own pointer-down so
-                              tapping a preset never starts a scrub on the parent .time-bar.  -->
-                        <div class="tb-header">
-                            ${this._renderChartIndicator()}
-                            ${this._renderPeriodSelector()}
-                        </div>
-
-                        <!--  Optional PV production graph, only
-                              rendered when the HA Energy dashboard
-                              exposes a solar source. Same chip
-                              styling as the main chart card; sits
-                              just above it with a 4 px gap so the
-                              two read as a stacked instrument. The
-                              graph's height is the same as one half
-                              of the main chart so the irradiance
-                              area and the PV area visually balance
-                              each other.  -->
                         ${renderTimelineHoverTooltip(this)}
 
                         <!--  Single re-targetable bottom chart: the active _chartTarget picks the series
@@ -1882,6 +1849,15 @@ export class HeliosCard extends LitElement
                             </div>
                             ${renderTimelineDayLabels(this)}
                         </div>
+                    </div>
+                ` : nothing}
+
+                <!--  Period-mode band: a separate strip BELOW the timeline (own card styling — same width,
+                      radius and themed border), holding the Now / 1 week / 1 month / 1 year selector. Stays
+                      visible in clock mode too so the window can be changed from there.  -->
+                ${hasHomeCoords && (this._viewMode === 'scene' || this._viewMode === 'clock') ? html`
+                    <div class="tb-band">
+                        ${this._renderPeriodSelector()}
                     </div>
                 ` : nothing}
 
@@ -1910,15 +1886,18 @@ export class HeliosCard extends LitElement
                             >
                                 <ha-icon icon="mdi:weather-sunny"></ha-icon>
                             </button>
-                            <button
-                                type="button"
-                                class="overlay-btn ${clockOn ? 'is-on' : ''}"
-                                aria-pressed="${clockOn ? 'true' : 'false'}"
-                                title="Clock"
-                                @click="${() => this._setViewMode('clock')}"
-                            >
-                                <ha-icon icon="mdi:clock-outline"></ha-icon>
-                            </button>
+                            <div class="rail-row">
+                                <button
+                                    type="button"
+                                    class="overlay-btn ${clockOn ? 'is-on' : ''}"
+                                    aria-pressed="${clockOn ? 'true' : 'false'}"
+                                    title="Clock"
+                                    @click="${() => this._setViewMode('clock')}"
+                                >
+                                    <ha-icon icon="mdi:clock-outline"></ha-icon>
+                                </button>
+                                ${clockOn ? this._renderClockSubModeToggle() : nothing}
+                            </div>
                             ${lidarAvailable ? html`
                                 <button
                                     type="button"
@@ -2604,6 +2583,9 @@ export class HeliosCard extends LitElement
             this._updateClockHomeAppearance();
             this._viewMode = mode;
             this._persistUiState();
+            //Long window: kick the decoupled hourly fetch now (the gated refresh chain won't, since nothing
+            //it watches changed). No-op / clears itself when not needed.
+            void refreshClockHourly(this);
             this._clockAnimate();
             return;
         }
@@ -2617,6 +2599,8 @@ export class HeliosCard extends LitElement
         }
         this._viewMode = mode;
         this._persistUiState();
+        //Now that we've left clock, let the hourly profile clear itself (it keys off _viewMode).
+        void refreshClockHourly(this);
     }
 
     //Flip the clock sub-mode (area curve <-> histogram). Same data + rings; only the geometry changes, so a
@@ -2835,6 +2819,12 @@ export class HeliosCard extends LitElement
                 {
                     this._clockSubMode = s.clockSubMode;
                 }
+                if (typeof s.timelineMode === 'string' && s.timelineMode in TIMELINE_MODES)
+                {
+                    this._timelineMode     = s.timelineMode as TimelineMode;
+                    this._periodPastDays   = TIMELINE_MODES[this._timelineMode].pastDays;
+                    this._periodFutureDays = TIMELINE_MODES[this._timelineMode].futureDays;
+                }
                 //Clock filter set: keep order, drop dupes/unknowns. The timeline follows the first.
                 if (Array.isArray(s.clockTargets))
                 {
@@ -2876,6 +2866,7 @@ export class HeliosCard extends LitElement
                 chartTarget:  this._chartTarget,
                 clockTargets: this._clockTargets,
                 clockSubMode: this._clockSubMode,
+                timelineMode: this._timelineMode,
             }));
         }
         catch (_)
@@ -3005,30 +2996,6 @@ export class HeliosCard extends LitElement
             node.style.top       = `${c.y.toFixed(1)}px`;
             node.style.transform = c.transform;
         });
-        this._clampClockTip();
-    }
-
-    //Keep the hover tooltip inside the card: prefer to the right of the cursor, flip left on overflow, then
-    //clamp both axes with a small margin.
-    private _clampClockTip(): void
-    {
-        const tip  = this._clockTip;
-        const card = this._haCard;
-        if (!tip || !card)
-        {
-            return;
-        }
-        const margin = 8;
-        const ww = card.clientWidth;
-        const wh = card.clientHeight;
-        const tw = tip.offsetWidth;
-        const th = tip.offsetHeight;
-        let left = this._clockHoverX + 14;
-        if (left + tw > ww - margin) { left = this._clockHoverX - 14 - tw; }
-        left = Math.max(margin, Math.min(left, ww - tw - margin));
-        const top = Math.max(margin, Math.min(this._clockHoverY - th / 2, wh - th - margin));
-        tip.style.left = `${left}px`;
-        tip.style.top  = `${top}px`;
     }
 
     //Mouse hover hit-test against the cylinder axes; updates the glow highlight + tooltip. Cleared during a
@@ -3138,6 +3105,26 @@ export class HeliosCard extends LitElement
         return formatHaTime(this.hass, new Date(2000, 0, 1, h));
     }
 
+    //Sub-mode toggle, sitting just right of the Clock rail button: a sliding knob in a pill (left = histogram,
+    //right = area curve), the pill the same height as the rail buttons. Click / Enter / Space flips the mode.
+    private _renderClockSubModeToggle(): TemplateResult
+    {
+        return html`
+            <div
+                class="clock-submode mode-${this._clockSubMode}"
+                role="button"
+                tabindex="0"
+                aria-label="${this._clockSubMode === 'area' ? 'Area curve' : 'Histogram'}"
+                @click=${() => this._toggleClockSubMode()}
+                @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleClockSubMode(); } }}
+            >
+                <span class="cs-knob"></span>
+                <ha-icon class="cs-opt cs-histogram" icon="mdi:chart-bar"></ha-icon>
+                <ha-icon class="cs-opt cs-area" icon="mdi:chart-areaspline"></ha-icon>
+            </div>
+        `;
+    }
+
     //Hover tooltip for an hour slice: a time-band header, then one row per active filter (its coloured icon
     //+ its total value at that hour). Position is set inline then clamped in _paintClock.
     private _renderClockTooltip(slot: number): TemplateResult
@@ -3157,10 +3144,7 @@ export class HeliosCard extends LitElement
             ? `${String(hour).padStart(2, '0')}:00 – ${String((hour + 1) % 24).padStart(2, '0')}:00`
             : `${fmtSlot(slot)} – ${fmtSlot((slot + 1) % totalSlots)}`;
         return html`
-            <div
-                class="clock-tip"
-                style="left:${this._clockHoverX}px;top:${this._clockHoverY}px"
-            >
+            <div class="clock-tip">
                 <div class="clock-tip-head">${head}</div>
                 ${this._clockData.map(data => {
                     const meta = clockTargetMeta(this, data.target);

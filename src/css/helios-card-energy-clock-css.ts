@@ -64,12 +64,16 @@ export const heliosCardEnergyClockCss = css`
     }
 
     /*  Hover tooltip; left/top set inline to the cursor, then clamped inside the card. */
+    /*  Anchored bottom-left, just above the period band — NOT under the cursor — so it never sits over the
+        dial or the scrub it describes. */
     .clock-tip
     {
         position: absolute;
+        left: 8px;
+        bottom: calc(var(--tb-band-h, 36px) + 12px);
         z-index: 14;
         min-width: 120px;
-        max-width: 80%;
+        max-width: calc(100% - 16px);
         box-sizing: border-box;
         background: var(--card-background-color, #fff);
         color: var(--primary-text-color, #212121);
@@ -147,19 +151,25 @@ export const heliosCardEnergyClockCss = css`
         color: var(--text-on-primary-color, #ffffff);
     }
 
-    /*  Sub-mode toggle (top-centre): a pill with a sliding circular knob. Left = histogram, right = area
-        curve; the knob slides under the active side and that icon brightens onto it. */
+    /*  Rail row that pairs the Clock mode button with the sub-mode toggle, side by side. */
+    .overlay-top-left .rail-row
+    {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+    }
+    /*  Sub-mode toggle: a pill with a sliding circular knob, the SAME height as the 40 px rail buttons it
+        sits beside. Left = histogram, right = area curve; the knob slides under the active side and that
+        icon brightens onto it. */
     .clock-submode
     {
-        position: absolute;
-        top: 12px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 60;
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 4px;
+        height: 40px;
+        box-sizing: border-box;
+        padding: 6px;
         border-radius: 999px;
         background: var(--ha-card-background, var(--card-background-color, #fff));
         border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
@@ -171,8 +181,8 @@ export const heliosCardEnergyClockCss = css`
     .clock-submode .cs-knob
     {
         position: absolute;
-        top: 4px;
-        left: 4px;
+        top: 6px;
+        left: 6px;
         width: 28px;
         height: 28px;
         border-radius: 50%;

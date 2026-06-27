@@ -14,7 +14,7 @@
 import { pvNormalizeToWatts } from './pv';
 import { formatEntityValue } from './format';
 import type { EnergyDefaults } from './energy-prefs';
-import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 
 
 export interface GridHost
@@ -25,6 +25,8 @@ export interface GridHost
     readonly _energyDefaults?: EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
     readonly _periodPastDays: number;
+    //Recorder period for the change-series, per the active timeline mode (5-min / hour / day).
+    readonly _storeFetchPeriod: StatPeriod;
 
     requestUpdate(): void;
 
@@ -108,7 +110,7 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 
     if (slot === 'import') { host._gridImportChangeFetchKey = key; host._gridImportChangeFetching = true; }
     else                   { host._gridExportChangeFetchKey = key; host._gridExportChangeFetching = true; }
-    void fetchChangeSeries(host.hass, sorted, startMs, endMs, '5minute')
+    void fetchChangeSeries(host.hass, sorted, startMs, endMs, host._storeFetchPeriod)
         .then((series) =>
         {
             if (series !== null)

@@ -1,0 +1,150 @@
+//Decoupled hourly source for the energy-clock on long windows. The timeline store goes DAILY in month/year
+//(one bucket per day), which carries no hour-of-day shape — so the clock can't bin its "average day" from it.
+//This builds a dedicated HOURLY profile (24 hour-of-day averages per metric) over the window, fetched only
+//when it's actually needed (clock mode + a sub-hourly store). Now/week keep using the store (already >= hourly),
+//so there's no redundant fetch in the common case.
+
+import { fetchChangeSeries, type ChangeBucket } from './energy-stats';
+import { callWSWithTimeout } from './ws-timeout';
+import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
+import { customEntityId, type HeliosConfig } from '../helios-config';
+import type { EnergyDefaults } from './energy-prefs';
+import { HOUR_MS } from '../constants';
+
+//24 hour-of-day averages per metric (watts, or % for SoC). consumption is derived from the others.
+export interface ClockHourly
+{
+    pv:               number[];
+    gridImport:       number[];
+    gridExport:       number[];
+    batteryCharge:    number[];
+    batteryDischarge: number[];
+    consumption:      number[];
+    soc:              number[];
+    custom:           number[];
+}
+
+export interface ClockHourlyHost
+{
+    hass:            any;
+    config:          HeliosConfig | undefined;
+    _timeRange:      { start: Date; end: Date } | null;
+    _energyDefaults: EnergyDefaults;
+    _timelineMode:   TimelineMode;
+    _viewMode?:      'scene' | 'clock' | 'lidar';
+    _clockHourly:    ClockHourly | null;
+    _clockHourlyKey: string;
+    requestUpdate(): void;
+}
+
+//True when the clock needs its own hourly source: clock mode AND a store coarser than hourly (month/year).
+export function clockNeedsHourly(host: ClockHourlyHost): boolean
+{
+    return host._viewMode === 'clock' && modeBucketsPerHour(host._timelineMode, host.config) < 1;
+}
+
+//Bin a recorder change-series into 24 hour-of-day average watts (each bucket's kWh -> avg watts via its own
+//duration; magnitude, since export/discharge meters are non-negative on their own meter).
+function binChangeByHour(buckets: ChangeBucket[] | null): number[]
+{
+    const sum = new Array<number>(24).fill(0);
+    const cnt = new Array<number>(24).fill(0);
+    if (buckets)
+    {
+        for (const b of buckets)
+        {
+            const hours = (b.endMs - b.startMs) / HOUR_MS;
+            if (hours <= 0 || !isFinite(b.kwh)) { continue; }
+            const w = (b.kwh / hours) * 1000;
+            const h = new Date(b.startMs).getHours();
+            sum[h] += Math.abs(w);
+            cnt[h] += 1;
+        }
+    }
+    return sum.map((s, h) => (cnt[h] ? s / cnt[h] : 0));
+}
+
+//Fetch hourly statistics and bin one value by hour-of-day. `power` => energy/power meters resolved to watts
+//(mean preferred, else change/duration); otherwise the raw mean (SoC %).
+async function statByHour(hass: any, ids: string[], startMs: number, endMs: number, power: boolean): Promise<number[]>
+{
+    const sum = new Array<number>(24).fill(0);
+    const cnt = new Array<number>(24).fill(0);
+    if (!ids.length) { return sum; }
+    try
+    {
+        const res: any = await callWSWithTimeout<any>(hass, {
+            type:          'recorder/statistics_during_period',
+            start_time:    new Date(startMs).toISOString(),
+            end_time:      new Date(endMs).toISOString(),
+            statistic_ids: [...ids].sort(),
+            period:        'hour',
+            types:         power ? ['mean', 'change'] : ['mean'],
+            ...(power ? { units: { energy: 'kWh', power: 'W' } } : {}),
+        });
+        for (const id of ids)
+        {
+            const buckets: any[] = Array.isArray(res?.[id]) ? res[id] : [];
+            for (const b of buckets)
+            {
+                const tMs = typeof b?.start === 'number' ? b.start : Date.parse(b?.start);
+                if (!isFinite(tMs)) { continue; }
+                let v: number | null = null;
+                if (typeof b?.mean === 'number' && isFinite(b.mean)) { v = b.mean; }
+                else if (power && typeof b?.change === 'number' && isFinite(b.change))
+                {
+                    const endB  = typeof b?.end === 'number' ? b.end : Date.parse(b?.end);
+                    const hours = (endB - tMs) / HOUR_MS;
+                    v = hours > 0 ? (b.change / hours) * 1000 : null;
+                }
+                if (v === null || !isFinite(v)) { continue; }
+                const h = new Date(tMs).getHours();
+                sum[h] += power ? Math.abs(v) : v;
+                cnt[h] += 1;
+            }
+        }
+    }
+    catch (_) { /* leave zeros */ }
+    return sum.map((s, h) => (cnt[h] ? s / cnt[h] : 0));
+}
+
+//Build (or clear) the hourly clock profile for the active window. Keyed so an unchanged window never refetches.
+export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
+{
+    if (!clockNeedsHourly(host) || !host.hass?.callWS || !host._timeRange)
+    {
+        if (host._clockHourly !== null) { host._clockHourly = null; host.requestUpdate(); }
+        host._clockHourlyKey = '';
+        return;
+    }
+    const d   = host._energyDefaults;
+    const cid = customEntityId(host.config);
+    const startMs = host._timeRange.start.getTime();
+    const endMs   = Math.min(Date.now(), host._timeRange.end.getTime());
+    if (startMs >= endMs) { return; }
+
+    const key = `${startMs}|${endMs}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}|${d.batteryStatSocs}|${cid}`;
+    if (key === host._clockHourlyKey) { return; }
+    host._clockHourlyKey = key;
+
+    const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
+        ids.length ? fetchChangeSeries(host.hass, [...ids].sort(), startMs, endMs, 'hour') : Promise.resolve(null);
+
+    const [solar, gImp, gExp, bChg, bDis, soc, custom] = await Promise.all([
+        chg(d.solarStatEnergyFroms), chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
+        chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
+        statByHour(host.hass, d.batteryStatSocs, startMs, endMs, false),
+        cid ? statByHour(host.hass, [cid], startMs, endMs, true) : Promise.resolve(new Array<number>(24).fill(0)),
+    ]);
+
+    const pv               = binChangeByHour(solar);
+    const gridImport       = binChangeByHour(gImp);
+    const gridExport       = binChangeByHour(gExp);
+    const batteryCharge    = binChangeByHour(bChg);
+    const batteryDischarge = binChangeByHour(bDis);
+    //Consumption from the same identity the timeline uses: production + import − export − net battery, clamped.
+    const consumption = pv.map((p, h) => Math.max(0, p + gridImport[h] - gridExport[h] - (batteryCharge[h] - batteryDischarge[h])));
+
+    host._clockHourly = { pv, gridImport, gridExport, batteryCharge, batteryDischarge, consumption, soc, custom };
+    host.requestUpdate();
+}

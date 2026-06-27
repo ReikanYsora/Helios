@@ -20,11 +20,11 @@
 //the two series are never mixed inside a single value.
 
 import type { HeliosConfig } from '../helios-config';
-import { displayUpdateFrequencyPerHour } from '../helios-config';
 import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
 import { forecastWattsAt, type SolarForecastPoint } from './energy-forecast';
+import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import { HOUR_MS, DAY_MS } from '../constants';
 
 //Re-export so graph consumers (e.g. SVG path builders walking bucketsPerHour) can query the cadence directly.
@@ -77,6 +77,8 @@ export interface UnifiedStoreHost
     //runtime selector); buildUnifiedStore builds exactly this many days.
     readonly _periodPastDays:         number;
     readonly _periodFutureDays:       number;
+    //Active timeline mode — drives the store cadence (now = fine, week = hourly, month/year = daily).
+    readonly _timelineMode:           TimelineMode;
     readonly hass:                    { language?: string; states?: Record<string, { state: string }>; config?: { latitude?: number; longitude?: number } } | undefined;
     readonly _chartSeries:            ChartSeries | null;
     readonly _pvHistory:              PvHistory | null;
@@ -339,7 +341,7 @@ function computeDataVersion(host: UnifiedStoreHost): string
     //Without it, opening the dashboard after midnight with the same arrays leaves the store anchored on the previous
     //day's J-2 origin and every per-day slice is shifted by one day until a fetch trips a length change.
     const todayKey = new Date().toDateString();
-    const cadence       = displayUpdateFrequencyPerHour(host.config);
+    const cadence       = modeBucketsPerHour(host._timelineMode, host.config);
     const seriesLen     = host._chartSeries?.times.length ?? 0;
     const pvHistLen     = host._pvHistory?.times.length   ?? 0;
     const pvCalibLen    = host._pvCalibStats?.times.length ?? 0;
@@ -357,7 +359,7 @@ function computeDataVersion(host: UnifiedStoreHost): string
 //the host snapshot: same input -> same output, no side effects.
 export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
 {
-    const bucketsPerHour = displayUpdateFrequencyPerHour(host.config);
+    const bucketsPerHour = modeBucketsPerHour(host._timelineMode, host.config);
     const bucketsPerDay  = 24 * bucketsPerHour;
     //Rolling-window span from the card's active period (config seed or runtime override): daysPast + today + daysFuture.
     const daysPast   = host._periodPastDays;
