@@ -44,7 +44,9 @@ export function clockNeedsHourly(host: ClockHourlyHost): boolean
 }
 
 //Bin a recorder change-series into 24 hour-of-day average watts (each bucket's kWh -> avg watts via its own
-//duration; magnitude, since export/discharge meters are non-negative on their own meter).
+//duration). These are single-direction meters (stat_energy_from/to), so a NEGATIVE change is a meter-reset
+//artefact, not real flow — floored at 0 exactly like the store path (changeSeriesToWatts + caller). Taking the
+//magnitude instead would turn a reset into a giant positive spike (the 190 kW at 23 h / 13 h bug).
 function binChangeByHour(buckets: ChangeBucket[] | null): number[]
 {
     const sum = new Array<number>(24).fill(0);
@@ -55,9 +57,9 @@ function binChangeByHour(buckets: ChangeBucket[] | null): number[]
         {
             const hours = (b.endMs - b.startMs) / HOUR_MS;
             if (hours <= 0 || !isFinite(b.kwh)) { continue; }
-            const w = (b.kwh / hours) * 1000;
+            const w = Math.max(0, (b.kwh / hours) * 1000);
             const h = new Date(b.startMs).getHours();
-            sum[h] += Math.abs(w);
+            sum[h] += w;
             cnt[h] += 1;
         }
     }

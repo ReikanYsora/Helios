@@ -11,7 +11,7 @@ import
     hasLocalLidar
 } from './helios-config';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
-import { refreshClockHourly, type ClockHourly } from './card/clock-hourly';
+import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER } from './card/timeline-modes';
 import { CUSTOM_ENTITY_COLOR } from './constants';
 import { pickTranslations } from './i18n';
@@ -482,6 +482,9 @@ export class HeliosCard extends LitElement
     private _clockSlotFrom = new Map<ChartTarget, number>();
     private _clockSlideStart = 0;
     private _clockAnimSeq = 0;
+    //Period-change reload: every ring shrinks to 0 and holds there while the new window's data is fetched,
+    //then grows back up once it lands — so the dial never pops abruptly from old data to new. 0 = idle.
+    private _clockReloadStart = 0;
     //Slice-focus dim: _clockDim ramps 0..1 (others fade toward 0.5) while _clockDimSlot is focused; it
     //persists through the fade-out so the dimmed bars + the focused spoke ramp back smoothly.
     private _clockDim = 0;
@@ -622,9 +625,10 @@ export class HeliosCard extends LitElement
         this._persistUiState();
         if (this._viewMode === 'clock')
         {
-            const now = Date.now();
+            //Shrink the current rings out now; they grow back once the new window's data lands (updated()).
+            this._clockReloadStart = Date.now();
             this._clockGrowStart.clear();
-            this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
+            void refreshClockHourly(this);
             this._clockAnimate();
         }
     }
@@ -1075,6 +1079,20 @@ export class HeliosCard extends LitElement
             if (inputsChanged)
             {
                 this._rebuildClockData();
+            }
+            //Reload grow: once the new window's data source is ready (the store for now/week, the hourly
+            //profile for month/year), grow the shrunk rings back up — scheduled for the end of the shrink so
+            //it always reads down-then-up.
+            if (this._clockReloadStart)
+            {
+                const ready = clockNeedsHourly(this) ? this._clockHourly !== null : this._unifiedStore !== null;
+                if (ready)
+                {
+                    const growStart = Math.max(Date.now(), this._clockReloadStart + CLOCK_GROW_MS);
+                    this._clockTargets.forEach(t => this._clockGrowStart.set(t, growStart));
+                    this._clockReloadStart = 0;
+                    this._clockAnimate();
+                }
             }
             //Home prism (no medallion any more): render it alone + colour it as equal slices of the active
             //filters. Re-run when the dial appears, the filter set changes, or data first lands (engine spawn).
@@ -2167,8 +2185,9 @@ export class HeliosCard extends LitElement
                       stays crisp under camera rotation.               -->
                 <!--  Custom-entity chip (top-left, above grid). Red leader to the home; bead flows home ->
                       chip on a positive value, chip -> home on a negative one. Shown only when the entity is
-                      configured and reads a finite value.  -->
-                ${hasHomeCoords && layout !== null && customLive !== null ? html`
+                      configured AND has a value at the active instant (customW !== null) — so scrubbing into a
+                      gap (no history) drops the chip + its leader entirely instead of leaving an empty pill.  -->
+                ${hasHomeCoords && layout !== null && customLive !== null && customW !== null ? html`
                     <svg class="custom-leader-svg">
                         <path class="custom-leader-line" style="stroke:${customLeaderColor}" d="${customLeaderPath}" />
                         ${customBeadDur !== null ? (customPositive ? svg`
@@ -2896,7 +2915,10 @@ export class HeliosCard extends LitElement
     {
         const now = Date.now();
         if (this._clockExiting.length > 0) { return true; }
+        //Stay active through the whole reload (shrink + hold) until the data lands and the grow is scheduled.
+        if (this._clockReloadStart) { return true; }
         if (this._clockSlideStart && now - this._clockSlideStart < CLOCK_GROW_MS) { return true; }
+        //A future grow start (reload hold) keeps it active until that grow finishes.
         for (const t of this._clockGrowStart.values()) { if (now - t < CLOCK_GROW_MS) { return true; } }
         return false;
     }
@@ -2915,12 +2937,20 @@ export class HeliosCard extends LitElement
                 this._clockSlideStart = 0;
                 this._clockSlotFrom.clear();
             }
+            //Reload safety: if the new data never lands (fetch failure / no data), grow back after 12 s so the
+            //dial is never stuck shrunk.
+            if (this._clockReloadStart && now - this._clockReloadStart > 12_000)
+            {
+                this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
+                this._clockReloadStart = 0;
+            }
         };
         if (this.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
         {
             this._clockExiting = [];
             this._clockGrowStart.clear();
             this._clockSlideStart = 0;
+            this._clockReloadStart = 0;
             this._clockSlotFrom.clear();
             this._paintClock();
             return;
@@ -2960,10 +2990,25 @@ export class HeliosCard extends LitElement
         //rings shrink + fade out at their captured slot. An empty list still paints the clock face (guide +
         //spokes + labels). projectClockFrame is pure geometry from here.
         const now = Date.now();
+        const rs = this._clockReloadStart;
         const rings: ClockRingInput[] = this._clockData.map((data, i) =>
         {
+            //heightScale phases: a grow start (gs) drives the rise (0 while it's still scheduled in the future,
+            //during the reload hold); otherwise a reload start shrinks 1 -> 0 and holds; otherwise full height.
             const gs = this._clockGrowStart.get(data.target);
-            const heightScale = gs ? 1 - (1 - Math.min(1, (now - gs) / CLOCK_GROW_MS)) ** 3 : 1;
+            let heightScale: number;
+            if (gs !== undefined)
+            {
+                heightScale = now >= gs ? 1 - (1 - Math.min(1, (now - gs) / CLOCK_GROW_MS)) ** 3 : 0;
+            }
+            else if (rs)
+            {
+                heightScale = (1 - Math.min(1, (now - rs) / CLOCK_GROW_MS)) ** 3;
+            }
+            else
+            {
+                heightScale = 1;
+            }
             return { data, slot: this._clockSlotNow(i, data.target), heightScale, opacity: 1 };
         });
         for (const e of this._clockExiting)

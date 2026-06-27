@@ -528,9 +528,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
-    const timeLabel  = new Intl.DateTimeFormat(haLanguage, {
-        hour: '2-digit', minute: '2-digit',
-    }).format(atDate);
+    //Header granularity follows the window: an intraday span shows the time, a multi-day span adds the weekday,
+    //and a month/year span shows the calendar day (the scrub steps day by day), so you always know WHEN you are.
+    const spanDays  = rangeMs / 86_400_000;
+    const timeOpts: Intl.DateTimeFormatOptions =
+          spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }
+        : spanDays <= 14.05 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }
+        :                     { weekday: 'short', day: 'numeric', month: 'short' };
+    const timeLabel  = new Intl.DateTimeFormat(haLanguage, timeOpts).format(atDate);
 
     //Day total split observed/forecast by cursor-vs-"now" (not the day boundary), so later-today hours show the
     //full-day forecast and earlier hours the production so far. Today's past prefers recorder-backed

@@ -164,6 +164,7 @@ export const heliosCardEnergyClockCss = css`
         icon brightens onto it. */
     .clock-submode
     {
+        position: relative;
         display: inline-flex;
         align-items: center;
         gap: 4px;

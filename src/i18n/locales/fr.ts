@@ -15,7 +15,7 @@ export const fr: Translations = {
     period:
     {
         rangeLabel: 'Période',
-        now:   'Now',
+        now:   'Maintenant',
         week:  '1 semaine',
         month: '1 mois',
         year:  '1 an',
