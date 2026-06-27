@@ -647,6 +647,26 @@ export class HeliosCard extends LitElement
         this._engine.setHomeAppearance(color, bands, play);
     }
 
+    //Clock mode home colour: equal-size slices, one per active filter (3 filters -> thirds), each in its
+    //metric colour — a pure legend of the selected metrics, no averaging. One filter = a solid block.
+    private _updateClockHomeAppearance(): void
+    {
+        if (!this._engine)
+        {
+            return;
+        }
+        const colors = this._clockTargets.map(t => clockTargetMeta(this, t).color);
+        if (colors.length === 0)
+        {
+            this._engine.setHomeAppearance(ENERGY_COLOR.consumption(this), [], false);
+            return;
+        }
+        const bands = colors.length >= 2
+            ? colors.map(c => ({ frac: 1 / colors.length, color: c }))
+            : [];
+        this._engine.setHomeAppearance(colors[0], bands, false);
+    }
+
     //Active-target indicator left of the timeline header: the current chart's icon, tinted with the active
     //accent. Keyed on the target so the glyph fades in on each re-target.
     private _renderChartIndicator(): TemplateResult
@@ -1031,7 +1051,8 @@ export class HeliosCard extends LitElement
         //only when the chip CHANGES; a scrub or live tick on the same chip recolours/restacks instantly.
         //Gated on these states so the frequent auto-rotate reprojections (which touch none of them) don't
         //re-resolve the theme colour every frame.
-        if (this._engine
+        if (this._viewMode !== 'clock'
+            && this._engine
             && (_changedProperties.has('_chartTarget')
                 || _changedProperties.has('_selectedTime')
                 || _changedProperties.has('hass')
@@ -1057,6 +1078,15 @@ export class HeliosCard extends LitElement
             if (inputsChanged)
             {
                 this._rebuildClockData();
+            }
+            //Home prism (no medallion any more): render it alone + colour it as equal slices of the active
+            //filters. Re-run when the dial appears, the filter set changes, or data first lands (engine spawn).
+            if (_changedProperties.has('_viewMode')
+                || _changedProperties.has('_clockTargets')
+                || _changedProperties.has('_unifiedStore'))
+            {
+                this._engine?.setHomeOnly(true);
+                this._updateClockHomeAppearance();
             }
             if (_changedProperties.has('_clockHoverSlot'))
             {
@@ -2553,11 +2583,17 @@ export class HeliosCard extends LitElement
             const now = Date.now();
             this._clockGrowStart.clear();
             this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
+            //Home prism becomes the dial anchor: render it alone, sliced by the active filters.
+            this._engine?.setHomeOnly(true);
+            this._updateClockHomeAppearance();
             this._viewMode = mode;
             this._persistUiState();
             this._clockAnimate();
             return;
         }
+        //Leaving clock: restore the full scene + the chart-driven home colour.
+        this._engine?.setHomeOnly(false);
+        this._updateHomeAppearance(false);
         if (this._clockTargets.length > 0)
         {
             //Back to scene: the timeline (hidden in clock mode) re-applies the FIRST selected filter.
@@ -2916,7 +2952,6 @@ export class HeliosCard extends LitElement
         }
         const frame = projectClockFrame(
             camera, rings,
-            this._clockHoverSlot,
             this._clockDimSlot, this._clockDim,
         );
         svgEl.innerHTML = frame.svg;

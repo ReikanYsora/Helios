@@ -58,6 +58,8 @@ export class SceneRenderer
     //multiplier for the on-retarget animation). Empty colour falls back to palette.home (solid block).
     private _home: HomeAppearance = { growth: 1 };
     private _homeRaf = 0;
+    //Home-only mode (clock view): draw just the home prism (no neighbours, no night wash) as the dial anchor.
+    private _homeOnly = false;
     private _palette: ScenePaletteFull = {
         home:            '#488fc2',
         neighbor:        '#cccccc',
@@ -198,6 +200,14 @@ export class SceneRenderer
         this.scheduleRedraw();
     }
 
+    //Toggle home-only rendering (clock mode shows the home prism alone, as the dial's centre anchor).
+    public setHomeOnly(on: boolean): void
+    {
+        if (this._homeOnly === on) { return; }
+        this._homeOnly = on;
+        this.scheduleRedraw();
+    }
+
     //Animate the home to a new colour/bands on chip retarget: squash to the ground (220 ms, old appearance),
     //swap colour + bands at the bottom, then grow back up (300 ms, new appearance). Instant under reduced
     //motion or when no prior colour exists (first paint).
@@ -292,15 +302,17 @@ export class SceneRenderer
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
         const alt = this._sun.altitude;
-        //Full-frame night/twilight wash for the current sun altitude (empty in daylight).
-        const shade = nightShade(alt);
+        //Home-only (clock mode): just the home prism, no neighbours, no night wash — it's the dial's anchor.
+        const drawn = this._homeOnly ? this._buildings.filter(b => b.isHome) : this._buildings;
+        //Full-frame night/twilight wash for the current sun altitude (empty in daylight / home-only).
+        const shade = this._homeOnly ? { opacity: 0, color: '' } : nightShade(alt);
         const shadeSvg = shade.opacity > 0
             ? `<rect width="${width}" height="${height}" fill="${shade.color}" opacity="${shade.opacity.toFixed(3)}"/>`
             : '';
         this._sceneSvg.innerHTML =
             shadeSvg +
-            renderShadows(this.camera, this._buildings, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
-            renderBuildings(this.camera, this._buildings, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
+            renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
+            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
 
         this.onAfterDraw?.();
     }

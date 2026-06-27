@@ -294,6 +294,8 @@ export function initEngineNow(host: InitHost): void
 
         host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host._effectiveCacheId?.() ?? '');
         wireEngineCallbacks(host);
+        //Restored straight into clock mode: render the home alone immediately (slices follow once data lands).
+        if (host._viewMode === 'clock') { host._engine.setHomeOnly(true); }
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
         //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).
         if (!host._timeRange)

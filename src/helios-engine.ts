@@ -492,6 +492,12 @@ export class HeliosEngine
             this._renderer.setHome(color, bands);
         }
     }
+
+    //Clock mode renders the home prism alone (no neighbours) as the dial anchor; scene mode shows everything.
+    public setHomeOnly(on: boolean): void
+    {
+        this._renderer?.setHomeOnly(on);
+    }
     //Defaults the editor's reset button restores: always the hemisphere-aware boot pose, never the user's
     //customised values (reading _initialBearing/_initialPitch would echo back what they just changed).
     public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }

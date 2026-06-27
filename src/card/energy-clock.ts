@@ -466,9 +466,8 @@ function clockCompass(
 export function projectClockFrame(
     camera: SceneCamera,
     rings: ClockRingInput[],
-    highlightSlot: number | null,
-    //Slot kept at full opacity while it's focused; every other slot dims by `dim` (0..1). dimSlot persists
-    //through the fade-out so the dimmed areas ramp back smoothly after the hover/tap ends.
+    //The focused slot (hover/tap), and the 0..1 fade ramp. While dim > 0 every curve dims uniformly and the
+    //cursor + beads light up at the focused slot. dimSlot persists through the fade-out so it ramps smoothly.
     dimSlot: number | null,
     dim: number
 ): ClockFrame
@@ -503,12 +502,15 @@ export function projectClockFrame(
         };
     });
 
-    //While a slot is focused, every OTHER slot dims toward 0.5.
-    const dimAt = (slot: number): number => (dimSlot !== null && slot !== dimSlot ? 1 - 0.5 * dim : 1);
+    //Hovering dims EVERY curve uniformly (toward 0.4) and pops a bright radial cursor from the hub to the
+    //focused slot plus a bead at each ring's value there — so the focus reads clearly on the continuous areas.
+    const dimFactor = 1 - 0.6 * dim;
 
     //Every wall quad across all rings, depth-sorted globally by ground Y so near areas paint over far ones.
     const hits: ClockHit[] = [];
     const faces: Array<{ depth: number; svg: string }> = [];
+    //Bead per ring at the focused slot (the value point on its curve), drawn over the dimmed areas.
+    const beads: Array<{ x: number; y: number; color: string; op: number; ri: number }> = [];
 
     rings.forEach((ring, ri) =>
     {
@@ -541,7 +543,7 @@ export function projectClockFrame(
                 const p = camera.project(R * Math.sin(a), R * Math.cos(a), 0);
                 pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`);
             }
-            faces.push({ depth: -Infinity, svg: `<polyline points="${pts.join(' ')}" fill="none" stroke="${data.color}" stroke-opacity="${(0.3 * ring.opacity).toFixed(3)}" stroke-width="1"/>` });
+            faces.push({ depth: -Infinity, svg: `<polyline points="${pts.join(' ')}" fill="none" stroke="${data.color}" stroke-opacity="${(0.3 * ring.opacity * dimFactor).toFixed(3)}" stroke-width="1"/>` });
             return;
         }
 
@@ -562,13 +564,15 @@ export function projectClockFrame(
             }
         }
 
-        //Wall quads + a top-edge line per segment (the continuous silhouette), depth-keyed on the ground.
+        //Bead at the focused slot: the top of this ring's stacked curve there.
         const top = layerTop[layerTop.length - 1];
+        if (dimSlot !== null) { beads.push({ x: top[dimSlot][0], y: top[dimSlot][1], color: data.color, op: ring.opacity, ri }); }
+
+        //Wall quads + a top-edge silhouette line per segment, depth-keyed on the ground. Uniformly dimmed.
+        const op = ring.opacity * dimFactor;
         for (let s = 0; s < CLOCK_SLOTS; s++)
         {
-            const op   = ring.opacity * dimAt(s);
-            const active = highlightSlot !== null && s === highlightSlot;
-            const depth  = (ground[s][1] + ground[s + 1][1]) / 2;
+            const depth = (ground[s][1] + ground[s + 1][1]) / 2;
             for (let k = 0; k < data.layers.length; k++)
             {
                 const L   = data.layers[k];
@@ -580,30 +584,42 @@ export function projectClockFrame(
                 const fill   = lerpHexToward(L.color, '#000000', 0.12);
                 faces.push({ depth, svg: `<polygon points="${loA[0].toFixed(1)},${loA[1].toFixed(1)} ${loB[0].toFixed(1)},${loB[1].toFixed(1)} ${hiB[0].toFixed(1)},${hiB[1].toFixed(1)} ${hiA[0].toFixed(1)},${hiA[1].toFixed(1)}" fill="${fill}" fill-opacity="${fillOp}"/>` });
             }
-            //Silhouette segment: the focused slot glows in the ring's colour, the rest a light hairline.
-            const stroke = active ? 'rgba(255,255,255,0.95)' : lerpHexToward(data.color, '#ffffff', 0.3);
-            const glow   = active ? ` filter="url(#clock-glow-${ri})"` : '';
-            faces.push({ depth, svg: `<line x1="${top[s][0].toFixed(1)}" y1="${top[s][1].toFixed(1)}" x2="${top[s + 1][0].toFixed(1)}" y2="${top[s + 1][1].toFixed(1)}" stroke="${stroke}" stroke-opacity="${op.toFixed(3)}" stroke-width="${active ? 2 : 1}"${glow}/>` });
+            const stroke = lerpHexToward(data.color, '#ffffff', 0.3);
+            faces.push({ depth, svg: `<line x1="${top[s][0].toFixed(1)}" y1="${top[s][1].toFixed(1)}" x2="${top[s + 1][0].toFixed(1)}" y2="${top[s + 1][1].toFixed(1)}" stroke="${stroke}" stroke-opacity="${op.toFixed(3)}" stroke-width="1"/>` });
         }
     });
 
     faces.sort((a, b) => a.depth - b.depth);
     const areaSvg = faces.map(f => f.svg).join('');
 
-    //One glow filter per ring, tinted to its metric colour, so the focused slot's silhouette pops.
+    //One glow filter per ring, tinted to its metric colour, so the focused-slot beads pop over the dimmed areas.
     let defs = '<defs>';
     rings.forEach((r, i) =>
     {
-        defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="${r.data.color}" flood-opacity="0.9"/></filter>`;
+        defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`;
     });
     defs += '</defs>';
 
-    //Guide + compass sit under the areas (drawn first) so the fills paint over them; the spoke for the hour
-    //holding the focused slot brightens with the dim. The compass is outside the dial, so nothing overlaps it.
-    const focusHour = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);
+    //Hover cursor + beads, drawn OVER the dimmed areas at full opacity: a bright radial "hand" from the hub to
+    //the focused slot (separate from the ground hour spokes), plus a glowing bead at each ring's value there.
+    let overlaySvg = '';
+    if (dimSlot !== null && dim > 0)
+    {
+        const ca = (dimSlot / CLOCK_SLOTS) * 2 * Math.PI;
+        const c0 = camera.project(0, 0, 0);
+        const c1 = camera.project(outerR * CLOCK_SPOKE_OUTER_FRAC * Math.sin(ca), outerR * CLOCK_SPOKE_OUTER_FRAC * Math.cos(ca), 0);
+        overlaySvg += `<line x1="${c0[0].toFixed(1)}" y1="${c0[1].toFixed(1)}" x2="${c1[0].toFixed(1)}" y2="${c1[1].toFixed(1)}" stroke="var(--primary-text-color, #212121)" stroke-opacity="${(0.85 * dim).toFixed(3)}" stroke-width="2.5" stroke-linecap="round"/>`;
+        for (const b of beads)
+        {
+            overlaySvg += `<circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="4.5" fill="${b.color}" stroke="rgba(255,255,255,0.95)" stroke-width="1.5" opacity="${(dim * b.op).toFixed(3)}" filter="url(#clock-glow-${b.ri})"/>`;
+        }
+    }
+
+    //Guide + compass sit UNDER the areas (drawn first). The hour spokes stay untouched by the hover. The
+    //compass is outside the dial, so nothing overlaps it.
     const compass = clockCompass(camera, outerR, bearing, tilt);
     return {
-        svg: defs + clockGuide(camera, outerR, focusHour, dim) + compass.svg + areaSvg,
+        svg: defs + clockGuide(camera, outerR, null, 0) + compass.svg + areaSvg + overlaySvg,
         hits, labels, compass: compass.labels,
     };
 }
