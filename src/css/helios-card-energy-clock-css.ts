@@ -116,10 +116,19 @@ export const heliosCardEnergyClockCss = css`
         --mdc-icon-size: 16px;
         flex: none;
     }
+    /*  Entity / metric name between the glyph and the value; truncated so a long friendly name can't widen the
+        tooltip past its clamp. */
+    .clock-tip-name
+    {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+    }
     /*  Per-entity breakdown row: the value pushed flush right so the column of numbers aligns. */
     .clock-tip-val
     {
         margin-left: auto;
+        padding-left: 12px;
         font-variant-numeric: tabular-nums;
     }
     .clock-tip-total

@@ -1892,7 +1892,8 @@ export class HeliosCard extends LitElement
                                 @pointerleave=${this._onChartHoverLeave}
                             >
                                 ${keyed(this._chartTarget, renderBottomChart(this))}
-                                ${renderTimelineNightZones(this)}
+                                ${(this._timelineMode === 'now' || this._timelineMode === 'week')
+                                    ? renderTimelineNightZones(this) : nothing}
                                 ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
@@ -3274,9 +3275,10 @@ export class HeliosCard extends LitElement
                 <div class="clock-tip-head">${head}</div>
                 ${this._clockData.map(data => {
                     const meta = clockTargetMeta(this, data.target);
-                    //Multi-entity metrics (PV per source, cloud low/mid/high, grid import/export, battery
-                    //charge/discharge) break down to one row per contributing layer — its own glyph + colour +
-                    //value, no name (kept uniform with the others). Single-layer metrics keep one total row.
+                    //Multi-entity metrics (PV per source, grid import/export, battery charge/discharge) break
+                    //down to one row per contributing layer; each row carries the layer's name (the entity's HA
+                    //Energy name, or the metric name) between its glyph and value. Single-layer metrics keep one
+                    //total row tagged with the metric name.
                     if (data.layers.length > 1) {
                         const rows = data.layers
                             .map(l => ({ l, v: clockLayerValue(l, data, mode, slot) }))
@@ -3285,6 +3287,7 @@ export class HeliosCard extends LitElement
                             return html`${rows.map(({ l, v }) => html`
                                 <div class="clock-tip-row">
                                     <ha-icon icon=${l.icon} style="color:${l.color}"></ha-icon>
+                                    <span class="clock-tip-name">${l.label}</span>
                                     <span class="clock-tip-val">${formatClockValue(this, data, v)}</span>
                                 </div>
                             `)}`;
@@ -3293,6 +3296,7 @@ export class HeliosCard extends LitElement
                     return html`
                         <div class="clock-tip-row">
                             <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
+                            <span class="clock-tip-name">${clockTargetLabel(this, data.target)}</span>
                             <span class="clock-tip-val">${formatClockValue(this, data, clockTotal(data, mode, slot))}</span>
                         </div>
                     `;

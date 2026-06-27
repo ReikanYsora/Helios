@@ -13,6 +13,15 @@ import { customEntityId, customEntityColor, valueDecimals } from '../helios-conf
 import { resolveCustomEntityIcon, resolveCustomEntityLive } from './custom-entity';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
+import type { EnergyDefaults } from './energy-prefs';
+
+//Friendly name of the first configured entity in a stat list (the Home Assistant Energy dashboard's own name),
+//used to label a tooltip layer. Empty when none is configured.
+function statFriendly(host: ClockHost, ids: string[]): string
+{
+    const id = ids[0];
+    return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : '';
+}
 
 //Structural surface the clock reads off the card. It already satisfies ChartHost (the bottom chart consumes
 //it); themeIsDark resolves the live palette polarity for the per-source colour ramp.
@@ -20,6 +29,7 @@ export type ClockHost = ChartHost & {
     themeIsDark(): boolean;
     _weatherAvailable: boolean;
     _timelineMode: TimelineMode;
+    _energyDefaults: EnergyDefaults;
     //Decoupled hourly profile, present only when the store is sub-hourly (month/year) + clock mode. When set,
     //buildClockData reads it instead of the daily store so the dial still shows an hour-of-day shape.
     _clockHourly: ClockHourly | null;
@@ -302,23 +312,25 @@ function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHour
     const dark = host.themeIsDark();
     const meta = clockTargetMeta(host, target);
     const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData => ({ target, color: meta.color, unit, layers });
+    const d = host._energyDefaults;
     //Energy metrics expand their hour TOTALS (split across slots); soc/custom hold their hourly average.
-    const oneE = (color: string, icon: string, v: number[]): ClockLayer => ({ color, icon, label: '', values: expandHourly(v, true) });
-    const oneA = (color: string, icon: string, v: number[]): ClockLayer => ({ color, icon, label: '', values: expandHourly(v, false) });
+    const oneE = (color: string, icon: string, label: string, v: number[]): ClockLayer => ({ color, icon, label, values: expandHourly(v, true) });
+    const oneA = (color: string, icon: string, label: string, v: number[]): ClockLayer => ({ color, icon, label, values: expandHourly(v, false) });
+    const tgtLabel = clockTargetLabel(host, target);
     switch (target)
     {
-        case 'production':  return data('energy', h.pv.map((vals, s) => oneE(energySolarColor(el, dark, s), 'mdi:solar-power', vals)));
-        case 'consumption': return data('energy', [oneE(ENERGY_COLOR.consumption(el), 'mdi:home-lightning-bolt', h.consumption)]);
+        case 'production':  return data('energy', h.pv.map((vals, s) => oneE(energySolarColor(el, dark, s), 'mdi:solar-power', statFriendly(host, [[...d.solarStatEnergyFroms].sort()[s]]), vals)));
+        case 'consumption': return data('energy', [oneE(ENERGY_COLOR.consumption(el), 'mdi:home-lightning-bolt', tgtLabel, h.consumption)]);
         case 'grid':        return data('energy', [
-            oneE(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', h.gridImport),
-            oneE(ENERGY_COLOR.gridExport(el), 'mdi:transmission-tower-export', h.gridExport),
+            oneE(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', statFriendly(host, d.gridStatEnergyFroms), h.gridImport),
+            oneE(ENERGY_COLOR.gridExport(el), 'mdi:transmission-tower-export', statFriendly(host, d.gridStatEnergyTos), h.gridExport),
         ]);
         case 'battery':     return data('energy', [
-            oneE(ENERGY_COLOR.batteryOut(el), 'mdi:battery-arrow-up',   h.batteryDischarge),
-            oneE(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', h.batteryCharge),
+            oneE(ENERGY_COLOR.batteryOut(el), 'mdi:battery-arrow-up',   statFriendly(host, d.batteryStatEnergyFroms), h.batteryDischarge),
+            oneE(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', statFriendly(host, d.batteryStatEnergyTos),   h.batteryCharge),
         ]);
-        case 'battery-soc': return data('percent', [oneA(ENERGY_COLOR.batteryOut(el), 'mdi:battery', h.soc)]);
-        case 'custom':      return data('power', [oneA(meta.color, meta.icon, h.custom)]);
+        case 'battery-soc': return data('percent', [oneA(ENERGY_COLOR.batteryOut(el), 'mdi:battery', tgtLabel, h.soc)]);
+        case 'custom':      return data('power', [oneA(meta.color, meta.icon, tgtLabel, h.custom)]);
         default:            return data(target === 'irradiance' ? 'irradiance' : 'energy', []);
     }
 }
@@ -408,7 +420,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                 sum[h] += v; cnt[h] += 1;
             }
         }
-        return data('percent', [{ color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery', label: '', values: avgOf(sum, cnt) }]);
+        return data('percent', [{ color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery', label: clockTargetLabel(host, target), values: avgOf(sum, cnt) }]);
     }
 
     if (target === 'cloud')
@@ -428,7 +440,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         const base  = ENERGY_COLOR.cloud(el);
         const cols  = [lerpHexToward(base, '#ffffff', 0.55), base, lerpHexToward(base, '#000000', 0.50)];
         const icons = ['mdi:format-vertical-align-bottom', 'mdi:format-vertical-align-center', 'mdi:format-vertical-align-top'];
-        return data('percent', [0, 1, 2].map(b => ({ color: cols[b], icon: icons[b], label: '', values: avgOf(sum[b], cnt[b]) })));
+        return data('percent', [0, 1, 2].map(b => ({ color: cols[b], icon: icons[b], label: clockTargetLabel(host, target), values: avgOf(sum[b], cnt[b]) })));
     }
 
     if (target === 'custom')
@@ -447,20 +459,21 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                 sum[h] += Math.abs(v); cnt[h] += 1;
             }
         }
-        return data('power', [{ color: meta.color, icon: meta.icon, label: '', values: avgOf(sum, cnt) }]);
+        return data('power', [{ color: meta.color, icon: meta.icon, label: clockTargetLabel(host, target), values: avgOf(sum, cnt) }]);
     }
 
     //Remaining metrics are single- or dual-layer store series, binned by hour-of-day.
     if (!store) { return data(target === 'irradiance' ? 'irradiance' : 'energy', []); }
 
-    let specs: { series: (number | null)[]; color: string; icon: string }[];
+    const d = host._energyDefaults;
+    let specs: { series: (number | null)[]; color: string; icon: string; label: string }[];
     //Energy metrics SUM kWh per hour-of-day; irradiance AVERAGES W/m².
     let unit: ClockData['unit'] = 'energy';
     if (target === 'grid')
     {
         specs = [
-            { series: store.gridImport, color: ENERGY_COLOR.gridImport(el), icon: 'mdi:transmission-tower-import' },
-            { series: store.gridExport, color: ENERGY_COLOR.gridExport(el), icon: 'mdi:transmission-tower-export' },
+            { series: store.gridImport, color: ENERGY_COLOR.gridImport(el), icon: 'mdi:transmission-tower-import', label: statFriendly(host, d.gridStatEnergyFroms) },
+            { series: store.gridExport, color: ENERGY_COLOR.gridExport(el), icon: 'mdi:transmission-tower-export', label: statFriendly(host, d.gridStatEnergyTos) },
         ];
     }
     else if (target === 'battery')
@@ -469,14 +482,14 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         const charge:    (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, v)));
         const discharge: (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, -v)));
         specs = [
-            { series: discharge, color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery-arrow-up' },
-            { series: charge,    color: ENERGY_COLOR.batteryIn(el),  icon: 'mdi:battery-arrow-down' },
+            { series: discharge, color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery-arrow-up',   label: statFriendly(host, d.batteryStatEnergyFroms) },
+            { series: charge,    color: ENERGY_COLOR.batteryIn(el),  icon: 'mdi:battery-arrow-down', label: statFriendly(host, d.batteryStatEnergyTos) },
         ];
     }
     else if (target === 'irradiance')
     {
         unit  = 'irradiance';
-        specs = [{ series: store.irradiance, color: ENERGY_COLOR.sun(el), icon: 'mdi:white-balance-sunny' }];
+        specs = [{ series: store.irradiance, color: ENERGY_COLOR.sun(el), icon: 'mdi:white-balance-sunny', label: clockTargetLabel(host, target) }];
     }
     else
     {
@@ -489,11 +502,11 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             if (p === null && gi === null && ge === null && b === null) { continue; }
             cons[i] = Math.max(0, (p ?? 0) + (gi ?? 0) - (ge ?? 0) - (b ?? 0));
         }
-        specs = [{ series: cons, color: ENERGY_COLOR.consumption(el), icon: 'mdi:home-lightning-bolt' }];
+        specs = [{ series: cons, color: ENERGY_COLOR.consumption(el), icon: 'mdi:home-lightning-bolt', label: clockTargetLabel(host, target) }];
     }
 
     const agg = unit === 'energy' ? binSlotSum : binSlotAvg;
-    return data(unit, specs.map(s => ({ color: s.color, icon: s.icon, label: '', values: agg(store, s.series) })));
+    return data(unit, specs.map(s => ({ color: s.color, icon: s.icon, label: s.label, values: agg(store, s.series) })));
 }
 
 

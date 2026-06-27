@@ -1,6 +1,6 @@
 {
   "name": "helios",
-  "version": "2026.7.1-a14",
+  "version": "2026.7.1-a15",
   "description": "HELIOS - real-time solar exposure, cloud cover and PV production card for Home Assistant",
   "license": "GPL-3.0-or-later",
   "type": "module",
