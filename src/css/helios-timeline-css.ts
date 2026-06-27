@@ -63,22 +63,6 @@ export const heliosTimelineStyles = css`
         height: clamp(36px, 8cqw, 72px);
         overflow: hidden;
     }
-    /*  Exact scrubbed/hovered instant, pinned top-right so a coarse axis (months on a year) still reads precisely. */
-    .tb-scrub-time
-    {
-        position: absolute;
-        top: 4px;
-        right: 6px;
-        z-index: 20;
-        pointer-events: none;
-        font-size: var(--ha-font-size-xs, 11px);
-        font-variant-numeric: tabular-nums;
-        color: var(--primary-text-color);
-        background: var(--card-background-color, rgba(0, 0, 0, 0.6));
-        padding: 1px 6px;
-        border-radius: 6px;
-        opacity: 0.92;
-    }
     .hc-chart-svg
     {
         display: block;
@@ -280,6 +264,16 @@ export const heliosTimelineStyles = css`
         display: inline-flex;
         align-items: center;
         line-height: 1;
+    }
+    /*  Exact scrubbed instant (date + time, HA format), pushed to the tooltip's top-right so a coarse axis
+        label still pins the precise moment. */
+    .tb-hover-tooltip-exact
+    {
+        margin-left: auto;
+        font-weight: var(--ha-font-weight-normal, 400);
+        font-variant-numeric: tabular-nums;
+        opacity: 0.7;
+        white-space: nowrap;
     }
     .tb-hover-tooltip-row
     {

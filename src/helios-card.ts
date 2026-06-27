@@ -27,7 +27,7 @@ import {
     projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
     CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './card/energy-clock';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaDateTime, resolveUiColor } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor } from './card/format';
 import
 {
     refreshPv,
@@ -1794,7 +1794,9 @@ export class HeliosCard extends LitElement
         let sunRayTargetY = sunScene?.home.y ?? 0;
         //Anchor the ray to the nearest point of the PV chip's stadium outline (centred at pvLabel, straight
         //middle + two end-caps of radius PV_HALF_HEIGHT_PX) so it glides along the outline as the sun arcs.
-        if (layout && sunScene && pvEntityId)
+        //Only when the chip is actually shown — scrubbing into the future hides it, so the ray falls back to the
+        //home instead of pointing at the vanished chip's slot.
+        if (layout && sunScene && showPvLabel)
         {
             const cx = layout.pvLabel.x;
             const cy = layout.pvLabel.y;
@@ -1896,7 +1898,6 @@ export class HeliosCard extends LitElement
                                     ? renderTimelineNightZones(this) : nothing}
                                 ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
-                                ${this._renderScrubReadout()}
                             </div>
                             ${renderTimelineDayLabels(this)}
                         </div>
@@ -3233,24 +3234,6 @@ export class HeliosCard extends LitElement
         return formatHaTime(this.hass, new Date(2000, 0, 1, h));
     }
 
-    //Top-right timeline readout: the exact scrubbed (committed) or hovered instant in the user's HA date-time
-    //format, so a coarse axis (months on a year window) still pins the moment precisely.
-    private _renderScrubReadout(): TemplateResult | typeof nothing
-    {
-        if (!this._timeRange) { return nothing; }
-        let ms: number | null = null;
-        if (this._selectedTime)
-        {
-            ms = this._selectedTime.getTime();
-        }
-        else if (this._chartHoverPct !== null)
-        {
-            const span = this._timeRange.end.getTime() - this._timeRange.start.getTime();
-            ms = this._timeRange.start.getTime() + (this._chartHoverPct / 100) * span;
-        }
-        if (ms === null) { return nothing; }
-        return html`<div class="tb-scrub-time">${formatHaDateTime(this.hass, new Date(ms))}</div>`;
-    }
 
     //Sub-mode toggle, sitting just right of the Clock rail button: a sliding knob in a pill (left = histogram,
     //right = area curve), the pill the same height as the rail buttons. Click / Enter / Space flips the mode.
