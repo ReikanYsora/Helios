@@ -10,7 +10,7 @@
 import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
 import { renderBuildings, renderShadows, type Building, type ShadowCaster, type ScenePalette, type HomeAppearance } from './buildings';
-import { renderWireframe, type NdsmRaster } from './lidar-ndsm';
+import { drawWireframe, type NdsmRaster } from './lidar-ndsm';
 import { nightShade } from './colors';
 import {
     SVG_NS,
@@ -19,8 +19,11 @@ import {
     HOME_GROW_MS,
 } from '../constants';
 
-//Wireframe sampling cap (max mesh nodes per side); the raster is sub-sampled to keep the line count sane.
-const WIREFRAME_MAX_LINES = 56;
+//Wireframe sampling cap (max mesh nodes per side); the raster is sub-sampled to keep the edge count bounded.
+const WIREFRAME_MAX_NODES = 200;
+//Half-size (metres) of the central square the wireframe draws — a zoom-19 view doesn't need the full display
+//radius, and capping it keeps the mesh dense and cheap.
+const WIREFRAME_RADIUS_M = 100;
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
 const prefersReducedMotion = (): boolean =>
@@ -51,6 +54,10 @@ export class SceneRenderer
     private readonly _groundHolder: HTMLDivElement;
     private readonly _groundOverlay: SVGSVGElement;
     private readonly _sceneSvg:     SVGSVGElement;
+    //Topmost layer: the LiDAR wireframe mesh, drawn as one batched canvas stroke (sits above the scene SVG by
+    //DOM order, so no z-index needed).
+    private readonly _wireframeCanvas: HTMLCanvasElement;
+    private readonly _wireframeCtx:    CanvasRenderingContext2D | null;
 
     private _ground?:     Ground;
     //Increments per build so a slower in-flight tile fetch can't overwrite a newer one — guards a rapid
@@ -64,6 +71,8 @@ export class SceneRenderer
     //LiDAR view wireframe: the decoded nDSM surface, drawn as a projected mesh on top of the scene when on.
     private _wireframeRaster: NdsmRaster | null = null;
     private _wireframeOn = false;
+    //True while the canvas holds a mesh, so a draw with the wireframe off clears it once rather than every frame.
+    private _wireframeDrawn = false;
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
     //Home prism appearance (the active chip's colour, optional stacked PV-string bands, and the squash
@@ -108,9 +117,13 @@ export class SceneRenderer
         this._groundOverlay.setAttribute('class', 'scene-ground-overlay');
         this._sceneSvg = document.createElementNS(SVG_NS, 'svg');
         this._sceneSvg.setAttribute('class', 'scene-svg');
+        this._wireframeCanvas = document.createElement('canvas');
+        this._wireframeCanvas.className = 'scene-wireframe-canvas';
+        this._wireframeCtx = this._wireframeCanvas.getContext('2d');
         container.appendChild(this._groundHolder);
         container.appendChild(this._groundOverlay);
         container.appendChild(this._sceneSvg);
+        container.appendChild(this._wireframeCanvas);
 
         //The camera centres on width/2 × height/2, so a draw taken before the container has its final size
         //lands the whole scene in the top-left. The container often starts at 0×0 (the first draw bails) or a
@@ -130,6 +143,7 @@ export class SceneRenderer
             if (w === this._obsW && h === this._obsH) { return; }
             this._obsW = w;
             this._obsH = h;
+            this._sizeWireframeCanvas(w, h);
             this.scheduleRedraw();
         });
         this._resizeObserver.observe(container);
@@ -143,7 +157,21 @@ export class SceneRenderer
         if (w0 > 0 && h0 > 0)
         {
             this.camera.setViewport(w0, h0);
+            this._sizeWireframeCanvas(w0, h0);
         }
+    }
+
+    //Back the wireframe canvas at devicePixelRatio so the mesh stays crisp on HiDPI; the CSS box stays the
+    //container size (the canvas projects in CSS px, scaled up by dpr in drawWireframe).
+    private _sizeWireframeCanvas(w: number, h: number): void
+    {
+        const dpr = window.devicePixelRatio || 1;
+        this._wireframeCanvas.width  = Math.round(w * dpr);
+        this._wireframeCanvas.height = Math.round(h * dpr);
+        this._wireframeCanvas.style.width  = `${w}px`;
+        this._wireframeCanvas.style.height = `${h}px`;
+        //Resizing a canvas clears it; mark it empty so the next draw repaints (and an off-state draw skips clearing).
+        this._wireframeDrawn = false;
     }
 
     //Resolve + build the CARTO basemap for a home position. One Voyager style serves both themes; dark mode
@@ -363,15 +391,30 @@ export class SceneRenderer
         const shadowCasters = this._homeOnly ? drawn : (this._shadowCasters ?? drawn);
         const lidarShadows  = !this._homeOnly && !!this._shadowCasters;
         const shadowMaxM    = lidarShadows ? this._shadowMaxM : undefined;
-        //LiDAR-view wireframe: drawn LAST so the nDSM mesh sits on top of the scene geometry.
-        const wireframe = this._wireframeOn && this._wireframeRaster && !this._homeOnly
-            ? renderWireframe(this.camera, this._wireframeRaster, WIREFRAME_MAX_LINES)
-            : '';
         this._sceneSvg.innerHTML =
             shadeSvg +
             renderShadows(this.camera, shadowCasters, this._sun, this._palette.shadow, this._palette.shadowOpacity, shadowMaxM, lidarShadows) +
-            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home) +
-            wireframe;
+            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
+
+        //LiDAR-view wireframe on its own canvas (topmost layer), so the dense nDSM mesh sits over the scene
+        //geometry as one batched stroke. Off / no raster / home-only: clear the canvas once (tracked) rather
+        //than every frame. Colour follows the live theme each draw — cheap, auto-follows dark/light.
+        if (this._wireframeOn && this._wireframeRaster && !this._homeOnly)
+        {
+            const color = getComputedStyle(this._container).getPropertyValue('--primary-text-color').trim() || '#e1e1e1';
+            drawWireframe(this._wireframeCtx, this.camera, this._wireframeRaster, {
+                radiusCap: WIREFRAME_RADIUS_M,
+                maxNodes:  WIREFRAME_MAX_NODES,
+                color,
+                dpr:       window.devicePixelRatio || 1,
+            });
+            this._wireframeDrawn = true;
+        }
+        else if (this._wireframeDrawn && this._wireframeCtx)
+        {
+            this._wireframeCtx.clearRect(0, 0, this._wireframeCanvas.width, this._wireframeCanvas.height);
+            this._wireframeDrawn = false;
+        }
 
         this.onAfterDraw?.();
     }
@@ -386,5 +429,6 @@ export class SceneRenderer
         if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
         this._groundHolder.remove();
         this._sceneSvg.remove();
+        this._wireframeCanvas.remove();
     }
 }

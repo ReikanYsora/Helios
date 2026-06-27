@@ -9,8 +9,9 @@
 //                      convex-hull footprint (LOCAL METRES east/north from the home) with the component's mean
 //                      height — the same frame building footprints use, so they feed the SAME shadow projector
 //                      (renderShadows). Buildings still render as prisms; only the SHADOW casters change.
-//  renderWireframe  -> projects the SAME raster as a grid mesh + node dots in the primary-text colour, drawn
-//                      on top in the LiDAR view (whole surface, no height threshold).
+//  drawWireframe    -> projects the SAME raster as a dense grid mesh in the primary-text colour onto a 2D
+//                      canvas (one batched stroke) on top in the LiDAR view (whole surface, no height
+//                      threshold), capped to a central radius so the mesh stays dense at this zoom.
 //
 //Self-contained engine module: no card imports, and buildings.ts never imports this (one-way dependency).
 //geotiff is loaded via a dynamic import so it executes only for LiDAR users.
@@ -264,69 +265,134 @@ export function rasterToCasters(raster: NdsmRaster, radiusM: number): ShadowCast
     return casters;
 }
 
-//Draw the nDSM surface as a projected grid mesh + node dots for the LiDAR view, in the theme's primary-text
-//colour (SVG inherits the card's CSS vars). The WHOLE surface is drawn (ground ~0, features bump up) so the
-//relief reads; no height threshold here (that's shadow-only). Sampled every `step` cells from maxLines, node
-//metres/height projected through the shared camera; a mesh edge is emitted only when both its endpoints exist
-//(finite height), and a dot at every existing node. One allocation-conscious string, wrapped in a group so
-//it reads as a wireframe rather than a solid fill.
-export function renderWireframe(cam: SceneCamera, raster: NdsmRaster, maxLines: number): string
+export interface WireframeOptions
 {
+    //Half-size (metres from the home) of the central square actually drawn — the full display radius is denser
+    //than this zoom needs, so the mesh is capped here to stay legible and cheap.
+    radiusCap: number;
+    //Max sampled mesh nodes per side; the window is sub-sampled to keep the node count (and edge count) bounded.
+    maxNodes:  number;
+    //Stroke colour, resolved from the live theme by the caller.
+    color:     string;
+    //devicePixelRatio: the canvas is backed at dpr but the camera projects in CSS px, so drawing is scaled by it.
+    dpr:       number;
+}
+
+//Draw the nDSM surface as a dense projected grid mesh onto a 2D canvas for the LiDAR view, in the theme's
+//primary-text colour. The WHOLE surface is drawn (ground ~0, features bump up) so the relief reads; no height
+//threshold here (that's shadow-only). Only the central `radiusCap` square is considered — the cell window for
+//that square is computed up front so the whole raster is never iterated — sub-sampled by `step` so the drawn
+//nodes per side stay under `maxNodes`. Every mesh edge (right + down neighbour) is queued into ONE path and
+//stroked a single time: per-line strokes are the slow trap that made rotation stutter; one batched stroke
+//repaints a dense mesh smoothly. A node is null (skipped, along with its edges) when its height is non-finite
+//or it falls outside the radius. No node dots — mesh only.
+export function drawWireframe(
+    ctx: CanvasRenderingContext2D | null,
+    cam: SceneCamera,
+    raster: NdsmRaster,
+    opts: WireframeOptions,
+): void
+{
+    if (!ctx) { return; }
+    const { radiusCap, maxNodes, color, dpr } = opts;
+
+    //Clear the full backing store in device px (identity transform), then scale to CSS px so the camera's
+    //CSS-px projections land correctly.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     const { heights, size, minLat, maxLat, minLon, maxLon, homeLat, homeLon } = raster;
-    const step  = Math.max(1, Math.ceil(size / maxLines));
-    const pxLat = (maxLat - minLat) / size;
-    const pxLon = (maxLon - minLon) / size;
+    const pxLat   = (maxLat - minLat) / size;
+    const pxLon   = (maxLon - minLon) / size;
     const cosHome = Math.cos(homeLat * DEG);
 
-    //Sampled grid of projected points ([x, y] | null = missing-height node, skipped along with its edges).
-    const cols: number[] = [];
-    for (let i = 0; i < size; i += step) { cols.push(i); }
-    const rows: number[] = [];
-    for (let j = 0; j < size; j += step) { rows.push(j); }
+    //Cell index window covering [-radiusCap, +radiusCap] metres around the home, so we iterate only the central
+    //square. Metres/cell along each axis -> cell span for 2*radiusCap; the window is centred on the home cell.
+    const mPerCellN = pxLat * M_PER_DEG_LAT;
+    const mPerCellE = pxLon * M_PER_DEG_LAT * cosHome;
+    const homeColF  = (homeLon - minLon) / pxLon - 0.5;
+    const homeRowF  = (maxLat - homeLat) / pxLat - 0.5;
+    const spanCellsE = radiusCap / Math.max(0.01, mPerCellE);
+    const spanCellsN = radiusCap / Math.max(0.01, mPerCellN);
+    const i0 = clamp(Math.floor(homeColF - spanCellsE), 0, size - 1);
+    const i1 = clamp(Math.ceil(homeColF + spanCellsE),  i0 + 1, size - 1);
+    const j0 = clamp(Math.floor(homeRowF - spanCellsN), 0, size - 1);
+    const j1 = clamp(Math.ceil(homeRowF + spanCellsN),  j0 + 1, size - 1);
 
-    const pts: ([number, number] | null)[] = new Array(rows.length * cols.length);
+    //Sample step so the drawn nodes per side stay <= maxNodes (use the larger window dimension).
+    const windowCells = Math.max(i1 - i0, j1 - j0) + 1;
+    const step  = Math.max(1, Math.ceil(windowCells / maxNodes));
+    const r2    = radiusCap * radiusCap;
+
+    //Sampled grid of projected points ([x, y] | null = missing-height or out-of-radius node, skipped with its
+    //edges). Built in one pass; the mesh then reads neighbours from it.
+    const cols: number[] = [];
+    for (let i = i0; i <= i1; i += step) { cols.push(i); }
+    const rows: number[] = [];
+    for (let j = j0; j <= j1; j += step) { rows.push(j); }
+
+    const ncols = cols.length;
+    const pts: ([number, number] | null)[] = new Array(rows.length * ncols);
     for (let rj = 0; rj < rows.length; rj++)
     {
-        const j    = rows[rj];
-        const cLat = maxLat - (j + 0.5) * pxLat;
+        const j      = rows[rj];
+        const cLat   = maxLat - (j + 0.5) * pxLat;
         const localN = (cLat - homeLat) * M_PER_DEG_LAT;
-        for (let ci = 0; ci < cols.length; ci++)
+        for (let ci = 0; ci < ncols; ci++)
         {
             const i = cols[ci];
             const h = heights[j * size + i];
-            if (!Number.isFinite(h))
-            {
-                pts[rj * cols.length + ci] = null;
-                continue;
-            }
             const cLon   = minLon + (i + 0.5) * pxLon;
             const localE = (cLon - homeLon) * M_PER_DEG_LAT * cosHome;
-            pts[rj * cols.length + ci] = cam.project(localE, localN, h);
+            if (!Number.isFinite(h) || (localE * localE + localN * localN) > r2)
+            {
+                pts[rj * ncols + ci] = null;
+                continue;
+            }
+            pts[rj * ncols + ci] = cam.project(localE, localN, h);
         }
     }
 
-    const color = 'var(--primary-text-color, #e1e1e1)';
-    let lines = '';
-    let dots  = '';
+    //ONE path: every right + down edge whose both endpoints exist, then a single stroke.
+    ctx.beginPath();
     for (let rj = 0; rj < rows.length; rj++)
     {
-        for (let ci = 0; ci < cols.length; ci++)
+        for (let ci = 0; ci < ncols; ci++)
         {
-            const a = pts[rj * cols.length + ci];
+            const a = pts[rj * ncols + ci];
             if (!a) { continue; }
-            dots += `<circle cx="${a[0].toFixed(1)}" cy="${a[1].toFixed(1)}" r="1" fill="${color}"/>`;
-            const right = ci + 1 < cols.length ? pts[rj * cols.length + ci + 1] : null;
+            const right = ci + 1 < ncols ? pts[rj * ncols + ci + 1] : null;
             if (right)
             {
-                lines += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${right[0].toFixed(1)}" y2="${right[1].toFixed(1)}"/>`;
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(right[0], right[1]);
             }
-            const down = rj + 1 < rows.length ? pts[(rj + 1) * cols.length + ci] : null;
+            const down = rj + 1 < rows.length ? pts[(rj + 1) * ncols + ci] : null;
             if (down)
             {
-                lines += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${down[0].toFixed(1)}" y2="${down[1].toFixed(1)}"/>`;
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(down[0], down[1]);
             }
         }
     }
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth   = 0.7;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
-    return `<g opacity="0.7"><g stroke="${color}" stroke-width="0.6" fill="none">${lines}</g>${dots}</g>`;
+    //Circular edge fade centred on the home (like the LiDAR shadow fade): a screen-space radial-gradient mask
+    //applied via destination-in, so the mesh dissolves toward the rim instead of ending on a hard ring. Only
+    //the gradient's alpha matters here (full out to 70%, fading to 0 at radiusCap); the colour is ignored.
+    const [hx, hy] = cam.project(0, 0, 0);
+    const r = cam.pxPerMetre * radiusCap;
+    const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, r);
+    g.addColorStop(0,   'rgba(0,0,0,1)');
+    g.addColorStop(0.7, 'rgba(0,0,0,1)');
+    g.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, ctx.canvas.width / dpr, ctx.canvas.height / dpr);
+    ctx.globalCompositeOperation = 'source-over';
 }

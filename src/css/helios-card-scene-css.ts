@@ -113,6 +113,17 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 1;
     }
+    /*  LiDAR-view wireframe canvas: topmost layer (DOM order keeps it over the scene SVG), sized via its
+        width/height attrs at devicePixelRatio while the style box maps it to the container. Click-transparent;
+        lives inside #map-container, so mode-lidar's selective hide (direct ha-card children only) leaves it. */
+    .scene-wireframe-canvas
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
     /*  Clock-mode ground guide overlay: screen-space, sits between the basemap and the home prism (DOM order +
         scene-svg's z-index 1 keep it under the home), so the home reads over the hub + hour spokes. */
     .scene-ground-overlay
