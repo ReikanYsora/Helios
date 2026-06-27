@@ -111,6 +111,12 @@ export interface Translations
         //Cast-shadow opacity, 0..1 slider.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
+        //LiDAR shadow quality: nDSM raster resolution tier (low/medium/high), shown only when a local LiDAR is set.
+        lidarShadowQuality:       string;
+        lidarShadowQualityHelp:   string;
+        lidarQualityLow:          string;
+        lidarQualityMedium:       string;
+        lidarQualityHigh:         string;
         //Local LiDAR: a user-hosted nDSM GeoTIFF (URL + EPSG:4326 bounding box) for true LiDAR shadows.
         lidarSection:             string;
         lidarHint:                string;

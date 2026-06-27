@@ -97,6 +97,9 @@ export interface HeliosConfig
     'lidar-local-ndsm-max-lat'?: unknown;
     'lidar-local-ndsm-min-lon'?: unknown;
     'lidar-local-ndsm-max-lon'?: unknown;
+    //LiDAR shadow quality: scales the nDSM raster resolution ('low'|'medium'|'high', default 'medium').
+    //Lower = fewer cells = lighter card; higher = finer shadows at more CPU/memory.
+    'lidar-shadow-quality'?:     unknown;
 }
 
 
@@ -138,6 +141,15 @@ export function localLidarConfig(config: HeliosConfig | undefined): LocalLidarCo
 export function hasLocalLidar(config: HeliosConfig | undefined): boolean
 {
     return localLidarConfig(config) !== null;
+}
+
+
+//Resolved LiDAR shadow quality, picking the nDSM raster resolution. Returns the configured tier only when it
+//is exactly one of the known values, else 'medium' (the default).
+export function lidarShadowQuality(config: HeliosConfig | undefined): 'low' | 'medium' | 'high'
+{
+    const raw = config?.['lidar-shadow-quality'];
+    return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'medium';
 }
 
 

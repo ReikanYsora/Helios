@@ -470,7 +470,10 @@ export function renderShadows(
     sun:          { azimuth: number; altitude: number },
     shadowColor:  string,
     shadowOpacity: number,
-    maxShadowM:   number = MAX_SHADOW_M
+    maxShadowM:   number = MAX_SHADOW_M,
+    //LiDAR shadows only: dissolve the shade toward the disc edge so a low sun can't paint a hard black mass
+    //(matches the basemap's edge fade). Footprint shadows are short + sparse, so they leave it off.
+    edgeFade = false
 ): string
 {
     const fade = Math.min(1, sun.altitude / SHADOW_FADE_DEG);
@@ -495,9 +498,25 @@ export function renderShadows(
         const cast = b.footprint.map((p) => cam.project(p[0] + oe, p[1] + on, 0));
         inner += `<polygon points="${pointsAttr(convexHull([...base, ...cast]))}" fill="${shadowColor}"/>`;
     }
-    return inner
-        ? `<g opacity="${(shadowOpacity * fade).toFixed(3)}">${inner}</g>`
-        : '';
+    if (!inner)
+    {
+        return '';
+    }
+    const group = `<g opacity="${(shadowOpacity * fade).toFixed(3)}">${inner}</g>`;
+    if (!edgeFade)
+    {
+        return group;
+    }
+    //Radial dissolve centred on the home (the dial origin), full out to 70% of the display radius then fading to
+    //nothing at the rim, so dense low-sun shade melts into the faded basemap instead of ending on a hard circle.
+    const c = cam.project(0, 0, 0);
+    const r = (cam.pxPerMetre || 1) * maxShadowM;
+    const w = cam.centreX * 2;
+    const h = cam.centreY * 2;
+    return `<defs><radialGradient id="helios-shadow-fade" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${r.toFixed(1)}" gradientUnits="userSpaceOnUse">`
+        + '<stop offset="0.7" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>'
+        + `<mask id="helios-shadow-mask"><rect x="0" y="0" width="${w.toFixed(0)}" height="${h.toFixed(0)}" fill="url(#helios-shadow-fade)"/></mask></defs>`
+        + `<g mask="url(#helios-shadow-mask)">${group}</g>`;
 }
 
 //Extrude + paint the buildings far→near. `altitude` is the sun altitude (deg) for the time-of-day tint;

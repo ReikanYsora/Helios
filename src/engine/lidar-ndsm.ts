@@ -39,9 +39,11 @@ export interface NdsmCasterOptions
     maxLat:  number;
     minLon:  number;
     maxLon:  number;
-    homeLat: number;
-    homeLon: number;
-    radiusM: number;
+    homeLat:    number;
+    homeLon:    number;
+    radiusM:    number;
+    //Square nDSM grid edge (cells/side). Resolved from the LiDAR shadow quality by the caller.
+    rasterSize: number;
     signal?: AbortSignal;
 }
 
@@ -49,11 +51,11 @@ export interface NdsmCasterOptions
 //decode; the caller swallows the error and falls back to footprint shadows.
 export async function fetchNdsmCasters(opts: NdsmCasterOptions): Promise<ShadowCaster[]>
 {
-    const { url, minLat, maxLat, minLon, maxLon, homeLat, homeLon, radiusM, signal } = opts;
+    const { url, minLat, maxLat, minLon, maxLon, homeLat, homeLon, radiusM, rasterSize, signal } = opts;
 
-    //Native pitch is ~1 m; the raster frame is the bbox, squared and bounded so a huge bbox can't request a
-    //multi-thousand-pixel grid.
-    const size = clamp(Math.round(2 * radiusM), 64, 1024);
+    //The raster frame is the bbox, force-resampled to a square grid; the caller sizes it from the LiDAR
+    //shadow quality (higher = finer shadows, heavier).
+    const size = rasterSize;
 
     const response = await fetch(url, { signal });
     if (!response.ok)

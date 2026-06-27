@@ -15,6 +15,7 @@ import {
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
     SUN_COLOR_HEX,
+    LIDAR_QUALITY_MULT, LIDAR_RASTER_MIN, LIDAR_RASTER_MAX,
 } from './constants';
 import
 {
@@ -22,6 +23,7 @@ import
     displayRadiusM,
     hasLocalLidar,
     localLidarConfig,
+    lidarShadowQuality,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
@@ -1192,8 +1194,10 @@ export class HeliosEngine
         }
 
         const radius = this._buildingRadiusMeters();
+        const q          = lidarShadowQuality(this.cfg);
+        const rasterSize = Math.max(LIDAR_RASTER_MIN, Math.min(LIDAR_RASTER_MAX, Math.round(2 * radius * LIDAR_QUALITY_MULT[q])));
         const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|`
-            + `${lidar.minLat}|${lidar.maxLat}|${lidar.minLon}|${lidar.maxLon}|${radius}|${lidar.url}`;
+            + `${lidar.minLat}|${lidar.maxLat}|${lidar.minLon}|${lidar.maxLon}|${radius}|${q}|${lidar.url}`;
 
         //Unchanged inputs with casters already decoded: re-apply idempotently (radius doubles as max length).
         if (key === this._lidarKey && this._lidarCasters)
@@ -1213,10 +1217,11 @@ export class HeliosEngine
             maxLat:  lidar.maxLat,
             minLon:  lidar.minLon,
             maxLon:  lidar.maxLon,
-            homeLat: this.homeLat,
-            homeLon: this.homeLon,
-            radiusM: radius,
-            signal:  ac.signal,
+            homeLat:    this.homeLat,
+            homeLon:    this.homeLon,
+            radiusM:    radius,
+            rasterSize: rasterSize,
+            signal:     ac.signal,
         })
         .then(casters =>
         {

@@ -5,6 +5,8 @@ import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
     type HeliosConfig,
+    hasLocalLidar,
+    lidarShadowQuality,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
@@ -315,6 +317,14 @@ export class HeliosCardEditor extends LitElement
         const key = el.dataset.key as keyof HeliosConfig | undefined;
         if (key) { this._update(key, el.dataset.value === 'true'); }
     };
+    //String-valued segmented toggle setter (writes data-value as-is, for multi-choice options).
+    private _onChoiceClick = (e: Event): void =>
+    {
+        const el  = e.currentTarget as HTMLElement;
+        const key = el.dataset.key as keyof HeliosConfig | undefined;
+        const val = el.dataset.value;
+        if (key && val !== undefined) { this._update(key, val); }
+    };
 
     private _fmtNum(v: number, step: number): string
     {
@@ -624,6 +634,33 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
+
+                ${hasLocalLidar(c) ? html`
+                <div class="field">
+                    <span class="label">${t.editor.lidarShadowQuality}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${lidarShadowQuality(c) === 'low' ? 'active' : ''}"
+                            data-key="lidar-shadow-quality" data-value="low"
+                            @click=${this._onChoiceClick}
+                        >${t.editor.lidarQualityLow}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${lidarShadowQuality(c) === 'medium' ? 'active' : ''}"
+                            data-key="lidar-shadow-quality" data-value="medium"
+                            @click=${this._onChoiceClick}
+                        >${t.editor.lidarQualityMedium}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${lidarShadowQuality(c) === 'high' ? 'active' : ''}"
+                            data-key="lidar-shadow-quality" data-value="high"
+                            @click=${this._onChoiceClick}
+                        >${t.editor.lidarQualityHigh}</button>
+                    </div>
+                </div>
+                <div class="field-help">${t.editor.lidarShadowQualityHelp}</div>
+                ` : nothing}
 
                 </details>
 

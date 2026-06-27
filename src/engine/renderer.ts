@@ -339,10 +339,11 @@ export class SceneRenderer
         //LiDAR ground shadows when set (cast from nDSM clumps, with their own max length), else the building
         //footprints. Home-only (clock) mode never uses the LiDAR casters — only the home prism is drawn.
         const shadowCasters = this._homeOnly ? drawn : (this._shadowCasters ?? drawn);
-        const shadowMaxM    = this._homeOnly ? undefined : (this._shadowCasters ? this._shadowMaxM : undefined);
+        const lidarShadows  = !this._homeOnly && !!this._shadowCasters;
+        const shadowMaxM    = lidarShadows ? this._shadowMaxM : undefined;
         this._sceneSvg.innerHTML =
             shadeSvg +
-            renderShadows(this.camera, shadowCasters, this._sun, this._palette.shadow, this._palette.shadowOpacity, shadowMaxM) +
+            renderShadows(this.camera, shadowCasters, this._sun, this._palette.shadow, this._palette.shadowOpacity, shadowMaxM, lidarShadows) +
             renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
 
         this.onAfterDraw?.();
