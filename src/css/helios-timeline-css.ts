@@ -63,6 +63,22 @@ export const heliosTimelineStyles = css`
         height: clamp(36px, 8cqw, 72px);
         overflow: hidden;
     }
+    /*  Exact scrubbed/hovered instant, pinned top-right so a coarse axis (months on a year) still reads precisely. */
+    .tb-scrub-time
+    {
+        position: absolute;
+        top: 4px;
+        right: 6px;
+        z-index: 20;
+        pointer-events: none;
+        font-size: var(--ha-font-size-xs, 11px);
+        font-variant-numeric: tabular-nums;
+        color: var(--primary-text-color);
+        background: var(--card-background-color, rgba(0, 0, 0, 0.6));
+        padding: 1px 6px;
+        border-radius: 6px;
+        opacity: 0.92;
+    }
     .hc-chart-svg
     {
         display: block;

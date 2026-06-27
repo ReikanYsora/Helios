@@ -77,6 +77,25 @@ export function formatHaTime(hass: any, date: Date): string
 }
 
 
+//Date + time the way the HA frontend formats it (day, short month, hour:minute, honouring 12/24h), for the
+//timeline scrub readout where the coarse axis labels (months on a year window) don't pin the exact instant.
+export function formatHaDateTime(hass: any, date: Date): string
+{
+    const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
+    const opts: Intl.DateTimeFormatOptions = {
+        day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: haUseAmPm(locale),
+    };
+    try
+    {
+        return new Intl.DateTimeFormat(locale?.language, opts).format(date);
+    }
+    catch (_)
+    {
+        return new Intl.DateTimeFormat(undefined, opts).format(date);
+    }
+}
+
+
 //Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every
 //chip prints the same unit/precision regardless of the source sensor's native unit. Input is watts.
 //`signed` prefixes an explicit + / − (figure-dash) so battery charge reads apart from discharge.

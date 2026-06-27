@@ -499,7 +499,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
     //which would duplicate the headline row).
     const perEntityMap     = host._pvHistoryPerEntity;
-    const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()).sort() : [];
+    //Source order (NOT sorted), so row index lines up with solarSourceName + the clock.
+    const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()) : [];
     const perEntityRows: { id: string; label: string; valueText: string; colorIdx: number }[] = [];
     for (let i = 0; i < perEntityIds.length; i++)
     {
@@ -514,21 +515,19 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         {
             continue;
         }
-        const stateObj    = host.hass?.states?.[id];
-        const friendly    = String(stateObj?.attributes?.friendly_name ?? id);
         const localDec    = val.unit === 'W' ? 0 : dec;
         const valueText   = `${formatLocalisedNumber(host.hass, val.value, localDec)} ${val.unit}`;
-        perEntityRows.push({ id, label: friendly, valueText, colorIdx: i });
+        perEntityRows.push({ id, label: solarSourceName(host, i), valueText, colorIdx: i });
     }
     const hasPv = isFinite(pv.value);
 
     //Row names (icon -> name -> value): the metric name, or the configured entity's HA Energy name for the
     //two-direction grid/battery rows.
     const tgtName        = clockTargetLabel(host, target);
-    const gridFromName   = statFriendly(host, host._energyDefaults.gridStatEnergyFroms);
-    const gridToName     = statFriendly(host, host._energyDefaults.gridStatEnergyTos);
-    const battChargeName = statFriendly(host, host._energyDefaults.batteryStatEnergyTos);
-    const battDisName    = statFriendly(host, host._energyDefaults.batteryStatEnergyFroms);
+    const gridFromName   = gridImportName(host);
+    const gridToName     = gridExportName(host);
+    const battChargeName = batteryChargeName(host);
+    const battDisName    = batteryDischargeName(host);
     //Each tooltip row's icon takes the colour of the series it represents (matching the chart curves) so the
     //readout is scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the
     //three stacked band shades in renderTargetChart.
@@ -749,6 +748,21 @@ export function statFriendly(host: ChartHost, ids: string[]): string
     const id = ids[0];
     return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : '';
 }
+
+//Canonical per-source PV name: the HA Energy solar source's energy meter (stat_energy_from), by SOURCE INDEX.
+//Single source of the per-string name so the clock (both data paths) and the timeline all label string `index`
+//identically — the rate/meter arrays are parallel per source, so this stays aligned as long as nothing re-sorts.
+export function solarSourceName(host: ChartHost, index: number): string
+{
+    const id = host._energyDefaults.solarStatEnergyFroms[index];
+    return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `PV ${index + 1}`;
+}
+
+//Directional energy names from the HA Energy dashboard, factored so the clock + timeline tooltips never diverge.
+export function gridImportName(host: ChartHost):      string { return statFriendly(host, host._energyDefaults.gridStatEnergyFroms); }
+export function gridExportName(host: ChartHost):      string { return statFriendly(host, host._energyDefaults.gridStatEnergyTos); }
+export function batteryChargeName(host: ChartHost):   string { return statFriendly(host, host._energyDefaults.batteryStatEnergyTos); }
+export function batteryDischargeName(host: ChartHost): string { return statFriendly(host, host._energyDefaults.batteryStatEnergyFroms); }
 
 //Metric name for a tooltip row / rail title. en + fr (Helios ships en/fr); other locales fall back to en. Custom
 //takes the entity's own name. No new i18n elsewhere — every tooltip name comes from here or from statFriendly.

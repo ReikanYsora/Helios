@@ -135,8 +135,9 @@ export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
 
     const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
         ids.length ? fetchChangeSeries(host.hass, [...ids].sort(), startMs, endMs, 'hour') : Promise.resolve(null);
-    //Each solar source separately, in id order, so the dial can split production by string.
-    const solarIds = [...d.solarStatEnergyFroms].sort();
+    //Each solar source separately, in HA Energy SOURCE order (not sorted), so source `s` lines up with
+    //solarSourceName(host, s) + the store path.
+    const solarIds = d.solarStatEnergyFroms;
 
     const [solarPerSource, gImp, gExp, bChg, bDis, soc, custom] = await Promise.all([
         Promise.all(solarIds.map(id => fetchChangeSeries(host.hass, [id], startMs, endMs, 'hour'))),

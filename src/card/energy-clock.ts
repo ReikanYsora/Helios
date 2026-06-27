@@ -6,7 +6,8 @@
 
 import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
-import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, statFriendly } from './charts';
+import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, solarSourceName,
+    gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from './charts';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
 import { customEntityId, customEntityColor, valueDecimals } from '../helios-config';
@@ -286,22 +287,21 @@ function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHour
     const dark = host.themeIsDark();
     const meta = clockTargetMeta(host, target);
     const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData => ({ target, color: meta.color, unit, layers });
-    const d = host._energyDefaults;
     //Energy metrics expand their hour TOTALS (split across slots); soc/custom hold their hourly average.
     const oneE = (color: string, icon: string, label: string, v: number[]): ClockLayer => ({ color, icon, label, values: expandHourly(v, true) });
     const oneA = (color: string, icon: string, label: string, v: number[]): ClockLayer => ({ color, icon, label, values: expandHourly(v, false) });
     const tgtLabel = clockTargetLabel(host, target);
     switch (target)
     {
-        case 'production':  return data('energy', h.pv.map((vals, s) => oneE(energySolarColor(el, dark, s), 'mdi:solar-power', statFriendly(host, [[...d.solarStatEnergyFroms].sort()[s]]), vals)));
+        case 'production':  return data('energy', h.pv.map((vals, s) => oneE(energySolarColor(el, dark, s), 'mdi:solar-power', solarSourceName(host, s), vals)));
         case 'consumption': return data('energy', [oneE(ENERGY_COLOR.consumption(el), 'mdi:home-lightning-bolt', tgtLabel, h.consumption)]);
         case 'grid':        return data('energy', [
-            oneE(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', statFriendly(host, d.gridStatEnergyFroms), h.gridImport),
-            oneE(ENERGY_COLOR.gridExport(el), 'mdi:transmission-tower-export', statFriendly(host, d.gridStatEnergyTos), h.gridExport),
+            oneE(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', gridImportName(host), h.gridImport),
+            oneE(ENERGY_COLOR.gridExport(el), 'mdi:transmission-tower-export', gridExportName(host), h.gridExport),
         ]);
         case 'battery':     return data('energy', [
-            oneE(ENERGY_COLOR.batteryOut(el), 'mdi:battery-arrow-up',   statFriendly(host, d.batteryStatEnergyFroms), h.batteryDischarge),
-            oneE(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', statFriendly(host, d.batteryStatEnergyTos),   h.batteryCharge),
+            oneE(ENERGY_COLOR.batteryOut(el), 'mdi:battery-arrow-up',   batteryDischargeName(host), h.batteryDischarge),
+            oneE(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', batteryChargeName(host),   h.batteryCharge),
         ]);
         case 'battery-soc': return data('percent', [oneA(ENERGY_COLOR.batteryOut(el), 'mdi:battery', tgtLabel, h.soc)]);
         case 'custom':      return data('power', [oneA(meta.color, meta.icon, tgtLabel, h.custom)]);
@@ -335,7 +335,9 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     if (target === 'production')
     {
         if (!store) { return data('energy', []); }
-        const ids = Array.from(host._pvHistoryPerEntity.keys()).sort();
+        //Source order (NOT sorted): the per-entity map is built in HA Energy source order, parallel to
+        //solarStatEnergyFroms, so string `s` here lines up with solarSourceName(host, s) + the other paths.
+        const ids = Array.from(host._pvHistoryPerEntity.keys());
         const nowMs = Date.now();
         const stepH  = store.stepMs / HOUR_MS;
         const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
@@ -366,10 +368,10 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         }
         //Actuals only: the clock shows recorded energy, no forecast layer (a translucent forecast ring read as
         //real PV and misled — the timeline carries the forecast instead).
-        const layers: ClockLayer[] = ids.map((id, s) => ({
+        const layers: ClockLayer[] = ids.map((_id, s) => ({
             color: energySolarColor(el, dark, s),
             icon:  'mdi:solar-power',
-            label: String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id),
+            label: solarSourceName(host, s),
             values: wsum[s],
         }));
         return data('energy', layers);
@@ -439,15 +441,14 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     //Remaining metrics are single- or dual-layer store series, binned by hour-of-day.
     if (!store) { return data(target === 'irradiance' ? 'irradiance' : 'energy', []); }
 
-    const d = host._energyDefaults;
     let specs: { series: (number | null)[]; color: string; icon: string; label: string }[];
     //Energy metrics SUM kWh per hour-of-day; irradiance AVERAGES W/m².
     let unit: ClockData['unit'] = 'energy';
     if (target === 'grid')
     {
         specs = [
-            { series: store.gridImport, color: ENERGY_COLOR.gridImport(el), icon: 'mdi:transmission-tower-import', label: statFriendly(host, d.gridStatEnergyFroms) },
-            { series: store.gridExport, color: ENERGY_COLOR.gridExport(el), icon: 'mdi:transmission-tower-export', label: statFriendly(host, d.gridStatEnergyTos) },
+            { series: store.gridImport, color: ENERGY_COLOR.gridImport(el), icon: 'mdi:transmission-tower-import', label: gridImportName(host) },
+            { series: store.gridExport, color: ENERGY_COLOR.gridExport(el), icon: 'mdi:transmission-tower-export', label: gridExportName(host) },
         ];
     }
     else if (target === 'battery')
@@ -456,8 +457,8 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         const charge:    (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, v)));
         const discharge: (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, -v)));
         specs = [
-            { series: discharge, color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery-arrow-up',   label: statFriendly(host, d.batteryStatEnergyFroms) },
-            { series: charge,    color: ENERGY_COLOR.batteryIn(el),  icon: 'mdi:battery-arrow-down', label: statFriendly(host, d.batteryStatEnergyTos) },
+            { series: discharge, color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery-arrow-up',   label: batteryDischargeName(host) },
+            { series: charge,    color: ENERGY_COLOR.batteryIn(el),  icon: 'mdi:battery-arrow-down', label: batteryChargeName(host) },
         ];
     }
     else if (target === 'irradiance')
