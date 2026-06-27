@@ -22,10 +22,10 @@ import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
 import { heliosCardLidarCss } from './css/helios-card-lidar-css';
 import {
-    type ClockData, type ClockHit,
+    type ClockData, type ClockHit, type ClockRingInput,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
     projectClockFrame, clockHitTest, clockHourTotal, formatClockValue,
-    CLOCK_GROW_MS, CLOCK_STAGGER_MS,
+    CLOCK_GROW_MS,
 } from './card/energy-clock';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime } from './card/format';
 import
@@ -466,18 +466,18 @@ export class HeliosCard extends LitElement
     private _clockTapSticky = false;
     private _clockTapStartX = 0;
     private _clockTapStartY = 0;
-    //Grow-sweep start (0 = no animation, full height) + a monotonic id so a replay supersedes the prior rAF.
-    //_clockGrowRingsActive limits the sweep to the rings just activated (null = all rings); _pendingGrowScope
-    //is set by the rail/mode action and consumed by the next _rebuildClock.
-    private _clockGrowthStart = 0;
-    private _clockGrowthSeq   = 0;
-    private _clockGrowRingsActive: ReadonlySet<number> | null = null;
-    private _pendingGrowScope: ReadonlySet<number> | 'all' | undefined = undefined;
-    //A filter being removed: its ring shrinks out (reverse sweep) before _clockData drops it. The rebuild is
-    //held off until the sweep ends so the bars stay on screen to animate.
-    private _clockRemovingRing: number | null = null;
-    private _clockRemoveStart = 0;
-    private _clockRemoveSeq   = 0;
+    //Per-ring animation, keyed by metric so rapid toggles never desync (no held rebuild, no shared index):
+    //  _clockGrowStart  — when a ring was added (drives its 0..1 height grow); absent = at rest.
+    //  _clockExiting    — removed rings fading + shrinking out, independent of the live list so a toggle never
+    //                     blocks the rebuild; each carries the slot it held so survivors slide over it.
+    //  _clockSlotFrom + _clockSlideStart — captured source slot per ring + when the recompaction slide began,
+    //                     re-snapshotted from CURRENT animated positions on every toggle so nothing teleports.
+    //  _clockAnimSeq    — gates the single shared animation rAF loop.
+    private _clockGrowStart = new Map<ChartTarget, number>();
+    private _clockExiting: Array<{ data: ClockData; slot: number; start: number; h0: number }> = [];
+    private _clockSlotFrom = new Map<ChartTarget, number>();
+    private _clockSlideStart = 0;
+    private _clockAnimSeq = 0;
     //Slice-focus dim: _clockDim ramps 0..1 (others fade toward 0.5) while _clockDimHour is focused; it
     //persists through the fade-out so the dimmed bars + the focused spoke ramp back smoothly.
     private _clockDim = 0;
@@ -979,10 +979,9 @@ export class HeliosCard extends LitElement
         this._engine?.persistCameraPose();
         this._persistUiState();
         this._unregisterCacheId();
-        //Stop any in-flight clock grow / dim / removal animation so a removed card doesn't keep an rAF alive.
-        this._clockGrowthSeq++;
+        //Stop any in-flight clock grow / slide / exit / dim animation so a removed card doesn't keep an rAF alive.
+        this._clockAnimSeq++;
         this._clockDimSeq++;
-        this._clockRemoveSeq++;
         //HA's edit-mode wrapping fires disconnect + reconnect in the same tick. Defer the engine teardown so a
         //quick reconnect (cancelled in connectedCallback) keeps the live engine; only a real removal lets it fire.
         if (this._engine !== undefined && this._engineTeardownTimer === undefined)
@@ -1044,9 +1043,9 @@ export class HeliosCard extends LitElement
             this._updateHomeAppearance(_changedProperties.has('_chartTarget'));
         }
 
-        //Energy-clock: while in clock mode, rebuild the hour rings when the metric set, the window or the
-        //underlying data changes (the grow sweep, if any, is queued by the action via _pendingGrowScope), then
-        //repaint once fresh rings render. A hover change kicks the slice-focus dim fade.
+        //Energy-clock: while in clock mode, rebuild the metric areas when the metric set, the window or the
+        //underlying data changes (a data-only rebuild animates nothing; the grow/slide is kicked by the toggle
+        //and mode actions), then repaint once fresh areas render. A hover change kicks the slice-focus dim fade.
         if (this._viewMode === 'clock')
         {
             const inputsChanged = _changedProperties.has('_viewMode')
@@ -1057,7 +1056,7 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_customEntityHistory');
             if (inputsChanged)
             {
-                this._rebuildClock();
+                this._rebuildClockData();
             }
             if (_changedProperties.has('_clockHoverHour'))
             {
@@ -2532,10 +2531,11 @@ export class HeliosCard extends LitElement
         {
             return;
         }
-        //Cancel any in-flight ring-removal so the dial rebuilds cleanly on the next clock entry.
-        this._clockRemoveSeq++;
-        this._clockRemovingRing = null;
-        this._clockRemoveStart  = 0;
+        //Reset any clock animation state so the dial enters/leaves cleanly.
+        this._clockAnimSeq++;
+        this._clockExiting = [];
+        this._clockSlotFrom.clear();
+        this._clockSlideStart = 0;
         if (mode === 'clock')
         {
             //Entering clock with no saved filters: seed from the current chip so a ring shows immediately.
@@ -2543,9 +2543,17 @@ export class HeliosCard extends LitElement
             {
                 this._clockTargets = [this._chartTarget];
             }
-            this._pendingGrowScope = 'all';   //reveal every ring when the dial first appears
+            this._rebuildClockData();
+            //Reveal every ring with a grow when the dial first appears.
+            const now = Date.now();
+            this._clockGrowStart.clear();
+            this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
+            this._viewMode = mode;
+            this._persistUiState();
+            this._clockAnimate();
+            return;
         }
-        else if (this._clockTargets.length > 0)
+        if (this._clockTargets.length > 0)
         {
             //Back to scene: the timeline (hidden in clock mode) re-applies the FIRST selected filter.
             this._setChartTarget(this._clockTargets[0]);
@@ -2554,32 +2562,60 @@ export class HeliosCard extends LitElement
         this._persistUiState();
     }
 
-    //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own ring;
-    //the first stays the timeline's target for when scene mode resumes. Order is preserved (append on add).
-    //Adding queues the grow sweep on ONLY the new ring; removing animates nothing.
+    //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own concentric
+    //area; the first stays the timeline's target for when scene mode resumes. Order is preserved (append on
+    //add). Adding grows the new area in; removing shrinks + fades it out while the survivors slide to recompact.
     private _toggleClockTarget = (target: ChartTarget): void =>
     {
         const i = this._clockTargets.indexOf(target);
         const adding = i < 0;
-        const next = adding
-            ? [...this._clockTargets, target]
-            : this._clockTargets.filter(t => t !== target);
+        //Snapshot every ring's CURRENT animated slot first, so the recompaction slides from where it is now
+        //(robust to toggling again mid-animation) rather than teleporting.
+        this._captureClockSlots();
+        const now = Date.now();
         if (adding)
         {
-            this._pendingGrowScope = new Set([next.length - 1]);   //new ring is appended last
+            //Re-adding a metric that's still exiting: cancel its exit so we don't briefly draw it twice.
+            this._clockExiting = this._clockExiting.filter(e => e.data.target !== target);
+            this._clockTargets = [...this._clockTargets, target];
+            this._clockGrowStart.set(target, now);
         }
         else
         {
-            //Removing: shrink ring `i` out first (the rebuild that drops it is held until the sweep ends).
-            this._startClockRemove(i);
+            //Hand the removed ring to the independent exit list at its current slot + height, so an in-progress
+            //grow shrinks from where it is (no jump to full) while survivors slide over it.
+            const data = this._clockData[i];
+            const gs   = this._clockGrowStart.get(target);
+            const h0   = gs ? 1 - (1 - Math.min(1, (now - gs) / CLOCK_GROW_MS)) ** 3 : 1;
+            if (data) { this._clockExiting.push({ data, slot: this._clockSlotFrom.get(target) ?? i, start: now, h0 }); }
+            this._clockGrowStart.delete(target);
+            this._clockTargets = this._clockTargets.filter(t => t !== target);
         }
-        this._clockTargets = next;
-        if (next.length > 0)
+        this._rebuildClockData();
+        if (this._clockTargets.length > 0)
         {
-            this._setChartTarget(next[0]);
+            this._setChartTarget(this._clockTargets[0]);
         }
         this._persistUiState();
+        this._clockAnimate();
     };
+
+    //Snapshot each present ring's current animated slot into _clockSlotFrom and (re)anchor the slide clock, so
+    //the next recompaction eases from the live positions instead of the integer indices.
+    private _captureClockSlots(): void
+    {
+        const now    = Date.now();
+        const slideP = this._clockSlideStart ? Math.min(1, (now - this._clockSlideStart) / CLOCK_GROW_MS) : 1;
+        const eased  = 1 - (1 - slideP) ** 3;
+        const snap   = new Map<ChartTarget, number>();
+        this._clockData.forEach((data, i) =>
+        {
+            const from = this._clockSlotFrom.get(data.target) ?? i;
+            snap.set(data.target, from + (i - from) * eased);
+        });
+        this._clockSlotFrom  = snap;
+        this._clockSlideStart = now;
+    }
 
     //Slice-focus dim fade: ramp _clockDim toward 1 while an hour is focused (others fade to 0.5), back to 0
     //when the hover/tap ends. _clockDimHour is kept through the fade-out so the dimmed bars + the focused
@@ -2777,92 +2813,63 @@ export class HeliosCard extends LitElement
         }
     }
 
-    //Rebuild one ring per active filter (outer -> inner). A grow sweep plays only when an action queued one
-    //(_pendingGrowScope): 'all' on entering clock mode, or just the new ring's index when a filter is added —
-    //so toggling a filter no longer re-grows every ring. A data-only rebuild animates nothing.
-    private _rebuildClock(): void
+    //Rebuild one ClockData per active filter (outer -> inner), immediately and unconditionally. Animation is
+    //carried separately (per-ring grow start, the exit list, the slide clock), so a data-only rebuild never
+    //disturbs an in-flight animation and a toggle is never blocked.
+    private _rebuildClockData(): void
     {
-        //Hold the current layout (with the departing ring) while it shrinks out; the rebuild that drops it
-        //runs when _startClockRemove finishes.
-        if (this._clockRemovingRing !== null)
-        {
-            return;
-        }
         this._clockData = this._clockTargets.map(t => buildClockData(this, t));
-        const scope = this._pendingGrowScope;
-        this._pendingGrowScope = undefined;
-        if (scope !== undefined)
-        {
-            this._startClockGrow(scope);
-        }
     }
 
-    //Play a removed filter's ring shrinking out (reverse sweep), holding the rebuild until it finishes so the
-    //bars stay on screen to animate. Instant in preview / reduced motion.
-    private _startClockRemove(idx: number): void
+    //Current animated slot of a present ring: eased lerp from its captured source slot to its live index.
+    private _clockSlotNow(index: number, target: ChartTarget): number
     {
-        this._clockRemovingRing = idx;
-        const finish = (): void =>
+        const from   = this._clockSlotFrom.get(target) ?? index;
+        const slideP = this._clockSlideStart ? Math.min(1, (Date.now() - this._clockSlideStart) / CLOCK_GROW_MS) : 1;
+        return from + (index - from) * (1 - (1 - slideP) ** 3);
+    }
+
+    //True while any grow, slide or exit is still playing (so the shared rAF loop keeps repainting).
+    private _clockAnimActive(): boolean
+    {
+        const now = Date.now();
+        if (this._clockExiting.length > 0) { return true; }
+        if (this._clockSlideStart && now - this._clockSlideStart < CLOCK_GROW_MS) { return true; }
+        for (const t of this._clockGrowStart.values()) { if (now - t < CLOCK_GROW_MS) { return true; } }
+        return false;
+    }
+
+    //Drive the shared clock animation: one rAF loop that prunes finished state then repaints, until idle.
+    //Instant in preview / reduced motion (settle immediately).
+    private _clockAnimate(): void
+    {
+        const settle = (): void =>
         {
-            this._clockRemoveStart = 0;
-            this._clockRemovingRing = null;
-            this._rebuildClock();   //now drops the ring + compacts the rest
+            const now = Date.now();
+            this._clockExiting = this._clockExiting.filter(e => now - e.start < CLOCK_GROW_MS);
+            for (const [t, s] of this._clockGrowStart) { if (now - s >= CLOCK_GROW_MS) { this._clockGrowStart.delete(t); } }
+            if (this._clockSlideStart && now - this._clockSlideStart >= CLOCK_GROW_MS)
+            {
+                this._clockSlideStart = 0;
+                this._clockSlotFrom.clear();
+            }
         };
         if (this.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
         {
-            finish();
+            this._clockExiting = [];
+            this._clockGrowStart.clear();
+            this._clockSlideStart = 0;
+            this._clockSlotFrom.clear();
+            this._paintClock();
             return;
         }
-        this._clockRemoveStart = Date.now();
-        const id    = ++this._clockRemoveSeq;
-        const total = CLOCK_GROW_MS + 23 * CLOCK_STAGGER_MS;
+        const id = ++this._clockAnimSeq;
         const tick = (): void =>
         {
-            if (id !== this._clockRemoveSeq || this._viewMode !== 'clock')
-            {
-                return;
-            }
+            if (id !== this._clockAnimSeq || this._viewMode !== 'clock') { return; }
+            settle();
             this._paintClock();
-            if (Date.now() - this._clockRemoveStart < total)
-            {
-                requestAnimationFrame(tick);
-            }
-            else
-            {
-                finish();
-            }
-        };
-        requestAnimationFrame(tick);
-    }
-
-    //Run the staggered grow sweep once over `scope` rings ('all' = every ring). Instant in preview / reduced
-    //motion.
-    private _startClockGrow(scope: ReadonlySet<number> | 'all'): void
-    {
-        this._clockGrowRingsActive = scope === 'all' ? null : scope;
-        if (this.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
-        {
-            this._clockGrowthStart = 0;
-            return;
-        }
-        this._clockGrowthStart = Date.now();
-        const id    = ++this._clockGrowthSeq;
-        const total = CLOCK_GROW_MS + 23 * CLOCK_STAGGER_MS;
-        const tick = (): void =>
-        {
-            if (id !== this._clockGrowthSeq || this._viewMode !== 'clock')
-            {
-                return;
-            }
-            this._paintClock();
-            if (Date.now() - this._clockGrowthStart < total)
-            {
-                requestAnimationFrame(tick);
-            }
-            else
-            {
-                this._clockGrowthStart = 0;   //settle to full height
-            }
+            if (this._clockAnimActive()) { requestAnimationFrame(tick); }
         };
         requestAnimationFrame(tick);
     }
@@ -2872,9 +2879,9 @@ export class HeliosCard extends LitElement
         requestAnimationFrame(() => this._paintClock());
     }
 
-    //Project the rings for one frame and write them onto the overlay DOM: the cylinder SVG, the ground-laid
-    //hour labels, and the clamped tooltip. Called every transform frame (init.ts) and during the grow sweep.
-    //Public so the engine's per-frame callback can reach it.
+    //Project the rings for one frame and write them onto the overlay DOM: the area SVG, the ground-laid hour
+    //labels, and the clamped tooltip. Called every transform frame (init.ts) and during the grow/slide/exit
+    //animation. Public so the engine's per-frame callback can reach it.
     public _paintClock(): void
     {
         if (this._viewMode !== 'clock')
@@ -2887,12 +2894,23 @@ export class HeliosCard extends LitElement
         {
             return;
         }
-        //An empty filter set still paints the clock face (guide ring + spokes + hour labels), just no
-        //cylinders — projectClockFrame handles the empty list.
+        //Resolve each ring's live animation scalars: present rings slide to their index + grow in; exiting
+        //rings shrink + fade out at their captured slot. An empty list still paints the clock face (guide +
+        //spokes + labels). projectClockFrame is pure geometry from here.
+        const now = Date.now();
+        const rings: ClockRingInput[] = this._clockData.map((data, i) =>
+        {
+            const gs = this._clockGrowStart.get(data.target);
+            const heightScale = gs ? 1 - (1 - Math.min(1, (now - gs) / CLOCK_GROW_MS)) ** 3 : 1;
+            return { data, slot: this._clockSlotNow(i, data.target), heightScale, opacity: 1 };
+        });
+        for (const e of this._clockExiting)
+        {
+            const p = 1 - (1 - Math.min(1, (now - e.start) / CLOCK_GROW_MS)) ** 3;
+            rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
+        }
         const frame = projectClockFrame(
-            camera, this._clockData,
-            this._clockGrowthStart, this._clockGrowRingsActive,
-            this._clockRemovingRing, this._clockRemoveStart,
+            camera, rings,
             this._clockHoverHour,
             this._clockDimHour, this._clockDim,
         );
