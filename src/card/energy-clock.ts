@@ -318,7 +318,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
 
     if (target === 'custom')
     {
-        //Custom entity from its fetched hourly history (values in W), binned by hour-of-day. One red layer.
+        //Custom entity from its fetched 5-min history (values in W), binned by slot-of-day. One red layer.
         const hist = host._customEntityHistory;
         const sum = new Array<number>(CLOCK_SLOTS).fill(0);
         const cnt = new Array<number>(CLOCK_SLOTS).fill(0);

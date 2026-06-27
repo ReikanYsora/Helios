@@ -123,10 +123,11 @@ export interface CustomEntityHost
     requestUpdate():      void;
 }
 
-//Fetch the custom entity's hourly history over the visible window and store it as { times, values } in
-//WATTS, so the clock ring (binned by hour-of-day) and the timeline curve share one consistent series. Power
-//sensors come back as `mean` (already W via unit normalisation); cumulative energy meters come back as
-//`change` (kWh per hour) and are differentiated to average watts. Keyed so an unchanged window never refetches.
+//Fetch the custom entity's 5-minute history over the visible window and store it as { times, values } in
+//WATTS, so the clock ring (binned into 15-min slots) and the timeline curve share one consistent, genuinely
+//fine series (not interpolated from hourly). Power sensors come back as `mean` (already W via unit
+//normalisation); cumulative energy meters come back as `change` (kWh per bucket) and are differentiated to
+//average watts via the bucket duration. Keyed so an unchanged window never refetches.
 export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
 {
     const id = customEntityId(host.config);
@@ -156,7 +157,9 @@ export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
             start_time:    start.toISOString(),
             end_time:      end.toISOString(),
             statistic_ids: [id],
-            period:        'hour',
+            //5-minute short-term statistics: real fine data for a power/energy meter (kept ~10 days, which
+            //covers the rolling window). The differentiation below reads each bucket's own duration.
+            period:        '5minute',
             //Normalise so `mean` lands in watts and `change` in kWh regardless of the sensor's native unit.
             types:         ['mean', 'change'],
             units:         { energy: 'kWh', power: 'W' },

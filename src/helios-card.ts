@@ -3095,8 +3095,8 @@ export class HeliosCard extends LitElement
                 ${this._clockData.map(data => {
                     const meta = clockTargetMeta(this, data.target);
                     //Multi-entity metrics (PV per source, cloud low/mid/high, grid import/export, battery
-                    //charge/discharge) break down to one row per contributing layer, each with its own glyph,
-                    //colour and (for PV) source name. Single-layer metrics keep one row with the metric total.
+                    //charge/discharge) break down to one row per contributing layer — its own glyph + colour +
+                    //value, no name (kept uniform with the others). Single-layer metrics keep one total row.
                     if (data.layers.length > 1) {
                         const rows = data.layers
                             .map(l => ({ l, v: Math.max(0, l.values[slot] ?? 0) }))
@@ -3105,7 +3105,6 @@ export class HeliosCard extends LitElement
                             return html`${rows.map(({ l, v }) => html`
                                 <div class="clock-tip-row">
                                     <ha-icon icon="${l.icon}" style="color:${l.color}"></ha-icon>
-                                    ${l.label ? html`<span class="clock-tip-label">${l.label}</span>` : nothing}
                                     <span class="clock-tip-val">${formatClockValue(this, data, v)}</span>
                                 </div>
                             `)}`;
