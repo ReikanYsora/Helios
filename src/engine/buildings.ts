@@ -504,7 +504,11 @@ export function renderBuildings(
         .map((b, index) =>
         {
             const c = cam.project3(b.centerX, b.centerY, 0);
-            return { index, depth: c.y, cameraZ: c.depth };
+            //Order by the building's NEAREST footprint vertex (max cameraZ), not its centre: a big building
+            //behind a small one in front has a nearer centre yet must draw FIRST, which the centroid got wrong.
+            let near = -Infinity;
+            for (const p of b.footprint) { const d = cam.project3(p[0], p[1], 0).depth; if (d > near) { near = d; } }
+            return { index, depth: near, cameraZ: c.depth };
         })
         //Near-plane cull: skip buildings at/behind the camera, else their walls smear over the card.
         .filter((o) => o.cameraZ < nearCull)

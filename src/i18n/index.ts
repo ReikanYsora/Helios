@@ -37,6 +37,8 @@ export interface Translations
         cloudLow:  string;
         cloudMid:  string;
         cloudHigh: string;
+        //Home-hover tooltip header: the window aggregate for the active filters.
+        total:     string;
     };
 
     editor:

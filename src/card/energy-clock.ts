@@ -113,6 +113,8 @@ export interface ClockFrame
     labels: { x: number; y: number; opacity: number; transform: string }[];
     //N/S compass letters, laid flat like the hours but at full opacity (no depth fade).
     compass: { x: number; y: number; transform: string; label: string }[];
+    //Home prism's projected centre + a screen-px hit radius (the inner empty disc), for the home-hover total.
+    home: { x: number; y: number; r: number };
 }
 
 
@@ -525,6 +527,15 @@ function ringMax(data: ClockData): number
     return m;
 }
 
+//Target per-unit ceiling for a set of rings (busiest among same-unit metrics). The card eases the displayed
+//ceiling toward this between filter changes so the remaining bars grow/shrink smoothly instead of snapping.
+export function clockUnitCeilings(datas: ClockData[]): Map<string, number>
+{
+    const m = new Map<string, number>();
+    for (const d of datas) { m.set(d.unit, Math.max(m.get(d.unit) ?? 0, ringMax(d))); }
+    return m;
+}
+
 //Rectangular bar footprint (metres) for histogram mode, oriented to `angle`: `hr` half-depth along the radius
 //(rings sit flush), `ht` half-width along the tangent. Four sides — cheap to redraw each rotation frame.
 function foot(cx: number, cy: number, hr: number, ht: number, angle: number): [number, number][]
@@ -670,7 +681,10 @@ export function projectClockFrame(
     dimSlot: number | null,
     dim: number,
     //Localised compass letters (N/S/E/W — e.g. W→O in French), supplied by the card.
-    cardinals: { n: string; s: string; e: string; w: string }
+    cardinals: { n: string; s: string; e: string; w: string },
+    //Per-unit ceiling override (the card eases it between filter changes so bars don't snap to a new scale).
+    //Units missing from the map fall back to the busiest current ring of that unit.
+    unitCeil?: Map<string, number>,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -694,7 +708,8 @@ export function projectClockFrame(
     }));
 
     //Shared per-UNIT ceiling: every ring of the same unit normalises against the busiest among them, so
-    //same-unit metrics share one axis (no read dissonance). Different units keep their own ceiling.
+    //same-unit metrics share one axis (no read dissonance). Different units keep their own ceiling. The card
+    //may pass an eased override (unitCeil); units it omits fall back to the busiest current ring.
     const unitMax = new Map<string, number>();
     for (const ring of rings) { const u = ring.data.unit; unitMax.set(u, Math.max(unitMax.get(u) ?? 0, ringMax(ring.data))); }
 
@@ -703,7 +718,7 @@ export function projectClockFrame(
     rings.forEach((ring, ri) =>
     {
         const R = outerR * ringRadiusFrac(ring.slot);
-        const ceiling = unitMax.get(ring.data.unit) ?? 0;
+        const ceiling = unitCeil?.get(ring.data.unit) ?? unitMax.get(ring.data.unit) ?? 0;
         projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits);
     });
     faces.sort((a, b) => a.depth - b.depth);
@@ -717,10 +732,14 @@ export function projectClockFrame(
     //the upright cylinders OVER it (svg). defs (the per-ring glow filters) stay with the cylinders that use them.
     //The bars carry their own per-bar highlight, so the guide stays static (no focused spoke).
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
+    //Home hit target: the projected local origin (the prism's base centre) + the inner empty-disc radius.
+    const homeC = camera.project3(0, 0, 0);
+    const homeR = RING_INNER_MIN_FRAC * RING_R_FRAC * minEdge;
     return {
         guideSvg: clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join(''),
         hits, labels, compass: compass.labels,
+        home: { x: homeC.x, y: homeC.y, r: homeR },
     };
 }
 
@@ -808,6 +827,22 @@ export function clockLayerValue(layer: ClockLayer, data: ClockData, slot: number
 export function clockTotal(data: ClockData, slot: number): number
 {
     return data.layers.reduce((s, L) => s + clockLayerValue(L, data, slot), 0);
+}
+
+//One layer's aggregate over the whole window, for the home-hover total: energy SUMS the 24 hourly kWh totals
+//(the window's energy), other units AVERAGE them (a representative percent/irradiance/power over the window).
+export function clockLayerPeriod(layer: ClockLayer, data: ClockData): number
+{
+    const energy = data.unit === 'energy';
+    const hv = hourlyOf(layer.values, energy);
+    let t = 0; for (let h = 0; h < 24; h++) { t += Math.max(0, hv[h]); }
+    return energy ? t : t / 24;
+}
+
+//A metric's window aggregate across all its layers (the grand total a single-layer metric shows).
+export function clockPeriodTotal(data: ClockData): number
+{
+    return data.layers.reduce((s, L) => s + clockLayerPeriod(L, data), 0);
 }
 
 

@@ -3,8 +3,8 @@
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { valueDecimals } from '../helios-config';
-import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward, cssHex, formatHaDateTime } from './format';
+import { valueDecimals, customEntityColor } from '../helios-config';
+import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from './format';
 import { valueAt } from './unifiedStore';
 import { resolveCustomEntityIcon } from './custom-entity';
 import {
@@ -278,7 +278,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ` : nothing}
                 ${target === 'custom' && isFinite(customV) ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, '--red-color', '#f44336')}" icon=${resolveCustomEntityIcon(host.hass, host.config)}></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336')}" icon=${resolveCustomEntityIcon(host.hass, host.config)}></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, Math.abs(customV) / 1000, dec)} kW</span>
                     </div>

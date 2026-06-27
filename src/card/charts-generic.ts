@@ -3,7 +3,8 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, lerpHexToward, cssHex } from './format';
+import { ENERGY_COLOR, lerpHexToward, cssHex, uiColorVar } from './format';
+import { customEntityColor } from '../helios-config';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { sumChangeForDay } from './energy-stats';
 import type { ChartHost, ChartTarget } from './charts';
@@ -35,7 +36,7 @@ export function chartAccentColor(host: ChartHost): string
     if (target === 'irradiance') { return ENERGY_COLOR.sun(el); }
     if (target === 'cloud')      { return ENERGY_COLOR.cloud(el); }
     if (target === 'battery-soc'){ return ENERGY_COLOR.batteryOut(el); }
-    if (target === 'custom')     { return cssHex(el, '--red-color', '#f44336'); }
+    if (target === 'custom')     { return cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336'); }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
@@ -174,8 +175,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'custom')
     {
-        //Custom entity over the window, from the fetched hourly history (values in W). One red curve,
-        //magnitude only so a signed sensor reads as a single area; the axis auto-scales.
+        //Custom entity over the window, from the fetched hourly history (values in W). One curve in the
+        //configured custom colour, magnitude only so a signed sensor reads as a single area; the axis auto-scales.
         const hist = host._customEntityHistory;
         const pts: { t: number; v: number }[] = [];
         if (hist)
@@ -189,7 +190,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 pts.push({ t: tMs, v: Math.abs(v) });
             }
         }
-        series = [{ pts, color: cssHex(el, '--red-color', '#f44336') }];
+        series = [{ pts, color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') }];
     }
     else if (target === 'cloud')
     {

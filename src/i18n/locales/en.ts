@@ -32,6 +32,7 @@ export const en: Translations = {
         cloudLow:  'Low cloud cover',
         cloudMid:  'Mid cloud cover',
         cloudHigh: 'High cloud cover',
+        total:     'Total',
     },
 
     editor:

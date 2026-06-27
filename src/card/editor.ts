@@ -27,6 +27,13 @@ import
 import { pickTranslations, type Translations } from '../i18n';
 
 
+//Colour-token fields (ui_color selectors). These always carry a token — there's no clear-colour affordance — so an
+//empty value-changed is a lazy-init artifact to ignore, unlike entity pickers where clearing is a valid edit.
+const COLOUR_FIELD_KEYS: ReadonlySet<keyof HeliosConfig> = new Set([
+    'custom-entity-color',
+    'home-color',
+    'building-color',
+]);
 
 
 // Render a localised hint with markdown-style `[text](url)` links as a Lit fragment of real `<a>` anchors. Built via Lit's tagged
@@ -296,6 +303,9 @@ export class HeliosCardEditor extends LitElement
         //Skip the echo a selector emits on first paint (value-changed with the value we just set): without this
         //the colour pickers clobber the saved value back to their default on editor reload.
         const next = e.detail.value ?? '';
+        //A colour selector can emit an empty value-changed before its .value applies; ignore it so the saved token
+        //survives reload. Entity pickers keep accepting empty (clearing the entity is a real edit).
+        if (COLOUR_FIELD_KEYS.has(key) && next === '') { return; }
         if (next === (this._cfg[key] ?? '')) { return; }
         this._update(key, next);
     };

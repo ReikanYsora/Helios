@@ -26,9 +26,9 @@ import {
     type ClockData, type ClockHit, type ClockRingInput,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
     projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
-    CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
+    clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './card/energy-clock';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar, lerpHexToward } from './card/format';
 import
 {
     refreshPv,
@@ -275,8 +275,15 @@ export class HeliosCard extends LitElement
     @state() _clockTargets: ChartTarget[] = [];
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     @state() private _clockData: ClockData[] = [];
+    //Per-unit displayed ceiling, eased toward the target between filter changes so the remaining bars rescale
+    //smoothly (toggling one of two same-unit metrics otherwise snaps the survivor to a new axis).
+    private _clockCeilAnim = new Map<string, { from: number; to: number; start: number }>();
     //Hovered slot; resolves to its hour and lights every ring's area for that hour + drives the tooltip. null = off.
     @state() private _clockHoverSlot: number | null = null;
+    //Home prism hovered/tapped: brightens it + shows the window-total tooltip (does NOT dim the cylinders).
+    @state() private _clockHomeHover = false;
+    //Home prism's screen centre + hit radius from the last frame, for the home hover/tap test.
+    private _clockHome: { x: number; y: number; r: number } | null = null;
     //Screen-space hit segments (each slot's axis), refreshed every paint for the hover test.
     private _clockHits: ClockHit[] = [];
     private _clockHoverX = 0;
@@ -517,10 +524,13 @@ export class HeliosCard extends LitElement
         {
             return;
         }
-        const colors = this._clockTargets.map(t => clockTargetMeta(this, t).color);
+        //On home hover/tap, brighten the slices toward white so the prism reads as highlighted (the same intent
+        //as the focused histogram bar) without touching the cylinders.
+        const lift = (c: string) => this._clockHomeHover ? lerpHexToward(c, '#ffffff', 0.35) : c;
+        const colors = this._clockTargets.map(t => lift(clockTargetMeta(this, t).color));
         if (colors.length === 0)
         {
-            this._engine.setHomeAppearance(ENERGY_COLOR.consumption(this), [], false);
+            this._engine.setHomeAppearance(lift(ENERGY_COLOR.consumption(this)), [], false);
             return;
         }
         const bands = colors.length >= 2
@@ -863,7 +873,10 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_chartSeries')
                 || _changedProperties.has('_batterySocHistory')
                 || _changedProperties.has('_customEntityHistory')
-                || _changedProperties.has('_clockHourly');
+                || _changedProperties.has('_clockHourly')
+                //An editor save (custom-entity colour, decimals…) changes config-derived clock visuals: rebuild
+                //so the cylinders + home pick up the new colour instead of keeping the cached one.
+                || _changedProperties.has('config');
             if (inputsChanged)
             {
                 this._rebuildClockData();
@@ -891,7 +904,8 @@ export class HeliosCard extends LitElement
             //filters. Re-run when the dial appears, the filter set changes, or data first lands (engine spawn).
             if (_changedProperties.has('_viewMode')
                 || _changedProperties.has('_clockTargets')
-                || _changedProperties.has('_unifiedStore'))
+                || _changedProperties.has('_unifiedStore')
+                || _changedProperties.has('config'))
             {
                 this._engine?.setHomeOnly(true);
                 this._updateClockHomeAppearance();
@@ -899,6 +913,10 @@ export class HeliosCard extends LitElement
             if (_changedProperties.has('_clockHoverSlot'))
             {
                 this._startClockDim();
+            }
+            if (_changedProperties.has('_clockHomeHover'))
+            {
+                this._updateClockHomeAppearance();
             }
             if (_changedProperties.has('_clockData'))
             {
@@ -1584,7 +1602,9 @@ export class HeliosCard extends LitElement
                         ${this._compassLabels().map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
                         ${this._clockHoverSlot !== null
                             ? this._renderClockTooltip(this._clockHoverSlot)
-                            : nothing}
+                            : this._clockHomeHover
+                                ? this._renderClockHomeTooltip()
+                                : nothing}
                     </div>
                 ` : nothing}
 
@@ -2392,6 +2412,8 @@ export class HeliosCard extends LitElement
         //Leaving clock: restore the full scene + the chart-driven home colour, clear the ground guide overlay.
         this._engine?.setHomeOnly(false);
         this._engine?.setGroundOverlay('');
+        this._clockCeilAnim.clear();
+        this._clockHomeHover = false;
         this._updateHomeAppearance(false);
         if (this._clockTargets.length > 0)
         {
@@ -2792,17 +2814,37 @@ export class HeliosCard extends LitElement
             const p = easeOutCubic((now - e.start) / CLOCK_GROW_MS);
             rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
         }
+        //Ease the per-unit ceiling toward the present rings' target so a filter toggle rescales the survivors
+        //smoothly. On the first sighting of a unit (or an unchanged target) the displayed value sits on the
+        //target — no animation; only a changed target starts an ease from the current displayed height.
+        const targetCeil = clockUnitCeilings(this._clockData);
+        const dispCeil = new Map<string, number>();
+        for (const u of [...this._clockCeilAnim.keys()]) { if (!targetCeil.has(u)) { this._clockCeilAnim.delete(u); } }
+        for (const [u, to] of targetCeil)
+        {
+            const prev = this._clockCeilAnim.get(u);
+            if (!prev) { this._clockCeilAnim.set(u, { from: to, to, start: now }); }
+            else if (prev.to !== to)
+            {
+                const cur = prev.from + (prev.to - prev.from) * easeOutCubic((now - prev.start) / CLOCK_GROW_MS);
+                this._clockCeilAnim.set(u, { from: cur, to, start: now });
+            }
+            const a = this._clockCeilAnim.get(u)!;
+            dispCeil.set(u, a.from + (a.to - a.from) * easeOutCubic((now - a.start) / CLOCK_GROW_MS));
+        }
         const tc = pickTranslations(this.hass?.language).clock;
         const frame = projectClockFrame(
             camera, rings,
             this._clockDimSlot, this._clockDim,
             { n: tc.compassN, s: tc.compassS, e: tc.compassE, w: tc.compassW },
+            dispCeil,
         );
         //Cylinders into .clock-svg (over the home prism); the flat guide into the engine's ground overlay,
         //which sits between the basemap and the home prism so the home reads OVER the guide.
         svgEl.innerHTML = frame.svg;
         this._engine?.setGroundOverlay(frame.guideSvg);
         this._clockHits = frame.hits;
+        this._clockHome = frame.home;
 
         this._clockLabels?.forEach((node, h) =>
         {
@@ -2851,6 +2893,13 @@ export class HeliosCard extends LitElement
         this._clockHoverY = e.clientY - rect.top;
         const hit = clockHitTest(this._clockHits, this._clockHoverX, this._clockHoverY);
         this._clockTapSticky = false;
+        //The home owns only the central disc, and only when no cylinder is under the cursor: it brightens the
+        //prism + shows the window total, and never dims the cylinders.
+        const homeHit = hit === null && this._clockHomeHit(this._clockHoverX, this._clockHoverY);
+        if (homeHit !== this._clockHomeHover)
+        {
+            this._clockHomeHover = homeHit;
+        }
         if (hit !== this._clockHoverSlot)
         {
             this._clockHoverSlot = hit;   //@state change -> tooltip render + repaint via updated()
@@ -2861,8 +2910,19 @@ export class HeliosCard extends LitElement
         }
     };
 
+    //True when (x,y) falls within the home prism's central hit disc captured from the last frame.
+    private _clockHomeHit(x: number, y: number): boolean
+    {
+        const h = this._clockHome;
+        return !!h && Math.hypot(x - h.x, y - h.y) <= h.r;
+    }
+
     private _onClockHoverEnd = (): void =>
     {
+        if (this._clockHomeHover)
+        {
+            this._clockHomeHover = false;
+        }
         //Leaving the surface only dismisses a mouse hover; a tapped (sticky) tooltip stays until tapped away.
         if (this._clockHoverSlot === null || this._clockTapSticky)
         {
@@ -2916,11 +2976,20 @@ export class HeliosCard extends LitElement
         {
             this._clockTapSticky = true;
             this._clockHoverSlot = hit;
+            this._clockHomeHover = false;
+        }
+        else if (this._clockHomeHit(x, y))
+        {
+            //Tap the home: toggle its window-total tooltip (re-tap or tap elsewhere dismisses).
+            this._clockHomeHover = !this._clockHomeHover;
+            this._clockHoverSlot = null;
+            this._clockTapSticky = this._clockHomeHover;
         }
         else
         {
             this._clockTapSticky = false;
             this._clockHoverSlot = null;
+            this._clockHomeHover = false;
         }
     };
 
@@ -2986,6 +3055,46 @@ export class HeliosCard extends LitElement
                             <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
                             <span class="clock-tip-name">${clockTargetLabel(this, data.target)}</span>
                             <span class="clock-tip-val">${formatClockValue(this, data, clockTotal(data, slot))}</span>
+                        </div>
+                    `;
+                })}
+            </div>
+        `;
+    }
+
+    //Home-hover tooltip: the window aggregate (energy summed, other units averaged) for every active filter —
+    //the same rows as the hour tooltip but totalled over the whole selected period instead of one hour.
+    private _renderClockHomeTooltip(): TemplateResult | typeof nothing
+    {
+        if (this._clockData.length === 0)
+        {
+            return nothing;
+        }
+        const tc = pickTranslations(this.hass?.language).clock;
+        return html`
+            <div class="clock-tip">
+                <div class="clock-tip-head">${tc.total}</div>
+                ${this._clockData.map(data => {
+                    const meta = clockTargetMeta(this, data.target);
+                    if (data.layers.length > 1) {
+                        const rows = data.layers
+                            .map(l => ({ l, v: clockLayerPeriod(l, data) }))
+                            .filter(r => r.v > 0);
+                        if (rows.length > 0) {
+                            return html`${rows.map(({ l, v }) => html`
+                                <div class="clock-tip-row">
+                                    <ha-icon icon=${l.icon} style="color:${l.color}"></ha-icon>
+                                    <span class="clock-tip-name">${l.label}</span>
+                                    <span class="clock-tip-val">${formatClockValue(this, data, v)}</span>
+                                </div>
+                            `)}`;
+                        }
+                    }
+                    return html`
+                        <div class="clock-tip-row">
+                            <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
+                            <span class="clock-tip-name">${clockTargetLabel(this, data.target)}</span>
+                            <span class="clock-tip-val">${formatClockValue(this, data, clockPeriodTotal(data))}</span>
                         </div>
                     `;
                 })}

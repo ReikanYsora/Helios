@@ -579,7 +579,9 @@ export const heliosTimelineStyles = css`
     }
     .tb-period-seg:hover
     {
-        background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
+        /*  HA's canonical quiet-row hover fill (dark: --ha-color-neutral-10 ≈ #1f1f21), so a Helios button
+            highlights exactly like a hovered HA card/list row; the rgba overlay is the pre-token fallback. */
+        background: var(--ha-color-fill-neutral-quiet-hover, rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08));
         color: var(--primary-text-color, #212121);
     }
     .tb-period-seg.is-on
