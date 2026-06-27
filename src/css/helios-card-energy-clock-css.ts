@@ -15,8 +15,22 @@ export const heliosCardEnergyClockCss = css`
         pointer-events: none;
     }
 
+    /*  Flat-ground guide layer (centre hub + 24 hour spokes + compass) painted each frame. z-index 0 puts it
+        BELOW #map-container (z-index 1), so the home prism (.scene-svg, inside that container) covers the
+        spokes' inner ends — the guide reads as ground the house stands on, not lines drawn over its base. */
+    .clock-guide-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        pointer-events: none;
+        overflow: visible;
+    }
+
     /*  Screen-space SVG the cylinders paint into each frame (innerHTML set imperatively). Sits above the
-        basemap, below the controls; inert so map drag-rotate passes straight through to the container. */
+        basemap AND the home prism, below the controls; inert so map drag-rotate passes straight through. */
     .clock-svg
     {
         position: absolute;

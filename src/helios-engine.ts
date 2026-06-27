@@ -19,7 +19,9 @@ import
     buildingCount,
     buildingRealSize,
     buildingFixedHeightM,
+    buildingColorToken,
 } from './helios-config';
+import { uiColorVar } from './card/format';
 
 
 //Lifecycle instrumentation on window.__heliosStats so lifecycle leaks (engines not torn down) can be
@@ -118,10 +120,6 @@ export interface WeatherData
     pvPowerHaurwitz:  number;      //always populated (analytical fallback)
     pvPowerShortwave: number;      //-1 if shortwave_radiation is unavailable
     irradianceSource: IrradianceSource;
-    //Ambient context for the card-side PV prediction: temperature drives thermal derating, wind the
-    //convective cooling term. NaN means the model lacked the value; predictor falls back to derating = 1.
-    temperatureC:   number;
-    windMs:         number;
 }
 
 //Cloud disc, chip cluster, camera target and sun-arc tunables live in constants.ts.
@@ -889,7 +887,7 @@ export class HeliosEngine
     {
         this._renderer?.setPalette({
             home:            this._cssHex('--energy-grid-consumption-color', '#488fc2'),
-            neighbor:        this._cssHex('--primary-text-color', '#dddddd'),
+            neighbor:        this._buildingColor(),
             sun:             SUN_COLOR_HEX,
             shadow:          this._cssHex('--shadow-color', '#000000'),
             shadowOpacity:   this._shadowsEnabled() ? this._shadowOpacity() : 0,
@@ -953,10 +951,6 @@ export class HeliosEngine
         cloudMid:       number;
         cloudHigh:      number;
         shortwave:      number;
-        //2 m air temperature °C. NaN = missing; callers fall back to no thermal derating.
-        temperatureC:   number;
-        //10 m wind speed m/s. NaN = missing; same fallback as temperature.
-        windMs:         number;
         cloudIntensity: CloudIntensity;
     }
     {
@@ -966,8 +960,6 @@ export class HeliosEngine
             cloudMid:       0,
             cloudHigh:      0,
             shortwave:      -1,
-            temperatureC:   NaN,
-            windMs:         NaN,
             cloudIntensity: 'clear' as CloudIntensity
         };
 
@@ -989,8 +981,6 @@ export class HeliosEngine
         const cHi  = home.cloudHigh[idx]   ?? 0;
         const sw   = home.shortwave[idx]   ?? -1;
         const wc   = home.weatherCode[idx] ?? 0;
-        const ta   = home.temperature[idx] ?? NaN;
-        const ws   = home.windSpeed[idx]   ?? NaN;
 
         return {
             cloudCover:     cc,
@@ -998,8 +988,6 @@ export class HeliosEngine
             cloudMid:       cMid,
             cloudHigh:      cHi,
             shortwave:      sw,
-            temperatureC:   ta,
-            windMs:         ws,
             cloudIntensity: weatherCodeToIntensity(wc, cc)
         };
     }
@@ -1099,8 +1087,6 @@ export class HeliosEngine
             pvPowerHaurwitz,
             pvPowerShortwave,
             irradianceSource,
-            temperatureC:     w.temperatureC,
-            windMs:           w.windMs,
         });
     }
 
@@ -1135,11 +1121,12 @@ export class HeliosEngine
         return Math.min(100, v);
     }
 
-    //Building base colour for the diagnostics snapshot. Resolved from the HA theme (the same token the
-    //renderer tints surrounding buildings with), not a config or constant.
+    //Building base tint: the configured ui_color token resolved to #rrggbb off the live theme (canvas
+    //drawing needs a concrete hex, not a CSS var). Shared by the renderer palette and the diagnostics
+    //snapshot, so a building-colour change re-tints via _resolvePalette without a refetch.
     private _buildingColor(): string
     {
-        return this._cssHex('--primary-text-color', '#cccccc');
+        return this._cssHex(uiColorVar(buildingColorToken(this.cfg), 'grey'), '#9e9e9e');
     }
 
     //Location-keyed key for the raw fetch + shared cache. Options are deliberately absent: a building-option
@@ -1349,8 +1336,6 @@ export class HeliosEngine
                 pvPowerHaurwitz:  0,
                 pvPowerShortwave: -1,
                 irradianceSource: 'haurwitz',
-                temperatureC:     NaN,
-                windMs:           NaN,
             });
 
             let retryDelay: number;
@@ -2107,8 +2092,7 @@ export class HeliosEngine
 
     //Hourly series for the chart (one entry per hour over the forecast window): irradiance (W/m², sensor ->
     //shortwave -> Haurwitz fallback so the curve stays continuous past the model horizon), effective cloud
-    //and the per-altitude bands, beam/diffuse, snow depth, temperature, wind. Null until the first fetch.
-    //The card re-renders the chart on every onWeatherUpdate.
+    //and the per-altitude bands. Null until the first fetch. The card re-renders the chart on every onWeatherUpdate.
     public getTimelineSeries(): {
         times:        Date[];
         irradiance:   number[];
@@ -2117,16 +2101,6 @@ export class HeliosEngine
         cloudLow:     number[];
         cloudMid:     number[];
         cloudHigh:    number[];
-        //Per-hour beam + diffuse irradiance W/m² (-1 where unsupplied), so card/pv.ts can transpose a tilted
-        //array on the real direct/diffuse split instead of the cloud-derived fraction.
-        directRad:    number[];
-        diffuseRad:   number[];
-        //Per-hour snow depth m (NaN where unsupplied); feeds the winter snow-cover derate on PV output.
-        snowDepth:    number[];
-        //Per-hour temperature °C and 10 m wind m/s (NaN-padded), so card/pv.ts can apply thermal derating
-        //without re-deriving the weather-hour-to-cursor alignment.
-        temperature:  number[];
-        windSpeed:    number[];
     } | null
     {
         const home = this._homeHourlyData;
@@ -2159,11 +2133,6 @@ export class HeliosEngine
         const cloudMid  = home.times.map((_, i) => home.cloudMid[i]  ?? 0);
         const cloudHigh = home.times.map((_, i) => home.cloudHigh[i] ?? 0);
 
-        //Beam + diffuse pass straight from the model with the -1 sentinel preserved (no sensor/Haurwitz
-        //fallback): an undecomposed hour reads -1 and the transposition reverts to the cloud split there.
-        const directRad  = home.times.map((_, i) => home.directRad[i]  ?? -1);
-        const diffuseRad = home.times.map((_, i) => home.diffuseRad[i] ?? -1);
-
         return {
             times:       home.times.slice(),
             irradiance,
@@ -2171,11 +2140,6 @@ export class HeliosEngine
             cloudLow,
             cloudMid,
             cloudHigh,
-            directRad,
-            diffuseRad,
-            snowDepth:   home.snowDepth.slice(),
-            temperature: home.temperature.slice(),
-            windSpeed:   home.windSpeed.slice(),
         };
     }
 

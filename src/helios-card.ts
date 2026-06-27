@@ -8,13 +8,14 @@ import
     type HeliosConfig,
     valueDecimals,
     customEntityId,
+    customEntityColor,
     cacheId,
     hasLocalLidar
 } from './helios-config';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod } from './card/timeline-modes';
-import { CUSTOM_ENTITY_COLOR } from './constants';
+import { DAY_MS } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -24,9 +25,9 @@ import {
     type ClockData, type ClockHit, type ClockRingInput, type ClockMode,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
     projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
-    CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR,
+    CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './card/energy-clock';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor } from './card/format';
 import
 {
     refreshPv,
@@ -465,7 +466,9 @@ export class HeliosCard extends LitElement
     private _clockTapStartX = 0;
     private _clockTapStartY = 0;
     //Per-ring animation, keyed by metric so rapid toggles never desync (no held rebuild, no shared index):
-    //  _clockGrowStart  — when a ring was added (drives its 0..1 height grow); absent = at rest.
+    //  _clockGrowStart  — when a ring's grow begins (0..1 height rise); absent = at rest. A start in the FUTURE
+    //                     holds the ring at 0 until then — the reload's shrink→hold→grow uses that. See
+    //                     _clockRingHeight for the resolved per-frame height, _clockSlotNow for the slide.
     //  _clockExiting    — removed rings fading + shrinking out, independent of the live list so a toggle never
     //                     blocks the rebuild; each carries the slot it held so survivors slide over it.
     //  _clockSlotFrom + _clockSlideStart — captured source slot per ring + when the recompaction slide began,
@@ -478,7 +481,11 @@ export class HeliosCard extends LitElement
     private _clockAnimSeq = 0;
     //Period-change reload: every ring shrinks to 0 and holds there while the new window's data is fetched,
     //then grows back up once it lands — so the dial never pops abruptly from old data to new. 0 = idle.
+    //_clockReloadWindowStartMs is the new window's series-start anchor, captured when the reload begins: the
+    //grow only fires once the relevant change-series fetch keys carry THIS start (the now/week store rebuilds
+    //eagerly from stale series at the new geometry, so non-null alone never proves the data is fresh).
     private _clockReloadStart = 0;
+    private _clockReloadWindowStartMs = 0;
     //Slice-focus dim: _clockDim ramps 0..1 (others fade toward 0.5) while _clockDimSlot is focused; it
     //persists through the fade-out so the dimmed bars + the focused spoke ramp back smoothly.
     private _clockDim = 0;
@@ -486,6 +493,7 @@ export class HeliosCard extends LitElement
     private _clockDimSeq  = 0;
     @query('ha-card') private _haCard?: HTMLElement;
     @query('.clock-svg') private _clockSvg?: SVGSVGElement;
+    @query('.clock-guide-svg') private _clockGuideSvg?: SVGSVGElement;
     @queryAll('.clock-hour-label') private _clockLabels!: NodeListOf<HTMLElement>;
     @queryAll('.clock-compass-label') private _clockCompassLabels!: NodeListOf<HTMLElement>;
     @state() _chartSeries: {
@@ -496,16 +504,6 @@ export class HeliosCard extends LitElement
         cloudLow:     number[];
         cloudMid:     number[];
         cloudHigh:    number[];
-        //Hourly horizontal beam + diffuse irradiance in W/m², -1 where not decomposed. Feeds the PV tilt
-        //transposition's direct/diffuse split.
-        directRad:    number[];
-        diffuseRad:   number[];
-        //Hourly ground snow depth in metres, NaN where unknown. Feeds the winter snow-cover derate.
-        snowDepth:    number[];
-        //Hourly ambient temperature in °C + wind speed in m/s, NaN-padded where absent. Mirror `times`
-        //length; feed the PV prediction's thermal-derating term.
-        temperature:  number[];
-        windSpeed:    number[];
     } | null = null;
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
@@ -620,7 +618,12 @@ export class HeliosCard extends LitElement
         if (this._viewMode === 'clock')
         {
             //Shrink the current rings out now; they grow back once the new window's data lands (updated()).
+            //Anchor the expected series start (midnight − new past span) so the grow gate can tell a completed
+            //refetch for THIS window from the stale series the store would otherwise rebuild from eagerly.
+            const today0 = new Date();
+            today0.setHours(0, 0, 0, 0);
             this._clockReloadStart = Date.now();
+            this._clockReloadWindowStartMs = today0.getTime() - this._periodPastDays * DAY_MS;
             this._clockGrowStart.clear();
             void refreshClockHourly(this);
             this._clockAnimate();
@@ -909,6 +912,11 @@ export class HeliosCard extends LitElement
         this._batteryChangeFetchKey       = '';
         this._irradianceHistory           = null;
         this._irradianceFetchKey          = '';
+        //Drop the derived clock + unified store so the next paint rebuilds them from the refetched series rather
+        //than the data the user just cleared.
+        this._clockHourly                 = null;
+        this._clockHourlyKey              = '';
+        this._unifiedStore                = null;
         //Drop the module-level caches too, else the next refresh rehydrates from the cross-mount cache with
         //the exact stale entry the user just cleared.
         clearPvModuleCaches();
@@ -1095,7 +1103,12 @@ export class HeliosCard extends LitElement
             //it always reads down-then-up.
             if (this._clockReloadStart)
             {
-                const ready = clockNeedsHourly(this) ? this._clockHourly !== null : this._unifiedStore !== null;
+                //month/year wait on the hourly profile (nulled up front on a window change, so non-null ⇒ fresh);
+                //now/week wait on every configured change-series having refetched for the new window — the store
+                //rebuilds eagerly from stale series, so non-null alone would grow the OLD numbers.
+                const ready = clockNeedsHourly(this)
+                    ? this._clockHourly !== null
+                    : this._unifiedStore !== null && this._clockWindowFetched();
                 if (ready)
                 {
                     const growStart = Math.max(Date.now(), this._clockReloadStart + CLOCK_GROW_MS);
@@ -1432,7 +1445,10 @@ export class HeliosCard extends LitElement
             && layout !== null
             && pvEntityId !== ''
             && pvActiveRate !== null
-            && (!pvScrubFuture || isPvPredicted);
+            && (!pvScrubFuture || isPvPredicted)
+            //Scrub to an era with no production (no panels yet, or a flat 0) hides the chip AND its leader
+            //together — a stale 0 used to leave the leader dangling to the home.
+            && (!pvScrubbing || pvActiveRate.value > 0);
 
         //User-configured decimal precision, applied to every chip readout (kW/kWh).
         const valueDec = valueDecimals(this.config);
@@ -1698,7 +1714,7 @@ export class HeliosCard extends LitElement
         //home (default). Cadence scales with the value's magnitude; below the idle floor the bead is dropped.
         const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config));
         const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
-        const customLeaderColor = CUSTOM_ENTITY_COLOR;
+        const customLeaderColor = resolveUiColor(customEntityColor(this.config), '#f44336');
         const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
         //Value at the active instant (scrub target in the past, else live now), in WATTS, shown as kW — never
         //an energy meter's lifetime total (customChipWatts differentiates cumulative energy to average power).
@@ -1839,6 +1855,7 @@ export class HeliosCard extends LitElement
 
                 ${hasHomeCoords && this._viewMode === 'clock' ? html`
                     <div class="clock-overlay">
+                        <svg class="clock-guide-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         <svg class="clock-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         ${Array.from({ length: 24 }, (_unused, h) => html`
                             <div class="clock-hour-label">${this._formatClockHour(h)}</div>
@@ -2206,9 +2223,10 @@ export class HeliosCard extends LitElement
                       stays crisp under camera rotation.               -->
                 <!--  Custom-entity chip (top-left, above grid). Red leader to the home; bead flows home ->
                       chip on a positive value, chip -> home on a negative one. Shown only when the entity is
-                      configured AND has a value at the active instant (customW !== null) — so scrubbing into a
-                      gap (no history) drops the chip + its leader entirely instead of leaving an empty pill.  -->
-                ${hasHomeCoords && layout !== null && customLive !== null && customW !== null ? html`
+                      configured AND has a real value at the active instant — scrubbing into a gap (no history,
+                      or a flat 0 before the entity existed) drops the chip + leader instead of an empty pill.  -->
+                ${hasHomeCoords && layout !== null && customLive !== null && customW !== null
+                  && (customScrubMs === null || customW !== 0) ? html`
                     <svg class="custom-leader-svg">
                         <path class="custom-leader-line" style="stroke:${customLeaderColor}" d=${customLeaderPath} />
                         ${customBeadDur !== null ? (customPositive ? svg`
@@ -2576,6 +2594,27 @@ export class HeliosCard extends LitElement
         this._unifiedStore = buildUnifiedStore(host);
     }
 
+    //Reload grow gate for now/week: true only once every CONFIGURED change-series has refetched for the new
+    //window. Each fetch helper keys its series on `…|${startMs}|…` where startMs is the new window's series
+    //start; so a series is fresh when its key carries _clockReloadWindowStartMs and it is no longer in flight.
+    //Series with no configured entity contribute nothing to the dial and are skipped. Until all pass, the
+    //store may be non-null but is built from STALE series at the new geometry, so the grow must not fire.
+    private _clockWindowFetched(): boolean
+    {
+        const anchor = `|${this._clockReloadWindowStartMs}|`;
+        const d = this._energyDefaults;
+        const fresh = (
+            ids:      readonly string[],
+            key:      string,
+            fetching: boolean,
+        ): boolean => ids.length === 0 || (!fetching && key.includes(anchor));
+        return fresh(d.solarStatEnergyFroms,   this._pvChangeSeriesFetchKey,     this._pvChangeSeriesFetching)
+            && fresh(d.gridStatEnergyFroms,    this._gridImportChangeFetchKey,   this._gridImportChangeFetching)
+            && fresh(d.gridStatEnergyTos,      this._gridExportChangeFetchKey,   this._gridExportChangeFetching)
+            && fresh([...d.batteryStatEnergyTos, ...d.batteryStatEnergyFroms],
+                     this._batteryChangeFetchKey, this._batteryChangeFetching);
+    }
+
     //Reset timeline scrub state so the absolutely-positioned tooltip disappears next render.
     private _exitScrubMode = (): void =>
     {
@@ -2694,7 +2733,7 @@ export class HeliosCard extends LitElement
             //grow shrinks from where it is (no jump to full) while survivors slide over it.
             const data = this._clockData[i];
             const gs   = this._clockGrowStart.get(target);
-            const h0   = gs ? 1 - (1 - Math.min(1, (now - gs) / CLOCK_GROW_MS)) ** 3 : 1;
+            const h0   = gs ? easeOutCubic((now - gs) / CLOCK_GROW_MS) : 1;
             if (data) { this._clockExiting.push({ data, slot: this._clockSlotFrom.get(target) ?? i, start: now, h0 }); }
             this._clockGrowStart.delete(target);
             this._clockTargets = this._clockTargets.filter(t => t !== target);
@@ -2720,8 +2759,8 @@ export class HeliosCard extends LitElement
     private _captureClockSlots(): void
     {
         const now    = Date.now();
-        const slideP = this._clockSlideStart ? Math.min(1, (now - this._clockSlideStart) / CLOCK_GROW_MS) : 1;
-        const eased  = 1 - (1 - slideP) ** 3;
+        const slideP = this._clockSlideStart ? (now - this._clockSlideStart) / CLOCK_GROW_MS : 1;
+        const eased  = easeOutCubic(slideP);
         const snap   = new Map<ChartTarget, number>();
         this._clockData.forEach((data, i) =>
         {
@@ -2760,7 +2799,7 @@ export class HeliosCard extends LitElement
                 return;
             }
             const t = Math.min(1, (now - start) / DUR);
-            this._clockDim = from + (target - from) * t;
+            this._clockDim = from + (target - from) * easeOutCubic(t);
             this.paintClock();
             if (t < 1)
             {
@@ -2952,8 +2991,21 @@ export class HeliosCard extends LitElement
     private _clockSlotNow(index: number, target: ChartTarget): number
     {
         const from   = this._clockSlotFrom.get(target) ?? index;
-        const slideP = this._clockSlideStart ? Math.min(1, (Date.now() - this._clockSlideStart) / CLOCK_GROW_MS) : 1;
-        return from + (index - from) * (1 - (1 - slideP) ** 3);
+        const slideP = this._clockSlideStart ? (Date.now() - this._clockSlideStart) / CLOCK_GROW_MS : 1;
+        return from + (index - from) * easeOutCubic(slideP);
+    }
+
+    //A present ring's 0..1 height for this frame, by explicit phase:
+    //  GROW   — a grow start exists. While it's scheduled in the future (the reload hold), it sits at 0;
+    //           from the start onward it eases up to full.
+    //  SHRINK — no grow start but a reload is in progress: ease down from full to 0, then hold there.
+    //  REST   — neither: full height.
+    private _clockRingHeight(target: ChartTarget, now: number): number
+    {
+        const gs = this._clockGrowStart.get(target);
+        if (gs !== undefined) { return now >= gs ? easeOutCubic((now - gs) / CLOCK_GROW_MS) : 0; }
+        if (this._clockReloadStart) { return 1 - easeOutCubic((now - this._clockReloadStart) / CLOCK_GROW_MS); }
+        return 1;
     }
 
     //True while any grow, slide or exit is still playing (so the shared rAF loop keeps repainting).
@@ -3036,37 +3088,20 @@ export class HeliosCard extends LitElement
         //rings shrink + fade out at their captured slot. An empty list still paints the clock face (guide +
         //spokes + labels). projectClockFrame is pure geometry from here.
         const now = Date.now();
-        const rs = this._clockReloadStart;
         const rings: ClockRingInput[] = this._clockData.map((data, i) =>
-        {
-            //heightScale phases: a grow start (gs) drives the rise (0 while it's still scheduled in the future,
-            //during the reload hold); otherwise a reload start shrinks 1 -> 0 and holds; otherwise full height.
-            const gs = this._clockGrowStart.get(data.target);
-            let heightScale: number;
-            if (gs !== undefined)
-            {
-                heightScale = now >= gs ? 1 - (1 - Math.min(1, (now - gs) / CLOCK_GROW_MS)) ** 3 : 0;
-            }
-            else if (rs)
-            {
-                heightScale = (1 - Math.min(1, (now - rs) / CLOCK_GROW_MS)) ** 3;
-            }
-            else
-            {
-                heightScale = 1;
-            }
-            return { data, slot: this._clockSlotNow(i, data.target), heightScale, opacity: 1 };
-        });
+            ({ data, slot: this._clockSlotNow(i, data.target), heightScale: this._clockRingHeight(data.target, now), opacity: 1 }));
         for (const e of this._clockExiting)
         {
-            const p = 1 - (1 - Math.min(1, (now - e.start) / CLOCK_GROW_MS)) ** 3;
+            const p = easeOutCubic((now - e.start) / CLOCK_GROW_MS);
             rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
         }
         const frame = projectClockFrame(
             camera, rings, this._clockSubMode,
             this._clockDimSlot, this._clockDim,
         );
+        //Cylinders into .clock-svg (over the home prism); the flat guide into .clock-guide-svg (under it).
         svgEl.innerHTML = frame.svg;
+        if (this._clockGuideSvg) { this._clockGuideSvg.innerHTML = frame.guideSvg; }
         this._clockHits = frame.hits;
 
         this._clockLabels?.forEach((node, h) =>

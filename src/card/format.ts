@@ -218,6 +218,28 @@ export function cloudCoverIcon(coverPct: number): string
 }
 
 
+// HA ui_color tokens
+//Mirror of HA's `ui_color` selector, which stores a STRING token — either a theme keyword (primary,
+//accent, disabled) or a Material colour name (red, grey, …). Each token maps to the CSS var
+//`--<token>-color`. We don't import HA: a token is just slugged into its var name, and the live theme
+//resolves it to a real colour. `uiColorVar` yields the var NAME (for the engine, which reads it to hex
+//via getComputedStyle); `resolveUiColor` yields a ready `var(--token-color, fallback)` for CSS/inline
+//styles, passing through values already given as #/rgb/var.
+export function uiColorVar(token: string | undefined, fallbackToken: string): string
+{
+    const t = (token ?? '').trim();
+    return `--${t || fallbackToken}-color`;
+}
+
+export function resolveUiColor(token: string | undefined, fallbackHex: string): string
+{
+    const t = (token ?? '').trim();
+    if (!t) { return fallbackHex; }
+    if (/^(#|rgb|var)/i.test(t)) { return t; }
+    return `var(--${t}-color, ${fallbackHex})`;
+}
+
+
 // HA energy theme colours + LAB ramp
 //Theme colour resolution for the card. Wherever a colour must be a concrete string — canvas chart
 //fills, inline SVG attributes — rather than a CSS var(), we resolve the live HA theme token off a host

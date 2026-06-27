@@ -380,7 +380,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.editor.uiAndMapSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
                 <div class="field">
                     <span class="label">${t.editor.autoRotate}</span>
                     <div class="segmented-toggle">
@@ -427,6 +427,19 @@ export class HeliosCardEditor extends LitElement
                             ></ha-icon-picker>
                         ` : nothing}
                     </div>
+                    <div class="field field-block">
+                        <span class="label">${t.editor.customEntityColor}</span>
+                        ${this._pickerReady ? html`
+                            <ha-selector
+                                .hass=${this.hass}
+                                .selector=${{ ui_color: { default_color: 'red' } }}
+                                .value=${String(c['custom-entity-color'] ?? 'red')}
+                                data-key="custom-entity-color"
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-selector>
+                        ` : nothing}
+                    </div>
+                    <div class="field-help">${t.editor.customEntityColorHelp}</div>
                 ` : nothing}
 
                 </details>
@@ -525,6 +538,19 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.buildingColor}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ ui_color: { default_color: 'grey' } }}
+                            .value=${String(c['building-color'] ?? 'grey')}
+                            data-key="building-color"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.buildingColorHelp}</div>
 
                 </details>
 

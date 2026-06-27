@@ -7,9 +7,9 @@
 import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
 import { type ChartTarget, type ChartHost, pvValueAtTime } from './charts';
-import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex } from './format';
+import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
-import { customEntityId } from '../helios-config';
+import { customEntityId, customEntityColor } from '../helios-config';
 import { resolveCustomEntityIcon, resolveCustomEntityLive } from './custom-entity';
 import type { ClockHourly } from './clock-hourly';
 
@@ -51,6 +51,12 @@ const CLOCK_COMPASS_LABEL_FRAC  = 1.50;
 //Grow/shrink + slot-slide duration: a ring rises (ease-out) over GROW_MS when added, falls + fades over it
 //when removed, and slides between slots over it when the stack recompacts.
 export const CLOCK_GROW_MS = 320;
+//Shared ease-out for every clock transition (grow, shrink, slide, dim). p clamped to 0..1.
+export function easeOutCubic(p: number): number
+{
+    const c = p < 0 ? 0 : p > 1 ? 1 : p;
+    return 1 - (1 - c) ** 3;
+}
 //How close (screen px) the cursor must be to an hour's axis to hover it.
 const HOVER_PX = 22;
 
@@ -97,9 +103,12 @@ export interface ClockRingInput
 //slot; histogram mode one per hourly bar (tagged with that hour's first slot). Hovering highlights it.
 export interface ClockHit { slot: number; bx: number; by: number; tx: number; ty: number; }
 
-//One projected frame: the cylinder SVG plus the per-element transforms the card writes onto its DOM nodes.
+//One projected frame, split into two stacked SVG layers plus the per-element transforms the card writes onto
+//its DOM nodes. `guideSvg` is the flat-ground guide (centre hub + 24 hour spokes + compass), painted UNDER
+//the home prism; `svg` is the upright metric cylinders, painted OVER it.
 export interface ClockFrame
 {
+    guideSvg: string;
     svg:    string;
     hits:   ClockHit[];
     labels: { x: number; y: number; opacity: number; transform: string }[];
@@ -183,20 +192,30 @@ function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[
     return fillGaps(sum.map((x, s) => (cnt[s] ? x / cnt[s] : NaN)));
 }
 
-//Sum one store WATTS series into per-slot ENERGY (kWh): each bucket's watts * its hours, accumulated by
-//hour-of-day across the whole window. Empty slots are a genuine 0 (no energy), so no gap interpolation. This is
-//the "total per period" the energy clock shows — and summing kWh directly avoids the per-bucket /duration that
-//inflated DST-folded buckets in the old average path.
+//Sum one store WATTS series into per-slot ENERGY (kWh) by hour-of-day across the window. Each bucket's energy is
+//SPREAD across the 15-min slots it actually covers, so a coarse store (e.g. hourly buckets in month mode) fills
+//every slot evenly instead of dumping a whole hour into one slot and leaving the other three at 0 (the sawtooth).
+//Summing kWh directly (not watts/duration) also keeps DST-folded buckets from inflating. This is the clock's
+//"total per period".
 function binSlotSum(store: UnifiedDataStore, series: (number | null)[]): number[]
 {
-    const sum   = new Array<number>(CLOCK_SLOTS).fill(0);
-    const stepH = store.stepMs / HOUR_MS;
+    const sum    = new Array<number>(CLOCK_SLOTS).fill(0);
+    const stepH  = store.stepMs / HOUR_MS;
+    const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
     for (let i = 0; i < store.bucketsTotal; i++)
     {
         const v = series[i];
         if (v === null || !isFinite(v)) { continue; }
-        const s = slotOf(new Date(store.storeStartMs + (i + 0.5) * store.stepMs));
-        sum[s] += (Math.max(0, v) * stepH) / 1000;   //W * h / 1000 = kWh
+        const energy = (Math.max(0, v) * stepH) / 1000;   //kWh for this bucket
+        const bStart = store.storeStartMs + i * store.stepMs;
+        const bEnd   = bStart + store.stepMs;
+        for (let t = bStart; t < bEnd; )
+        {
+            const slotEnd = Math.floor(t / slotMs) * slotMs + slotMs;
+            const segEnd  = Math.min(bEnd, slotEnd);
+            sum[slotOf(new Date(t))] += energy * ((segEnd - t) / store.stepMs);
+            t = segEnd;
+        }
     }
     return sum;
 }
@@ -245,7 +264,7 @@ export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: s
         case 'battery-soc': return { icon: 'mdi:battery',              color: ENERGY_COLOR.batteryOut(el) };
         case 'irradiance':  return { icon: 'mdi:white-balance-sunny',  color: ENERGY_COLOR.sun(el) };
         case 'cloud':       return { icon: 'mdi:weather-cloudy',       color: ENERGY_COLOR.cloud(el) };
-        case 'custom':      return { icon: resolveCustomEntityIcon(host.hass, host.config), color: cssHex(el, '--red-color', '#f44336') };
+        case 'custom':      return { icon: resolveCustomEntityIcon(host.hass, host.config), color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') };
         default:            return { icon: 'mdi:solar-power',          color: ENERGY_COLOR.pv(el) };
     }
 }
@@ -339,21 +358,14 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                 if (isFinite(v) && v > 0) { wsum[s][h] += (v * stepH) / 1000; }
             });
         }
-        const srcSum = wsum;   //already kWh per slot
+        //Actuals only: the clock shows recorded energy, no forecast layer (a translucent forecast ring read as
+        //real PV and misled — the timeline carries the forecast instead).
         const layers: ClockLayer[] = ids.map((id, s) => ({
             color: energySolarColor(el, dark, s),
             icon:  'mdi:solar-power',
             label: String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id),
-            values: srcSum[s],
+            values: wsum[s],
         }));
-        //Forecast layer: the forecast energy on hours with no actuals, drawn translucent so a future day reads.
-        const forecastSum = binSlotSum(store, store.forecast);
-        const fcVals = forecastSum.map((v, h) =>
-            (srcSum.reduce((t, a) => t + a[h], 0) <= 0 && v > 0) ? v : 0);
-        if (fcVals.some(v => v > 0))
-        {
-            layers.push({ color: ENERGY_COLOR.pv(el), icon: 'mdi:solar-power', label: '', values: fcVals, predicted: true });
-        }
         return data('energy', layers);
     }
 
@@ -692,10 +704,12 @@ export function projectClockFrame(
     rings.forEach((r, i) => { defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`; });
     defs += '</defs>';
 
-    //Guide + compass sit UNDER the geometry (drawn first). The hour spokes stay untouched by the hover.
+    //Two layers so the home prism sits between them: the flat-ground guide + compass go UNDER it (guideSvg),
+    //the upright cylinders OVER it (svg). defs (the per-ring glow filters) stay with the cylinders that use them.
     const compass = clockCompass(camera, outerR, bearing, tilt);
     return {
-        svg: defs + clockGuide(camera, outerR, null, 0) + compass.svg + faces.map(f => f.svg).join(''),
+        guideSvg: clockGuide(camera, outerR, null, 0) + compass.svg,
+        svg: defs + faces.map(f => f.svg).join(''),
         hits, labels, compass: compass.labels,
     };
 }
@@ -760,6 +774,13 @@ function projectAreaRing(
             const fillOp = (ring.opacity * fillMul * (L.predicted ? 0.5 : 1)).toFixed(3);
             const fill   = lerpHexToward(L.color, '#000000', 0.12);
             faces.push({ depth, svg: `<polygon points="${loA[0].toFixed(1)},${loA[1].toFixed(1)} ${loB[0].toFixed(1)},${loB[1].toFixed(1)} ${hiB[0].toFixed(1)},${hiB[1].toFixed(1)} ${hiA[0].toFixed(1)},${hiA[1].toFixed(1)}" fill="${fill}" fill-opacity="${fillOp}"/>` });
+            //Thin full-opacity boundary on each stacked layer (the topmost edge gets the focus-aware line below),
+            //in the layer's own colour, so superposed areas stay legible.
+            if (k < data.layers.length - 1)
+            {
+                const edge = lerpHexToward(L.color, '#ffffff', 0.3);
+                faces.push({ depth, svg: `<line x1="${hiA[0].toFixed(1)}" y1="${hiA[1].toFixed(1)}" x2="${hiB[0].toFixed(1)}" y2="${hiB[1].toFixed(1)}" stroke="${edge}" stroke-opacity="${ring.opacity.toFixed(3)}" stroke-width="0.75"/>` });
+            }
         }
         //Curve line: full opacity always; the hovered slice brightens, thickens and glows.
         const stroke = focused ? 'rgba(255,255,255,0.97)' : lerpHexToward(data.color, '#ffffff', 0.3);

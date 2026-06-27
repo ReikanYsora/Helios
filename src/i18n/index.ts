@@ -74,12 +74,16 @@ export interface Translations
         customEntity:              string;
         customEntityHelp:          string;
         customEntityIcon:          string;
+        customEntityColor:         string;
+        customEntityColorHelp:     string;
         //Surrounding buildings: cluster radius grows the home group to include attached outbuildings,
         //opacity sets neighbour transparency, colour is the base tint for every building.
         buildingsSection:         string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
         buildingOpacity:          string;
+        buildingColor:            string;
+        buildingColorHelp:        string;
         //Shadow options.
         shadowsSection:           string;
         //Master shadow toggle (building footprints).

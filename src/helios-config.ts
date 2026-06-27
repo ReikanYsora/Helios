@@ -78,6 +78,10 @@ export interface HeliosConfig
     //Optional MDI icon override for the custom entity (chip + clock medallion/button). Empty falls back to the
     //entity's own icon, then a generic glyph.
     'custom-entity-icon'?:      unknown;
+    //HA ui_color token tinting the custom-entity chip, its leader and its clock ring. Default 'red'.
+    'custom-entity-color'?:     unknown;
+    //HA ui_color token for the base tint of surrounding buildings in the scene. Default 'grey'.
+    'building-color'?:          unknown;
     //Optional per-card cache id. When set, the saved view (mode, selected filters, camera pose, lock) is keyed
     //on it instead of the home coordinates, so two cards on the same home keep independent state (e.g. one in
     //scene mode, one in clock mode). Empty = shared per-home cache (the default).
@@ -140,6 +144,23 @@ export function customEntityId(config: HeliosConfig | undefined): string
 {
     const raw = config?.['custom-entity'];
     return typeof raw === 'string' ? raw.trim() : '';
+}
+
+
+//Resolved ui_color token for the custom-entity chip/leader/clock ring (default 'red') and for the
+//building base tint (default 'grey'). A plain string read; the colour helpers turn it into a CSS var.
+export function customEntityColor(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['custom-entity-color'];
+    const token = typeof raw === 'string' ? raw.trim() : '';
+    return token || 'red';
+}
+
+export function buildingColorToken(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['building-color'];
+    const token = typeof raw === 'string' ? raw.trim() : '';
+    return token || 'grey';
 }
 
 

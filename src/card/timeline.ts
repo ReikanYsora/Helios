@@ -8,7 +8,7 @@ import type { HeliosConfig } from '../helios-config';
 import { refreshHud, type HudHost } from './hud';
 import type { HeliosEngine } from '../helios-engine';
 import type { ChartSeries } from './charts';
-import { TIMELINE_MODES, type TimelineMode } from './timeline-modes';
+import type { TimelineMode } from './timeline-modes';
 
 
 //Bound pointer-handler references the host keeps so it can add/remove the same listener instance.
@@ -176,26 +176,7 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
         }
     }
 
-    //Per-mode snapping: Now stays free (fluid replay of the day); a week steps to the nearest local hour;
-    //month/year step to the hovered day pinned at the spec's hour (12:00), so the scrub reads day by day.
-    const spec = TIMELINE_MODES[host._timelineMode];
-    let snappedMs = tMs;
-    if (spec.snapMs > 0)
-    {
-        const d = new Date(tMs);
-        if (spec.snapHour !== null)
-        {
-            d.setHours(spec.snapHour, 0, 0, 0);
-        }
-        else
-        {
-            if (d.getMinutes() >= 30) { d.setHours(d.getHours() + 1); }
-            d.setMinutes(0, 0, 0);
-        }
-        snappedMs = d.getTime();
-    }
-
-    const t = new Date(snappedMs);
+    const t = new Date(tMs);
     if (host._selectedTime && host._selectedTime.getTime() === t.getTime())
     {
         return;
@@ -203,8 +184,9 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
 
     host._selectedTime  = t;
     host._isLiveMode    = false;
-    //Cursor dot tracks the SNAPPED instant so it lands on the bucket the scrub resolved to.
-    host._chartHoverPct = ((snappedMs - host._timeRange.start.getTime()) / rangeMs) * 100;
+    //Cursor follows the pointer exactly (no snap), in lockstep with the hover tooltip, so click + drag feel as
+    //fine as hover. The engine resolves the instant to the right hourly weather bucket on its own.
+    host._chartHoverPct = frac * 100;
     host._engine?.setSelectedTime(t);
 }
 

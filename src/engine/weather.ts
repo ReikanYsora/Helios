@@ -25,13 +25,6 @@ export interface SampleHourly
     cloudHigh:   number[];
     weatherCode: number[];
     shortwave:   number[];
-    //Beam (direct) + diffuse shortwave irradiance on the horizontal plane, W/m², -1 sentinel. Kept so cache +
-    //chart-series plumbing stays stable even when unread. Same for snowDepth/temperature/windSpeed.
-    directRad:   number[];
-    diffuseRad:  number[];
-    snowDepth:   number[];   //ground snow depth, metres, NaN-padded.
-    temperature: number[];   //2 m air temp, °C, NaN-padded.
-    windSpeed:   number[];   //10 m wind speed, m/s, NaN-padded.
 }
 export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../constants';
 
@@ -168,11 +161,6 @@ interface CachedPayload
         cloudHigh:   number[];
         weatherCode: number[];
         shortwave:   number[];
-        directRad?:   number[];   //optional: a cache entry may omit these extra series
-        diffuseRad?:  number[];
-        snowDepth?:   number[];
-        temperature?: number[];
-        windSpeed?:   number[];
     };
 }
 
@@ -244,13 +232,6 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudHigh:   p.cloudHigh   ?? [],
             weatherCode: p.weatherCode ?? [],
             shortwave:   p.shortwave   ?? [],
-            //A cache entry may omit these series; empty arrays read as -1/NaN per index downstream, so consumers fall back
-            //cleanly (tilt split → cloud-derived path; thermal derating → multiplier 1 → analytical Haurwitz output).
-            directRad:   p.directRad   ?? [],
-            diffuseRad:  p.diffuseRad  ?? [],
-            snowDepth:   p.snowDepth   ?? [],
-            temperature: p.temperature ?? [],
-            windSpeed:   p.windSpeed   ?? [],
         };
     }
     catch
@@ -276,11 +257,6 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 cloudHigh:   data.cloudHigh,
                 weatherCode: data.weatherCode,
                 shortwave:   data.shortwave,
-                directRad:   data.directRad,
-                diffuseRad:  data.diffuseRad,
-                snowDepth:   data.snowDepth,
-                temperature: data.temperature,
-                windSpeed:   data.windSpeed,
             }
         };
         window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -295,7 +271,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //Variables we ask Open-Meteo for. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged over
 //the preceding one), matching our visual time cursor; it powers the live irradiance chip and sun-arc colouring. The split
 //cloud variables keep the total cloud_cover for rendering and let us detect the low-layer "fog spike" failure mode. The
-//PV forecast is read natively from Home Assistant, so the irradiance split, snow depth, temperature and wind are not requested.
+//PV forecast is read natively from Home Assistant, so the irradiance split and ambient series are not requested.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover',
@@ -357,11 +333,9 @@ function readWeatherCode(row: any, models: string[]): number[]
     return [];
 }
 
-//Gap fills: cloud → 0 (missing = clear); shortwave → -1 (0 is a valid night value); temp/wind → NaN so a downstream
-//isFinite check rejects the sample without conflating "missing" with a real zero.
+//Gap fills: cloud → 0 (missing = clear); shortwave → -1 (0 is a valid night value).
 const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
 const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
-const fillNaN       = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
 
 
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
@@ -468,11 +442,6 @@ export async function fetchHomePointData(
                 cloudHigh:   highSeries,
                 weatherCode: readWeatherCode(row, models),
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
-                directRad:   fillShortwave(readSeries(row, 'direct_radiation_instant',  models)),
-                diffuseRad:  fillShortwave(readSeries(row, 'diffuse_radiation_instant', models)),
-                snowDepth:   fillNaN(readSeries(row, 'snow_depth', models)),
-                temperature: fillNaN(readSeries(row, 'temperature_2m',  models)),
-                windSpeed:   fillNaN(readSeries(row, 'wind_speed_10m',  models)),
             };
 
             writeCache(fLat, fLon, precision, data);

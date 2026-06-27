@@ -53,6 +53,10 @@ export const heliosCardStyles = css`
         inset: -1px;
         overflow: hidden;
         perspective: 1200px;
+        /*  Explicit z-index so the container (and its home prism) sits ABOVE the clock's flat-ground guide
+            layer (.clock-guide-svg, z-index 0) yet still below every HUD overlay (z-index 4+) and the clock
+            cylinders (.clock-svg, z-index 5). Lets the dial spokes/hub pass under the house. */
+        z-index: 1;
     }
 
     /*  Renderer ground holder: the tilted basemap tile canvas + edge fade, driven by a CSS 3D transform

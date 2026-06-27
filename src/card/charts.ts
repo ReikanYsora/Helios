@@ -553,7 +553,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     {
         dayKwh = host._haSolarTodayKwh;
     }
-    const showProduction = !isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    //Past cursor shows only the instantaneous power (the day total lives in the clock); a future cursor adds the
+    //forecast day total, which has no other home in the UI.
     const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
         ? formatLocalisedNumber(host.hass, dayKwh, 1) + ' kWh'
@@ -605,12 +606,6 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     </span>
                 </div>
                 ${target === 'production' ? html`
-                    ${showProduction && dayKwhText ? html`
-                        <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:solar-power-variant"></ha-icon>
-                            <span class="tb-hover-tooltip-value">${dayKwhText}</span>
-                        </div>
-                    ` : nothing}
                     ${showForecast && dayKwhText ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:crystal-ball"></ha-icon>
@@ -719,16 +714,6 @@ export interface ChartSeries
     cloudLow:     number[];
     cloudMid:     number[];
     cloudHigh:    number[];
-    //Hourly horizontal beam + diffuse irradiance (W/m²), -1 where the model didn't decompose. Feeds tilt
-    //transposition with the real direct/diffuse split; non-transposing consumers ignore them.
-    directRad:    number[];
-    diffuseRad:   number[];
-    //Hourly ground snow depth (m), NaN where unknown. Feeds the winter snow-cover derate.
-    snowDepth:    number[];
-    //Hourly ambient temperature (°C) and 10-metre wind speed (m/s), NaN where unsupplied. Consumers that don't
-    //thermal-derate ignore these.
-    temperature:  number[];
-    windSpeed:    number[];
 }
 
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (+ dashed

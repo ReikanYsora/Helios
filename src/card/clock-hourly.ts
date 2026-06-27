@@ -11,6 +11,10 @@ import { customEntityId, type HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
 import { HOUR_MS } from '../constants';
 
+//A change bucket above this multiple of the median positive bucket is a meter reset/rollover artefact, not real
+//flow, and is dropped from the hour-of-day sums.
+const OUTLIER_CAP_FACTOR = 20;
+
 //24 hour-of-day values per metric: energy meters are kWh TOTALS summed over the window; soc is an average %,
 //custom an average (watts). consumption is derived from the energy totals.
 export interface ClockHourly
@@ -51,13 +55,19 @@ export function clockNeedsHourly(host: ClockHourlyHost): boolean
 function binChangeByHour(buckets: ChangeBucket[] | null): number[]
 {
     const sum = new Array<number>(24).fill(0);
-    if (buckets)
+    if (!buckets) { return sum; }
+    //Reject extreme positive outliers: a meter reset/rollover emits one bucket whose change is the whole
+    //accumulated total (hundreds of kWh), survives the >=0 floor, and would spike a single hour. Cap at a
+    //generous multiple of the median positive bucket — well above any real hour, far below a rollover.
+    const positives = buckets.map(b => b.kwh).filter(k => isFinite(k) && k > 0).sort((a, b) => a - b);
+    const median = positives.length ? positives[Math.floor(positives.length / 2)] : 0;
+    const cap    = median > 0 ? median * OUTLIER_CAP_FACTOR : Infinity;
+    for (const b of buckets)
     {
-        for (const b of buckets)
-        {
-            if (!isFinite(b.kwh)) { continue; }
-            sum[new Date(b.startMs).getHours()] += Math.max(0, b.kwh);
-        }
+        if (!isFinite(b.kwh)) { continue; }
+        const kwh = Math.max(0, b.kwh);
+        if (kwh > cap) { continue; }
+        sum[new Date(b.startMs).getHours()] += kwh;
     }
     return sum;
 }
@@ -123,6 +133,9 @@ export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
 
     const key = `${startMs}|${endMs}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}|${d.batteryStatSocs}|${cid}`;
     if (key === host._clockHourlyKey) { return; }
+    //Window changed: drop the stale profile up front so consumers (the reload grow gate) see _clockHourly as
+    //null through the await and only treat it as ready once the NEW window's data below has actually landed.
+    if (host._clockHourly !== null) { host._clockHourly = null; host.requestUpdate(); }
     host._clockHourlyKey = key;
 
     const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
