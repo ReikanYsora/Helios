@@ -146,4 +146,61 @@ export const heliosCardEnergyClockCss = css`
     {
         color: var(--text-on-primary-color, #ffffff);
     }
+
+    /*  Sub-mode toggle (top-centre): a pill with a sliding circular knob. Left = histogram, right = area
+        curve; the knob slides under the active side and that icon brightens onto it. */
+    .clock-submode
+    {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 60;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        border-radius: 999px;
+        background: var(--ha-card-background, var(--card-background-color, #fff));
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        box-shadow: 0 1px 3px var(--shadow-color, rgba(0, 0, 0, 0.2));
+        cursor: pointer;
+        pointer-events: auto;
+        user-select: none;
+    }
+    .clock-submode .cs-knob
+    {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--primary-color, #03a9f4);
+        transition: transform var(--ha-animation-duration-fast, 150ms) ease;
+    }
+    /*  Knob sits over histogram (left) by default; slides one slot (icon width + gap) right for area. */
+    .clock-submode.mode-area .cs-knob
+    {
+        transform: translateX(32px);
+    }
+    .clock-submode .cs-opt
+    {
+        position: relative;
+        z-index: 1;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        --mdc-icon-size: 18px;
+        color: var(--secondary-text-color, #727272);
+        transition: color var(--ha-animation-duration-fast, 150ms) ease;
+    }
+    /*  The active side's icon reads on the knob fill. */
+    .clock-submode.mode-histogram .cs-histogram,
+    .clock-submode.mode-area .cs-area
+    {
+        color: var(--text-on-primary-color, #ffffff);
+    }
 `;

@@ -20,8 +20,13 @@ const RING_R_FRAC     = 0.34;   //outermost ring radius
 const RING_INNER_MIN_FRAC = 0.4;//innermost concentric ring radius as a fraction of the outer one
 const CLOCK_MAX_FILTERS = 8;    //fixed slot count: rings always sit at their slot radius, so adding/removing
                                 //a filter never re-spaces the others (and the radii are constant)
-const MAX_HEIGHT_FRAC = 0.30;   //tallest area
-const AREA_FILL_OPACITY = 0.75; //translucency on every area fill, so stacked layers read through faintly
+const MAX_HEIGHT_FRAC = 0.30;   //tallest area / bar
+//Area mode: a very transparent base fill (the curve lines stay full opacity); the hovered slice ramps to full.
+const AREA_FILL_BASE  = 0.28;
+//Histogram mode: bar tangential half-width (frac of the smaller edge, scaled per ring) and radial half-depth
+//(a fraction of the slot spacing so consecutive rings' bars sit flush).
+const BAR_TANGENT_FRAC = 0.018;
+const BAR_RADIAL_FRAC  = 0.45;
 const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
 const LABEL_MIN_OPACITY = 0.15; //farthest-back hour label opacity (nearest is opaque)
 //Clock-face guide: a faint centre ring (radius as a fraction of the outer ring) with 24 spokes reaching out
@@ -42,15 +47,19 @@ export const CLOCK_GROW_MS = 320;
 const HOVER_PX = 22;
 
 
-//One stacked layer of a metric: a continuous 24-hour series (one value per hour-of-day) drawn as a filled
-//area swept around the dial. Layers stack on top of each other (cumulative), like the bar bands did, but as
-//continuous ribbons rather than per-hour columns.
+//The two clock sub-modes: a continuous stacked AREA curve, or the classic stacked-bar HISTOGRAM (one bar per
+//hour, sitting BETWEEN the hour lines). Both read off the same ClockData — the histogram aggregates the slot
+//series to hourly on the fly — so only the geometry differs.
+export type ClockMode = 'area' | 'histogram';
+
+//One stacked layer of a metric: a per-slot series (CLOCK_SLOTS values) drawn as a filled area swept around
+//the dial (or aggregated to 24 hourly bars in histogram mode). Layers stack cumulatively.
 export interface ClockLayer
 {
     color:      string;
     icon:       string;
     label:      string;       //per-source name for production layers, else ''
-    values:     number[];     //24 hour-of-day magnitudes (W, %, or W/m²)
+    values:     number[];     //CLOCK_SLOTS per-slot magnitudes (W, %, or W/m²)
     predicted?: boolean;      //forecast-only layer (no actuals) — rendered translucent
 }
 
@@ -75,8 +84,8 @@ export interface ClockRingInput
     opacity:     number;
 }
 
-//Screen-space hit target: a 15-min slot's vertical axis (base -> curve top) tagged with its slot. Hovering
-//any ring's slot highlights that whole slice across rings, so only the slot matters for the hit.
+//Screen-space hit target: a vertical axis (base -> top) tagged with its slot. Area mode emits one per 15-min
+//slot; histogram mode one per hourly bar (tagged with that hour's first slot). Hovering highlights it.
 export interface ClockHit { slot: number; bx: number; by: number; tx: number; ty: number; }
 
 //One projected frame: the cylinder SVG plus the per-element transforms the card writes onto its DOM nodes.
@@ -389,6 +398,79 @@ function ringRadiusFrac(i: number): number
     return 1 - slot * (1 - RING_INNER_MIN_FRAC) / (CLOCK_MAX_FILTERS - 1);
 }
 
+//Constant slot spacing (metres) between concentric rings; histogram bars are half of it deep so neighbours
+//sit flush.
+function ringSpacingM(outerR: number): number
+{
+    return outerR * (1 - RING_INNER_MIN_FRAC) / (CLOCK_MAX_FILTERS - 1);
+}
+
+//Aggregate a per-slot series to 24 hourly averages, for the histogram bars (each bar = one hour H..H+1).
+function hourlyOf(values: number[]): number[]
+{
+    const out = new Array<number>(24).fill(0);
+    for (let h = 0; h < 24; h++)
+    {
+        let sum = 0;
+        for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { sum += Math.max(0, values[h * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
+        out[h] = sum / CLOCK_SLOTS_PER_HOUR;
+    }
+    return out;
+}
+
+//Rectangular bar footprint (metres) for histogram mode, oriented to `angle`: `hr` half-depth along the radius
+//(rings sit flush), `ht` half-width along the tangent. Four sides — cheap to redraw each rotation frame.
+function foot(cx: number, cy: number, hr: number, ht: number, angle: number): Array<[number, number]>
+{
+    const rs = Math.sin(angle), rc = Math.cos(angle);
+    const ts = Math.cos(angle), tc = -Math.sin(angle);
+    return [
+        [cx + hr * rs + ht * ts, cy + hr * rc + ht * tc],
+        [cx + hr * rs - ht * ts, cy + hr * rc - ht * tc],
+        [cx - hr * rs - ht * ts, cy - hr * rc - ht * tc],
+        [cx - hr * rs + ht * ts, cy - hr * rc + ht * tc],
+    ];
+}
+
+//Draw one extruded histogram column split into stacked bands, back-to-front by depth, with a roof cap. Pure
+//geometry through the shared camera; the caller resolves each band's fill.
+function stackedColumn(
+    camera: SceneCamera,
+    footprint: Array<[number, number]>,
+    totalHeightM: number,
+    bands: Array<{ frac: number; wall: string; roof: string }>,
+    stroke: string
+): string
+{
+    if (!bands.length) { return ''; }
+    const cum = [0];
+    for (const b of bands) { cum.push(cum[cum.length - 1] + b.frac); }
+    cum[cum.length - 1] = 1;
+    const levels  = cum.map(c => footprint.map(p => camera.project(p[0], p[1], totalHeightM * c)));
+    const bearing = camera.bearingDeg * Math.PI / 180;
+    const edges: Array<{ depth: number; faces: string }> = [];
+    for (let i = 0; i < footprint.length; i++)
+    {
+        const next = (i + 1) % footprint.length;
+        //Back-face cull: drop walls whose outward normal faces away from the camera.
+        const edgeE = footprint[next][0] - footprint[i][0];
+        const edgeN = footprint[next][1] - footprint[i][1];
+        if (edgeN * Math.sin(bearing) + edgeE * Math.cos(bearing) <= 0) { continue; }
+        let walls = '';
+        for (let k = 0; k < bands.length; k++)
+        {
+            const lo = levels[k], hi = levels[k + 1];
+            walls += `<polygon points="${lo[i][0].toFixed(1)},${lo[i][1].toFixed(1)} ${lo[next][0].toFixed(1)},${lo[next][1].toFixed(1)} ${hi[next][0].toFixed(1)},${hi[next][1].toFixed(1)} ${hi[i][0].toFixed(1)},${hi[i][1].toFixed(1)}" fill="${bands[k].wall}" stroke="${stroke}" stroke-width="0.4"/>`;
+        }
+        edges.push({ depth: (levels[0][i][1] + levels[0][next][1]) / 2, faces: walls });
+    }
+    edges.sort((a, b) => a.depth - b.depth);
+    let svg = edges.map(e => e.faces).join('');
+    const roof = levels[levels.length - 1].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+    svg += `<polygon points="${roof}" fill="${bands[bands.length - 1].roof}" stroke="${stroke}" stroke-width="0.6"/>`;
+    return svg;
+}
+
 //Clock-face guide laid flat on the ground (under the cylinders): a faint centre ring + a spoke per hour
 //reaching from the ring toward each hour label, stopping short so it never overlaps the text. Theme colour,
 //low opacity. The focused hour's spoke ramps to full opacity with `dim` (0..1), so the selected slice's
@@ -459,169 +541,182 @@ function clockCompass(
     return { svg, labels };
 }
 
-//Project one frame for ALL selected metrics as concentric rings (outer = first, nesting inward), each metric
-//a continuous stacked AREA swept around the dial at 15-min slot resolution: the area SVG (globally
-//back-to-front by ground depth), the hit segments tagged with their slot, and the flat transforms for the 24
-//ground-laid hour labels. Pure — the card resolves each ring's animation scalars + the focused slot.
+type ClockFace = { depth: number; svg: string };
+
+//Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward), in the chosen
+//sub-mode. SHARED here: the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, and the
+//global back-to-front depth sort. Per-mode geometry lives in projectAreaRing / projectHistogramRing. Pure —
+//the card resolves each ring's animation scalars (slot/heightScale/opacity) + the focused slot.
 export function projectClockFrame(
     camera: SceneCamera,
     rings: ClockRingInput[],
-    //The focused slot (hover/tap), and the 0..1 fade ramp. While dim > 0 every curve dims uniformly and the
-    //cursor + beads light up at the focused slot. dimSlot persists through the fade-out so it ramps smoothly.
+    mode: ClockMode,
+    //Focused slot (hover/tap) + the 0..1 fade ramp. dimSlot persists through the fade-out so it ramps smoothly.
     dimSlot: number | null,
     dim: number
 ): ClockFrame
 {
-    const width  = camera.centreX * 2;
-    const height = camera.centreY * 2;
-    const minEdge = Math.min(width, height) || 1;
-    const ppm = camera.pxPerMetre || 1;
-    const outerR = (RING_R_FRAC * minEdge) / ppm;
-    const maxHm  = (MAX_HEIGHT_FRAC * minEdge) / ppm;   //tallest area, in metres
+    const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
+    const ppm     = camera.pxPerMetre || 1;
+    const outerR  = (RING_R_FRAC * minEdge) / ppm;
+    const maxHm   = (MAX_HEIGHT_FRAC * minEdge) / ppm;   //tallest area / bar, in metres
     const tilt    = camera.tiltDeg;
     const bearing = camera.bearingDeg;
 
     //Hour labels, laid flat just outside the OUTER ring; each fades with its distance from the camera.
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
-    {
-        const angle = (h / 24) * 2 * Math.PI;
-        return camera.project3(labelR * Math.sin(angle), labelR * Math.cos(angle), 0);
-    });
-    let depthMin = Infinity;
-    let depthMax = -Infinity;
+        camera.project3(labelR * Math.sin((h / 24) * 2 * Math.PI), labelR * Math.cos((h / 24) * 2 * Math.PI), 0));
+    let depthMin = Infinity, depthMax = -Infinity;
     for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
     const depthRange = depthMax - depthMin || 1;
-    const labels = projLabels.map((p, h) =>
-    {
-        const near = (p.depth - depthMin) / depthRange;
-        return {
-            x: p.x, y: p.y,
-            opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * near,
-            transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (h / 24) * 360 + 180}deg)`,
-        };
-    });
+    const labels = projLabels.map((p, h) => ({
+        x: p.x, y: p.y,
+        opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (h / 24) * 360 + 180}deg)`,
+    }));
 
-    //Hovering dims EVERY curve uniformly (toward 0.4) and pops a bright radial cursor from the hub to the
-    //focused slot plus a bead at each ring's value there — so the focus reads clearly on the continuous areas.
-    const dimFactor = 1 - 0.6 * dim;
-
-    //Every wall quad across all rings, depth-sorted globally by ground Y so near areas paint over far ones.
-    const hits: ClockHit[] = [];
-    const faces: Array<{ depth: number; svg: string }> = [];
-    //Bead per ring at the focused slot (the value point on its curve), drawn over the dimmed areas.
-    const beads: Array<{ x: number; y: number; color: string; op: number; ri: number }> = [];
-
+    const hits:  ClockHit[]  = [];
+    const faces: ClockFace[] = [];
     rings.forEach((ring, ri) =>
     {
-        const data = ring.data;
         const R = outerR * ringRadiusFrac(ring.slot);
-
-        //Busiest stacked slot normalises THIS ring (units differ per metric).
-        const totalAt = (sl: number): number => data.layers.reduce((s, L) => s + Math.max(0, L.values[sl] ?? 0), 0);
-        let maxTotal = 0;
-        for (let sl = 0; sl < CLOCK_SLOTS; sl++) { maxTotal = Math.max(maxTotal, totalAt(sl)); }
-        const zScale = maxTotal > 0 ? (maxHm * ring.heightScale) / maxTotal : 0;
-
-        //Hit segment per slot: the vertical axis from ground to the stacked top at that slot.
-        for (let sl = 0; sl < CLOCK_SLOTS; sl++)
-        {
-            const a = (sl / CLOCK_SLOTS) * 2 * Math.PI;
-            const e = R * Math.sin(a), n = R * Math.cos(a);
-            const base = camera.project(e, n, 0);
-            const top  = camera.project(e, n, totalAt(sl) * zScale);
-            hits.push({ slot: sl, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
-        }
-
-        if (maxTotal <= 0)
-        {
-            //Empty ring: a faint baseline circle so the slot still reads while data loads / is zero.
-            const pts: string[] = [];
-            for (let s = 0; s <= CLOCK_SLOTS; s++)
-            {
-                const a = (s / CLOCK_SLOTS) * 2 * Math.PI;
-                const p = camera.project(R * Math.sin(a), R * Math.cos(a), 0);
-                pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`);
-            }
-            faces.push({ depth: -Infinity, svg: `<polyline points="${pts.join(' ')}" fill="none" stroke="${data.color}" stroke-opacity="${(0.3 * ring.opacity * dimFactor).toFixed(3)}" stroke-width="1"/>` });
-            return;
-        }
-
-        //Sample the circle at every slot: ground point + cumulative stacked-top point per layer.
-        const ground:   Array<[number, number]> = [];
-        const layerTop: Array<Array<[number, number]>> = data.layers.map(() => []);
-        for (let s = 0; s <= CLOCK_SLOTS; s++)
-        {
-            const sl = s % CLOCK_SLOTS;
-            const a  = (s / CLOCK_SLOTS) * 2 * Math.PI;
-            const e  = R * Math.sin(a), n = R * Math.cos(a);
-            ground.push(camera.project(e, n, 0));
-            let cum = 0;
-            for (let k = 0; k < data.layers.length; k++)
-            {
-                cum += Math.max(0, data.layers[k].values[sl] ?? 0);
-                layerTop[k].push(camera.project(e, n, cum * zScale));
-            }
-        }
-
-        //Bead at the focused slot: the top of this ring's stacked curve there.
-        const top = layerTop[layerTop.length - 1];
-        if (dimSlot !== null) { beads.push({ x: top[dimSlot][0], y: top[dimSlot][1], color: data.color, op: ring.opacity, ri }); }
-
-        //Wall quads + a top-edge silhouette line per segment, depth-keyed on the ground. Uniformly dimmed.
-        const op = ring.opacity * dimFactor;
-        for (let s = 0; s < CLOCK_SLOTS; s++)
-        {
-            const depth = (ground[s][1] + ground[s + 1][1]) / 2;
-            for (let k = 0; k < data.layers.length; k++)
-            {
-                const L   = data.layers[k];
-                const loA = k === 0 ? ground[s]     : layerTop[k - 1][s];
-                const loB = k === 0 ? ground[s + 1] : layerTop[k - 1][s + 1];
-                const hiA = layerTop[k][s];
-                const hiB = layerTop[k][s + 1];
-                const fillOp = (op * AREA_FILL_OPACITY * (L.predicted ? 0.5 : 1)).toFixed(3);
-                const fill   = lerpHexToward(L.color, '#000000', 0.12);
-                faces.push({ depth, svg: `<polygon points="${loA[0].toFixed(1)},${loA[1].toFixed(1)} ${loB[0].toFixed(1)},${loB[1].toFixed(1)} ${hiB[0].toFixed(1)},${hiB[1].toFixed(1)} ${hiA[0].toFixed(1)},${hiA[1].toFixed(1)}" fill="${fill}" fill-opacity="${fillOp}"/>` });
-            }
-            const stroke = lerpHexToward(data.color, '#ffffff', 0.3);
-            faces.push({ depth, svg: `<line x1="${top[s][0].toFixed(1)}" y1="${top[s][1].toFixed(1)}" x2="${top[s + 1][0].toFixed(1)}" y2="${top[s + 1][1].toFixed(1)}" stroke="${stroke}" stroke-opacity="${op.toFixed(3)}" stroke-width="1"/>` });
-        }
+        if (mode === 'histogram') { projectHistogramRing(camera, R, outerR, ring, ri, maxHm, minEdge, ppm, dimSlot, dim, faces, hits); }
+        else                      { projectAreaRing(camera, R, ring, ri, maxHm, dimSlot, dim, faces, hits); }
     });
-
     faces.sort((a, b) => a.depth - b.depth);
-    const areaSvg = faces.map(f => f.svg).join('');
 
-    //One glow filter per ring, tinted to its metric colour, so the focused-slot beads pop over the dimmed areas.
+    //One glow filter per ring, tinted to its metric colour, for the focused slice / bar.
     let defs = '<defs>';
-    rings.forEach((r, i) =>
-    {
-        defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`;
-    });
+    rings.forEach((r, i) => { defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`; });
     defs += '</defs>';
 
-    //Hover cursor + beads, drawn OVER the dimmed areas at full opacity: a bright radial "hand" from the hub to
-    //the focused slot (separate from the ground hour spokes), plus a glowing bead at each ring's value there.
-    let overlaySvg = '';
-    if (dimSlot !== null && dim > 0)
-    {
-        const ca = (dimSlot / CLOCK_SLOTS) * 2 * Math.PI;
-        const c0 = camera.project(0, 0, 0);
-        const c1 = camera.project(outerR * CLOCK_SPOKE_OUTER_FRAC * Math.sin(ca), outerR * CLOCK_SPOKE_OUTER_FRAC * Math.cos(ca), 0);
-        overlaySvg += `<line x1="${c0[0].toFixed(1)}" y1="${c0[1].toFixed(1)}" x2="${c1[0].toFixed(1)}" y2="${c1[1].toFixed(1)}" stroke="var(--primary-text-color, #212121)" stroke-opacity="${(0.85 * dim).toFixed(3)}" stroke-width="2.5" stroke-linecap="round"/>`;
-        for (const b of beads)
-        {
-            overlaySvg += `<circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="4.5" fill="${b.color}" stroke="rgba(255,255,255,0.95)" stroke-width="1.5" opacity="${(dim * b.op).toFixed(3)}" filter="url(#clock-glow-${b.ri})"/>`;
-        }
-    }
-
-    //Guide + compass sit UNDER the areas (drawn first). The hour spokes stay untouched by the hover. The
-    //compass is outside the dial, so nothing overlaps it.
+    //Guide + compass sit UNDER the geometry (drawn first). The hour spokes stay untouched by the hover.
     const compass = clockCompass(camera, outerR, bearing, tilt);
     return {
-        svg: defs + clockGuide(camera, outerR, null, 0) + compass.svg + areaSvg + overlaySvg,
+        svg: defs + clockGuide(camera, outerR, null, 0) + compass.svg + faces.map(f => f.svg).join(''),
         hits, labels, compass: compass.labels,
     };
+}
+
+//AREA sub-mode: a continuous stacked area swept over the 15-min slots. Fills sit at a very transparent base
+//(the curve lines stay full opacity); the hovered slot's slice ramps to full opacity + a bright glowing line.
+function projectAreaRing(
+    camera: SceneCamera, R: number, ring: ClockRingInput, ri: number, maxHm: number,
+    dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
+): void
+{
+    const data = ring.data;
+    const totalAt = (sl: number): number => data.layers.reduce((s, L) => s + Math.max(0, L.values[sl] ?? 0), 0);
+    let maxTotal = 0;
+    for (let sl = 0; sl < CLOCK_SLOTS; sl++) { maxTotal = Math.max(maxTotal, totalAt(sl)); }
+    const zScale = maxTotal > 0 ? (maxHm * ring.heightScale) / maxTotal : 0;
+
+    for (let sl = 0; sl < CLOCK_SLOTS; sl++)
+    {
+        const a = (sl / CLOCK_SLOTS) * 2 * Math.PI;
+        const e = R * Math.sin(a), n = R * Math.cos(a);
+        const base = camera.project(e, n, 0);
+        const top  = camera.project(e, n, totalAt(sl) * zScale);
+        hits.push({ slot: sl, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
+    }
+
+    if (maxTotal <= 0)
+    {
+        const pts: string[] = [];
+        for (let s = 0; s <= CLOCK_SLOTS; s++) { const a = (s / CLOCK_SLOTS) * 2 * Math.PI; const p = camera.project(R * Math.sin(a), R * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        faces.push({ depth: -Infinity, svg: `<polyline points="${pts.join(' ')}" fill="none" stroke="${data.color}" stroke-opacity="${(0.3 * ring.opacity).toFixed(3)}" stroke-width="1"/>` });
+        return;
+    }
+
+    const ground:   Array<[number, number]> = [];
+    const layerTop: Array<Array<[number, number]>> = data.layers.map(() => []);
+    for (let s = 0; s <= CLOCK_SLOTS; s++)
+    {
+        const sl = s % CLOCK_SLOTS;
+        const a  = (s / CLOCK_SLOTS) * 2 * Math.PI;
+        const e  = R * Math.sin(a), n = R * Math.cos(a);
+        ground.push(camera.project(e, n, 0));
+        let cum = 0;
+        for (let k = 0; k < data.layers.length; k++) { cum += Math.max(0, data.layers[k].values[sl] ?? 0); layerTop[k].push(camera.project(e, n, cum * zScale)); }
+    }
+
+    const top = layerTop[layerTop.length - 1];
+    for (let s = 0; s < CLOCK_SLOTS; s++)
+    {
+        const depth   = (ground[s][1] + ground[s + 1][1]) / 2;
+        //The hovered slice ramps its fill from the transparent base to full; every other slice stays at base.
+        const focused = dimSlot !== null && s === dimSlot;
+        const fillMul = focused ? AREA_FILL_BASE + (1 - AREA_FILL_BASE) * dim : AREA_FILL_BASE;
+        for (let k = 0; k < data.layers.length; k++)
+        {
+            const L   = data.layers[k];
+            const loA = k === 0 ? ground[s]     : layerTop[k - 1][s];
+            const loB = k === 0 ? ground[s + 1] : layerTop[k - 1][s + 1];
+            const hiA = layerTop[k][s];
+            const hiB = layerTop[k][s + 1];
+            const fillOp = (ring.opacity * fillMul * (L.predicted ? 0.5 : 1)).toFixed(3);
+            const fill   = lerpHexToward(L.color, '#000000', 0.12);
+            faces.push({ depth, svg: `<polygon points="${loA[0].toFixed(1)},${loA[1].toFixed(1)} ${loB[0].toFixed(1)},${loB[1].toFixed(1)} ${hiB[0].toFixed(1)},${hiB[1].toFixed(1)} ${hiA[0].toFixed(1)},${hiA[1].toFixed(1)}" fill="${fill}" fill-opacity="${fillOp}"/>` });
+        }
+        //Curve line: full opacity always; the hovered slice brightens, thickens and glows.
+        const stroke = focused ? 'rgba(255,255,255,0.97)' : lerpHexToward(data.color, '#ffffff', 0.3);
+        const glow   = focused ? ` filter="url(#clock-glow-${ri})"` : '';
+        const w      = focused ? (1 + 1.5 * dim) : 1;
+        faces.push({ depth, svg: `<line x1="${top[s][0].toFixed(1)}" y1="${top[s][1].toFixed(1)}" x2="${top[s + 1][0].toFixed(1)}" y2="${top[s + 1][1].toFixed(1)}" stroke="${stroke}" stroke-opacity="${ring.opacity.toFixed(3)}" stroke-width="${w.toFixed(2)}"${glow}/>` });
+    }
+}
+
+//HISTOGRAM sub-mode: 24 stacked bars, one per hour, sitting BETWEEN the hour lines (centred at H+0.5 — each
+//bar is the value over H..H+1). The hovered bar glows; the others dim. Grow / slide / exit ride on the ring's
+//animation scalars exactly like the area mode.
+function projectHistogramRing(
+    camera: SceneCamera, R: number, outerR: number, ring: ClockRingInput, ri: number, maxHm: number,
+    minEdge: number, ppm: number, dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
+): void
+{
+    const data   = ring.data;
+    const hourly = data.layers.map(L => hourlyOf(L.values));   //[layer][24]
+    const totalAt = (h: number): number => hourly.reduce((s, hv) => s + Math.max(0, hv[h]), 0);
+    let maxTotal = 0;
+    for (let h = 0; h < 24; h++) { maxTotal = Math.max(maxTotal, totalAt(h)); }
+    const zScale = maxTotal > 0 ? (maxHm * ring.heightScale) / maxTotal : 0;
+    const halfRadial = ringSpacingM(outerR) * BAR_RADIAL_FRAC;
+    const halfTan    = (BAR_TANGENT_FRAC * minEdge) / ppm * ringRadiusFrac(ring.slot);
+    const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);
+
+    for (let h = 0; h < 24; h++)
+    {
+        const a = ((h + 0.5) / 24) * 2 * Math.PI;   //BETWEEN the hour lines
+        const e = R * Math.sin(a), n = R * Math.cos(a);
+        const total = totalAt(h);
+        const base  = camera.project(e, n, 0);
+        const top   = camera.project(e, n, total * zScale);
+        //Hit axis tagged with the hour's first slot, so the card maps it back to the hour.
+        hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
+        const active = h === focusHour;
+        const dimOp  = ring.opacity * (focusHour !== null && !active ? 1 - 0.5 * dim : 1);
+        if (total <= 0)
+        {
+            //Empty hour: a flat neutral puck so all 24 stay on the dial (as the old histogram did).
+            const puckH = maxHm * 0.04 * ring.heightScale;
+            let puck = stackedColumn(camera, foot(e, n, halfRadial, halfTan, a), puckH,
+                [{ frac: 1, wall: 'rgba(140,140,140,0.3)', roof: 'rgba(170,170,170,0.42)' }], 'rgba(0,0,0,0.25)');
+            if (dimOp < 1) { puck = `<g opacity="${dimOp.toFixed(3)}">${puck}</g>`; }
+            faces.push({ depth: base[1], svg: puck });
+            continue;
+        }
+        const bands = data.layers
+            .map((L, k) => ({ v: Math.max(0, hourly[k][h]), color: L.color }))
+            .filter(b => b.v > 0)
+            .map(b => ({ frac: b.v / total, wall: lerpHexToward(b.color, '#000000', 0.25), roof: lerpHexToward(b.color, '#ffffff', active ? 0.4 : 0.12) }));
+        if (!bands.length) { continue; }
+        const stroke = active ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)';
+        let col = stackedColumn(camera, foot(e, n, halfRadial, halfTan, a), total * zScale, bands, stroke);
+        if (active) { col = `<g filter="url(#clock-glow-${ri})">${col}</g>`; }
+        if (dimOp < 1) { col = `<g opacity="${dimOp.toFixed(3)}">${col}</g>`; }
+        faces.push({ depth: base[1], svg: col });
+    }
 }
 
 
@@ -640,10 +735,25 @@ export function clockHitTest(hits: ClockHit[], x: number, y: number): number | n
 }
 
 
-//A metric's total magnitude at a given slot (sum of its layers), for the per-filter tooltip rows.
-export function clockSlotTotal(data: ClockData, slot: number): number
+//Read one layer at the focused position, honouring the mode: area reads the exact 15-min slot; histogram
+//reads the hourly average of the slot's hour (matching the bar height).
+function hourlyAt(values: number[], hour: number): number
 {
-    return data.layers.reduce((s, L) => s + Math.max(0, L.values[slot] ?? 0), 0);
+    let sum = 0;
+    for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { sum += Math.max(0, values[hour * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
+    return sum / CLOCK_SLOTS_PER_HOUR;
+}
+export function clockLayerValue(layer: ClockLayer, mode: ClockMode, slot: number): number
+{
+    return mode === 'histogram'
+        ? hourlyAt(layer.values, Math.floor(slot / CLOCK_SLOTS_PER_HOUR))
+        : Math.max(0, layer.values[slot] ?? 0);
+}
+
+//A metric's total magnitude at the focused position (sum of its layers), for the per-filter tooltip rows.
+export function clockTotal(data: ClockData, mode: ClockMode, slot: number): number
+{
+    return data.layers.reduce((s, L) => s + clockLayerValue(L, mode, slot), 0);
 }
 
 //Slots per hour, exposed so the card can format a slot's HH:MM label + range.

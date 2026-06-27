@@ -22,9 +22,9 @@ import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
 import { heliosCardLidarCss } from './css/helios-card-lidar-css';
 import {
-    type ClockData, type ClockHit, type ClockRingInput,
+    type ClockData, type ClockHit, type ClockRingInput, type ClockMode,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
-    projectClockFrame, clockHitTest, clockSlotTotal, formatClockValue,
+    projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
     CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR,
 } from './card/energy-clock';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime } from './card/format';
@@ -453,6 +453,8 @@ export class HeliosCard extends LitElement
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
     //Persisted; the timeline (hidden in clock mode) follows the first when scene mode resumes.
     @state() _clockTargets: ChartTarget[] = [];
+    //Clock sub-mode (area curves vs hourly histogram), toggled top-centre in clock view. Persisted per card.
+    @state() _clockSubMode: ClockMode = 'area';
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     @state() private _clockData: ClockData[] = [];
     //Hovered 15-min slot; lights every ring's area at that slot + drives the multi-metric tooltip. null = off.
@@ -1817,6 +1819,20 @@ export class HeliosCard extends LitElement
                             ? this._renderClockTooltip(this._clockHoverSlot)
                             : nothing}
                     </div>
+                    <!--  Sub-mode toggle (top-centre): a sliding knob in a pill, left = histogram, right = area
+                          curve. Click flips the mode (persisted per card).  -->
+                    <div
+                        class="clock-submode mode-${this._clockSubMode}"
+                        role="button"
+                        tabindex="0"
+                        aria-label="${this._clockSubMode === 'area' ? 'Area curve' : 'Histogram'}"
+                        @click=${() => this._toggleClockSubMode()}
+                        @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleClockSubMode(); } }}
+                    >
+                        <span class="cs-knob"></span>
+                        <ha-icon class="cs-opt cs-histogram" icon="mdi:chart-bar"></ha-icon>
+                        <ha-icon class="cs-opt cs-area" icon="mdi:chart-areaspline"></ha-icon>
+                    </div>
                 ` : nothing}
 
                 ${hasHomeCoords && this._timeRange && this._viewMode === 'scene' ? html`
@@ -2603,6 +2619,15 @@ export class HeliosCard extends LitElement
         this._persistUiState();
     }
 
+    //Flip the clock sub-mode (area curve <-> histogram). Same data + rings; only the geometry changes, so a
+    //repaint is enough. Persisted per card.
+    private _toggleClockSubMode(): void
+    {
+        this._clockSubMode = this._clockSubMode === 'area' ? 'histogram' : 'area';
+        this._persistUiState();
+        this._scheduleClockPaint();
+    }
+
     //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own concentric
     //area; the first stays the timeline's target for when scene mode resumes. Order is preserved (append on
     //add). Adding grows the new area in; removing shrinks + fades it out while the survivors slide to recompact.
@@ -2806,6 +2831,10 @@ export class HeliosCard extends LitElement
                 {
                     this._chartTarget = s.chartTarget as ChartTarget;
                 }
+                if (s.clockSubMode === 'area' || s.clockSubMode === 'histogram')
+                {
+                    this._clockSubMode = s.clockSubMode;
+                }
                 //Clock filter set: keep order, drop dupes/unknowns. The timeline follows the first.
                 if (Array.isArray(s.clockTargets))
                 {
@@ -2846,6 +2875,7 @@ export class HeliosCard extends LitElement
                 viewMode:     this._viewMode,
                 chartTarget:  this._chartTarget,
                 clockTargets: this._clockTargets,
+                clockSubMode: this._clockSubMode,
             }));
         }
         catch (_)
@@ -2951,7 +2981,7 @@ export class HeliosCard extends LitElement
             rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
         }
         const frame = projectClockFrame(
-            camera, rings,
+            camera, rings, this._clockSubMode,
             this._clockDimSlot, this._clockDim,
         );
         svgEl.innerHTML = frame.svg;
@@ -3116,17 +3146,22 @@ export class HeliosCard extends LitElement
         {
             return html``;
         }
-        //15-minute slot range, e.g. "14:15 – 14:30" (the end wraps past midnight).
+        const mode = this._clockSubMode;
+        //Time-band header: histogram covers a whole hour (HH:00 – HH+1:00), area a 15-min slot (HH:MM – HH:MM).
         const totalSlots = 24 * CLOCK_SLOTS_PER_HOUR;
         const stepMin    = 60 / CLOCK_SLOTS_PER_HOUR;
-        const fmt = (sl: number): string =>
+        const fmtSlot = (sl: number): string =>
             `${String(Math.floor(sl / CLOCK_SLOTS_PER_HOUR) % 24).padStart(2, '0')}:${String((sl % CLOCK_SLOTS_PER_HOUR) * stepMin).padStart(2, '0')}`;
+        const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
+        const head = mode === 'histogram'
+            ? `${String(hour).padStart(2, '0')}:00 – ${String((hour + 1) % 24).padStart(2, '0')}:00`
+            : `${fmtSlot(slot)} – ${fmtSlot((slot + 1) % totalSlots)}`;
         return html`
             <div
                 class="clock-tip"
                 style="left:${this._clockHoverX}px;top:${this._clockHoverY}px"
             >
-                <div class="clock-tip-head">${fmt(slot)} – ${fmt((slot + 1) % totalSlots)}</div>
+                <div class="clock-tip-head">${head}</div>
                 ${this._clockData.map(data => {
                     const meta = clockTargetMeta(this, data.target);
                     //Multi-entity metrics (PV per source, cloud low/mid/high, grid import/export, battery
@@ -3134,7 +3169,7 @@ export class HeliosCard extends LitElement
                     //value, no name (kept uniform with the others). Single-layer metrics keep one total row.
                     if (data.layers.length > 1) {
                         const rows = data.layers
-                            .map(l => ({ l, v: Math.max(0, l.values[slot] ?? 0) }))
+                            .map(l => ({ l, v: clockLayerValue(l, mode, slot) }))
                             .filter(r => r.v > 0);
                         if (rows.length > 0) {
                             return html`${rows.map(({ l, v }) => html`
@@ -3148,7 +3183,7 @@ export class HeliosCard extends LitElement
                     return html`
                         <div class="clock-tip-row">
                             <ha-icon icon="${meta.icon}" style="color:${meta.color}"></ha-icon>
-                            <span class="clock-tip-val">${formatClockValue(this, data, clockSlotTotal(data, slot))}</span>
+                            <span class="clock-tip-val">${formatClockValue(this, data, clockTotal(data, mode, slot))}</span>
                         </div>
                     `;
                 })}
