@@ -285,6 +285,40 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
     return fallback;
 }
 
+//Fallback luminance probe on a host element: reads --primary-background-color and decides dark vs light by
+//relative luminance. Costly (forces a style recompute), so only reached when hass.themes.darkMode is undefined.
+export function isDarkFromCss(host: Element): boolean
+{
+    try
+    {
+        const bg = getComputedStyle(host).getPropertyValue('--primary-background-color').trim();
+        if (!bg)
+        {
+            return false;
+        }
+        const hexMatch = bg.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+        let r = 0; let g = 0; let b = 0;
+        if (hexMatch)
+        {
+            const hex = hexMatch[1].length === 3
+                ? hexMatch[1].split('').map(c => c + c).join('')
+                : hexMatch[1];
+            r = parseInt(hex.slice(0, 2), 16);
+            g = parseInt(hex.slice(2, 4), 16);
+            b = parseInt(hex.slice(4, 6), 16);
+        }
+        else
+        {
+            const rgbMatch = bg.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+            if (rgbMatch) { r = +rgbMatch[1]; g = +rgbMatch[2]; b = +rgbMatch[3]; }
+        }
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return lum < 0.5;
+    }
+    catch (_) { /* probe failed: fall through to the light-theme default */ }
+    return false;
+}
+
 //RGB↔LAB conversion (chroma.js, via HA's common/color), used for the per-energy-source colour ramp below.
 //The D65 white-point + LAB transfer thresholds live in constants.ts.
 const rgbXyz = (c: number): number => { const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4; };

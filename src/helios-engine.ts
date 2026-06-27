@@ -4,6 +4,12 @@ import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/s
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
 import {
+    type CloudIntensity,
+    resolveWeatherAtTime,
+} from './engine/weather-resolve';
+import { clusterScaleRamp, steppedArcScale } from './engine/hud-layout';
+import { sunSpherePoint, daylightRamp } from './engine/sun-arc';
+import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
@@ -96,7 +102,9 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 
 
 
-export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
+//Re-exported from engine/weather-resolve (where the pure classification lives) so existing importers of
+//CloudIntensity from this module keep resolving.
+export type { CloudIntensity };
 
 //Source of the irradiance shown in the PV legend, in precedence order:
 //  haurwitz  - analytical clear-sky GHI (Haurwitz 1945) + cloud attenuation (Kasten-Czeplak 1980);
@@ -123,36 +131,6 @@ export interface WeatherData
 }
 
 //Cloud disc, chip cluster, camera target and sun-arc tunables live in constants.ts.
-
-
-function weatherCodeToIntensity(code: number, pct: number): CloudIntensity
-{
-    if (code >= 95)
-    {
-        return 'storm';
-    }
-    if (code >= 45 && code <= 48)
-    {
-        return 'fog';
-    }
-    if ((code >= 61 && code <= 67) || (code >= 71 && code <= 77) || code >= 80)
-    {
-        return 'heavy';
-    }
-    if (code >= 51)
-    {
-        return 'moderate';
-    }
-    if (pct < 15)
-    {
-        return 'clear';
-    }
-    if (pct < 50)
-    {
-        return 'light';
-    }
-    return pct < 80 ? 'moderate' : 'heavy';
-}
 
 
 //Engine
@@ -912,39 +890,9 @@ export class HeliosEngine
     }
 
 
-    private _findHourIndex(t: Date): number
-    {
-        const home = this._homeHourlyData;
-        if (!home || !home.times.length)
-        {
-            return 0;
-        }
-
-        const target = t.getTime();
-        const times  = home.times;
-        let best     = 0;
-        let bestDist = Math.abs(times[0].getTime() - target);
-
-        for (let i = 1; i < times.length; i++)
-        {
-            const d = Math.abs(times[i].getTime() - target);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                best     = i;
-            }
-            else if (d > bestDist)
-            {
-                break;
-            }
-        }
-
-        return best;
-    }
-
-    //Resolve weather variables at a given time from the home location. Source: _homeHourlyData; null
-    //(initial/failed/in-flight) returns the empty sentinel so timeline ramps render flat. shortwave = -1
-    //means the model gave no value this hour (caller falls back to Haurwitz).
+    //Resolve weather variables at a given time from the home location. Source: _homeHourlyData; the pure
+    //lookup lives in engine/weather-resolve (null returns the empty sentinel so timeline ramps render flat,
+    //shortwave = -1 means no model value this hour and the caller falls back to Haurwitz).
     private _getWeatherAtTime(t: Date): {
         cloudCover:     number;
         cloudLow:       number;
@@ -954,42 +902,7 @@ export class HeliosEngine
         cloudIntensity: CloudIntensity;
     }
     {
-        const empty = {
-            cloudCover:     0,
-            cloudLow:       0,
-            cloudMid:       0,
-            cloudHigh:      0,
-            shortwave:      -1,
-            cloudIntensity: 'clear' as CloudIntensity
-        };
-
-        const home = this._homeHourlyData;
-        if (!home || !home.times.length)
-        {
-            return empty;
-        }
-
-        const idx = this._findHourIndex(t);
-        if (idx < 0 || idx >= home.times.length)
-        {
-            return empty;
-        }
-
-        const cc   = home.cloudCover[idx]  ?? 0;
-        const cLow = home.cloudLow[idx]    ?? 0;
-        const cMid = home.cloudMid[idx]    ?? 0;
-        const cHi  = home.cloudHigh[idx]   ?? 0;
-        const sw   = home.shortwave[idx]   ?? -1;
-        const wc   = home.weatherCode[idx] ?? 0;
-
-        return {
-            cloudCover:     cc,
-            cloudLow:       cLow,
-            cloudMid:       cMid,
-            cloudHigh:      cHi,
-            shortwave:      sw,
-            cloudIntensity: weatherCodeToIntensity(wc, cc)
-        };
+        return resolveWeatherAtTime(this._homeHourlyData, t);
     }
 
     //Public wrapper for _getTimeRange so the card's 30 s tick can re-fetch the window after midnight rollover.
@@ -1623,60 +1536,18 @@ export class HeliosEngine
     private _cachedCanvasCssH = 0;
 
 
-    //Linear ramp on the card's min CSS dimension so the chip cluster expands on a kiosk layout: 1.0 below
-    //FLOOR (standard grid cell), ramping to MAX at TOP.
+    //Horizontal chip-cluster spread ramp (MAX 1.6); the pure ramp math lives in engine/hud-layout.
     private _heliosScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
-        if (!Number.isFinite(minDim) || minDim <= 0)
-        {
-            return 1.0;
-        }
-        const FLOOR = 600;
-        const TOP   = 1200;
-        const MAX   = 1.6;
-        if (minDim <= FLOOR)
-        {
-            return 1.0;
-        }
-        if (minDim >= TOP)
-        {
-            return MAX;
-        }
-        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
+        return clusterScaleRamp(minDim, 1.6);
     }
     //Steeper vertical-lift ramp (MAX 2.4 vs _heliosScale's 1.6) so the chip->home leader keeps pace with
     //canvas growth and the home stays anchored low. Same FLOOR/TOP breakpoints so transitions hinge together.
     private _clusterLiftScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
-        if (!Number.isFinite(minDim) || minDim <= 0)
-        {
-            return 1.0;
-        }
-        const FLOOR = 600;
-        const TOP   = 1200;
-        const MAX   = 2.4;
-        if (minDim <= FLOOR)
-        {
-            return 1.0;
-        }
-        if (minDim >= TOP)
-        {
-            return MAX;
-        }
-        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
-    }
-    //Stepped canvas-size ramp for the sun arc, used as a fallback before the map projection is ready so the
-    //first paint has a sane radius. The dynamic _sunArcScale below takes over once projection works.
-    private _steppedArcScale(minDim: number): number
-    {
-        if (!Number.isFinite(minDim) || minDim <= 0) { return 1.0; }
-        const SMALL = 360; const FLOOR = 600; const TOP = 1200; const MIN = 0.72; const MAX = 2.2;
-        if (minDim <= SMALL) { return MIN; }
-        if (minDim <  FLOOR) { return MIN + (1.0 - MIN) * (minDim - SMALL) / (FLOOR - SMALL); }
-        if (minDim >= TOP)   { return MAX; }
-        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
+        return clusterScaleRamp(minDim, 2.4);
     }
 
     //Dynamic sun-arc radius scale: size the arc so its widest on-screen reach is a fixed fraction of the
@@ -1697,7 +1568,7 @@ export class HeliosEngine
             return memo.scale;
         }
 
-        let scale = this._steppedArcScale(minDim);
+        let scale = steppedArcScale(minDim);
         if (this._renderer && Number.isFinite(minDim) && minDim > 0)
         {
             const D          = Math.PI / 180;
@@ -1941,15 +1812,8 @@ export class HeliosEngine
             belowHorizon: p.belowHorizon
         }));
 
-        //daylight: smooth 0..1 ramp on solar altitude. Below -6° it bottoms at SUN_ARC_NIGHT_OPACITY,
-        //above +6° full; the band between blends so dawn/dusk doesn't pop.
-        const daylight = (() =>
-        {
-            if (sunNowAlt >= 6) { return 1; }
-            if (sunNowAlt <= -6) { return SUN_ARC_NIGHT_OPACITY; }
-            const t01 = (sunNowAlt + 6) / 12;
-            return SUN_ARC_NIGHT_OPACITY + (1 - SUN_ARC_NIGHT_OPACITY) * t01;
-        })();
+        //daylight: smooth 0..1 ramp on solar altitude (pure ramp in engine/sun-arc).
+        const daylight = daylightRamp(sunNowAlt, SUN_ARC_NIGHT_OPACITY);
 
         //Horizon crossings: walk the cached samples for below->above (sunrise) and above->below (sunset)
         //transitions, interpolating linearly between brackets. The tangent comes from the bracketing points
@@ -2022,34 +1886,13 @@ export class HeliosEngine
         };
     }
 
-    //date -> 3D point on the celestial hemisphere (radius SUN_ARC_RADIUS_M, centred on home) as
-    //(lon, lat, altitude_m) for _projectScenePoint. Azimuth clockwise from North; ENU offsets
-    //east=R·cosα·sinφ, north=R·cosα·cosφ, up=R·sinα, converted to lon/lat via local metres-per-degree.
+    //date -> 3D point on the celestial hemisphere (centred on home) for _projectScenePoint; the pure
+    //geometry lives in engine/sun-arc, fed the current kiosk arc scale.
     private _sunSpherePoint(date: Date): {
         lon: number; lat: number; altitudeM: number; altitudeDeg: number
     } | null
     {
-        const sun = getSunPosition(date, this.homeLat, this.homeLon);
-        const D   = Math.PI / 180;
-        const a   = sun.altitude * D;
-        const z   = sun.azimuth  * D;
-
-        //Scale the celestial radius on kiosk layouts so the arc doesn't sit at its grid-tuned size.
-        const R = SUN_ARC_RADIUS_M * this._sunArcScale();
-        const east  = R * Math.cos(a) * Math.sin(z);
-        const north = R * Math.cos(a) * Math.cos(z);
-        const up    = R * Math.sin(a);
-
-        //Local metres-per-degree.
-        const mPerDegLat = 111_320;
-        const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
-
-        return {
-            lon:         this.homeLon + east  / mPerDegLon,
-            lat:         this.homeLat + north / mPerDegLat,
-            altitudeM:   up,
-            altitudeDeg: sun.altitude
-        };
+        return sunSpherePoint(date, this.homeLat, this.homeLon, this._sunArcScale());
     }
 
     //Set the scrub time (null = live). Swaps the weather refresh cadence and re-renders.

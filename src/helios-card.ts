@@ -27,7 +27,7 @@ import {
     projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
     CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './card/energy-clock';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss } from './card/format';
 import
 {
     refreshPv,
@@ -69,6 +69,8 @@ import
     type SunScene,
     type LabelLayout
 } from './card/hud';
+import { nudgeToHomePill } from './card/hud-geometry';
+import { detectLegacyEntityKeys, legacyEntityKeysMessage } from './card/legacy-config';
 import
 {
     tick,
@@ -96,197 +98,17 @@ import
 } from './card/init';
 //Side-effect import: registers <helios-card-editor> as a custom element.
 import './card/editor';
+//Side-effect import: writes the Helios entry into window.customCards for the HA card picker.
+import './card/registry';
+//Side-effect import: install banner, window.heliosStats() dump, location-override debug helpers and the
+//page-wide data-cache reset bus. liveCards is the shared registry the card adds/removes itself from.
+import { liveCards } from './card/diagnostics';
 
-
-//Custom-card registration
-
-declare global
-{
-    interface Window
-    {
-        customCards?: {
-            type:        string;
-            name:        string;
-            description: string;
-            preview?:    boolean;
-        }[];
-    }
-}
-
-//Card name/description for the HA picker, shown before any hass exists, so language comes from navigator.
-const _bootI18n = pickTranslations(typeof navigator !== 'undefined' ? navigator.language : 'en');
-
-//Overwrite (not insert-if-missing) so the freshly-loaded bundle's metadata always wins over any stale
-//entry pushed by other code (HACS placeholder, dev-tools mock, an older Helios bundle on the same page).
-window.customCards = window.customCards || [];
-{
-    const heliosEntry =
-    {
-        type:        'helios-card',
-        name:        _bootI18n.cardName,
-        description: _bootI18n.cardDescription,
-        preview:     true,
-    };
-    const existingIdx = window.customCards.findIndex(c => c.type === 'helios-card');
-    if (existingIdx >= 0)
-    {
-        window.customCards[existingIdx] = heliosEntry;
-    }
-    else
-    {
-        window.customCards.push(heliosEntry);
-    }
-}
-
-//Install banner: two adjacent chips (card name + build version), like other HACS frontends. Guarded
-//against double-print on bundle reload. Version is inlined at build time from package.json by vite.config.ts.
-{
-    const flagKey = '__heliosBannerPrinted';
-    const w = window as unknown as Record<string, unknown>;
-    if (!w[flagKey])
-    {
-        w[flagKey] = true;
-        const labelStyle   = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;';
-        const versionStyle = 'background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;';
-        // eslint-disable-next-line no-console -- intentional install/version banner, like other HACS frontends
-        console.info(
-            `%c☀ HELIOS%c v${__HELIOS_VERSION__}`,
-            labelStyle,
-            versionStyle
-        );
-        // eslint-disable-next-line no-console -- intentional install banner hint pointing at the diagnostic command
-        console.info(
-            `%c☀ HELIOS%c run window.heliosStats() in the console for a live config + engine dump`,
-            labelStyle,
-            'color:#6b7280;font-style:italic;'
-        );
-    }
-}
-
-
-//Registry of every live <helios-card>, maintained by connected/disconnectedCallback so
-//window.heliosStats() can enumerate on-screen cards and dump config + engine state. Module-level (not a
-//static) so the heliosStats() function below can close over it without the class being fully constructed.
-const _liveCards = new Set<HeliosCard>();
 
 //Live cards grouped by their (auto-generated) cache id, in connection order. A pasted card carries a copy of
 //the source's id; the registry hands each same-id card a distinct, order-stable storage slot so duplicates
 //never share — without the user ever seeing or managing the id.
 const _cacheIdRegistry = new Map<string, HeliosCard[]>();
-
-
-
-//Window-level reset bus: the editor's "reset data cache" button fires this so every live card on the
-//page drops its cached data in one sweep. Wired once at module load, not per card.
-window.addEventListener('helios-data-cache-reset', () =>
-{
-    for (const card of _liveCards)
-    {
-        card.resetDataCache();
-    }
-});
-
-//Public diagnostic command, exposed once on first bundle load. Returns a JSON-safe snapshot AND prints
-//a grouped console dump (build version, engine lifecycle counters, one section per card). Config values
-//are PII-free and safe to paste into an issue (no API keys; basemap is keyless CARTO raster tiles).
-{
-    interface HeliosWin extends Window
-    {
-        heliosStats?: () => Record<string, unknown>;
-        __heliosStats?: Record<string, unknown>;
-    }
-    const w = window as HeliosWin;
-    if (!w.heliosStats)
-    {
-        w.heliosStats = () =>
-        {
-            const cards = Array.from(_liveCards).map((c, i) =>
-            ({
-                index:  i,
-                snapshot: c.getStatsSnapshot()
-            }));
-
-            const out: Record<string, unknown> =
-            {
-                version:   __HELIOS_VERSION__,
-                cards:     cards.length,
-                lifecycle: w.__heliosStats ?? null,
-                details:   cards
-            };
-
-            const label    = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;';
-            const heading  = 'color:#f59e0b;font-weight:bold;';
-            /* eslint-disable no-console -- intentional diagnostic dump exposed via window.heliosStats() */
-            console.groupCollapsed(`%c☀ HELIOS stats%c v${__HELIOS_VERSION__}, ${cards.length} card${cards.length === 1 ? '' : 's'} alive`,
-                label, 'color:#6b7280;font-weight:normal;');
-            console.log('%cLifecycle counters', heading, w.__heliosStats ?? '(none yet)');
-            cards.forEach((c, i) =>
-            {
-                const snap = c.snapshot;
-                console.groupCollapsed(`%cCard #${i + 1}`, heading);
-                console.log('config:', snap.config);
-                console.log('engine:', snap.engine);
-                console.log('pv:',     snap.pv);
-                console.groupEnd();
-            });
-            console.groupEnd();
-            /* eslint-enable no-console */
-            return out;
-        };
-    }
-}
-
-
-//Debug-only home-location override. setHeliosLocation(lat, lon) renders every live card as if HA's home
-//were elsewhere; clearHeliosLocation() reverts. Stored on window only (no localStorage), so a refresh
-//restores hass.config. _getHomeCoords() prefers the override; setting it reinits every live card so the
-//engine, weather fetch and PV calibration cache all swap immediately.
-{
-    interface HeliosWin extends Window
-    {
-        setHeliosLocation?:        (lat: number, lon: number) => void;
-        clearHeliosLocation?:      () => void;
-        __heliosLocationOverride?: { lat: number; lon: number };
-    }
-    const w = window as HeliosWin;
-
-    if (!w.setHeliosLocation)
-    {
-        w.setHeliosLocation = (lat: number, lon: number) =>
-        {
-            if (typeof lat !== 'number' || typeof lon !== 'number'
-                || !isFinite(lat)        || !isFinite(lon)
-                || lat < -90  || lat > 90
-                || lon < -180 || lon > 180)
-            {
-                //Out-of-range or non-numeric input: ignore the override request.
-                return;
-            }
-            w.__heliosLocationOverride = { lat, lon };
-            for (const card of _liveCards)
-            {
-                card.invalidateLocation();
-            }
-        };
-    }
-
-    if (!w.clearHeliosLocation)
-    {
-        w.clearHeliosLocation = () =>
-        {
-            if (!w.__heliosLocationOverride)
-            {
-                //No override active: nothing to revert.
-                return;
-            }
-            w.__heliosLocationOverride = undefined;
-            for (const card of _liveCards)
-            {
-                card.invalidateLocation();
-            }
-        };
-    }
-}
 
 
 //Main card
@@ -740,18 +562,6 @@ export class HeliosCard extends LitElement
     //Retired YAML entity keys, now read entirely from the HA Energy dashboard; any still set on the card
     //config is ignored at runtime. Detected only to fire a one-shot persistent notification pointing the
     //user at the replacement.
-    private static readonly _LEGACY_ENTITY_KEYS: readonly string[] =
-    [
-        'pv-power-entity',
-        'grid-import-entity',
-        'grid-export-entity',
-        'grid-power-entity',
-        'grid-power-invert',
-        'battery-soc-entity',
-        'battery-power-entity',
-        'battery-power-invert',
-        'batteries',
-    ];
     private _legacyKeyWarningFired = false;
 
     //Fire a one-shot HA persistent notification when the card YAML carries any retired entity key. Silent
@@ -767,34 +577,18 @@ export class HeliosCard extends LitElement
         {
             return;
         }
-        const detected: string[] = [];
-        for (const key of HeliosCard._LEGACY_ENTITY_KEYS)
-        {
-            const v = (config as Record<string, unknown>)[key];
-            if (v !== undefined && v !== null && v !== '')
-            {
-                detected.push(key);
-            }
-        }
+        const detected = detectLegacyEntityKeys(config);
         if (detected.length === 0)
         {
             return;
         }
         this._legacyKeyWarningFired = true;
-        const message =
-              `The Helios card no longer reads its PV, grid and battery entities from the card YAML. `
-            + `The following key${detected.length > 1 ? 's are' : ' is'} silently ignored: ${detected.map(k => '`' + k + '`').join(', ')}. `
-            + `Helios now resolves these directly from the official Home Assistant Energy dashboard `
-            + `(Settings → Dashboards → Energy → your sources). The PV forecast is also read from the `
-            + `Energy dashboard's configured solar forecast now, so the card no longer carries any PV `
-            + `install configuration. Only the entity slots and the forecast config were retired; the `
-            + `visual options still live in the card YAML.`;
         try
         {
             this.hass.callService('persistent_notification', 'create', {
                 notification_id: 'helios-legacy-entity-config',
                 title:           'Helios card: deprecated entity keys ignored',
-                message,
+                message:         legacyEntityKeysMessage(detected),
             });
         }
         catch (_)
@@ -960,7 +754,7 @@ export class HeliosCard extends LitElement
     public connectedCallback(): void
     {
         super.connectedCallback();
-        _liveCards.add(this);
+        liveCards.add(this);
         this._registerCacheId();
         //Quick reconnect (HA edit-mode thrash): cancel the deferred engine teardown so the live engine is kept.
         if (this._engineTeardownTimer !== undefined)
@@ -996,7 +790,7 @@ export class HeliosCard extends LitElement
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
-        _liveCards.delete(this);
+        liveCards.delete(this);
         window.clearInterval(this._timer);
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
@@ -1281,7 +1075,7 @@ export class HeliosCard extends LitElement
         {
             return this._cachedIsDark;
         }
-        const isDark = this._probeIsDarkFromCss();
+        const isDark = isDarkFromCss(this);
         this._cachedIsDarkThemesRef = themesObj;
         this._cachedIsDark = isDark;
         return isDark;
@@ -1294,66 +1088,16 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Fallback luminance probe: reads --primary-background-color and decides dark vs light by relative
-    //luminance. Costly (forces a style recompute), so only reached when hass.themes.darkMode is undefined.
-    private _probeIsDarkFromCss(): boolean
-    {
-        try
-        {
-            const bg = getComputedStyle(this).getPropertyValue('--primary-background-color').trim();
-            if (!bg)
-            {
-                return false;
-            }
-            const hexMatch = bg.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-            let r = 0; let g = 0; let b = 0;
-            if (hexMatch)
-            {
-                const hex = hexMatch[1].length === 3
-                    ? hexMatch[1].split('').map(c => c + c).join('')
-                    : hexMatch[1];
-                r = parseInt(hex.slice(0, 2), 16);
-                g = parseInt(hex.slice(2, 4), 16);
-                b = parseInt(hex.slice(4, 6), 16);
-            }
-            else
-            {
-                const rgbMatch = bg.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-                if (rgbMatch) { r = +rgbMatch[1]; g = +rgbMatch[2]; b = +rgbMatch[3]; }
-            }
-            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-            return lum < 0.5;
-        }
-        catch (_) { /* probe failed: fall through to the light-theme default */ }
-        return false;
-    }
-
-
-    //Nearest point on the home pill's stadium outline to (chipX, chipY): the straight top/bottom edge over
-    //the middle, the rounded end-cap arc beyond it. All chip leaders dock here so the home reads as the
-    //focal energy node.
     private _nudgeToHomePill(
         chipX: number, chipY: number,
         homeX: number, homeY: number,
     ): { x: number; y: number }
     {
-        const halfW = HeliosCard.HOME_PILL_HALF_WIDTH_PX;
-        const halfH = HeliosCard.HOME_PILL_HALF_HEIGHT_PX;
-        const ex = chipX - homeX;
-        const ey = chipY - homeY;
-        //Width of the straight middle (between the two end-cap semicircles).
-        const straightHalfW = Math.max(0, halfW - halfH);
-        if (Math.abs(ex) <= straightHalfW)
-        {
-            //Over the straight middle: dock on the nearest top/bottom edge.
-            return { x: chipX, y: homeY + (ey >= 0 ? 1 : -1) * halfH };
-        }
-        //Over an end cap: dock on the matching semicircle arc.
-        const cornerX = homeX + (ex >= 0 ? 1 : -1) * straightHalfW;
-        const dx = chipX - cornerX;
-        const dy = chipY - homeY;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        return { x: cornerX + (halfH * dx) / dist, y: homeY + (halfH * dy) / dist };
+        return nudgeToHomePill(
+            chipX, chipY, homeX, homeY,
+            HeliosCard.HOME_PILL_HALF_WIDTH_PX,
+            HeliosCard.HOME_PILL_HALF_HEIGHT_PX,
+        );
     }
 
 
