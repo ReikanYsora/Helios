@@ -448,8 +448,9 @@ export const heliosCardStyles = css`
         z-index: 9;
         flex-direction: row;
         justify-content: center;
-        color: var(--primary-color, #03a9f4);
-        border-color: var(--primary-color, #03a9f4);
+        /*  Home == consumption: matches the consumption green used by its clock area + chart. */
+        color: var(--green-color, #4caf50);
+        border-color: var(--green-color, #4caf50);
         /*  Clickable: the home is the consumption chip, retargeting the bottom chart to home usage. */
         pointer-events: auto;
         cursor: pointer;
@@ -460,13 +461,13 @@ export const heliosCardStyles = css`
     .home-pill.is-hovered
     {
         box-shadow: 0 1px 3px var(--shadow-color),
-                    0 0 7px 1px color-mix(in srgb, var(--primary-color, #03a9f4) 28%, transparent);
+                    0 0 7px 1px color-mix(in srgb, var(--green-color, #4caf50) 28%, transparent);
     }
-    /*  Active consumption target: same retarget glow the other chips use, in the consumption blue. */
+    /*  Active consumption target: same retarget glow the other chips use, in the consumption green. */
     .home-pill.is-chart-active
     {
         box-shadow: 0 1px 3px var(--shadow-color),
-                    0 0 12px color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 70%, transparent);
+                    0 0 12px color-mix(in srgb, var(--green-color, #4caf50) 70%, transparent);
     }
     .home-pill ha-icon
     {

@@ -21,7 +21,7 @@ const RING_INNER_MIN_FRAC = 0.4;//innermost concentric ring radius as a fraction
 const CLOCK_MAX_FILTERS = 8;    //fixed slot count: rings always sit at their slot radius, so adding/removing
                                 //a filter never re-spaces the others (and the radii are constant)
 const MAX_HEIGHT_FRAC = 0.30;   //tallest area
-const AREA_FILL_OPACITY = 0.9;  //slight translucency on every area fill, so stacked layers read through faintly
+const AREA_FILL_OPACITY = 0.75; //translucency on every area fill, so stacked layers read through faintly
 const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
 const LABEL_MIN_OPACITY = 0.15; //farthest-back hour label opacity (nearest is opaque)
 //Clock-face guide: a faint centre ring (radius as a fraction of the outer ring) with 24 spokes reaching out
@@ -112,7 +112,29 @@ function slotOf(d: Date): number
     return d.getHours() * CLOCK_SLOTS_PER_HOUR + Math.floor(d.getMinutes() / (60 / CLOCK_SLOTS_PER_HOUR));
 }
 
-//Bin one store series into per-slot averages of its absolute value (export/charge come back negative).
+//Fill NaN gaps by linear interpolation between the nearest real samples, wrapping around the dial, so a
+//metric whose source is HOURLY (binned into sparse 15-min slots — custom entity, battery SoC, cloud) reads as
+//a smooth ramp instead of a spike every 4th slot. Store-backed metrics are already 15-min dense, so there are
+//no gaps and this is a no-op. All-NaN (no data at all) collapses to zeros.
+function fillGaps(v: number[]): number[]
+{
+    const n = v.length;
+    if (!v.some(x => Number.isFinite(x))) { return new Array<number>(n).fill(0); }
+    const out = v.slice();
+    for (let i = 0; i < n; i++)
+    {
+        if (Number.isFinite(out[i])) { continue; }
+        let db = 1; while (!Number.isFinite(v[((i - db) % n + n) % n])) { db++; }
+        let df = 1; while (!Number.isFinite(v[(i + df) % n])) { df++; }
+        const a = v[((i - db) % n + n) % n];
+        const b = v[(i + df) % n];
+        out[i] = a + (b - a) * (db / (db + df));
+    }
+    return out;
+}
+
+//Bin one store series into per-slot averages of its absolute value (export/charge come back negative); empty
+//slots stay NaN so fillGaps can interpolate them rather than reading as a zero spike.
 function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[]
 {
     const sum = new Array<number>(CLOCK_SLOTS).fill(0);
@@ -125,7 +147,7 @@ function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[
         sum[s] += Math.abs(v);
         cnt[s] += 1;
     }
-    return sum.map((x, s) => (cnt[s] ? x / cnt[s] : 0));
+    return fillGaps(sum.map((x, s) => (cnt[s] ? x / cnt[s] : NaN)));
 }
 
 //True when a series carries any real (non-null, non-zero) reading — drives which rail buttons appear.
@@ -233,6 +255,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                 if (isFinite(v) && v > 0) { sum[s][h] += v; cnt[s][h] += 1; }
             });
         }
+        //Per-source PV is store-dense (15-min) during the day; night slots are a genuine 0 (not a gap to fill).
         const srcAvg = sum.map((arr, s) => arr.map((x, h) => (cnt[s][h] ? x / cnt[s][h] : 0)));
         const layers: ClockLayer[] = ids.map((id, s) => ({
             color: energySolarColor(el, dark, s),
@@ -251,8 +274,9 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         return data('power', layers);
     }
 
-    //Average a sum/count pair into a per-slot series.
-    const avgOf = (s: number[], c: number[]): number[] => s.map((v, i) => (c[i] ? v / c[i] : 0));
+    //Average a sum/count pair into a per-slot series, interpolating empty slots (hourly sources land in 1 of
+    //every 4 slots — fillGaps ramps between them instead of spiking).
+    const avgOf = (s: number[], c: number[]): number[] => fillGaps(s.map((v, i) => (c[i] ? v / c[i] : NaN)));
 
     if (target === 'battery-soc')
     {
