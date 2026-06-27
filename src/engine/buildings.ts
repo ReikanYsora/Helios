@@ -49,6 +49,17 @@ export interface Building
     centerY:   number;  //centroid north
 }
 
+//The exact subset renderShadows reads from a caster: a local-metre footprint, a height, and a centroid for
+//the near-plane cull. Building satisfies it, so footprint shadows are unchanged; the LiDAR path supplies its
+//own clump casters through the same projector.
+export interface ShadowCaster
+{
+    footprint: Point[];
+    height:    number;
+    centerX:   number;
+    centerY:   number;
+}
+
 export interface ScenePalette
 {
     home:     string; //#rrggbb
@@ -455,10 +466,11 @@ export function interpretBuildings(
 //{azimuth (deg from N, CW), altitude (deg)}. shadowColor is a solid colour; shadowOpacity its peak alpha.
 export function renderShadows(
     cam:          SceneCamera,
-    buildings:    Building[],
+    casters:      ShadowCaster[],
     sun:          { azimuth: number; altitude: number },
     shadowColor:  string,
-    shadowOpacity: number
+    shadowOpacity: number,
+    maxShadowM:   number = MAX_SHADOW_M
 ): string
 {
     const fade = Math.min(1, sun.altitude / SHADOW_FADE_DEG);
@@ -469,14 +481,14 @@ export function renderShadows(
     const away     = (sun.azimuth + 180) * DEG;
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
     let inner = '';
-    for (const b of buildings)
+    for (const b of casters)
     {
-        //Skip shadows of buildings at/behind the camera (same near-plane cull as the buildings).
+        //Skip shadows of casters at/behind the camera (same near-plane cull as the buildings).
         if (cam.project3(b.centerX, b.centerY, 0).depth >= nearCull)
         {
             continue;
         }
-        const length = Math.min(b.height / Math.tan(sun.altitude * DEG), MAX_SHADOW_M);
+        const length = Math.min(b.height / Math.tan(sun.altitude * DEG), maxShadowM);
         const oe = Math.sin(away) * length;
         const on = Math.cos(away) * length;
         const base = b.footprint.map((p) => cam.project(p[0], p[1], 0));
@@ -674,8 +686,8 @@ function simplifyFootprint(points: Point[]): Point[]
 }
 
 //Andrew's monotone-chain convex hull. Returns vertices counter-clockwise, NOT closed. Used to wrap a
-//building's base + cast-shadow points into one shadow envelope.
-function convexHull(pts: Point[]): Point[]
+//building's base + cast-shadow points into one shadow envelope, and to wrap each LiDAR clump's cells.
+export function convexHull(pts: Point[]): Point[]
 {
     if (pts.length < 3)
     {

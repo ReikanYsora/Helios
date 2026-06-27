@@ -1,5 +1,6 @@
 import { SceneRenderer } from './engine/renderer';
-import type { Building, RawBuilding } from './engine/buildings';
+import type { Building, RawBuilding, ShadowCaster } from './engine/buildings';
+import { fetchNdsmCasters } from './engine/lidar-ndsm';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
@@ -19,6 +20,8 @@ import
 {
     type HeliosConfig,
     displayRadiusM,
+    hasLocalLidar,
+    localLidarConfig,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
@@ -553,6 +556,14 @@ export class HeliosEngine
     private readonly _editMode: boolean;
     private _buildingsAbort?: AbortController;
 
+    //Local-LiDAR ground shadows: when a local nDSM is configured and shadows are on, the ground shadows come
+    //from nDSM clump casters instead of the OSM building footprints (buildings still render as prisms). The
+    //decoded casters are cached against _lidarKey (home | bbox | radius | url); an in-flight decode is
+    //cancelled via _lidarAbort on any change. Null casters = footprint shadows.
+    private _lidarCasters: ShadowCaster[] | null = null;
+    private _lidarKey:     string | null         = null;
+    private _lidarAbort:   AbortController | null = null;
+
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
     //and the refresh runs once on expiry. Curves+chips still update every move; only the costly shadow
     //raster paint is coalesced.
@@ -787,6 +798,7 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
+        this._refreshLidarShadows();
         //60 s sky/atmosphere refresh. _refreshShadowsAndAtmosphere short-circuits when the sun barely moved,
         //so the cost is negligible; the paused skip avoids even the signature check while invisible.
         this._skyTimer = window.setInterval(() =>
@@ -1152,6 +1164,82 @@ export class HeliosEngine
         this._renderer.setSun(azimuth, altitude);
     }
 
+    //Source the ground shadows from the local nDSM when one is configured and shadows are on; otherwise clear
+    //the override so the building footprints cast the shadows. Re-run on config change, home move, and at boot.
+    //The decode is cached by home | bbox | radius | url, so an idle re-run (same inputs) just re-applies the
+    //cached casters. A failed/aborted decode falls back silently to footprint shadows (no logging).
+    private _refreshLidarShadows(): void
+    {
+        const renderer = this._renderer;
+        if (!renderer)
+        {
+            return;
+        }
+
+        const lidar = this._shadowsEnabled() && hasLocalLidar(this.cfg)
+            ? localLidarConfig(this.cfg)
+            : null;
+
+        //No LiDAR or shadows off: drop any override + cancel an in-flight decode so footprints cast shadows.
+        if (!lidar)
+        {
+            this._lidarAbort?.abort();
+            this._lidarAbort   = null;
+            this._lidarKey     = null;
+            this._lidarCasters = null;
+            renderer.setShadowCasters(null);
+            return;
+        }
+
+        const radius = this._buildingRadiusMeters();
+        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|`
+            + `${lidar.minLat}|${lidar.maxLat}|${lidar.minLon}|${lidar.maxLon}|${radius}|${lidar.url}`;
+
+        //Unchanged inputs with casters already decoded: re-apply idempotently (radius doubles as max length).
+        if (key === this._lidarKey && this._lidarCasters)
+        {
+            renderer.setShadowCasters(this._lidarCasters, radius);
+            return;
+        }
+
+        this._lidarAbort?.abort();
+        const ac = new AbortController();
+        this._lidarAbort = ac;
+        this._lidarKey   = key;
+
+        fetchNdsmCasters({
+            url:     lidar.url,
+            minLat:  lidar.minLat,
+            maxLat:  lidar.maxLat,
+            minLon:  lidar.minLon,
+            maxLon:  lidar.maxLon,
+            homeLat: this.homeLat,
+            homeLon: this.homeLon,
+            radiusM: radius,
+            signal:  ac.signal,
+        })
+        .then(casters =>
+        {
+            //Ignore a resolution that lost its race (aborted, or the key/renderer moved on).
+            if (ac.signal.aborted || this._lidarKey !== key || this._renderer !== renderer)
+            {
+                return;
+            }
+            this._lidarCasters = casters;
+            renderer.setShadowCasters(casters, radius);
+        })
+        .catch(() =>
+        {
+            //Decode/fetch failed or was aborted: fall back silently to footprint shadows.
+            if (ac.signal.aborted || this._renderer !== renderer)
+            {
+                return;
+            }
+            this._lidarCasters = null;
+            renderer.setShadowCasters(null);
+        });
+    }
+
     //Precision fixed to 'high' (multi-model median).
     private _resolvedPrecision(): 'standard' | 'high'
     {
@@ -1342,6 +1430,7 @@ export class HeliosEngine
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
+        this._refreshLidarShadows();
         void this._refreshWeather(lat, lon);
     }
 
@@ -2001,6 +2090,10 @@ export class HeliosEngine
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         }
+        //LiDAR shadow source: re-resolve on every config commit. _refreshLidarShadows is cached by
+        //home | bbox | radius | url, so an unrelated option change just re-applies the cached casters; a
+        //LiDAR-enable, shadow-toggle or radius change re-decodes / clears as needed.
+        this._refreshLidarShadows();
         this._renderer.scheduleRedraw();
 
         if (this._homeHourlyData && this._mapReady)
@@ -2021,6 +2114,9 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
+        this._lidarAbort?.abort();
+        this._lidarAbort   = null;
+        this._lidarCasters = null;
         this._arcInputsCache         = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)

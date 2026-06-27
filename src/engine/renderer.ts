@@ -9,7 +9,7 @@
 
 import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
-import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
+import { renderBuildings, renderShadows, type Building, type ShadowCaster, type ScenePalette, type HomeAppearance } from './buildings';
 import { nightShade } from './colors';
 import {
     SVG_NS,
@@ -53,6 +53,10 @@ export class SceneRenderer
     //home-position change landing while the previous tile grid is still fetching.
     private _groundToken = 0;
     private _buildings: Building[] = [];
+    //When set, ground shadows are cast from these (LiDAR clump casters) instead of the building footprints,
+    //with their own max length so tall tree/roof shadows aren't clipped to the building cap. Null = footprints.
+    private _shadowCasters: ShadowCaster[] | null = null;
+    private _shadowMaxM: number | undefined;
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
     //Home prism appearance (the active chip's colour, optional stacked PV-string bands, and the squash
@@ -158,6 +162,15 @@ export class SceneRenderer
     public setBuildings(buildings: Building[]): void
     {
         this._buildings = buildings;
+        this.scheduleRedraw();
+    }
+
+    //Override the ground-shadow casters (LiDAR clumps) and their max shadow length. Null restores the
+    //building-footprint shadows.
+    public setShadowCasters(casters: ShadowCaster[] | null, maxShadowM?: number): void
+    {
+        this._shadowCasters = casters;
+        this._shadowMaxM    = maxShadowM;
         this.scheduleRedraw();
     }
 
@@ -323,9 +336,13 @@ export class SceneRenderer
         const shadeSvg = shade.opacity > 0
             ? `<rect width="${width}" height="${height}" fill="${shade.color}" opacity="${shade.opacity.toFixed(3)}"/>`
             : '';
+        //LiDAR ground shadows when set (cast from nDSM clumps, with their own max length), else the building
+        //footprints. Home-only (clock) mode never uses the LiDAR casters — only the home prism is drawn.
+        const shadowCasters = this._homeOnly ? drawn : (this._shadowCasters ?? drawn);
+        const shadowMaxM    = this._homeOnly ? undefined : (this._shadowCasters ? this._shadowMaxM : undefined);
         this._sceneSvg.innerHTML =
             shadeSvg +
-            renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
+            renderShadows(this.camera, shadowCasters, this._sun, this._palette.shadow, this._palette.shadowOpacity, shadowMaxM) +
             renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
 
         this.onAfterDraw?.();
