@@ -603,16 +603,22 @@ export function renderBuildings(
                     wall += `<line x1="${r[i][0].toFixed(2)}" y1="${r[i][1].toFixed(2)}" x2="${r[next][0].toFixed(2)}" y2="${r[next][1].toFixed(2)}" stroke="${sep}" stroke-width="0.9"/>`;
                 }
             }
-            const midE = (fp[i][0] + fp[next][0]) / 2;
-            const midN = (fp[i][1] + fp[next][1]) / 2;
-            faces.push({ depth: cam.project3(midE, midN, h / 2).depth, svg: wall });
+            //Sort key = the wall's NEAREST corner (max cameraZ, where larger = nearer). On a concave footprint
+            //the edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
+            const wallDepth = Math.max(
+                cam.project3(fp[i][0], fp[i][1], 0).depth,
+                cam.project3(fp[next][0], fp[next][1], 0).depth,
+                cam.project3(fp[i][0], fp[i][1], h).depth,
+                cam.project3(fp[next][0], fp[next][1], h).depth,
+            );
+            faces.push({ depth: wallDepth, svg: wall });
         }
-        faces.push({
-            depth: cam.project3(b.centerX, b.centerY, h).depth,
-            svg: `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`,
-        });
+        //Walls far -> near; the flat roof painted LAST. The roof sits at the top, so in any above-horizon view
+        //it never overlaps a wall in screen space — drawing it over the sorted walls removes any roof/wall
+        //mis-order and leaves only the (now nearest-point-sorted) wall ordering.
         faces.sort((a, c) => a.depth - c.depth);
-        svg += faces.map((f) => f.svg).join('');
+        const roofSvg = `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`;
+        svg += faces.map((f) => f.svg).join('') + roofSvg;
     }
     return svg;
 }
