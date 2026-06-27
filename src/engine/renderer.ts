@@ -48,10 +48,8 @@ export class SceneRenderer
     private readonly _sceneSvg:     SVGSVGElement;
 
     private _ground?:     Ground;
-    private _groundLat?:  number;
-    private _groundLon?:  number;
     //Increments per build so a slower in-flight tile fetch can't overwrite a newer one — guards a rapid
-    //theme re-flip landing while the previous re-tile is still fetching.
+    //home-position change landing while the previous tile grid is still fetching.
     private _groundToken = 0;
     private _buildings: Building[] = [];
     private _sun = { azimuth: 0, altitude: 0 };
@@ -63,7 +61,6 @@ export class SceneRenderer
     private _palette: ScenePaletteFull = {
         home:            '#488fc2',
         neighbor:        '#cccccc',
-        dark:            false,
         sun:             '#ffc107',
         shadow:          '#000000',
         shadowOpacity:   0.32,
@@ -129,15 +126,13 @@ export class SceneRenderer
         }
     }
 
-    //Resolve + build the CARTO basemap for a home position. The position is retained so a theme flip can
-    //re-tile with the matching light/dark style.
+    //Resolve + build the CARTO basemap for a home position. One Voyager style serves both themes; dark mode
+    //is a CSS filter on the canvas, so a theme flip never re-tiles.
     public async setLocation(lat: number, lon: number): Promise<void>
     {
-        this._groundLat = lat;
-        this._groundLon = lon;
         this.camera.pxPerMetre = pxPerMetreFor(lat);
         const token  = ++this._groundToken;
-        const ground = await buildGround(lat, lon, this._palette.dark);
+        const ground = await buildGround(lat, lon);
         if (!this._alive || token !== this._groundToken) { return; }
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);
@@ -191,13 +186,7 @@ export class SceneRenderer
 
     public setPalette(p: Partial<ScenePaletteFull>): void
     {
-        const darkFlipped = p.dark !== undefined && p.dark !== this._palette.dark;
         this._palette = { ...this._palette, ...p };
-        //A theme flip swaps the CARTO basemap style, so re-tile the ground at the retained position.
-        if (darkFlipped && this._groundLat !== undefined && this._groundLon !== undefined)
-        {
-            void this.setLocation(this._groundLat, this._groundLon);
-        }
         this.scheduleRedraw();
     }
 

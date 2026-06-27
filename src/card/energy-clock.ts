@@ -602,11 +602,25 @@ export function projectClockFrame(
         ring: number; hour: number; bands: ClockBand[]; predicted: boolean;
         east: number; north: number; angle: number; amount: number; maxValue: number; halfTan: number; screenY: number;
     };
+    //Slot slide on removal: while the departing ring shrinks out, every ring INSIDE it (higher index) eases
+    //one slot outward to fill the gap, arriving exactly as it vanishes — so survivors never teleport when the
+    //rebuild finally drops it. Uses the same timeline as the shrink, so the two finish together.
+    const removeTotal = CLOCK_GROW_MS + 23 * CLOCK_STAGGER_MS;
+    let removeP = 0;
+    if (removingRing !== null && removeStart)
+    {
+        const t = Math.max(0, Math.min(1, (Date.now() - removeStart) / removeTotal));
+        removeP = 1 - (1 - t) ** 3;   //ease-out, matching the grow/shrink feel
+    }
+    const effSlot = (ring: number): number =>
+        (removingRing !== null && ring > removingRing) ? ring - removeP : ring;
+
     const cols: Col[] = [];
     dataList.forEach((data, ring) =>
     {
-        const ringR   = outerR * ringRadiusFrac(ring);
-        const halfTan = baseFootR * ringRadiusFrac(ring);   //tangential width keeps a constant angular span
+        const slot    = effSlot(ring);
+        const ringR   = outerR * ringRadiusFrac(slot);
+        const halfTan = baseFootR * ringRadiusFrac(slot);   //tangential width keeps a constant angular span
         const perHour = data.hours.map(r =>
         {
             const angle = (r.hour / 24) * 2 * Math.PI;
@@ -658,7 +672,9 @@ export function projectClockFrame(
             hits.push({ hour: col.hour, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
             let puck = stackedColumn(camera, fp, h,
                 [{ frac: 1, wall: 'rgba(140,140,140,0.3)', roof: 'rgba(170,170,170,0.42)' }], 'rgba(0,0,0,0.25)');
-            const op = colOpacity(col.hour, false);
+            //A departing ring fades out as it shrinks (opacity tracks the shrink factor) so the bar AND its
+            //base dissolve together instead of the base cutting out at the bottom.
+            const op = colOpacity(col.hour, false) * (col.ring === removingRing ? grow : 1);
             if (op < 1) { puck = `<g opacity="${op.toFixed(3)}">${puck}</g>`; }
             svg += puck;
             continue;
@@ -682,7 +698,9 @@ export function projectClockFrame(
         let piece = stackedColumn(camera, fp, colHeight, bands, stroke);
         //Highlighted bars glow in their own ring's colour (one filter per ring).
         if (active) { piece = `<g filter="url(#clock-glow-${col.ring})">${piece}</g>`; }
-        const op = colOpacity(col.hour, col.predicted);
+        //A departing ring fades out as it shrinks (opacity tracks the shrink factor), so the bar + its base
+        //dissolve together rather than the base blinking out at the bottom.
+        const op = colOpacity(col.hour, col.predicted) * (col.ring === removingRing ? grow : 1);
         if (op < 1) { piece = `<g opacity="${op.toFixed(3)}">${piece}</g>`; }
         svg += piece;
     }

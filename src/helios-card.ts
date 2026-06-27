@@ -1192,19 +1192,10 @@ export class HeliosCard extends LitElement
     };
 
 
-    //Resolve the active theme polarity. Authoritative: hass.themes.darkMode (HA flips it on every theme
-    //swap). The getComputedStyle fallback covers ancient HA builds and custom themes that scope
-    //--primary-background-color below :host. Only the fallback is cached (the primary path is cheap).
-    //setCardThemeIsDark runs every call so a mid-session engine spawn stays in sync.
-    private _resolveIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
-    {
-        const isDark = this._computeIsDark(themesObj);
-        this._engine?.setCardThemeIsDark(isDark);
-        return isDark;
-    }
-
-    //Pure polarity resolution (no engine push). Authoritative hass.themes.darkMode, else the cached/fresh
-    //luminance probe. Reused to seed a freshly spawned engine before its basemap builds.
+    //Resolve the active theme polarity, used to drive the `theme-dark` / `theme-light` class on the card. The
+    //basemap's dark tint and every theme colour follow that class in CSS, so this no longer pushes anything to
+    //the engine. Authoritative: hass.themes.darkMode; the getComputedStyle fallback covers ancient HA builds
+    //and custom themes that scope --primary-background-color below :host (only the fallback is cached).
     private _computeIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
     {
         if (themesObj && typeof themesObj.darkMode === 'boolean')
@@ -1753,7 +1744,7 @@ export class HeliosCard extends LitElement
         //Detect the active HA theme. Authoritative: hass.themes.darkMode (HA flips it on every theme swap).
         //A getComputedStyle luminance probe is the fallback for older HA builds that lack it.
         const themesObj = (this.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes;
-        const isDark = this._resolveIsDark(themesObj);
+        const isDark = this._computeIsDark(themesObj);
         const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
         //camera-locked swaps the grab cursor for the default arrow when the camera is pinned (pan + rotate

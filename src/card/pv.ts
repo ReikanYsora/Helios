@@ -55,6 +55,8 @@ export interface PvHost
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _energyDefaults: import('./energy-prefs').EnergyDefaults;
+    //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
+    readonly _periodPastDays: number;
 
     requestUpdate(): void;
 
@@ -324,7 +326,9 @@ export function refreshPv(host: PvHost): void
     const changeIds = host._energyDefaults.solarStatEnergyFroms;
     if (changeIds.length > 0 && !host._pvChangeSeriesFetching)
     {
-        const seriesStart = new Date(today0.getTime() - 2 * DAY_MS);
+        //Span the full configured past window (period selector), not a fixed 2 days, or the older days of a
+        //wide window (e.g. 7 d) come back empty.
+        const seriesStart = new Date(today0.getTime() - host._periodPastDays * DAY_MS);
         const sortedChange = [...changeIds].sort();
         //The refresh anchor re-arms the gate once per CHANGE_REFRESH_MS. fetchEnd alone only moves on time-range shifts (weather
         //refresh, midnight rollover) — too coarse: it froze the past curve and the cumulative-only chip fallback for hours.

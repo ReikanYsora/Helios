@@ -75,6 +75,8 @@ export interface BatteryHost
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _energyDefaults: EnergyDefaults;
+    //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
+    readonly _periodPastDays: number;
 
     requestUpdate(): void;
 
@@ -281,7 +283,9 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
 
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime() - 2 * 24 * 3_600_000;
+    //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
+    //wide window (e.g. 7 d) come back empty.
+    const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
     //End anchor rounded down to the refresh boundary, folded into the fetch key so the gate re-arms once per CHANGE_REFRESH_MS and
     //the live-chip fallback + past curve keep tracking new buckets (a startMs-only key froze the series until midnight: a battery
     //idle at load showed 0 W all day). Rounding also lands every card on the same energy-stats cache key, so an N-card dashboard

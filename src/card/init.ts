@@ -292,7 +292,7 @@ export function initEngineNow(host: InitHost): void
         //installs - the engine and aux fetch then omit &elevation= and let Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
 
-        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.themeIsDark(), host.preview === true, host._effectiveCacheId?.() ?? '');
+        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host._effectiveCacheId?.() ?? '');
         wireEngineCallbacks(host);
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
         //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).

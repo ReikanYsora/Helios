@@ -65,13 +65,20 @@ export const heliosCardStyles = css`
         transform-style: preserve-3d;
         pointer-events: none;
     }
-    /*  Basemap tile canvas (CARTO tiles). Positioned by the renderer's transform-origin + transform;
-        sized in JS to the stitched tile grid. */
+    /*  Basemap tile canvas (CARTO Voyager). Positioned by the renderer's transform-origin + transform;
+        sized in JS to the stitched tile grid. One light style is fetched for both themes. */
     .ground
     {
         position: absolute;
         top: 0;
         left: 0;
+    }
+    /*  Dark theme tints the (light) Voyager basemap to a dark map purely in CSS — invert + hue-rotate keep
+        it legible, brightness + low saturation keep it calm under the HUD. Reads better than swapping to a
+        separate dark tile set (too bright in light, too dark in dark). */
+    ha-card.theme-dark .ground
+    {
+        filter: invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4);
     }
     /*  Edge fade: same size + transform as the ground, a radial gradient that's transparent out to 90%
         (GROUND_FADE_START) then dissolves to the themed card background, turning the square tile grid into

@@ -23,6 +23,8 @@ export interface GridHost
     //HA Energy dashboard defaults (populated by card/energy-prefs.ts) — the sole source of grid
     //wiring: import/export meters, live power sensors, and the sign-inversion set.
     readonly _energyDefaults?: EnergyDefaults;
+    //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
+    readonly _periodPastDays: number;
 
     requestUpdate(): void;
 
@@ -92,7 +94,9 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime() - 2 * 24 * 3_600_000;
+    //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
+    //wide window (e.g. 7 d) come back empty.
+    const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
     //Rounded end anchor in the key re-issues the fetch once per CHANGE_REFRESH_MS (as in
     //fetchBatteryChangeSeries), so a cumulative-only grid keeps a live chip and fresh past curve.
     const endMs   = changeRefreshAnchorMs();

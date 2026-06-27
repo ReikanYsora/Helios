@@ -54,7 +54,6 @@ export interface ScenePalette
 {
     home:     string; //#rrggbb
     neighbor: string; //#rrggbb
-    dark:     boolean;
 }
 
 //Per-frame appearance of the HOME prism only (neighbours unaffected). All optional; an empty object
