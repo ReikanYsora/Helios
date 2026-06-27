@@ -12,7 +12,7 @@ import
 } from './helios-config';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
-import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER } from './card/timeline-modes';
+import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod } from './card/timeline-modes';
 import { CUSTOM_ENTITY_COLOR } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
@@ -346,9 +346,6 @@ export class HeliosCard extends LitElement
     //Per-entity histories alongside _pvHistory so the chart can draw one curve per source and the scrub
     //tooltip can break down by entity. Keyed by entity id; cleared + repopulated in fetchPvHistory.
     _pvHistoryPerEntity: Map<string, { times: Date[]; values: number[] }> = new Map();
-    //Most recent PV history fetch outcome, surfaced via window.heliosStats() (raw entries, samples kept
-    //after unit/unavailable filtering, window in hours).
-    _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same shape as _pvHistory
     //but via recorder/statistics_during_period (~120 rows/5 days vs potentially millions on the raw path
     //for high-frequency sensors). Null while first fetch is in flight; calibration.ts falls back to
@@ -635,7 +632,7 @@ export class HeliosCard extends LitElement
 
     //Recorder period for the energy change-series, per the active mode (5-min for Now, hourly for a week,
     //daily for month/year) — so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
-    get _storeFetchPeriod(): StatPeriod { return TIMELINE_MODES[this._timelineMode].fetchPeriod; }
+    get _storeFetchPeriod(): StatPeriod { return modeFetchPeriod(this._timelineMode, this.config); }
 
     //Whether weather (irradiance + cloud) is offered in the active mode. Off for month/year (Open-Meteo only
     //reaches ~16 days), where the focus is energy. Hides those chips + clock-rail buttons + chart targets.
@@ -855,8 +852,7 @@ export class HeliosCard extends LitElement
             pv:
             {
                 entityConfigured: resolvePvLiveEntity(this._energyDefaults) !== '',
-                unit:             this._pvUnit || null,
-                lastHistory:      this._pvHistoryDiagnostics
+                unit:             this._pvUnit || null
             }
         };
     }
@@ -886,7 +882,6 @@ export class HeliosCard extends LitElement
         this._haSolarForecastFetching     = false;
         this._haSolarForecastFetchedAt    = 0;
         this._pvCalibStatsFetchKey        = '';
-        this._pvHistoryDiagnostics        = null;
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;
         this._gridImportChangeFetchKey    = '';
@@ -3198,7 +3193,7 @@ export class HeliosCard extends LitElement
                     //value, no name (kept uniform with the others). Single-layer metrics keep one total row.
                     if (data.layers.length > 1) {
                         const rows = data.layers
-                            .map(l => ({ l, v: clockLayerValue(l, mode, slot) }))
+                            .map(l => ({ l, v: clockLayerValue(l, data, mode, slot) }))
                             .filter(r => r.v > 0);
                         if (rows.length > 0) {
                             return html`${rows.map(({ l, v }) => html`

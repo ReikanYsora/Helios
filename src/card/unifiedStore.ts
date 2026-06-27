@@ -435,51 +435,6 @@ export function valueAt(series: ReadonlyArray<number | null>, store: UnifiedData
 
 
 
-//Integrate the forecast series (watts/bucket) over [dayStartMs, dayEndMs) into kWh at store cadence: each non-null
-//bucket contributes watts x stepHours / 1000. Single source for every forecast kWh figure (headline, day-strip chips)
-//so they all match the timeline curve. Null when no bucket in range carried a value.
-export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): number | null
-{
-    const series = store.forecast;
-    const stepH  = store.stepMs / HOUR_MS;
-    let kwh = 0;
-    let any = false;
-    for (let i = 0; i < store.bucketsTotal; i++)
-    {
-        const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
-        if (mid < dayStartMs || mid >= dayEndMs) { continue; }
-        const v = series[i];
-        if (v === null || !isFinite(v)) { continue; }
-        kwh += v * stepH / 1000;
-        any = true;
-    }
-    return any ? kwh : null;
-}
-
-
-//Cumulative forecast kWh across [dayStartMs, dayEndMs), one point per bucket, for the running intraday curve. Same
-//integration as integrateForecastKwh (endpoint == headline total). Always seeded with a 0 point at dayStartMs.
-export function forecastCumulativeForDay(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): Array<{ tMs: number; kwh: number }>
-{
-    const stepH = store.stepMs / HOUR_MS;
-    const out: Array<{ tMs: number; kwh: number }> = [{ tMs: dayStartMs, kwh: 0 }];
-    let kwh = 0;
-    for (let i = 0; i < store.bucketsTotal; i++)
-    {
-        const bucketStart = store.storeStartMs + i * store.stepMs;
-        const mid         = bucketStart + 0.5 * store.stepMs;
-        if (mid < dayStartMs || mid >= dayEndMs) { continue; }
-        const v = store.forecast[i];
-        if (v === null || !isFinite(v)) { continue; }
-        kwh += v * stepH / 1000;
-        out.push({ tMs: bucketStart + store.stepMs, kwh });
-    }
-    return out;
-}
-
-
-
-
 //Per-bucket samples over an arbitrary [startMs, endMs] sub-window. Used by the main timeline chart (production +
 //forecast curves across the visible 5-day window). One entry per bucket whose centre falls inside; null = no data.
 export interface RangeSlice

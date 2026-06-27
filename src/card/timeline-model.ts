@@ -3,7 +3,6 @@
 
 
 import { TIMELINE_MAX_TICKS, HOUR_MS, DAY_MS } from '../constants';
-export { TIMELINE_MAX_TICKS };
 
 export type TimelineKind = 'intraday' | 'days' | 'weeks' | 'months';
 

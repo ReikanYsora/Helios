@@ -62,53 +62,6 @@ export interface Translations
         //Section-top hint: entity wiring (production, grid, battery) lives in HA Energy now; this
         //section only adds install details that improve forecast accuracy.
         installationHint:         string;
-        //Inverter clipping cap (kW AC). Optional; forecast tops out here so an over-sized DC array
-        //on a smaller inverter doesn't render an unachievable peak.
-        pvInverterMaxKw:          string;
-        pvInverterMaxKwHelp:      string;
-        //Multi-array PV layout. Each entry: tilt (0..90), azimuth (0..360 cw from north, 180=south),
-        //share % of total kWp. Shares are normalised to sum 1.0 at compute time, so the editor warns
-        //when typed shares don't add to 100. "+ Add array" hidden past 6 entries. pvArraysSection is
-        //its own block so the region reads as a discrete sub-section.
-        pvArraysSection:          string;
-        pvArraysHelp:             string;
-        pvArrayTitle:             string;   //e.g. "Array {n}"
-        pvArrayName:              string;
-        pvArrayNameHelp:          string;
-        pvArrayTilt:              string;
-        pvArrayAzimuth:           string;
-        //Per-string peak power (kWp); total install power is the row sum.
-        pvArrayPeakKwp:           string;
-        pvArrayPeakKwpHelp:       string;
-        pvArrayAdd:               string;
-        pvArrayRemove:            string;
-        pvArrayNormHint:          string;
-        //Per-field helps for tilt / azimuth / share; share help spells out auto-normalisation (50/50
-        //and 1/1 give the same forecast).
-        pvArrayTiltHelp:          string;
-        pvArrayAzimuthHelp:       string;
-        //Optional per-array GPS coords, for panels a meaningful distance from the home (e.g.
-        //ground-mounted in a clearing): drives true sun position + a map marker at the panel.
-        pvArrayLatitude:          string;
-        pvArrayLongitude:         string;
-        pvArrayCoordsHelp:        string;
-        pvArrayCoordsPlaceholder: string;
-        //Panel-group height above ground (m), for the per-array geometry.
-        pvArrayHeight:            string;
-        pvArrayHeightHelp:        string;
-        //Sun-tracking selector per row: 'none' (fixed, default), 'dual-axis' (tilt+azimuth track),
-        //'single-axis-h' (tilt only), 'single-axis-v' (azimuth only).
-        pvArrayTracker:           string;
-        pvArrayTrackerNone:       string;
-        pvArrayTrackerDual:       string;
-        pvArrayTrackerSingleH:    string;
-        pvArrayTrackerSingleV:    string;
-        pvArrayTrackerHelp:       string;
-        //Inverter cutoff SoC: % at which a hybrid inverter clamps PV once the battery ceiling is hit.
-        //Forecast learning drops every hour that reached this SoC so blocked production doesn't train
-        //as phantom shadow.
-        inverterCutoffSocPct:       string;
-        inverterCutoffSocPctHelp:   string;
         //Optional W/m² sensor override (Ecowitt / Davis / PWS). When wired, preferred over Open-Meteo
         //for live + past irradiance; forecast hours always fall through to the model.
         solarIrradianceEntity:     string;
@@ -141,12 +94,9 @@ export interface Translations
         resetCacheWarning:        string;
         resetCacheDone:           string;
         //About section at the editor bottom: version string, the source repo, an appreciation line +
-        //Buy Me A Coffee link. (aboutSiteTitle/aboutSiteDescription are unused.)
+        //Buy Me A Coffee link.
         aboutSection:             string;
         aboutVersionLabel:        string;
-        aboutSiteTitle:           string;
-        aboutSiteDescription:     string;
-        aboutCodeLabel:           string;
         aboutRepoCard:            string;
         aboutCoffeeMessage:       string;
         aboutCoffeeLink:          string;

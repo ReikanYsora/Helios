@@ -8,8 +8,6 @@ import {
     DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M,
     DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
-    DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
-    MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
 } from './constants';
@@ -18,11 +16,9 @@ export {
     DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
     MAX_DISPLAY_RADIUS_M, DISPLAY_FADE_DELTA_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
-    MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, DEFAULT_PERIOD_PAST_DAYS, DEFAULT_PERIOD_FUTURE_DAYS,
-    MIN_PERIOD_PAST_DAYS, MAX_PERIOD_PAST_DAYS, MIN_PERIOD_FUTURE_DAYS, MAX_PERIOD_FUTURE_DAYS,
+    MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
-    DEFAULT_BUILDING_REAL_SIZE,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
 } from './constants';
 
@@ -45,11 +41,6 @@ export interface HeliosConfig
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.
     'camera-locked'?:          unknown;
-    //Rolling window: period-past-days of history + period-future-days of forecast around today (inclusive,
-    //from local midnight). Defaults reproduce the -2/+2 window; the in-card selector overrides at runtime.
-    //Past clamps [0,30], future [0,14] (Open-Meteo forecasts ~16 days).
-    'period-past-days'?:       unknown;
-    'period-future-days'?:     unknown;
     //Legacy per-layer building radius, retired for `display-radius`. Kept in the type only so the editor's
     //retired-key strip recognises + removes it on save.
     'building-radius'?:        unknown;
@@ -196,30 +187,6 @@ export function displayRadiusM(config: HeliosConfig | undefined): number
     const r = Math.round(n);
     if (r < MIN_DISPLAY_RADIUS_M) { return MIN_DISPLAY_RADIUS_M; }
     if (r > MAX_DISPLAY_RADIUS_M) { return MAX_DISPLAY_RADIUS_M; }
-    return r;
-}
-
-
-//Resolve past/forecast day counts from their config keys, clamped to range, defaulting on missing/invalid.
-export function periodPastDays(config: HeliosConfig | undefined): number
-{
-    const raw = config?.['period-past-days'];
-    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) { return DEFAULT_PERIOD_PAST_DAYS; }
-    const r = Math.round(n);
-    if (r < MIN_PERIOD_PAST_DAYS) { return MIN_PERIOD_PAST_DAYS; }
-    if (r > MAX_PERIOD_PAST_DAYS) { return MAX_PERIOD_PAST_DAYS; }
-    return r;
-}
-
-export function periodFutureDays(config: HeliosConfig | undefined): number
-{
-    const raw = config?.['period-future-days'];
-    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) { return DEFAULT_PERIOD_FUTURE_DAYS; }
-    const r = Math.round(n);
-    if (r < MIN_PERIOD_FUTURE_DAYS) { return MIN_PERIOD_FUTURE_DAYS; }
-    if (r > MAX_PERIOD_FUTURE_DAYS) { return MAX_PERIOD_FUTURE_DAYS; }
     return r;
 }
 

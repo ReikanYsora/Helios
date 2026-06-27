@@ -38,16 +38,6 @@ export const DEFAULT_VALUE_DECIMALS = 1;
 export const MIN_VALUE_DECIMALS     = 0;
 export const MAX_VALUE_DECIMALS     = 3;
 
-//=== Rolling-window period ===
-//Days of history / forecast around today (inclusive). Defaults reproduce the -2/+2 window; the in-card
-//selector overrides at runtime. Past clamps [0,30], future [0,14] (Open-Meteo forecasts ~16 days).
-export const DEFAULT_PERIOD_PAST_DAYS   = 2;
-export const DEFAULT_PERIOD_FUTURE_DAYS = 2;
-export const MIN_PERIOD_PAST_DAYS       = 0;
-export const MAX_PERIOD_PAST_DAYS       = 30;
-export const MIN_PERIOD_FUTURE_DAYS     = 0;
-export const MAX_PERIOD_FUTURE_DAYS     = 14;
-
 
 //=== Colours ===
 //Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart) — a stable warm yellow rather

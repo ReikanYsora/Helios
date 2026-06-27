@@ -5,7 +5,7 @@
 //
 //Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane.
 
-import { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, EARTH_CIRCUMFERENCE_M, METRES_PER_DEG_LAT, DEG } from '../constants';
+import { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, EARTH_CIRCUMFERENCE_M, DEG } from '../constants';
 //Re-exported so importers (e.g. the card CSS imports GROUND_FADE_START from './tiles') keep resolving.
 export { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, GROUND_FADE_START } from '../constants';
 
@@ -22,16 +22,6 @@ export function lonLatToTile(lon: number, lat: number, zoom: number): [number, n
     const latRad = lat * DEG;
     const y      = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2;
     return [((lon + 180) / 360) * world, y * world];
-}
-
-//Metres-per-degree scale at a given home latitude: [perLon, perLat]. A point (lat, lng) becomes local
-//metres via east = (lng - homeLng) * perLon, north = (lat - homeLat) * perLat.
-export function metresPerDegree(homeLat: number): { perLon: number; perLat: number }
-{
-    return {
-        perLon: METRES_PER_DEG_LAT * Math.cos(homeLat * DEG),
-        perLat: METRES_PER_DEG_LAT,
-    };
 }
 
 export interface Ground

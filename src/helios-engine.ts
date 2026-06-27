@@ -16,8 +16,6 @@ import
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
-    periodPastDays,
-    periodFutureDays,
     buildingCount,
     buildingRealSize,
     buildingFixedHeightM,
@@ -1008,8 +1006,8 @@ export class HeliosEngine
         return this._getTimeRange();
     }
 
-    //Active rolling-window span (days past/future around today). Undefined until setPeriodDays() pushes
-    //resolved values; _getTimeRange falls back to config keys so the window is correct before the first push.
+    //Active rolling-window span (days past/future around today). Undefined until setPeriodDays() pushes the
+    //card's mode-resolved values; _getTimeRange falls back to a safe default so the window is sane before then.
     private _periodPastDays?:   number;
     private _periodFutureDays?: number;
 
@@ -1024,8 +1022,8 @@ export class HeliosEngine
     //inclusive of today. The Open-Meteo payload may stretch further (calibration), but the axis is clipped.
     private _getTimeRange(): { start: Date; end: Date } | null
     {
-        const pastDays   = this._periodPastDays   ?? periodPastDays(this.cfg);
-        const futureDays = this._periodFutureDays ?? periodFutureDays(this.cfg);
+        const pastDays   = this._periodPastDays   ?? 2;
+        const futureDays = this._periodFutureDays ?? 1;
         const today0 = new Date();
         today0.setHours(0, 0, 0, 0);
         const visibleStartMs = today0.getTime() - pastDays * 24 * 3_600_000;

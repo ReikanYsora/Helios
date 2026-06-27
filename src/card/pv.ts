@@ -69,7 +69,6 @@ export interface PvHost
     //tooltip can show a per-entity breakdown. Keyed by entity id; single-source carries one entry equal to `_pvHistory`.
     //Empty map = aggregated only (single-source or pre-fetch boot window).
     _pvHistoryPerEntity:    Map<string, PvHistory>;
-    _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
     //Hourly LTS series feeding the 5-day forecast calibration. Same times[]/values[] shape as `_pvHistory`, via
     //`recorder/statistics_during_period` period:'hour' over 5 days. Power sensors land as bucket means; cumulative-energy as
     //bucket-end `state`. ~120 rows, light on the recorder. Null when LTS unavailable (no `state_class`, LTS disabled);

@@ -11,7 +11,8 @@ import { customEntityId, type HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
 import { HOUR_MS } from '../constants';
 
-//24 hour-of-day averages per metric (watts, or % for SoC). consumption is derived from the others.
+//24 hour-of-day values per metric: energy meters are kWh TOTALS summed over the window; soc is an average %,
+//custom an average (watts). consumption is derived from the energy totals.
 export interface ClockHourly
 {
     pv:               number[];
@@ -43,27 +44,22 @@ export function clockNeedsHourly(host: ClockHourlyHost): boolean
     return host._viewMode === 'clock' && modeBucketsPerHour(host._timelineMode, host.config) < 1;
 }
 
-//Bin a recorder change-series into 24 hour-of-day average watts (each bucket's kWh -> avg watts via its own
-//duration). These are single-direction meters (stat_energy_from/to), so a NEGATIVE change is a meter-reset
-//artefact, not real flow — floored at 0 exactly like the store path (changeSeriesToWatts + caller). Taking the
-//magnitude instead would turn a reset into a giant positive spike (the 190 kW at 23 h / 13 h bug).
+//Bin a recorder change-series into 24 hour-of-day ENERGY TOTALS (kWh), SUMMED over the window. Single-direction
+//meters (stat_energy_from/to), so a negative change is a meter-reset artefact floored at 0. Summing the kWh
+//directly (no division by the bucket duration) is both the "total per period" the clock shows AND the fix for
+//the DST-folded / partial buckets that the old /duration average blew up into the 190 kW spike at 23h/13h.
 function binChangeByHour(buckets: ChangeBucket[] | null): number[]
 {
     const sum = new Array<number>(24).fill(0);
-    const cnt = new Array<number>(24).fill(0);
     if (buckets)
     {
         for (const b of buckets)
         {
-            const hours = (b.endMs - b.startMs) / HOUR_MS;
-            if (hours <= 0 || !isFinite(b.kwh)) { continue; }
-            const w = Math.max(0, (b.kwh / hours) * 1000);
-            const h = new Date(b.startMs).getHours();
-            sum[h] += w;
-            cnt[h] += 1;
+            if (!isFinite(b.kwh)) { continue; }
+            sum[new Date(b.startMs).getHours()] += Math.max(0, b.kwh);
         }
     }
-    return sum.map((s, h) => (cnt[h] ? s / cnt[h] : 0));
+    return sum;
 }
 
 //Fetch hourly statistics and bin one value by hour-of-day. `power` => energy/power meters resolved to watts

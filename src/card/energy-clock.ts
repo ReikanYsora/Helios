@@ -5,6 +5,7 @@
 //straight from the store + histories the timeline already loaded, binned by hour-of-day — no extra fetch.
 
 import { type SceneCamera } from '../engine/projection';
+import { HOUR_MS } from '../constants';
 import { type ChartTarget, type ChartHost, pvValueAtTime } from './charts';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex } from './format';
 import { type UnifiedDataStore } from './unifiedStore';
@@ -76,8 +77,9 @@ export interface ClockData
     layers: ClockLayer[];
     //The metric's representative colour, used for the rail button + the hovered slice glow.
     color:  string;
-    //Tooltip value formatter for this metric (kW for power, % for soc/cloud, W/m² for irradiance).
-    unit:   'power' | 'percent' | 'irradiance';
+    //Tooltip value formatter + aggregation. 'energy' metrics (production/consumption/grid/battery) SUM the kWh
+    //over the window per hour-of-day (a total, the user's ask); 'power'/'percent'/'irradiance' AVERAGE.
+    unit:   'energy' | 'power' | 'percent' | 'irradiance';
 }
 
 //One ring to project, with its live animation scalars resolved by the card: `slot` is the (possibly
@@ -149,13 +151,18 @@ function fillGaps(v: number[]): number[]
     return out;
 }
 
-//Expand a 24-value hour-of-day profile (decoupled hourly clock source) to the dial's per-slot resolution by
-//holding each hour's value across its slots — so the histogram reads the exact hourly value and the area
-//steps at hourly resolution (which is all the data carries on a long window).
-function expandHourly(hourly: number[]): number[]
+//Expand a 24-value hour-of-day profile (decoupled hourly clock source) to the dial's per-slot resolution. For
+//`sum` (energy) the hour's TOTAL is split evenly across its slots, so per-slot reads as the 15-min energy and
+//re-summing the hour recovers the total; otherwise the hourly value is HELD across its slots (the per-slot
+//currency is then the hourly value, and a histogram averages back to it).
+function expandHourly(hourly: number[], sum: boolean): number[]
 {
     const out = new Array<number>(CLOCK_SLOTS);
-    for (let i = 0; i < CLOCK_SLOTS; i++) { out[i] = Math.max(0, hourly[Math.floor(i / CLOCK_SLOTS_PER_HOUR)] ?? 0); }
+    for (let i = 0; i < CLOCK_SLOTS; i++)
+    {
+        const v = Math.max(0, hourly[Math.floor(i / CLOCK_SLOTS_PER_HOUR)] ?? 0);
+        out[i] = sum ? v / CLOCK_SLOTS_PER_HOUR : v;
+    }
     return out;
 }
 
@@ -174,6 +181,24 @@ function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[
         cnt[s] += 1;
     }
     return fillGaps(sum.map((x, s) => (cnt[s] ? x / cnt[s] : NaN)));
+}
+
+//Sum one store WATTS series into per-slot ENERGY (kWh): each bucket's watts * its hours, accumulated by
+//hour-of-day across the whole window. Empty slots are a genuine 0 (no energy), so no gap interpolation. This is
+//the "total per period" the energy clock shows — and summing kWh directly avoids the per-bucket /duration that
+//inflated DST-folded buckets in the old average path.
+function binSlotSum(store: UnifiedDataStore, series: (number | null)[]): number[]
+{
+    const sum   = new Array<number>(CLOCK_SLOTS).fill(0);
+    const stepH = store.stepMs / HOUR_MS;
+    for (let i = 0; i < store.bucketsTotal; i++)
+    {
+        const v = series[i];
+        if (v === null || !isFinite(v)) { continue; }
+        const s = slotOf(new Date(store.storeStartMs + (i + 0.5) * store.stepMs));
+        sum[s] += (Math.max(0, v) * stepH) / 1000;   //W * h / 1000 = kWh
+    }
+    return sum;
 }
 
 //True when a series carries any real (non-null, non-zero) reading — drives which rail buttons appear.
@@ -255,22 +280,24 @@ function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHour
     const el   = host as unknown as Element;
     const meta = clockTargetMeta(host, target);
     const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData => ({ target, color: meta.color, unit, layers });
-    const one  = (color: string, icon: string, v: number[]): ClockLayer => ({ color, icon, label: '', values: expandHourly(v) });
+    //Energy metrics expand their hour TOTALS (split across slots); soc/custom hold their hourly average.
+    const oneE = (color: string, icon: string, v: number[]): ClockLayer => ({ color, icon, label: '', values: expandHourly(v, true) });
+    const oneA = (color: string, icon: string, v: number[]): ClockLayer => ({ color, icon, label: '', values: expandHourly(v, false) });
     switch (target)
     {
-        case 'production':  return data('power', [one(ENERGY_COLOR.pv(el), 'mdi:solar-power', h.pv)]);
-        case 'consumption': return data('power', [one(ENERGY_COLOR.consumption(el), 'mdi:home-lightning-bolt', h.consumption)]);
-        case 'grid':        return data('power', [
-            one(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', h.gridImport),
-            one(ENERGY_COLOR.gridExport(el), 'mdi:transmission-tower-export', h.gridExport),
+        case 'production':  return data('energy', [oneE(ENERGY_COLOR.pv(el), 'mdi:solar-power', h.pv)]);
+        case 'consumption': return data('energy', [oneE(ENERGY_COLOR.consumption(el), 'mdi:home-lightning-bolt', h.consumption)]);
+        case 'grid':        return data('energy', [
+            oneE(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', h.gridImport),
+            oneE(ENERGY_COLOR.gridExport(el), 'mdi:transmission-tower-export', h.gridExport),
         ]);
-        case 'battery':     return data('power', [
-            one(ENERGY_COLOR.batteryOut(el), 'mdi:battery-arrow-up',   h.batteryDischarge),
-            one(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', h.batteryCharge),
+        case 'battery':     return data('energy', [
+            oneE(ENERGY_COLOR.batteryOut(el), 'mdi:battery-arrow-up',   h.batteryDischarge),
+            oneE(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', h.batteryCharge),
         ]);
-        case 'battery-soc': return data('percent', [one(ENERGY_COLOR.batteryOut(el), 'mdi:battery', h.soc)]);
-        case 'custom':      return data('power', [one(meta.color, meta.icon, h.custom)]);
-        default:            return data(target === 'irradiance' ? 'irradiance' : 'power', []);
+        case 'battery-soc': return data('percent', [oneA(ENERGY_COLOR.batteryOut(el), 'mdi:battery', h.soc)]);
+        case 'custom':      return data('power', [oneA(meta.color, meta.icon, h.custom)]);
+        default:            return data(target === 'irradiance' ? 'irradiance' : 'energy', []);
     }
 }
 
@@ -292,12 +319,13 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
 
     if (target === 'production')
     {
-        if (!store) { return data('power', []); }
+        if (!store) { return data('energy', []); }
         const ids = Array.from(host._pvHistoryPerEntity.keys()).sort();
         const nowMs = Date.now();
-        //Per-source actuals: instantaneous power at each past bucket centre, averaged by hour-of-day.
-        const sum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
-        const cnt = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
+        const stepH = store.stepMs / HOUR_MS;
+        //Per-source energy (kWh) SUMMED by hour-of-day: instantaneous power at each past bucket centre * its
+        //hours, accumulated over the window.
+        const wsum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
         for (let i = 0; i < store.bucketsTotal; i++)
         {
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
@@ -308,26 +336,25 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                 const ph = host._pvHistoryPerEntity.get(id);
                 if (!ph) { return; }
                 const v = pvValueAtTime(host, tMs, ph).value;
-                if (isFinite(v) && v > 0) { sum[s][h] += v; cnt[s][h] += 1; }
+                if (isFinite(v) && v > 0) { wsum[s][h] += (v * stepH) / 1000; }
             });
         }
-        //Per-source PV is store-dense (15-min) during the day; night slots are a genuine 0 (not a gap to fill).
-        const srcAvg = sum.map((arr, s) => arr.map((x, h) => (cnt[s][h] ? x / cnt[s][h] : 0)));
+        const srcSum = wsum;   //already kWh per slot
         const layers: ClockLayer[] = ids.map((id, s) => ({
             color: energySolarColor(el, dark, s),
             icon:  'mdi:solar-power',
             label: String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id),
-            values: srcAvg[s],
+            values: srcSum[s],
         }));
-        //Forecast layer: covers only the hours with no actuals, drawn translucent so a future day still reads.
-        const forecastAvg = binSlotAvg(store, store.forecast);
-        const fcVals = forecastAvg.map((v, h) =>
-            (srcAvg.reduce((t, a) => t + a[h], 0) <= 0 && v > 0) ? v : 0);
+        //Forecast layer: the forecast energy on hours with no actuals, drawn translucent so a future day reads.
+        const forecastSum = binSlotSum(store, store.forecast);
+        const fcVals = forecastSum.map((v, h) =>
+            (srcSum.reduce((t, a) => t + a[h], 0) <= 0 && v > 0) ? v : 0);
         if (fcVals.some(v => v > 0))
         {
             layers.push({ color: ENERGY_COLOR.pv(el), icon: 'mdi:solar-power', label: '', values: fcVals, predicted: true });
         }
-        return data('power', layers);
+        return data('energy', layers);
     }
 
     //Average a sum/count pair into a per-slot series, interpolating empty slots (hourly sources land in 1 of
@@ -392,10 +419,11 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     }
 
     //Remaining metrics are single- or dual-layer store series, binned by hour-of-day.
-    if (!store) { return data(target === 'irradiance' ? 'irradiance' : 'power', []); }
+    if (!store) { return data(target === 'irradiance' ? 'irradiance' : 'energy', []); }
 
     let specs: Array<{ series: (number | null)[]; color: string; icon: string }>;
-    let unit: ClockData['unit'] = 'power';
+    //Energy metrics SUM kWh per hour-of-day; irradiance AVERAGES W/m².
+    let unit: ClockData['unit'] = 'energy';
     if (target === 'grid')
     {
         specs = [
@@ -432,7 +460,8 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         specs = [{ series: cons, color: ENERGY_COLOR.consumption(el), icon: 'mdi:home-lightning-bolt' }];
     }
 
-    return data(unit, specs.map(s => ({ color: s.color, icon: s.icon, label: '', values: binSlotAvg(store, s.series) })));
+    const agg = unit === 'energy' ? binSlotSum : binSlotAvg;
+    return data(unit, specs.map(s => ({ color: s.color, icon: s.icon, label: '', values: agg(store, s.series) })));
 }
 
 
@@ -452,15 +481,16 @@ function ringSpacingM(outerR: number): number
     return outerR * (1 - RING_INNER_MIN_FRAC) / (CLOCK_MAX_FILTERS - 1);
 }
 
-//Aggregate a per-slot series to 24 hourly averages, for the histogram bars (each bar = one hour H..H+1).
-function hourlyOf(values: number[]): number[]
+//Aggregate a per-slot series to 24 hourly values for the histogram bars (each bar = one hour H..H+1). `sum`
+//(energy) totals the hour's slots; otherwise (power/percent/irradiance) it averages them.
+function hourlyOf(values: number[], sum: boolean): number[]
 {
     const out = new Array<number>(24).fill(0);
     for (let h = 0; h < 24; h++)
     {
-        let sum = 0;
-        for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { sum += Math.max(0, values[h * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
-        out[h] = sum / CLOCK_SLOTS_PER_HOUR;
+        let s = 0;
+        for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { s += Math.max(0, values[h * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
+        out[h] = sum ? s : s / CLOCK_SLOTS_PER_HOUR;
     }
     return out;
 }
@@ -473,7 +503,7 @@ function ringMax(data: ClockData, mode: ClockMode): number
     let m = 0;
     if (mode === 'histogram')
     {
-        const hourly = data.layers.map(L => hourlyOf(L.values));
+        const hourly = data.layers.map(L => hourlyOf(L.values, data.unit === 'energy'));
         for (let h = 0; h < 24; h++) { let t = 0; for (const hv of hourly) { t += Math.max(0, hv[h]); } m = Math.max(m, t); }
     }
     else
@@ -748,7 +778,7 @@ function projectHistogramRing(
 ): void
 {
     const data   = ring.data;
-    const hourly = data.layers.map(L => hourlyOf(L.values));   //[layer][24]
+    const hourly = data.layers.map(L => hourlyOf(L.values, data.unit === 'energy'));   //[layer][24]
     const totalAt = (h: number): number => hourly.reduce((s, hv) => s + Math.max(0, hv[h]), 0);
     //Normalise against the shared per-unit ceiling so same-unit metrics' bars are directly comparable.
     const zScale = ceiling > 0 ? (maxHm * ring.heightScale) / ceiling : 0;
@@ -806,34 +836,35 @@ export function clockHitTest(hits: ClockHit[], x: number, y: number): number | n
 }
 
 
-//Read one layer at the focused position, honouring the mode: area reads the exact 15-min slot; histogram
-//reads the hourly average of the slot's hour (matching the bar height).
-function hourlyAt(values: number[], hour: number): number
+//Read one layer at the focused position, honouring the mode + aggregation: area reads the exact 15-min slot;
+//histogram reads the hour's total (`sum`, energy) or average (power/percent/irradiance), matching the bar.
+function hourlyAt(values: number[], hour: number, sum: boolean): number
 {
-    let sum = 0;
-    for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { sum += Math.max(0, values[hour * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
-    return sum / CLOCK_SLOTS_PER_HOUR;
+    let s = 0;
+    for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { s += Math.max(0, values[hour * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
+    return sum ? s : s / CLOCK_SLOTS_PER_HOUR;
 }
-export function clockLayerValue(layer: ClockLayer, mode: ClockMode, slot: number): number
+export function clockLayerValue(layer: ClockLayer, data: ClockData, mode: ClockMode, slot: number): number
 {
     return mode === 'histogram'
-        ? hourlyAt(layer.values, Math.floor(slot / CLOCK_SLOTS_PER_HOUR))
+        ? hourlyAt(layer.values, Math.floor(slot / CLOCK_SLOTS_PER_HOUR), data.unit === 'energy')
         : Math.max(0, layer.values[slot] ?? 0);
 }
 
 //A metric's total magnitude at the focused position (sum of its layers), for the per-filter tooltip rows.
 export function clockTotal(data: ClockData, mode: ClockMode, slot: number): number
 {
-    return data.layers.reduce((s, L) => s + clockLayerValue(L, mode, slot), 0);
+    return data.layers.reduce((s, L) => s + clockLayerValue(L, data, mode, slot), 0);
 }
 
 //Slots per hour, exposed so the card can format a slot's HH:MM label + range.
 export { CLOCK_SLOTS_PER_HOUR };
 
-//Format a band/total magnitude for the tooltip, per the metric's unit.
+//Format a band/total magnitude for the tooltip, per the metric's unit. 'energy' values are already kWh.
 export function formatClockValue(host: ClockHost, data: ClockData, v: number): string
 {
     if (data.unit === 'percent')    { return `${Math.round(Math.max(0, v))} %`; }
     if (data.unit === 'irradiance') { return `${Math.round(Math.max(0, v))} W/m²`; }
+    if (data.unit === 'energy')     { return `${formatLocalisedNumber(host.hass, v, 1)} kWh`; }
     return `${formatLocalisedNumber(host.hass, v / 1000, 1)} kW`;
 }
