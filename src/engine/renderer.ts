@@ -10,6 +10,7 @@
 import { SceneCamera } from './projection';
 import { buildGround, pxPerMetreFor, type Ground } from './tiles';
 import { renderBuildings, renderShadows, type Building, type ShadowCaster, type ScenePalette, type HomeAppearance } from './buildings';
+import { renderWireframe, type NdsmRaster } from './lidar-ndsm';
 import { nightShade } from './colors';
 import {
     SVG_NS,
@@ -17,6 +18,9 @@ import {
     HOME_SQUASH_MS,
     HOME_GROW_MS,
 } from '../constants';
+
+//Wireframe sampling cap (max mesh nodes per side); the raster is sub-sampled to keep the line count sane.
+const WIREFRAME_MAX_LINES = 56;
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
 const prefersReducedMotion = (): boolean =>
@@ -57,6 +61,9 @@ export class SceneRenderer
     //with their own max length so tall tree/roof shadows aren't clipped to the building cap. Null = footprints.
     private _shadowCasters: ShadowCaster[] | null = null;
     private _shadowMaxM: number | undefined;
+    //LiDAR view wireframe: the decoded nDSM surface, drawn as a projected mesh on top of the scene when on.
+    private _wireframeRaster: NdsmRaster | null = null;
+    private _wireframeOn = false;
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
     //Home prism appearance (the active chip's colour, optional stacked PV-string bands, and the squash
@@ -171,6 +178,21 @@ export class SceneRenderer
     {
         this._shadowCasters = casters;
         this._shadowMaxM    = maxShadowM;
+        this.scheduleRedraw();
+    }
+
+    //LiDAR view: the nDSM surface to draw as a wireframe (null clears it).
+    public setWireframeRaster(raster: NdsmRaster | null): void
+    {
+        this._wireframeRaster = raster;
+        this.scheduleRedraw();
+    }
+
+    //Toggle the wireframe layer (on only in the LiDAR view).
+    public setWireframeEnabled(on: boolean): void
+    {
+        if (this._wireframeOn === on) { return; }
+        this._wireframeOn = on;
         this.scheduleRedraw();
     }
 
@@ -341,10 +363,15 @@ export class SceneRenderer
         const shadowCasters = this._homeOnly ? drawn : (this._shadowCasters ?? drawn);
         const lidarShadows  = !this._homeOnly && !!this._shadowCasters;
         const shadowMaxM    = lidarShadows ? this._shadowMaxM : undefined;
+        //LiDAR-view wireframe: drawn LAST so the nDSM mesh sits on top of the scene geometry.
+        const wireframe = this._wireframeOn && this._wireframeRaster && !this._homeOnly
+            ? renderWireframe(this.camera, this._wireframeRaster, WIREFRAME_MAX_LINES)
+            : '';
         this._sceneSvg.innerHTML =
             shadeSvg +
             renderShadows(this.camera, shadowCasters, this._sun, this._palette.shadow, this._palette.shadowOpacity, shadowMaxM, lidarShadows) +
-            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
+            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home) +
+            wireframe;
 
         this.onAfterDraw?.();
     }

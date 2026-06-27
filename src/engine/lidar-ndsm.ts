@@ -1,7 +1,7 @@
 //Local-nDSM decode + shadow casters for the 2.5D scene. Decodes a browser-reachable nDSM (normalised Digital
 //Surface Model) GeoTIFF into a height raster, then consolidates it into ground-shadow casters.
 //
-//Two reusable stages so the LiDAR view (wireframe + points) can share the decode:
+//Reusable stages so the LiDAR view (wireframe + points) shares the decode:
 //  fetchNdsmRaster  -> reads ONLY the display-radius window of the GeoTIFF (so every cell lands inside the
 //                      visible disc at ~native pitch instead of being spread thin across a large bbox) and
 //                      returns the height grid + that window's geo frame.
@@ -9,11 +9,14 @@
 //                      convex-hull footprint (LOCAL METRES east/north from the home) with the component's mean
 //                      height — the same frame building footprints use, so they feed the SAME shadow projector
 //                      (renderShadows). Buildings still render as prisms; only the SHADOW casters change.
+//  renderWireframe  -> projects the SAME raster as a grid mesh + node dots in the primary-text colour, drawn
+//                      on top in the LiDAR view (whole surface, no height threshold).
 //
 //Self-contained engine module: no card imports, and buildings.ts never imports this (one-way dependency).
 //geotiff is loaded via a dynamic import so it executes only for LiDAR users.
 
 import { convexHull, type ShadowCaster } from './buildings';
+import type { SceneCamera } from './projection';
 import { DEG } from '../constants';
 
 const M_PER_DEG_LAT = 111_320;
@@ -261,9 +264,69 @@ export function rasterToCasters(raster: NdsmRaster, radiusM: number): ShadowCast
     return casters;
 }
 
-//Decode + consolidate in one call (the engine's shadow path). Throws on failure; the caller falls back.
-export async function fetchNdsmCasters(opts: NdsmFetchOptions): Promise<ShadowCaster[]>
+//Draw the nDSM surface as a projected grid mesh + node dots for the LiDAR view, in the theme's primary-text
+//colour (SVG inherits the card's CSS vars). The WHOLE surface is drawn (ground ~0, features bump up) so the
+//relief reads; no height threshold here (that's shadow-only). Sampled every `step` cells from maxLines, node
+//metres/height projected through the shared camera; a mesh edge is emitted only when both its endpoints exist
+//(finite height), and a dot at every existing node. One allocation-conscious string, wrapped in a group so
+//it reads as a wireframe rather than a solid fill.
+export function renderWireframe(cam: SceneCamera, raster: NdsmRaster, maxLines: number): string
 {
-    const raster = await fetchNdsmRaster(opts);
-    return rasterToCasters(raster, opts.radiusM);
+    const { heights, size, minLat, maxLat, minLon, maxLon, homeLat, homeLon } = raster;
+    const step  = Math.max(1, Math.ceil(size / maxLines));
+    const pxLat = (maxLat - minLat) / size;
+    const pxLon = (maxLon - minLon) / size;
+    const cosHome = Math.cos(homeLat * DEG);
+
+    //Sampled grid of projected points ([x, y] | null = missing-height node, skipped along with its edges).
+    const cols: number[] = [];
+    for (let i = 0; i < size; i += step) { cols.push(i); }
+    const rows: number[] = [];
+    for (let j = 0; j < size; j += step) { rows.push(j); }
+
+    const pts: ([number, number] | null)[] = new Array(rows.length * cols.length);
+    for (let rj = 0; rj < rows.length; rj++)
+    {
+        const j    = rows[rj];
+        const cLat = maxLat - (j + 0.5) * pxLat;
+        const localN = (cLat - homeLat) * M_PER_DEG_LAT;
+        for (let ci = 0; ci < cols.length; ci++)
+        {
+            const i = cols[ci];
+            const h = heights[j * size + i];
+            if (!Number.isFinite(h))
+            {
+                pts[rj * cols.length + ci] = null;
+                continue;
+            }
+            const cLon   = minLon + (i + 0.5) * pxLon;
+            const localE = (cLon - homeLon) * M_PER_DEG_LAT * cosHome;
+            pts[rj * cols.length + ci] = cam.project(localE, localN, h);
+        }
+    }
+
+    const color = 'var(--primary-text-color, #e1e1e1)';
+    let lines = '';
+    let dots  = '';
+    for (let rj = 0; rj < rows.length; rj++)
+    {
+        for (let ci = 0; ci < cols.length; ci++)
+        {
+            const a = pts[rj * cols.length + ci];
+            if (!a) { continue; }
+            dots += `<circle cx="${a[0].toFixed(1)}" cy="${a[1].toFixed(1)}" r="1" fill="${color}"/>`;
+            const right = ci + 1 < cols.length ? pts[rj * cols.length + ci + 1] : null;
+            if (right)
+            {
+                lines += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${right[0].toFixed(1)}" y2="${right[1].toFixed(1)}"/>`;
+            }
+            const down = rj + 1 < rows.length ? pts[(rj + 1) * cols.length + ci] : null;
+            if (down)
+            {
+                lines += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${down[0].toFixed(1)}" y2="${down[1].toFixed(1)}"/>`;
+            }
+        }
+    }
+
+    return `<g opacity="0.7"><g stroke="${color}" stroke-width="0.6" fill="none">${lines}</g>${dots}</g>`;
 }

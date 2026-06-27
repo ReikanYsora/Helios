@@ -1,12 +1,13 @@
 import { css } from 'lit';
 
-//Styles for the local-LiDAR view mode. In this mode the whole scene is hidden and the local LiDAR is drawn
-//as a wireframe instead (added later); for now only the top-left mode rail (mode toggles + lock) stays on
-//screen. The wireframe layer, when it lands, opts back in with its own class.
+//Styles for the local-LiDAR view mode. It reuses the full scene (basemap + building/home shadows + prisms)
+//and keeps the timeline + period band + the top-left mode rail; only the HUD (chips, leaders, sun, sun-arc,
+//cloud) is hidden. The nDSM surface is drawn as a wireframe on top, inside the scene SVG layer (no extra
+//element). Same selective-hide approach as clock mode.
 export const heliosCardLidarCss = css`
-    /*  Clock mode fades all but a few layers; LiDAR mode goes further and hides EVERYTHING (basemap + scene
-        SVG + HUD + timeline) except the top-left rail, so only the controls float over the LiDAR wireframe. */
-    ha-card.mode-lidar > :not(.overlay-top-left):not(.lidar-overlay)
+    /*  Keep the scene, timeline, period band and the top-left rail; fade out every other direct child of the
+        card (the HUD layers) so only those controls float over the scene + wireframe. */
+    ha-card.mode-lidar > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.tb-band)
     {
         opacity: 0;
         pointer-events: none;

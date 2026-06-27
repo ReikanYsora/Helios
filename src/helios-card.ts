@@ -843,6 +843,13 @@ export class HeliosCard extends LitElement
             this._viewMode = 'scene';
         }
 
+        //Keep the engine's wireframe in step with the view mode. _setViewMode handles live switches, but a card
+        //that restores straight into the LiDAR view needs it turned on once the engine is ready (idempotent).
+        if (this._engine)
+        {
+            this._engine.setWireframe(this._viewMode === 'lidar');
+        }
+
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
         //(one hash compare), ~50 ms for a full 480 × 7 bucketization + forecast pass on a real refresh.
@@ -1611,7 +1618,7 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                ${hasHomeCoords && this._timeRange && this._viewMode === 'scene' ? html`
+                ${hasHomeCoords && this._timeRange && (this._viewMode === 'scene' || this._viewMode === 'lidar') ? html`
                     <div
                         class="time-bar"
                         @pointerdown=${this._onTimelinePointerDown}
@@ -1646,7 +1653,7 @@ export class HeliosCard extends LitElement
                 <!--  Period-mode band: a separate strip BELOW the timeline (own card styling — same width,
                       radius and themed border), holding the Now / 1 week / 1 month / 1 year selector. Stays
                       visible in clock mode too so the window can be changed from there.  -->
-                ${hasHomeCoords && (this._viewMode === 'scene' || this._viewMode === 'clock') ? html`
+                ${hasHomeCoords && (this._viewMode === 'scene' || this._viewMode === 'clock' || this._viewMode === 'lidar') ? html`
                     <div class="tb-band">
                         ${this._renderPeriodSelector()}
                     </div>
@@ -2401,8 +2408,9 @@ export class HeliosCard extends LitElement
             const now = Date.now();
             this._clockGrowStart.clear();
             this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
-            //Home prism becomes the dial anchor: render it alone, sliced by the active filters.
+            //Home prism becomes the dial anchor: render it alone, sliced by the active filters. No wireframe.
             this._engine?.setHomeOnly(true);
+            this._engine?.setWireframe(false);
             this._updateClockHomeAppearance();
             this._viewMode = mode;
             this._persistUiState();
@@ -2413,7 +2421,9 @@ export class HeliosCard extends LitElement
             return;
         }
         //Leaving clock: restore the full scene + the chart-driven home colour, clear the ground guide overlay.
+        //The nDSM wireframe shows only in the LiDAR view (covers entering scene/clock from lidar too).
         this._engine?.setHomeOnly(false);
+        this._engine?.setWireframe(mode === 'lidar');
         this._engine?.setGroundOverlay('');
         this._clockCeilAnim.clear();
         this._clockCeilSig = null;
