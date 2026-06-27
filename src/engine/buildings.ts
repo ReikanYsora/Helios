@@ -66,6 +66,9 @@ export interface HomeAppearance
     bands?:  { frac: number; color: string }[];
     //Extra height multiplier (0..1) for the squash/grow-on-retarget animation; multiplies `growth`.
     growth?: number;
+    //Focal highlight (clock home hover): the prism gets the focused-bar treatment — a coloured glow halo, a
+    //white edge and a brighter roof — so tapping the home reads exactly like tapping a histogram bar.
+    highlight?: boolean;
 }
 
 //---------------------------------------------------------------------------------------------------------
@@ -555,11 +558,18 @@ export function renderBuildings(
         //Roof + edge stroke follow the top band (histogram) or the solid colour; the home keeps a brightened
         //edge so it reads as the focal building.
         const topColor = homeBands ? homeBands[homeBands.length - 1].color : (home.color ?? palette.home);
+        //Focused home (clock hover): the same look as the focused histogram bar — roof lifted harder toward
+        //white, a near-opaque white edge, and the coloured glow halo wrapped on below.
+        const hl = !!(b.isHome && home.highlight);
         const roofFill = b.isHome
-            ? tintedRgba(mixHex(topColor, '#ffffff', 0.18), altitude, 0.92)
+            ? tintedRgba(mixHex(topColor, '#ffffff', hl ? 0.4 : 0.18), altitude, 0.92)
             : nbRgba(neighborOpacity);
         let stroke = nbRgba(Math.min(1, neighborOpacity * 1.1));
-        if (b.isHome)
+        if (hl)
+        {
+            stroke = 'rgba(255,255,255,0.9)';
+        }
+        else if (b.isHome)
         {
             const eg = mixHex(home.color ?? palette.home, '#ffffff', 0.5);
             stroke   = `rgba(${hexByte(eg, 1)},${hexByte(eg, 3)},${hexByte(eg, 5)},0.1)`;
@@ -622,9 +632,14 @@ export function renderBuildings(
         //mis-order and leaves only the (now nearest-point-sorted) wall ordering.
         faces.sort((a, c) => a.depth - c.depth);
         const roofSvg = `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`;
-        svg += faces.map((f) => f.svg).join('') + roofSvg;
+        const buildingSvg = faces.map((f) => f.svg).join('') + roofSvg;
+        svg += hl ? `<g filter="url(#home-glow)">${buildingSvg}</g>` : buildingSvg;
     }
-    return svg;
+    //Focused-home glow halo: the same drop-shadow recipe as the focused histogram bar, tinted to the home colour.
+    const homeGlow = home.highlight
+        ? `<defs><filter id="home-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${home.color ?? palette.home}" flood-opacity="0.95"/></filter></defs>`
+        : '';
+    return homeGlow + svg;
 }
 
 //---------------------------------------------------------------------------------------------------------

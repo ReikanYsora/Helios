@@ -420,7 +420,7 @@ export class HeliosEngine
     //Home prism appearance, driven by the card's active chip: `color` is the chip's accent, `bands` the
     //per-PV-string production split (empty = solid). `animate` plays the squash/grow on a chip change; an
     //instant set is used for same-chip scrubs. The card computes these (they're hass/energy-derived).
-    public setHomeAppearance(color: string, bands: { frac: number; color: string }[], animate: boolean): void
+    public setHomeAppearance(color: string, bands: { frac: number; color: string }[], animate: boolean, highlight = false): void
     {
         if (!this._renderer)
         {
@@ -432,7 +432,7 @@ export class HeliosEngine
         }
         else
         {
-            this._renderer.setHome(color, bands);
+            this._renderer.setHome(color, bands, highlight);
         }
     }
 

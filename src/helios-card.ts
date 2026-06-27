@@ -28,7 +28,7 @@ import {
     projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
     clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './card/energy-clock';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar, lerpHexToward } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
     refreshPv,
@@ -276,8 +276,11 @@ export class HeliosCard extends LitElement
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     @state() private _clockData: ClockData[] = [];
     //Per-unit displayed ceiling, eased toward the target between filter changes so the remaining bars rescale
-    //smoothly (toggling one of two same-unit metrics otherwise snaps the survivor to a new axis).
+    //smoothly (toggling one of two same-unit metrics otherwise snaps the survivor to a new axis). The signature
+    //is the active filter set: the ease fires ONLY when it changes (a toggle) — entry, data loading and period
+    //changes snap, so the bars never flash at full height while the ceiling settles. null between clock sessions.
     private _clockCeilAnim = new Map<string, { from: number; to: number; start: number }>();
+    private _clockCeilSig: string | null = null;
     //Hovered slot; resolves to its hour and lights every ring's area for that hour + drives the tooltip. null = off.
     @state() private _clockHoverSlot: number | null = null;
     //Home prism hovered/tapped: brightens it + shows the window-total tooltip (does NOT dim the cylinders).
@@ -524,19 +527,19 @@ export class HeliosCard extends LitElement
         {
             return;
         }
-        //On home hover/tap, brighten the slices toward white so the prism reads as highlighted (the same intent
-        //as the focused histogram bar) without touching the cylinders.
-        const lift = (c: string) => this._clockHomeHover ? lerpHexToward(c, '#ffffff', 0.35) : c;
-        const colors = this._clockTargets.map(t => lift(clockTargetMeta(this, t).color));
+        //On home hover/tap the engine gives the prism the focused-bar treatment (glow + white edge + brighter
+        //roof) — the same effect as a tapped histogram bar — without dimming the cylinders.
+        const hl = this._clockHomeHover;
+        const colors = this._clockTargets.map(t => clockTargetMeta(this, t).color);
         if (colors.length === 0)
         {
-            this._engine.setHomeAppearance(lift(ENERGY_COLOR.consumption(this)), [], false);
+            this._engine.setHomeAppearance(ENERGY_COLOR.consumption(this), [], false, hl);
             return;
         }
         const bands = colors.length >= 2
             ? colors.map(c => ({ frac: 1 / colors.length, color: c }))
             : [];
-        this._engine.setHomeAppearance(colors[0], bands, false);
+        this._engine.setHomeAppearance(colors[0], bands, false, hl);
     }
 
     //Timeline mode selector: Now / 1 week / 1 month / 1 year. The active mode is highlighted. Pointer-down is
@@ -2413,6 +2416,7 @@ export class HeliosCard extends LitElement
         this._engine?.setHomeOnly(false);
         this._engine?.setGroundOverlay('');
         this._clockCeilAnim.clear();
+        this._clockCeilSig = null;
         this._clockHomeHover = false;
         this._updateHomeAppearance(false);
         if (this._clockTargets.length > 0)
@@ -2814,20 +2818,26 @@ export class HeliosCard extends LitElement
             const p = easeOutCubic((now - e.start) / CLOCK_GROW_MS);
             rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
         }
-        //Ease the per-unit ceiling toward the present rings' target so a filter toggle rescales the survivors
-        //smoothly. On the first sighting of a unit (or an unchanged target) the displayed value sits on the
-        //target — no animation; only a changed target starts an ease from the current displayed height.
+        //Ease the per-unit ceiling toward the present rings' target so a filter TOGGLE rescales the survivors
+        //smoothly. The ease fires only when the active filter set changed; entry, data loading and period
+        //changes snap straight to the target (otherwise the bars flash at full height while it settles).
         const targetCeil = clockUnitCeilings(this._clockData);
+        const sig     = this._clockTargets.join(',');
+        const toggled = this._clockCeilSig !== null && this._clockCeilSig !== sig;
+        this._clockCeilSig = sig;
         const dispCeil = new Map<string, number>();
         for (const u of [...this._clockCeilAnim.keys()]) { if (!targetCeil.has(u)) { this._clockCeilAnim.delete(u); } }
         for (const [u, to] of targetCeil)
         {
             const prev = this._clockCeilAnim.get(u);
-            if (!prev) { this._clockCeilAnim.set(u, { from: to, to, start: now }); }
-            else if (prev.to !== to)
+            if (toggled && prev && prev.to !== to)
             {
                 const cur = prev.from + (prev.to - prev.from) * easeOutCubic((now - prev.start) / CLOCK_GROW_MS);
                 this._clockCeilAnim.set(u, { from: cur, to, start: now });
+            }
+            else if (!prev || !toggled)
+            {
+                this._clockCeilAnim.set(u, { from: to, to, start: now });   //snap (entry / data / period change)
             }
             const a = this._clockCeilAnim.get(u)!;
             dispCeil.set(u, a.from + (a.to - a.from) * easeOutCubic((now - a.start) / CLOCK_GROW_MS));

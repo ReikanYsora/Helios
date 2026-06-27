@@ -208,9 +208,9 @@ export class SceneRenderer
 
     //Set the home prism's colour + optional PV-string histogram bands instantly (a same-chip recolour or
     //scrub). Keeps the current squash multiplier so it doesn't interrupt an in-flight animation.
-    public setHome(color: string, bands: { frac: number; color: string }[] = []): void
+    public setHome(color: string, bands: { frac: number; color: string }[] = [], highlight = false): void
     {
-        this._home = { color, bands, growth: this._home.growth ?? 1 };
+        this._home = { color, bands, growth: this._home.growth ?? 1, highlight };
         this.scheduleRedraw();
     }
 
