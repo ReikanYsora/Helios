@@ -23,7 +23,7 @@ import {
 const WIREFRAME_MAX_NODES = 200;
 //Half-size (metres) of the central square the wireframe draws — a zoom-19 view doesn't need the full display
 //radius, and capping it keeps the mesh dense and cheap.
-const WIREFRAME_RADIUS_M = 100;
+const WIREFRAME_RADIUS_M = 150;
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
 const prefersReducedMotion = (): boolean =>
@@ -391,10 +391,15 @@ export class SceneRenderer
         const shadowCasters = this._homeOnly ? drawn : (this._shadowCasters ?? drawn);
         const lidarShadows  = !this._homeOnly && !!this._shadowCasters;
         const shadowMaxM    = lidarShadows ? this._shadowMaxM : undefined;
+        //LiDAR view (wireframe on): drop the extruded prisms — the mesh already represents every surface, so
+        //the boxes would only clutter it. The basemap + cast shadows stay.
+        const buildingsSvg = this._wireframeOn
+            ? ''
+            : renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
         this._sceneSvg.innerHTML =
             shadeSvg +
             renderShadows(this.camera, shadowCasters, this._sun, this._palette.shadow, this._palette.shadowOpacity, shadowMaxM, lidarShadows) +
-            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
+            buildingsSvg;
 
         //LiDAR-view wireframe on its own canvas (topmost layer), so the dense nDSM mesh sits over the scene
         //geometry as one batched stroke. Off / no raster / home-only: clear the canvas once (tracked) rather

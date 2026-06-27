@@ -83,9 +83,9 @@ export const TIMELINE_MAX_TICKS = 7;
 export const DEFAULT_SHADOW_OPACITY = 0.32;
 //LiDAR shadow quality: the nDSM raster is sized cells = 2·radius·mult, clamped [MIN,MAX]. Higher quality =
 //finer shadows but a heavier card; lower = fewer cells = lighter.
-export const LIDAR_QUALITY_MULT: Record<'low' | 'medium' | 'high', number> = { low: 0.6, medium: 1.0, high: 1.6 };
+export const LIDAR_QUALITY_MULT: Record<'low' | 'medium' | 'high', number> = { low: 0.6, medium: 1.0, high: 3.0 };
 export const LIDAR_RASTER_MIN = 64;
-export const LIDAR_RASTER_MAX = 1024;
+export const LIDAR_RASTER_MAX = 1280;
 
 //=== Weather fetch ===
 export const WEATHER_PAST_DAYS          = 5;

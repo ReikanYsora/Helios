@@ -113,7 +113,10 @@ export async function fetchNdsmRaster(opts: NdsmFetchOptions): Promise<NdsmRaste
     const frameMaxLat = maxLat - (top    / imgH) * (maxLat - minLat);
     const frameMinLat = maxLat - (bottom / imgH) * (maxLat - minLat);
 
-    const size = rasterSize;
+    //Never resample ABOVE the window's native pixel count — upsampling adds cost without detail. So the
+    //effective grid is min(requested, native): a high quality reads the file at full resolution, a low one
+    //downsamples it.
+    const size = Math.max(8, Math.min(rasterSize, Math.max(right - left, bottom - top)));
     const rasters = await image.readRasters({
         window:     [left, top, right, bottom],
         width:      size,
@@ -384,13 +387,15 @@ export function drawWireframe(
 
     //Circular edge fade centred on the home (like the LiDAR shadow fade): a screen-space radial-gradient mask
     //applied via destination-in, so the mesh dissolves toward the rim instead of ending on a hard ring. Only
-    //the gradient's alpha matters here (full out to 70%, fading to 0 at radiusCap); the colour is ignored.
+    //the gradient's alpha matters here; a long ramp (full to ~25% of the radius, then easing to 0 at the rim)
+    //makes the dissolve gradual over most of the disc rather than a tight edge band. The colour is ignored.
     const [hx, hy] = cam.project(0, 0, 0);
     const r = cam.pxPerMetre * radiusCap;
     const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, r);
-    g.addColorStop(0,   'rgba(0,0,0,1)');
-    g.addColorStop(0.7, 'rgba(0,0,0,1)');
-    g.addColorStop(1,   'rgba(0,0,0,0)');
+    g.addColorStop(0,    'rgba(0,0,0,1)');
+    g.addColorStop(0.25, 'rgba(0,0,0,1)');
+    g.addColorStop(0.7,  'rgba(0,0,0,0.45)');
+    g.addColorStop(1,    'rgba(0,0,0,0)');
     ctx.globalCompositeOperation = 'destination-in';
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, ctx.canvas.width / dpr, ctx.canvas.height / dpr);
