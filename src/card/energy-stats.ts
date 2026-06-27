@@ -156,6 +156,19 @@ export async function fetchChangeSeries(
 
 
 
+//A change bucket whose magnitude exceeds this multiple of the median is a meter reset/rollover artefact, not
+//real flow. SINGLE source of the outlier rule for every change-series consumer (the store curves AND the clock).
+const OUTLIER_CAP_FACTOR = 20;
+
+//kWh magnitude above which a change bucket is rejected as a reset/rollover spike (the whole accumulated total
+//dumped into one bucket). Infinity when there's nothing to compare against.
+export function outlierCapKwh(buckets: ChangeBucket[] | null): number
+{
+    if (!buckets) { return Infinity; }
+    const mags = buckets.map(b => Math.abs(b.kwh)).filter(k => isFinite(k) && k > 0).sort((a, b) => a - b);
+    return mags.length ? mags[Math.floor(mags.length / 2)] * OUTLIER_CAP_FACTOR : Infinity;
+}
+
 //Project a change series onto the unified-store bucket grid as average watts: per store bucket, sum the kWh of every
 //source bucket starting inside it, then W = kWh * 1000 / bucket-duration-hours. Store buckets are always >= the
 //source period (slider caps at 12/hour = 5 min), so each contains whole source buckets and the conversion is exact.
@@ -170,11 +183,13 @@ export function changeSeriesToWatts(
 {
     const out = new Array<number | null>(bucketsTotal).fill(null);
     if (!buckets || buckets.length === 0) { return out; }
+    const cap  = outlierCapKwh(buckets);
     const sums = new Array<number>(bucketsTotal).fill(0);
     const hit  = new Array<boolean>(bucketsTotal).fill(false);
     for (const b of buckets)
     {
         if (b.startMs < storeStartMs || b.startMs >= nowMs) { continue; }
+        if (Math.abs(b.kwh) > cap) { continue; }   //drop a reset/rollover spike
         const idx = Math.floor((b.startMs - storeStartMs) / stepMs);
         if (idx < 0 || idx >= bucketsTotal) { continue; }
         sums[idx] += b.kwh;

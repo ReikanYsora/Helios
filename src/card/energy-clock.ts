@@ -6,22 +6,14 @@
 
 import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
-import { type ChartTarget, type ChartHost, pvValueAtTime } from './charts';
+import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, statFriendly } from './charts';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
 import { customEntityId, customEntityColor, valueDecimals } from '../helios-config';
-import { resolveCustomEntityIcon, resolveCustomEntityLive } from './custom-entity';
+import { resolveCustomEntityIcon } from './custom-entity';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import type { EnergyDefaults } from './energy-prefs';
-
-//Friendly name of the first configured entity in a stat list (the Home Assistant Energy dashboard's own name),
-//used to label a tooltip layer. Empty when none is configured.
-function statFriendly(host: ClockHost, ids: string[]): string
-{
-    const id = ids[0];
-    return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : '';
-}
 
 //Structural surface the clock reads off the card. It already satisfies ChartHost (the bottom chart consumes
 //it); themeIsDark resolves the live palette polarity for the per-source colour ramp.
@@ -281,26 +273,8 @@ export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: s
     }
 }
 
-//Human label for the rail button title/aria. English + French (Helios ships en/fr); other locales fall to en.
-const TARGET_LABELS_EN: Record<ChartTarget, string> = {
-    production: 'Production', consumption: 'Consumption', grid: 'Grid', battery: 'Battery',
-    'battery-soc': 'Battery charge', irradiance: 'Irradiance', cloud: 'Cloud cover', custom: 'Custom',
-};
-const TARGET_LABELS_FR: Record<ChartTarget, string> = {
-    production: 'Production', consumption: 'Consommation', grid: 'Réseau', battery: 'Batterie',
-    'battery-soc': 'Charge batterie', irradiance: 'Irradiance', cloud: 'Nébulosité', custom: 'Personnalisé',
-};
-export function clockTargetLabel(host: ClockHost, target: ChartTarget): string
-{
-    //The custom metric is labelled by the entity's own name, like its chip.
-    if (target === 'custom')
-    {
-        const live = resolveCustomEntityLive(host.hass, customEntityId(host.config));
-        return live?.name || customEntityId(host.config) || 'Custom';
-    }
-    const lang = String(host.hass?.language ?? '').toLowerCase();
-    return (lang.startsWith('fr') ? TARGET_LABELS_FR : TARGET_LABELS_EN)[target];
-}
+//clockTargetLabel lives in charts.ts (single label source); re-exported so callers importing from the clock keep working.
+export { clockTargetLabel };
 
 
 //Build layers from the decoupled hourly profile (month/year, where the store is daily): each metric expands

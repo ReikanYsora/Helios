@@ -1891,7 +1891,7 @@ export class HeliosCard extends LitElement
                                 @pointermove=${this._onChartHoverMove}
                                 @pointerleave=${this._onChartHoverLeave}
                             >
-                                ${keyed(this._chartTarget, renderBottomChart(this))}
+                                ${keyed(`${this._chartTarget}|${this._timelineMode}`, renderBottomChart(this))}
                                 ${(this._timelineMode === 'now' || this._timelineMode === 'week')
                                     ? renderTimelineNightZones(this) : nothing}
                                 ${renderTimelineFutureMask(this)}

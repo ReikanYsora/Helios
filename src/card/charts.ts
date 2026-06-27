@@ -3,7 +3,8 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { type HeliosConfig, valueDecimals } from '../helios-config';
+import { type HeliosConfig, valueDecimals, customEntityId } from '../helios-config';
+import type { EnergyDefaults } from './energy-prefs';
 import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward, cssHex } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { pvNormalizeToWatts, type PvHistory } from './pv';
@@ -11,7 +12,7 @@ import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { sliceForRange, valueAt, type UnifiedDataStore } from './unifiedStore';
 import { sumChangeForDay, type ChangeBucket } from './energy-stats';
-import { resolveCustomEntityIcon } from './custom-entity';
+import { resolveCustomEntityIcon, resolveCustomEntityLive } from './custom-entity';
 
 
 
@@ -521,6 +522,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     }
     const hasPv = isFinite(pv.value);
 
+    //Row names (icon -> name -> value): the metric name, or the configured entity's HA Energy name for the
+    //two-direction grid/battery rows.
+    const tgtName        = clockTargetLabel(host, target);
+    const gridFromName   = statFriendly(host, host._energyDefaults.gridStatEnergyFroms);
+    const gridToName     = statFriendly(host, host._energyDefaults.gridStatEnergyTos);
+    const battChargeName = statFriendly(host, host._energyDefaults.batteryStatEnergyTos);
+    const battDisName    = statFriendly(host, host._energyDefaults.batteryStatEnergyFroms);
     //Each tooltip row's icon takes the colour of the series it represents (matching the chart curves) so the
     //readout is scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the
     //three stacked band shades in renderTargetChart.
@@ -609,12 +617,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     ${showForecast && dayKwhText ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:crystal-ball"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${tgtName}</span>
                             <span class="tb-hover-tooltip-value">${dayKwhText}</span>
                         </div>
                     ` : nothing}
                     ${hasPv ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:solar-power"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${tgtName}</span>
                             <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
                         </div>
                     ` : nothing}
@@ -629,6 +639,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ${target === 'consumption' && hasConsumption ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.consumption(el)}" icon="mdi:home-lightning-bolt"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${kw(consumptionW)}</span>
                     </div>
                 ` : nothing}
@@ -636,12 +647,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     ${isFinite(gridImpW) && gridImpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridImport(el)}" icon="mdi:transmission-tower-export"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${gridFromName}</span>
                             <span class="tb-hover-tooltip-value">${kw(gridImpW)}</span>
                         </div>
                     ` : nothing}
                     ${isFinite(gridExpW) && gridExpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridExport(el)}" icon="mdi:transmission-tower-import"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${gridToName}</span>
                             <span class="tb-hover-tooltip-value">${kw(gridExpW)}</span>
                         </div>
                     ` : nothing}
@@ -650,12 +663,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     ${isFinite(battW) && battW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryIn(el)}" icon="mdi:battery-arrow-up"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${battChargeName}</span>
                             <span class="tb-hover-tooltip-value">${kw(battW)}</span>
                         </div>
                     ` : nothing}
                     ${isFinite(battW) && battW <= -1 ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery-arrow-down"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${battDisName}</span>
                             <span class="tb-hover-tooltip-value">${kw(-battW)}</span>
                         </div>
                     ` : nothing}
@@ -663,18 +678,21 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ${target === 'battery-soc' && isFinite(battSocV) ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, battSocV)))} %</span>
                     </div>
                 ` : nothing}
                 ${target === 'irradiance' && isFinite(irrV) ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.sun(el)}" icon="mdi:white-balance-sunny"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
                     </div>
                 ` : nothing}
                 ${target === 'custom' && isFinite(customV) ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, '--red-color', '#f44336')}" icon=${resolveCustomEntityIcon(host.hass, host.config)}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, Math.abs(customV) / 1000, dec)} kW</span>
                     </div>
                 ` : nothing}
@@ -682,18 +700,21 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     ${isFinite(cloudHighV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudHighColor}" icon="mdi:format-vertical-align-top"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${tgtName}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudHighV)))} %</span>
                         </div>
                     ` : nothing}
                     ${isFinite(cloudMidV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudBase}" icon="mdi:format-vertical-align-center"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${tgtName}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudMidV)))} %</span>
                         </div>
                     ` : nothing}
                     ${isFinite(cloudLowV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudLowColor}" icon="mdi:format-vertical-align-bottom"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${tgtName}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
                         </div>
                     ` : nothing}
@@ -721,12 +742,42 @@ export interface ChartSeries
 //'irradiance' draws W/m² on a fixed 0..1000 scale.
 export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud' | 'custom';
 
+//Friendly name of the first configured entity in a stat list (the Home Assistant Energy dashboard's own name),
+//used to label a tooltip row. Empty when none is configured.
+export function statFriendly(host: ChartHost, ids: string[]): string
+{
+    const id = ids[0];
+    return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : '';
+}
+
+//Metric name for a tooltip row / rail title. en + fr (Helios ships en/fr); other locales fall back to en. Custom
+//takes the entity's own name. No new i18n elsewhere — every tooltip name comes from here or from statFriendly.
+const TARGET_LABELS_EN: Record<ChartTarget, string> = {
+    production: 'Production', consumption: 'Consumption', grid: 'Grid', battery: 'Battery',
+    'battery-soc': 'Battery charge', irradiance: 'Irradiance', cloud: 'Cloud cover', custom: 'Custom',
+};
+const TARGET_LABELS_FR: Record<ChartTarget, string> = {
+    production: 'Production', consumption: 'Consommation', grid: 'Réseau', battery: 'Batterie',
+    'battery-soc': 'Charge batterie', irradiance: 'Irradiance', cloud: 'Nébulosité', custom: 'Personnalisé',
+};
+export function clockTargetLabel(host: ChartHost, target: ChartTarget): string
+{
+    if (target === 'custom')
+    {
+        const live = resolveCustomEntityLive(host.hass, customEntityId(host.config));
+        return live?.name || customEntityId(host.config) || 'Custom';
+    }
+    const lang = String(host.hass?.language ?? '').toLowerCase();
+    return (lang.startsWith('fr') ? TARGET_LABELS_FR : TARGET_LABELS_EN)[target];
+}
+
 //Structural surface the host card exposes. `_chartHoverPct` is intentionally writable (hover handlers mutate it on
 //pointermove/leave); all other fields stay read-only.
 export interface ChartHost
 {
-    readonly config:        HeliosConfig | undefined;
-    readonly hass:          any;
+    readonly config:         HeliosConfig | undefined;
+    readonly hass:           any;
+    readonly _energyDefaults: EnergyDefaults;
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;

@@ -69,9 +69,9 @@ export const heliosTimelineStyles = css`
         width: 100%;
         height: 100%;
     }
-    /*  Grow only the curves up from the baseline when the chart re-targets (SVG is keyed so it
-        re-mounts and replays), matching HA's 500 ms grow. Separators + hover guide sit outside this
-        group so they don't stretch. fill-box anchors the scale at the chart baseline. */
+    /*  Grow the curves up from the baseline when the chart re-targets OR the period changes (the SVG is keyed
+        on both, so it re-mounts and replays), matching HA's 500 ms grow. Separators + hover guide sit outside
+        this group so they don't stretch. fill-box anchors the scale at the chart baseline. */
     .hc-chart-grow
     {
         transform-box: fill-box;
@@ -283,10 +283,21 @@ export const heliosTimelineStyles = css`
         color: var(--primary-text-color, #212121);
         --mdc-icon-color: var(--primary-text-color, #212121);
     }
+    /*  Entity / metric name between the glyph and the value; truncated so a long friendly name can't widen the
+        tooltip. The value keeps flex:1 + right-align, so it stays flush right while the name flows left. */
+    .tb-hover-tooltip-name
+    {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 170px;
+        opacity: 0.85;
+    }
     .tb-hover-tooltip-value
     {
         flex: 1;
         text-align: right;
+        padding-left: 10px;
     }
 
     /*  Per-source breakdown rows under the aggregate PV row on multi-source installs. Indented +

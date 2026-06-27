@@ -4,16 +4,12 @@
 //when it's actually needed (clock mode + a sub-hourly store). Now/week keep using the store (already >= hourly),
 //so there's no redundant fetch in the common case.
 
-import { fetchChangeSeries, type ChangeBucket } from './energy-stats';
+import { fetchChangeSeries, outlierCapKwh, type ChangeBucket } from './energy-stats';
 import { callWSWithTimeout } from './ws-timeout';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import { customEntityId, type HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
 import { HOUR_MS } from '../constants';
-
-//A change bucket above this multiple of the median positive bucket is a meter reset/rollover artefact, not real
-//flow, and is dropped from the hour-of-day sums.
-const OUTLIER_CAP_FACTOR = 20;
 
 //24 hour-of-day values per metric: energy meters are kWh TOTALS summed over the window; soc is an average %,
 //custom an average (watts). consumption is derived from the energy totals. `pv` is per solar source (one
@@ -57,18 +53,12 @@ function binChangeByHour(buckets: ChangeBucket[] | null): number[]
 {
     const sum = new Array<number>(24).fill(0);
     if (!buckets) { return sum; }
-    //Reject extreme positive outliers: a meter reset/rollover emits one bucket whose change is the whole
-    //accumulated total (hundreds of kWh), survives the >=0 floor, and would spike a single hour. Cap at a
-    //generous multiple of the median positive bucket — well above any real hour, far below a rollover.
-    const positives = buckets.map(b => b.kwh).filter(k => isFinite(k) && k > 0).sort((a, b) => a - b);
-    const median = positives.length ? positives[Math.floor(positives.length / 2)] : 0;
-    const cap    = median > 0 ? median * OUTLIER_CAP_FACTOR : Infinity;
+    //Same shared outlier rule as the store curves: a reset/rollover dumps the accumulated total into one bucket.
+    const cap = outlierCapKwh(buckets);
     for (const b of buckets)
     {
-        if (!isFinite(b.kwh)) { continue; }
-        const kwh = Math.max(0, b.kwh);
-        if (kwh > cap) { continue; }
-        sum[new Date(b.startMs).getHours()] += kwh;
+        if (!isFinite(b.kwh) || Math.abs(b.kwh) > cap) { continue; }
+        sum[new Date(b.startMs).getHours()] += Math.max(0, b.kwh);
     }
     return sum;
 }
