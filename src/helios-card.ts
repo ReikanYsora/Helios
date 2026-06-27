@@ -7,7 +7,6 @@ import
 {
     type HeliosConfig,
     valueDecimals,
-    displayUpdateFrequencyPerHour,
     customEntityId,
     customEntityColor,
     homeColor,
@@ -24,10 +23,10 @@ import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
 import { heliosCardLidarCss } from './css/helios-card-lidar-css';
 import {
-    type ClockData, type ClockHit, type ClockRingInput, type ClockMode,
+    type ClockData, type ClockHit, type ClockRingInput,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
     projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
-    CLOCK_GROW_MS, clockSlotsPerHour, setClockResolution, easeOutCubic,
+    CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './card/energy-clock';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
@@ -274,8 +273,6 @@ export class HeliosCard extends LitElement
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
     //Persisted; the timeline (hidden in clock mode) follows the first when scene mode resumes.
     @state() _clockTargets: ChartTarget[] = [];
-    //Clock sub-mode (area curves vs hourly histogram), toggled top-centre in clock view. Persisted per card.
-    @state() _clockSubMode: ClockMode = 'area';
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     @state() private _clockData: ClockData[] = [];
     //Hovered slot; resolves to its hour and lights every ring's area for that hour + drives the tooltip. null = off.
@@ -1658,19 +1655,16 @@ export class HeliosCard extends LitElement
                             >
                                 <ha-icon icon="mdi:weather-sunny"></ha-icon>
                             </button>
-                            <div class="rail-row">
-                                <button
-                                    type="button"
-                                    class="overlay-btn ${clockOn ? 'is-on' : ''}"
-                                    aria-pressed=${clockOn ? 'true' : 'false'}
-                                    title="Clock"
-                                    data-view="clock"
-                                    @click=${this._onViewModeClick}
-                                >
-                                    <ha-icon icon="mdi:clock-outline"></ha-icon>
-                                </button>
-                                ${clockOn ? this._renderClockSubModeToggle() : nothing}
-                            </div>
+                            <button
+                                type="button"
+                                class="overlay-btn ${clockOn ? 'is-on' : ''}"
+                                aria-pressed=${clockOn ? 'true' : 'false'}
+                                title="Clock"
+                                data-view="clock"
+                                @click=${this._onViewModeClick}
+                            >
+                                <ha-icon icon="mdi:clock-outline"></ha-icon>
+                            </button>
                             ${lidarAvailable ? html`
                                 <button
                                     type="button"
@@ -2417,21 +2411,6 @@ export class HeliosCard extends LitElement
         if (view) { this._setViewMode(view); }
     };
 
-    //Flip the clock sub-mode (area curve <-> histogram). Same data + rings; only the geometry changes, so a
-    //repaint is enough. Persisted per card.
-    private _toggleClockSubMode(): void
-    {
-        this._clockSubMode = this._clockSubMode === 'area' ? 'histogram' : 'area';
-        this._persistUiState();
-        this._scheduleClockPaint();
-    }
-
-    //Keyboard activation for the sub-mode toggle (Enter / Space), matching the click behaviour.
-    private _onSubModeKeydown = (e: KeyboardEvent): void =>
-    {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleClockSubMode(); }
-    };
-
     //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own concentric
     //area; the first stays the timeline's target for when scene mode resumes. Order is preserved (append on
     //add). Adding grows the new area in; removing shrinks + fades it out while the survivors slide to recompact.
@@ -2642,10 +2621,6 @@ export class HeliosCard extends LitElement
                 {
                     this._chartTarget = parsed.chartTarget as ChartTarget;
                 }
-                if (parsed.clockSubMode === 'area' || parsed.clockSubMode === 'histogram')
-                {
-                    this._clockSubMode = parsed.clockSubMode;
-                }
                 if (typeof parsed.timelineMode === 'string' && parsed.timelineMode in TIMELINE_MODES)
                 {
                     this._timelineMode     = parsed.timelineMode as TimelineMode;
@@ -2692,7 +2667,6 @@ export class HeliosCard extends LitElement
                 viewMode:     this._viewMode,
                 chartTarget:  this._chartTarget,
                 clockTargets: this._clockTargets,
-                clockSubMode: this._clockSubMode,
                 timelineMode: this._timelineMode,
             }));
         }
@@ -2707,9 +2681,6 @@ export class HeliosCard extends LitElement
     //disturbs an in-flight animation and a toggle is never blocked.
     private _rebuildClockData(): void
     {
-        //Drive the dial's slot resolution from the graph-detail setting, once, before binning: every projection
-        //and tooltip then reads the same slot count for the current config (per-hour totals stay identical).
-        setClockResolution(displayUpdateFrequencyPerHour(this.config));
         this._clockData = this._clockTargets.map(t => buildClockData(this, t));
     }
 
@@ -2823,7 +2794,7 @@ export class HeliosCard extends LitElement
         }
         const tc = pickTranslations(this.hass?.language).clock;
         const frame = projectClockFrame(
-            camera, rings, this._clockSubMode,
+            camera, rings,
             this._clockDimSlot, this._clockDim,
             { n: tc.compassN, s: tc.compassS, e: tc.compassE, w: tc.compassW },
         );
@@ -2975,26 +2946,6 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Sub-mode toggle, sitting just right of the Clock rail button: a sliding knob in a pill (left = histogram,
-    //right = area curve), the pill the same height as the rail buttons. Click / Enter / Space flips the mode.
-    private _renderClockSubModeToggle(): TemplateResult
-    {
-        return html`
-            <div
-                class="clock-submode mode-${this._clockSubMode}"
-                role="button"
-                tabindex="0"
-                aria-label=${this._clockSubMode === 'area' ? 'Area curve' : 'Histogram'}
-                @click=${this._toggleClockSubMode}
-                @keydown=${this._onSubModeKeydown}
-            >
-                <span class="cs-knob"></span>
-                <ha-icon class="cs-opt cs-histogram" icon="mdi:chart-bar"></ha-icon>
-                <ha-icon class="cs-opt cs-area" icon="mdi:chart-areaspline"></ha-icon>
-            </div>
-        `;
-    }
-
     //Hover tooltip for an hour slice: a time-band header, then one row per active filter (its coloured icon
     //+ its total value at that hour). Position is set inline then clamped in paintClock.
     private _renderClockTooltip(slot: number): TemplateResult | typeof nothing
@@ -3003,10 +2954,9 @@ export class HeliosCard extends LitElement
         {
             return nothing;
         }
-        const mode = this._clockSubMode;
-        //Both sub-modes read the HOUR the focused slot falls in: the header is the hour band (HH:00 – HH+1:00)
-        //and the rows/total below aggregate that hour, so area + histogram tooltips are identical for the hour.
-        const hour = Math.floor(slot / clockSlotsPerHour());
+        //The tooltip reads the HOUR the focused slot falls in: the header is the hour band (HH:00 – HH+1:00)
+        //and the rows/total below aggregate that hour, matching the histogram bar.
+        const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
         const head = `${String(hour).padStart(2, '0')}:00 – ${String((hour + 1) % 24).padStart(2, '0')}:00`;
         return html`
             <div class="clock-tip">
@@ -3019,7 +2969,7 @@ export class HeliosCard extends LitElement
                     //total row tagged with the metric name.
                     if (data.layers.length > 1) {
                         const rows = data.layers
-                            .map(l => ({ l, v: clockLayerValue(l, data, mode, slot) }))
+                            .map(l => ({ l, v: clockLayerValue(l, data, slot) }))
                             .filter(r => r.v > 0);
                         if (rows.length > 0) {
                             return html`${rows.map(({ l, v }) => html`
@@ -3035,7 +2985,7 @@ export class HeliosCard extends LitElement
                         <div class="clock-tip-row">
                             <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
                             <span class="clock-tip-name">${clockTargetLabel(this, data.target)}</span>
-                            <span class="clock-tip-val">${formatClockValue(this, data, clockTotal(data, mode, slot))}</span>
+                            <span class="clock-tip-val">${formatClockValue(this, data, clockTotal(data, slot))}</span>
                         </div>
                     `;
                 })}

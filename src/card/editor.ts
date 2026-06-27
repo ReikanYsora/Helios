@@ -276,6 +276,14 @@ export class HeliosCardEditor extends LitElement
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
         if (key) { this._numField(key, e); }
     };
+    //Plain text field commit (e.g. the LiDAR nDSM URL): trims, stores the string, clears the key when empty.
+    private _onTextFieldChange = (e: Event): void =>
+    {
+        const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
+        if (!key) { return; }
+        const raw = (e.target as HTMLInputElement).value.trim();
+        this._update(key, raw === '' ? undefined : raw);
+    };
     private _onNumSliderInput = (e: Event): void =>
     {
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
@@ -663,6 +671,68 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.solarIrradianceEntityHelp}</div>
+
+                </details>
+
+
+                <details class="advanced-section" data-section="lidar" ?open=${this._openSection === 'lidar'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:cube-scan"></ha-icon>${t.editor.lidarSection}</summary>
+                <div class="hint">${t.editor.lidarHint}</div>
+                <div class="field">
+                    <span class="label">${t.editor.lidarEnabled}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['lidar-local-ndsm-enabled'] === true) ? 'active' : ''}"
+                            data-key="lidar-local-ndsm-enabled" data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.lidarEnabledOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['lidar-local-ndsm-enabled'] !== true) ? 'active' : ''}"
+                            data-key="lidar-local-ndsm-enabled" data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.lidarEnabledOff}</button>
+                    </div>
+                </div>
+                ${c['lidar-local-ndsm-enabled'] === true ? html`
+                    <label class="field field-block">
+                        <span class="label">${t.editor.lidarUrl}</span>
+                        <input
+                            type="text"
+                            placeholder="https://…/ndsm.tif"
+                            .value=${String(c['lidar-local-ndsm-url'] ?? '')}
+                            data-key="lidar-local-ndsm-url"
+                            @change=${this._onTextFieldChange}
+                        />
+                    </label>
+                    <div class="field-help">${t.editor.lidarUrlHelp}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarMinLat}</span>
+                        <input type="number" min="-90" max="90" step="any"
+                            .value=${c['lidar-local-ndsm-min-lat'] != null ? String(c['lidar-local-ndsm-min-lat']) : ''}
+                            data-key="lidar-local-ndsm-min-lat" @change=${this._onNumFieldChange} />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarMaxLat}</span>
+                        <input type="number" min="-90" max="90" step="any"
+                            .value=${c['lidar-local-ndsm-max-lat'] != null ? String(c['lidar-local-ndsm-max-lat']) : ''}
+                            data-key="lidar-local-ndsm-max-lat" @change=${this._onNumFieldChange} />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarMinLon}</span>
+                        <input type="number" min="-180" max="180" step="any"
+                            .value=${c['lidar-local-ndsm-min-lon'] != null ? String(c['lidar-local-ndsm-min-lon']) : ''}
+                            data-key="lidar-local-ndsm-min-lon" @change=${this._onNumFieldChange} />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarMaxLon}</span>
+                        <input type="number" min="-180" max="180" step="any"
+                            .value=${c['lidar-local-ndsm-max-lon'] != null ? String(c['lidar-local-ndsm-max-lon']) : ''}
+                            data-key="lidar-local-ndsm-max-lon" @change=${this._onNumFieldChange} />
+                    </label>
+                    <div class="field-help">${t.editor.lidarBboxHelp}</div>
+                ` : nothing}
 
                 </details>
 

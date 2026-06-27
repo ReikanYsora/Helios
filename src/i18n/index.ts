@@ -109,6 +109,19 @@ export interface Translations
         //Cast-shadow opacity, 0..1 slider.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
+        //Local LiDAR: a user-hosted nDSM GeoTIFF (URL + EPSG:4326 bounding box) for true LiDAR shadows.
+        lidarSection:             string;
+        lidarHint:                string;
+        lidarEnabled:             string;
+        lidarEnabledOn:           string;
+        lidarEnabledOff:          string;
+        lidarUrl:                 string;
+        lidarUrlHelp:             string;
+        lidarMinLat:              string;
+        lidarMaxLat:              string;
+        lidarMinLon:              string;
+        lidarMaxLon:              string;
+        lidarBboxHelp:            string;
         //Reset: one destructive button wiping every cached payload (weather, PV history, sample
         //buffer) and forcing a fresh fetch. Own collapsible section at the editor bottom.
         //resetCacheDone is a transient post-click confirmation on the button.

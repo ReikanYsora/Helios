@@ -34,11 +34,9 @@ const RING_R_FRAC     = 0.34;   //outermost ring radius
 const RING_INNER_MIN_FRAC = 0.4;//innermost concentric ring radius as a fraction of the outer one
 const CLOCK_MAX_FILTERS = 8;    //fixed slot count: rings always sit at their slot radius, so adding/removing
                                 //a filter never re-spaces the others (and the radii are constant)
-const MAX_HEIGHT_FRAC = 0.30;   //tallest area / bar
-//Area mode: a translucent base fill (the curve lines stay full opacity); the hovered slice ramps to full.
-const AREA_FILL_BASE  = 0.5;
-//Histogram mode: bar tangential half-width (frac of the smaller edge, scaled per ring) and radial half-depth
-//(a fraction of the slot spacing so consecutive rings' bars sit flush).
+const MAX_HEIGHT_FRAC = 0.30;   //tallest bar
+//Bar tangential half-width (frac of the smaller edge, scaled per ring) and radial half-depth (a fraction of
+//the slot spacing so consecutive rings' bars sit flush).
 const BAR_TANGENT_FRAC = 0.018;
 const BAR_RADIAL_FRAC  = 0.45;
 const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
@@ -67,19 +65,14 @@ export function easeOutCubic(p: number): number
 const HOVER_PX = 22;
 
 
-//The two clock sub-modes: a continuous stacked AREA curve, or the classic stacked-bar HISTOGRAM (one bar per
-//hour, sitting BETWEEN the hour lines). Both read off the same ClockData — the histogram aggregates the slot
-//series to hourly on the fly — so only the geometry differs.
-export type ClockMode = 'area' | 'histogram';
-
-//One stacked layer of a metric: a per-slot series (clockSlots() values) drawn as a filled area swept around
-//the dial (or aggregated to 24 hourly bars in histogram mode). Layers stack cumulatively.
+//One stacked layer of a metric: a per-slot series (CLOCK_SLOTS values) aggregated to 24 hourly bars. Layers
+//stack cumulatively.
 export interface ClockLayer
 {
     color:      string;
     icon:       string;
     label:      string;       //per-source name for production layers, else ''
-    values:     number[];     //clockSlots() per-slot magnitudes (W, %, or W/m²)
+    values:     number[];     //CLOCK_SLOTS per-slot magnitudes (W, %, or W/m²)
     predicted?: boolean;      //forecast-only layer (no actuals) — rendered translucent
 }
 
@@ -105,8 +98,8 @@ export interface ClockRingInput
     opacity:     number;
 }
 
-//Screen-space hit target: a vertical axis (base -> top) tagged with its slot. Area mode emits one per slot;
-//histogram mode one per hourly bar (tagged with that hour's first slot). Hovering highlights it.
+//Screen-space hit target: a vertical axis (base -> top) tagged with its slot, one per hourly bar (tagged with
+//that hour's first slot). Hovering highlights it.
 export interface ClockHit { slot: number; bx: number; by: number; tx: number; ty: number; }
 
 //One projected frame, split into two stacked SVG layers plus the per-element transforms the card writes onto
@@ -134,25 +127,16 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
 }
 
 
-//Dial resolution: sub-hourly slots binning the metric finer than hourly. Driven by the config's graph-detail
-//setting (slots/hour = display-update-frequency-per-hour, 1..12) so the area curve is drawn at that many
-//points per hour; the per-hour TOTALS are unchanged (more/fewer points, same area). 24 hour labels still mark
-//the dial; each hour spans clockSlotsPerHour() slots. Module-private state so other modules read the live
-//value through the getter (an ES live binding); never an exported mutable binding (lint: no-mutable-exports).
-let _slotsPerHour = 4;
-export function clockSlotsPerHour(): number { return _slotsPerHour; }
-export function clockSlots(): number { return 24 * _slotsPerHour; }
-//Set once before each (re)build of the clock data, so every binning/projection uses the current config's
-//slot count. Clamped to [1,12]; the dial always stays 24 hours.
-export function setClockResolution(n: number): void
-{
-    _slotsPerHour = !Number.isFinite(n) ? 4 : Math.min(12, Math.max(1, Math.round(n)));
-}
+//Dial resolution: sub-hourly slots binning the metric finer than hourly (the histogram re-aggregates them to
+//24 hourly bars). Fixed at 4 slots/hour — the per-hour totals are independent of the slot count, and 24 hour
+//labels always mark the dial, each hour spanning CLOCK_SLOTS_PER_HOUR slots.
+export const CLOCK_SLOTS_PER_HOUR = 4;
+const CLOCK_SLOTS = 24 * CLOCK_SLOTS_PER_HOUR;
 
-//Slot-of-day [0..clockSlots()) for a local time.
+//Slot-of-day [0..CLOCK_SLOTS) for a local time.
 function slotOf(d: Date): number
 {
-    return d.getHours() * _slotsPerHour + Math.floor(d.getMinutes() / (60 / _slotsPerHour));
+    return d.getHours() * CLOCK_SLOTS_PER_HOUR + Math.floor(d.getMinutes() / (60 / CLOCK_SLOTS_PER_HOUR));
 }
 
 //Fill NaN gaps by linear interpolation between the nearest real samples, wrapping around the dial, so a
@@ -182,12 +166,12 @@ function fillGaps(v: number[]): number[]
 //currency is then the hourly value, and a histogram averages back to it).
 function expandHourly(hourly: number[], sum: boolean): number[]
 {
-    const slots = clockSlots();
+    const slots = CLOCK_SLOTS;
     const out = new Array<number>(slots);
     for (let i = 0; i < slots; i++)
     {
-        const v = Math.max(0, hourly[Math.floor(i / _slotsPerHour)] ?? 0);
-        out[i] = sum ? v / _slotsPerHour : v;
+        const v = Math.max(0, hourly[Math.floor(i / CLOCK_SLOTS_PER_HOUR)] ?? 0);
+        out[i] = sum ? v / CLOCK_SLOTS_PER_HOUR : v;
     }
     return out;
 }
@@ -196,8 +180,8 @@ function expandHourly(hourly: number[], sum: boolean): number[]
 //slots stay NaN so fillGaps can interpolate them rather than reading as a zero spike.
 function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[]
 {
-    const sum = new Array<number>(clockSlots()).fill(0);
-    const cnt = new Array<number>(clockSlots()).fill(0);
+    const sum = new Array<number>(CLOCK_SLOTS).fill(0);
+    const cnt = new Array<number>(CLOCK_SLOTS).fill(0);
     for (let i = 0; i < store.bucketsTotal; i++)
     {
         const v = series[i];
@@ -216,9 +200,9 @@ function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[
 //"total per period".
 function binSlotSum(store: UnifiedDataStore, series: (number | null)[]): number[]
 {
-    const sum    = new Array<number>(clockSlots()).fill(0);
+    const sum    = new Array<number>(CLOCK_SLOTS).fill(0);
     const stepH  = store.stepMs / HOUR_MS;
-    const slotMs = HOUR_MS / _slotsPerHour;
+    const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
     for (let i = 0; i < store.bucketsTotal; i++)
     {
         const v = series[i];
@@ -352,10 +336,10 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         const ids = Array.from(host._pvHistoryPerEntity.keys());
         const nowMs = Date.now();
         const stepH  = store.stepMs / HOUR_MS;
-        const slotMs = HOUR_MS / _slotsPerHour;
+        const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
         //Per-source energy (kWh) SUMMED by hour-of-day: each bucket's power * its hours, SPREAD across the slots
         //the bucket covers (so a coarse month/year store fills every slot instead of one — same fix as binSlotSum).
-        const wsum = ids.map(() => new Array<number>(clockSlots()).fill(0));
+        const wsum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
         for (let i = 0; i < store.bucketsTotal; i++)
         {
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
@@ -396,8 +380,8 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     if (target === 'battery-soc')
     {
         const hist = host._batterySocHistory;
-        const sum = new Array<number>(clockSlots()).fill(0);
-        const cnt = new Array<number>(clockSlots()).fill(0);
+        const sum = new Array<number>(CLOCK_SLOTS).fill(0);
+        const cnt = new Array<number>(CLOCK_SLOTS).fill(0);
         if (hist)
         {
             for (let i = 0; i < hist.times.length; i++)
@@ -414,7 +398,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     if (target === 'cloud')
     {
         const cs = host._chartSeries;
-        const slots = clockSlots();
+        const slots = CLOCK_SLOTS;
         const sum = [new Array<number>(slots).fill(0), new Array<number>(slots).fill(0), new Array<number>(slots).fill(0)];
         const cnt = [new Array<number>(slots).fill(0), new Array<number>(slots).fill(0), new Array<number>(slots).fill(0)];
         if (cs)
@@ -438,8 +422,8 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     {
         //Custom entity from its fetched 5-min history (values in W), binned by slot-of-day. One red layer.
         const hist = host._customEntityHistory;
-        const sum = new Array<number>(clockSlots()).fill(0);
-        const cnt = new Array<number>(clockSlots()).fill(0);
+        const sum = new Array<number>(CLOCK_SLOTS).fill(0);
+        const cnt = new Array<number>(CLOCK_SLOTS).fill(0);
         if (hist)
         {
             for (let i = 0; i < hist.times.length; i++)
@@ -521,32 +505,23 @@ function ringSpacingM(outerR: number): number
 function hourlyOf(values: number[], sum: boolean): number[]
 {
     const out = new Array<number>(24).fill(0);
-    const sph = _slotsPerHour;
     for (let h = 0; h < 24; h++)
     {
         let s = 0;
-        for (let j = 0; j < sph; j++) { s += Math.max(0, values[h * sph + j] ?? 0); }
-        out[h] = sum ? s : s / sph;
+        for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { s += Math.max(0, values[h * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
+        out[h] = sum ? s : s / CLOCK_SLOTS_PER_HOUR;
     }
     return out;
 }
 
-//Busiest stacked total of a ring in the given mode (slot total for area, hourly total for histogram). Drives
-//the per-UNIT shared ceiling, so two metrics in the same unit are plotted on the exact same axis — a 2 kW and
-//a 5 kW power metric read at the right relative heights instead of both filling their own ring.
-function ringMax(data: ClockData, mode: ClockMode): number
+//Busiest stacked hourly total of a ring. Drives the per-UNIT shared ceiling, so two metrics in the same unit
+//are plotted on the exact same axis — a 2 kW and a 5 kW power metric read at the right relative heights
+//instead of both filling their own ring.
+function ringMax(data: ClockData): number
 {
     let m = 0;
-    if (mode === 'histogram')
-    {
-        const hourly = data.layers.map(L => hourlyOf(L.values, data.unit === 'energy'));
-        for (let h = 0; h < 24; h++) { let t = 0; for (const hv of hourly) { t += Math.max(0, hv[h]); } m = Math.max(m, t); }
-    }
-    else
-    {
-        const slots = clockSlots();
-        for (let sl = 0; sl < slots; sl++) { let t = 0; for (const L of data.layers) { t += Math.max(0, L.values[sl] ?? 0); } m = Math.max(m, t); }
-    }
+    const hourly = data.layers.map(L => hourlyOf(L.values, data.unit === 'energy'));
+    for (let h = 0; h < 24; h++) { let t = 0; for (const hv of hourly) { t += Math.max(0, hv[h]); } m = Math.max(m, t); }
     return m;
 }
 
@@ -603,41 +578,10 @@ function stackedColumn(
     return svg;
 }
 
-//Flat-on-ground highlight wedge for the focused hour (area mode only): a pie sector between the hour-H and
-//hour-(H+1) spoke angles, from the central hub out to the spokes' outer radius. The inner + outer arcs are
-//sampled at a few sub-angles and projected through the camera, so the sector reads as a curved slice in the
-//2.5D view. Filled translucent in the focused metric's colour (neutral white when none), ramped by `dim` so
-//it fades in/out with the rest of the focus. Drawn in the guide pass, UNDER the cylinders.
-function clockWedge(camera: SceneCamera, outerR: number, hour: number, dim: number): string
-{
-    const innerR = outerR * CLOCK_HUB_R_FRAC;
-    const outerW = outerR * CLOCK_SPOKE_OUTER_FRAC;
-    const a0 = (hour / 24) * 2 * Math.PI;
-    const a1 = ((hour + 1) / 24) * 2 * Math.PI;
-    const STEPS = 6;
-    const pts: string[] = [];
-    for (let i = 0; i <= STEPS; i++)
-    {
-        const a = a0 + (a1 - a0) * (i / STEPS);
-        const p = camera.project(outerW * Math.sin(a), outerW * Math.cos(a), 0);
-        pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`);
-    }
-    for (let i = STEPS; i >= 0; i--)
-    {
-        const a = a0 + (a1 - a0) * (i / STEPS);
-        const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), 0);
-        pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`);
-    }
-    //Same colour as the guide lines (theme text), at a reduced fill opacity vs the strokes.
-    const op = (0.15 * dim).toFixed(3);
-    return `<polygon points="${pts.join(' ')}" fill="var(--primary-text-color, #212121)" fill-opacity="${op}"/>`;
-}
-
 //Clock-face guide laid flat on the ground (under the cylinders): a faint centre ring + a spoke per hour
-//reaching from the ring toward each hour label, stopping short so it never overlaps the text. Theme colour,
-//low opacity. The focused hour's spoke ramps to full opacity with `dim` (0..1), so the selected slice's
-//line lights up. `outerR` is the outermost ring radius in metres.
-function clockGuide(camera: SceneCamera, outerR: number, focusHour: number | null, dim: number): string
+//reaching from the ring toward each hour label, stopping short so it never overlaps the text, plus the outer
+//ring closing the 24 pie slices. Theme colour, low opacity. `outerR` is the outermost ring radius in metres.
+function clockGuide(camera: SceneCamera, outerR: number): string
 {
     const col   = 'var(--primary-text-color, #212121)';
     const hubR  = outerR * CLOCK_HUB_R_FRAC;
@@ -664,10 +608,7 @@ function clockGuide(camera: SceneCamera, outerR: number, focusHour: number | nul
         const a  = (h / 24) * 2 * Math.PI;
         const p1 = camera.project(hubR * Math.sin(a), hubR * Math.cos(a), 0);
         const p2 = camera.project(tipR * Math.sin(a), tipR * Math.cos(a), 0);
-        //Both bounding spokes of the focused hour wedge (H and H+1) light up.
-        const focused = focusHour !== null && (h === focusHour || h === (focusHour + 1) % 24);
-        const op = focused ? CLOCK_GUIDE_OPACITY + (1 - CLOCK_GUIDE_OPACITY) * dim : CLOCK_GUIDE_OPACITY;
-        svg += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${col}" stroke-opacity="${op.toFixed(3)}" stroke-width="${focused ? '1.5' : '1'}"/>`;
+        svg += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${col}" stroke-opacity="${CLOCK_GUIDE_OPACITY}" stroke-width="1"/>`;
     }
     return svg;
 }
@@ -718,14 +659,13 @@ function clockCompass(
 
 interface ClockFace { depth: number; svg: string }
 
-//Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward), in the chosen
-//sub-mode. SHARED here: the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, and the
-//global back-to-front depth sort. Per-mode geometry lives in projectAreaRing / projectHistogramRing. Pure —
-//the card resolves each ring's animation scalars (slot/heightScale/opacity) + the focused slot.
+//Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward). SHARED here:
+//the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, and the global back-to-front
+//depth sort; per-ring geometry lives in projectHistogramRing. Pure — the card resolves each ring's animation
+//scalars (slot/heightScale/opacity) + the focused slot.
 export function projectClockFrame(
     camera: SceneCamera,
     rings: ClockRingInput[],
-    mode: ClockMode,
     //Focused slot (hover/tap) + the 0..1 fade ramp. dimSlot persists through the fade-out so it ramps smoothly.
     dimSlot: number | null,
     dim: number,
@@ -736,7 +676,7 @@ export function projectClockFrame(
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
     const ppm     = camera.pxPerMetre || 1;
     const outerR  = (RING_R_FRAC * minEdge) / ppm;
-    const maxHm   = (MAX_HEIGHT_FRAC * minEdge) / ppm;   //tallest area / bar, in metres
+    const maxHm   = (MAX_HEIGHT_FRAC * minEdge) / ppm;   //tallest bar, in metres
     const tilt    = camera.tiltDeg;
     const bearing = camera.bearingDeg;
 
@@ -756,7 +696,7 @@ export function projectClockFrame(
     //Shared per-UNIT ceiling: every ring of the same unit normalises against the busiest among them, so
     //same-unit metrics share one axis (no read dissonance). Different units keep their own ceiling.
     const unitMax = new Map<string, number>();
-    for (const ring of rings) { const u = ring.data.unit; unitMax.set(u, Math.max(unitMax.get(u) ?? 0, ringMax(ring.data, mode))); }
+    for (const ring of rings) { const u = ring.data.unit; unitMax.set(u, Math.max(unitMax.get(u) ?? 0, ringMax(ring.data))); }
 
     const hits:  ClockHit[]  = [];
     const faces: ClockFace[] = [];
@@ -764,8 +704,7 @@ export function projectClockFrame(
     {
         const R = outerR * ringRadiusFrac(ring.slot);
         const ceiling = unitMax.get(ring.data.unit) ?? 0;
-        if (mode === 'histogram') { projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits); }
-        else                      { projectAreaRing(camera, R, ring, ri, maxHm, ceiling, dimSlot, dim, faces, hits); }
+        projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits);
     });
     faces.sort((a, b) => a.depth - b.depth);
 
@@ -776,105 +715,17 @@ export function projectClockFrame(
 
     //Two layers so the home prism sits between them: the flat-ground guide + compass go UNDER it (guideSvg),
     //the upright cylinders OVER it (svg). defs (the per-ring glow filters) stay with the cylinders that use them.
-    //Area mode also lays a translucent highlight wedge on the hovered hour, beneath the spokes (so the columns
-    //rise over it); histogram keeps its own per-bar highlight, so it gets no wedge.
-    //Spoke + wedge focus are area-only; histogram keeps its prior guide (no focused spoke) and per-bar highlight.
-    const focusHour = (mode === 'area' && dimSlot !== null) ? Math.floor(dimSlot / _slotsPerHour) : null;
-    const wedge = (focusHour !== null && dim > 0)
-        ? clockWedge(camera, outerR, focusHour, dim)
-        : '';
+    //The bars carry their own per-bar highlight, so the guide stays static (no focused spoke).
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
     return {
-        guideSvg: wedge + clockGuide(camera, outerR, focusHour, dim) + compass.svg,
+        guideSvg: clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join(''),
         hits, labels, compass: compass.labels,
     };
 }
 
-//AREA sub-mode: a continuous stacked area swept over the dial's slots. Fills sit at a very transparent base
-//(the curve lines stay full opacity); the focused HOUR's slices ramp to full opacity + a bright glowing line.
-//Interaction snaps to the hour: dimSlot resolves to a focused hour and EVERY slice in that hour brightens, so
-//the whole hour band of the curve lights up (matching the histogram, which highlights a whole bar).
-function projectAreaRing(
-    camera: SceneCamera, R: number, ring: ClockRingInput, ri: number, maxHm: number, ceiling: number,
-    dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
-): void
-{
-    const data  = ring.data;
-    const slots = clockSlots();
-    const sph   = _slotsPerHour;
-    const focusHour = dimSlot === null ? null : Math.floor(dimSlot / sph);
-    const totalAt = (sl: number): number => data.layers.reduce((s, L) => s + Math.max(0, L.values[sl] ?? 0), 0);
-    //Normalise against the shared per-unit ceiling, not the ring's own max, so same-unit metrics share an axis.
-    const zScale = ceiling > 0 ? (maxHm * ring.heightScale) / ceiling : 0;
-    let maxTotal = 0;   //own max — only to detect a truly empty ring (baseline circle)
-    for (let sl = 0; sl < slots; sl++) { maxTotal = Math.max(maxTotal, totalAt(sl)); }
-
-    for (let sl = 0; sl < slots; sl++)
-    {
-        const a = (sl / slots) * 2 * Math.PI;
-        const e = R * Math.sin(a); const n = R * Math.cos(a);
-        const base = camera.project(e, n, 0);
-        const top  = camera.project(e, n, totalAt(sl) * zScale);
-        hits.push({ slot: sl, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
-    }
-
-    if (maxTotal <= 0)
-    {
-        const pts: string[] = [];
-        for (let s = 0; s <= slots; s++) { const a = (s / slots) * 2 * Math.PI; const p = camera.project(R * Math.sin(a), R * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
-        faces.push({ depth: -Infinity, svg: `<polyline points="${pts.join(' ')}" fill="none" stroke="${data.color}" stroke-opacity="${(0.3 * ring.opacity).toFixed(3)}" stroke-width="1"/>` });
-        return;
-    }
-
-    const ground:   [number, number][] = [];
-    const layerTop: [number, number][][] = data.layers.map(() => []);
-    for (let s = 0; s <= slots; s++)
-    {
-        const sl = s % slots;
-        const a  = (s / slots) * 2 * Math.PI;
-        const e  = R * Math.sin(a); const n = R * Math.cos(a);
-        ground.push(camera.project(e, n, 0));
-        let cum = 0;
-        for (let k = 0; k < data.layers.length; k++) { cum += Math.max(0, data.layers[k].values[sl] ?? 0); layerTop[k].push(camera.project(e, n, cum * zScale)); }
-    }
-
-    const top = layerTop[layerTop.length - 1];
-    for (let s = 0; s < slots; s++)
-    {
-        const depth   = (ground[s][1] + ground[s + 1][1]) / 2;
-        //The focused hour's slices ramp their fill from the transparent base to full; the rest stay at base.
-        const focused = focusHour !== null && Math.floor(s / sph) === focusHour;
-        const fillMul = focused ? AREA_FILL_BASE + (1 - AREA_FILL_BASE) * dim : AREA_FILL_BASE;
-        for (let k = 0; k < data.layers.length; k++)
-        {
-            const L   = data.layers[k];
-            const loA = k === 0 ? ground[s]     : layerTop[k - 1][s];
-            const loB = k === 0 ? ground[s + 1] : layerTop[k - 1][s + 1];
-            const hiA = layerTop[k][s];
-            const hiB = layerTop[k][s + 1];
-            const fillOp = (ring.opacity * fillMul * (L.predicted ? 0.5 : 1)).toFixed(3);
-            const fill   = lerpHexToward(L.color, '#000000', 0.12);
-            faces.push({ depth, svg: `<polygon points="${loA[0].toFixed(1)},${loA[1].toFixed(1)} ${loB[0].toFixed(1)},${loB[1].toFixed(1)} ${hiB[0].toFixed(1)},${hiB[1].toFixed(1)} ${hiA[0].toFixed(1)},${hiA[1].toFixed(1)}" fill="${fill}" fill-opacity="${fillOp}"/>` });
-            //Thin full-opacity boundary on each stacked layer (the topmost edge gets the focus-aware line below),
-            //in the layer's own colour, so superposed areas stay legible.
-            if (k < data.layers.length - 1)
-            {
-                const edge = lerpHexToward(L.color, '#ffffff', 0.3);
-                faces.push({ depth, svg: `<line x1="${hiA[0].toFixed(1)}" y1="${hiA[1].toFixed(1)}" x2="${hiB[0].toFixed(1)}" y2="${hiB[1].toFixed(1)}" stroke="${edge}" stroke-opacity="${ring.opacity.toFixed(3)}" stroke-width="0.75"/>` });
-            }
-        }
-        //Curve line: full opacity always; the hovered slice brightens, thickens and glows.
-        const stroke = focused ? 'rgba(255,255,255,0.97)' : lerpHexToward(data.color, '#ffffff', 0.3);
-        const glow   = focused ? ` filter="url(#clock-glow-${ri})"` : '';
-        const w      = focused ? (1 + 1.5 * dim) : 1;
-        faces.push({ depth, svg: `<line x1="${top[s][0].toFixed(1)}" y1="${top[s][1].toFixed(1)}" x2="${top[s + 1][0].toFixed(1)}" y2="${top[s + 1][1].toFixed(1)}" stroke="${stroke}" stroke-opacity="${ring.opacity.toFixed(3)}" stroke-width="${w.toFixed(2)}"${glow}/>` });
-    }
-}
-
-//HISTOGRAM sub-mode: 24 stacked bars, one per hour, sitting BETWEEN the hour lines (centred at H+0.5 — each
-//bar is the value over H..H+1). The hovered bar glows; the others dim. Grow / slide / exit ride on the ring's
-//animation scalars exactly like the area mode.
+//24 stacked bars, one per hour, sitting BETWEEN the hour lines (centred at H+0.5 — each bar is the value over
+//H..H+1). The hovered bar glows; the others dim. Grow / slide / exit ride on the ring's animation scalars.
 function projectHistogramRing(
     camera: SceneCamera, R: number, outerR: number, ring: ClockRingInput, ri: number, maxHm: number, ceiling: number,
     minEdge: number, ppm: number, dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
@@ -887,7 +738,7 @@ function projectHistogramRing(
     const zScale = ceiling > 0 ? (maxHm * ring.heightScale) / ceiling : 0;
     const halfRadial = ringSpacingM(outerR) * BAR_RADIAL_FRAC;
     const halfTan    = (BAR_TANGENT_FRAC * minEdge) / ppm * ringRadiusFrac(ring.slot);
-    const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / _slotsPerHour);
+    const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);
 
     for (let h = 0; h < 24; h++)
     {
@@ -897,7 +748,7 @@ function projectHistogramRing(
         const base  = camera.project(e, n, 0);
         const top   = camera.project(e, n, total * zScale);
         //Hit axis tagged with the hour's first slot, so the card maps it back to the hour.
-        hits.push({ slot: h * _slotsPerHour, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
+        hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
         const active = h === focusHour;
         const dimOp  = ring.opacity * (focusHour !== null && !active ? 1 - 0.5 * dim : 1);
         if (total <= 0)
@@ -940,24 +791,23 @@ export function clockHitTest(hits: ClockHit[], x: number, y: number): number | n
 
 
 //Read one layer aggregated over the hour the focused slot falls in: the hour's TOTAL (`sum`, energy) or its
-//AVERAGE (power/percent/irradiance), matching the histogram bar. Both clock sub-modes read this — the area
-//interaction snaps to the hour, so its tooltip shows exactly the same per-hour figures as the histogram.
+//AVERAGE (power/percent/irradiance), matching the histogram bar.
 export function hourlyAt(values: number[], hour: number, sum: boolean): number
 {
-    const sph = _slotsPerHour;
+    const sph = CLOCK_SLOTS_PER_HOUR;
     let s = 0;
     for (let j = 0; j < sph; j++) { s += Math.max(0, values[hour * sph + j] ?? 0); }
     return sum ? s : s / sph;
 }
-export function clockLayerValue(layer: ClockLayer, data: ClockData, _mode: ClockMode, slot: number): number
+export function clockLayerValue(layer: ClockLayer, data: ClockData, slot: number): number
 {
-    return hourlyAt(layer.values, Math.floor(slot / _slotsPerHour), data.unit === 'energy');
+    return hourlyAt(layer.values, Math.floor(slot / CLOCK_SLOTS_PER_HOUR), data.unit === 'energy');
 }
 
 //A metric's total magnitude at the focused position (sum of its layers), for the per-filter tooltip rows.
-export function clockTotal(data: ClockData, mode: ClockMode, slot: number): number
+export function clockTotal(data: ClockData, slot: number): number
 {
-    return data.layers.reduce((s, L) => s + clockLayerValue(L, data, mode, slot), 0);
+    return data.layers.reduce((s, L) => s + clockLayerValue(L, data, slot), 0);
 }
 
 
