@@ -31,8 +31,8 @@ const RING_INNER_MIN_FRAC = 0.4;//innermost concentric ring radius as a fraction
 const CLOCK_MAX_FILTERS = 8;    //fixed slot count: rings always sit at their slot radius, so adding/removing
                                 //a filter never re-spaces the others (and the radii are constant)
 const MAX_HEIGHT_FRAC = 0.30;   //tallest area / bar
-//Area mode: a very transparent base fill (the curve lines stay full opacity); the hovered slice ramps to full.
-const AREA_FILL_BASE  = 0.28;
+//Area mode: a translucent base fill (the curve lines stay full opacity); the hovered slice ramps to full.
+const AREA_FILL_BASE  = 0.5;
 //Histogram mode: bar tangential half-width (frac of the smaller edge, scaled per ring) and radial half-depth
 //(a fraction of the slot spacing so consecutive rings' bars sit flush).
 const BAR_TANGENT_FRAC = 0.018;
@@ -294,11 +294,12 @@ export function clockTargetLabel(host: ClockHost, target: ChartTarget): string
 
 
 //Build layers from the decoupled hourly profile (month/year, where the store is daily): each metric expands
-//its 24 hour-of-day averages to the dial's slots. Production is aggregate here (no per-source split on a
-//long-window average); weather metrics aren't offered in these modes, so they fall through to empty.
+//its 24 hour-of-day totals to the dial's slots. Production splits per solar source like the short-window path;
+//weather metrics aren't offered in these modes, so they fall through to empty.
 function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHourly): ClockData
 {
     const el   = host as unknown as Element;
+    const dark = host.themeIsDark();
     const meta = clockTargetMeta(host, target);
     const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData => ({ target, color: meta.color, unit, layers });
     //Energy metrics expand their hour TOTALS (split across slots); soc/custom hold their hourly average.
@@ -306,7 +307,7 @@ function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHour
     const oneA = (color: string, icon: string, v: number[]): ClockLayer => ({ color, icon, label: '', values: expandHourly(v, false) });
     switch (target)
     {
-        case 'production':  return data('energy', [oneE(ENERGY_COLOR.pv(el), 'mdi:solar-power', h.pv)]);
+        case 'production':  return data('energy', h.pv.map((vals, s) => oneE(energySolarColor(el, dark, s), 'mdi:solar-power', vals)));
         case 'consumption': return data('energy', [oneE(ENERGY_COLOR.consumption(el), 'mdi:home-lightning-bolt', h.consumption)]);
         case 'grid':        return data('energy', [
             oneE(ENERGY_COLOR.gridImport(el), 'mdi:transmission-tower-import', h.gridImport),
@@ -350,21 +351,31 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         if (!store) { return data('energy', []); }
         const ids = Array.from(host._pvHistoryPerEntity.keys()).sort();
         const nowMs = Date.now();
-        const stepH = store.stepMs / HOUR_MS;
-        //Per-source energy (kWh) SUMMED by hour-of-day: instantaneous power at each past bucket centre * its
-        //hours, accumulated over the window.
+        const stepH  = store.stepMs / HOUR_MS;
+        const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
+        //Per-source energy (kWh) SUMMED by hour-of-day: each bucket's power * its hours, SPREAD across the slots
+        //the bucket covers (so a coarse month/year store fills every slot instead of one — same fix as binSlotSum).
         const wsum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
         for (let i = 0; i < store.bucketsTotal; i++)
         {
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
             if (tMs > nowMs) { break; }
-            const h = slotOf(new Date(tMs));
+            const bStart = store.storeStartMs + i * store.stepMs;
+            const bEnd   = bStart + store.stepMs;
             ids.forEach((id, s) =>
             {
                 const ph = host._pvHistoryPerEntity.get(id);
                 if (!ph) { return; }
                 const v = pvValueAtTime(host, tMs, ph).value;
-                if (isFinite(v) && v > 0) { wsum[s][h] += (v * stepH) / 1000; }
+                if (!(isFinite(v) && v > 0)) { return; }
+                const energy = (v * stepH) / 1000;
+                for (let t = bStart; t < bEnd; )
+                {
+                    const slotEnd = Math.floor(t / slotMs) * slotMs + slotMs;
+                    const segEnd  = Math.min(bEnd, slotEnd);
+                    wsum[s][slotOf(new Date(t))] += energy * ((segEnd - t) / store.stepMs);
+                    t = segEnd;
+                }
             });
         }
         //Actuals only: the clock shows recorded energy, no forecast layer (a translucent forecast ring read as
