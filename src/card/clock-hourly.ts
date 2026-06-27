@@ -128,15 +128,19 @@ export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
     const d   = host._energyDefaults;
     const cid = customEntityId(host.config);
     const startMs = host._timeRange.start.getTime();
-    const endMs   = Math.min(Date.now(), host._timeRange.end.getTime());
+    //Quantise the end to the whole hour: Date.now() advances every frame, and an unquantised end would churn
+    //the key on every render — refetching in a loop and (with the null-on-change below) flashing the dial.
+    const endMs   = Math.floor(Math.min(Date.now(), host._timeRange.end.getTime()) / HOUR_MS) * HOUR_MS;
     if (startMs >= endMs) { return; }
 
     const key = `${startMs}|${endMs}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}|${d.batteryStatSocs}|${cid}`;
     if (key === host._clockHourlyKey) { return; }
-    //Window changed: drop the stale profile up front so consumers (the reload grow gate) see _clockHourly as
-    //null through the await and only treat it as ready once the NEW window's data below has actually landed.
-    if (host._clockHourly !== null) { host._clockHourly = null; host.requestUpdate(); }
+    //Drop the stale profile up front ONLY when the WINDOW itself changed (start moved = a mode switch), so the
+    //reload grow gate sees null until the new data lands. A benign end-of-window tick keeps the old profile so
+    //the dial never flashes the daily-store fallback.
+    const windowChanged = !host._clockHourlyKey.startsWith(`${startMs}|`);
     host._clockHourlyKey = key;
+    if (windowChanged && host._clockHourly !== null) { host._clockHourly = null; host.requestUpdate(); }
 
     const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
         ids.length ? fetchChangeSeries(host.hass, [...ids].sort(), startMs, endMs, 'hour') : Promise.resolve(null);

@@ -9,15 +9,17 @@ import { HOUR_MS } from '../constants';
 import { type ChartTarget, type ChartHost, pvValueAtTime } from './charts';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
-import { customEntityId, customEntityColor } from '../helios-config';
+import { customEntityId, customEntityColor, valueDecimals } from '../helios-config';
 import { resolveCustomEntityIcon, resolveCustomEntityLive } from './custom-entity';
 import type { ClockHourly } from './clock-hourly';
+import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 
 //Structural surface the clock reads off the card. It already satisfies ChartHost (the bottom chart consumes
 //it); themeIsDark resolves the live palette polarity for the per-source colour ramp.
 export type ClockHost = ChartHost & {
     themeIsDark(): boolean;
     _weatherAvailable: boolean;
+    _timelineMode: TimelineMode;
     //Decoupled hourly profile, present only when the store is sub-hourly (month/year) + clock mode. When set,
     //buildClockData reads it instead of the daily store so the dial still shows an hour-of-day shape.
     _clockHourly: ClockHourly | null;
@@ -335,6 +337,13 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
 
     const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData =>
         ({ target, color: meta.color, unit, layers });
+
+    //Month/year need the decoupled hourly profile; until it lands, render an empty baseline rather than the
+    //daily store, which carries no hour-of-day shape and would draw a flat full-height ring.
+    if (modeBucketsPerHour(host._timelineMode, host.config) < 1)
+    {
+        return data(target === 'irradiance' ? 'irradiance' : 'energy', []);
+    }
 
     if (target === 'production')
     {
@@ -881,11 +890,13 @@ export function clockTotal(data: ClockData, mode: ClockMode, slot: number): numb
 //Slots per hour, exposed so the card can format a slot's HH:MM label + range.
 export { CLOCK_SLOTS_PER_HOUR };
 
-//Format a band/total magnitude for the tooltip, per the metric's unit. 'energy' values are already kWh.
+//Format a band/total magnitude for the tooltip, per the metric's unit. kW/kWh honour the user's decimals
+//setting; %/irradiance read as integers. 'energy' values are already kWh.
 export function formatClockValue(host: ClockHost, data: ClockData, v: number): string
 {
     if (data.unit === 'percent')    { return `${Math.round(Math.max(0, v))} %`; }
     if (data.unit === 'irradiance') { return `${Math.round(Math.max(0, v))} W/m²`; }
-    if (data.unit === 'energy')     { return `${formatLocalisedNumber(host.hass, v, 1)} kWh`; }
-    return `${formatLocalisedNumber(host.hass, v / 1000, 1)} kW`;
+    const dec = valueDecimals(host.config);
+    if (data.unit === 'energy')     { return `${formatLocalisedNumber(host.hass, v, dec)} kWh`; }
+    return `${formatLocalisedNumber(host.hass, v / 1000, dec)} kW`;
 }
