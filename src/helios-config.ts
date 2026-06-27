@@ -82,6 +82,8 @@ export interface HeliosConfig
     'custom-entity-color'?:     unknown;
     //HA ui_color token for the base tint of surrounding buildings in the scene. Default 'grey'.
     'building-color'?:          unknown;
+    //HA ui_color token for the home (consumption) colour: the home pill + every consumption readout. Default 'green'.
+    'home-color'?:              unknown;
     //Optional per-card cache id. When set, the saved view (mode, selected filters, camera pose, lock) is keyed
     //on it instead of the home coordinates, so two cards on the same home keep independent state (e.g. one in
     //scene mode, one in clock mode). Empty = shared per-home cache (the default).
@@ -161,6 +163,15 @@ export function buildingColorToken(config: HeliosConfig | undefined): string
     const raw = config?.['building-color'];
     const token = typeof raw === 'string' ? raw.trim() : '';
     return token || 'grey';
+}
+
+//Resolved ui_color token for the home (consumption) colour — the home pill + every consumption readout.
+//Default 'green', matching the unconfigured tint.
+export function homeColor(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['home-color'];
+    const token = typeof raw === 'string' ? raw.trim() : '';
+    return token || 'green';
 }
 
 

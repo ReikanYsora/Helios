@@ -45,6 +45,7 @@ export class SceneRenderer
 
     private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
+    private readonly _groundOverlay: SVGSVGElement;
     private readonly _sceneSvg:     SVGSVGElement;
 
     private _ground?:     Ground;
@@ -89,9 +90,15 @@ export class SceneRenderer
 
         this._groundHolder = document.createElement('div');
         this._groundHolder.className = 'scene-ground-holder';
+        //Screen-space overlay BETWEEN the basemap and the home prism, for the card's clock-mode ground guide
+        //(hub + hour spokes). Sits here so the guide reads above the map yet UNDER the home, which the basemap
+        //+ home being one stacking unit can't achieve with z-index alone.
+        this._groundOverlay = document.createElementNS(SVG_NS, 'svg');
+        this._groundOverlay.setAttribute('class', 'scene-ground-overlay');
         this._sceneSvg = document.createElementNS(SVG_NS, 'svg');
         this._sceneSvg.setAttribute('class', 'scene-svg');
         container.appendChild(this._groundHolder);
+        container.appendChild(this._groundOverlay);
         container.appendChild(this._sceneSvg);
 
         //The camera centres on width/2 × height/2, so a draw taken before the container has its final size
@@ -139,6 +146,13 @@ export class SceneRenderer
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);
         this.scheduleRedraw();
+    }
+
+    //Card-supplied screen-space SVG painted between the basemap and the home prism (the clock-mode ground guide).
+    //Empty string clears it (scene mode).
+    public setGroundOverlay(svg: string): void
+    {
+        this._groundOverlay.innerHTML = svg;
     }
 
     public setBuildings(buildings: Building[]): void

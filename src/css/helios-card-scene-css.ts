@@ -113,6 +113,17 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 1;
     }
+    /*  Clock-mode ground guide overlay: screen-space, sits between the basemap and the home prism (DOM order +
+        scene-svg's z-index 1 keep it under the home), so the home reads over the hub + hour spokes. */
+    .scene-ground-overlay
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+    }
     /*  Camera-locked cursor: default cursor when rotation is disabled, so the scene doesn't advertise an
         interaction that doesn't exist. */
     ha-card.camera-locked #map-container
@@ -454,8 +465,8 @@ export const heliosCardStyles = css`
         flex-direction: row;
         justify-content: center;
         /*  Home == consumption: matches the consumption green used by its clock area + chart. */
-        color: var(--green-color, #4caf50);
-        border-color: var(--green-color, #4caf50);
+        color: var(--helios-consumption-color, #4caf50);
+        border-color: var(--helios-consumption-color, #4caf50);
         /*  Clickable: the home is the consumption chip, retargeting the bottom chart to home usage. */
         pointer-events: auto;
         cursor: pointer;
@@ -466,13 +477,13 @@ export const heliosCardStyles = css`
     .home-pill.is-hovered
     {
         box-shadow: 0 1px 3px var(--shadow-color),
-                    0 0 7px 1px color-mix(in srgb, var(--green-color, #4caf50) 28%, transparent);
+                    0 0 7px 1px color-mix(in srgb, var(--helios-consumption-color, #4caf50) 28%, transparent);
     }
     /*  Active consumption target: same retarget glow the other chips use, in the consumption green. */
     .home-pill.is-chart-active
     {
         box-shadow: 0 1px 3px var(--shadow-color),
-                    0 0 12px color-mix(in srgb, var(--green-color, #4caf50) 70%, transparent);
+                    0 0 12px color-mix(in srgb, var(--helios-consumption-color, #4caf50) 70%, transparent);
     }
     .home-pill ha-icon
     {

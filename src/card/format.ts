@@ -396,7 +396,7 @@ export const ENERGY_COLOR = {
     pv:         (h: Element | null | undefined): string => cssHex(h, '--energy-solar-color', '#ff9800'),
     //Home consumption (load): the frontend's named green, so it never reads as the grid-import blue (both used
     //to resolve to --energy-grid-consumption-color and were indistinguishable).
-    consumption:(h: Element | null | undefined): string => cssHex(h, '--green-color', '#4caf50'),
+    consumption:(h: Element | null | undefined): string => cssHex(h, '--helios-consumption-color', '#4caf50'),
     gridImport: (h: Element | null | undefined): string => cssHex(h, '--energy-grid-consumption-color', '#488fc2'),
     gridExport: (h: Element | null | undefined): string => cssHex(h, '--energy-grid-return-color', '#8353d1'),
     batteryIn:  (h: Element | null | undefined): string => cssHex(h, '--energy-battery-in-color', '#f06292'),

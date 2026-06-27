@@ -26,6 +26,19 @@ export interface Translations
         year?:       string; //'1 year'
     };
 
+    //Energy-clock labels: the ground compass letters (N/S/E/W — localised, e.g. W→O in French) and the three
+    //cloud-cover band names in the tooltip.
+    clock:
+    {
+        compassN: string;
+        compassS: string;
+        compassE: string;
+        compassW: string;
+        cloudLow:  string;
+        cloudMid:  string;
+        cloudHigh: string;
+    };
+
     editor:
     {
         //Optional home-location override for the card's center. Blank → falls back to hass.config;
@@ -79,6 +92,8 @@ export interface Translations
         //Surrounding buildings: cluster radius grows the home group to include attached outbuildings,
         //opacity sets neighbour transparency, colour is the base tint for every building.
         buildingsSection:         string;
+        homeColor:                string;
+        homeColorHelp:            string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
         buildingOpacity:          string;

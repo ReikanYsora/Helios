@@ -247,7 +247,6 @@ export const heliosTimelineStyles = css`
         letter-spacing: 0.3px;
         padding-bottom: 4px;
         margin-bottom: 4px;
-        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
     .tb-hover-tooltip-time-icon
     {

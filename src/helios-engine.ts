@@ -1,7 +1,7 @@
 import { SceneRenderer } from './engine/renderer';
 import type { Building, RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
-import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
+import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
 import {
     type CloudIntensity,
@@ -28,41 +28,6 @@ import
     buildingColorToken,
 } from './helios-config';
 import { uiColorVar } from './card/format';
-
-
-//Lifecycle instrumentation on window.__heliosStats so lifecycle leaks (engines not torn down) can be
-//diagnosed by diffing a snapshot before/after editor activity. Cheap, no I/O.
-interface HeliosStats
-{
-    enginesCreated:           number;
-    enginesCleanedUp:         number;
-    updateConfigCalls:        number;
-    styleReloads:             number;
-    addBuildingsCalls:        number;
-    buildingFetchStarts:      number;
-}
-function bumpStat(key: keyof HeliosStats): void
-{
-    if (typeof window === 'undefined')
-    {
-        return;
-    }
-    const w = window as unknown as { __heliosStats?: HeliosStats };
-    if (!w.__heliosStats)
-    {
-        w.__heliosStats = {
-            enginesCreated:      0,
-            enginesCleanedUp:    0,
-            updateConfigCalls:   0,
-            styleReloads:        0,
-            addBuildingsCalls:   0,
-            buildingFetchStarts: 0
-        };
-    }
-    w.__heliosStats[key] = (w.__heliosStats[key] ?? 0) + 1;
-}
-
-
 
 
 //-----------------------------------------------------------------
@@ -476,6 +441,11 @@ export class HeliosEngine
     {
         this._renderer?.setHomeOnly(on);
     }
+    //Card -> renderer: the clock-mode ground guide, painted between the basemap and the home prism. '' clears it.
+    public setGroundOverlay(svg: string): void
+    {
+        this._renderer?.setGroundOverlay(svg);
+    }
     //Defaults the editor's reset button restores: always the hemisphere-aware boot pose, never the user's
     //customised values (reading _initialBearing/_initialPitch would echo back what they just changed).
     public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }
@@ -628,8 +598,6 @@ export class HeliosEngine
         this._editMode = editMode;
         //Set before _initMapInstance: the renderer reads the stored camera pose (keyed on cacheKey) at boot.
         this.cacheKey = cacheKey;
-
-        bumpStat('enginesCreated');
 
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
@@ -1084,7 +1052,6 @@ export class HeliosEngine
         this._buildingsAbort?.abort();
         const ac = new AbortController();
         this._buildingsAbort = ac;
-        bumpStat('buildingFetchStarts');
 
         try { this.onBuildingsFetchStart?.(); } catch (_) { /* host progress callback threw; fetch continues */ }
 
@@ -1986,79 +1953,8 @@ export class HeliosEngine
         };
     }
 
-    //Snapshot of the engine's live state for window.heliosStats() debugging. JSON-safe so a user can paste
-    //it into an issue. No PII: home lat/lon/elevation are stripped (only the hemisphere is kept, for
-    //sun-arc orientation) and the API key never reaches here.
-    public getStatsSnapshot(): Record<string, unknown>
-    {
-        const shadowsOn = this._shadowsEnabled();
-        const buildingsFootprints = this._buildingsData
-            ? {
-                home:         this._buildingsData.filter((b) => b.isHome).length,
-                surroundings: this._buildingsData.filter((b) => !b.isHome).length
-              }
-            : null;
-        let shadowSource: string;
-        if (!shadowsOn)
-        {
-            shadowSource = 'disabled';
-        }
-        else if (this._buildingsData)
-        {
-            shadowSource = 'footprints';
-        }
-        else
-        {
-            shadowSource = 'pending';
-        }
-
-        return {
-            mapReady:             this._mapReady,
-            //Home position omitted; only the hemisphere is kept (for sun-arc orientation).
-            hemisphere:           this.homeLat >= 0 ? 'N' : 'S',
-            shadows:
-            {
-                enabled:          shadowsOn,
-                source:           shadowSource,
-                opacity:          this._shadowOpacity(),
-                clipRadiusM:      this._buildingRadiusMeters()
-            },
-            buildings:
-            {
-                radiusM:          this._buildingRadiusMeters(),
-                clusterRadiusM:   this._buildingClusterRadiusMeters(),
-                opacity:          this._buildingOpacity(),
-                color:            this._buildingColor(),
-                footprints:       buildingsFootprints
-            },
-            weather:
-            {
-                samples:          this._homeHourlyData?.times.length ?? 0,
-                rateLimitStreak:  this._rateLimitStreak,
-                //Module-level counters shared across every Helios card on the page, so these reflect the
-                //combined Open-Meteo traffic of the session (useful for rate-limit debugging).
-                openMeteoStats:   getWeatherFetchStats()
-            },
-            timeline:
-            {
-                //ISO strings (not Date) so the snapshot round-trips through JSON.stringify.
-                rangeStart:       this._getTimeRange()?.start?.toISOString() ?? null,
-                rangeEnd:         this._getTimeRange()?.end?.toISOString()   ?? null,
-                selectedTime:     this._selectedTime?.toISOString() ?? null
-            },
-            caches:
-            {
-                arcCacheDay:      this._arcInputsCache
-                    ? new Date(this._arcInputsCache.dayStartMs).toISOString().slice(0, 10)
-                    : null,
-                arcCacheCloudPct: this._arcInputsCache?.cloudPctInt ?? null
-            }
-        };
-    }
-
     public updateConfig(cfg: HeliosConfig): void
     {
-        bumpStat('updateConfigCalls');
         const prevRadius      = this._buildingRadiusMeters();
         const prevShadowOpa   = this._shadowOpacity();
         const prevShadowsOn   = this._shadowsEnabled();
@@ -2116,7 +2012,6 @@ export class HeliosEngine
 
     public cleanup(): void
     {
-        bumpStat('enginesCleanedUp');
         this._clearWeatherTimer();
         if (this._selectedTimeShadowTimer !== null)
         {

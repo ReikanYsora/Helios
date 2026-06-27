@@ -23,6 +23,17 @@ export const en: Translations = {
         year:  '1 year',
     },
 
+    clock:
+    {
+        compassN: 'N',
+        compassS: 'S',
+        compassE: 'E',
+        compassW: 'W',
+        cloudLow:  'Low cloud cover',
+        cloudMid:  'Mid cloud cover',
+        cloudHigh: 'High cloud cover',
+    },
+
     editor:
     {
         locationSection:    'Location',
@@ -31,12 +42,12 @@ export const en: Translations = {
         locationHint:       'Override the home address used as the card\'s center. Leave both fields empty to use Home Assistant\'s configured home. The override is only applied when BOTH fields are set to valid coordinates.',
         uiAndMapSection:    'UI',
         autoRotate:         'Camera auto-rotation',
-        autoRotateHint:     'When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun\'s apparent motion). A single-finger drag pauses it instantly and it resumes once you let go.',
+        autoRotateHint:     'When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun\'s apparent motion). A single-finger drag pauses it instantly and it resumes once you let go. Avoid it on very old devices: auto-rotation forces a render every second.',
         autoRotateOn:       'On',
         autoRotateOff:      'Off',
         dataDisplaySection:           'Data display',
         displayUpdateFrequency:       'Graph detail',
-        displayUpdateFrequencyHelp:   'How many points per hour the graphs draw. The data itself is always Home Assistant\'s 5-minute statistics; this only controls how densely the curve is plotted: 1 = one point per hour (smoothest, lightest to render), 12 = one point every 5 minutes (full detail, heaviest). Default 4 = a point every 15 minutes. Lower it on older or slower devices to cut rendering cost. The forecast curve follows the same cadence, so a finer setting also resolves short shadow dips (a tree clipping production for half an hour) that an hourly curve steps over.',
+        displayUpdateFrequencyHelp:   'How many points per hour the graphs draw. The data itself is always Home Assistant\'s 5-minute statistics; this only controls how densely the curve is plotted: 1 = one point per hour (smoothest, lightest to render), 6 = one point every 10 minutes (full detail, heaviest). Default 4 = a point every 15 minutes. Lower it on older or slower devices to cut rendering cost. The forecast curve follows the same cadence, so a finer setting also resolves short shadow dips (a tree clipping production for half an hour) that an hourly curve steps over.',
         valueDecimals:                'Decimals',
         valueDecimalsHelp:            'Number of decimals shown on every value readout. Power is always shown in kW and energy in kWh; this sets the precision for all of them so the chips read uniform. 0 to 3, default 1.',
         installationSection: 'PV installation',
@@ -48,7 +59,9 @@ export const en: Translations = {
         customEntityIcon:          'Custom entity icon',
         customEntityColor:         'Custom entity colour',
         customEntityColorHelp:     'Colour of the custom entity chip, its leader line and its clock ring.',
-        buildingsSection:   'Building',
+        buildingsSection:   'Home & buildings',
+        homeColor:          'Home colour',
+        homeColorHelp:      'Colour of the home: the home pill and every consumption readout.',
         buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
         displayRadius:         'Display radius',
         displayRadiusHelp:     'Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home.',

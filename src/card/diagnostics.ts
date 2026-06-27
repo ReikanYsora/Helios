@@ -1,29 +1,22 @@
-//Module-load diagnostics for the Helios card: install banner, the public window.heliosStats() dump, the
-//debug-only home-location override helpers, and the page-wide data-cache reset bus. All side-effects run
-//once at import; helios-card.ts imports this module for those effects and shares the live-card registry.
-//Kept out of the card module so the class file stays focused on the element itself.
+//Module-load diagnostics for the Helios card: install banner, the debug-only home-location override helpers,
+//and the page-wide data-cache reset bus. All side-effects run once at import; helios-card.ts imports this
+//module for those effects and shares the live-card registry. Kept out of the card module so the class file
+//stays focused on the element itself.
 
 //Minimal surface the diagnostics need from a live card, so this module never imports the card class.
 export interface HeliosDiagnosticsCard
 {
     resetDataCache():    void;
     invalidateLocation(): void;
-    getStatsSnapshot():  {
-        config: Record<string, unknown>;
-        engine: Record<string, unknown> | null;
-        pv:     Record<string, unknown>;
-    };
 }
 
-//Registry of every live card, maintained by the card's connected/disconnectedCallback so window.heliosStats()
-//can enumerate on-screen cards and the reset bus can sweep them all. Module-level so these helpers close over
-//it without the class being fully constructed.
+//Registry of every live card, maintained by the card's connected/disconnectedCallback so the location-override
+//helpers can re-init on-screen cards and the reset bus can sweep them all. Module-level so these helpers close
+//over it without the class being fully constructed.
 export const liveCards = new Set<HeliosDiagnosticsCard>();
 
 interface HeliosWin extends Window
 {
-    heliosStats?:              () => Record<string, unknown>;
-    __heliosStats?:            Record<string, unknown>;
     setHeliosLocation?:        (lat: number, lon: number) => void;
     clearHeliosLocation?:      () => void;
     __heliosLocationOverride?: { lat: number; lon: number };
@@ -45,57 +38,6 @@ interface HeliosWin extends Window
             labelStyle,
             versionStyle
         );
-        // eslint-disable-next-line no-console -- intentional install banner hint pointing at the diagnostic command
-        console.info(
-            `%c☀ HELIOS%c run window.heliosStats() in the console for a live config + engine dump`,
-            labelStyle,
-            'color:#6b7280;font-style:italic;'
-        );
-    }
-}
-
-//Public diagnostic command, exposed once on first bundle load. Returns a JSON-safe snapshot AND prints
-//a grouped console dump (build version, engine lifecycle counters, one section per card). Config values
-//are PII-free and safe to paste into an issue (no API keys; basemap is keyless CARTO raster tiles).
-{
-    const w = window as HeliosWin;
-    if (!w.heliosStats)
-    {
-        w.heliosStats = () =>
-        {
-            const cards = Array.from(liveCards).map((c, i) =>
-            ({
-                index:  i,
-                snapshot: c.getStatsSnapshot()
-            }));
-
-            const out: Record<string, unknown> =
-            {
-                version:   __HELIOS_VERSION__,
-                cards:     cards.length,
-                lifecycle: w.__heliosStats ?? null,
-                details:   cards
-            };
-
-            const label    = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;';
-            const heading  = 'color:#f59e0b;font-weight:bold;';
-            /* eslint-disable no-console -- intentional diagnostic dump exposed via window.heliosStats() */
-            console.groupCollapsed(`%c☀ HELIOS stats%c v${__HELIOS_VERSION__}, ${cards.length} card${cards.length === 1 ? '' : 's'} alive`,
-                label, 'color:#6b7280;font-weight:normal;');
-            console.log('%cLifecycle counters', heading, w.__heliosStats ?? '(none yet)');
-            cards.forEach((c, i) =>
-            {
-                const snap = c.snapshot;
-                console.groupCollapsed(`%cCard #${i + 1}`, heading);
-                console.log('config:', snap.config);
-                console.log('engine:', snap.engine);
-                console.log('pv:',     snap.pv);
-                console.groupEnd();
-            });
-            console.groupEnd();
-            /* eslint-enable no-console */
-            return out;
-        };
     }
 }
 

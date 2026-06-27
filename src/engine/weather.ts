@@ -121,28 +121,6 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 //CACHE_KEY_PREFIX lives in constants.ts.
 
 
-//Module-level diagnostics walked by window.heliosStats() so a power user can audit network/cache/dedup ratios over a
-//session. Pure counters, no behavioural effect.
-const _weatherStats =
-{
-    cacheHits:             0,
-    networkFetches:        0,
-    inflightDedups:        0,
-    rateLimit429:          0,
-    otherErrors:           0,
-};
-export function getWeatherFetchStats(): {
-    cacheHits:      number;
-    networkFetches: number;
-    inflightDedups: number;
-    rateLimit429:   number;
-    otherErrors:    number;
-}
-{
-    return { ..._weatherStats };
-}
-
-
 //Inflight Promise map keyed on cache key (`<precision>:<lat>,<lon>`). When several engines or call sites ask for the same
 //(lat, lon, precision) while a fetch is in flight, they await the SAME Promise instead of each firing its own round-trip.
 //Cleared in a finally block so an error path frees the slot for the next attempt.
@@ -361,7 +339,6 @@ export async function fetchHomePointData(
     const cached = readCache(fLat, fLon, precision);
     if (cached)
     {
-        _weatherStats.cacheHits++;
         return cached;
     }
 
@@ -371,7 +348,6 @@ export async function fetchHomePointData(
     const pending = _inflightFetches.get(inflightKey);
     if (pending)
     {
-        _weatherStats.inflightDedups++;
         return pending;
     }
 
@@ -395,7 +371,6 @@ export async function fetchHomePointData(
 
         try
         {
-            _weatherStats.networkFetches++;
             const res = await fetch(url, { signal });
             if (!res.ok)
             {
@@ -404,12 +379,10 @@ export async function fetchHomePointData(
                 //hammering Open-Meteo. Other non-OK statuses fall through to the silent null path (generic network error).
                 if (res.status === 429)
                 {
-                    _weatherStats.rateLimit429++;
                     const err: Error & { status?: number } = new Error('Open-Meteo rate limit (HTTP 429)');
                     err.status = 429;
                     throw err;
                 }
-                _weatherStats.otherErrors++;
                 return null;
             }
             const json = await res.json();
@@ -454,10 +427,6 @@ export async function fetchHomePointData(
             if (e && typeof e === 'object' && (e as { status?: number }).status === 429)
             {
                 throw e;
-            }
-            if (e && typeof e === 'object' && (e as { name?: string }).name !== 'AbortError')
-            {
-                _weatherStats.otherErrors++;
             }
             return null;
         }

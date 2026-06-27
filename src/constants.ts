@@ -31,7 +31,7 @@ export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = legacy single-poly
 //Buckets/hour for the unified store + every graph. 4 = 15 min; clamp [1,12] (12 = the recorder's 5-min floor).
 export const DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR = 4;
 export const MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 1;
-export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 12;
+export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 6;
 //Decimal places for every value readout (kW/kWh). Default 1, clamp [0,3].
 export const DEFAULT_VALUE_DECIMALS = 1;
 export const MIN_VALUE_DECIMALS     = 0;
@@ -161,7 +161,7 @@ export const PERSPECTIVE     = 1200;
 //card CSS), and the WGS84 Earth circumference used for the local-metre math.
 export const TILE_PX             = 256;
 export const GROUND_RADIUS       = 3;
-export const GROUND_ZOOM         = 18;
+export const GROUND_ZOOM         = 19;
 export const GROUND_FADE_START   = 90;
 export const EARTH_CIRCUMFERENCE_M = 40075016.686;
 

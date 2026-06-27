@@ -284,7 +284,12 @@ export class HeliosCardEditor extends LitElement
     private _onEntityValueChanged = (e: CustomEvent): void =>
     {
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
-        if (key) { this._update(key, e.detail.value ?? ''); }
+        if (!key) { return; }
+        //Skip the echo a selector emits on first paint (value-changed with the value we just set): without this
+        //the colour pickers clobber the saved value back to their default on editor reload.
+        const next = e.detail.value ?? '';
+        if (next === (this._cfg[key] ?? '')) { return; }
+        this._update(key, next);
     };
     private _onBoolToggleClick = (e: Event): void =>
     {
@@ -538,6 +543,19 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.homeColor}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ ui_color: { default_color: 'green' } }}
+                            .value=${String(c['home-color'] ?? 'green')}
+                            data-key="home-color"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.homeColorHelp}</div>
                 <div class="field field-block">
                     <span class="label">${t.editor.buildingColor}</span>
                     ${this._pickerReady ? html`

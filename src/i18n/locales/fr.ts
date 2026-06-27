@@ -21,6 +21,17 @@ export const fr: Translations = {
         year:  '1 an',
     },
 
+    clock:
+    {
+        compassN: 'N',
+        compassS: 'S',
+        compassE: 'E',
+        compassW: 'O',
+        cloudLow:  'Couverture basse',
+        cloudMid:  'Couverture moyenne',
+        cloudHigh: 'Couverture haute',
+    },
+
     editor:
     {
         locationSection:    'Localisation',
@@ -29,12 +40,12 @@ export const fr: Translations = {
         locationHint:       'Remplace l\'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n\'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides.',
         uiAndMapSection:    'UI',
         autoRotate:         'Rotation auto de la caméra',
-        autoRotateHint:     'Après quelques secondes d\'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches.',
+        autoRotateHint:     'Après quelques secondes d\'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches. À éviter sur les appareils très anciens : la rotation auto force un rendu chaque seconde.',
         autoRotateOn:       'Activée',
         autoRotateOff:      'Désactivée',
         dataDisplaySection:           'Affichage des données',
         displayUpdateFrequency:       'Détail du graphique',
-        displayUpdateFrequencyHelp:   'Combien de points par heure les graphiques tracent. La donnée elle-même est toujours en 5 minutes (statistiques Home Assistant) ; ce réglage ne change que la densité de tracé de la courbe : 1 = un point par heure (le plus lisse, le plus léger), 12 = un point toutes les 5 minutes (détail maximal, le plus lourd). Par défaut 4 = un point toutes les 15 minutes. Baissez-le sur un appareil ancien ou lent pour réduire le coût d\'affichage. La courbe de prévision suit la même cadence : un réglage plus fin fait donc ressortir les creux d\'ombre courts (un arbre qui coupe la production une demi-heure) qu\'une courbe horaire enjambe.',
+        displayUpdateFrequencyHelp:   'Combien de points par heure les graphiques tracent. La donnée elle-même est toujours en 5 minutes (statistiques Home Assistant) ; ce réglage ne change que la densité de tracé de la courbe : 1 = un point par heure (le plus lisse, le plus léger), 6 = un point toutes les 10 minutes (détail maximal, le plus lourd). Par défaut 4 = un point toutes les 15 minutes. Baissez-le sur un appareil ancien ou lent pour réduire le coût d\'affichage. La courbe de prévision suit la même cadence : un réglage plus fin fait donc ressortir les creux d\'ombre courts (un arbre qui coupe la production une demi-heure) qu\'une courbe horaire enjambe.',
         valueDecimals:                'Décimales',
         valueDecimalsHelp:            'Nombre de décimales affichées sur chaque valeur. La puissance est toujours en kW et l\'énergie en kWh ; ce réglage fixe la précision de toutes pour que les chips restent uniformes. De 0 à 3, par défaut 1.',
         installationSection: 'Installation photovoltaïque',
@@ -46,7 +57,9 @@ export const fr: Translations = {
         customEntityIcon:          'Icône de l\'entité personnalisée',
         customEntityColor:         'Couleur de l\'entité personnalisée',
         customEntityColorHelp:     'Couleur du chip de l\'entité personnalisée, de sa ligne de liaison et de son anneau d\'horloge.',
-        buildingsSection:   'Bâtiment',
+        buildingsSection:   'Maison & bâtiments',
+        homeColor:          'Couleur de la maison',
+        homeColorHelp:      'Couleur de la maison : la pastille maison et tous les affichages de consommation.',
         buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d\'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».',
         displayRadius:         'Rayon d\'affichage',
         displayRadiusHelp:     'Rayon autour de la maison dans lequel les bâtiments sont récupérés et affichés, jusqu\'au bord du disque de carte estompé. Baissez-le pour alléger le rendu sur un appareil lent ; à 0, seule la maison reste.',

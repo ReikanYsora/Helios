@@ -7,8 +7,10 @@ import
 {
     type HeliosConfig,
     valueDecimals,
+    displayUpdateFrequencyPerHour,
     customEntityId,
     customEntityColor,
+    homeColor,
     cacheId,
     hasLocalLidar
 } from './helios-config';
@@ -25,9 +27,9 @@ import {
     type ClockData, type ClockHit, type ClockRingInput, type ClockMode,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
     projectClockFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
-    CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
+    CLOCK_GROW_MS, clockSlotsPerHour, setClockResolution, easeOutCubic,
 } from './card/energy-clock';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
     refreshPv,
@@ -100,8 +102,8 @@ import
 import './card/editor';
 //Side-effect import: writes the Helios entry into window.customCards for the HA card picker.
 import './card/registry';
-//Side-effect import: install banner, window.heliosStats() dump, location-override debug helpers and the
-//page-wide data-cache reset bus. liveCards is the shared registry the card adds/removes itself from.
+//Side-effect import: install banner, location-override debug helpers and the page-wide data-cache reset
+//bus. liveCards is the shared registry the card adds/removes itself from.
 import { liveCards } from './card/diagnostics';
 
 
@@ -276,7 +278,7 @@ export class HeliosCard extends LitElement
     @state() _clockSubMode: ClockMode = 'area';
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     @state() private _clockData: ClockData[] = [];
-    //Hovered 15-min slot; lights every ring's area at that slot + drives the multi-metric tooltip. null = off.
+    //Hovered slot; resolves to its hour and lights every ring's area for that hour + drives the tooltip. null = off.
     @state() private _clockHoverSlot: number | null = null;
     //Screen-space hit segments (each slot's axis), refreshed every paint for the hover test.
     private _clockHits: ClockHit[] = [];
@@ -315,7 +317,6 @@ export class HeliosCard extends LitElement
     private _clockDimSeq  = 0;
     @query('ha-card') private _haCard?: HTMLElement;
     @query('.clock-svg') private _clockSvg?: SVGSVGElement;
-    @query('.clock-guide-svg') private _clockGuideSvg?: SVGSVGElement;
     @queryAll('.clock-hour-label') private _clockLabels!: NodeListOf<HTMLElement>;
     @queryAll('.clock-compass-label') private _clockCompassLabels!: NodeListOf<HTMLElement>;
     @state() _chartSeries: {
@@ -361,6 +362,8 @@ export class HeliosCard extends LitElement
     //per render. Result only changes on theme polarity flip / style reload, so cache by themesObj identity.
     private _cachedIsDarkThemesRef: unknown = undefined;
     private _cachedIsDark = false;
+    //Last resolved home-colour token, so the :host consumption var is only re-derived when it changes.
+    private _homeColorToken = '';
 
     //Refresh-chain gate: updated() re-runs the PV/Battery/Grid/Irradiance refreshers only when hass,
     //config or the timeline range change identity. Without it, every overlay @state mutation would re-run
@@ -636,39 +639,6 @@ export class HeliosCard extends LitElement
         return {};
     }
 
-    //Diagnostic snapshot for window.heliosStats(): live config, engine snapshot (when up) and a small PV
-    //block. JSON-safe, no DOM, no PII: the engine snapshot strips its hass.config lat/lon, and the loop
-    //below omits the home-latitude / home-longitude overrides so user coordinates never leak.
-    public getStatsSnapshot(): {
-        config: Record<string, unknown>;
-        engine: Record<string, unknown> | null;
-        pv:     Record<string, unknown>;
-    }
-    {
-        const cfg: Record<string, unknown> = {};
-        if (this.config)
-        {
-            for (const [k, v] of Object.entries(this.config))
-            {
-                //Skip user-supplied home coordinates so the snapshot stays PII-free.
-                if (k === 'home-latitude' || k === 'home-longitude')
-                {
-                    continue;
-                }
-                cfg[k] = v;
-            }
-        }
-        return {
-            config: cfg,
-            engine: this._engine ? this._engine.getStatsSnapshot() : null,
-            pv:
-            {
-                entityConfigured: resolvePvLiveEntity(this._energyDefaults) !== '',
-                unit:             this._pvUnit || null
-            }
-        };
-    }
-
     //Called by the setHeliosLocation / clearHeliosLocation debug helpers. Clears the cached home key so
     //the next updated() sees identityChanged and re-inits the engine against the new coordinates, then
     //schedules that pass. The visual editor reaches the same re-init via the natural identity-drift path
@@ -845,6 +815,15 @@ export class HeliosCard extends LitElement
     //trash the user's in-progress editor edits).
     protected updated(_changedProperties: PropertyValues): void
     {
+        //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it. Resolve
+        //the configured ui_color token to a hex once per token change (getComputedStyle forces a reflow).
+        const homeToken = homeColor(this.config);
+        if (homeToken !== this._homeColorToken)
+        {
+            this._homeColorToken = homeToken;
+            this.style.setProperty('--helios-consumption-color', cssHex(this, uiColorVar(homeToken, 'green'), '#4caf50'));
+        }
+
         //Restore the saved view mode + selected chip once coords resolve (idempotent; retries until ready).
         this._restoreUiState();
 
@@ -1601,7 +1580,6 @@ export class HeliosCard extends LitElement
 
                 ${hasHomeCoords && this._viewMode === 'clock' ? html`
                     <div class="clock-overlay">
-                        <svg class="clock-guide-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         <svg class="clock-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         ${Array.from({ length: 24 }, (_unused, h) => html`
                             <div class="clock-hour-label">${this._formatClockHour(h)}</div>
@@ -2420,8 +2398,9 @@ export class HeliosCard extends LitElement
             this._clockAnimate();
             return;
         }
-        //Leaving clock: restore the full scene + the chart-driven home colour.
+        //Leaving clock: restore the full scene + the chart-driven home colour, clear the ground guide overlay.
         this._engine?.setHomeOnly(false);
+        this._engine?.setGroundOverlay('');
         this._updateHomeAppearance(false);
         if (this._clockTargets.length > 0)
         {
@@ -2731,6 +2710,9 @@ export class HeliosCard extends LitElement
     //disturbs an in-flight animation and a toggle is never blocked.
     private _rebuildClockData(): void
     {
+        //Drive the dial's slot resolution from the graph-detail setting, once, before binning: every projection
+        //and tooltip then reads the same slot count for the current config (per-hour totals stay identical).
+        setClockResolution(displayUpdateFrequencyPerHour(this.config));
         this._clockData = this._clockTargets.map(t => buildClockData(this, t));
     }
 
@@ -2842,13 +2824,16 @@ export class HeliosCard extends LitElement
             const p = easeOutCubic((now - e.start) / CLOCK_GROW_MS);
             rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
         }
+        const tc = pickTranslations(this.hass?.language).clock;
         const frame = projectClockFrame(
             camera, rings, this._clockSubMode,
             this._clockDimSlot, this._clockDim,
+            { n: tc.compassN, s: tc.compassS, e: tc.compassE, w: tc.compassW },
         );
-        //Cylinders into .clock-svg (over the home prism); the flat guide into .clock-guide-svg (under it).
+        //Cylinders into .clock-svg (over the home prism); the flat guide into the engine's ground overlay,
+        //which sits between the basemap and the home prism so the home reads OVER the guide.
         svgEl.innerHTML = frame.svg;
-        if (this._clockGuideSvg) { this._clockGuideSvg.innerHTML = frame.guideSvg; }
+        this._engine?.setGroundOverlay(frame.guideSvg);
         this._clockHits = frame.hits;
 
         this._clockLabels?.forEach((node, h) =>
@@ -3008,15 +2993,10 @@ export class HeliosCard extends LitElement
             return nothing;
         }
         const mode = this._clockSubMode;
-        //Time-band header: histogram covers a whole hour (HH:00 – HH+1:00), area a 15-min slot (HH:MM – HH:MM).
-        const totalSlots = 24 * CLOCK_SLOTS_PER_HOUR;
-        const stepMin    = 60 / CLOCK_SLOTS_PER_HOUR;
-        const fmtSlot = (sl: number): string =>
-            `${String(Math.floor(sl / CLOCK_SLOTS_PER_HOUR) % 24).padStart(2, '0')}:${String((sl % CLOCK_SLOTS_PER_HOUR) * stepMin).padStart(2, '0')}`;
-        const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
-        const head = mode === 'histogram'
-            ? `${String(hour).padStart(2, '0')}:00 – ${String((hour + 1) % 24).padStart(2, '0')}:00`
-            : `${fmtSlot(slot)} – ${fmtSlot((slot + 1) % totalSlots)}`;
+        //Both sub-modes read the HOUR the focused slot falls in: the header is the hour band (HH:00 – HH+1:00)
+        //and the rows/total below aggregate that hour, so area + histogram tooltips are identical for the hour.
+        const hour = Math.floor(slot / clockSlotsPerHour());
+        const head = `${String(hour).padStart(2, '0')}:00 – ${String((hour + 1) % 24).padStart(2, '0')}:00`;
         return html`
             <div class="clock-tip">
                 <div class="clock-tip-head">${head}</div>
