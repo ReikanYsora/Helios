@@ -21,16 +21,6 @@ export interface CustomEntityLive
 const POWER_UNITS  = new Set(['w', 'kw', 'mw']);
 const ENERGY_UNITS = new Set(['wh', 'kwh', 'mwh']);
 
-//True when an entity carries a power or energy reading — the set the picker offers and the chip accepts.
-export function isPowerOrEnergyEntity(stateObj: any): boolean
-{
-    if (!stateObj || !stateObj.attributes) { return false; }
-    const dc = String(stateObj.attributes.device_class ?? '');
-    if (dc === 'power' || dc === 'energy') { return true; }
-    const lu = String(stateObj.attributes.unit_of_measurement ?? '').trim().toLowerCase();
-    return POWER_UNITS.has(lu) || ENERGY_UNITS.has(lu);
-}
-
 export function resolveCustomEntityLive(hass: any, entityId: string): CustomEntityLive | null
 {
     if (!entityId) { return null; }

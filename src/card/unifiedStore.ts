@@ -98,7 +98,7 @@ export interface UnifiedStoreHost
     readonly _gridExportChangeSeries: ChangeBucket[] | null;
     //HA Energy solar forecast (energy-forecast.ts), merged across config entries and time-sorted. Empty when no
     //forecast source is configured (forecast series left all-null, no curve renders).
-    readonly _haSolarForecast:        ReadonlyArray<SolarForecastPoint>;
+    readonly _haSolarForecast:        readonly SolarForecastPoint[];
 }
 
 
@@ -417,7 +417,7 @@ export function isStoreFresh(host: UnifiedStoreHost, store: UnifiedDataStore | n
 
 
 //Linearly interpolate a series value at an exact timestamp. Null when outside the window OR both surrounding buckets null.
-export function valueAt(series: ReadonlyArray<number | null>, store: UnifiedDataStore, ms: number): number | null
+export function valueAt(series: readonly (number | null)[], store: UnifiedDataStore, ms: number): number | null
 {
     if (ms < store.storeStartMs || ms >= store.storeEndMs) { return null; }
     const stepFloat = (ms - store.storeStartMs) / store.stepMs - 0.5;

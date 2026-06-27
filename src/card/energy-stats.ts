@@ -108,7 +108,7 @@ export async function fetchChangeSeries(
                 period,
                 types:         ['change'],
                 units:         { energy: 'kWh' },
-            }) as Record<string, Array<{ start?: unknown; end?: unknown; change?: number | null }>>;
+            }) as Record<string, { start?: unknown; end?: unknown; change?: number | null }[]>;
 
             //Merge per-source buckets into one series keyed on bucket start. Same-period sources share bucket starts
             //so the merge is a clean per-bucket sum; misaligned sources still accumulate into the nearest start key.

@@ -9,7 +9,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
-import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import { callWSWithTimeout } from './ws-timeout';
 import { RADIATION_CACHE_TTL_MS } from '../constants';
 
 
@@ -21,7 +21,7 @@ interface IrradianceHistoryCacheEntry
     ts:      number;
 }
 
-const _irradianceHistoryCache: Map<string, IrradianceHistoryCacheEntry> = new Map();
+const _irradianceHistoryCache = new Map<string, IrradianceHistoryCacheEntry>();
 
 function irradianceHistoryCacheGet(key: string): IrradianceHistoryCacheEntry | null
 {
@@ -257,7 +257,7 @@ export async function fetchIrradianceHistory(
     entityId: string,
     start:    Date,
     end:      Date,
-    cacheKey: string = '',
+    cacheKey = '',
 ): Promise<void>
 {
     if (!host.hass?.callWS)
@@ -316,16 +316,9 @@ export async function fetchIrradianceHistory(
             _irradianceHistoryCache.set(cacheKey, { history, ts: Date.now() });
         }
     }
-    catch (e)
+    catch (_e)
     {
-        if (e instanceof WsTimeoutError)
-        {
-            console.warn(`[HELIOS] irradiance fetch timed out (${e.timeoutMs} ms), engine falls back to Open-Meteo for the past window.`);
-        }
-        else
-        {
-            console.warn('[HELIOS] Irradiance history fetch failed:', e);
-        }
+        //Fetch timed out or failed: clear the history so the engine falls back to Open-Meteo for the past window.
         host._irradianceHistory = { times: [], values: [] };
         pushIrradianceToEngine(host);
     }

@@ -34,7 +34,7 @@ export class WsTimeoutError extends Error
 //system-wide throttle.
 
 let _activeFetches = 0;
-const _fetchQueue: Array<() => void> = [];
+const _fetchQueue: (() => void)[] = [];
 
 function acquireFetchSlot(): Promise<void>
 {

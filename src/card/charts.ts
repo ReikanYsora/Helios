@@ -1,14 +1,15 @@
 //Timeline chart rendering: the two SVG cards under the map, the scrub cursors, and per-day kWh aggregation for the
 //day chips. Pure templates over a structural `ChartHost`; charts only read, state mutations live elsewhere.
 
-import { html, svg, nothing, TemplateResult } from 'lit';
-import { type HeliosConfig } from '../helios-config';
+import type { TemplateResult } from 'lit';
+import { html, svg, nothing } from 'lit';
+import type { HeliosConfig } from '../helios-config';
 import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward, cssHex } from './format';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { pvNormalizeToWatts, type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
-import { sliceForRange, valueAt } from './unifiedStore';
+import { sliceForRange, valueAt, type UnifiedDataStore } from './unifiedStore';
 import { sumChangeForDay, type ChangeBucket } from './energy-stats';
 import { resolveCustomEntityIcon } from './custom-entity';
 
@@ -76,9 +77,9 @@ function findSunCrossing(
 //Memo for computeNightIntervals: the night zones depend only on the window + home coords, which are stable
 //across the frequent scrub + auto-rotate renders (those move _selectedTime / the camera, not _timeRange).
 //Without this the ~700 getSunPosition calls below ran on every one of those renders.
-let _nightMemo: { key: string; out: Array<{ startPct: number; endPct: number }> } | null = null;
+let _nightMemo: { key: string; out: { startPct: number; endPct: number }[] } | null = null;
 
-function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPct: number }>
+function computeNightIntervals(host: ChartHost): { startPct: number; endPct: number }[]
 {
     const range = host._timeRange;
     if (!range)
@@ -103,7 +104,7 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
         return _nightMemo.out;
     }
 
-    type Crossing = { ms: number; kind: 'sunrise' | 'sunset' };
+    interface Crossing { ms: number; kind: 'sunrise' | 'sunset' }
     const crossings: Crossing[] = [];
 
     const cursor = new Date(range.start);
@@ -128,7 +129,7 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
     }
     crossings.sort((a, b) => a.ms - b.ms);
 
-    const intervals: Array<{ startMs: number; endMs: number }> = [];
+    const intervals: { startMs: number; endMs: number }[] = [];
     let pendingSunset: number | null = null;
     let sawAnySunrise = false;
     for (const c of crossings)
@@ -158,7 +159,7 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
         intervals.push({ startMs: pendingSunset, endMs: Infinity });
     }
 
-    const out: Array<{ startPct: number; endPct: number }> = [];
+    const out: { startPct: number; endPct: number }[] = [];
     for (const iv of intervals)
     {
         const s = Math.max(iv.startMs, startMs);
@@ -178,12 +179,12 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
 
 //Night-zone overlays: one absolutely-positioned low-alpha-wash div per night interval, inside the chart card so it
 //inherits the card's positioning + clipping. z-index sits above the SVG curves but below the cursors (z-index 4).
-export function renderTimelineNightZones(host: ChartHost): TemplateResult
+export function renderTimelineNightZones(host: ChartHost): TemplateResult | typeof nothing
 {
     const intervals = computeNightIntervals(host);
     if (intervals.length === 0)
     {
-        return html``;
+        return nothing;
     }
     return html`
         ${intervals.map(iv => html`
@@ -199,24 +200,24 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult
 //Semi-opaque overlay over the future portion of a chart card (z-index 3: above curves + night-zones, below the
 //z-index-4 cursors). Anchored to "now" so the forecast side reads behind a wash. Returns nothing when "now" is
 //outside the range, so the mask never shrinks to a sliver or fills the whole card.
-export function renderTimelineFutureMask(host: ChartHost): TemplateResult
+export function renderTimelineFutureMask(host: ChartHost): TemplateResult | typeof nothing
 {
     const range = host._timeRange;
     if (!range)
     {
-        return html``;
+        return nothing;
     }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
     const rangeMs = endMs - startMs;
     if (rangeMs <= 0)
     {
-        return html``;
+        return nothing;
     }
     const nowMs = Date.now();
     if (nowMs <= startMs || nowMs >= endMs)
     {
-        return html``;
+        return nothing;
     }
     const nowPct = (nowMs - startMs) / rangeMs * 100;
     return html`
@@ -435,7 +436,7 @@ export function pvValueAtTime(
 //Hover tooltip above the chart-card stack: the hover timestamp + one icon-coded row per series, plus the day's kWh
 //production (past) or forecast (future). A magnet-snap tab surfaces when the scrub enters the band around the live
 //cursor (snap logic in applyTimelinePointer, timeline.ts). The PV row is skipped silently when unavailable.
-export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
+export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | typeof nothing
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
@@ -443,14 +444,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     //recorder fine, irradiance + cloud cells just fall back to NaN handled below.
     if (!range)
     {
-        return html``;
+        return nothing;
     }
 
     const startMs = range.start.getTime();
     const rangeMs = range.end.getTime() - startMs;
     if (rangeMs <= 0)
     {
-        return html``;
+        return nothing;
     }
 
     //Tooltip shows only while the pointer is actively over the chart (or dragging the scrub). On gesture end
@@ -458,7 +459,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const hoverPct = host._chartHoverPct;
     if (hoverPct === null || hoverPct < 0 || hoverPct > 100)
     {
-        return html``;
+        return nothing;
     }
     const pct  = hoverPct;
     const atMs = startMs + (pct / 100) * rangeMs;
@@ -496,7 +497,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     //which would duplicate the headline row).
     const perEntityMap     = host._pvHistoryPerEntity;
     const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()).sort() : [];
-    const perEntityRows: Array<{ id: string; label: string; valueText: string; colorIdx: number }> = [];
+    const perEntityRows: { id: string; label: string; valueText: string; colorIdx: number }[] = [];
     for (let i = 0; i < perEntityIds.length; i++)
     {
         const id    = perEntityIds[i];
@@ -595,9 +596,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                     <span class="tb-hover-tooltip-time-label">${timeLabel}</span>
                     <span
                         class="tb-hover-tooltip-live-chip ${inMagnetZone ? 'is-visible' : ''}"
-                        title="${liveText}"
-                        aria-label="${liveText}"
-                        aria-hidden="${inMagnetZone ? 'false' : 'true'}"
+                        title=${liveText}
+                        aria-label=${liveText}
+                        aria-hidden=${inMagnetZone ? 'false' : 'true'}
                     >
                         <ha-icon class="tb-hover-tooltip-live-chip-dot" icon="mdi:circle-medium"></ha-icon>
                         <span class="tb-hover-tooltip-live-chip-label">${liveLabel}</span>
@@ -678,7 +679,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                 ` : nothing}
                 ${target === 'custom' && isFinite(customV) ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, '--red-color', '#f44336')}" icon="${resolveCustomEntityIcon(host.hass, host.config)}"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, '--red-color', '#f44336')}" icon=${resolveCustomEntityIcon(host.hass, host.config)}></ha-icon>
                         <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, Math.abs(customV) / 1000, 1)} kW</span>
                     </div>
                 ` : nothing}
@@ -765,7 +766,7 @@ export interface ChartHost
     _chartHoverPct:         number | null;
     //Unified 5-day data source, single point of truth for the production + forecast curves. Null only between mount
     //and first build -> chart degrades to an empty curve.
-    readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
+    readonly _unifiedStore: UnifiedDataStore | null;
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
     readonly _batterySocHistory: { times: Date[]; values: number[] } | null;
@@ -800,7 +801,7 @@ export function interpAt(times: Date[], values: number[], targetMs: number): num
     let hi = n - 1;
     while (hi - lo > 1)
     {
-        const mid = (lo + hi) >> 1;
+        const mid = Math.trunc((lo + hi) / 2);
         if (times[mid].getTime() <= targetMs)
         {
             lo = mid;
@@ -928,7 +929,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     //Production samples: store watts × nativeFromW so the Y axis stays in the entity's native unit (store is the
     //single conversion point).
-    const samples: Array<{ t: Date; v: number }> = [];
+    const samples: { t: Date; v: number }[] = [];
     if (rangeSlice)
     {
         for (let i = 0; i < rangeSlice.times.length; i++)
@@ -941,7 +942,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     //Forecast curve: same store, same conversion. The forecast series is already cap-clipped, calibration-applied
     //and shading-aware at every DISPLAY bucket, no local model loop here.
-    const predictedSamples: Array<{ t: Date; v: number }> = [];
+    const predictedSamples: { t: Date; v: number }[] = [];
     if (rangeSlice)
     {
         for (let i = 0; i < rangeSlice.times.length; i++)
@@ -981,7 +982,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     const perEntityIdsForCurves = host._pvHistoryPerEntity.size > 1
         ? Array.from(host._pvHistoryPerEntity.keys()).sort()
         : [];
-    const stackedAreas: Array<{ color: string; path: string }> = [];
+    const stackedAreas: { color: string; path: string }[] = [];
     if (perEntityIdsForCurves.length > 1 && samples.length >= 2)
     {
         const elc   = host as unknown as Element;
@@ -1040,9 +1041,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //Hover dot at the interpolated PV value. Observed wins; with no observed value (future, gap, outage) it falls
     //back to the predicted series. Same Y axis as the curve it rides, so it reads as a point on the curve.
     const hoverPct = host._chartHoverPct;
-    let hoverX:     number = 0;
-    let hoverY:     number = NaN;
-    let hoverYPred: number = NaN;
+    let hoverX = 0;
+    let hoverY = NaN;
+    let hoverYPred = NaN;
     let showHover = false;
     if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
     {
@@ -1069,7 +1070,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     //Per-source hover dots: one dot riding the top of each stacked band at the hover instant, in the band's
     //colour, so the curves carry the same dot vocabulary as the cloud chart.
-    const sourceHoverDots: Array<{ y: number; color: string }> = [];
+    const sourceHoverDots: { y: number; color: string }[] = [];
     if (showHover && hoverPct !== null && stackedAreas.length > 0)
     {
         const hoverMs    = startMs + (hoverPct / 100) * rangeMs;
@@ -1197,7 +1198,7 @@ export function chartAccentColor(host: ChartHost): string
     }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
-    const sumArr = (arr: ReadonlyArray<number | null>, map?: (v: number) => number): number =>
+    const sumArr = (arr: readonly (number | null)[], map?: (v: number) => number): number =>
     {
         let s = 0;
         for (let i = 0; i < arr.length; i++)
@@ -1247,9 +1248,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
 
     //Map a store series to visible-range points, dropping nulls and clipping to the window. Bucket centre matches
     //sliceForRange so curves line up with the production chart's day separators.
-    const toPts = (arr: ReadonlyArray<number | null>, map?: (v: number) => number): Array<{ t: number; v: number }> =>
+    const toPts = (arr: readonly (number | null)[], map?: (v: number) => number): { t: number; v: number }[] =>
     {
-        const out: Array<{ t: number; v: number }> = [];
+        const out: { t: number; v: number }[] = [];
         for (let i = 0; i < arr.length; i++)
         {
             const raw = arr[i];
@@ -1260,16 +1261,16 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
         return out;
     };
-    const sum = (pts: Array<{ v: number }>): number => pts.reduce((a, p) => a + p.v, 0);
+    const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
 
-    type Line = { pts: Array<{ t: number; v: number }>; color: string };
+    interface Line { pts: { t: number; v: number }[]; color: string }
     let series: Line[];
     let fixedMax = 0;
     if (target === 'consumption')
     {
         //Home consumption (load) derived per bucket: production + grid import − grid export − net battery
         //(charge-positive), clamped at 0. Same formula as the live home-usage pill, so chart + chip agree.
-        const cons: Array<{ t: number; v: number }> = [];
+        const cons: { t: number; v: number }[] = [];
         for (let i = 0; i < store.production.length; i++)
         {
             const p  = store.production[i];
@@ -1310,7 +1311,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         //Battery SoC over the window, read from the fetched SoC history (the store only has a live sample). One curve
         //on a fixed 0..100 % scale.
         const hist = host._batterySocHistory;
-        const pts: Array<{ t: number; v: number }> = [];
+        const pts: { t: number; v: number }[] = [];
         if (hist)
         {
             for (let i = 0; i < hist.times.length; i++)
@@ -1330,7 +1331,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         //Custom entity over the window, from the fetched hourly history (values in W). One red curve,
         //magnitude only so a signed sensor reads as a single area; the axis auto-scales.
         const hist = host._customEntityHistory;
-        const pts: Array<{ t: number; v: number }> = [];
+        const pts: { t: number; v: number }[] = [];
         if (hist)
         {
             for (let i = 0; i < hist.times.length; i++)
@@ -1350,9 +1351,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         //index-align and stack cleanly (each band continues above the one below); the Y axis auto-scales to the
         //stacked total. Light -> dark cloud-grey shades.
         const cs = host._chartSeries;
-        const lowPts:  Array<{ t: number; v: number }> = [];
-        const midPts:  Array<{ t: number; v: number }> = [];
-        const highPts: Array<{ t: number; v: number }> = [];
+        const lowPts:  { t: number; v: number }[] = [];
+        const midPts:  { t: number; v: number }[] = [];
+        const highPts: { t: number; v: number }[] = [];
         if (cs)
         {
             for (let i = 0; i < cs.times.length; i++)
@@ -1415,7 +1416,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     const TOP_HEADROOM_PX = 10;
     const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
 
-    let drawn: Array<{ area: string; line: string; color: string; total: number }>;
+    let drawn: { area: string; line: string; color: string; total: number }[];
     if (isStacked)
     {
         const N = series[0].pts.length;
@@ -1465,7 +1466,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     const hoverPct = host._chartHoverPct;
     let hoverX     = 0;
     let showHover  = false;
-    const hoverDots: Array<{ y: number; color: string }> = [];
+    const hoverDots: { y: number; color: string }[] = [];
     if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
     {
         hoverX = (hoverPct / 100) * W;
@@ -1517,11 +1518,11 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
 
 //The thin track carries only the cursors; day separators live inside the chart card SVG and the scrub time label is
 //a chip above the card.
-export function renderTimelineTicks(host: ChartHost): TemplateResult
+export function renderTimelineTicks(host: ChartHost): TemplateResult | typeof nothing
 {
     if (!host._timeRange)
     {
-        return html``;
+        return nothing;
     }
 
     const { start, end } = host._timeRange;
@@ -1546,11 +1547,11 @@ export function renderTimelineTicks(host: ChartHost): TemplateResult
 //Adaptive timeline labels over the chart-card footer. The shared timeline model picks granularity from the visible
 //span (hours / weekdays / day+month / months) and thins the count so a wide window stays legible. Each label sits
 //at its model fraction; the day view emphasises today, matching the now-cursor. Separators draw boundary lines.
-export function renderTimelineDayLabels(host: ChartHost): TemplateResult
+export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeof nothing
 {
     if (!host._timeRange)
     {
-        return html``;
+        return nothing;
     }
 
     const { start, end } = host._timeRange;

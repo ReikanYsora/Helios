@@ -1,4 +1,5 @@
-import { LitElement, html, TemplateResult, nothing } from 'lit';
+import type { TemplateResult} from 'lit';
+import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { editorStyles } from '../css/helios-card-editor-css';
 import
@@ -47,12 +48,12 @@ function renderMarkdownLinks(text: string): unknown[]
         const url   = match[2];
         if (/^https?:\/\//i.test(url))
         {
-            parts.push(html`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+            parts.push(html`<a href=${url} target="_blank" rel="noopener noreferrer">${label}</a>`);
         }
         else if (/^\/[a-zA-Z0-9_\-/.]*$/.test(url))
         {
             // Same-origin in-app navigation (e.g. /config/energy). No target=_blank so the user stays inside the HA SPA.
-            parts.push(html`<a href="${url}">${label}</a>`);
+            parts.push(html`<a href=${url}>${label}</a>`);
         }
         else
         {
@@ -83,7 +84,11 @@ export class HeliosCardEditor extends LitElement
     // cascade a full engine re-render each pixel (painful during preview). _cfg updates synchronously so the bound .value tracks the
     // drag, but `config-changed` only dispatches after a short idle window.
     private static readonly SLIDER_COMMIT_DELAY_MS = 250;
-    private _sliderDebounce: Map<string, number> = new Map();
+    //Give the lazily-imported ha-entity-picker this long to register before rendering the form unenhanced.
+    private static readonly PICKER_LOAD_TIMEOUT_MS = 8000;
+    //How long the "cache reset" confirmation stays on screen before clearing.
+    private static readonly RESET_FEEDBACK_MS = 2000;
+    private _sliderDebounce = new Map<string, number>();
 
     public disconnectedCallback(): void
     {
@@ -165,13 +170,13 @@ export class HeliosCardEditor extends LitElement
             {
                 await Promise.race([
                     customElements.whenDefined('ha-entity-picker'),
-                    new Promise<void>(resolve => setTimeout(resolve, 8000))
+                    new Promise<void>(resolve => { setTimeout(resolve, HeliosCardEditor.PICKER_LOAD_TIMEOUT_MS); })
                 ]);
             }
         }
-        catch (e)
+        catch (_e)
         {
-            console.warn('[HELIOS] Failed to lazy-load ha-entity-picker:', e);
+            //Lazy import failed to register the picker: it simply renders unenhanced.
         }
         finally
         {
@@ -258,6 +263,36 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
+    // Bound template delegates: each reads its parameter off the firing element's data-* attribute so the
+    // markup can pass bare method references (no in-template arrows). data-key maps to a HeliosConfig key,
+    // data-section to an accordion id, data-value to the boolean a toggle button commits.
+    private _onSectionToggleEvt = (e: Event): void =>
+    {
+        const section = (e.currentTarget as HTMLElement).dataset.section;
+        if (section) { this._onSectionToggle(section, e); }
+    };
+    private _onNumFieldChange = (e: Event): void =>
+    {
+        const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
+        if (key) { this._numField(key, e); }
+    };
+    private _onNumSliderInput = (e: Event): void =>
+    {
+        const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
+        if (key) { this._numSlider(key, e); }
+    };
+    private _onEntityValueChanged = (e: CustomEvent): void =>
+    {
+        const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
+        if (key) { this._update(key, e.detail.value ?? ''); }
+    };
+    private _onBoolToggleClick = (e: Event): void =>
+    {
+        const el  = e.currentTarget as HTMLElement;
+        const key = el.dataset.key as keyof HeliosConfig | undefined;
+        if (key) { this._update(key, el.dataset.value === 'true'); }
+    };
+
     private _fmtNum(v: number, step: number): string
     {
         return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
@@ -312,7 +347,7 @@ export class HeliosCardEditor extends LitElement
         return html`
             <div class="editor">
 
-                <details class="advanced-section" ?open="${this._openSection === 'location'}" @toggle="${(e: Event) => this._onSectionToggle('location', e)}">
+                <details class="advanced-section" data-section="location" ?open=${this._openSection === 'location'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map-marker"></ha-icon>${t.editor.locationSection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.homeLatitude}</span>
@@ -321,9 +356,10 @@ export class HeliosCardEditor extends LitElement
                         min="-90"
                         max="90"
                         step="any"
-                        placeholder="${latPlaceholder}"
-                        .value="${c['home-latitude'] != null ? String(c['home-latitude']) : ''}"
-                        @change="${(e: Event) => this._numField('home-latitude', e)}"
+                        placeholder=${latPlaceholder}
+                        .value=${c['home-latitude'] != null ? String(c['home-latitude']) : ''}
+                        data-key="home-latitude"
+                        @change=${this._onNumFieldChange}
                     />
                 </label>
                 <label class="field">
@@ -333,16 +369,17 @@ export class HeliosCardEditor extends LitElement
                         min="-180"
                         max="180"
                         step="any"
-                        placeholder="${lonPlaceholder}"
-                        .value="${c['home-longitude'] != null ? String(c['home-longitude']) : ''}"
-                        @change="${(e: Event) => this._numField('home-longitude', e)}"
+                        placeholder=${lonPlaceholder}
+                        .value=${c['home-longitude'] != null ? String(c['home-longitude']) : ''}
+                        data-key="home-longitude"
+                        @change=${this._onNumFieldChange}
                     />
                 </label>
                 <div class="hint">${t.editor.locationHint}</div>
 
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'map'}" @toggle="${(e: Event) => this._onSectionToggle('map', e)}">
+                <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.editor.uiAndMapSection}</summary>
                 <div class="field">
                     <span class="label">${t.editor.autoRotate}</span>
@@ -350,12 +387,14 @@ export class HeliosCardEditor extends LitElement
                         <button
                             type="button"
                             class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
-                            @click="${() => this._update('auto-rotate-enabled', true)}"
+                            data-key="auto-rotate-enabled" data-value="true"
+                            @click=${this._onBoolToggleClick}
                         >${t.editor.autoRotateOn}</button>
                         <button
                             type="button"
                             class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
-                            @click="${() => this._update('auto-rotate-enabled', false)}"
+                            data-key="auto-rotate-enabled" data-value="false"
+                            @click=${this._onBoolToggleClick}
                         >${t.editor.autoRotateOff}</button>
                     </div>
                 </div>
@@ -366,11 +405,12 @@ export class HeliosCardEditor extends LitElement
                     ${this._pickerReady ? html`
                         <ha-entity-picker
                             allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c['custom-entity'] ?? '')}"
-                            .includeDomains="${['sensor', 'input_number', 'number']}"
-                            .entityFilter="${this._customEntityFilter}"
-                            @value-changed="${(e: CustomEvent) => this._update('custom-entity', e.detail.value ?? '')}"
+                            .hass=${this.hass}
+                            .value=${String(c['custom-entity'] ?? '')}
+                            .includeDomains=${['sensor', 'input_number', 'number']}
+                            .entityFilter=${this._customEntityFilter}
+                            data-key="custom-entity"
+                            @value-changed=${this._onEntityValueChanged}
                         ></ha-entity-picker>
                     ` : nothing}
                 </div>
@@ -380,9 +420,10 @@ export class HeliosCardEditor extends LitElement
                         <span class="label">${t.editor.customEntityIcon}</span>
                         ${this._pickerReady ? html`
                             <ha-icon-picker
-                                .hass="${this.hass}"
-                                .value="${String(c['custom-entity-icon'] ?? '')}"
-                                @value-changed="${(e: CustomEvent) => this._update('custom-entity-icon', e.detail.value ?? '')}"
+                                .hass=${this.hass}
+                                .value=${String(c['custom-entity-icon'] ?? '')}
+                                data-key="custom-entity-icon"
+                                @value-changed=${this._onEntityValueChanged}
                             ></ha-icon-picker>
                         ` : nothing}
                     </div>
@@ -390,18 +431,19 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'buildings'}" @toggle="${(e: Event) => this._onSectionToggle('buildings', e)}">
+                <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.displayRadius ?? 'Display radius'}</span>
                     <div class="slider-row">
                         <input
                             type="range"
-                            min="${MIN_DISPLAY_RADIUS_M}"
-                            max="${MAX_DISPLAY_RADIUS_M}"
+                            min=${MIN_DISPLAY_RADIUS_M}
+                            max=${MAX_DISPLAY_RADIUS_M}
                             step="10"
-                            .value="${String(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M)}"
-                            @input="${(e: Event) => this._numSlider('display-radius', e)}"
+                            .value=${String(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M)}
+                            data-key="display-radius"
+                            @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M), 10)} m</span>
                     </div>
@@ -412,11 +454,12 @@ export class HeliosCardEditor extends LitElement
                     <div class="slider-row">
                         <input
                             type="range"
-                            min="${MIN_BUILDING_COUNT}"
-                            max="${MAX_BUILDING_COUNT}"
+                            min=${MIN_BUILDING_COUNT}
+                            max=${MAX_BUILDING_COUNT}
                             step="5"
-                            .value="${String(c['building-count'] ?? DEFAULT_BUILDING_COUNT)}"
-                            @input="${(e: Event) => this._numSlider('building-count', e)}"
+                            .value=${String(c['building-count'] ?? DEFAULT_BUILDING_COUNT)}
+                            data-key="building-count"
+                            @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['building-count'] ?? DEFAULT_BUILDING_COUNT), 5)}</span>
                     </div>
@@ -428,12 +471,14 @@ export class HeliosCardEditor extends LitElement
                         <button
                             type="button"
                             class="seg-option ${(c['building-real-size'] !== false) ? 'active' : ''}"
-                            @click="${() => this._update('building-real-size', true)}"
+                            data-key="building-real-size" data-value="true"
+                            @click=${this._onBoolToggleClick}
                         >${t.editor.buildingRealSizeOn ?? 'On'}</button>
                         <button
                             type="button"
                             class="seg-option ${(c['building-real-size'] === false) ? 'active' : ''}"
-                            @click="${() => this._update('building-real-size', false)}"
+                            data-key="building-real-size" data-value="false"
+                            @click=${this._onBoolToggleClick}
                         >${t.editor.buildingRealSizeOff ?? 'Off'}</button>
                     </div>
                 </div>
@@ -444,11 +489,12 @@ export class HeliosCardEditor extends LitElement
                         <div class="slider-row">
                             <input
                                 type="range"
-                                min="${MIN_BUILDING_HEIGHT_M}"
-                                max="${MAX_BUILDING_HEIGHT_M}"
+                                min=${MIN_BUILDING_HEIGHT_M}
+                                max=${MAX_BUILDING_HEIGHT_M}
                                 step="0.5"
-                                .value="${String(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M)}"
-                                @input="${(e: Event) => this._numSlider('building-height', e)}"
+                                .value=${String(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M)}
+                                data-key="building-height"
+                                @input=${this._onNumSliderInput}
                             />
                             <span class="slider-value">${this._fmtNum(Number(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M), 0.5)} m</span>
                         </div>
@@ -459,8 +505,9 @@ export class HeliosCardEditor extends LitElement
                     <div class="slider-row">
                         <input
                             type="range" min="0" max="100" step="1"
-                            .value="${String(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}"
-                            @input="${(e: Event) => this._numSlider('building-cluster-radius', e)}"
+                            .value=${String(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}
+                            data-key="building-cluster-radius"
+                            @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
                     </div>
@@ -470,8 +517,9 @@ export class HeliosCardEditor extends LitElement
                     <div class="slider-row">
                         <input
                             type="range" min="0" max="1" step="0.05"
-                            .value="${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}"
-                            @input="${(e: Event) => this._numSlider('building-opacity', e)}"
+                            .value=${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}
+                            data-key="building-opacity"
+                            @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
                     </div>
@@ -480,7 +528,7 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'shadows'}" @toggle="${(e: Event) => this._onSectionToggle('shadows', e)}">
+                <details class="advanced-section" data-section="shadows" ?open=${this._openSection === 'shadows'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gradient-vertical"></ha-icon>${t.editor.shadowsSection}</summary>
                 <div class="field">
                     <span class="label">${t.editor.shadowsEnabled}</span>
@@ -488,12 +536,14 @@ export class HeliosCardEditor extends LitElement
                         <button
                             type="button"
                             class="seg-option ${(c['shadows-enabled'] !== false) ? 'active' : ''}"
-                            @click="${() => this._update('shadows-enabled', true)}"
+                            data-key="shadows-enabled" data-value="true"
+                            @click=${this._onBoolToggleClick}
                         >${t.editor.shadowsEnabledOn}</button>
                         <button
                             type="button"
                             class="seg-option ${(c['shadows-enabled'] === false) ? 'active' : ''}"
-                            @click="${() => this._update('shadows-enabled', false)}"
+                            data-key="shadows-enabled" data-value="false"
+                            @click=${this._onBoolToggleClick}
                         >${t.editor.shadowsEnabledOff}</button>
                     </div>
                 </div>
@@ -504,8 +554,9 @@ export class HeliosCardEditor extends LitElement
                     <div class="slider-row">
                         <input
                             type="range" min="0" max="1" step="0.05"
-                            .value="${String(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY)}"
-                            @input="${(e: Event) => this._numSlider('shadow-opacity', e)}"
+                            .value=${String(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY)}
+                            data-key="shadow-opacity"
+                            @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY), 0.05)}</span>
                     </div>
@@ -514,18 +565,19 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'dataDisplay'}" @toggle="${(e: Event) => this._onSectionToggle('dataDisplay', e)}">
+                <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:chart-timeline-variant"></ha-icon>${t.editor.dataDisplaySection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.displayUpdateFrequency}</span>
                     <div class="slider-row">
                         <input
                             type="range"
-                            min="${MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}"
-                            max="${MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}"
+                            min=${MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}
+                            max=${MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}
                             step="1"
-                            .value="${String(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR)}"
-                            @input="${(e: Event) => this._numSlider('display-update-frequency-per-hour', e)}"
+                            .value=${String(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR)}
+                            data-key="display-update-frequency-per-hour"
+                            @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR), 1)} / h</span>
                     </div>
@@ -536,11 +588,12 @@ export class HeliosCardEditor extends LitElement
                     <div class="slider-row">
                         <input
                             type="range"
-                            min="${MIN_VALUE_DECIMALS}"
-                            max="${MAX_VALUE_DECIMALS}"
+                            min=${MIN_VALUE_DECIMALS}
+                            max=${MAX_VALUE_DECIMALS}
                             step="1"
-                            .value="${String(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS)}"
-                            @input="${(e: Event) => this._numSlider('value-decimals', e)}"
+                            .value=${String(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS)}
+                            data-key="value-decimals"
+                            @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS), 1)}</span>
                     </div>
@@ -548,7 +601,7 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'installation'}" @toggle="${(e: Event) => this._onSectionToggle('installation', e)}">
+                <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:solar-power-variant"></ha-icon>${t.editor.installationSection}</summary>
                 <div class="hint">${renderMarkdownLinks(t.editor.installationHint)}</div>
                 <div class="field field-block">
@@ -556,11 +609,12 @@ export class HeliosCardEditor extends LitElement
                     ${this._pickerReady ? html`
                         <ha-entity-picker
                             allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c['solar-irradiance-entity'] ?? '')}"
-                            .includeDomains="${['sensor', 'input_number']}"
-                            .entityFilter="${this._solarIrradianceEntityFilter}"
-                            @value-changed="${(e: CustomEvent) => this._update('solar-irradiance-entity', e.detail.value ?? '')}"
+                            .hass=${this.hass}
+                            .value=${String(c['solar-irradiance-entity'] ?? '')}
+                            .includeDomains=${['sensor', 'input_number']}
+                            .entityFilter=${this._solarIrradianceEntityFilter}
+                            data-key="solar-irradiance-entity"
+                            @value-changed=${this._onEntityValueChanged}
                         ></ha-entity-picker>
                     ` : nothing}
                 </div>
@@ -569,18 +623,18 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
 
-                <details class="advanced-section" ?open="${this._openSection === 'reset'}" @toggle="${(e: Event) => this._onSectionToggle('reset', e)}">
+                <details class="advanced-section" data-section="reset" ?open=${this._openSection === 'reset'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:refresh"></ha-icon>${t.editor.resetSection}</summary>
                     <div class="hint">${t.editor.resetSectionHint}</div>
                     <div class="hint reset-warning">${t.editor.resetCacheWarning}</div>
                     <button
                         type="button"
                         class="reset-btn"
-                        @click="${() => this._onResetCacheClick()}"
+                        @click=${this._onResetCacheClick}
                     >${this._resetFeedback ?? t.editor.resetCacheButton}</button>
                 </details>
 
-                <details class="advanced-section about-section" ?open="${this._openSection === 'about'}" @toggle="${(e: Event) => this._onSectionToggle('about', e)}">
+                <details class="advanced-section about-section" data-section="about" ?open=${this._openSection === 'about'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:information-outline"></ha-icon>${t.editor.aboutSection}</summary>
                     <!-- Identity + links column. Every row uses the same label-left, content-right
                          layout the version row established: a single .about-row line per piece of
@@ -646,7 +700,7 @@ export class HeliosCardEditor extends LitElement
         {
             window.dispatchEvent(new CustomEvent('helios-data-cache-reset'));
         }
-        catch (_) {}
+        catch (_) { /* CustomEvent unsupported: skip the cross-card cache-reset broadcast */ }
         const t = pickTranslations(this.hass?.language);
         this._resetFeedback = t.editor.resetCacheDone;
         if (this._resetFeedbackTimer !== undefined)
@@ -656,7 +710,7 @@ export class HeliosCardEditor extends LitElement
         this._resetFeedbackTimer = window.setTimeout(() =>
         {
             this._resetFeedback = null;
-        }, 2000);
+        }, HeliosCardEditor.RESET_FEEDBACK_MS);
     }
 
     static styles = editorStyles;

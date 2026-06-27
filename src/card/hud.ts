@@ -144,7 +144,7 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     }
     for (let i = 0; i < a.arc.length; i++)
     {
-        const sa = a.arc[i], sb = b.arc[i];
+        const sa = a.arc[i]; const sb = b.arc[i];
         if (sa.belowHorizon !== sb.belowHorizon)
         {
             return false;
@@ -215,9 +215,9 @@ export function setAnimationsPaused(host: HudHost, paused: boolean): void
     }
     //NodeList is directly iterable; skip Array.from.
     const svgs = root.querySelectorAll('svg');
-    for (let i = 0; i < svgs.length; i++)
+    for (const svg of svgs)
     {
-        const s = svgs[i] as SVGSVGElement & {
+        const s = svg as SVGSVGElement & {
             pauseAnimations?:   () => void;
             unpauseAnimations?: () => void;
         };
@@ -232,30 +232,30 @@ export function setAnimationsPaused(host: HudHost, paused: boolean): void
                 s.unpauseAnimations?.();
             }
         }
-        catch (_) {}
+        catch (_) { /* SMIL control unsupported on this element */ }
     }
 }
 
 
 //Map an arc-sample sequence into stroke segments. Caller paints each as a <line> with stroke width scaled by nearness.
 export function buildArcSegments(
-    arc:      ReadonlyArray<SunArcSample>,
+    arc:      readonly SunArcSample[],
     sunColor: string
 ): ArcSegment[]
 {
     const out: ArcSegment[] = [];
     for (let i = 0; i < arc.length - 1; i++)
     {
-        const a = arc[i];
-        const b = arc[i + 1];
+        const point = arc[i];
+        const next  = arc[i + 1];
         out.push({
-            x1: a.x, y1: a.y,
-            x2: b.x, y2: b.y,
+            x1: point.x, y1: point.y,
+            x2: next.x,  y2: next.y,
             //Time-of-day arc colour (grey under the horizon, warm near it, amber high). `sunColor` is the
             //live --warning-color amber the high arc takes.
-            color:        arcColor(0.5 * (a.altitude + b.altitude), sunColor),
-            nearness:     0.5 * (a.nearness + b.nearness),
-            belowHorizon: a.belowHorizon || b.belowHorizon
+            color:        arcColor(0.5 * (point.altitude + next.altitude), sunColor),
+            nearness:     0.5 * (point.nearness + next.nearness),
+            belowHorizon: point.belowHorizon || next.belowHorizon
         });
     }
     return out;
@@ -268,7 +268,7 @@ export function buildArcSegments(
 export function flowDuration(
     rate:        number,
     saturation:  number,
-    minDuration: number = 0.4
+    minDuration = 0.4
 ): number
 {
     if (!isFinite(rate) || rate <= 0)

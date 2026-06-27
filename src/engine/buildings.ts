@@ -19,10 +19,10 @@
 //screen-space back-face culled); shadows are each footprint's cast envelope flattened by one group-opacity.
 //Pure functions over a SceneCamera + local-metric footprints.
 
-import { SceneCamera, PERSPECTIVE, NEAR_PLANE } from './projection';
+import type { SceneCamera} from './projection';
+import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { mixHex, hexByte, tintedRgba, pointsAttr, type Point } from './colors';
-import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M } from '../constants';
-import {
+import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
     FIXED_BUILDING_HEIGHT_M,
     MAX_BUILDING_COUNT,
     MAX_DISPLAY_RADIUS_M,
@@ -32,8 +32,7 @@ import {
     OVERPASS_RETRY_DELAY_MS,
     OVERPASS_ENDPOINTS,
     REAL_HEIGHT_CAP_M,
-    REAL_HEIGHT_FALLBACK_M,
-} from '../constants';
+    REAL_HEIGHT_FALLBACK_M } from '../constants';
 //Re-exported so importers of SHADOW_FADE_DEG from './buildings' keep resolving.
 export { SHADOW_FADE_DEG } from '../constants';
 
@@ -496,7 +495,7 @@ export function renderBuildings(
     altitude:        number,
     palette:         ScenePalette,
     growth:          number,
-    neighborOpacity: number = 0.25,
+    neighborOpacity = 0.25,
     home:            HomeAppearance = {}
 ): string
 {

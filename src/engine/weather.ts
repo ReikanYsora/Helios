@@ -3,6 +3,17 @@
 
 //Hourly forecast at the home location. Numeric arrays are aligned on `times`. `shortwave` uses -1 as a "no data"
 //sentinel since 0 is a legitimate night value.
+//Forecast window, back-off tables, cache TTL/precision live in constants.ts. Aliased on import so the in-file usages
+//below stay unchanged; the two back-off tables are also re-exported because helios-engine.ts imports them here.
+import {
+    WEATHER_PAST_DAYS          as PAST_DAYS,
+    WEATHER_FORECAST_DAYS      as FORECAST_DAYS,
+    WEATHER_CACHE_TTL_MS       as CACHE_TTL_MS,
+    WEATHER_CACHE_KEY_DECIMALS as CACHE_KEY_DECIMALS,
+    CACHE_KEY_PREFIX,
+} from '../constants';
+
+
 export interface SampleHourly
 {
     lat:         number;
@@ -22,24 +33,13 @@ export interface SampleHourly
     temperature: number[];   //2 m air temp, °C, NaN-padded.
     windSpeed:   number[];   //10 m wind speed, m/s, NaN-padded.
 }
-
-
-//Forecast window, back-off tables, cache TTL/precision live in constants.ts. Aliased on import so the in-file usages
-//below stay unchanged; the two back-off tables are also re-exported because helios-engine.ts imports them here.
-import {
-    WEATHER_PAST_DAYS          as PAST_DAYS,
-    WEATHER_FORECAST_DAYS      as FORECAST_DAYS,
-    WEATHER_CACHE_TTL_MS       as CACHE_TTL_MS,
-    WEATHER_CACHE_KEY_DECIMALS as CACHE_KEY_DECIMALS,
-    CACHE_KEY_PREFIX,
-} from '../constants';
 export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../constants';
 
 
 //Median ignoring null/undefined/NaN. Combines concurrent multi-model forecasts into one robust value per timestep.
 //Median over mean because individual models occasionally emit gross outliers (e.g. cloud_cover_low pegged at 100% from
 //the Sundqvist parametrisation hitting an underground pressure level).
-export function medianOfNumbers(values: ReadonlyArray<number | null | undefined>): number | null
+export function medianOfNumbers(values: readonly (number | null | undefined)[]): number | null
 {
     const clean: number[] = [];
     for (const v of values)
@@ -55,7 +55,7 @@ export function medianOfNumbers(values: ReadonlyArray<number | null | undefined>
         return null;
     }
     clean.sort((a, b) => a - b);
-    const mid = clean.length >> 1;
+    const mid = Math.trunc(clean.length / 2);
     return clean.length % 2 === 0
         ? (clean[mid - 1] + clean[mid]) / 2
         : clean[mid];
@@ -153,7 +153,7 @@ export function getWeatherFetchStats(): {
 //Inflight Promise map keyed on cache key (`<precision>:<lat>,<lon>`). When several engines or call sites ask for the same
 //(lat, lon, precision) while a fetch is in flight, they await the SAME Promise instead of each firing its own round-trip.
 //Cleared in a finally block so an error path frees the slot for the next attempt.
-const _inflightFetches: Map<string, Promise<SampleHourly | null>> = new Map();
+const _inflightFetches = new Map<string, Promise<SampleHourly | null>>();
 
 interface CachedPayload
 {
@@ -205,7 +205,7 @@ export function clearWeatherCache(): number
         }
         for (const k of stale) { ls.removeItem(k); cleared++; }
     }
-    catch (_) {}
+    catch (_) { /* localStorage unavailable or quota error: leave the cache as-is */ }
     return cleared;
 }
 
@@ -307,14 +307,14 @@ const HOURLY_VARS = [
 
 //Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_meteofrance_seamless);
 //"best_match" mode uses bare keys. Try the bare key first then the suffixed ones so one code path handles both.
-function readSeries(row: any, varName: string, models: string[]): Array<number | null>
+function readSeries(row: any, varName: string, models: string[]): (number | null)[]
 {
     const direct = row?.hourly?.[varName];
     if (Array.isArray(direct))
     {
         return direct.map((v: any) => (v == null || Number.isNaN(v)) ? null : Number(v));
     }
-    const series: Array<Array<number | null>> = [];
+    const series: (number | null)[][] = [];
     for (const m of models)
     {
         const arr = row?.hourly?.[`${varName}_${m}`];
@@ -329,7 +329,7 @@ function readSeries(row: any, varName: string, models: string[]): Array<number |
         return [];
     }
     const len = Math.max(...series.map(s => s.length));
-    const out: Array<number | null> = new Array(len);
+    const out = new Array<number | null>(len);
     for (let i = 0; i < len; i++)
     {
         out[i] = medianOfNumbers(series.map(s => s[i]));
@@ -359,9 +359,9 @@ function readWeatherCode(row: any, models: string[]): number[]
 
 //Gap fills: cloud → 0 (missing = clear); shortwave → -1 (0 is a valid night value); temp/wind → NaN so a downstream
 //isFinite check rejects the sample without conflating "missing" with a real zero.
-const fillCloud     = (arr: Array<number | null>): number[] => arr.map(v => v == null ? 0   : v);
-const fillShortwave = (arr: Array<number | null>): number[] => arr.map(v => v == null ? -1  : v);
-const fillNaN       = (arr: Array<number | null>): number[] => arr.map(v => v == null ? NaN : v);
+const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
+const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
+const fillNaN       = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
 
 
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model

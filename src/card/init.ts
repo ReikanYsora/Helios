@@ -184,17 +184,17 @@ export interface InitHost extends HudHost
     _initInflight:       boolean;
     _visibilityObserver?: IntersectionObserver;
     //Document visibilitychange listener, stored on the host so disconnectedCallback can removeEventListener cleanly (per-card instance).
-    _onVisibilityChange?: () => void;
+    _onVisibilityChange?: (() => void) | undefined;
 
     //Current HA theme polarity, used to seed a new engine so its basemap builds at the right style first time.
     themeIsDark(): boolean;
     requestUpdate(): void;
     //Per-card storage discriminator (cache id + any duplicate suffix), fed to the engine for its pose key.
-    _effectiveCacheId?(): string;
+    effectiveCacheId?: (() => string) | undefined;
 
     //Energy-clock mode: when active, each transform frame also re-projects the hour cylinders.
     _viewMode?: 'scene' | 'clock' | 'lidar';
-    _paintClock?(): void;
+    paintClock?: (() => void) | undefined;
 }
 
 
@@ -296,7 +296,7 @@ export function initEngineNow(host: InitHost): void
         //installs - the engine and aux fetch then omit &elevation= and let Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
 
-        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host._effectiveCacheId?.() ?? '');
+        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host.effectiveCacheId?.() ?? '');
         wireEngineCallbacks(host);
         //Seed the engine with the active (possibly restored) window before getTimelineRange(), so a card that
         //loads straight into week/month/year frames the right span from the first paint.
@@ -361,7 +361,7 @@ function wireEngineCallbacks(host: InitHost): void
             refreshHud(host);
             //Clock mode rides the same camera: re-project its cylinders on every transform so they stay
             //glued to the rotating basemap.
-            if (host._viewMode === 'clock') { host._paintClock?.(); }
+            if (host._viewMode === 'clock') { host.paintClock?.(); }
         });
     };
 }

@@ -6,6 +6,11 @@
 //Contractual shape every locale must implement. Declared explicitly (not derived via `typeof en`)
 //so the English locale can import the type without a circular dependency. New keys must be added
 //here and in every locale (TS error otherwise).
+//Locale registry. Only English + French ship for now; the full language set is regenerated before
+//release. pickTranslations walks the hass.language tag through this map, falling back to English.
+import { en } from './locales/en';
+import { fr } from './locales/fr';
+
 export interface Translations
 {
     cardName:        string;
@@ -105,11 +110,6 @@ export interface Translations
         aboutDeveloperLinkedIn:   string;
     };
 }
-
-//Locale registry. Only English + French ship for now; the full language set is regenerated before
-//release. pickTranslations walks the hass.language tag through this map, falling back to English.
-import { en } from './locales/en';
-import { fr } from './locales/fr';
 
 const LOCALES: Record<string, Translations> =
 {

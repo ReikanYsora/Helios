@@ -11,6 +11,9 @@ import type { ChartSeries } from './charts';
 import { TIMELINE_MODES, type TimelineMode } from './timeline-modes';
 
 
+//Bound pointer-handler references the host keeps so it can add/remove the same listener instance.
+type PointerHandler = (e: PointerEvent) => void;
+
 //Structural surface the host card exposes here. Extends HudHost so the clock tick can fire refreshHud(host) on the same value.
 export interface TimelineHost extends HudHost
 {
@@ -31,8 +34,8 @@ export interface TimelineHost extends HudHost
 
     _trackElement:      HTMLElement | null;
     _trackPointerId:    number | null;
-    _boundPointerMove:  (e: PointerEvent) => void;
-    _boundPointerUp:    (e: PointerEvent) => void;
+    boundPointerMove:  PointerHandler;
+    boundPointerUp:    PointerHandler;
 }
 
 
@@ -91,9 +94,9 @@ export function onTimelinePointerDown(host: TimelineHost, e: PointerEvent): void
     track.setPointerCapture(e.pointerId);
     host._trackElement   = track;
     host._trackPointerId = e.pointerId;
-    track.addEventListener('pointermove',   host._boundPointerMove);
-    track.addEventListener('pointerup',     host._boundPointerUp);
-    track.addEventListener('pointercancel', host._boundPointerUp);
+    track.addEventListener('pointermove',   host.boundPointerMove);
+    track.addEventListener('pointerup',     host.boundPointerUp);
+    track.addEventListener('pointercancel', host.boundPointerUp);
     applyTimelinePointer(host, e);
 }
 
@@ -121,10 +124,10 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
         {
             track.releasePointerCapture(e.pointerId);
         }
-        catch (_) {}
-        track.removeEventListener('pointermove',   host._boundPointerMove);
-        track.removeEventListener('pointerup',     host._boundPointerUp);
-        track.removeEventListener('pointercancel', host._boundPointerUp);
+        catch (_) { /* pointer capture may already be released */ }
+        track.removeEventListener('pointermove',   host.boundPointerMove);
+        track.removeEventListener('pointerup',     host.boundPointerUp);
+        track.removeEventListener('pointercancel', host.boundPointerUp);
     }
     host._trackElement   = null;
     host._trackPointerId = null;

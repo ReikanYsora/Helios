@@ -20,11 +20,10 @@ export const DEG = Math.PI / 180;
 
 //=== Display radius + buildings ===
 //Single on-screen radius (m) for buildings and shadows. 200 m default; the `display-radius`
-//slider lowers it for perf or raises it for a wider survey. Buildings fade out over DISPLAY_FADE_DELTA_M.
+//slider lowers it for perf or raises it for a wider survey.
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
 export const MIN_DISPLAY_RADIUS_M     = 0;
 export const MAX_DISPLAY_RADIUS_M     = 500;
-export const DISPLAY_FADE_DELTA_M     = 50;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;  //ghost surround; home stays 1.0
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = legacy single-polygon home detection
 
@@ -106,7 +105,6 @@ export const FIXED_BUILDING_HEIGHT_M = 6;
 export const DEFAULT_BUILDING_COUNT  = 50;
 export const MIN_BUILDING_COUNT      = 10;
 export const MAX_BUILDING_COUNT      = 100;
-export const DEFAULT_BUILDING_REAL_SIZE = true;
 export const MIN_BUILDING_HEIGHT_M   = 3;
 export const MAX_BUILDING_HEIGHT_M   = 10;
 //OSM-height cap (m) so a nearby tower can't dominate the 2.5D framing; untagged buildings fall back.
@@ -132,11 +130,11 @@ export const CACHE_KEY_PREFIX = 'helios-weather-cache:';
 //=== Colour-space conversion (CIE D65 / LAB) ===
 //D65 white-point tristimulus values and the LAB piecewise-transfer thresholds, used by the RGB↔LAB
 //conversion that drives the per-energy-source colour ramp.
-/* eslint-disable @typescript-eslint/naming-convention */
+ 
 export const Xn = 0.95047;
 export const Yn = 1;
 export const Zn = 1.08883;
-/* eslint-enable @typescript-eslint/naming-convention */
+ 
 export const LAB_T0 = 0.137931034;
 export const LAB_T1 = 0.206896552;
 export const LAB_T2 = 0.12841855;
@@ -160,13 +158,12 @@ export const PERSPECTIVE     = 1200;
 
 //=== Basemap tiles ===
 //Tile pixel size, ground-canvas radius/zoom, the edge-fade start (% of the closest side, consumed by the
-//card CSS), and the WGS84 Earth circumference + metres-per-degree-latitude used for the local-metre math.
+//card CSS), and the WGS84 Earth circumference used for the local-metre math.
 export const TILE_PX             = 256;
 export const GROUND_RADIUS       = 3;
 export const GROUND_ZOOM         = 18;
 export const GROUND_FADE_START   = 90;
 export const EARTH_CIRCUMFERENCE_M = 40075016.686;
-export const METRES_PER_DEG_LAT  = 111_320;
 
 //=== Renderer ===
 //SVG namespace for the scene's screen-space overlay.

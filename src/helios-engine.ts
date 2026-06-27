@@ -1,5 +1,5 @@
 import { SceneRenderer } from './engine/renderer';
-import { type Building, type RawBuilding } from './engine/buildings';
+import type { Building, RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
@@ -70,7 +70,11 @@ interface SharedBuildingsCacheEntry
     ts:   number;
 }
 
-const _sharedBuildingsCache: Map<string, SharedBuildingsCacheEntry> = new Map();
+const _sharedBuildingsCache = new Map<string, SharedBuildingsCacheEntry>();
+
+//Live-mode weather poll cadence (ms). 10 min: Open-Meteo updates forecasts every 15 min, so this stays
+//near-fresh without lagging a model cycle, well within free-tier quotas.
+const WEATHER_REFRESH_INTERVAL_MS = 600_000;
 
 
 function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
@@ -516,8 +520,8 @@ export class HeliosEngine
     //Auto-rotation: when idle a few seconds the map slowly orbits the home counter to the sun's motion
     //(~1.5°/s). Any interaction resets the inactivity timer, pausing then resuming from the new bearing.
     _autoRotateRaf?:           number;
-    _autoRotateLastFrame:      number = 0;
-    _autoRotateLastUserAction: number = 0;
+    _autoRotateLastFrame = 0;
+    _autoRotateLastUserAction = 0;
     //Bearing integrated in our own float; round-tripping through getCameraBearing() would quantise the
     //sub-degree increment into jitter.
     private _autoRotateBearing?: number;
@@ -596,7 +600,7 @@ export class HeliosEngine
     //recomputed in memory on every option change with no re-fetch.
     private _buildingsData:   Building[] | null    = null;
     private _buildingsRaw:    RawBuilding[] | null = null;
-    private _buildingsLocKey: string               = '';
+    private _buildingsLocKey               = '';
     //One-shot prism-rise guard (plays once the first time footprints land).
     private _grown = false;
     //Editor-preview mode: HA rebuilds the preview card on every keystroke, so intro animations are skipped.
@@ -617,14 +621,14 @@ export class HeliosEngine
         //Sun-arc scale baked into the points below (×100, rounded). In the key so a resize/zoom rebuilds
         //the arc at the new size.
         scaleKey: number;
-        samples: Array<{
+        samples: ({
             lon: number;
             lat: number;
             altitudeM: number;
             altitudeDeg: number;
             wm2: number;
             belowHorizon: boolean;
-        } | null>;
+        } | null)[];
     };
     //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
     //change, not per arc sample per frame. Bearing/pitch invariant, so auto-rotation never refreshes it.
@@ -706,7 +710,7 @@ export class HeliosEngine
 
         //Sibling global for the editor UI: camera setters live on the engine.
         try { (window as unknown as { __heliosEngine?: HeliosEngine }).__heliosEngine = this; }
-        catch (_) {}
+        catch (_) { /* window not writable: skip the optional editor global */ }
 
         //Bootstrap the basemap + initial scene asynchronously, then mark ready and feed sun/buildings.
         this._bootstrapRenderer();
@@ -755,7 +759,7 @@ export class HeliosEngine
             lastPointerY = e.clientY;
             this._autoRotateLastUserAction = Date.now();
             try { container.setPointerCapture(e.pointerId); }
-            catch (_) {}
+            catch (_) { /* pointer capture unsupported on this element */ }
         };
         const onMove = (e: PointerEvent) =>
         {
@@ -784,7 +788,7 @@ export class HeliosEngine
             dragRotating = false;
             activeId     = null;
             try { container.releasePointerCapture(e.pointerId); }
-            catch (_) {}
+            catch (_) { /* pointer capture may already be released */ }
             //Persist the pose the user just dragged to, so a return restores the same view.
             this.persistCameraPose();
         };
@@ -810,9 +814,9 @@ export class HeliosEngine
         {
             await renderer.setLocation(this.homeLat, this.homeLon);
         }
-        catch (err)
+        catch (_err)
         {
-            console.warn('[HELIOS] Scene basemap failed to load:', err);
+            //Basemap load failed (tiles or network): the scene still renders without the tiled ground.
         }
         //The engine may have been torn down while the basemap resolved.
         if (this._renderer !== renderer)
@@ -1182,7 +1186,7 @@ export class HeliosEngine
         this._buildingsAbort = ac;
         bumpStat('buildingFetchStarts');
 
-        try { this.onBuildingsFetchStart?.(); } catch (_) {}
+        try { this.onBuildingsFetchStart?.(); } catch (_) { /* host progress callback threw; fetch continues */ }
 
         fetchRawBuildings(this.homeLat, this.homeLon, ac.signal)
         .then(result =>
@@ -1200,17 +1204,13 @@ export class HeliosEngine
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         })
-        .catch(err =>
+        .catch(() =>
         {
-            if ((err as { name?: string })?.name === 'AbortError')
-            {
-                return;
-            }
-            console.warn('[HELIOS] Buildings fetch failed:', err);
+            //Buildings fetch failed or was aborted on teardown: the scene renders without 3D buildings.
         })
         .finally(() =>
         {
-            try { this.onBuildingsFetchEnd?.(); } catch (_) {}
+            try { this.onBuildingsFetchEnd?.(); } catch (_) { /* host progress callback threw; nothing left to do */ }
         });
     }
 
@@ -1319,11 +1319,9 @@ export class HeliosEngine
 
             if (this._selectedTime === null)
             {
-                //Refresh every 10 min: Open-Meteo updates forecasts every 15 min, so this stays near-fresh
-                //without lagging a model cycle, well within free-tier quotas.
                 this._weatherTimer = window.setInterval(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
-                    600_000
+                    WEATHER_REFRESH_INTERVAL_MS
                 );
             }
         }
@@ -1614,8 +1612,8 @@ export class HeliosEngine
                 continue;
             }
             //Direct number-to-string concat with one decimal of precision (cheaper than toFixed per call).
-            const dx = ((p.x - home.x) * 100 | 0) / 100;
-            const dy = ((p.y - home.y) * 100 | 0) / 100;
+            const dx = Math.trunc((p.x - home.x) * 100) / 100;
+            const dy = Math.trunc((p.y - home.y) * 100) / 100;
             anchorPts[i] = dx + ',' + dy;
         }
 
@@ -1689,7 +1687,7 @@ export class HeliosEngine
     private _steppedArcScale(minDim: number): number
     {
         if (!Number.isFinite(minDim) || minDim <= 0) { return 1.0; }
-        const SMALL = 360, FLOOR = 600, TOP = 1200, MIN = 0.72, MAX = 2.2;
+        const SMALL = 360; const FLOOR = 600; const TOP = 1200; const MIN = 0.72; const MAX = 2.2;
         if (minDim <= SMALL) { return MIN; }
         if (minDim <  FLOOR) { return MIN + (1.0 - MIN) * (minDim - SMALL) / (FLOOR - SMALL); }
         if (minDim >= TOP)   { return MAX; }
@@ -1783,10 +1781,10 @@ export class HeliosEngine
     //simplification that stays reactive without a per-hour forecast) and a `nearness` in [0..1] (1 =
     //nearest depth) the card uses to scale segment thickness + sun-disc radius for a perspective ribbon.
     public projectSunScene(now: Date): {
-        arc:      Array<{
+        arc:      {
             x: number; y: number;
             irradiance: number; altitude: number; nearness: number; belowHorizon: boolean;
-        }>;
+        }[];
         sun:      { x: number; y: number; irradiance: number; altitude: number; nearness: number };
         home:     { x: number; y: number };
         daylight: number;
@@ -1838,14 +1836,14 @@ export class HeliosEngine
          || cache.scaleKey    !== arcScaleKey
         )
         {
-            const samples: Array<{
+            const samples: ({
                 lon: number;
                 lat: number;
                 altitudeM: number;
                 altitudeDeg: number;
                 wm2: number;
                 belowHorizon: boolean;
-            } | null> = [];
+            } | null)[] = [];
             for (let i = 0; i < SUN_ARC_SAMPLES; i++)
             {
                 const t = new Date(dayStartMs + i * stepMs);
@@ -1877,10 +1875,10 @@ export class HeliosEngine
         }
 
         //Per-frame: re-project the cached samples, recording depth to normalise into nearness below.
-        type RawArcPoint = {
+        interface RawArcPoint {
             x: number; y: number; irradiance: number; depth: number;
             altitude: number; belowHorizon: boolean;
-        };
+        }
         const raw: RawArcPoint[] = [];
         for (let i = 0; i < SUN_ARC_SAMPLES; i++)
         {
@@ -2349,7 +2347,7 @@ export class HeliosEngine
 
         //Renderer teardown: cancels its rAF, removes its ground holder + scene SVG from the container.
         try { this._renderer?.cleanup(); }
-        catch (_) {}
+        catch (_) { /* renderer may already be torn down */ }
         this._renderer      = undefined;
         this._mapReady      = false;
 
@@ -2362,6 +2360,6 @@ export class HeliosEngine
                 delete w.__heliosEngine;
             }
         }
-        catch (_) {}
+        catch (_) { /* window not writable: editor global cleanup not needed */ }
     }
 }

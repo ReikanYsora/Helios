@@ -5,7 +5,7 @@
 
 import { formatPowerKw } from './format';
 import { pvNormalizeToWatts } from './pv';
-import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import { callWSWithTimeout } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { BATTERY_CACHE_TTL_MS } from '../constants';
@@ -21,7 +21,7 @@ interface BatteryHistoryCacheEntry
     ts:    number;
 }
 
-const _batteryHistoryCache: Map<string, BatteryHistoryCacheEntry> = new Map();
+const _batteryHistoryCache = new Map<string, BatteryHistoryCacheEntry>();
 
 function batteryHistoryCacheGet(key: string): BatteryHistoryCacheEntry | null
 {
@@ -172,7 +172,7 @@ export function refreshBattery(host: BatteryHost): void
     //two SEPARATE directional energy meters: latest charge bucket (stat_energy_to) minus latest discharge (stat_energy_from), so the
     //sign is structural and charging is never lost (the "stuck at 0 W" fix).
     let nextPower: number | null = null;
-    let nextUnit:  string        = '';
+    let nextUnit        = '';
     const rateEntities = host._energyDefaults.batteryStatRates;
     if (rateEntities.length > 0)
     {
@@ -474,16 +474,16 @@ function aggregateBatteryLkcf(
         let count = 0;
         for (let i = 0; i < perEntity.length; i++)
         {
-            const h = perEntity[i];
-            let c   = cursors[i];
-            while (c + 1 < h.times.length && h.times[c + 1].getTime() <= ts)
+            const series = perEntity[i];
+            let cursor   = cursors[i];
+            while (cursor + 1 < series.times.length && series.times[cursor + 1].getTime() <= ts)
             {
-                c++;
+                cursor++;
             }
-            cursors[i] = c;
-            if (c >= 0 && isFinite(h.values[c]))
+            cursors[i] = cursor;
+            if (cursor >= 0 && isFinite(series.values[cursor]))
             {
-                sum += transform(h.values[c], i);
+                sum += transform(series.values[cursor], i);
                 count++;
             }
         }
@@ -503,7 +503,7 @@ export async function fetchBatteryHistory(
     ltsStart:      Date,
     rawStart:      Date,
     end:           Date,
-    cacheKey:      string = '',
+    cacheKey = '',
 ): Promise<void>
 {
     if (!host.hass?.callWS)
@@ -599,16 +599,9 @@ export async function fetchBatteryHistory(
             _batteryHistoryCache.set(cacheKey, { soc: socSeries, power: powerSeries, ts: Date.now() });
         }
     }
-    catch (e)
+    catch (_e)
     {
-        if (e instanceof WsTimeoutError)
-        {
-            console.warn(`[HELIOS] battery history fetch timed out (${e.timeoutMs} ms), rendering without past-day curve.`);
-        }
-        else
-        {
-            console.warn('[HELIOS] battery history fetch failed:', e);
-        }
+        //Fetch timed out or failed (LTS unavailable, entity untracked): degrade to empty histories.
         host._batterySocHistory   = { times: [], values: [] };
         host._batteryPowerHistory = { times: [], values: [] };
     }

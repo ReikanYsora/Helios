@@ -6,11 +6,11 @@
 import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
 import { pvNormalizeToWatts, formatEntityValue } from './format';
-//Re-export so battery/grid/charts/helios-card keep importing pvNormalizeToWatts from './pv'.
-export { pvNormalizeToWatts } from './format';
-import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import { callWSWithTimeout } from './ws-timeout';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
+//Re-export so battery/grid/charts/helios-card keep importing pvNormalizeToWatts from './pv'.
+export { pvNormalizeToWatts } from './format';
 
 
 //Resolve the live PV entity from the HA Energy solar source. Prefers `stat_rate` (signed W/kW) over cumulative `stat_energy_from`
@@ -54,7 +54,7 @@ export interface PvHost
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
-    readonly _energyDefaults: import('./energy-prefs').EnergyDefaults;
+    readonly _energyDefaults: EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
     readonly _periodPastDays: number;
     //Recorder period for the change-series, per the active timeline mode (5-min / hour / day).
@@ -100,7 +100,7 @@ interface PvStatsCacheEntry
     ts:        number;
 }
 
-const _pvCalibStatsCache:     Map<string, PvStatsCacheEntry>   = new Map();
+const _pvCalibStatsCache   = new Map<string, PvStatsCacheEntry>();
 
 
 function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): PvStatsCacheEntry | null
@@ -165,8 +165,8 @@ export function refreshPv(host: PvHost): void
     if (stateObj)
     {
         let nextValue:    number | null = null;
-        let nextUnit:     string        = '';
-        let liveTs:       number        = 0;
+        let nextUnit        = '';
+        let liveTs        = 0;
         if (isMultiEntity)
         {
             //Sum raw values across every live entity, keeping the first valid sample's unit. Downstream (currentPvRate /
@@ -267,12 +267,10 @@ export function refreshPv(host: PvHost): void
         }
     }
     else
-    {
-        if (host._pvCurrent !== null)
+    if (host._pvCurrent !== null)
         {
             host._pvCurrent = null;
         }
-    }
 
     //Two fetches, gated independently so each reissues only when its (entity, window) tuple changes:
     //  1. Hourly LTS over 5 days, feeding the forecast calibration (`calibration.ts`).
@@ -365,7 +363,7 @@ export function refreshPv(host: PvHost): void
 //Without it, an entity coming online mid-window with a large lifetime total injects a phantom
 //cumulative jump that today-kWh integration attributes to "today". Baselined, each entity contributes 0 at first appearance and
 //only its delta from there. Power sensors MUST use `cumulative: false` — baselining a W reading yields meaningless "delta-W".
-function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = false): PvHistory
+function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative = false): PvHistory
 {
     if (perEntity.length === 0)
     {
@@ -395,27 +393,27 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = 
         let sum = 0;
         for (let i = 0; i < perEntity.length; i++)
         {
-            const h = perEntity[i];
+            const series = perEntity[i];
             //Advance cursor while the next sample is at or before the cursor timestamp.
-            let c = cursors[i];
-            while (c + 1 < h.times.length && h.times[c + 1].getTime() <= ts)
+            let cursor = cursors[i];
+            while (cursor + 1 < series.times.length && series.times[cursor + 1].getTime() <= ts)
             {
-                c++;
+                cursor++;
             }
-            cursors[i] = c;
-            if (c >= 0 && isFinite(h.values[c]))
+            cursors[i] = cursor;
+            if (cursor >= 0 && isFinite(series.values[cursor]))
             {
                 if (baselines)
                 {
                     if (baselines[i] === null)
                     {
-                        baselines[i] = h.values[c];
+                        baselines[i] = series.values[cursor];
                     }
-                    sum += h.values[c] - baselines[i]!;
+                    sum += series.values[cursor] - baselines[i]!;
                 }
                 else
                 {
-                    sum += h.values[c];
+                    sum += series.values[cursor];
                 }
             }
         }
@@ -450,10 +448,10 @@ export async function fetchPvStatistics(
     start: Date,
     end: Date,
     period: '5minute' | 'hour' | 'day' | 'week' | 'month',
-    cacheKey: string = '',
+    cacheKey = '',
     //Same `cumulative` flag as the aggregator: cumulative entities populate `state` with the bucket-end lifetime value, so the
     //multi-source phantom-jump risk applies. Power entities populate `mean` and stay on the raw-sum path.
-    cumulative: boolean = false,
+    cumulative = false,
 ): Promise<void>
 {
     if (!host.hass?.callWS || entityIds.length === 0)
@@ -548,17 +546,9 @@ export async function fetchPvStatistics(
             cache.set(cacheKey, { stats, perEntity: perMap, ts: Date.now() });
         }
     }
-    catch (e)
+    catch (_e)
     {
-        if (e instanceof WsTimeoutError)
-        {
-            console.warn(`[HELIOS] PV calib statistics fetch timed out (${e.timeoutMs} ms), consumer degrades to raw _pvHistory.`);
-        }
-        else
-        {
-            //LTS endpoint missing or entity not tracked. Surface an empty series so the consumer can degrade to `_pvHistory`.
-            console.warn('[HELIOS] PV calib statistics fetch failed:', e);
-        }
+        //Fetch timed out, LTS endpoint missing, or entity not tracked: surface an empty series so the consumer degrades to raw _pvHistory.
         host[targetSlot] = { times: [], values: [] };
     }
     finally

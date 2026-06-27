@@ -1,7 +1,8 @@
-import { LitElement, html, svg, PropertyValues, TemplateResult, nothing } from 'lit';
+import type { PropertyValues, TemplateResult} from 'lit';
+import { LitElement, html, svg, nothing } from 'lit';
 import { customElement, property, state, query, queryAll } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
-import { HeliosEngine } from './helios-engine';
+import type { HeliosEngine } from './helios-engine';
 import
 {
     type HeliosConfig,
@@ -82,9 +83,9 @@ import {
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
-import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod } from './card/energy-stats';
+import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod, type ChangeBucket } from './card/energy-stats';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
-import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost } from './card/unifiedStore';
+import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
 import
 {
     computeConfigSig,
@@ -102,12 +103,12 @@ declare global
 {
     interface Window
     {
-        customCards?: Array<{
+        customCards?: {
             type:        string;
             name:        string;
             description: string;
             preview?:    boolean;
-        }>;
+        }[];
     }
 }
 
@@ -146,11 +147,13 @@ window.customCards = window.customCards || [];
         w[flagKey] = true;
         const labelStyle   = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;';
         const versionStyle = 'background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;';
+        // eslint-disable-next-line no-console -- intentional install/version banner, like other HACS frontends
         console.info(
             `%c☀ HELIOS%c v${__HELIOS_VERSION__}`,
             labelStyle,
             versionStyle
         );
+        // eslint-disable-next-line no-console -- intentional install banner hint pointing at the diagnostic command
         console.info(
             `%c☀ HELIOS%c run window.heliosStats() in the console for a live config + engine dump`,
             labelStyle,
@@ -212,6 +215,7 @@ window.addEventListener('helios-data-cache-reset', () =>
 
             const label    = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;';
             const heading  = 'color:#f59e0b;font-weight:bold;';
+            /* eslint-disable no-console -- intentional diagnostic dump exposed via window.heliosStats() */
             console.groupCollapsed(`%c☀ HELIOS stats%c v${__HELIOS_VERSION__}, ${cards.length} card${cards.length === 1 ? '' : 's'} alive`,
                 label, 'color:#6b7280;font-weight:normal;');
             console.log('%cLifecycle counters', heading, w.__heliosStats ?? '(none yet)');
@@ -225,6 +229,7 @@ window.addEventListener('helios-data-cache-reset', () =>
                 console.groupEnd();
             });
             console.groupEnd();
+            /* eslint-enable no-console */
             return out;
         };
     }
@@ -244,8 +249,6 @@ window.addEventListener('helios-data-cache-reset', () =>
     }
     const w = window as HeliosWin;
 
-    const label = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;';
-
     if (!w.setHeliosLocation)
     {
         w.setHeliosLocation = (lat: number, lon: number) =>
@@ -255,13 +258,10 @@ window.addEventListener('helios-data-cache-reset', () =>
                 || lat < -90  || lat > 90
                 || lon < -180 || lon > 180)
             {
-                console.warn('☀ HELIOS: setHeliosLocation expected (lat[-90..90], lon[-180..180]), got', lat, lon);
+                //Out-of-range or non-numeric input: ignore the override request.
                 return;
             }
             w.__heliosLocationOverride = { lat, lon };
-            console.info(
-                `%c☀ HELIOS%c location override → ${lat.toFixed(5)}, ${lon.toFixed(5)} (refresh page to revert)`,
-                label, 'color:#6b7280;');
             for (const card of _liveCards)
             {
                 card.invalidateLocation();
@@ -275,13 +275,10 @@ window.addEventListener('helios-data-cache-reset', () =>
         {
             if (!w.__heliosLocationOverride)
             {
-                console.info('☀ HELIOS: no location override active');
+                //No override active: nothing to revert.
                 return;
             }
             w.__heliosLocationOverride = undefined;
-            console.info(
-                `%c☀ HELIOS%c location override cleared, reverting to hass.config`,
-                label, 'color:#6b7280;');
             for (const card of _liveCards)
             {
                 card.invalidateLocation();
@@ -338,14 +335,14 @@ export class HeliosCard extends LitElement
     //PV production state, set when the HA Energy dashboard exposes a solar source: live value from
     //hass.states + historical series from HA's history API for the dedicated chart.
     @state() _pvCurrent: number | null = null;
-    @state() _pvUnit:    string        = '';
+    @state() _pvUnit        = '';
     @state() _pvHistory: {
         times:  Date[];
         values: number[];
     } | null = null;
     //Per-entity histories alongside _pvHistory so the chart can draw one curve per source and the scrub
     //tooltip can break down by entity. Keyed by entity id; cleared + repopulated in fetchPvHistory.
-    _pvHistoryPerEntity: Map<string, { times: Date[]; values: number[] }> = new Map();
+    _pvHistoryPerEntity = new Map<string, { times: Date[]; values: number[] }>();
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same shape as _pvHistory
     //but via recorder/statistics_during_period (~120 rows/5 days vs potentially millions on the raw path
     //for high-frequency sensors). Null while first fetch is in flight; calibration.ts falls back to
@@ -356,7 +353,7 @@ export class HeliosCard extends LitElement
     //Recorder change series for the solar meter(s): canonical past-production source for the unified
     //store + chip scrub. Reset-corrected, unit-normalised kWh per 5-min bucket, same as the HA Energy
     //dashboard.
-    @state() _pvChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    @state() _pvChangeSeries: ChangeBucket[] | null = null;
     _pvChangeSeriesFetchKey  = '';
     _pvChangeSeriesFetching  = false;
     //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries.
@@ -370,17 +367,17 @@ export class HeliosCard extends LitElement
     //Units kept alongside values so the chip formats kW vs W without re-reading the state.
     @state() _batterySoc:        number | null = null;
     @state() _batteryPower:      number | null = null;
-    @state() _batteryPowerUnit:  string        = '';
+    @state() _batteryPowerUnit        = '';
     //Grid import/export live values, set by refreshGrid() from the HA Energy grid source's stat_energy_from
     //(import) / stat_energy_to (export). Unit captured alongside so the chip formats W/kWh/m³ correctly.
     @state() _gridImportValue:   number | null = null;
-    @state() _gridImportUnit:    string        = '';
+    @state() _gridImportUnit        = '';
     @state() _gridExportValue:   number | null = null;
-    @state() _gridExportUnit:    string        = '';
+    @state() _gridExportUnit        = '';
     //Recorder change series for the grid import/export meters: canonical past-power source for the
     //unified store + scrub. Reset-corrected kWh per 5-min bucket, same as the HA Energy dashboard.
-    @state() _gridImportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
-    @state() _gridExportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    @state() _gridImportChangeSeries: ChangeBucket[] | null = null;
+    @state() _gridExportChangeSeries: ChangeBucket[] | null = null;
     _gridImportChangeFetchKey = '';
     _gridExportChangeFetchKey = '';
     _gridImportChangeFetching = false;
@@ -411,8 +408,8 @@ export class HeliosCard extends LitElement
     //Recorder change series for battery charge (stat_energy_to) + discharge (stat_energy_from) meters:
     //canonical past-power source for the unified store + scrub. Net (charge - discharge) gives a
     //structural sign so charging is never lost (#216).
-    @state() _batteryChargeChangeSeries:    import('./card/energy-stats').ChangeBucket[] | null = null;
-    @state() _batteryDischargeChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    @state() _batteryChargeChangeSeries:    ChangeBucket[] | null = null;
+    @state() _batteryDischargeChangeSeries: ChangeBucket[] | null = null;
     _batteryChangeFetchKey = '';
     _batteryChangeFetching = false;
     //Irradiance entity history, populated when solar-irradiance-entity is configured. Recorder
@@ -475,7 +472,7 @@ export class HeliosCard extends LitElement
     //                     re-snapshotted from CURRENT animated positions on every toggle so nothing teleports.
     //  _clockAnimSeq    — gates the single shared animation rAF loop.
     private _clockGrowStart = new Map<ChartTarget, number>();
-    private _clockExiting: Array<{ data: ClockData; slot: number; start: number; h0: number }> = [];
+    private _clockExiting: { data: ClockData; slot: number; start: number; h0: number }[] = [];
     private _clockSlotFrom = new Map<ChartTarget, number>();
     private _clockSlideStart = 0;
     private _clockAnimSeq = 0;
@@ -530,7 +527,7 @@ export class HeliosCard extends LitElement
     //any refresh, sliced/interpolated by the radial dial, graph view and main timeline. Live numeric chips
     //stay on the direct hass.states path: the store carries bucketed curves, the chips need sample-accurate
     //values a 15 min bucket would lose.
-    @state() _unifiedStore: import('./card/unifiedStore').UnifiedDataStore | null = null;
+    @state() _unifiedStore: UnifiedDataStore | null = null;
 
 
     private _timer?:           number;
@@ -630,6 +627,16 @@ export class HeliosCard extends LitElement
         }
     }
 
+    //Shared: swallow a pointerdown so the period selector doesn't start a timeline scrub.
+    private _stopPropagation = (e: Event): void => { e.stopPropagation(); };
+
+    //Period-selector button delegate: the clicked element carries its mode in data-mode.
+    private _onTimelineModeClick = (e: Event): void =>
+    {
+        const mode = (e.currentTarget as HTMLElement).dataset.mode as TimelineMode | undefined;
+        if (mode) { this._setTimelineMode(mode); }
+    };
+
     //Recorder period for the energy change-series, per the active mode (5-min for Now, hourly for a week,
     //daily for month/year) — so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
     get _storeFetchPeriod(): StatPeriod { return modeFetchPeriod(this._timelineMode, this.config); }
@@ -646,6 +653,13 @@ export class HeliosCard extends LitElement
             this._chartTarget = target;
             this._persistUiState();
         }
+    };
+
+    //Chip click delegate: the clicked element carries its metric in data-target.
+    private _onChartTargetClick = (e: Event): void =>
+    {
+        const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
+        if (target) { this._setChartTarget(target); }
     };
 
     //Last target the home prism was painted for, so updated() can tell a chip CHANGE (play the squash/grow)
@@ -705,14 +719,15 @@ export class HeliosCard extends LitElement
             <div
                 class="tb-period-selector"
                 role="group"
-                aria-label="${t.period?.rangeLabel ?? 'Time range'}"
-                @pointerdown="${(e: Event) => e.stopPropagation()}"
+                aria-label=${t.period?.rangeLabel ?? 'Time range'}
+                @pointerdown=${this._stopPropagation}
             >
                 ${TIMELINE_MODE_ORDER.map(m => html`
                     <button
                         type="button"
                         class="tb-period-seg ${this._timelineMode === m ? 'is-on' : ''}"
-                        @click="${() => this._setTimelineMode(m)}"
+                        data-mode=${m}
+                        @click=${this._onTimelineModeClick}
                     >${labels[m]}</button>
                 `)}
             </div>
@@ -722,7 +737,7 @@ export class HeliosCard extends LitElement
     //Retired YAML entity keys, now read entirely from the HA Energy dashboard; any still set on the card
     //config is ignored at runtime. Detected only to fire a one-shot persistent notification pointing the
     //user at the replacement.
-    private static readonly _LEGACY_ENTITY_KEYS: ReadonlyArray<string> =
+    private static readonly _LEGACY_ENTITY_KEYS: readonly string[] =
     [
         'pv-power-entity',
         'grid-import-entity',
@@ -808,9 +823,9 @@ export class HeliosCard extends LitElement
                 {
                     continue;
                 }
-                const state = hass.states?.[entityId];
-                const lat   = state?.attributes?.latitude;
-                const lon   = state?.attributes?.longitude;
+                const entityState = hass.states?.[entityId];
+                const lat   = entityState?.attributes?.latitude;
+                const lon   = entityState?.attributes?.longitude;
                 if (typeof lat === 'number' && Number.isFinite(lat)
                  && typeof lon === 'number' && Number.isFinite(lon))
                 {
@@ -990,7 +1005,7 @@ export class HeliosCard extends LitElement
         //Snapshot the view for the next visit (while still registered, so the storage slot is the right one):
         //the engine writes the live camera pose (captures an auto-rotated bearing too), the card writes the
         //view mode + selected chip.
-        if (this._engine) { this._engine.cacheKey = this._effectiveCacheId(); }
+        if (this._engine) { this._engine.cacheKey = this.effectiveCacheId(); }
         this._engine?.persistCameraPose();
         this._persistUiState();
         this._unregisterCacheId();
@@ -1217,8 +1232,8 @@ export class HeliosCard extends LitElement
     _trackPointerId: number | null      = null;
 
 
-    _boundPointerMove = (e: PointerEvent): void => onTimelinePointerMove(this, e);
-    _boundPointerUp   = (e: PointerEvent): void => onTimelinePointerUp(this, e);
+    boundPointerMove = (e: PointerEvent): void => onTimelinePointerMove(this, e);
+    boundPointerUp   = (e: PointerEvent): void => onTimelinePointerUp(this, e);
 
 
     //Page-visibility listener that invalidates the cached theme probe when the tab returns to foreground.
@@ -1232,6 +1247,11 @@ export class HeliosCard extends LitElement
             this.requestUpdate();
         }
     };
+
+    //Bound delegates to the timeline + chart-hover module helpers, which need the host as first arg.
+    private _onTimelinePointerDown = (e: PointerEvent): void => onTimelinePointerDown(this, e);
+    private _onChartHoverMove      = (e: PointerEvent): void => handleChartHoverMove(this, e);
+    private _onChartHoverLeave     = (): void => handleChartHoverLeave(this);
 
 
     //Resolve the active theme polarity, used to drive the `theme-dark` / `theme-light` class on the card. The
@@ -1273,7 +1293,7 @@ export class HeliosCard extends LitElement
                 return false;
             }
             const hexMatch = bg.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-            let r = 0, g = 0, b = 0;
+            let r = 0; let g = 0; let b = 0;
             if (hexMatch)
             {
                 const hex = hexMatch[1].length === 3
@@ -1291,7 +1311,7 @@ export class HeliosCard extends LitElement
             const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
             return lum < 0.5;
         }
-        catch (_) {}
+        catch (_) { /* probe failed: fall through to the light-theme default */ }
         return false;
     }
 
@@ -1349,7 +1369,7 @@ export class HeliosCard extends LitElement
                 class="sun-cross-marker"
                 style="left:${lx.toFixed(1)}px; top:${ly.toFixed(1)}px; --sun-cross-color:${color}"
             >
-                <ha-icon icon="${icon}"></ha-icon>
+                <ha-icon icon=${icon}></ha-icon>
                 <span>${t}</span>
             </div>
         `;
@@ -1468,11 +1488,11 @@ export class HeliosCard extends LitElement
         if (batteryScrubbing)
         {
             const tMs = this._selectedTime!.getTime();
-            const c   = wattsAtFromChangeSeries(this._batteryChargeChangeSeries, tMs);
-            const d   = wattsAtFromChangeSeries(this._batteryDischargeChangeSeries, tMs);
-            activeBatteryPower = (c === null && d === null)
+            const chargeW    = wattsAtFromChangeSeries(this._batteryChargeChangeSeries, tMs);
+            const dischargeW = wattsAtFromChangeSeries(this._batteryDischargeChangeSeries, tMs);
+            activeBatteryPower = (chargeW === null && dischargeW === null)
                 ? null
-                : Math.max(0, c ?? 0) - Math.max(0, d ?? 0);
+                : Math.max(0, chargeW ?? 0) - Math.max(0, dischargeW ?? 0);
         }
         else
         {
@@ -1718,9 +1738,8 @@ export class HeliosCard extends LitElement
         //Above-horizon segments get a 2nd split by camera nearness: the half closest to the eye renders
         //ABOVE the home chips (over leaders + pill), the half arching away renders BEHIND. Threshold is the
         //nearness midpoint.
-        for (let i = 0; i < arcSegments.length; i++)
+        for (const s of arcSegments)
         {
-            const s = arcSegments[i];
             if (s.belowHorizon)
             {
                 arcSegmentsBack.push(s);
@@ -1808,14 +1827,14 @@ export class HeliosCard extends LitElement
         ].filter(Boolean).join(' ');
 
         return html`
-            <ha-card class="${cardClasses}">
+            <ha-card class=${cardClasses}>
 
                 <div
                     id="map-container"
-                    @pointermove="${(e: PointerEvent) => this._onClockHover(e)}"
-                    @pointerleave="${() => this._onClockHoverEnd()}"
-                    @pointerdown="${(e: PointerEvent) => this._onClockTapStart(e)}"
-                    @pointerup="${(e: PointerEvent) => this._onClockTapEnd(e)}"
+                    @pointermove=${this._onClockHover}
+                    @pointerleave=${this._onClockHoverEnd}
+                    @pointerdown=${this._onClockTapStart}
+                    @pointerup=${this._onClockTapEnd}
                 ></div>
 
                 ${hasHomeCoords && this._viewMode === 'clock' ? html`
@@ -1837,7 +1856,7 @@ export class HeliosCard extends LitElement
                 ${hasHomeCoords && this._timeRange && this._viewMode === 'scene' ? html`
                     <div
                         class="time-bar"
-                        @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
+                        @pointerdown=${this._onTimelinePointerDown}
                     >
                         ${renderTimelineHoverTooltip(this)}
 
@@ -1852,8 +1871,8 @@ export class HeliosCard extends LitElement
                         >
                             <div
                                 class="tb-chart-card"
-                                @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
-                                @pointerleave="${() => handleChartHoverLeave(this)}"
+                                @pointermove=${this._onChartHoverMove}
+                                @pointerleave=${this._onChartHoverLeave}
                             >
                                 ${keyed(this._chartTarget, renderBottomChart(this))}
                                 ${renderTimelineNightZones(this)}
@@ -1881,8 +1900,8 @@ export class HeliosCard extends LitElement
                       glyph carries the meaning and tooltips are
                       useless on touch.                              -->
                 ${hasHomeCoords ? (() => {
-                    const cameraLocked  = this._isCameraLocked();
-                    const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
+                    const railCameraLocked = this._isCameraLocked();
+                    const lockIcon      = railCameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
                     const sceneOn       = this._viewMode === 'scene';
                     const clockOn       = this._viewMode === 'clock';
                     const lidarOn       = this._viewMode === 'lidar';
@@ -1893,9 +1912,10 @@ export class HeliosCard extends LitElement
                             <button
                                 type="button"
                                 class="overlay-btn ${sceneOn ? 'is-on' : ''}"
-                                aria-pressed="${sceneOn ? 'true' : 'false'}"
+                                aria-pressed=${sceneOn ? 'true' : 'false'}
                                 title="Scene"
-                                @click="${() => this._setViewMode('scene')}"
+                                data-view="scene"
+                                @click=${this._onViewModeClick}
                             >
                                 <ha-icon icon="mdi:weather-sunny"></ha-icon>
                             </button>
@@ -1903,9 +1923,10 @@ export class HeliosCard extends LitElement
                                 <button
                                     type="button"
                                     class="overlay-btn ${clockOn ? 'is-on' : ''}"
-                                    aria-pressed="${clockOn ? 'true' : 'false'}"
+                                    aria-pressed=${clockOn ? 'true' : 'false'}
                                     title="Clock"
-                                    @click="${() => this._setViewMode('clock')}"
+                                    data-view="clock"
+                                    @click=${this._onViewModeClick}
                                 >
                                     <ha-icon icon="mdi:clock-outline"></ha-icon>
                                 </button>
@@ -1915,20 +1936,21 @@ export class HeliosCard extends LitElement
                                 <button
                                     type="button"
                                     class="overlay-btn ${lidarOn ? 'is-on' : ''}"
-                                    aria-pressed="${lidarOn ? 'true' : 'false'}"
+                                    aria-pressed=${lidarOn ? 'true' : 'false'}
                                     title="LiDAR"
-                                    @click="${() => this._setViewMode('lidar')}"
+                                    data-view="lidar"
+                                    @click=${this._onViewModeClick}
                                 >
                                     <ha-icon icon="mdi:satellite-variant"></ha-icon>
                                 </button>
                             ` : nothing}
                             <button
                                 type="button"
-                                class="overlay-btn ${cameraLocked ? 'is-on' : ''}"
-                                aria-pressed="${cameraLocked ? 'true' : 'false'}"
-                                @click="${this._onCameraLockToggle}"
+                                class="overlay-btn ${railCameraLocked ? 'is-on' : ''}"
+                                aria-pressed=${railCameraLocked ? 'true' : 'false'}
+                                @click=${this._onCameraLockToggle}
                             >
-                                <ha-icon icon="${lockIcon}"></ha-icon>
+                                <ha-icon icon=${lockIcon}></ha-icon>
                             </button>
                         </div>
                     `;
@@ -1951,12 +1973,13 @@ export class HeliosCard extends LitElement
                                         type="button"
                                         class="overlay-btn ${on ? 'is-on' : ''}"
                                         style="--clock-btn-color:${meta.color}"
-                                        aria-pressed="${on ? 'true' : 'false'}"
-                                        title="${lbl}"
-                                        aria-label="${lbl}"
-                                        @click="${() => this._toggleClockTarget(t)}"
+                                        aria-pressed=${on ? 'true' : 'false'}
+                                        title=${lbl}
+                                        aria-label=${lbl}
+                                        data-target=${t}
+                                        @click=${this._onClockTargetToggleClick}
                                     >
-                                        <ha-icon icon="${meta.icon}"></ha-icon>
+                                        <ha-icon icon=${meta.icon}></ha-icon>
                                     </button>
                                 `;
                             })}
@@ -2028,10 +2051,10 @@ export class HeliosCard extends LitElement
                         <line
                             class="pv-home-leader-line"
                             style="--pv-leader-color:${pvColor}"
-                            x1="${pvX1}"
-                            y1="${pvY1}"
-                            x2="${pvHomeEnd.x}"
-                            y2="${pvHomeEnd.y}"
+                            x1=${pvX1}
+                            y1=${pvY1}
+                            x2=${pvHomeEnd.x}
+                            y2=${pvHomeEnd.y}
                         ></line>
                         ${!pvIdle ? svg`
                             <!--  Moving bead, a small filled disc rides
@@ -2060,7 +2083,8 @@ export class HeliosCard extends LitElement
                         style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
                         role="button"
                         tabindex="0"
-                        @click=${() => this._setChartTarget('production')}
+                        data-target="production"
+                        @click=${this._onChartTargetClick}
                     >
                         <ha-icon icon="mdi:solar-power"></ha-icon>
                         <span>${pvDisplayValue}</span>
@@ -2149,7 +2173,8 @@ export class HeliosCard extends LitElement
                             style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
                             role="button"
                             tabindex="0"
-                            @click=${() => this._setChartTarget('battery-soc')}
+                            data-target="battery-soc"
+                            @click=${this._onChartTargetClick}
                         >
                             <ha-icon icon="mdi:battery"></ha-icon>
                             <span>${batterySocText}</span>
@@ -2161,7 +2186,8 @@ export class HeliosCard extends LitElement
                             style="left:${layout!.batteryPowerLabel.x}px; top:${layout!.batteryPowerLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
                             role="button"
                             tabindex="0"
-                            @click=${() => this._setChartTarget('battery')}
+                            data-target="battery"
+                            @click=${this._onChartTargetClick}
                         >
                             <ha-icon icon="mdi:lightning-bolt"></ha-icon>
                             <span>${batteryPowerText}</span>
@@ -2184,7 +2210,7 @@ export class HeliosCard extends LitElement
                       gap (no history) drops the chip + its leader entirely instead of leaving an empty pill.  -->
                 ${hasHomeCoords && layout !== null && customLive !== null && customW !== null ? html`
                     <svg class="custom-leader-svg">
-                        <path class="custom-leader-line" style="stroke:${customLeaderColor}" d="${customLeaderPath}" />
+                        <path class="custom-leader-line" style="stroke:${customLeaderColor}" d=${customLeaderPath} />
                         ${customBeadDur !== null ? (customPositive ? svg`
                             <circle class="custom-leader-bead" r="3" style="fill:${customLeaderColor}">
                                 <animateMotion dur="${customBeadDur.toFixed(2)}s" repeatCount="indefinite"
@@ -2200,19 +2226,20 @@ export class HeliosCard extends LitElement
                     <div
                         class="custom-label ${this._chartTarget === 'custom' ? 'is-chart-active' : ''}"
                         style="left:${layout!.customLabel.x}px; top:${layout!.customLabel.y}px; --custom-leader-color:${customLeaderColor}"
-                        title="${customLive!.name}"
+                        title=${customLive!.name}
                         role="button"
                         tabindex="0"
-                        @click=${() => this._setChartTarget('custom')}
+                        data-target="custom"
+                        @click=${this._onChartTargetClick}
                     >
-                        <ha-icon icon="${customIcon}"></ha-icon>
+                        <ha-icon icon=${customIcon}></ha-icon>
                         <span>${customDisplay}</span>
                     </div>
                 ` : nothing}
 
                 ${hasHomeCoords && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
-                        <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d="${gridLeaderPath}" />
+                        <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d=${gridLeaderPath} />
                         <!--  Single bead on the active flow. Import
                               flows grid → home (default traversal),
                               export flows home → grid (keyPoints 1;0
@@ -2236,9 +2263,10 @@ export class HeliosCard extends LitElement
                         style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
                         role="button"
                         tabindex="0"
-                        @click=${() => this._setChartTarget('grid')}
+                        data-target="grid"
+                        @click=${this._onChartTargetClick}
                     >
-                        <ha-icon icon="${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}"></ha-icon>
+                        <ha-icon icon=${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}></ha-icon>
                         <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec)}</span>
                     </div>
                 ` : nothing}
@@ -2327,9 +2355,9 @@ export class HeliosCard extends LitElement
                         <line
                             class="solar-ray"
                             style="--sun-flow-duration:${sunFlowDuration}s"
-                            x1="${sunScene!.sun.x}"  y1="${sunScene!.sun.y}"
-                            x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
-                            stroke="${sunColor}"
+                            x1=${sunScene!.sun.x}  y1=${sunScene!.sun.y}
+                            x2=${sunRayTargetX}    y2=${sunRayTargetY}
+                            stroke=${sunColor}
                         ></line>
                         <!--  Bead uses an absolute-coordinate path
                               with cx / cy left at the default 0
@@ -2340,7 +2368,7 @@ export class HeliosCard extends LitElement
                         <circle
                             class="solar-ray-bead"
                             r="3"
-                            fill="${sunColor}"
+                            fill=${sunColor}
                         >
                             <animateMotion
                                 dur="${sunFlowDuration}s"
@@ -2432,7 +2460,8 @@ export class HeliosCard extends LitElement
                         style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px"
                         role="button"
                         tabindex="0"
-                        @click=${() => this._setChartTarget('irradiance')}
+                        data-target="irradiance"
+                        @click=${this._onChartTargetClick}
                     >
                         <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
                         <span>${sunWm2Round} W/m²</span>
@@ -2475,9 +2504,10 @@ export class HeliosCard extends LitElement
                             style="left:${chipLeft.toFixed(1)}px; top:${bottomY.toFixed(1)}px; transform:${chipTransform}"
                             role="button"
                             tabindex="0"
-                            @click=${() => this._setChartTarget('cloud')}
+                            data-target="cloud"
+                            @click=${this._onChartTargetClick}
                         >
-                            <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
+                            <ha-icon icon=${cloudCoverIcon(this._cloudCover)}></ha-icon>
                             <span>${Math.round(this._cloudCover)} %</span>
                         </div>
                     `;
@@ -2504,9 +2534,10 @@ export class HeliosCard extends LitElement
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                         role="button"
                         tabindex="0"
-                        @click=${() => this._setChartTarget('consumption')}
-                        @mouseenter="${this._onHomeEnter}"
-                        @mouseleave="${this._onHomeLeave}"
+                        data-target="consumption"
+                        @click=${this._onChartTargetClick}
+                        @mouseenter=${this._onHomeEnter}
+                        @mouseleave=${this._onHomeLeave}
                     >
                         <ha-icon icon="mdi:home"></ha-icon>
                         ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}
@@ -2617,6 +2648,13 @@ export class HeliosCard extends LitElement
         void refreshClockHourly(this);
     }
 
+    //Rail button delegate: the clicked element carries its mode in data-view.
+    private _onViewModeClick = (e: Event): void =>
+    {
+        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | 'lidar' | undefined;
+        if (view) { this._setViewMode(view); }
+    };
+
     //Flip the clock sub-mode (area curve <-> histogram). Same data + rings; only the geometry changes, so a
     //repaint is enough. Persisted per card.
     private _toggleClockSubMode(): void
@@ -2625,6 +2663,12 @@ export class HeliosCard extends LitElement
         this._persistUiState();
         this._scheduleClockPaint();
     }
+
+    //Keyboard activation for the sub-mode toggle (Enter / Space), matching the click behaviour.
+    private _onSubModeKeydown = (e: KeyboardEvent): void =>
+    {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleClockSubMode(); }
+    };
 
     //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own concentric
     //area; the first stays the timeline's target for when scene mode resumes. Order is preserved (append on
@@ -2662,6 +2706,13 @@ export class HeliosCard extends LitElement
         }
         this._persistUiState();
         this._clockAnimate();
+    };
+
+    //Metric-rail button delegate: the clicked element carries its metric in data-target.
+    private _onClockTargetToggleClick = (e: Event): void =>
+    {
+        const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
+        if (target) { this._toggleClockTarget(target); }
     };
 
     //Snapshot each present ring's current animated slot into _clockSlotFrom and (re)anchor the slide clock, so
@@ -2702,7 +2753,7 @@ export class HeliosCard extends LitElement
         const from  = this._clockDim;
         const start = performance.now();
         const DUR   = 150;
-        const tick = (now: number): void =>
+        const animateDim = (now: number): void =>
         {
             if (id !== this._clockDimSeq || this._viewMode !== 'clock')
             {
@@ -2710,19 +2761,19 @@ export class HeliosCard extends LitElement
             }
             const t = Math.min(1, (now - start) / DUR);
             this._clockDim = from + (target - from) * t;
-            this._paintClock();
+            this.paintClock();
             if (t < 1)
             {
-                requestAnimationFrame(tick);
+                requestAnimationFrame(animateDim);
             }
             else
             {
                 this._clockDim = target;
                 if (target === 0) { this._clockDimSlot = null; }
-                this._paintClock();
+                this.paintClock();
             }
         };
-        requestAnimationFrame(tick);
+        requestAnimationFrame(animateDim);
     }
 
     //Per-home localStorage key for the card's UI state (view mode + selected chip). Mirrors the engine's
@@ -2764,7 +2815,7 @@ export class HeliosCard extends LitElement
     }
     //Effective per-card cache id: the configured id for the first card holding it, a stable `#N` suffix for
     //any same-id duplicate (a paste), '' when unconfigured (caller falls back to the home coordinates).
-    public _effectiveCacheId(): string
+    public effectiveCacheId(): string
     {
         const id = cacheId(this.config);
         if (!id)
@@ -2780,7 +2831,7 @@ export class HeliosCard extends LitElement
     {
         //A per-card cache id isolates cards on the same home (duplicates get a #N suffix); else fall back to
         //the home coordinates.
-        const id = this._effectiveCacheId();
+        const id = this.effectiveCacheId();
         if (id)
         {
             return `helios:ui-state:${id}`;
@@ -2816,40 +2867,40 @@ export class HeliosCard extends LitElement
             {
                 return;
             }
-            const s = JSON.parse(raw);
-            if (s && typeof s === 'object')
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object')
             {
-                if (s.viewMode === 'scene' || s.viewMode === 'clock'
-                    || (s.viewMode === 'lidar' && hasLocalLidar(this.config)))
+                if (parsed.viewMode === 'scene' || parsed.viewMode === 'clock'
+                    || (parsed.viewMode === 'lidar' && hasLocalLidar(this.config)))
                 {
-                    this._viewMode = s.viewMode;
+                    this._viewMode = parsed.viewMode;
                 }
                 const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'cloud', 'custom'];
-                if (typeof s.chartTarget === 'string' && valid.includes(s.chartTarget as ChartTarget))
+                if (typeof parsed.chartTarget === 'string' && valid.includes(parsed.chartTarget as ChartTarget))
                 {
-                    this._chartTarget = s.chartTarget as ChartTarget;
+                    this._chartTarget = parsed.chartTarget as ChartTarget;
                 }
-                if (s.clockSubMode === 'area' || s.clockSubMode === 'histogram')
+                if (parsed.clockSubMode === 'area' || parsed.clockSubMode === 'histogram')
                 {
-                    this._clockSubMode = s.clockSubMode;
+                    this._clockSubMode = parsed.clockSubMode;
                 }
-                if (typeof s.timelineMode === 'string' && s.timelineMode in TIMELINE_MODES)
+                if (typeof parsed.timelineMode === 'string' && parsed.timelineMode in TIMELINE_MODES)
                 {
-                    this._timelineMode     = s.timelineMode as TimelineMode;
+                    this._timelineMode     = parsed.timelineMode as TimelineMode;
                     this._periodPastDays   = TIMELINE_MODES[this._timelineMode].pastDays;
                     this._periodFutureDays = TIMELINE_MODES[this._timelineMode].futureDays;
                 }
                 //Clock filter set: keep order, drop dupes/unknowns. The timeline follows the first.
-                if (Array.isArray(s.clockTargets))
+                if (Array.isArray(parsed.clockTargets))
                 {
                     const seen = new Set<ChartTarget>();
                     const list: ChartTarget[] = [];
-                    for (const t of s.clockTargets)
+                    for (const target of parsed.clockTargets)
                     {
-                        if (typeof t === 'string' && valid.includes(t as ChartTarget) && !seen.has(t as ChartTarget))
+                        if (typeof target === 'string' && valid.includes(target as ChartTarget) && !seen.has(target as ChartTarget))
                         {
-                            seen.add(t as ChartTarget);
-                            list.push(t as ChartTarget);
+                            seen.add(target as ChartTarget);
+                            list.push(target as ChartTarget);
                         }
                     }
                     this._clockTargets = list;
@@ -2947,29 +2998,29 @@ export class HeliosCard extends LitElement
             this._clockSlideStart = 0;
             this._clockReloadStart = 0;
             this._clockSlotFrom.clear();
-            this._paintClock();
+            this.paintClock();
             return;
         }
         const id = ++this._clockAnimSeq;
-        const tick = (): void =>
+        const animateClock = (): void =>
         {
             if (id !== this._clockAnimSeq || this._viewMode !== 'clock') { return; }
             settle();
-            this._paintClock();
-            if (this._clockAnimActive()) { requestAnimationFrame(tick); }
+            this.paintClock();
+            if (this._clockAnimActive()) { requestAnimationFrame(animateClock); }
         };
-        requestAnimationFrame(tick);
+        requestAnimationFrame(animateClock);
     }
 
     private _scheduleClockPaint(): void
     {
-        requestAnimationFrame(() => this._paintClock());
+        requestAnimationFrame(() => this.paintClock());
     }
 
     //Project the rings for one frame and write them onto the overlay DOM: the area SVG, the ground-laid hour
     //labels, and the clamped tooltip. Called every transform frame (init.ts) and during the grow/slide/exit
     //animation. Public so the engine's per-frame callback can reach it.
-    public _paintClock(): void
+    public paintClock(): void
     {
         if (this._viewMode !== 'clock')
         {
@@ -3154,9 +3205,9 @@ export class HeliosCard extends LitElement
                 class="clock-submode mode-${this._clockSubMode}"
                 role="button"
                 tabindex="0"
-                aria-label="${this._clockSubMode === 'area' ? 'Area curve' : 'Histogram'}"
-                @click=${() => this._toggleClockSubMode()}
-                @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleClockSubMode(); } }}
+                aria-label=${this._clockSubMode === 'area' ? 'Area curve' : 'Histogram'}
+                @click=${this._toggleClockSubMode}
+                @keydown=${this._onSubModeKeydown}
             >
                 <span class="cs-knob"></span>
                 <ha-icon class="cs-opt cs-histogram" icon="mdi:chart-bar"></ha-icon>
@@ -3166,12 +3217,12 @@ export class HeliosCard extends LitElement
     }
 
     //Hover tooltip for an hour slice: a time-band header, then one row per active filter (its coloured icon
-    //+ its total value at that hour). Position is set inline then clamped in _paintClock.
-    private _renderClockTooltip(slot: number): TemplateResult
+    //+ its total value at that hour). Position is set inline then clamped in paintClock.
+    private _renderClockTooltip(slot: number): TemplateResult | typeof nothing
     {
         if (this._clockData.length === 0)
         {
-            return html``;
+            return nothing;
         }
         const mode = this._clockSubMode;
         //Time-band header: histogram covers a whole hour (HH:00 – HH+1:00), area a 15-min slot (HH:MM – HH:MM).
@@ -3198,7 +3249,7 @@ export class HeliosCard extends LitElement
                         if (rows.length > 0) {
                             return html`${rows.map(({ l, v }) => html`
                                 <div class="clock-tip-row">
-                                    <ha-icon icon="${l.icon}" style="color:${l.color}"></ha-icon>
+                                    <ha-icon icon=${l.icon} style="color:${l.color}"></ha-icon>
                                     <span class="clock-tip-val">${formatClockValue(this, data, v)}</span>
                                 </div>
                             `)}`;
@@ -3206,7 +3257,7 @@ export class HeliosCard extends LitElement
                     }
                     return html`
                         <div class="clock-tip-row">
-                            <ha-icon icon="${meta.icon}" style="color:${meta.color}"></ha-icon>
+                            <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
                             <span class="clock-tip-val">${formatClockValue(this, data, clockTotal(data, mode, slot))}</span>
                         </div>
                     `;

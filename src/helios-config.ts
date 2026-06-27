@@ -11,10 +11,11 @@ import {
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
 } from './constants';
+
 export {
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
-    MAX_DISPLAY_RADIUS_M, DISPLAY_FADE_DELTA_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
+    MAX_DISPLAY_RADIUS_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
     DEFAULT_SHADOW_OPACITY,
@@ -155,12 +156,12 @@ export function cacheId(config: HeliosConfig | undefined): string
 export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined): number
 {
     const raw = config?.['display-update-frequency-per-hour'];
-    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) { return DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
-    const r = Math.round(n);
-    if (r < MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
-    if (r > MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
-    return r;
+    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(parsed)) { return DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    const rounded = Math.round(parsed);
+    if (rounded < MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    if (rounded > MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    return rounded;
 }
 
 
@@ -168,12 +169,12 @@ export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined):
 export function valueDecimals(config: HeliosConfig | undefined): number
 {
     const raw = config?.['value-decimals'];
-    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) { return DEFAULT_VALUE_DECIMALS; }
-    const r = Math.round(n);
-    if (r < MIN_VALUE_DECIMALS) { return MIN_VALUE_DECIMALS; }
-    if (r > MAX_VALUE_DECIMALS) { return MAX_VALUE_DECIMALS; }
-    return r;
+    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(parsed)) { return DEFAULT_VALUE_DECIMALS; }
+    const rounded = Math.round(parsed);
+    if (rounded < MIN_VALUE_DECIMALS) { return MIN_VALUE_DECIMALS; }
+    if (rounded > MAX_VALUE_DECIMALS) { return MAX_VALUE_DECIMALS; }
+    return rounded;
 }
 
 
@@ -182,12 +183,12 @@ export function valueDecimals(config: HeliosConfig | undefined): number
 export function displayRadiusM(config: HeliosConfig | undefined): number
 {
     const raw = config?.['display-radius'];
-    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) { return DEFAULT_DISPLAY_RADIUS_M; }
-    const r = Math.round(n);
-    if (r < MIN_DISPLAY_RADIUS_M) { return MIN_DISPLAY_RADIUS_M; }
-    if (r > MAX_DISPLAY_RADIUS_M) { return MAX_DISPLAY_RADIUS_M; }
-    return r;
+    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(parsed)) { return DEFAULT_DISPLAY_RADIUS_M; }
+    const rounded = Math.round(parsed);
+    if (rounded < MIN_DISPLAY_RADIUS_M) { return MIN_DISPLAY_RADIUS_M; }
+    if (rounded > MAX_DISPLAY_RADIUS_M) { return MAX_DISPLAY_RADIUS_M; }
+    return rounded;
 }
 
 
@@ -195,12 +196,12 @@ export function displayRadiusM(config: HeliosConfig | undefined): number
 export function buildingCount(config: HeliosConfig | undefined): number
 {
     const raw = config?.['building-count'];
-    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) { return DEFAULT_BUILDING_COUNT; }
-    const r = Math.round(n);
-    if (r < MIN_BUILDING_COUNT) { return MIN_BUILDING_COUNT; }
-    if (r > MAX_BUILDING_COUNT) { return MAX_BUILDING_COUNT; }
-    return r;
+    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(parsed)) { return DEFAULT_BUILDING_COUNT; }
+    const rounded = Math.round(parsed);
+    if (rounded < MIN_BUILDING_COUNT) { return MIN_BUILDING_COUNT; }
+    if (rounded > MAX_BUILDING_COUNT) { return MAX_BUILDING_COUNT; }
+    return rounded;
 }
 
 
@@ -216,10 +217,10 @@ export function buildingRealSize(config: HeliosConfig | undefined): boolean
 export function buildingFixedHeightM(config: HeliosConfig | undefined): number
 {
     const raw = config?.['building-height'];
-    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) { return FIXED_BUILDING_HEIGHT_M; }
-    const r = Math.round(n);
-    if (r < MIN_BUILDING_HEIGHT_M) { return MIN_BUILDING_HEIGHT_M; }
-    if (r > MAX_BUILDING_HEIGHT_M) { return MAX_BUILDING_HEIGHT_M; }
-    return r;
+    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(parsed)) { return FIXED_BUILDING_HEIGHT_M; }
+    const rounded = Math.round(parsed);
+    if (rounded < MIN_BUILDING_HEIGHT_M) { return MIN_BUILDING_HEIGHT_M; }
+    if (rounded > MAX_BUILDING_HEIGHT_M) { return MAX_BUILDING_HEIGHT_M; }
+    return rounded;
 }

@@ -55,7 +55,7 @@ export interface EnergyPrefsHost
     //True once `fetchEnergyPrefs` lands a parsed snapshot (including the empty "no energy_sources" case), so boot gating
     //stops blocking on a never-arriving prefs payload when no HA Energy dashboard is configured.
     _energyDefaultsLoaded: boolean;
-    _energyPrefsUnsub?: () => void;
+    _energyPrefsUnsub?: (() => void) | undefined;
     requestUpdate(): void;
 }
 
@@ -71,7 +71,7 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
     try
     {
         const prefs = await host.hass.callWS({ type: 'energy/get_prefs' }) as {
-            energy_sources?: Array<Record<string, unknown>>;
+            energy_sources?: Record<string, unknown>[];
         };
         const next = parseEnergyPrefs(prefs);
         host._energyDefaults       = next;
@@ -120,6 +120,7 @@ export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
         }
         catch (_)
         {
+            /* prefs subscription already gone or unsubscribe threw on teardown */
         }
         host._energyPrefsUnsub = undefined;
     }
@@ -144,12 +145,11 @@ export interface HaDailyTotalsHost
 //Module-level cache for the recorder day-totals fetch, keyed by `${localDate}|${sortedStatisticIds}` so cards on one
 //dashboard share a round-trip. TTL undershoots the 30s tick so the value survives a refresh window; `inflight` dedupes
 //concurrent calls. Process-scoped (cleared on reload), same lifetime as hass.connection.
-type HaDailyTotalsCacheEntry =
-{
+interface HaDailyTotalsCacheEntry {
     ts:        number;
     result:    number | null;
     inflight?: Promise<number | null>;
-};
+}
 const _haDailyTotalsCache = new Map<string, HaDailyTotalsCacheEntry>();
 
 
@@ -198,7 +198,7 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
                 types:         ['change'],
                 //Normalise to kWh (installs may report Wh/MWh); chip + dashboard formatters assume kWh downstream.
                 units:         { energy: 'kWh' },
-            }) as Record<string, Array<{ change?: number | null }>>;
+            }) as Record<string, { change?: number | null }[]>;
             let total  = 0;
             let anyHit = false;
             for (const id of statisticIds)
@@ -241,12 +241,7 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
 export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<void>
 {
     const defaults = host._energyDefaults;
-    let solar:      number | null = null;
-    let imp:        number | null = null;
-    let exp:        number | null = null;
-    let charged:    number | null = null;
-    let discharged: number | null = null;
-    [solar, imp, exp, charged, discharged] = await Promise.all([
+    const [solar, imp, exp, charged, discharged] = await Promise.all([
         fetchTodayKwhChange(host, defaults.solarStatEnergyFroms),
         fetchTodayKwhChange(host, defaults.gridStatEnergyFroms),
         fetchTodayKwhChange(host, defaults.gridStatEnergyTos),
@@ -297,7 +292,7 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
 //`power_config.stat_rate` is the post-2026 grid/battery live-power slot; the top-level grid `stat_rate` is the legacy
 //slot HA still serves. We read both so any encountered config maps cleanly.
 export function parseEnergyPrefs(prefs: {
-    energy_sources?: Array<Record<string, unknown>>;
+    energy_sources?: Record<string, unknown>[];
 }): EnergyDefaults
 {
     //Fresh literal (not `{ ...EMPTY_ENERGY_DEFAULTS }`) so array fields aren't aliased on the shared empty default, avoiding
@@ -425,14 +420,14 @@ export function parseEnergyPrefs(prefs: {
 //  - `stat_rate_to`: unsigned TO the source (battery charge -> positive / grid export -> negative).
 //A source can carry both directional slots (separate charge/discharge wattmeters, e.g. Zendure), so every populated slot
 //lands in the list and the consumer sums them; reading only one would show 0W or the wrong sign.
-function collectPowerConfigRates(raw: unknown, flavor: 'grid' | 'battery'): Array<{ entity: string; inverted: boolean }>
+function collectPowerConfigRates(raw: unknown, flavor: 'grid' | 'battery'): { entity: string; inverted: boolean }[]
 {
     if (!raw || typeof raw !== 'object')
     {
         return [];
     }
     const pc  = raw as Record<string, unknown>;
-    const out: Array<{ entity: string; inverted: boolean }> = [];
+    const out: { entity: string; inverted: boolean }[] = [];
     //Net slots first, and exclusive of the directional pair: a signed net sensor already carries both directions, so
     //summing it with from/to would double-count.
     const direct = pickFirstString(pc['stat_rate']);

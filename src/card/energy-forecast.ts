@@ -102,12 +102,13 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     {
         try
         {
+            // eslint-disable-next-line no-await-in-loop -- sequential by design: return the first candidate that answers, skip the rest
             const res = await host.hass.callWS({
                 type:     'helios_forecast/series',
                 entry_id: entryId,
                 start:    startIso,
                 end:      endIso,
-            }) as { points?: Array<{ t: string; pv_w: number }> };
+            }) as { points?: { t: string; pv_w: number }[] };
             const raw = res?.points;
             if (!Array.isArray(raw))
             {
@@ -181,7 +182,7 @@ export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<strin
 
 //Read the forecast WATTS at a bucket time. The forecast is hourly; we linearly interpolate between consecutive points
 //so the 15-minute store buckets draw a smooth curve instead of flat steps. Returns null when no point covers the time.
-export function forecastWattsAt(forecast: ReadonlyArray<SolarForecastPoint>, ms: number): number | null
+export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: number): number | null
 {
     if (forecast.length === 0)
     {
@@ -193,7 +194,7 @@ export function forecastWattsAt(forecast: ReadonlyArray<SolarForecastPoint>, ms:
     let idx = -1;
     while (lo <= hi)
     {
-        const midIdx = (lo + hi) >> 1;
+        const midIdx = Math.trunc((lo + hi) / 2);
         if (forecast[midIdx].tMs <= ms)
         {
             idx = midIdx;

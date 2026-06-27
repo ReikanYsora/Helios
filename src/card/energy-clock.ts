@@ -4,11 +4,11 @@
 //the whole rolling window (a single day shows that day's shape; a longer range averages it). The data comes
 //straight from the store + histories the timeline already loaded, binned by hour-of-day — no extra fetch.
 
-import { type SceneCamera } from '../engine/projection';
+import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
 import { type ChartTarget, type ChartHost, pvValueAtTime } from './charts';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex } from './format';
-import { type UnifiedDataStore } from './unifiedStore';
+import type { UnifiedDataStore } from './unifiedStore';
 import { customEntityId } from '../helios-config';
 import { resolveCustomEntityIcon, resolveCustomEntityLive } from './custom-entity';
 import type { ClockHourly } from './clock-hourly';
@@ -20,7 +20,7 @@ export type ClockHost = ChartHost & {
     _weatherAvailable: boolean;
     //Decoupled hourly profile, present only when the store is sub-hourly (month/year) + clock mode. When set,
     //buildClockData reads it instead of the daily store so the dial still shows an hour-of-day shape.
-    _clockHourly: import('./clock-hourly').ClockHourly | null;
+    _clockHourly: ClockHourly | null;
 };
 
 //Ring geometry, expressed as fractions of the smaller viewport edge so the clock fills the card at any size.
@@ -102,9 +102,9 @@ export interface ClockFrame
 {
     svg:    string;
     hits:   ClockHit[];
-    labels: Array<{ x: number; y: number; opacity: number; transform: string }>;
+    labels: { x: number; y: number; opacity: number; transform: string }[];
     //N/S compass letters, laid flat like the hours but at full opacity (no depth fade).
-    compass: Array<{ x: number; y: number; transform: string; label: string }>;
+    compass: { x: number; y: number; transform: string; label: string }[];
 }
 
 
@@ -421,7 +421,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     //Remaining metrics are single- or dual-layer store series, binned by hour-of-day.
     if (!store) { return data(target === 'irradiance' ? 'irradiance' : 'energy', []); }
 
-    let specs: Array<{ series: (number | null)[]; color: string; icon: string }>;
+    let specs: { series: (number | null)[]; color: string; icon: string }[];
     //Energy metrics SUM kWh per hour-of-day; irradiance AVERAGES W/m².
     let unit: ClockData['unit'] = 'energy';
     if (target === 'grid')
@@ -515,10 +515,10 @@ function ringMax(data: ClockData, mode: ClockMode): number
 
 //Rectangular bar footprint (metres) for histogram mode, oriented to `angle`: `hr` half-depth along the radius
 //(rings sit flush), `ht` half-width along the tangent. Four sides — cheap to redraw each rotation frame.
-function foot(cx: number, cy: number, hr: number, ht: number, angle: number): Array<[number, number]>
+function foot(cx: number, cy: number, hr: number, ht: number, angle: number): [number, number][]
 {
-    const rs = Math.sin(angle), rc = Math.cos(angle);
-    const ts = Math.cos(angle), tc = -Math.sin(angle);
+    const rs = Math.sin(angle); const rc = Math.cos(angle);
+    const ts = Math.cos(angle); const tc = -Math.sin(angle);
     return [
         [cx + hr * rs + ht * ts, cy + hr * rc + ht * tc],
         [cx + hr * rs - ht * ts, cy + hr * rc - ht * tc],
@@ -531,9 +531,9 @@ function foot(cx: number, cy: number, hr: number, ht: number, angle: number): Ar
 //geometry through the shared camera; the caller resolves each band's fill.
 function stackedColumn(
     camera: SceneCamera,
-    footprint: Array<[number, number]>,
+    footprint: [number, number][],
     totalHeightM: number,
-    bands: Array<{ frac: number; wall: string; roof: string }>,
+    bands: { frac: number; wall: string; roof: string }[],
     stroke: string
 ): string
 {
@@ -543,7 +543,7 @@ function stackedColumn(
     cum[cum.length - 1] = 1;
     const levels  = cum.map(c => footprint.map(p => camera.project(p[0], p[1], totalHeightM * c)));
     const bearing = camera.bearingDeg * Math.PI / 180;
-    const edges: Array<{ depth: number; faces: string }> = [];
+    const edges: { depth: number; faces: string }[] = [];
     for (let i = 0; i < footprint.length; i++)
     {
         const next = (i + 1) % footprint.length;
@@ -554,7 +554,7 @@ function stackedColumn(
         let walls = '';
         for (let k = 0; k < bands.length; k++)
         {
-            const lo = levels[k], hi = levels[k + 1];
+            const lo = levels[k]; const hi = levels[k + 1];
             walls += `<polygon points="${lo[i][0].toFixed(1)},${lo[i][1].toFixed(1)} ${lo[next][0].toFixed(1)},${lo[next][1].toFixed(1)} ${hi[next][0].toFixed(1)},${hi[next][1].toFixed(1)} ${hi[i][0].toFixed(1)},${hi[i][1].toFixed(1)}" fill="${bands[k].wall}" stroke="${stroke}" stroke-width="0.4"/>`;
         }
         edges.push({ depth: (levels[0][i][1] + levels[0][next][1]) / 2, faces: walls });
@@ -615,8 +615,8 @@ function clockCompass(
 
     const triangle = (angle: number, color: string): string =>
     {
-        const rs = Math.sin(angle), rc = Math.cos(angle);   //radial (outward) unit
-        const ts = Math.cos(angle), tc = -Math.sin(angle);  //tangential unit
+        const rs = Math.sin(angle); const rc = Math.cos(angle);   //radial (outward) unit
+        const ts = Math.cos(angle); const tc = -Math.sin(angle);  //tangential unit
         const tip = camera.project(tipR * rs, tipR * rc, 0);
         const b1  = camera.project(baseR * rs + halfW * ts, baseR * rc + halfW * tc, 0);
         const b2  = camera.project(baseR * rs - halfW * ts, baseR * rc - halfW * tc, 0);
@@ -636,7 +636,7 @@ function clockCompass(
     return { svg, labels };
 }
 
-type ClockFace = { depth: number; svg: string };
+interface ClockFace { depth: number; svg: string }
 
 //Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward), in the chosen
 //sub-mode. SHARED here: the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, and the
@@ -662,7 +662,7 @@ export function projectClockFrame(
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
         camera.project3(labelR * Math.sin((h / 24) * 2 * Math.PI), labelR * Math.cos((h / 24) * 2 * Math.PI), 0));
-    let depthMin = Infinity, depthMax = -Infinity;
+    let depthMin = Infinity; let depthMax = -Infinity;
     for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
     const depthRange = depthMax - depthMin || 1;
     const labels = projLabels.map((p, h) => ({
@@ -717,7 +717,7 @@ function projectAreaRing(
     for (let sl = 0; sl < CLOCK_SLOTS; sl++)
     {
         const a = (sl / CLOCK_SLOTS) * 2 * Math.PI;
-        const e = R * Math.sin(a), n = R * Math.cos(a);
+        const e = R * Math.sin(a); const n = R * Math.cos(a);
         const base = camera.project(e, n, 0);
         const top  = camera.project(e, n, totalAt(sl) * zScale);
         hits.push({ slot: sl, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
@@ -731,13 +731,13 @@ function projectAreaRing(
         return;
     }
 
-    const ground:   Array<[number, number]> = [];
-    const layerTop: Array<Array<[number, number]>> = data.layers.map(() => []);
+    const ground:   [number, number][] = [];
+    const layerTop: [number, number][][] = data.layers.map(() => []);
     for (let s = 0; s <= CLOCK_SLOTS; s++)
     {
         const sl = s % CLOCK_SLOTS;
         const a  = (s / CLOCK_SLOTS) * 2 * Math.PI;
-        const e  = R * Math.sin(a), n = R * Math.cos(a);
+        const e  = R * Math.sin(a); const n = R * Math.cos(a);
         ground.push(camera.project(e, n, 0));
         let cum = 0;
         for (let k = 0; k < data.layers.length; k++) { cum += Math.max(0, data.layers[k].values[sl] ?? 0); layerTop[k].push(camera.project(e, n, cum * zScale)); }
@@ -789,7 +789,7 @@ function projectHistogramRing(
     for (let h = 0; h < 24; h++)
     {
         const a = ((h + 0.5) / 24) * 2 * Math.PI;   //BETWEEN the hour lines
-        const e = R * Math.sin(a), n = R * Math.cos(a);
+        const e = R * Math.sin(a); const n = R * Math.cos(a);
         const total = totalAt(h);
         const base  = camera.project(e, n, 0);
         const top   = camera.project(e, n, total * zScale);

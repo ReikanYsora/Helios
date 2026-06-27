@@ -112,7 +112,7 @@ export function computePvPower(
     const ghiClear = 1098 * cosZ * Math.exp(-0.059 / cosZ);
 
     const cc     = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
-    const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
+    const kCloud = 1 - 0.75 * cc**3.4;
 
     //Prefer supplied measured/forecast GHI (already encodes real cloud attenuation), else analytical Haurwitz × Kasten-Czeplak.
     //kCloud is still used below for the direct/diffuse split regardless of which magnitude won.
@@ -158,7 +158,7 @@ export function computePvPower(
 
         //Beam transposition ratio R_b = cos(θi)/cos(zenith). Clamp the denominator at sin(5°) so it doesn't blow up at
         //sunrise/sunset (beam is tiny there anyway).
-        const Rb = cosTheta > 0
+        const rb = cosTheta > 0
             ? Math.max(0, cosTheta) / Math.max(0.087, cosZ)
             : 0;
 
@@ -183,7 +183,7 @@ export function computePvPower(
 
         //Shading: an obstacle blocks the sun ray. Direct beam gone; diffuse + ground terms still reach the panel
         //(we don't model an obstacle opaque to diffuse, which needs a sky-view factor the pipeline lacks).
-        const directPoa  = ctx?.shading ? 0 : ghiEff * directFraction * Rb;
+        const directPoa  = ctx?.shading ? 0 : ghiEff * directFraction * rb;
         const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
         const groundPoa  = ghiEff * 0.2             * (1 - Math.cos(beta)) / 2;
 
@@ -230,7 +230,7 @@ export function computeIrradianceWm2(date: Date, lat: number, lon: number, cloud
     const ghiClear = 1098 * cosZ * Math.exp(-0.059 / cosZ);
 
     const cc     = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
-    const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
+    const kCloud = 1 - 0.75 * cc**3.4;
 
     return Math.max(0, ghiClear * kCloud);
 }

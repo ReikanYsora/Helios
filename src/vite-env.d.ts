@@ -10,4 +10,5 @@ declare module '*.css?inline' {
 //Inlined at build time from package.json by vite.config.ts. Used
 //for the install banner printed to the browser console at module
 //load (see helios-card.ts).
+// eslint-disable-next-line @typescript-eslint/naming-convention
 declare const __HELIOS_VERSION__: string;

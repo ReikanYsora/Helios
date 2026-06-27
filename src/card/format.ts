@@ -11,7 +11,7 @@ export function formatLocalisedNumber(
     hass: any,
     value: number,
     fractionDigits: number,
-    integer: boolean = false
+    integer = false
 ): string
 {
     //Guard against NaN / Infinity / undefined from cold-cache reads or upstream parser failures:
@@ -80,7 +80,7 @@ export function formatHaTime(hass: any, date: Date): string
 //Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every
 //chip prints the same unit/precision regardless of the source sensor's native unit. Input is watts.
 //`signed` prefixes an explicit + / − (figure-dash) so battery charge reads apart from discharge.
-export function formatPowerKw(hass: any, watts: number, decimals: number, signed: boolean = false): string
+export function formatPowerKw(hass: any, watts: number, decimals: number, signed = false): string
 {
     if (signed)
     {
