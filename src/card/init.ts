@@ -192,7 +192,7 @@ export interface InitHost extends HudHost
     effectiveCacheId?: (() => string) | undefined;
 
     //Energy-clock mode: when active, each transform frame also re-projects the hour cylinders.
-    _viewMode?: 'scene' | 'clock';
+    _viewMode?: 'scene' | 'clock' | 'trend';
     paintClock?: (() => void) | undefined;
 }
 
@@ -300,8 +300,8 @@ export function initEngineNow(host: InitHost): void
         //Seed the engine with the active (possibly restored) window before getTimelineRange(), so a card that
         //loads straight into week/month/year frames the right span from the first paint.
         host._engine.setPeriodDays(host._periodPastDays, host._periodFutureDays);
-        //Restored straight into clock mode: render the home alone immediately (slices follow once data lands).
-        if (host._viewMode === 'clock') { host._engine.setHomeOnly(true); }
+        //Restored straight into a dial mode: keep the engine basemap-only (the overlay paints the dial).
+        if (host._viewMode === 'clock' || host._viewMode === 'trend') { host._engine.setHomeOnly(true); }
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
         //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).
         if (!host._timeRange)
@@ -358,9 +358,9 @@ function wireEngineCallbacks(host: InitHost): void
         {
             overlayRaf = null;
             refreshHud(host);
-            //Clock mode rides the same camera: re-project its cylinders on every transform so they stay
-            //glued to the rotating basemap.
-            if (host._viewMode === 'clock') { host.paintClock?.(); }
+            //Clock + trend ride the same camera: re-project the dial on every transform so it stays glued to
+            //the rotating basemap.
+            if (host._viewMode === 'clock' || host._viewMode === 'trend') { host.paintClock?.(); }
         });
     };
 }

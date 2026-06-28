@@ -276,7 +276,7 @@ export { clockTargetLabel };
 //Build layers from the decoupled hourly profile (month/year daily store): each metric expands its 24
 //hour-of-day totals to the dial's slots. Production splits per solar source like the short-window path;
 //weather metrics aren't offered in these modes, so they fall through to empty.
-function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHourly): ClockData
+export function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHourly): ClockData
 {
     const el   = host as unknown as Element;
     const dark = host.themeIsDark();
@@ -500,7 +500,7 @@ function ringSpacingM(outerR: number): number
 
 //Aggregate a per-slot series to 24 hourly values for the histogram bars (each bar = one hour H..H+1). `sum`
 //(energy) totals the hour's slots; otherwise (power/percent/irradiance) it averages them.
-function hourlyOf(values: number[], sum: boolean): number[]
+export function hourlyOf(values: number[], sum: boolean): number[]
 {
     const out = new Array<number>(24).fill(0);
     for (let h = 0; h < 24; h++)
@@ -829,6 +829,106 @@ function centralColumn(camera: SceneCamera, hubR: number, heightM: number, rings
     let svg = stackedColumn(camera, fp, heightM, bands, stroke);
     if (highlight) { svg = `<g filter="url(#clock-col-glow)">${svg}</g>`; }
     return { depth: camera.project(0, 0, 0)[1], svg };
+}
+
+
+//Which way is "better" for a metric, so the trend dial colours the change green/red. +1 = up is good
+//(production), -1 = down is good (consumption, grid use), 0 = neutral (battery, weather, custom).
+export function trendGoodDirection(target: ChartTarget): number
+{
+    switch (target)
+    {
+        case 'production': return 1;
+        case 'consumption':
+        case 'grid':       return -1;
+        default:           return 0;
+    }
+}
+
+//Project the TREND dial: one ring of 24 bars for the current period P, each with a reference marker (sphere +
+//dashed stem) at the previous period's level P-1, the gap coloured green/red by whether the change is an
+//improvement for this metric. `perHourP`/`perHourPrev` are 24 hour-of-day totals; both normalise against the
+//taller of the two so the marker always fits. Pure geometry; the card resolves the focused hour + the tooltip.
+export function projectTrendFrame(
+    camera: SceneCamera,
+    perHourP: number[],
+    perHourPrev: number[],
+    color: string,
+    direction: number,
+    cardinals: { n: string; s: string; e: string; w: string },
+    dimSlot: number | null,
+    dim: number,
+): ClockFrame
+{
+    const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
+    const ppm     = camera.pxPerMetre || 1;
+    const outerR  = (RING_R_FRAC * minEdge) / ppm;
+    const maxHm   = (MAX_HEIGHT_FRAC * minEdge) / ppm;
+    const tilt    = camera.tiltDeg;
+    const bearing = camera.bearingDeg;
+
+    const labelR = outerR * LABEL_R_MULT;
+    const projLabels = Array.from({ length: 24 }, (_, h) =>
+        camera.project3(labelR * Math.sin((h / 24) * 2 * Math.PI), labelR * Math.cos((h / 24) * 2 * Math.PI), 0));
+    let depthMin = Infinity; let depthMax = -Infinity;
+    for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
+    const depthRange = depthMax - depthMin || 1;
+    const labels = projLabels.map((p, h) => ({
+        x: p.x, y: p.y,
+        opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (h / 24) * 360 + 180}deg)`,
+    }));
+
+    let ceiling = 0;
+    for (let h = 0; h < 24; h++) { ceiling = Math.max(ceiling, perHourP[h], perHourPrev[h]); }
+    const zScale     = ceiling > 0 ? maxHm / ceiling : 0;
+    const R          = outerR;   //single outer ring
+    const halfRadial = ringSpacingM(outerR) * BAR_RADIAL_FRAC;
+    const halfTan    = (BAR_TANGENT_FRAC * minEdge) / ppm;
+    const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);
+    const good = 'var(--success-color, #2e7d32)';
+    const bad  = 'var(--error-color, #c62828)';
+
+    const hits:  ClockHit[]  = [];
+    const faces: ClockFace[] = [];
+    for (let h = 0; h < 24; h++)
+    {
+        const a = ((h + 0.5) / 24) * 2 * Math.PI;
+        const e = R * Math.sin(a); const n = R * Math.cos(a);
+        const p = Math.max(0, perHourP[h]); const prev = Math.max(0, perHourPrev[h]);
+        const base = camera.project(e, n, 0);
+        const top  = camera.project(e, n, p * zScale);
+        hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
+        const active = h === focusHour;
+        const dimOp  = focusHour !== null && !active ? 1 - 0.5 * dim : 1;
+
+        let svg = '';
+        if (p > 0)
+        {
+            const bands = [{ frac: 1, wall: lerpHexToward(color, '#000000', 0.25), roof: lerpHexToward(color, '#ffffff', active ? 0.4 : 0.12) }];
+            svg += stackedColumn(camera, foot(e, n, halfRadial, halfTan, a), p * zScale, bands, active ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)');
+        }
+        if (ceiling > 0)
+        {
+            const impr    = (p - prev) * direction;
+            const markCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? good : bad);
+            const mk = camera.project(e, n, prev * zScale);
+            //Dashed stem between the bar top and the P-1 level, then the marker sphere ON that level.
+            svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
+            svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="3.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
+        }
+        if (dimOp < 1) { svg = `<g opacity="${dimOp.toFixed(3)}">${svg}</g>`; }
+        faces.push({ depth: base[1], svg });
+    }
+    faces.sort((a, b) => a.depth - b.depth);
+
+    const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
+    return {
+        guideSvg: clockGuide(camera, outerR) + compass.svg,
+        svg: faces.map(f => f.svg).join(''),
+        hits, labels, compass: compass.labels,
+        home: { x: 0, y: 0, r: 0 },
+    };
 }
 
 

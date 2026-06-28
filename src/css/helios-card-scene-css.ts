@@ -240,9 +240,10 @@ export const heliosCardStyles = css`
     {
         transition: opacity var(--ha-animation-duration-slow, 350ms) ease;
     }
-    /*  Clock mode hides the HUD chips/leaders/timeline; the scene SVG stays but renders home-only, so the
-        home prism anchors the dial centre. */
-    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band)
+    /*  Clock + trend modes hide the scene HUD (chips/leaders/timeline); only the basemap, the dial overlay,
+        the rails and the period band remain. */
+    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band),
+    ha-card.mode-trend > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band)
     {
         opacity: 0;
         pointer-events: none;

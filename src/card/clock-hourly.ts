@@ -33,7 +33,7 @@ export interface ClockHourlyHost
     _timeRange:      { start: Date; end: Date } | null;
     _energyDefaults: EnergyDefaults;
     _timelineMode:   TimelineMode;
-    _viewMode?:      'scene' | 'clock';
+    _viewMode?:      'scene' | 'clock' | 'trend';
     _clockHourly:    ClockHourly | null;
     _clockHourlyKey: string;
     requestUpdate(): void;
@@ -107,6 +107,39 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
     return sum.map((s, h) => (cnt[h] ? s / cnt[h] : 0));
 }
 
+//Fetch the 24 hour-of-day profile for an arbitrary window. Pure (no host state): used for the clock's current
+//window and, shifted, for the trend mode's previous-period comparison.
+export async function fetchHourlyProfile(
+    hass: any, d: EnergyDefaults, cid: string, startMs: number, endMs: number,
+): Promise<ClockHourly>
+{
+    const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
+        ids.length ? fetchChangeSeries(hass, [...ids].sort(), startMs, endMs, 'hour') : Promise.resolve(null);
+    //Each solar source separately, in HA Energy source order (not sorted), so source `s` lines up with
+    //solarSourceName(host, s) + the store path.
+    const solarIds = d.solarStatEnergyFroms;
+
+    const [solarPerSource, gImp, gExp, bChg, bDis, soc, custom] = await Promise.all([
+        Promise.all(solarIds.map(id => fetchChangeSeries(hass, [id], startMs, endMs, 'hour'))),
+        chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
+        chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
+        statByHour(hass, d.batteryStatSocs, startMs, endMs, false),
+        cid ? statByHour(hass, [cid], startMs, endMs, true) : Promise.resolve(new Array<number>(24).fill(0)),
+    ]);
+
+    const pv               = solarPerSource.map(buckets => binChangeByHour(buckets));
+    const pvTotal          = new Array<number>(24).fill(0);
+    for (const src of pv) { for (let h = 0; h < 24; h++) { pvTotal[h] += src[h]; } }
+    const gridImport       = binChangeByHour(gImp);
+    const gridExport       = binChangeByHour(gExp);
+    const batteryCharge    = binChangeByHour(bChg);
+    const batteryDischarge = binChangeByHour(bDis);
+    //Consumption from the same identity the timeline uses: production + import − export − net battery, clamped.
+    const consumption = pvTotal.map((p, h) => Math.max(0, p + gridImport[h] - gridExport[h] - (batteryCharge[h] - batteryDischarge[h])));
+
+    return { pv, gridImport, gridExport, batteryCharge, batteryDischarge, consumption, soc, custom };
+}
+
 //Build (or clear) the hourly clock profile for the active window. Keyed so an unchanged window never refetches.
 export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
 {
@@ -133,30 +166,6 @@ export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
     host._clockHourlyKey = key;
     if (windowChanged && host._clockHourly !== null) { host._clockHourly = null; host.requestUpdate(); }
 
-    const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
-        ids.length ? fetchChangeSeries(host.hass, [...ids].sort(), startMs, endMs, 'hour') : Promise.resolve(null);
-    //Each solar source separately, in HA Energy source order (not sorted), so source `s` lines up with
-    //solarSourceName(host, s) + the store path.
-    const solarIds = d.solarStatEnergyFroms;
-
-    const [solarPerSource, gImp, gExp, bChg, bDis, soc, custom] = await Promise.all([
-        Promise.all(solarIds.map(id => fetchChangeSeries(host.hass, [id], startMs, endMs, 'hour'))),
-        chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
-        chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
-        statByHour(host.hass, d.batteryStatSocs, startMs, endMs, false),
-        cid ? statByHour(host.hass, [cid], startMs, endMs, true) : Promise.resolve(new Array<number>(24).fill(0)),
-    ]);
-
-    const pv               = solarPerSource.map(buckets => binChangeByHour(buckets));
-    const pvTotal          = new Array<number>(24).fill(0);
-    for (const src of pv) { for (let h = 0; h < 24; h++) { pvTotal[h] += src[h]; } }
-    const gridImport       = binChangeByHour(gImp);
-    const gridExport       = binChangeByHour(gExp);
-    const batteryCharge    = binChangeByHour(bChg);
-    const batteryDischarge = binChangeByHour(bDis);
-    //Consumption from the same identity the timeline uses: production + import − export − net battery, clamped.
-    const consumption = pvTotal.map((p, h) => Math.max(0, p + gridImport[h] - gridExport[h] - (batteryCharge[h] - batteryDischarge[h])));
-
-    host._clockHourly = { pv, gridImport, gridExport, batteryCharge, batteryDischarge, consumption, soc, custom };
+    host._clockHourly = await fetchHourlyProfile(host.hass, d, cid, startMs, endMs);
     host.requestUpdate();
 }

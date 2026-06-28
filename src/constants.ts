@@ -18,7 +18,7 @@ export const DEG = Math.PI / 180;
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
 export const MIN_DISPLAY_RADIUS_M     = 0;
 export const MAX_DISPLAY_RADIUS_M     = 500;
-export const DEFAULT_BUILDING_OPACITY          = 0.25;  //ghost surround; home stays 1.0
+export const DEFAULT_BUILDING_OPACITY          = 0.5;   //ghost surround; home stays 1.0
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = single-polygon home detection
 
 //=== Data cadence + value precision ===
