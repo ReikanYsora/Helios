@@ -1153,8 +1153,7 @@ export class HeliosCard extends LitElement
         const dist = Math.hypot(dx, dy) || 1;
         const lx   = cross.x + (dx / dist) * 22;
         const ly   = cross.y + (dy / dist) * 22;
-        const t    = cross.time.toLocaleTimeString(this.hass?.locale?.language ?? undefined,
-            { hour: '2-digit', minute: '2-digit' });
+        const t    = formatHaTime(this.hass, cross.time);
         return html`
             <div
                 class="sun-cross-marker"
