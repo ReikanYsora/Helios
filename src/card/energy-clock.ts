@@ -678,6 +678,45 @@ function currentHourArrow(camera: SceneCamera, R: number, maxHm: number): string
     return `<polygon points="${p[0].toFixed(1)},${p[1].toFixed(1)} ${(p[0] - 6).toFixed(1)},${(p[1] - 11).toFixed(1)} ${(p[0] + 6).toFixed(1)},${(p[1] - 11).toFixed(1)}" fill="${col}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
 }
 
+//A collar: the FRONT (camera-facing) edges of a footprint drawn at one height, so it reads as a ring wrapping
+//the prism at the P-1 level. Only front edges (same cull as the walls) so the far half doesn't bleed over the
+//front face.
+function frontEdges(camera: SceneCamera, fp: [number, number][], heightM: number, color: string, width: number, dashed: boolean): string
+{
+    const bearing = camera.bearingDeg * Math.PI / 180;
+    let s = '';
+    for (let i = 0; i < fp.length; i++)
+    {
+        const next  = (i + 1) % fp.length;
+        const edgeE = fp[next][0] - fp[i][0];
+        const edgeN = fp[next][1] - fp[i][1];
+        if (edgeN * Math.sin(bearing) + edgeE * Math.cos(bearing) <= 0) { continue; }
+        const a1 = camera.project(fp[i][0], fp[i][1], heightM);
+        const a2 = camera.project(fp[next][0], fp[next][1], heightM);
+        s += `<line x1="${a1[0].toFixed(1)}" y1="${a1[1].toFixed(1)}" x2="${a2[0].toFixed(1)}" y2="${a2[1].toFixed(1)}" stroke="${color}" stroke-width="${width}"${dashed ? ' stroke-dasharray="2 2"' : ''}/>`;
+    }
+    return s;
+}
+
+//Vertical struts on the front corners between two heights, joining the bar top to a floating collar above it
+//(the P < P-1 case), so the gap reads as a connected cage rather than a detached ring.
+function cageStruts(camera: SceneCamera, fp: [number, number][], fromH: number, toH: number, color: string): string
+{
+    const bearing = camera.bearingDeg * Math.PI / 180;
+    let s = '';
+    for (let i = 0; i < fp.length; i++)
+    {
+        const next  = (i + 1) % fp.length;
+        const edgeE = fp[next][0] - fp[i][0];
+        const edgeN = fp[next][1] - fp[i][1];
+        if (edgeN * Math.sin(bearing) + edgeE * Math.cos(bearing) <= 0) { continue; }
+        const lo = camera.project(fp[i][0], fp[i][1], fromH);
+        const hi = camera.project(fp[i][0], fp[i][1], toH);
+        s += `<line x1="${lo[0].toFixed(1)}" y1="${lo[1].toFixed(1)}" x2="${hi[0].toFixed(1)}" y2="${hi[1].toFixed(1)}" stroke="${color}" stroke-width="1.2" stroke-dasharray="2 2"/>`;
+    }
+    return s;
+}
+
 //Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward). Shared here:
 //the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, the global back-to-front depth
 //sort; per-ring geometry lives in projectHistogramRing. Pure: the card resolves each ring's animation scalars
@@ -919,28 +958,54 @@ export function projectTrendFrame(
         const a = ((h + 0.5) / 24) * 2 * Math.PI;
         const e = R * Math.sin(a); const n = R * Math.cos(a);
         const p = Math.max(0, perHourP[h]); const prev = Math.max(0, perHourPrev[h]);
+        const pH = p * zScale; const prevH = prev * zScale;
+        const fp = foot(e, n, halfRadial, halfTan, a);
         const base = camera.project(e, n, 0);
-        const top  = camera.project(e, n, p * zScale);
-        hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
+        //Hit axis spans up to the taller of the two, so a floating P-1 collar is hoverable too.
+        const topH = camera.project(e, n, Math.max(pH, prevH));
+        hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: topH[0], ty: topH[1] });
         const active = h === focusHour;
         const dimOp  = focusHour !== null && !active ? 1 - 0.5 * dim : 1;
         const fade   = FADE_MIN + (1 - FADE_MIN) * (depths[h] - dMin) / dRange;
         const op     = dimOp * fade;
 
+        //Gauge: the solid bar is the CURRENT period P; a collar marks the PREVIOUS period P-1; the gap is
+        //coloured green/red by whether the change is an improvement for this metric.
+        const impr     = (p - prev) * direction;
+        const deltaCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? good : bad);
+        const baseWall = lerpHexToward(color, '#000000', 0.25);
+        const baseRoof = lerpHexToward(color, '#ffffff', active ? 0.4 : 0.12);
+        const stroke   = active ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)';
+
         let svg = '';
-        if (p > 0)
+        if (pH > 0 && prevH <= pH)
         {
-            const bands = [{ frac: 1, wall: lerpHexToward(color, '#000000', 0.25), roof: lerpHexToward(color, '#ffffff', active ? 0.4 : 0.12) }];
-            svg += stackedColumn(camera, foot(e, n, halfRadial, halfTan, a), p * zScale, bands, active ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)');
+            //Current >= previous: one prism to P, split at P-1 (base colour below, delta colour above), with a
+            //collar ring on the split so the previous level is always visible even when it sits low on the bar.
+            const split = prevH / pH;
+            const bands: { frac: number; wall: string; roof: string }[] = [];
+            if (split > 0.02) { bands.push({ frac: split, wall: baseWall, roof: baseRoof }); }
+            bands.push({
+                frac: Math.max(0.02, 1 - split),
+                wall: lerpHexToward(deltaCol, '#000000', 0.15),
+                roof: lerpHexToward(deltaCol, '#ffffff', active ? 0.35 : 0.1),
+            });
+            svg += stackedColumn(camera, fp, pH, bands, stroke);
+            if (prevH > 0.5) { svg += frontEdges(camera, fp, prevH, deltaCol, 2, false); }
         }
-        if (ceiling > 0)
+        else if (pH > 0)
         {
-            const impr    = (p - prev) * direction;
-            const markCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? good : bad);
-            const mk = camera.project(e, n, prev * zScale);
-            //Dashed stem between the bar top and the P-1 level, then the marker sphere ON that level.
-            svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
-            svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="3.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
+            //Current < previous: solid current bar + a floating collar at P-1, joined by a dashed cage so the
+            //gap reads as "below last period".
+            svg += stackedColumn(camera, fp, pH, [{ frac: 1, wall: baseWall, roof: baseRoof }], stroke);
+            svg += cageStruts(camera, fp, pH, prevH, deltaCol);
+            svg += frontEdges(camera, fp, prevH, deltaCol, 2, false);
+        }
+        else if (prevH > 0.5)
+        {
+            //No current value, previous positive: the collar alone (with a cage from the ground).
+            svg += cageStruts(camera, fp, 0, prevH, deltaCol);
+            svg += frontEdges(camera, fp, prevH, deltaCol, 2, false);
         }
         if (op < 1) { svg = `<g opacity="${op.toFixed(3)}">${svg}</g>`; }
         faces.push({ depth: base[1], svg });
