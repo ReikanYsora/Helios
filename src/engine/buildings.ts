@@ -486,119 +486,6 @@ export function renderShadows(
     return `<g opacity="${(shadowOpacity * fade).toFixed(3)}">${inner}</g>`;
 }
 
-//---------------------------------------------------------------------------------------------------------
-//Merge touching home parts. Two abutting prisms share a partial wall whose faces a single-scalar painter's
-//sort can't order (equal depth along the shared edge), which glitches the seam. So before extruding, home
-//parts that touch are fused into ONE prism per connected group (their combined convex outline): no shared
-//face survives. Detached parts stay separate, and only the home set is merged (the focal building);
-//neighbours render unchanged.
-//---------------------------------------------------------------------------------------------------------
-
-//Shortest distance from point p to segment [a,b], in local metres.
-function pointSegDist(p: Point, a: Point, b: Point): number
-{
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
-    const len2 = dx * dx + dy * dy;
-    const t = len2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2)) : 0;
-    return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
-}
-
-//Two simple footprints touch or overlap? bbox reject, then vertex-inside-other, near-edge (within
-//TOUCH_EPS_M) or any edge pair within that distance, so an abutting shared wall counts as connected.
-const TOUCH_EPS_M = 0.4;
-//Axis-aligned bounds [minX, minY, maxX, maxY] of a footprint.
-function bboxOf(poly: Point[]): [number, number, number, number]
-{
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const p of poly)
-    {
-        if (p[0] < minX) { minX = p[0]; }
-        if (p[1] < minY) { minY = p[1]; }
-        if (p[0] > maxX) { maxX = p[0]; }
-        if (p[1] > maxY) { maxY = p[1]; }
-    }
-    return [minX, minY, maxX, maxY];
-}
-function footprintsTouch(a: Point[], b: Point[]): boolean
-{
-    const [aMinX, aMinY, aMaxX, aMaxY] = bboxOf(a);
-    const [bMinX, bMinY, bMaxX, bMaxY] = bboxOf(b);
-    if (aMaxX + TOUCH_EPS_M < bMinX || bMaxX + TOUCH_EPS_M < aMinX
-     || aMaxY + TOUCH_EPS_M < bMinY || bMaxY + TOUCH_EPS_M < aMinY) { return false; }
-    for (const p of a) { if (pointInPolygon(p[0], p[1], b)) { return true; } }
-    for (const p of b) { if (pointInPolygon(p[0], p[1], a)) { return true; } }
-    for (let i = 0; i < a.length; i++)
-    {
-        const a1 = a[i];
-        const a2 = a[(i + 1) % a.length];
-        for (let j = 0; j < b.length; j++)
-        {
-            const b1 = b[j];
-            const b2 = b[(j + 1) % b.length];
-            if (pointSegDist(a1, b1, b2) <= TOUCH_EPS_M || pointSegDist(b1, a1, a2) <= TOUCH_EPS_M) { return true; }
-        }
-    }
-    return false;
-}
-
-//Fuse a homogeneous list (all home OR all neighbours) so parts that touch transitively become one
-//convex-outline prism per connected group; detached parts are kept. Group height is the tallest part's;
-//isHome is inherited from the list so the merged prism keeps the right styling.
-function mergeGroup(list: Building[], isHome: boolean): Building[]
-{
-    const n = list.length;
-    if (n < 2) { return list; }
-    const parent = Array.from({ length: n }, (_, i) => i);
-    const find = (i: number): number => { let r = i; while (parent[r] !== r) { parent[r] = parent[parent[r]]; r = parent[r]; } return r; };
-    for (let i = 0; i < n; i++)
-    {
-        for (let j = i + 1; j < n; j++)
-        {
-            if (footprintsTouch(list[i].footprint, list[j].footprint)) { parent[find(i)] = find(j); }
-        }
-    }
-    const groups = new Map<number, number[]>();
-    for (let i = 0; i < n; i++)
-    {
-        const r = find(i);
-        const g = groups.get(r);
-        if (g) { g.push(i); } else { groups.set(r, [i]); }
-    }
-    const out: Building[] = [];
-    for (const idxs of groups.values())
-    {
-        if (idxs.length === 1) { out.push(list[idxs[0]]); continue; }
-        const verts: Point[] = [];
-        let height = 0;
-        for (const i of idxs)
-        {
-            for (const p of list[i].footprint) { verts.push(p); }
-            if (list[i].height > height) { height = list[i].height; }
-        }
-        const hull = convexHull(verts);
-        let cx = 0;
-        let cy = 0;
-        for (const p of hull) { cx += p[0]; cy += p[1]; }
-        out.push({ footprint: hull, height, isHome, centerX: cx / hull.length, centerY: cy / hull.length });
-    }
-    return out;
-}
-
-//Merge touching prisms across the whole scene, home parts and neighbours each merged within their own set
-//(never fused across, so a neighbour abutting the home keeps its own colour). Removes the abutting shared
-//walls that the painter's sort can't resolve.
-function mergeTouchingBuildings(buildings: Building[]): Building[]
-{
-    return [
-        ...mergeGroup(buildings.filter((b) => !b.isHome), false),
-        ...mergeGroup(buildings.filter((b) => b.isHome), true),
-    ];
-}
-
 //Extrude + paint the buildings far to near. `altitude` is the sun altitude (deg) for the time-of-day tint;
 //`growth` in [0,1] animates the prisms rising. `neighborOpacity` (0..1) sets how solid the surrounding
 //(non-home) prisms read. `home` customises the home prism only (colour, growth multiplier, band histogram).
@@ -612,10 +499,8 @@ export function renderBuildings(
     home:            HomeAppearance = {}
 ): string
 {
-    //Fuse touching prisms first so no abutting shared wall reaches the painter (it can't order coplanar faces).
-    const merged = mergeTouchingBuildings(buildings);
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
-    const order = merged
+    const order = buildings
         .map((b, index) =>
         {
             const c = cam.project3(b.centerX, b.centerY, 0);
@@ -644,7 +529,7 @@ export function renderBuildings(
     const allFaces: { depth: number; svg: string }[] = [];
     for (const { index } of order)
     {
-        const b  = merged[index];
+        const b  = buildings[index];
         const fp = simplifyFootprint(b.footprint);
         //Home prism height carries the extra squash/grow multiplier.
         const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);

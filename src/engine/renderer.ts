@@ -313,12 +313,10 @@ export class SceneRenderer
         }
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-        //Home-only (clock dial) is always lit as overhead midday: a fixed high sun gives the prism its full
-        //daytime tint and casts no shadow, so the scene's real time of day never darkens or streaks the dial.
-        const sun = this._homeOnly ? { azimuth: 180, altitude: 90 } : this._sun;
-        const alt = sun.altitude;
-        //Home-only: just the home prism, no neighbours, no night wash, as the dial's anchor.
-        const drawn = this._homeOnly ? this._buildings.filter(b => b.isHome) : this._buildings;
+        const alt = this._sun.altitude;
+        //Home-only (clock dial): draw NO scene geometry. The card paints the dial (bars + central column) into
+        //its own overlay, so the engine just keeps the basemap underneath.
+        const drawn = this._homeOnly ? [] : this._buildings;
         //Full-frame night/twilight wash for the current sun altitude (empty in daylight / home-only).
         const shade = this._homeOnly ? { opacity: 0, color: '' } : nightShade(alt);
         const shadeSvg = shade.opacity > 0
@@ -326,7 +324,7 @@ export class SceneRenderer
             : '';
         this._sceneSvg.innerHTML =
             shadeSvg +
-            renderShadows(this.camera, drawn, sun, this._palette.shadow, this._palette.shadowOpacity) +
+            renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
             renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
 
         this.onAfterDraw?.();

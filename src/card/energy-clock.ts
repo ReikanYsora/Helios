@@ -41,6 +41,10 @@ const BAR_TANGENT_FRAC = 0.018;
 const BAR_RADIAL_FRAC  = 0.45;
 const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
 const LABEL_MIN_OPACITY = 0.15; //farthest-back hour label opacity (nearest is opaque)
+//Central column filling the hub: a stacked cylinder (one band per active filter) replacing the home prism at
+//the dial centre. Height is a fraction of the tallest bar; the polygon count fakes a smooth cylinder.
+const CLOCK_COLUMN_H_FRAC = 0.5;
+const CLOCK_COLUMN_SIDES  = 24;
 //Clock-face guide: faint centre ring + 24 spokes reaching toward (but stopping short of) the hour labels.
 const CLOCK_HUB_R_FRAC      = 0.12;
 const CLOCK_SPOKE_OUTER_FRAC = 1.10;
@@ -677,6 +681,8 @@ export function projectClockFrame(
     //Per-unit ceiling override (eased between filter changes so bars don't snap to a new scale). Units missing
     //from the map fall back to the busiest current ring of that unit.
     unitCeil?: Map<string, number>,
+    //Central column hovered/tapped: brighten it + glow (the card then shows the period-total tooltip).
+    columnHighlight = false,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -713,19 +719,29 @@ export function projectClockFrame(
         const ceiling = unitCeil?.get(ring.data.unit) ?? unitMax.get(ring.data.unit) ?? 0;
         projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits);
     });
+    //Central column: one stacked band per active filter (its colour), drawn in the same depth pass so the
+    //nearer bars occlude it and the farther bars sit behind. Grows with the bars (max ring heightScale).
+    const hubR = outerR * CLOCK_HUB_R_FRAC;
+    if (rings.length)
+    {
+        const grow = rings.reduce((m, r) => Math.max(m, r.heightScale), 0);
+        faces.push(centralColumn(camera, hubR, maxHm * CLOCK_COLUMN_H_FRAC * grow, rings, columnHighlight));
+    }
     faces.sort((a, b) => a.depth - b.depth);
 
-    //One glow filter per ring, tinted to its metric colour, for the focused slice / bar.
+    //One glow filter per ring, tinted to its metric colour, for the focused slice / bar; plus the central
+    //column's own glow (first filter colour) used when it is hovered.
     let defs = '<defs>';
     rings.forEach((r, i) => { defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`; });
+    defs += `<filter id="clock-col-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${rings[0]?.data.color ?? '#ffffff'}" flood-opacity="0.95"/></filter>`;
     defs += '</defs>';
 
     //defs (per-ring glow filters) stay with the cylinders that use them. Bars carry their own highlight, so
     //the guide stays static (no focused spoke).
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
-    //Home hit target: the projected local origin (the prism's base centre) + the inner empty-disc radius.
+    //Central-column hit target: the projected origin (its base centre) + the hub radius in screen px.
     const homeC = camera.project3(0, 0, 0);
-    const homeR = RING_INNER_MIN_FRAC * RING_R_FRAC * minEdge;
+    const homeR = hubR * ppm;
     return {
         guideSvg: clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join(''),
@@ -782,6 +798,29 @@ function projectHistogramRing(
         if (dimOp < 1) { col = `<g opacity="${dimOp.toFixed(3)}">${col}</g>`; }
         faces.push({ depth: base[1], svg: col });
     }
+}
+
+//Central column: a stacked cylinder at the dial origin, one equal band per active filter (its colour), so it
+//reads as a legend of the selected metrics. Hovered, it brightens (roof toward white, white edge) and glows.
+//Returned as one face at the base-centre depth, so the surrounding bars occlude/sit-behind it correctly.
+function centralColumn(camera: SceneCamera, hubR: number, heightM: number, rings: ClockRingInput[], highlight: boolean): ClockFace
+{
+    const fp: [number, number][] = [];
+    for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
+    {
+        const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
+        fp.push([hubR * Math.sin(a), hubR * Math.cos(a)]);
+    }
+    const frac  = 1 / rings.length;
+    const bands = rings.map((r) => ({
+        frac,
+        wall: lerpHexToward(r.data.color, '#000000', 0.25),
+        roof: lerpHexToward(r.data.color, '#ffffff', highlight ? 0.4 : 0.18),
+    }));
+    const stroke = highlight ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)';
+    let svg = stackedColumn(camera, fp, heightM, bands, stroke);
+    if (highlight) { svg = `<g filter="url(#clock-col-glow)">${svg}</g>`; }
+    return { depth: camera.project(0, 0, 0)[1], svg };
 }
 
 

@@ -519,29 +519,6 @@ export class HeliosCard extends LitElement
         this._engine.setHomeAppearance(color, bands, play);
     }
 
-    //Clock mode home colour: equal-size slices, one per active filter (3 filters -> thirds), each in its
-    //metric colour: a pure legend of the selected metrics, no averaging. One filter = a solid block.
-    private _updateClockHomeAppearance(): void
-    {
-        if (!this._engine)
-        {
-            return;
-        }
-        //On home hover/tap the engine gives the prism the focused-bar treatment (glow + white edge + brighter
-        //roof), the same effect as a tapped histogram bar, without dimming the cylinders.
-        const hl = this._clockHomeHover;
-        const colors = this._clockTargets.map(t => clockTargetMeta(this, t).color);
-        if (colors.length === 0)
-        {
-            this._engine.setHomeAppearance(ENERGY_COLOR.consumption(this), [], false, hl);
-            return;
-        }
-        const bands = colors.length >= 2
-            ? colors.map(c => ({ frac: 1 / colors.length, color: c }))
-            : [];
-        this._engine.setHomeAppearance(colors[0], bands, false, hl);
-    }
-
     //Timeline mode selector: Now / 1 week / 1 month / 1 year. The active mode is highlighted. Pointer-down is
     //swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
@@ -897,10 +874,8 @@ export class HeliosCard extends LitElement
                     this._clockAnimate();
                 }
             }
-            //Home prism: render it alone + colour it as equal slices of the active filters. Re-run when the dial
-            //appears, the filter set changes, data first lands, or the ENGINE (re)spawns: returning to the tab
-            //rebuilds the engine without any of the others changing, so without _engine here the home would draw
-            //in its default colour until the first hover re-pushed the appearance.
+            //Clock dial draws no scene geometry: keep the engine in home-only so it shows just the basemap under
+            //the overlay (bars + central column). Re-assert on dial open, filter change, data land, engine respawn.
             if (_changedProperties.has('_viewMode')
                 || _changedProperties.has('_clockTargets')
                 || _changedProperties.has('_unifiedStore')
@@ -908,10 +883,9 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('config'))
             {
                 this._engine?.setHomeOnly(true);
-                this._updateClockHomeAppearance();
             }
-            //Engine (re)spawn (e.g. returning to the tab): replay the bar grow on every present ring, the same
-            //rise the home prism plays, so the dial re-enters with the build animation instead of popping in.
+            //Engine (re)spawn (e.g. returning to the tab): replay the bar grow on every present ring, so the dial
+            //re-enters with the build animation instead of popping in.
             if (_changedProperties.has('_engine') && this._engine)
             {
                 const now = Date.now();
@@ -923,9 +897,11 @@ export class HeliosCard extends LitElement
             {
                 this._startClockDim();
             }
+            //Central-column hover toggles its highlight: repaint so it brightens/glows (its colour comes from the
+            //projected frame, not the engine prism).
             if (_changedProperties.has('_clockHomeHover'))
             {
-                this._updateClockHomeAppearance();
+                this._scheduleClockPaint();
             }
             if (_changedProperties.has('_clockData'))
             {
@@ -2336,9 +2312,8 @@ export class HeliosCard extends LitElement
             const now = Date.now();
             this._clockGrowStart.clear();
             this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
-            //Home prism becomes the dial anchor: render it alone, sliced by the active filters.
+            //Dial draws no scene geometry: the engine keeps only the basemap, the overlay paints the dial.
             this._engine?.setHomeOnly(true);
-            this._updateClockHomeAppearance();
             this._viewMode = mode;
             this._persistUiState();
             //Long window: kick the decoupled hourly fetch now (the gated refresh chain won't, since nothing
@@ -2794,9 +2769,10 @@ export class HeliosCard extends LitElement
             this._clockDimSlot, this._clockDim,
             { n: tc.compassN, s: tc.compassS, e: tc.compassE, w: tc.compassW },
             dispCeil,
+            this._clockHomeHover,
         );
-        //Cylinders into .clock-svg (over the home prism); the flat guide into the engine's ground overlay,
-        //which sits between the basemap and the home prism so the home reads OVER the guide.
+        //Cylinders + central column into .clock-svg; the flat guide into the engine's ground overlay, which
+        //sits between the basemap and the dial so the column reads OVER the guide.
         svgEl.innerHTML = frame.svg;
         this._engine?.setGroundOverlay(frame.guideSvg);
         this._clockHits = frame.hits;

@@ -478,9 +478,10 @@ export const heliosTimelineStyles = css`
         padding: 0 1px;
         box-sizing: border-box;
         color: var(--primary-text-color, #212121);
-        /*  HA frontend font stack so the label's metrics match the chart cards above. */
+        /*  Match an HA tile card's entity-value text (body font, --ha-font-size-s, normal weight) so the
+            timeline's axis labels read as native HA chrome. */
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, Roboto, "Helvetica Neue", Arial, sans-serif));
-        font-size: clamp(9px, 7cqw, 11px);
+        font-size: var(--ha-font-size-s, 12px);
         line-height: 18px;
         letter-spacing: 0;
         font-variant-numeric: tabular-nums;
