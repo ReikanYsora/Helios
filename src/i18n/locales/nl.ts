@@ -9,9 +9,9 @@ export const nl: Translations = {
     {
         rangeLabel: 'Periode',
         now:   'Nu',
-        week:  '1 week',
-        month: '1 maand',
-        year:  '1 jaar',
+        week:  'week',
+        month: 'maand',
+        year:  'jaar',
     },
 
     clock:

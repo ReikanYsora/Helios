@@ -9,9 +9,9 @@ export const id: Translations = {
     {
         rangeLabel: 'Rentang waktu',
         now:   'Sekarang',
-        week:  '1 minggu',
-        month: '1 bulan',
-        year:  '1 tahun',
+        week:  'minggu',
+        month: 'bulan',
+        year:  'tahun',
     },
 
     clock:

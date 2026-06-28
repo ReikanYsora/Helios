@@ -9,9 +9,9 @@ export const fi: Translations = {
     {
         rangeLabel: 'Aikaväli',
         now:   'Nyt',
-        week:  '1 viikko',
-        month: '1 kuukausi',
-        year:  '1 vuosi',
+        week:  'viikko',
+        month: 'kuukausi',
+        year:  'vuosi',
     },
 
     clock:

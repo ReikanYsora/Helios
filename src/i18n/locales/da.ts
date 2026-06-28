@@ -9,9 +9,9 @@ export const da: Translations = {
     {
         rangeLabel: 'Tidsrum',
         now:   'Nu',
-        week:  '1 uge',
-        month: '1 måned',
-        year:  '1 år',
+        week:  'uge',
+        month: 'måned',
+        year:  'år',
     },
 
     clock:

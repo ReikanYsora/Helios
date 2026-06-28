@@ -15,10 +15,12 @@ export const fr: Translations = {
     period:
     {
         rangeLabel: 'Période',
+        standard: 'Standard',
+        today: "Aujourd'hui",
         now:   'Maintenant',
-        week:  '1 semaine',
-        month: '1 mois',
-        year:  '1 an',
+        week:  'Semaine',
+        month: 'Mois',
+        year:  'An',
     },
 
     clock:

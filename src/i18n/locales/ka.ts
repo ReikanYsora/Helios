@@ -9,9 +9,9 @@ export const ka: Translations = {
     {
         rangeLabel: 'დროის დიაპაზონი',
         now:   'ახლა',
-        week:  '1 კვირა',
-        month: '1 თვე',
-        year:  '1 წელი',
+        week:  'კვირა',
+        month: 'თვე',
+        year:  'წელი',
     },
 
     clock:

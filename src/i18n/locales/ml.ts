@@ -9,9 +9,9 @@ export const ml: Translations = {
     {
         rangeLabel: 'സമയ പരിധി',
         now:   'ഇപ്പോൾ',
-        week:  '1 ആഴ്ച',
-        month: '1 മാസം',
-        year:  '1 വർഷം',
+        week:  'ആഴ്ച',
+        month: 'മാസം',
+        year:  'വർഷം',
     },
 
     clock:

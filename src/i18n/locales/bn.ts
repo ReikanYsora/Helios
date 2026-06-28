@@ -9,9 +9,9 @@ export const bn: Translations = {
     {
         rangeLabel: 'সময়সীমা',
         now:   'এখন',
-        week:  '1 সপ্তাহ',
-        month: '1 মাস',
-        year:  '1 বছর',
+        week:  'সপ্তাহ',
+        month: 'মাস',
+        year:  'বছর',
     },
 
     clock:

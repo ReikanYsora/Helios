@@ -9,9 +9,9 @@ export const zhHant: Translations = {
     {
         rangeLabel: '時間範圍',
         now:   '現在',
-        week:  '1 週',
-        month: '1 個月',
-        year:  '1 年',
+        week:  '週',
+        month: '個月',
+        year:  '年',
     },
 
     clock:

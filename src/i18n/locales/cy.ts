@@ -9,9 +9,9 @@ export const cy: Translations = {
     {
         rangeLabel: 'Ystod amser',
         now:   'Nawr',
-        week:  '1 wythnos',
-        month: '1 mis',
-        year:  '1 flwyddyn',
+        week:  'wythnos',
+        month: 'mis',
+        year:  'flwyddyn',
     },
 
     clock:

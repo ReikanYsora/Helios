@@ -9,9 +9,9 @@ export const hu: Translations = {
     {
         rangeLabel: 'Időtartomány',
         now:   'Most',
-        week:  '1 hét',
-        month: '1 hónap',
-        year:  '1 év',
+        week:  'hét',
+        month: 'hónap',
+        year:  'év',
     },
 
     clock:

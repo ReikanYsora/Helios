@@ -9,9 +9,9 @@ export const th: Translations = {
     {
         rangeLabel: 'ช่วงเวลา',
         now:   'ตอนนี้',
-        week:  '1 สัปดาห์',
-        month: '1 เดือน',
-        year:  '1 ปี',
+        week:  'สัปดาห์',
+        month: 'เดือน',
+        year:  'ปี',
     },
 
     clock:

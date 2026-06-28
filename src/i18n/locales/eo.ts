@@ -9,9 +9,9 @@ export const eo: Translations = {
     {
         rangeLabel: 'Tempa intervalo',
         now:   'Nun',
-        week:  '1 semajno',
-        month: '1 monato',
-        year:  '1 jaro',
+        week:  'semajno',
+        month: 'monato',
+        year:  'jaro',
     },
 
     clock:

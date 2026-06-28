@@ -9,9 +9,9 @@ export const uk: Translations = {
     {
         rangeLabel: 'Період',
         now:   'Зараз',
-        week:  '1 тиждень',
-        month: '1 місяць',
-        year:  '1 рік',
+        week:  'тиждень',
+        month: 'місяць',
+        year:  'рік',
     },
 
     clock:

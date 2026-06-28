@@ -9,9 +9,9 @@ export const gl: Translations = {
     {
         rangeLabel: 'Período',
         now:   'Agora',
-        week:  '1 semana',
-        month: '1 mes',
-        year:  '1 ano',
+        week:  'semana',
+        month: 'mes',
+        year:  'ano',
     },
 
     clock:

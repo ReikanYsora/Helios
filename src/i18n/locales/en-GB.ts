@@ -9,9 +9,9 @@ export const enGB: Translations = {
     {
         rangeLabel: 'Time range',
         now:   'Now',
-        week:  '1 week',
-        month: '1 month',
-        year:  '1 year',
+        week:  'week',
+        month: 'month',
+        year:  'year',
     },
 
     clock:

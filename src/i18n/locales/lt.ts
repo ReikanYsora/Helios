@@ -9,9 +9,9 @@ export const lt: Translations = {
     {
         rangeLabel: 'Laiko intervalas',
         now:   'Dabar',
-        week:  '1 savaitė',
-        month: '1 mėnuo',
-        year:  '1 metai',
+        week:  'savaitė',
+        month: 'mėnuo',
+        year:  'metai',
     },
 
     clock:

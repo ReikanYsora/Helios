@@ -9,9 +9,9 @@ export const ur: Translations = {
     {
         rangeLabel: 'وقت کا دورانیہ',
         now:   'ابھی',
-        week:  '1 ہفتہ',
-        month: '1 مہینہ',
-        year:  '1 سال',
+        week:  'ہفتہ',
+        month: 'مہینہ',
+        year:  'سال',
     },
 
     clock:

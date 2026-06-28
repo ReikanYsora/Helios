@@ -9,9 +9,9 @@ export const ta: Translations = {
     {
         rangeLabel: 'நேர வரம்பு',
         now:   'இப்போது',
-        week:  '1 வாரம்',
-        month: '1 மாதம்',
-        year:  '1 ஆண்டு',
+        week:  'வாரம்',
+        month: 'மாதம்',
+        year:  'ஆண்டு',
     },
 
     clock:

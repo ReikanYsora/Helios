@@ -9,9 +9,9 @@ export const ca: Translations = {
     {
         rangeLabel: 'Període',
         now:   'Ara',
-        week:  '1 setmana',
-        month: '1 mes',
-        year:  '1 any',
+        week:  'setmana',
+        month: 'mes',
+        year:  'any',
     },
 
     clock:

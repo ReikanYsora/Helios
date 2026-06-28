@@ -9,9 +9,9 @@ export const es419: Translations = {
     {
         rangeLabel: 'Rango de tiempo',
         now:   'Ahora',
-        week:  '1 semana',
-        month: '1 mes',
-        year:  '1 año',
+        week:  'semana',
+        month: 'mes',
+        year:  'año',
     },
 
     clock:

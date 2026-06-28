@@ -9,9 +9,9 @@ export const eu: Translations = {
     {
         rangeLabel: 'Aldia',
         now:   'Orain',
-        week:  '1 aste',
-        month: '1 hilabete',
-        year:  '1 urte',
+        week:  'aste',
+        month: 'hilabete',
+        year:  'urte',
     },
 
     clock:

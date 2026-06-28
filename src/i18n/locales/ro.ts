@@ -9,9 +9,9 @@ export const ro: Translations = {
     {
         rangeLabel: 'Interval de timp',
         now:   'Acum',
-        week:  '1 saptamana',
-        month: '1 luna',
-        year:  '1 an',
+        week:  'saptamana',
+        month: 'luna',
+        year:  'an',
     },
 
     clock:

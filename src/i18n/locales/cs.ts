@@ -9,9 +9,9 @@ export const cs: Translations = {
     {
         rangeLabel: 'Časový rozsah',
         now:   'Teď',
-        week:  '1 týden',
-        month: '1 měsíc',
-        year:  '1 rok',
+        week:  'týden',
+        month: 'měsíc',
+        year:  'rok',
     },
 
     clock:

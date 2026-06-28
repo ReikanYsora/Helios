@@ -17,10 +17,12 @@ export const en: Translations = {
     period:
     {
         rangeLabel: 'Time range',
+        standard: 'Standard',
+        today: 'Today',
         now:   'Now',
-        week:  '1 week',
-        month: '1 month',
-        year:  '1 year',
+        week:  'Week',
+        month: 'Month',
+        year:  'Year',
     },
 
     clock:

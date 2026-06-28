@@ -9,9 +9,9 @@ export const tr: Translations = {
     {
         rangeLabel: 'Zaman araligi',
         now:   'Simdi',
-        week:  '1 hafta',
-        month: '1 ay',
-        year:  '1 yil',
+        week:  'hafta',
+        month: 'ay',
+        year:  'yil',
     },
 
     clock:

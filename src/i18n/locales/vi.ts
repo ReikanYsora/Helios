@@ -9,9 +9,9 @@ export const vi: Translations = {
     {
         rangeLabel: 'Khoảng thời gian',
         now:   'Bây giờ',
-        week:  '1 tuần',
-        month: '1 tháng',
-        year:  '1 năm',
+        week:  'tuần',
+        month: 'tháng',
+        year:  'năm',
     },
 
     clock:

@@ -9,9 +9,9 @@ export const lb: Translations = {
     {
         rangeLabel: 'Zäitberäich',
         now:   'Elo',
-        week:  '1 Woch',
-        month: '1 Mount',
-        year:  '1 Joer',
+        week:  'Woch',
+        month: 'Mount',
+        year:  'Joer',
     },
 
     clock:

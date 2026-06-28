@@ -9,9 +9,9 @@ export const ja: Translations = {
     {
         rangeLabel: '期間',
         now:   '現在',
-        week:  '1週間',
-        month: '1か月',
-        year:  '1年',
+        week:  '週間',
+        month: 'か月',
+        year:  '年',
     },
 
     clock:

@@ -79,7 +79,9 @@ export interface Translations
     period?:
     {
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
-        now?:        string; //'Now' (today + tomorrow)
+        standard?:   string; //'Standard' (J-2 .. J+2)
+        today?:      string; //'Today'
+        now?:        string; //legacy key (kept so existing locales still type-check)
         week?:       string; //'1 week'
         month?:      string; //'1 month'
         year?:       string; //'1 year'

@@ -9,9 +9,9 @@ export const el: Translations = {
     {
         rangeLabel: 'Περίοδος',
         now:   'Τώρα',
-        week:  '1 εβδομάδα',
-        month: '1 μήνας',
-        year:  '1 έτος',
+        week:  'εβδομάδα',
+        month: 'μήνας',
+        year:  'έτος',
     },
 
     clock:

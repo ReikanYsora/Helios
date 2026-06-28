@@ -9,9 +9,9 @@ export const isLocale: Translations = {
     {
         rangeLabel: 'Tímabil',
         now:   'Núna',
-        week:  '1 vika',
-        month: '1 mánuður',
-        year:  '1 ár',
+        week:  'vika',
+        month: 'mánuður',
+        year:  'ár',
     },
 
     clock:

@@ -9,9 +9,9 @@ export const bg: Translations = {
     {
         rangeLabel: 'Период',
         now:   'Сега',
-        week:  '1 седмица',
-        month: '1 месец',
-        year:  '1 година',
+        week:  'седмица',
+        month: 'месец',
+        year:  'година',
     },
 
     clock:

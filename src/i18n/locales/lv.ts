@@ -9,9 +9,9 @@ export const lv: Translations = {
     {
         rangeLabel: 'Laika diapazons',
         now:   'Tagad',
-        week:  '1 nedēļa',
-        month: '1 mēnesis',
-        year:  '1 gads',
+        week:  'nedēļa',
+        month: 'mēnesis',
+        year:  'gads',
     },
 
     clock:

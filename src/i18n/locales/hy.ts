@@ -9,9 +9,9 @@ export const hy: Translations = {
     {
         rangeLabel: 'Ժամանակահատված',
         now:   'Հիմա',
-        week:  '1 շաբաթ',
-        month: '1 ամիս',
-        year:  '1 տարի',
+        week:  'շաբաթ',
+        month: 'ամիս',
+        year:  'տարի',
     },
 
     clock:

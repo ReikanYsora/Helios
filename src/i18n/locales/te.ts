@@ -9,9 +9,9 @@ export const te: Translations = {
     {
         rangeLabel: 'సమయ పరిధి',
         now:   'ఇప్పుడు',
-        week:  '1 వారం',
-        month: '1 నెల',
-        year:  '1 సంవత్సరం',
+        week:  'వారం',
+        month: 'నెల',
+        year:  'సంవత్సరం',
     },
 
     clock:

@@ -9,9 +9,9 @@ export const ru: Translations = {
     {
         rangeLabel: 'Период',
         now:   'Сейчас',
-        week:  '1 неделя',
-        month: '1 месяц',
-        year:  '1 год',
+        week:  'неделя',
+        month: 'месяц',
+        year:  'год',
     },
 
     clock:

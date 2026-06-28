@@ -9,9 +9,9 @@ export const pt: Translations = {
     {
         rangeLabel: 'Período',
         now:   'Agora',
-        week:  '1 semana',
-        month: '1 mês',
-        year:  '1 ano',
+        week:  'semana',
+        month: 'mês',
+        year:  'ano',
     },
 
     clock:

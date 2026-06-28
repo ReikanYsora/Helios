@@ -9,9 +9,9 @@ export const et: Translations = {
     {
         rangeLabel: 'Ajavahemik',
         now:   'Praegu',
-        week:  '1 nädal',
-        month: '1 kuu',
-        year:  '1 aasta',
+        week:  'nädal',
+        month: 'kuu',
+        year:  'aasta',
     },
 
     clock:

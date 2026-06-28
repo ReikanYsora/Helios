@@ -9,9 +9,9 @@ export const sl: Translations = {
     {
         rangeLabel: 'Časovni razpon',
         now:   'Zdaj',
-        week:  '1 teden',
-        month: '1 mesec',
-        year:  '1 leto',
+        week:  'teden',
+        month: 'mesec',
+        year:  'leto',
     },
 
     clock:

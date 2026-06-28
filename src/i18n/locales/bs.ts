@@ -9,9 +9,9 @@ export const bs: Translations = {
     {
         rangeLabel: 'Vremenski raspon',
         now:   'Sada',
-        week:  '1 sedmica',
-        month: '1 mjesec',
-        year:  '1 godina',
+        week:  'sedmica',
+        month: 'mjesec',
+        year:  'godina',
     },
 
     clock:

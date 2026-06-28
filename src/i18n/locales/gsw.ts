@@ -9,9 +9,9 @@ export const gsw: Translations = {
     {
         rangeLabel: 'Ziitberiich',
         now:   'Jetz',
-        week:  '1 Wuche',
-        month: '1 Monet',
-        year:  '1 Jahr',
+        week:  'Wuche',
+        month: 'Monet',
+        year:  'Jahr',
     },
 
     clock:

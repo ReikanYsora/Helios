@@ -9,9 +9,9 @@ export const de: Translations = {
     {
         rangeLabel: 'Zeitraum',
         now:   'Jetzt',
-        week:  '1 Woche',
-        month: '1 Monat',
-        year:  '1 Jahr',
+        week:  'Woche',
+        month: 'Monat',
+        year:  'Jahr',
     },
 
     clock:

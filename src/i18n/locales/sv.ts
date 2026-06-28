@@ -9,9 +9,9 @@ export const sv: Translations = {
     {
         rangeLabel: 'Tidsintervall',
         now:   'Nu',
-        week:  '1 vecka',
-        month: '1 månad',
-        year:  '1 år',
+        week:  'vecka',
+        month: 'månad',
+        year:  'år',
     },
 
     clock:

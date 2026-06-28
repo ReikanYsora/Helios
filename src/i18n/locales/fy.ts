@@ -9,9 +9,9 @@ export const fy: Translations = {
     {
         rangeLabel: 'Tiidberik',
         now:   'No',
-        week:  '1 wike',
-        month: '1 moanne',
-        year:  '1 jier',
+        week:  'wike',
+        month: 'moanne',
+        year:  'jier',
     },
 
     clock:

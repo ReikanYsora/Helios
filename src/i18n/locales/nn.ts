@@ -9,9 +9,9 @@ export const nn: Translations = {
     {
         rangeLabel: 'Tidsrom',
         now:   'No',
-        week:  '1 veke',
-        month: '1 månad',
-        year:  '1 år',
+        week:  'veke',
+        month: 'månad',
+        year:  'år',
     },
 
     clock:

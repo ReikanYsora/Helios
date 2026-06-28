@@ -14,7 +14,7 @@ import
 } from './helios-config';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
-import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod } from './card/timeline-modes';
+import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
 import { DAY_MS, HOUR_MS } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
@@ -351,12 +351,12 @@ export class HeliosCard extends LitElement
     @state() _isLiveMode    = true;
     //Active timeline mode (now / week / month / year). Drives the window + store cadence + fetch period +
     //scrub snapping (see card/timeline-modes.ts). Persisted per card; the toggle lives in the bottom band.
-    @state() _timelineMode: TimelineMode = 'now';
+    @state() _timelineMode: TimelineMode = 'standard';
     //Active rolling-window span (days of history/forecast around today), derived from the mode. Pushed to the
     //engine via setPeriodDays(), read by buildUnifiedStore. Single runtime source of truth for the window.
     //Not @state: changes go through _applyPeriod(), which requestUpdate()s after dropping store + window.
-    _periodPastDays   = TIMELINE_MODES.now.pastDays;
-    _periodFutureDays = TIMELINE_MODES.now.futureDays;
+    _periodPastDays   = modePastDays('standard');
+    _periodFutureDays = modeFutureDays('standard');
 
     //Flipped by fetchEnergyPrefs after the first parse lands, so the card kicks refreshHaDailyTotals as
     //soon as the HA Energy defaults snapshot appears rather than waiting up to 30 s for the next tick.
@@ -445,8 +445,8 @@ export class HeliosCard extends LitElement
         if (this._timelineMode === mode) { return; }
         this._timelineMode = mode;
         const spec = TIMELINE_MODES[mode];
-        this._periodPastDays   = spec.pastDays;
-        this._periodFutureDays = spec.futureDays;
+        this._periodPastDays   = modePastDays(mode);
+        this._periodFutureDays = modeFutureDays(mode);
         //Entering a no-weather mode: drop weather metrics from the clock filters + retarget the chart off them.
         if (!spec.weather)
         {
@@ -535,16 +535,17 @@ export class HeliosCard extends LitElement
         this._engine.setHomeAppearance(color, bands, play);
     }
 
-    //Timeline mode selector: Now / 1 week / 1 month / 1 year. The active mode is highlighted. Pointer-down is
-    //swallowed so tapping never starts a scrub on the parent band.
+    //Timeline mode selector: Standard / Today / Week / Month / Year. The active mode is highlighted.
+    //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
         const labels: Record<TimelineMode, string> = {
-            now:   t.period?.now   ?? 'Now',
-            week:  t.period?.week  ?? '1 week',
-            month: t.period?.month ?? '1 month',
-            year:  t.period?.year  ?? '1 year',
+            standard: t.period?.standard ?? 'Standard',
+            today:    t.period?.today    ?? 'Today',
+            week:     t.period?.week     ?? 'Week',
+            month:    t.period?.month    ?? 'Month',
+            year:     t.period?.year     ?? 'Year',
         };
         return html`
             <div
@@ -1673,7 +1674,7 @@ export class HeliosCard extends LitElement
                                 @pointerleave=${this._onChartHoverLeave}
                             >
                                 ${keyed(`${this._chartTarget}|${this._timelineMode}`, renderBottomChart(this))}
-                                ${(this._timelineMode === 'now' || this._timelineMode === 'week')
+                                ${(this._timelineMode === 'standard' || this._timelineMode === 'today' || this._timelineMode === 'week')
                                     ? renderTimelineNightZones(this) : nothing}
                                 ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
@@ -2689,8 +2690,8 @@ export class HeliosCard extends LitElement
                 if (typeof parsed.timelineMode === 'string' && parsed.timelineMode in TIMELINE_MODES)
                 {
                     this._timelineMode     = parsed.timelineMode as TimelineMode;
-                    this._periodPastDays   = TIMELINE_MODES[this._timelineMode].pastDays;
-                    this._periodFutureDays = TIMELINE_MODES[this._timelineMode].futureDays;
+                    this._periodPastDays   = modePastDays(this._timelineMode);
+                    this._periodFutureDays = modeFutureDays(this._timelineMode);
                 }
                 //Clock filter set: keep order, drop dupes/unknowns. The timeline follows the first.
                 if (Array.isArray(parsed.clockTargets))

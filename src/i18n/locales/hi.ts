@@ -9,9 +9,9 @@ export const hi: Translations = {
     {
         rangeLabel: 'समय अवधि',
         now:   'अभी',
-        week:  '1 सप्ताह',
-        month: '1 महीना',
-        year:  '1 वर्ष',
+        week:  'सप्ताह',
+        month: 'महीना',
+        year:  'वर्ष',
     },
 
     clock:

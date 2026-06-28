@@ -9,9 +9,9 @@ export const ko: Translations = {
     {
         rangeLabel: '기간',
         now:   '지금',
-        week:  '1주',
-        month: '1개월',
-        year:  '1년',
+        week:  '주',
+        month: '개월',
+        year:  '년',
     },
 
     clock:
