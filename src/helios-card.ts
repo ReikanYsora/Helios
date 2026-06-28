@@ -1710,7 +1710,7 @@ export class HeliosCard extends LitElement
                                 data-view="trend"
                                 @click=${this._onViewModeClick}
                             >
-                                <ha-icon icon="mdi:chart-timeline-variant-shimmer"></ha-icon>
+                                <ha-icon icon="mdi:delta"></ha-icon>
                             </button>
                             <button
                                 type="button"

@@ -666,6 +666,18 @@ function clockCompass(
 
 interface ClockFace { depth: number; svg: string }
 
+//Small downward marker above the dial at the CURRENT hour's slot, so opening a dial instantly shows which hour
+//band is "now". Sits above the tallest bar (bars normalise to <= maxHm) and is drawn last (always on top).
+function currentHourArrow(camera: SceneCamera, R: number, maxHm: number): string
+{
+    const hour = new Date().getHours();
+    const a = ((hour + 0.5) / 24) * 2 * Math.PI;
+    const p = camera.project(R * Math.sin(a), R * Math.cos(a), maxHm * 1.15);
+    const col = 'var(--primary-color, #03a9f4)';
+    //Apex at p (points down at the slot), base 11 px above it.
+    return `<polygon points="${p[0].toFixed(1)},${p[1].toFixed(1)} ${(p[0] - 6).toFixed(1)},${(p[1] - 11).toFixed(1)} ${(p[0] + 6).toFixed(1)},${(p[1] - 11).toFixed(1)}" fill="${col}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
+}
+
 //Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward). Shared here:
 //the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, the global back-to-front depth
 //sort; per-ring geometry lives in projectHistogramRing. Pure: the card resolves each ring's animation scalars
@@ -750,7 +762,7 @@ export function projectClockFrame(
     const homeR = Math.hypot(colTop[0] - colBase[0], colTop[1] - colBase[1]) / 2 + hubR * ppm;
     return {
         guideSvg: clockGuide(camera, outerR) + compass.svg,
-        svg: defs + faces.map(f => f.svg).join(''),
+        svg: defs + faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm),
         hits, labels, compass: compass.labels,
         home: { x: homeX, y: homeY, r: homeR },
     };
@@ -890,6 +902,17 @@ export function projectTrendFrame(
     const bad  = 'var(--error-color, #c62828)';
 
     const hits:  ClockHit[]  = [];
+    //Depth fade: bars far from the camera dim toward FADE_MIN so the foreground stays readable (like the hours).
+    const FADE_MIN = 0.4;
+    const depths = Array.from({ length: 24 }, (_u, h) =>
+    {
+        const a = ((h + 0.5) / 24) * 2 * Math.PI;
+        return camera.project3(R * Math.sin(a), R * Math.cos(a), 0).depth;
+    });
+    let dMin = Infinity; let dMax = -Infinity;
+    for (const d of depths) { dMin = Math.min(dMin, d); dMax = Math.max(dMax, d); }
+    const dRange = dMax - dMin || 1;
+
     const faces: ClockFace[] = [];
     for (let h = 0; h < 24; h++)
     {
@@ -901,6 +924,8 @@ export function projectTrendFrame(
         hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
         const active = h === focusHour;
         const dimOp  = focusHour !== null && !active ? 1 - 0.5 * dim : 1;
+        const fade   = FADE_MIN + (1 - FADE_MIN) * (depths[h] - dMin) / dRange;
+        const op     = dimOp * fade;
 
         let svg = '';
         if (p > 0)
@@ -917,7 +942,7 @@ export function projectTrendFrame(
             svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
             svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="3.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
         }
-        if (dimOp < 1) { svg = `<g opacity="${dimOp.toFixed(3)}">${svg}</g>`; }
+        if (op < 1) { svg = `<g opacity="${op.toFixed(3)}">${svg}</g>`; }
         faces.push({ depth: base[1], svg });
     }
     faces.sort((a, b) => a.depth - b.depth);
@@ -925,7 +950,7 @@ export function projectTrendFrame(
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
     return {
         guideSvg: clockGuide(camera, outerR) + compass.svg,
-        svg: faces.map(f => f.svg).join(''),
+        svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm),
         hits, labels, compass: compass.labels,
         home: { x: 0, y: 0, r: 0 },
     };

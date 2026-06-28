@@ -159,6 +159,9 @@ export const heliosCardEnergyClockCss = css`
     .overlay-top-right.trend-rail
     {
         gap: 0;
+        /*  top 4 px (not 8) + 48 px segments give the same icon pitch + centres as the clock rail's 40 px
+            chips at 8 px gaps, so switching clock <-> trend never shifts the metric icons. */
+        top: 4px;
         border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
         border-radius: var(--ha-border-radius-md, 6px);
         background: var(--card-background-color, #ffffff);
@@ -174,7 +177,7 @@ export const heliosCardEnergyClockCss = css`
         outline: 0;
         cursor: pointer;
         width: 40px;
-        height: 40px;
+        height: 48px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
