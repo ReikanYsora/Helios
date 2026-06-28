@@ -515,21 +515,23 @@ export function renderBuildings(
         .sort((a, b) => a.depth - b.depth);
 
     //Neighbours use the raw colour (NOT altitude-tinted): night shading would darken them to near the
-    //dark-theme background and make them vanish. Opacity (neighborOpacity) is user-controlled.
-    const nb     = palette.neighbor;
-    const nbRgba = (op: number): string =>
-        `rgba(${hexByte(nb, 1)},${hexByte(nb, 3)},${hexByte(nb, 5)},${Math.max(0, Math.min(1, op)).toFixed(3)})`;
+    //dark-theme background and make them vanish. They paint OPAQUE (walls a touch darker than the roof for
+    //shading); the user-set neighborOpacity is applied ONCE to the whole neighbour group below, so back faces
+    //and stacked prisms never show through each other (only the visible silhouette reads, then fades as a unit).
+    const nb       = palette.neighbor;
+    const nbWall   = mixHex(nb, '#000000', 0.18);
+    const nbStroke = mixHex(nb, '#000000', 0.30);
     const homeBands = home.bands && home.bands.length >= 2 ? home.bands : null;
 
-    //Every visible face (wall band + roof) from EVERY building goes into one list, painted strictly far to near
-    //by its nearest-corner depth. Sorting globally (not per building) is what makes two TOUCHING buildings draw
-    //correctly: their faces interleave by true depth, so the shared/partly-overlapping wall at the junction no
-    //longer mis-orders against the neighbour it abuts. (Per-building sorting drew each prism whole, so an abutting
-    //wing's roof or wall could paint over its neighbour at the seam.)
-    const allFaces: { depth: number; svg: string }[] = [];
+    //Faces split by group: neighbours (faded together) and the home (always full opacity, drawn on top). Each
+    //group is painted far-to-near by nearest-corner depth, so within a group two touching prisms interleave
+    //correctly at their shared wall.
+    const neighborFaces: { depth: number; svg: string }[] = [];
+    const homeFaces:     { depth: number; svg: string }[] = [];
     for (const { index } of order)
     {
         const b  = buildings[index];
+        const faces = b.isHome ? homeFaces : neighborFaces;
         const fp = simplifyFootprint(b.footprint);
         //Home prism height carries the extra squash/grow multiplier.
         const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);
@@ -552,7 +554,7 @@ export function renderBuildings(
             cum.push(1);
             fill.push(b.isHome
                 ? tintedRgba(mixHex(home.color ?? palette.home, '#000000', 0.22), altitude, 0.9)
-                : nbRgba(neighborOpacity * 0.7));
+                : nbWall);
         }
         const rings    = cum.map((c) => fp.map((p) => cam.project(p[0], p[1], h * c)));
         const base     = rings[0];
@@ -564,8 +566,8 @@ export function renderBuildings(
         const hl = !!(b.isHome && home.highlight);
         const roofFill = b.isHome
             ? tintedRgba(mixHex(topColor, '#ffffff', hl ? 0.4 : 0.18), altitude, 0.92)
-            : nbRgba(neighborOpacity);
-        let stroke = nbRgba(Math.min(1, neighborOpacity * 1.1));
+            : nb;
+        let stroke = nbStroke;
         if (hl)
         {
             stroke = 'rgba(255,255,255,0.9)';
@@ -624,29 +626,36 @@ export function renderBuildings(
                 cam.project3(fp[i][0], fp[i][1], h).depth,
                 cam.project3(fp[next][0], fp[next][1], h).depth,
             );
-            allFaces.push({ depth: wallDepth, svg: wall });
+            faces.push({ depth: wallDepth, svg: wall });
         }
         //Flat roof at its own nearest-corner depth. It sits at the top so in any above-horizon view it never
         //overlaps a wall in screen space, so its order against walls is cosmetic; depth-placing it just keeps a
         //nearer building's roof correctly over a farther one.
         let roofDepth = -Infinity;
         for (const p of fp) { const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth) { roofDepth = d; } }
-        allFaces.push({
+        faces.push({
             depth: roofDepth,
             svg:   `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`,
         });
     }
-    //Paint every building's faces in one far-to-near pass.
-    allFaces.sort((a, c) => a.depth - c.depth);
-    const svg = allFaces.map((f) => f.svg).join('');
-    //Focused-home glow halo: a drop-shadow tinted to the home colour, matching the focused histogram bar. The
-    //highlight only fires in the clock dial (home-only render), so wrapping the whole pass glows just the home.
-    if (home.highlight)
+    //Neighbours: opaque silhouette painted far-to-near, then faded as ONE group so layers never bleed through.
+    neighborFaces.sort((a, c) => a.depth - c.depth);
+    const op = Math.max(0, Math.min(1, neighborOpacity)).toFixed(3);
+    const neighborsSvg = neighborFaces.length
+        ? `<g opacity="${op}">${neighborFaces.map((f) => f.svg).join('')}</g>`
+        : '';
+
+    //Home on top at full opacity (the focal building). Far-to-near within its own parts.
+    homeFaces.sort((a, c) => a.depth - c.depth);
+    let homeSvg = homeFaces.map((f) => f.svg).join('');
+    //Focused-home glow halo: a drop-shadow tinted to the home colour, matching the focused histogram bar (only
+    //fires in the clock dial, where there are no neighbours).
+    if (home.highlight && homeSvg)
     {
         const glow = `<defs><filter id="home-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${home.color ?? palette.home}" flood-opacity="0.95"/></filter></defs>`;
-        return `${glow}<g filter="url(#home-glow)">${svg}</g>`;
+        homeSvg = `${glow}<g filter="url(#home-glow)">${homeSvg}</g>`;
     }
-    return svg;
+    return neighborsSvg + homeSvg;
 }
 
 //---------------------------------------------------------------------------------------------------------
