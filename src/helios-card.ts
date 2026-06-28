@@ -15,7 +15,7 @@ import
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod } from './card/timeline-modes';
-import { DAY_MS } from './constants';
+import { DAY_MS, HOUR_MS } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -27,6 +27,7 @@ import {
     clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
+import { nightFractionByHour } from './card/sun-zones';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
@@ -275,6 +276,9 @@ export class HeliosCard extends LitElement
     @state() _trendP:    ClockHourly | null = null;
     @state() _trendPrev: ClockHourly | null = null;
     _trendKey = '';
+    //Per-hour night share for the dial's ground day/night wedges, recomputed when the home or window changes.
+    @state() private _nightFrac: number[] | null = null;
+    private _nightFracKey = '';
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
     //Persisted; the timeline (hidden in clock mode) follows the first when scene mode resumes.
     @state() _clockTargets: ChartTarget[] = [];
@@ -744,6 +748,8 @@ export class HeliosCard extends LitElement
             //Refresh the HA Energy daily-total cache on the same 30 s cadence. One WS round-trip per
             //non-empty entity list; totals move by watt-hours, so 30 s tracks the dashboard tile cheaply.
             refreshHaDailyTotals(this);
+            //Keep the dial's "current hour" arrow in step with the clock even on an idle, camera-locked card.
+            if (this._viewMode === 'clock' || this._viewMode === 'trend') { this._scheduleClockPaint(); }
         }, 30_000);
         initVisibilityObserver(this);
         if (typeof document !== 'undefined')
@@ -848,6 +854,17 @@ export class HeliosCard extends LitElement
             this._updateHomeAppearance(_changedProperties.has('_chartTarget'));
         }
 
+        //Dial day/night wedges: recompute the per-hour night share when the home or window changes (keyed, so
+        //this is cheap). A new _nightFrac repaints via the dial branches below.
+        if ((this._viewMode === 'clock' || this._viewMode === 'trend')
+            && (_changedProperties.has('_viewMode')
+                || _changedProperties.has('_timeRange')
+                || _changedProperties.has('hass')
+                || _changedProperties.has('config')))
+        {
+            this._refreshNightFrac();
+        }
+
         //Energy-clock: while in clock mode, rebuild the metric areas when the metric set, the window or the
         //underlying data changes (a data-only rebuild animates nothing; the grow/slide is kicked by the toggle
         //and mode actions), then repaint once fresh areas render. A hover change kicks the slice-focus dim fade.
@@ -915,7 +932,7 @@ export class HeliosCard extends LitElement
             {
                 this._scheduleClockPaint();
             }
-            if (_changedProperties.has('_clockData'))
+            if (_changedProperties.has('_clockData') || _changedProperties.has('_nightFrac'))
             {
                 this._scheduleClockPaint();
             }
@@ -938,7 +955,8 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_trendPrev')
                 || _changedProperties.has('_trendTarget')
                 || _changedProperties.has('_clockHoverSlot')
-                || _changedProperties.has('_clockHomeHover'))
+                || _changedProperties.has('_clockHomeHover')
+                || _changedProperties.has('_nightFrac'))
             {
                 if (_changedProperties.has('_clockHoverSlot')) { this._startClockDim(); }
                 this._scheduleClockPaint();
@@ -1761,7 +1779,9 @@ export class HeliosCard extends LitElement
                 <!--  Right-hand metric selector (trend mode): a SINGLE-choice vertical toggle (one metric at a
                       time), styled as one rounded segmented control that fits the available metrics.  -->
                 ${hasHomeCoords && this._viewMode === 'trend' ? (() => {
-                    const targets = availableClockTargets(this);
+                    //Weather metrics (irradiance, cloud) have no per-hour P / P-1 profile (they're not recorder
+                    //stats), and they're not consumption habits anyway, so the trend selector drops them.
+                    const targets = availableClockTargets(this).filter(t => t !== 'irradiance' && t !== 'cloud');
                     if (!targets.length) { return nothing; }
                     return html`
                         <div class="overlay-top-right trend-rail">
@@ -2408,6 +2428,8 @@ export class HeliosCard extends LitElement
         }
         if (mode === 'trend')
         {
+            //Weather metrics have no P / P-1 profile; if one was restored, fall back to consumption.
+            if (this._trendTarget === 'irradiance' || this._trendTarget === 'cloud') { this._trendTarget = 'consumption'; }
             //Dial draws no scene geometry; the overlay paints the comparison dial. Fetch the two profiles.
             this._engine?.setHomeOnly(true);
             this._viewMode = mode;
@@ -2834,6 +2856,25 @@ export class HeliosCard extends LitElement
         return { pH: vec(dP), prevH: vec(dPrev), isE, data: dP ?? dPrev };
     }
 
+    //Recompute the per-hour night share for the ground wedges when the home or the window (rounded to the hour)
+    //changes. Cheap + keyed, so idle frames never recompute.
+    private _refreshNightFrac(): void
+    {
+        const coords = getHomeCoords(this.config, this.hass);
+        if (!coords || !this._timeRange)
+        {
+            if (this._nightFrac !== null) { this._nightFrac = null; }
+            this._nightFracKey = '';
+            return;
+        }
+        const startMs = this._timeRange.start.getTime();
+        const endMs   = Math.min(Date.now(), this._timeRange.end.getTime());
+        const key = `${coords.lat.toFixed(3)}|${coords.lon.toFixed(3)}|${Math.floor(startMs / HOUR_MS)}|${Math.floor(endMs / HOUR_MS)}`;
+        if (key === this._nightFracKey) { return; }
+        this._nightFracKey = key;
+        this._nightFrac = nightFractionByHour(coords.lat, coords.lon, startMs, endMs);
+    }
+
     //Project the rings for one frame and write them onto the overlay DOM: the bar SVG, the ground-laid hour
     //labels, and the clamped tooltip. Called every transform frame (init.ts) and during the grow/slide/exit
     //animation. Public so the engine's per-frame callback can reach it.
@@ -2863,7 +2904,7 @@ export class HeliosCard extends LitElement
                 camera, pH, prevH,
                 clockTargetMeta(this, target).color, trendGoodDirection(target),
                 cardinals, this._clockDimSlot, this._clockDim,
-                totalOf(pH), totalOf(prevH), this._clockHomeHover,
+                totalOf(pH), totalOf(prevH), this._clockHomeHover, this._nightFrac ?? [],
             );
             this._applyClockFrame(frame);
             return;
@@ -2914,6 +2955,7 @@ export class HeliosCard extends LitElement
             cardinals,
             dispCeil,
             this._clockHomeHover,
+            this._nightFrac ?? [],
         );
         this._applyClockFrame(frame);
     }

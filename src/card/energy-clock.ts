@@ -683,6 +683,27 @@ function currentHourArrow(camera: SceneCamera, R: number, maxHm: number, toH: nu
     return line + tri;
 }
 
+//Day/night ground wedges: one flat pizza-slice per hour from the hub out toward the map edge, its darkness set
+//by that hour's night share over the period (always-night hours full, mixed hours partial). Painted on the
+//ground (under the dial) so it reads as the sun being up or down at each hour band.
+function nightSectors(camera: SceneCamera, innerR: number, outerR: number, nightFrac: number[], maxOp: number): string
+{
+    const SEG = 4;
+    let s = '';
+    for (let h = 0; h < 24; h++)
+    {
+        const frac = nightFrac[h] ?? 0;
+        if (frac < 0.02) { continue; }
+        const a0 = (h / 24) * 2 * Math.PI;
+        const a1 = ((h + 1) / 24) * 2 * Math.PI;
+        const pts: string[] = [];
+        for (let k = 0; k <= SEG; k++) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(outerR * Math.sin(a), outerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        s += `<polygon points="${pts.join(' ')}" fill="#070b14" opacity="${(frac * maxOp).toFixed(3)}"/>`;
+    }
+    return s;
+}
+
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
 //no body below, so a marker placed lower stays visible.
 function floatingSlice(camera: SceneCamera, fp: [number, number][], loH: number, hiH: number, wall: string, roof: string, stroke: string): string
@@ -724,6 +745,8 @@ export function projectClockFrame(
     unitCeil?: Map<string, number>,
     //Central column hovered/tapped: brighten it + glow (the card then shows the period-total tooltip).
     columnHighlight = false,
+    //Per-hour night share for the ground day/night wedges (empty = none drawn).
+    nightFrac: number[] = [],
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -789,8 +812,9 @@ export function projectClockFrame(
     const homeX = (colBase[0] + colTop[0]) / 2;
     const homeY = (colBase[1] + colTop[1]) / 2;
     const homeR = Math.hypot(colTop[0] - colBase[0], colTop[1] - colBase[1]) / 2 + hubR * ppm;
+    const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
-        guideSvg: clockGuide(camera, outerR) + compass.svg,
+        guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, 0),
         hits, labels, compass: compass.labels,
         home: { x: homeX, y: homeY, r: homeR },
@@ -933,6 +957,8 @@ export function projectTrendFrame(
     totalP: number,
     totalPrev: number,
     columnHighlight: boolean,
+    //Per-hour night share for the ground day/night wedges (empty = none drawn).
+    nightFrac: number[] = [],
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -965,8 +991,9 @@ export function projectTrendFrame(
     const bad  = 'var(--error-color, #c62828)';
 
     const hits:  ClockHit[]  = [];
-    //Depth fade: bars far from the camera dim toward FADE_MIN so the foreground stays readable (like the hours).
-    const FADE_MIN = 0.4;
+    //Depth fade: bars far from the camera dim toward FADE_MIN so the foreground stays readable (gentle, so the
+    //back of the dial stays legible).
+    const FADE_MIN = 0.6;
     const depths = Array.from({ length: 24 }, (_u, h) =>
     {
         const a = ((h + 0.5) / 24) * 2 * Math.PI;
@@ -1027,8 +1054,9 @@ export function projectTrendFrame(
     //Central-gauge hit target: a disc over the whole projected column body (base to top), like the clock hub.
     const cBase = camera.project(0, 0, 0);
     const cTop  = camera.project(0, 0, colH);
+    const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
-        guideSvg: clockGuide(camera, outerR) + compass.svg,
+        guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[new Date().getHours()]) * zScale),
         hits, labels, compass: compass.labels,
         home: {
