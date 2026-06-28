@@ -8,6 +8,8 @@ export const af: Translations = {
     period:
     {
         rangeLabel: 'Tydbereik',
+        standard: 'Standaard',
+        today: 'Vandag',
         now:   'Nou',
         week:  'week',
         month: 'maand',

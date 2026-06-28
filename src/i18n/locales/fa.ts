@@ -8,6 +8,8 @@ export const fa: Translations = {
     period:
     {
         rangeLabel: 'بازه‌ی زمانی',
+        standard: 'استاندارد',
+        today: 'امروز',
         now:   'اکنون',
         week:  '۱ هفته',
         month: '۱ ماه',

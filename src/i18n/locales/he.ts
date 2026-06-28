@@ -8,6 +8,8 @@ export const he: Translations = {
     period:
     {
         rangeLabel: 'טווח זמן',
+        standard: 'רגיל',
+        today: 'היום',
         now:   'עכשיו',
         week:  'שבוע אחד',
         month: 'חודש אחד',

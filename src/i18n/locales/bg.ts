@@ -8,6 +8,8 @@ export const bg: Translations = {
     period:
     {
         rangeLabel: 'Период',
+        standard: 'Стандарт',
+        today: 'Днес',
         now:   'Сега',
         week:  'седмица',
         month: 'месец',

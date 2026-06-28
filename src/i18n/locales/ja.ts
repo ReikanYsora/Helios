@@ -8,6 +8,8 @@ export const ja: Translations = {
     period:
     {
         rangeLabel: '期間',
+        standard: '標準',
+        today: '今日',
         now:   '現在',
         week:  '週間',
         month: 'か月',

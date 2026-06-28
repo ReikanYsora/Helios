@@ -8,6 +8,8 @@ export const hy: Translations = {
     period:
     {
         rangeLabel: 'Ժամանակահատված',
+        standard: 'Ստանդարտ',
+        today: 'Այսօր',
         now:   'Հիմա',
         week:  'շաբաթ',
         month: 'ամիս',

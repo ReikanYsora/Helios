@@ -8,6 +8,8 @@ export const th: Translations = {
     period:
     {
         rangeLabel: 'ช่วงเวลา',
+        standard: 'มาตรฐาน',
+        today: 'วันนี้',
         now:   'ตอนนี้',
         week:  'สัปดาห์',
         month: 'เดือน',

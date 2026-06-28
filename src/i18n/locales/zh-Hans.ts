@@ -8,6 +8,8 @@ export const zhHans: Translations = {
     period:
     {
         rangeLabel: '时间范围',
+        standard: '标准',
+        today: '今天',
         now:   '现在',
         week:  '周',
         month: '个月',

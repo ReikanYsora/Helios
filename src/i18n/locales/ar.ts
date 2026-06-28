@@ -8,6 +8,8 @@ export const ar: Translations = {
     period:
     {
         rangeLabel: 'النطاق الزمني',
+        standard: 'قياسي',
+        today: 'اليوم',
         now:   'الآن',
         week:  'أسبوع واحد',
         month: 'شهر واحد',

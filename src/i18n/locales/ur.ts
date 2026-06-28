@@ -8,6 +8,8 @@ export const ur: Translations = {
     period:
     {
         rangeLabel: 'وقت کا دورانیہ',
+        standard: 'معیاری',
+        today: 'آج',
         now:   'ابھی',
         week:  'ہفتہ',
         month: 'مہینہ',

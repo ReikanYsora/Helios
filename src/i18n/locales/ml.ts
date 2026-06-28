@@ -8,6 +8,8 @@ export const ml: Translations = {
     period:
     {
         rangeLabel: 'സമയ പരിധി',
+        standard: 'സ്റ്റാൻഡേർഡ്',
+        today: 'ഇന്ന്',
         now:   'ഇപ്പോൾ',
         week:  'ആഴ്ച',
         month: 'മാസം',

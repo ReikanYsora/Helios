@@ -8,6 +8,8 @@ export const eu: Translations = {
     period:
     {
         rangeLabel: 'Aldia',
+        standard: 'Estandarra',
+        today: 'Gaur',
         now:   'Orain',
         week:  'aste',
         month: 'hilabete',

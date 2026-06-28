@@ -8,6 +8,8 @@ export const cy: Translations = {
     period:
     {
         rangeLabel: 'Ystod amser',
+        standard: 'Safonol',
+        today: 'Heddiw',
         now:   'Nawr',
         week:  'wythnos',
         month: 'mis',

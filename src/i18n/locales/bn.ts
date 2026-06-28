@@ -8,6 +8,8 @@ export const bn: Translations = {
     period:
     {
         rangeLabel: 'সময়সীমা',
+        standard: 'মানক',
+        today: 'আজ',
         now:   'এখন',
         week:  'সপ্তাহ',
         month: 'মাস',

@@ -8,6 +8,8 @@ export const et: Translations = {
     period:
     {
         rangeLabel: 'Ajavahemik',
+        standard: 'Standard',
+        today: 'Täna',
         now:   'Praegu',
         week:  'nädal',
         month: 'kuu',

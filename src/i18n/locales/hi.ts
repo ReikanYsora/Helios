@@ -8,6 +8,8 @@ export const hi: Translations = {
     period:
     {
         rangeLabel: 'समय अवधि',
+        standard: 'मानक',
+        today: 'आज',
         now:   'अभी',
         week:  'सप्ताह',
         month: 'महीना',

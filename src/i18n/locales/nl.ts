@@ -8,6 +8,8 @@ export const nl: Translations = {
     period:
     {
         rangeLabel: 'Periode',
+        standard: 'Standaard',
+        today: 'Vandaag',
         now:   'Nu',
         week:  'week',
         month: 'maand',

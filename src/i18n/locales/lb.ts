@@ -8,6 +8,8 @@ export const lb: Translations = {
     period:
     {
         rangeLabel: 'Zäitberäich',
+        standard: 'Standard',
+        today: 'Haut',
         now:   'Elo',
         week:  'Woch',
         month: 'Mount',

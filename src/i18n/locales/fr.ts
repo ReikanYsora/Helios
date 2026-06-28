@@ -20,7 +20,7 @@ export const fr: Translations = {
         now:   'Maintenant',
         week:  'Semaine',
         month: 'Mois',
-        year:  'An',
+        year:  'Année',
     },
 
     clock:

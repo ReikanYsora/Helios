@@ -8,6 +8,8 @@ export const uk: Translations = {
     period:
     {
         rangeLabel: 'Період',
+        standard: 'Стандарт',
+        today: 'Сьогодні',
         now:   'Зараз',
         week:  'тиждень',
         month: 'місяць',

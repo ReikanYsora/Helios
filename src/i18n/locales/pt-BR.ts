@@ -8,6 +8,8 @@ export const ptBR: Translations = {
     period:
     {
         rangeLabel: 'Intervalo de tempo',
+        standard: 'Padrão',
+        today: 'Hoje',
         now:   'Agora',
         week:  'semana',
         month: 'mês',

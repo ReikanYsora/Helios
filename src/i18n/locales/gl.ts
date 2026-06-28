@@ -8,6 +8,8 @@ export const gl: Translations = {
     period:
     {
         rangeLabel: 'Período',
+        standard: 'Estándar',
+        today: 'Hoxe',
         now:   'Agora',
         week:  'semana',
         month: 'mes',

@@ -8,6 +8,8 @@ export const eo: Translations = {
     period:
     {
         rangeLabel: 'Tempa intervalo',
+        standard: 'Norma',
+        today: 'Hodiaŭ',
         now:   'Nun',
         week:  'semajno',
         month: 'monato',

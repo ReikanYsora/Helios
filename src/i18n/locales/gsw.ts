@@ -8,6 +8,8 @@ export const gsw: Translations = {
     period:
     {
         rangeLabel: 'Ziitberiich',
+        standard: 'Standard',
+        today: 'Hüt',
         now:   'Jetz',
         week:  'Wuche',
         month: 'Monet',

@@ -8,6 +8,8 @@ export const hu: Translations = {
     period:
     {
         rangeLabel: 'Időtartomány',
+        standard: 'Normál',
+        today: 'Ma',
         now:   'Most',
         week:  'hét',
         month: 'hónap',

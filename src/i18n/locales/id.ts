@@ -8,6 +8,8 @@ export const id: Translations = {
     period:
     {
         rangeLabel: 'Rentang waktu',
+        standard: 'Standar',
+        today: 'Hari ini',
         now:   'Sekarang',
         week:  'minggu',
         month: 'bulan',

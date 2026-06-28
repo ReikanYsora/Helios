@@ -8,6 +8,8 @@ export const enGB: Translations = {
     period:
     {
         rangeLabel: 'Time range',
+        standard: 'Standard',
+        today: 'Today',
         now:   'Now',
         week:  'week',
         month: 'month',

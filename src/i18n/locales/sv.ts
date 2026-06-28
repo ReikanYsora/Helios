@@ -8,6 +8,8 @@ export const sv: Translations = {
     period:
     {
         rangeLabel: 'Tidsintervall',
+        standard: 'Standard',
+        today: 'Idag',
         now:   'Nu',
         week:  'vecka',
         month: 'månad',

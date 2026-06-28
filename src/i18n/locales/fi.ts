@@ -8,6 +8,8 @@ export const fi: Translations = {
     period:
     {
         rangeLabel: 'Aikaväli',
+        standard: 'Vakio',
+        today: 'Tänään',
         now:   'Nyt',
         week:  'viikko',
         month: 'kuukausi',

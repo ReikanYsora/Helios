@@ -8,6 +8,8 @@ export const tr: Translations = {
     period:
     {
         rangeLabel: 'Zaman araligi',
+        standard: 'Standart',
+        today: 'Bugun',
         now:   'Simdi',
         week:  'hafta',
         month: 'ay',

@@ -8,6 +8,8 @@ export const te: Translations = {
     period:
     {
         rangeLabel: 'సమయ పరిధి',
+        standard: 'ప్రామాణికం',
+        today: 'ఈరోజు',
         now:   'ఇప్పుడు',
         week:  'వారం',
         month: 'నెల',

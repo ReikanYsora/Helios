@@ -8,6 +8,8 @@ export const srLatn: Translations = {
     period:
     {
         rangeLabel: 'Vremenski opseg',
+        standard: 'Standardni',
+        today: 'Danas',
         now:   'Sada',
         week:  'nedelja',
         month: 'mesec',

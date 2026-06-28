@@ -8,6 +8,8 @@ export const nn: Translations = {
     period:
     {
         rangeLabel: 'Tidsrom',
+        standard: 'Standard',
+        today: 'I dag',
         now:   'No',
         week:  'veke',
         month: 'månad',

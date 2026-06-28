@@ -8,6 +8,8 @@ export const ta: Translations = {
     period:
     {
         rangeLabel: 'நேர வரம்பு',
+        standard: 'நிலையானது',
+        today: 'இன்று',
         now:   'இப்போது',
         week:  'வாரம்',
         month: 'மாதம்',

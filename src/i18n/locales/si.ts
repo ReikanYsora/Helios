@@ -8,6 +8,8 @@ export const si: Translations = {
     period:
     {
         rangeLabel: 'කාල පරාසය',
+        standard: 'සම්මත',
+        today: 'අද',
         now:   'දැන්',
         week:  'සති 1',
         month: 'මාස 1',

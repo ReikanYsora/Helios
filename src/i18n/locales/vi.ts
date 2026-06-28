@@ -8,6 +8,8 @@ export const vi: Translations = {
     period:
     {
         rangeLabel: 'Khoảng thời gian',
+        standard: 'Tiêu chuẩn',
+        today: 'Hôm nay',
         now:   'Bây giờ',
         week:  'tuần',
         month: 'tháng',

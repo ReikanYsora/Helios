@@ -52,9 +52,10 @@ export const heliosTimelineStyles = css`
     .tb-chart-stack
     {
         position: relative;
-        /*  Thin stroke in the active chart accent, softened to 60% so it reads as a subtle frame. */
+        /*  Neutral hairline frame, same as the period band below (the curve colour already signals the metric,
+            so the border stays a fixed divider rather than tinting per mode). */
         border: var(--ha-border-width-sm, 1px) solid
-            color-mix(in srgb, var(--chart-accent, var(--primary-text-color, #212121)) 60%, transparent);
+            var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
         overflow: hidden;
     }
     .tb-chart-card

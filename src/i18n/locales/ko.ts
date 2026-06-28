@@ -8,6 +8,8 @@ export const ko: Translations = {
     period:
     {
         rangeLabel: '기간',
+        standard: '표준',
+        today: '오늘',
         now:   '지금',
         week:  '주',
         month: '개월',

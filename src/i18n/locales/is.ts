@@ -8,6 +8,8 @@ export const isLocale: Translations = {
     period:
     {
         rangeLabel: 'Tímabil',
+        standard: 'Staðlað',
+        today: 'Í dag',
         now:   'Núna',
         week:  'vika',
         month: 'mánuður',

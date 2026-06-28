@@ -8,6 +8,8 @@ export const cs: Translations = {
     period:
     {
         rangeLabel: 'Časový rozsah',
+        standard: 'Standardní',
+        today: 'Dnes',
         now:   'Teď',
         week:  'týden',
         month: 'měsíc',

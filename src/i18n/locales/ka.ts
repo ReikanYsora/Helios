@@ -8,6 +8,8 @@ export const ka: Translations = {
     period:
     {
         rangeLabel: 'დროის დიაპაზონი',
+        standard: 'სტანდარტული',
+        today: 'დღეს',
         now:   'ახლა',
         week:  'კვირა',
         month: 'თვე',

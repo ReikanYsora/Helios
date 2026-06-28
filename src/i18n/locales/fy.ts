@@ -8,6 +8,8 @@ export const fy: Translations = {
     period:
     {
         rangeLabel: 'Tiidberik',
+        standard: 'Standert',
+        today: 'Hjoed',
         now:   'No',
         week:  'wike',
         month: 'moanne',
