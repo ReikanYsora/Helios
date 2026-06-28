@@ -611,7 +611,7 @@ function clockGuide(camera: SceneCamera, outerR: number): string
         const a  = (h / 24) * 2 * Math.PI;
         const p1 = camera.project(hubR * Math.sin(a), hubR * Math.cos(a), 0);
         const p2 = camera.project(tipR * Math.sin(a), tipR * Math.cos(a), 0);
-        svg += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${col}" stroke-opacity="${CLOCK_GUIDE_OPACITY}" stroke-width="1"/>`;
+        svg += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${col}" stroke-opacity="${CLOCK_GUIDE_OPACITY}" stroke-width="1" stroke-dasharray="2 2.5"/>`;
     }
     return svg;
 }

@@ -897,11 +897,14 @@ export class HeliosCard extends LitElement
                     this._clockAnimate();
                 }
             }
-            //Home prism (no medallion any more): render it alone + colour it as equal slices of the active
-            //filters. Re-run when the dial appears, the filter set changes, or data first lands (engine spawn).
+            //Home prism: render it alone + colour it as equal slices of the active filters. Re-run when the dial
+            //appears, the filter set changes, data first lands, or the ENGINE (re)spawns: returning to the tab
+            //rebuilds the engine without any of the others changing, so without _engine here the home would draw
+            //in its default colour until the first hover re-pushed the appearance.
             if (_changedProperties.has('_viewMode')
                 || _changedProperties.has('_clockTargets')
                 || _changedProperties.has('_unifiedStore')
+                || _changedProperties.has('_engine')
                 || _changedProperties.has('config'))
             {
                 this._engine?.setHomeOnly(true);
@@ -1673,7 +1676,7 @@ export class HeliosCard extends LitElement
                                 data-view="clock"
                                 @click=${this._onViewModeClick}
                             >
-                                <ha-icon icon="mdi:clock-outline"></ha-icon>
+                                <ha-icon icon="mdi:chart-bar"></ha-icon>
                             </button>
                             <button
                                 type="button"
@@ -2766,8 +2769,13 @@ export class HeliosCard extends LitElement
             }
             else if (prev.to !== to)
             {
-                //Target moved: ease from the currently displayed value on a toggle, else snap.
-                this._clockCeilAnim.set(u, ease ? { from: ceilAt(prev), to, start: now } : { from: to, to, start: 0 });
+                //Target moved. Ease only a TOGGLE that LOWERS the ceiling (a filter removed: the survivors rescale
+                //up smoothly). A rising ceiling snaps: easing the denominator up from a smaller value divides the
+                //bar heights by too little for the first frames and flings them off the top (e.g. adding a metric
+                //while the only ring was all-zero, like PV at night). The added ring still grows in via its own
+                //heightScale, so the snap is invisible.
+                const from = ceilAt(prev);
+                this._clockCeilAnim.set(u, ease && to < from ? { from, to, start: now } : { from: to, to, start: 0 });
             }
             dispCeil.set(u, ceilAt(this._clockCeilAnim.get(u)!));
         }

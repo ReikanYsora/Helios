@@ -39,8 +39,8 @@ export const heliosCardEnergyClockCss = css`
         transform-origin: center;
         will-change: transform, opacity;
         pointer-events: none;
-        font-size: var(--ha-font-size-l, 16px);
-        font-weight: var(--ha-font-weight-medium, 500);
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: var(--ha-font-weight-normal, 400);
         font-variant-numeric: tabular-nums;
         color: var(--primary-text-color);
         white-space: nowrap;

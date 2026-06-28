@@ -521,7 +521,12 @@ export function renderBuildings(
         `rgba(${hexByte(nb, 1)},${hexByte(nb, 3)},${hexByte(nb, 5)},${Math.max(0, Math.min(1, op)).toFixed(3)})`;
     const homeBands = home.bands && home.bands.length >= 2 ? home.bands : null;
 
-    let svg = '';
+    //Every visible face (wall band + roof) from EVERY building goes into one list, painted strictly far to near
+    //by its nearest-corner depth. Sorting globally (not per building) is what makes two TOUCHING buildings draw
+    //correctly: their faces interleave by true depth, so the shared/partly-overlapping wall at the junction no
+    //longer mis-orders against the neighbour it abuts. (Per-building sorting drew each prism whole, so an abutting
+    //wing's roof or wall could paint over its neighbour at the seam.)
+    const allFaces: { depth: number; svg: string }[] = [];
     for (const { index } of order)
     {
         const b  = buildings[index];
@@ -572,9 +577,7 @@ export function renderBuildings(
         }
         const strokeW = b.isHome ? 1 : 0.4;
 
-        //All visible faces (walls + roof) painted strictly far to near by camera depth, so a nearer wing's
-        //wall correctly occludes a farther wing's roof (correct even for concave footprints).
-        const faces: { depth: number; svg: string }[] = [];
+        //Emit each visible wall band into the shared face list (sorted globally below).
         for (let i = 0; i < base.length; i++)
         {
             const next = (i + 1) % base.length;
@@ -621,21 +624,29 @@ export function renderBuildings(
                 cam.project3(fp[i][0], fp[i][1], h).depth,
                 cam.project3(fp[next][0], fp[next][1], h).depth,
             );
-            faces.push({ depth: wallDepth, svg: wall });
+            allFaces.push({ depth: wallDepth, svg: wall });
         }
-        //Walls far to near, the flat roof LAST. The roof sits at the top, so in any above-horizon view it
-        //never overlaps a wall in screen space; drawing it over the sorted walls removes any roof/wall
-        //mis-order and leaves only the (nearest-point-sorted) wall ordering.
-        faces.sort((a, c) => a.depth - c.depth);
-        const roofSvg = `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`;
-        const buildingSvg = faces.map((f) => f.svg).join('') + roofSvg;
-        svg += hl ? `<g filter="url(#home-glow)">${buildingSvg}</g>` : buildingSvg;
+        //Flat roof at its own nearest-corner depth. It sits at the top so in any above-horizon view it never
+        //overlaps a wall in screen space, so its order against walls is cosmetic; depth-placing it just keeps a
+        //nearer building's roof correctly over a farther one.
+        let roofDepth = -Infinity;
+        for (const p of fp) { const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth) { roofDepth = d; } }
+        allFaces.push({
+            depth: roofDepth,
+            svg:   `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`,
+        });
     }
-    //Focused-home glow halo: a drop-shadow tinted to the home colour, matching the focused histogram bar.
-    const homeGlow = home.highlight
-        ? `<defs><filter id="home-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${home.color ?? palette.home}" flood-opacity="0.95"/></filter></defs>`
-        : '';
-    return homeGlow + svg;
+    //Paint every building's faces in one far-to-near pass.
+    allFaces.sort((a, c) => a.depth - c.depth);
+    const svg = allFaces.map((f) => f.svg).join('');
+    //Focused-home glow halo: a drop-shadow tinted to the home colour, matching the focused histogram bar. The
+    //highlight only fires in the clock dial (home-only render), so wrapping the whole pass glows just the home.
+    if (home.highlight)
+    {
+        const glow = `<defs><filter id="home-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${home.color ?? palette.home}" flood-opacity="0.95"/></filter></defs>`;
+        return `${glow}<g filter="url(#home-glow)">${svg}</g>`;
+    }
+    return svg;
 }
 
 //---------------------------------------------------------------------------------------------------------
