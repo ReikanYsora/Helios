@@ -937,7 +937,8 @@ export class HeliosCard extends LitElement
             if (_changedProperties.has('_trendP')
                 || _changedProperties.has('_trendPrev')
                 || _changedProperties.has('_trendTarget')
-                || _changedProperties.has('_clockHoverSlot'))
+                || _changedProperties.has('_clockHoverSlot')
+                || _changedProperties.has('_clockHomeHover'))
             {
                 if (_changedProperties.has('_clockHoverSlot')) { this._startClockDim(); }
                 this._scheduleClockPaint();
@@ -1624,8 +1625,10 @@ export class HeliosCard extends LitElement
                             ? (this._viewMode === 'trend'
                                 ? this._renderTrendTooltip(this._clockHoverSlot)
                                 : this._renderClockTooltip(this._clockHoverSlot))
-                            : (this._viewMode === 'clock' && this._clockHomeHover
-                                ? this._renderClockHomeTooltip()
+                            : (this._clockHomeHover
+                                ? (this._viewMode === 'trend'
+                                    ? this._renderTrendHomeTooltip()
+                                    : this._renderClockHomeTooltip())
                                 : nothing)}
                     </div>
                 ` : nothing}
@@ -1686,7 +1689,7 @@ export class HeliosCard extends LitElement
                                 type="button"
                                 class="overlay-btn ${sceneOn ? 'is-on' : ''}"
                                 aria-pressed=${sceneOn ? 'true' : 'false'}
-                                title="Scene"
+                                aria-label="Scene"
                                 data-view="scene"
                                 @click=${this._onViewModeClick}
                             >
@@ -1696,7 +1699,7 @@ export class HeliosCard extends LitElement
                                 type="button"
                                 class="overlay-btn ${clockOn ? 'is-on' : ''}"
                                 aria-pressed=${clockOn ? 'true' : 'false'}
-                                title="Clock"
+                                aria-label="Clock"
                                 data-view="clock"
                                 @click=${this._onViewModeClick}
                             >
@@ -1706,7 +1709,7 @@ export class HeliosCard extends LitElement
                                 type="button"
                                 class="overlay-btn ${trendOn ? 'is-on' : ''}"
                                 aria-pressed=${trendOn ? 'true' : 'false'}
-                                title="Trend"
+                                aria-label="Trend"
                                 data-view="trend"
                                 @click=${this._onViewModeClick}
                             >
@@ -2813,6 +2816,24 @@ export class HeliosCard extends LitElement
         requestAnimationFrame(() => this.paintClock());
     }
 
+    //Trend hour-of-day vectors for the selected metric: P and P-1 totals per hour (summed across the metric's
+    //layers), the energy flag (sum vs average), and a ClockData for unit-aware value formatting.
+    private _trendVectors(): { pH: number[]; prevH: number[]; isE: boolean; data: ClockData | null }
+    {
+        const target = this._trendTarget;
+        const dP    = this._trendP    ? buildClockDataHourly(this, target, this._trendP)    : null;
+        const dPrev = this._trendPrev ? buildClockDataHourly(this, target, this._trendPrev) : null;
+        const isE   = ((dP ?? dPrev)?.unit ?? 'energy') === 'energy';
+        const vec = (data: ClockData | null): number[] =>
+        {
+            const out = new Array<number>(24).fill(0);
+            if (!data) { return out; }
+            for (const L of data.layers) { const hv = hourlyOf(L.values, isE); for (let h = 0; h < 24; h++) { out[h] += hv[h]; } }
+            return out;
+        };
+        return { pH: vec(dP), prevH: vec(dPrev), isE, data: dP ?? dPrev };
+    }
+
     //Project the rings for one frame and write them onto the overlay DOM: the bar SVG, the ground-laid hour
     //labels, and the clamped tooltip. Called every transform frame (init.ts) and during the grow/slide/exit
     //animation. Public so the engine's per-frame callback can reach it.
@@ -2835,20 +2856,14 @@ export class HeliosCard extends LitElement
         //metric's hour-of-day totals, summed across the metric's layers (import+export, per-source PV, …).
         if (this._viewMode === 'trend')
         {
-            const target  = this._trendTarget;
-            const perHour = (prof: ClockHourly | null): number[] =>
-            {
-                const out = new Array<number>(24).fill(0);
-                if (!prof) { return out; }
-                const data = buildClockDataHourly(this, target, prof);
-                const isE  = data.unit === 'energy';
-                for (const L of data.layers) { const hv = hourlyOf(L.values, isE); for (let h = 0; h < 24; h++) { out[h] += hv[h]; } }
-                return out;
-            };
+            const target = this._trendTarget;
+            const { pH, prevH, isE } = this._trendVectors();
+            const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / 24; };
             const frame = projectTrendFrame(
-                camera, perHour(this._trendP), perHour(this._trendPrev),
+                camera, pH, prevH,
                 clockTargetMeta(this, target).color, trendGoodDirection(target),
                 cardinals, this._clockDimSlot, this._clockDim,
+                totalOf(pH), totalOf(prevH), this._clockHomeHover,
             );
             this._applyClockFrame(frame);
             return;
@@ -3178,6 +3193,46 @@ export class HeliosCard extends LitElement
                     <ha-icon icon="mdi:history" style="color:var(--secondary-text-color)"></ha-icon>
                     <span class="clock-tip-name">P-1</span>
                     <span class="clock-tip-val">${fmt(prev.v)}</span>
+                </div>
+                <div class="clock-tip-row">
+                    <ha-icon icon="mdi:delta" style="color:${deltaColor}"></ha-icon>
+                    <span class="clock-tip-name"></span>
+                    <span class="clock-tip-val" style="color:${deltaColor}">${delta >= 0 ? '+' : '-'}${fmt(Math.abs(delta))}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    //Central-gauge tooltip (trend): the period GLOBAL total P, the previous period P-1, and the signed delta.
+    private _renderTrendHomeTooltip(): TemplateResult | typeof nothing
+    {
+        if (!this._trendP && !this._trendPrev)
+        {
+            return nothing;
+        }
+        const { pH, prevH, isE, data } = this._trendVectors();
+        const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / 24; };
+        const tP    = totalOf(pH);
+        const tPrev = totalOf(prevH);
+        const fmt   = (v: number): string => data ? formatClockValue(this, data, v) : v.toFixed(1);
+        const delta = tP - tPrev;
+        const dir   = trendGoodDirection(this._trendTarget);
+        const deltaColor = dir === 0
+            ? 'var(--primary-text-color, #212121)'
+            : (delta * dir >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
+        const meta = clockTargetMeta(this, this._trendTarget);
+        return html`
+            <div class="clock-tip">
+                <div class="clock-tip-head">${clockTargetLabel(this, this._trendTarget)}</div>
+                <div class="clock-tip-row">
+                    <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
+                    <span class="clock-tip-name"></span>
+                    <span class="clock-tip-val">${fmt(tP)}</span>
+                </div>
+                <div class="clock-tip-row">
+                    <ha-icon icon="mdi:history" style="color:var(--secondary-text-color)"></ha-icon>
+                    <span class="clock-tip-name">P-1</span>
+                    <span class="clock-tip-val">${fmt(tPrev)}</span>
                 </div>
                 <div class="clock-tip-row">
                     <ha-icon icon="mdi:delta" style="color:${deltaColor}"></ha-icon>

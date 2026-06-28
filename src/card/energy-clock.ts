@@ -667,54 +667,44 @@ function clockCompass(
 interface ClockFace { depth: number; svg: string }
 
 //Small downward marker above the dial at the CURRENT hour's slot, so opening a dial instantly shows which hour
-//band is "now". Sits above the tallest bar (bars normalise to <= maxHm) and is drawn last (always on top).
-function currentHourArrow(camera: SceneCamera, R: number, maxHm: number): string
+//band is "now". A dashed line drops from it to `toH` (that hour's bar top) so the marker reads in 3D space.
+//Drawn last (always on top).
+function currentHourArrow(camera: SceneCamera, R: number, maxHm: number, toH: number): string
 {
     const hour = new Date().getHours();
     const a = ((hour + 0.5) / 24) * 2 * Math.PI;
-    const p = camera.project(R * Math.sin(a), R * Math.cos(a), maxHm * 1.15);
-    const col = 'var(--primary-color, #03a9f4)';
-    //Apex at p (points down at the slot), base 11 px above it.
-    return `<polygon points="${p[0].toFixed(1)},${p[1].toFixed(1)} ${(p[0] - 6).toFixed(1)},${(p[1] - 11).toFixed(1)} ${(p[0] + 6).toFixed(1)},${(p[1] - 11).toFixed(1)}" fill="${col}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
+    const e = R * Math.sin(a); const n = R * Math.cos(a);
+    const apex = camera.project(e, n, maxHm * 1.15);
+    const drop = camera.project(e, n, Math.max(0, toH));
+    const col  = 'var(--primary-color, #03a9f4)';
+    //Dashed drop to the bar top, then a downward triangle whose apex sits above it.
+    const line = `<line x1="${apex[0].toFixed(1)}" y1="${apex[1].toFixed(1)}" x2="${drop[0].toFixed(1)}" y2="${drop[1].toFixed(1)}" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 2"/>`;
+    const tri  = `<polygon points="${apex[0].toFixed(1)},${apex[1].toFixed(1)} ${(apex[0] - 6).toFixed(1)},${(apex[1] - 11).toFixed(1)} ${(apex[0] + 6).toFixed(1)},${(apex[1] - 11).toFixed(1)}" fill="${col}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
+    return line + tri;
 }
 
-//A collar: the FRONT (camera-facing) edges of a footprint drawn at one height, so it reads as a ring wrapping
-//the prism at the P-1 level. Only front edges (same cull as the walls) so the far half doesn't bleed over the
-//front face.
-function frontEdges(camera: SceneCamera, fp: [number, number][], heightM: number, color: string, width: number, dashed: boolean): string
+//A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
+//no body below, so a marker placed lower stays visible.
+function floatingSlice(camera: SceneCamera, fp: [number, number][], loH: number, hiH: number, wall: string, roof: string, stroke: string): string
 {
     const bearing = camera.bearingDeg * Math.PI / 180;
-    let s = '';
+    const lo = fp.map(p => camera.project(p[0], p[1], loH));
+    const hi = fp.map(p => camera.project(p[0], p[1], hiH));
+    const edges: { d: number; s: string }[] = [];
     for (let i = 0; i < fp.length; i++)
     {
         const next  = (i + 1) % fp.length;
         const edgeE = fp[next][0] - fp[i][0];
         const edgeN = fp[next][1] - fp[i][1];
         if (edgeN * Math.sin(bearing) + edgeE * Math.cos(bearing) <= 0) { continue; }
-        const a1 = camera.project(fp[i][0], fp[i][1], heightM);
-        const a2 = camera.project(fp[next][0], fp[next][1], heightM);
-        s += `<line x1="${a1[0].toFixed(1)}" y1="${a1[1].toFixed(1)}" x2="${a2[0].toFixed(1)}" y2="${a2[1].toFixed(1)}" stroke="${color}" stroke-width="${width}"${dashed ? ' stroke-dasharray="2 2"' : ''}/>`;
+        edges.push({
+            d: (lo[i][1] + lo[next][1]) / 2,
+            s: `<polygon points="${lo[i][0].toFixed(1)},${lo[i][1].toFixed(1)} ${lo[next][0].toFixed(1)},${lo[next][1].toFixed(1)} ${hi[next][0].toFixed(1)},${hi[next][1].toFixed(1)} ${hi[i][0].toFixed(1)},${hi[i][1].toFixed(1)}" fill="${wall}" stroke="${stroke}" stroke-width="0.4"/>`,
+        });
     }
-    return s;
-}
-
-//Vertical struts on the front corners between two heights, joining the bar top to a floating collar above it
-//(the P < P-1 case), so the gap reads as a connected cage rather than a detached ring.
-function cageStruts(camera: SceneCamera, fp: [number, number][], fromH: number, toH: number, color: string): string
-{
-    const bearing = camera.bearingDeg * Math.PI / 180;
-    let s = '';
-    for (let i = 0; i < fp.length; i++)
-    {
-        const next  = (i + 1) % fp.length;
-        const edgeE = fp[next][0] - fp[i][0];
-        const edgeN = fp[next][1] - fp[i][1];
-        if (edgeN * Math.sin(bearing) + edgeE * Math.cos(bearing) <= 0) { continue; }
-        const lo = camera.project(fp[i][0], fp[i][1], fromH);
-        const hi = camera.project(fp[i][0], fp[i][1], toH);
-        s += `<line x1="${lo[0].toFixed(1)}" y1="${lo[1].toFixed(1)}" x2="${hi[0].toFixed(1)}" y2="${hi[1].toFixed(1)}" stroke="${color}" stroke-width="1.2" stroke-dasharray="2 2"/>`;
-    }
-    return s;
+    edges.sort((x, y) => x.d - y.d);
+    const roofPts = hi.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+    return edges.map(e => e.s).join('') + `<polygon points="${roofPts}" fill="${roof}" stroke="${stroke}" stroke-width="0.6"/>`;
 }
 
 //Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward). Shared here:
@@ -801,7 +791,7 @@ export function projectClockFrame(
     const homeR = Math.hypot(colTop[0] - colBase[0], colTop[1] - colBase[1]) / 2 + hubR * ppm;
     return {
         guideSvg: clockGuide(camera, outerR) + compass.svg,
-        svg: defs + faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm),
+        svg: defs + faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, 0),
         hits, labels, compass: compass.labels,
         home: { x: homeX, y: homeY, r: homeR },
     };
@@ -883,6 +873,36 @@ function centralColumn(camera: SceneCamera, hubR: number, heightM: number, rings
 }
 
 
+//Central trend gauge at the hub: the period's GLOBAL value (P total) as a thin cap, with a sphere marker at
+//the previous period's global total P-1, coloured green/red by improvement. Same language as the hour bars.
+function centralTrendColumn(camera: SceneCamera, hubR: number, totalP: number, totalPrev: number, colH: number, color: string, direction: number, highlight: boolean): ClockFace
+{
+    const ceil = Math.max(totalP, totalPrev) || 1;
+    const z    = colH / ceil;
+    const pH   = totalP * z; const prevH = totalPrev * z;
+    const fp: [number, number][] = [];
+    for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
+    {
+        const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
+        fp.push([hubR * Math.cos(a), hubR * Math.sin(a)]);
+    }
+    const impr    = (totalP - totalPrev) * direction;
+    const markCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
+    let svg = '';
+    if (pH > 0)
+    {
+        const cap = colH * 0.1;
+        svg += floatingSlice(camera, fp, Math.max(0, pH - cap), pH,
+            lerpHexToward(color, '#000000', 0.25), lerpHexToward(color, '#ffffff', highlight ? 0.4 : 0.18),
+            highlight ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)');
+    }
+    const top = camera.project(0, 0, pH);
+    const mk  = camera.project(0, 0, prevH);
+    svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
+    svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="4.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="1"/>`;
+    return { depth: camera.project(0, 0, 0)[1], svg };
+}
+
 //Which way is "better" for a metric, so the trend dial colours the change green/red. +1 = up is good
 //(production), -1 = down is good (consumption, grid use), 0 = neutral (battery, weather, custom).
 export function trendGoodDirection(target: ChartTarget): number
@@ -909,6 +929,10 @@ export function projectTrendFrame(
     cardinals: { n: string; s: string; e: string; w: string },
     dimSlot: number | null,
     dim: number,
+    //Period GLOBAL totals (P and P-1) for the central hub gauge, and whether it is hovered.
+    totalP: number,
+    totalPrev: number,
+    columnHighlight: boolean,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -969,55 +993,49 @@ export function projectTrendFrame(
         const fade   = FADE_MIN + (1 - FADE_MIN) * (depths[h] - dMin) / dRange;
         const op     = dimOp * fade;
 
-        //Gauge: the solid bar is the CURRENT period P; a collar marks the PREVIOUS period P-1; the gap is
+        //Solid bar = the current period P; a sphere marker on a dashed stem sits at the previous period P-1,
         //coloured green/red by whether the change is an improvement for this metric.
-        const impr     = (p - prev) * direction;
-        const deltaCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? good : bad);
-        const baseWall = lerpHexToward(color, '#000000', 0.25);
-        const baseRoof = lerpHexToward(color, '#ffffff', active ? 0.4 : 0.12);
-        const stroke   = active ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)';
-
         let svg = '';
-        if (pH > 0 && prevH <= pH)
+        if (pH > 0)
         {
-            //Current >= previous: one prism to P, split at P-1 (base colour below, delta colour above), with a
-            //collar ring on the split so the previous level is always visible even when it sits low on the bar.
-            const split = prevH / pH;
-            const bands: { frac: number; wall: string; roof: string }[] = [];
-            if (split > 0.02) { bands.push({ frac: split, wall: baseWall, roof: baseRoof }); }
-            bands.push({
-                frac: Math.max(0.02, 1 - split),
-                wall: lerpHexToward(deltaCol, '#000000', 0.15),
-                roof: lerpHexToward(deltaCol, '#ffffff', active ? 0.35 : 0.1),
-            });
-            svg += stackedColumn(camera, fp, pH, bands, stroke);
-            if (prevH > 0.5) { svg += frontEdges(camera, fp, prevH, deltaCol, 2, false); }
+            //Only the TOP slice of the bar (a thin slab, not the full column), so the P-1 marker below it stays
+            //visible. CAP is a small slab thickness; clamped so a tiny bar doesn't dip below the ground.
+            const cap = maxHm * 0.07;
+            svg += floatingSlice(camera, fp, Math.max(0, pH - cap), pH,
+                lerpHexToward(color, '#000000', 0.25), lerpHexToward(color, '#ffffff', active ? 0.4 : 0.12),
+                active ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)');
         }
-        else if (pH > 0)
+        if (ceiling > 0)
         {
-            //Current < previous: solid current bar + a floating collar at P-1, joined by a dashed cage so the
-            //gap reads as "below last period".
-            svg += stackedColumn(camera, fp, pH, [{ frac: 1, wall: baseWall, roof: baseRoof }], stroke);
-            svg += cageStruts(camera, fp, pH, prevH, deltaCol);
-            svg += frontEdges(camera, fp, prevH, deltaCol, 2, false);
-        }
-        else if (prevH > 0.5)
-        {
-            //No current value, previous positive: the collar alone (with a cage from the ground).
-            svg += cageStruts(camera, fp, 0, prevH, deltaCol);
-            svg += frontEdges(camera, fp, prevH, deltaCol, 2, false);
+            const impr    = (p - prev) * direction;
+            const markCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? good : bad);
+            const top = camera.project(e, n, pH);
+            const mk  = camera.project(e, n, prevH);
+            svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
+            svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="3.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
         }
         if (op < 1) { svg = `<g opacity="${op.toFixed(3)}">${svg}</g>`; }
         faces.push({ depth: base[1], svg });
     }
+    //Central hub gauge: the period's global total vs the previous period's, same depth pass as the bars.
+    const hubR = outerR * CLOCK_HUB_R_FRAC;
+    const colH = maxHm * CLOCK_COLUMN_H_FRAC;
+    faces.push(centralTrendColumn(camera, hubR, totalP, totalPrev, colH, color, direction, columnHighlight));
     faces.sort((a, b) => a.depth - b.depth);
 
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
+    //Central-gauge hit target: a disc over the whole projected column body (base to top), like the clock hub.
+    const cBase = camera.project(0, 0, 0);
+    const cTop  = camera.project(0, 0, colH);
     return {
         guideSvg: clockGuide(camera, outerR) + compass.svg,
-        svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm),
+        svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[new Date().getHours()]) * zScale),
         hits, labels, compass: compass.labels,
-        home: { x: 0, y: 0, r: 0 },
+        home: {
+            x: (cBase[0] + cTop[0]) / 2,
+            y: (cBase[1] + cTop[1]) / 2,
+            r: Math.hypot(cTop[0] - cBase[0], cTop[1] - cBase[1]) / 2 + hubR * ppm,
+        },
     };
 }
 
