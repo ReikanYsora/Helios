@@ -722,10 +722,11 @@ export function projectClockFrame(
     //Central column: one stacked band per active filter (its colour), drawn in the same depth pass so the
     //nearer bars occlude it and the farther bars sit behind. Grows with the bars (max ring heightScale).
     const hubR = outerR * CLOCK_HUB_R_FRAC;
+    const grow = rings.length ? rings.reduce((m, r) => Math.max(m, r.heightScale), 0) : 0;
+    const colH = maxHm * CLOCK_COLUMN_H_FRAC * grow;
     if (rings.length)
     {
-        const grow = rings.reduce((m, r) => Math.max(m, r.heightScale), 0);
-        faces.push(centralColumn(camera, hubR, maxHm * CLOCK_COLUMN_H_FRAC * grow, rings, columnHighlight));
+        faces.push(centralColumn(camera, hubR, colH, rings, columnHighlight));
     }
     faces.sort((a, b) => a.depth - b.depth);
 
@@ -739,14 +740,19 @@ export function projectClockFrame(
     //defs (per-ring glow filters) stay with the cylinders that use them. Bars carry their own highlight, so
     //the guide stays static (no focused spoke).
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
-    //Central-column hit target: the projected origin (its base centre) + the hub radius in screen px.
-    const homeC = camera.project3(0, 0, 0);
-    const homeR = hubR * ppm;
+    //Central-column hit target: a disc over the WHOLE projected column body, not just its base. The cylinder
+    //rises above its base on screen (height + tilt), so a base-only disc would miss every tap on the body.
+    //Centre it between the projected base and top, radius covering that span plus the hub width.
+    const colBase = camera.project(0, 0, 0);
+    const colTop  = camera.project(0, 0, colH);
+    const homeX = (colBase[0] + colTop[0]) / 2;
+    const homeY = (colBase[1] + colTop[1]) / 2;
+    const homeR = Math.hypot(colTop[0] - colBase[0], colTop[1] - colBase[1]) / 2 + hubR * ppm;
     return {
         guideSvg: clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join(''),
         hits, labels, compass: compass.labels,
-        home: { x: homeC.x, y: homeC.y, r: homeR },
+        home: { x: homeX, y: homeY, r: homeR },
     };
 }
 
@@ -805,11 +811,13 @@ function projectHistogramRing(
 //Returned as one face at the base-centre depth, so the surrounding bars occlude/sit-behind it correctly.
 function centralColumn(camera: SceneCamera, hubR: number, heightM: number, rings: ClockRingInput[], highlight: boolean): ClockFace
 {
+    //CCW winding (cos, sin) to match the bars' footprint, so stackedColumn's back-face cull keeps the OUTWARD
+    //walls (a clockwise ring would invert it and show the inside).
     const fp: [number, number][] = [];
     for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
     {
         const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
-        fp.push([hubR * Math.sin(a), hubR * Math.cos(a)]);
+        fp.push([hubR * Math.cos(a), hubR * Math.sin(a)]);
     }
     const frac  = 1 / rings.length;
     const bands = rings.map((r) => ({
