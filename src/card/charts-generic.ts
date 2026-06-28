@@ -1,5 +1,5 @@
-//Generic re-targetable bottom chart (everything except production), the target accent colour, the cursor/label axis
-//furniture, and per-day kWh aggregation for the day chips. Production keeps its dedicated renderer in charts-pv.ts.
+//Re-targetable bottom chart for everything except production, the target accent colour, the cursor/label axis
+//furniture, and per-day kWh aggregation for the day chips. Production has its own renderer in charts-pv.ts.
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
@@ -12,8 +12,8 @@ import { interpAt } from './series-sample';
 import { renderPvChart } from './charts-pv';
 
 
-//Re-targetable bottom chart. Production keeps its dedicated renderer (forecast + per-source breakdown +
-//native-unit scaling); other targets go through the generic renderer below.
+//Production routes to its dedicated renderer (forecast + per-source breakdown + native-unit scaling); every
+//other target goes through the generic renderer below.
 export function renderBottomChart(host: ChartHost): TemplateResult
 {
     const target = host._chartTarget ?? 'production';
@@ -25,11 +25,11 @@ export function renderBottomChart(host: ChartHost): TemplateResult
 }
 
 
-//Accent colour for the active target, shared by the chart border and active chip so re-targeting reads as one
-//gesture. Production/irradiance/cloud/soc are fixed; grid/battery take the dominant side over the window.
+//Accent colour for the active target, shared by chart border and active chip so re-targeting reads as one gesture.
+//Production/irradiance/cloud/soc are fixed; grid/battery take the colour of whichever side dominates the window.
 export function chartAccentColor(host: ChartHost): string
 {
-    const el = host as unknown as Element; //for live HA theme-token colour resolution
+    const el = host as unknown as Element; //live HA theme-token colour resolution
     const target = host._chartTarget ?? 'production';
     if (target === 'production') { return ENERGY_COLOR.pv(el); }
     if (target === 'consumption'){ return ENERGY_COLOR.consumption(el); }
@@ -71,11 +71,10 @@ export function chartAccentColor(host: ChartHost): string
 
 
 //Generic chart for the non-production targets. Grid + battery draw two directional series each; irradiance one
-//curve on a fixed 0..1000 W/m² scale. Power stays in watts (tooltip formats to kW); native-unit handling lives in
-//renderPvChart for production only.
+//curve on a fixed 0..1000 W/m² scale. Power stays in watts (tooltip formats to kW).
 function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'production'>): TemplateResult
 {
-    const el = host as unknown as Element; //for live HA theme-token colour resolution
+    const el = host as unknown as Element; //live HA theme-token colour resolution
     const store = host._unifiedStore;
     const range = host._timeRange;
     const W = 1000;
@@ -93,9 +92,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     const xOf = (tMs: number): number => ((tMs - startMs) / rangeMs) * W;
 
-    //Map a store series to visible-range points, dropping nulls and clipping to the window. Bucket centre matches
-    //sliceForRange so curves line up with the production chart's day separators.
-    const toPts = (arr: readonly (number | null)[], map?: (v: number) => number): { t: number; v: number }[] =>
+    //Store series to visible-range points: drop nulls, clip to the window. Bucket centre matches sliceForRange so
+    //curves line up with the production chart's day separators.
+    const toPts =(arr: readonly (number | null)[], map?: (v: number) => number): { t: number; v: number }[] =>
     {
         const out: { t: number; v: number }[] = [];
         for (let i = 0; i < arr.length; i++)
@@ -115,8 +114,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     let fixedMax = 0;
     if (target === 'consumption')
     {
-        //Home consumption (load) derived per bucket: production + grid import − grid export − net battery
-        //(charge-positive), clamped at 0. Same formula as the live home-usage pill, so chart + chip agree.
+        //Home consumption (load) per bucket: production + grid import - grid export - net battery (charge-positive),
+        //clamped at 0. Same formula as the live home-usage pill, so chart + chip agree.
         const cons: { t: number; v: number }[] = [];
         for (let i = 0; i < store.production.length; i++)
         {
@@ -124,7 +123,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             const gi = store.gridImport[i];
             const ge = store.gridExport[i];
             const b  = store.battery[i];
-            //Skip buckets with no measured data at all, so a gap reads as a gap rather than a flat 0.
+            //Skip buckets with no measured data, so a gap reads as a gap rather than a flat 0.
             if (p === null && gi === null && ge === null && b === null) { continue; }
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
             if (tMs < startMs || tMs > endMsAbs) { continue; }
@@ -145,7 +144,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     else if (target === 'battery')
     {
         //Store battery is signed net power (charge - discharge); split into two non-negative curves so each flow
-        //reads distinctly, zero while the other is active.
+        //reads distinctly, each zero while the other is active.
         const charge    = toPts(store.battery, v => Math.max(0, v));
         const discharge = toPts(store.battery, v => Math.max(0, -v));
         series = [
@@ -155,7 +154,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'battery-soc')
     {
-        //Battery SoC over the window, read from the fetched SoC history (the store only has a live sample). One curve
+        //Battery SoC over the window, from the fetched SoC history (the store only carries a live sample). One curve
         //on a fixed 0..100 % scale.
         const hist = host._batterySocHistory;
         const pts: { t: number; v: number }[] = [];
@@ -175,8 +174,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'custom')
     {
-        //Custom entity over the window, from the fetched hourly history (values in W). One curve in the
-        //configured custom colour, magnitude only so a signed sensor reads as a single area; the axis auto-scales.
+        //Custom entity over the window, from the fetched hourly history (values in W). One curve in the configured
+        //custom colour, magnitude only so a signed sensor reads as a single area; axis auto-scales.
         const hist = host._customEntityHistory;
         const pts: { t: number; v: number }[] = [];
         if (hist)
@@ -194,9 +193,10 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'cloud')
     {
-        //Cloud-cover bands from the hourly weather series, low -> mid -> high. Built at the SAME times so they
-        //index-align and stack cleanly (each band continues above the one below); the Y axis auto-scales to the
-        //stacked total. Light -> dark cloud-grey shades.
+        //Cloud-cover bands from the hourly weather series, low -> mid -> high. Built at identical times so they
+        //index-align and stack cleanly (each band continues above the one below); Y axis auto-scales to the stacked
+        //total. Three distinct cloud-grey levels (low lightest, high darkest) so the layers read apart at the higher
+        //fill opacity, not as one flat grey.
         const cs = host._chartSeries;
         const lowPts:  { t: number; v: number }[] = [];
         const midPts:  { t: number; v: number }[] = [];
@@ -216,8 +216,6 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 highPts.push({ t: tMs, v: isFinite(hi) ? Math.max(0, hi) : 0 });
             }
         }
-        //Three clearly distinct cloud-grey levels (low = lightest, high = darkest) so the stacked layers read
-        //as separate bands at the higher fill opacity, not one flat grey.
         series = [
             { pts: lowPts,  color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
             { pts: midPts,  color: ENERGY_COLOR.cloud(el) },
@@ -231,15 +229,14 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         fixedMax = 1000;
     }
 
-    //Among the generic targets only the cloud bands stack (low + mid + high layer up to the total sky cover);
-    //per-source PV stacks in renderPvChart. The two-direction targets (grid import/export, battery
-    //charge/discharge) draw both areas from the baseline so each flow reads on its own — stacking them would
-    //sum two opposite flows into a meaningless total.
-    const isStacked = target === 'cloud'
+    //Only the cloud bands stack (low + mid + high layer up to total sky cover). The two-direction targets (grid
+    //import/export, battery charge/discharge) draw both areas from the baseline so each flow reads on its own;
+    //stacking them would sum two opposite flows into a meaningless total.
+    const isStacked =target === 'cloud'
         && series.length > 1
         && series.every(s => s.pts.length === series[0].pts.length && s.pts.length >= 2);
 
-    //Y scale: fixed where set, else auto — to the stacked total when stacked, else the per-series running max.
+    //Y scale: fixed where set, else auto to the stacked total when stacked, else the per-series running max.
     let yMax = fixedMax;
     if (yMax <= 0)
     {
@@ -259,7 +256,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
         }
     }
-    //Leave a sliver of headroom at the top so a curve's peak never kisses the timeline's top edge.
+    //Headroom at the top so a curve's peak never kisses the top edge.
     const TOP_HEADROOM_PX = 10;
     const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
 
@@ -318,8 +315,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     {
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
-        //Stacked: the dot rides the cumulative TOP of each band (the stacked curve), not the raw value, so it
-        //sits on the visible boundary. Unstacked: the dot rides the series' own value.
+        //Stacked: the dot rides the cumulative top of each band, not the raw value, so it sits on the visible
+        //boundary. Unstacked: the dot rides the series' own value.
         let cum = 0;
         for (const s of series)
         {
@@ -363,8 +360,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
 }
 
 
-//The thin track carries only the cursors; day separators live inside the chart card SVG and the scrub time label is
-//a chip above the card.
+//The thin track carries only the cursors; day separators live inside the chart card SVG, the scrub time label is a
+//chip above the card.
 export function renderTimelineTicks(host: ChartHost): TemplateResult | typeof nothing
 {
     if (!host._timeRange)
@@ -391,9 +388,9 @@ export function renderTimelineTicks(host: ChartHost): TemplateResult | typeof no
 }
 
 
-//Adaptive timeline labels over the chart-card footer. The shared timeline model picks granularity from the visible
-//span (hours / weekdays / day+month / months) and thins the count so a wide window stays legible. Each label sits
-//at its model fraction; the day view emphasises today, matching the now-cursor. Separators draw boundary lines.
+//Adaptive timeline labels over the chart-card footer. The shared model picks granularity from the visible span
+//(hours / weekdays / day+month / months) and thins the count so a wide window stays legible. Each label sits at its
+//model fraction; the day view emphasises today, matching the now-cursor.
 export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeof nothing
 {
     if (!host._timeRange)
@@ -409,8 +406,8 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeo
 
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
-    //Emphasise today only in the day view (each label names one calendar day); on wider spans the now-cursor already
-    //marks the present.
+    //Emphasise today only in the day view (each label names one calendar day); wider spans already mark the present
+    //with the now-cursor.
     const isTodayLabel = (d: Date): boolean =>
         model.kind === 'days' && d.getTime() === today0.getTime();
 
@@ -431,9 +428,9 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeo
 
 
 
-//kWh-per-day totals over the active range, from two sources: past + today-so-far from the recorder `change` buckets
-//(Pass 1), today-remainder + future from the store's corrected forecast (Pass 2). Returns a Map keyed by each day's
-//local-midnight ms (kWh); days outside the range or without usable data are omitted.
+//kWh-per-day totals over the active range from two passes: past + today-so-far from the recorder `change` buckets,
+//today-remainder + future from the store's corrected forecast. Returns a Map keyed by each day's local-midnight ms
+//(kWh); days outside the range or without usable data are omitted.
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 {
     const out = new Map<number, number>();
@@ -453,8 +450,8 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     };
 
     //Pass 1: past + today-so-far, summed per day from the recorder `change` buckets so each day matches HA Energy to
-    //the watt-hour (no curve integration / gap interpolation, which was inflating totals). The series spans the J-2
-    //past window, covering every past day shown.
+    //the watt-hour (no curve integration / gap interpolation, which inflates totals). The series spans the J-2 past
+    //window, covering every past day shown.
     const changeSeries = host._pvChangeSeries;
     if (changeSeries && changeSeries.length > 0)
     {
@@ -474,8 +471,8 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         }
     }
 
-    //Pass 2: future + today-remainder from the store's CORRECTED forecast (same series the dotted curve draws), so
-    //per-day chips agree with the curve. Only buckets at / after "now" contribute (past is Pass 1's real production);
+    //Pass 2: future + today-remainder from the store's corrected forecast (same series the dotted curve draws), so
+    //per-day chips agree with the curve. Only buckets at/after "now" contribute (past is Pass 1's real production);
     //the forecast is already cap-clipped and correction-applied.
     const store = host._unifiedStore;
     if (store)

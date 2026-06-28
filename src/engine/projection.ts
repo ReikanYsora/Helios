@@ -1,10 +1,9 @@
-//Faux-3D ("2.5D") camera + projection for the Helios scene renderer — the keystone of the scene. A
-//tilted ground plane (CSS rotateX/rotateZ on the basemap tile canvas) with every overlay (buildings,
-//shadows, sun arc, chips) projected on top by a bearing → pitch → perspective transform, so the SVG
-//content stays glued to the rotating basemap.
+//Faux-3D ("2.5D") camera + projection for the scene renderer. A tilted ground plane (CSS rotateX/rotateZ
+//on the basemap tile canvas) with every overlay (buildings, shadows, sun arc, chips) projected on top by a
+//bearing -> pitch -> perspective transform, so the SVG content stays glued to the rotating basemap.
 //
-//All coordinates are LOCAL METRES relative to the home origin: +east, +north, +up. The lat/lng →
-//local-metre conversion (and tile math) lives in ./tiles. Pure and card-agnostic, shared by both cards.
+//All coordinates are LOCAL METRES relative to the home origin: +east, +north, +up. The lat/lng to
+//local-metre conversion (and tile math) lives in ./tiles. Pure and card-agnostic.
 
 import { PITCH_MIN, PITCH_MAX, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE, DEG } from '../constants';
 //Re-exported so importers of these symbols from './projection' keep resolving.
@@ -37,7 +36,7 @@ export class SceneCamera
     public centreX = 0;
     public centreY = 0;
     //False until the first setViewport with a real size. Consumers gate on it so nothing projects against
-    //the seed centre (0,0) — which would briefly throw the whole HUD into the top-left corner.
+    //the seed centre (0,0), which would briefly throw the whole HUD into the top-left corner.
     public hasViewport = false;
 
     //Cached trig basis, recomputed by setViewport. Seeded to the default pose so a project() before the
@@ -97,7 +96,7 @@ export class SceneCamera
 
     //CSS transform for the basemap tile canvas, given the home's pixel position within that canvas. The
     //canvas is tilted (rotateX = pitch) and turned (rotateZ = bearing) about the home, then translated so
-    //the home lands on the screen-space centre — exactly the inverse of what project3 does for overlays.
+    //the home lands on the screen-space centre, exactly the inverse of what project3 does for overlays.
     public groundTransform(homeX: number, homeY: number): GroundTransform
     {
         const origin = `${homeX}px ${homeY}px`;

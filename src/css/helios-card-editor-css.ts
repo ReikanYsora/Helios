@@ -1,9 +1,8 @@
 import { css } from 'lit';
 
-//Styles for the config editor. Kept separate from the runtime card's
-//helios-card-scene-css.ts so editor and card never share selectors.
-//Single export: `editorStyles`, applied to <helios-card-editor>.
-
+//Styles for the config editor, separate from the runtime card's sheet so editor and card never share
+//selectors. Single export: `editorStyles`, applied to <helios-card-editor>. Sizes/radii/weights/danger
+//colour route through HA tokens (with the prior literal as fallback) so the editor tracks the active theme.
 
 export const editorStyles = css`
     .editor
@@ -16,35 +15,20 @@ export const editorStyles = css`
 
     .section-title
     {
-        font-size: 12px;
-        font-weight: 700;
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: var(--ha-font-weight-bold, 700);
         text-transform: uppercase;
         letter-spacing: 0.8px;
         color: var(--primary-color, #03a9f4);
         margin-top: 10px;
         padding-bottom: 4px;
-        border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        border-bottom: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
     }
 
-    /*  Subsection heading inside a collapsible block. Quieter than
-        .section-title (no border, dimmer) so it reads as a logical
-        group still inside the parent section. */
-    .subsection-title
-    {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        color: var(--secondary-text-color, #6c757d);
-        margin-top: 16px;
-        margin-bottom: 4px;
-    }
-
-    /*  Collapsible section. Native <details>/<summary> so open/closed
-        state needs no JS and is keyboard-accessible. Default triangle
-        replaced by a custom ::before chevron so the row matches a
-        .section-title heading. Extra margin-top separates siblings;
-        first child gets none (editor handles its own top padding). */
+    /*  Collapsible section. Native <details>/<summary> so open/closed state needs no JS and is
+        keyboard-accessible. Default triangle replaced by a custom ::before chevron so the row matches a
+        .section-title heading. margin-top separates siblings; first child gets none (editor pads its
+        own top). */
     details.advanced-section
     {
         display: flex;
@@ -65,13 +49,13 @@ export const editorStyles = css`
         display: flex;
         align-items: center;
         gap: 6px;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: var(--ha-font-weight-bold, 700);
         text-transform: uppercase;
         letter-spacing: 0.8px;
         color: var(--primary-color, #03a9f4);
         padding-bottom: 6px;
-        border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.18));
+        border-bottom: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.18));
     }
     details.advanced-section > summary.section-title-collapse::before
     {
@@ -85,8 +69,7 @@ export const editorStyles = css`
     {
         transform: rotate(90deg);
     }
-    /*  Per-section icon between the chevron and label. Inherits the
-        section title's tint, sized to match the title's rhythm. */
+    /*  Per-section icon between the chevron and label; inherits the section title's tint. */
     .section-icon
     {
         --mdc-icon-size: 16px;
@@ -97,32 +80,25 @@ export const editorStyles = css`
         flex-shrink: 0;
     }
 
-    /*  Help text margins stack with the section's 14 px flex gap:
-        field→help = 22 px, help→next field = 34 px (1.5x ratio), so
-        the help reads as attached to the field above it. */
-    .field-help
+    /*  Help-text margins stack with the section's 14 px flex gap: field-to-help 22 px, help-to-next-field
+        34 px (1.5x ratio), so the help reads as attached to the field above it. .hint adds italics. */
+    .field-help,
+    .hint
     {
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         color: var(--secondary-text-color, #727272);
         margin: 8px 0 20px 0;
     }
+    .hint { font-style: italic; }
 
     .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
     .field-help a:hover { text-decoration: underline; }
-
-    .hint
-    {
-        font-size: 11px;
-        color: var(--secondary-text-color, #727272);
-        font-style: italic;
-        margin: 8px 0 20px 0;
-    }
     .hint a
     {
         color: var(--primary-color, #03a9f4);
         text-decoration: none;
         font-style: normal;
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
     }
     .hint a:hover { text-decoration: underline; }
 
@@ -135,16 +111,14 @@ export const editorStyles = css`
         position: relative;
     }
 
-    /*  Extra gap between two consecutive fields with no help text
-        between them (e.g. the lat/lon pair). Only fires when both
-        siblings are .field, so help-separated rows are unaffected. */
+    /*  Extra gap between two consecutive fields with no help text between them (e.g. the lat/lon pair).
+        Only fires when both siblings are .field, so help-separated rows are unaffected. */
     .field + .field
     {
         margin-top: 8px;
     }
 
-    /*  Stacked variant for controls too wide to share a row with
-        their label (e.g. ha-entity-picker). */
+    /*  Stacked variant for controls too wide to share a row with their label (e.g. ha-entity-picker). */
     .field.field-block
     {
         flex-direction: column;
@@ -157,47 +131,30 @@ export const editorStyles = css`
 
     .label
     {
-        font-size: 13px;
+        font-size: var(--ha-font-size-s, 13px);
         color: var(--primary-text-color, #212121);
         flex: 1;
     }
 
-    input[type="text"],
     input[type="number"]
     {
         width: 180px;
         padding: 6px 8px;
-        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-        border-radius: 4px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: var(--ha-border-radius-sm, 4px);
         background: var(--card-background-color, #fff);
         color: var(--primary-text-color, #212121);
-        font-size: 13px;
+        font-size: var(--ha-font-size-s, 13px);
     }
 
-    /*  Native dropdown for settings with 3+ options that won't fit a
-        segmented toggle across languages. Same width as the text
-        inputs for right-edge alignment; native chevron kept on
-        purpose as the most familiar control across HA frontends. */
-    .he-select
-    {
-        width: 180px;
-        padding: 6px 8px;
-        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-        border-radius: 4px;
-        background: var(--card-background-color, #fff);
-        color: var(--primary-text-color, #212121);
-        font-size: 13px;
-    }
-
-    /*  Two-button toggle, sized to match the other inputs for
-        consistent right-edge alignment. */
+    /*  Two-button toggle, sized to match the other inputs for right-edge alignment. */
     .segmented-toggle
     {
         display: inline-flex;
         width: 180px;
-        border-radius: 6px;
+        border-radius: var(--ha-border-radius-md, 6px);
         overflow: hidden;
-        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
         background: var(--card-background-color, #fff);
     }
 
@@ -209,14 +166,14 @@ export const editorStyles = css`
         color: var(--primary-text-color, #212121);
         border: none;
         cursor: pointer;
-        font-size: 13px;
+        font-size: var(--ha-font-size-s, 13px);
         font-family: inherit;
         transition: background 0.15s, color 0.15s;
     }
 
     .seg-option + .seg-option
     {
-        border-left: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        border-left: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
     }
 
     .seg-option:hover:not(.active)
@@ -230,8 +187,8 @@ export const editorStyles = css`
         color: var(--text-primary-color, #fff);
     }
 
-    /*  Slider variant replacing number inputs so a value out of the
-        supported range can't be entered. Value shown right of track. */
+    /*  Slider variant for ranged values so an out-of-range number can't be entered. Value shown right of
+        the track. */
     .slider-row
     {
         display: inline-flex;
@@ -250,34 +207,18 @@ export const editorStyles = css`
     .slider-value
     {
         font-variant-numeric: tabular-nums;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         color: var(--secondary-text-color, #727272);
         min-width: 44px;
         text-align: right;
     }
 
-    code
-    {
-        font-family: monospace;
-        background: var(--secondary-background-color, rgba(0,0,0,0.05));
-        padding: 1px 4px;
-        border-radius: 3px;
-    }
-
-    /*  Gap under the entity picker row in each grid slot so the
-        invert toggle / add-source button doesn't crowd the dropdown. */
-    .grid-source-row
-    {
-        margin-bottom: 12px;
-    }
-
-    /*  Reset section: warning stacked above the button so the
-        destructive-action explanation is read before the click
-        target. Button right-aligned to match the +Add affordance.
-        Red border + label reinforces "this empties data". */
+    /*  Reset section: warning stacked above the button so the destructive-action explanation is read
+        before the click target. Button right-aligned to match the +Add affordance; danger border + label
+        reinforces "this empties data". */
     .reset-warning
     {
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         line-height: 1.4;
         color: var(--secondary-text-color, #5f6368);
         opacity: 0.85;
@@ -286,11 +227,11 @@ export const editorStyles = css`
     .reset-btn
     {
         background: transparent;
-        border: 1px solid #ef4444;
-        color: #ef4444;
-        border-radius: 4px;
+        border: var(--ha-border-width-sm, 1px) solid var(--error-color, #ef4444);
+        color: var(--error-color, #ef4444);
+        border-radius: var(--ha-border-radius-sm, 4px);
         padding: 4px 10px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         font-family: inherit;
         cursor: pointer;
@@ -301,17 +242,16 @@ export const editorStyles = css`
     }
     .reset-btn:hover
     {
-        background: rgba(239, 68, 68, 0.08);
+        background: color-mix(in srgb, var(--error-color, #ef4444) 8%, transparent);
     }
     .reset-btn:focus-visible
     {
-        outline: 2px solid #ef4444;
+        outline: 2px solid var(--error-color, #ef4444);
         outline-offset: 2px;
     }
 
-    /*  About section pinned at the bottom of the editor. Compact
-        rows styled as a soft credits-panel footer, not a config
-        section. */
+    /*  About section pinned at the editor bottom. Compact rows styled as a soft credits footer, not a
+        config section. */
     .about-row
     {
         display: flex;
@@ -324,23 +264,16 @@ export const editorStyles = css`
     .about-row:first-of-type { padding-top: 8px; }
     .about-label
     {
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
         color: var(--secondary-text-color, #71717a);
-        font-size: 13px;
+        font-size: var(--ha-font-size-s, 13px);
     }
-    .about-value
-    {
-        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-        font-size: 13px;
-        color: var(--primary-text-color, #18181b);
-    }
-    /*  Identity rows. Label-left, content-right layout (from about-row's
-        flex container); variants below tune the right side (link, plain
-        value, version chip). */
+    /*  Identity rows: label-left, content-right (from about-row's flex container); variants below tune the
+        right side (link, plain value, version chip). */
     .about-row-value
     {
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
-        font-size: 14px;
+        font-size: var(--ha-font-size-m, 14px);
         font-weight: var(--ha-font-weight-medium, 500);
         color: var(--primary-text-color, #18181b);
         text-align: right;
@@ -351,7 +284,7 @@ export const editorStyles = css`
         align-items: center;
         gap: 8px;
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
-        font-size: 14px;
+        font-size: var(--ha-font-size-m, 14px);
         font-weight: var(--ha-font-weight-medium, 500);
         color: var(--primary-color, #3b82f6);
         text-decoration: none;
@@ -362,16 +295,15 @@ export const editorStyles = css`
         --mdc-icon-size: 18px;
         color: inherit;
     }
-    /*  X brand mark: inline SVG (mdi:twitter would mis-label the
-        post-rebrand platform). Sized to match adjacent ha-icon glyphs. */
+    /*  X brand mark: inline SVG (mdi:twitter mis-labels the platform). Sized to match adjacent ha-icon
+        glyphs. */
     .about-row-svg
     {
         width:  18px;
         height: 18px;
         flex-shrink: 0;
     }
-    /*  Version chip styled as a link jumping to the matching GitHub
-        release page. */
+    /*  Version chip styled as a link to the matching GitHub release page. */
     .about-version-link
     {
         font-weight: var(--ha-font-weight-bold, 700);
@@ -392,8 +324,8 @@ export const editorStyles = css`
         gap: 8px;
         text-decoration: none;
         color: var(--primary-color, #3b82f6);
-        font-size: 14px;
-        font-weight: 500;
+        font-size: var(--ha-font-size-m, 14px);
+        font-weight: var(--ha-font-weight-medium, 500);
         padding: 6px 0;
     }
     .about-link:hover { text-decoration: underline; }
@@ -405,7 +337,7 @@ export const editorStyles = css`
     .about-paragraph
     {
         margin: 0;
-        font-size: 13px;
+        font-size: var(--ha-font-size-s, 13px);
         line-height: 1.45;
         color: var(--secondary-text-color, #52525b);
     }
@@ -413,19 +345,19 @@ export const editorStyles = css`
     {
         margin-top: 18px;
         padding-top: 14px;
-        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  BMC button: same outline shape as reset-btn but in BMC yellow,
-        with the same hover bloom for consistency. */
+    /*  BMC button: same outline shape and hover bloom as reset-btn, in Buy Me a Coffee brand yellow
+        (kept literal: it's an external brand colour, not a themeable surface). */
     .about-coffee-link
     {
         margin-top: 8px;
         background: transparent;
-        border: 1px solid #ffcc00;
+        border: var(--ha-border-width-sm, 1px) solid #ffcc00;
         color: #ffcc00;
-        border-radius: 4px;
+        border-radius: var(--ha-border-radius-sm, 4px);
         padding: 4px 10px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         font-family: inherit;
         cursor: pointer;

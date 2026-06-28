@@ -1,6 +1,5 @@
-//Photovoltaic production chart: the observed area + line, the dashed forecast curve, the per-source stacked bands
-//(multi-source installs), and the hover dots that ride each curve. Native-unit Y scaling lives here (production
-//only); the generic targets stay in charts-generic.ts.
+//Photovoltaic production chart: observed area + line, the dashed forecast curve, the per-source stacked bands
+//(multi-source installs), and the hover dots that ride each curve. Native-unit Y scaling lives here.
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
@@ -11,14 +10,13 @@ import { type ChartHost, chartIsDark } from './charts';
 import { interpAt, pvValueAtTime } from './series-sample';
 
 
-//Render the photovoltaic production graph above the main timeline chart. Shares the X axis (host._timeRange) so day
-//boundaries and the scrub cursor align across both. The observed curve stops at the last recorded sample; the
-//forecast continues past "now".
+//Production graph above the main timeline chart. Shares the X axis (host._timeRange) so day boundaries and the
+//scrub cursor align across both. The observed curve stops at the last recorded sample; the forecast continues
+//past "now".
 export function renderPvChart(host: ChartHost): TemplateResult
 {
-    const el = host as unknown as Element; //for live HA theme-token colour resolution
+    const el = host as unknown as Element; //live HA theme-token colour resolution
     const range = host._timeRange;
-    const hist  = host._pvHistory;
     const W     = 1000;
     const H     = 100;
 
@@ -35,26 +33,23 @@ export function renderPvChart(host: ChartHost): TemplateResult
     }
 
     const pvColor = ENERGY_COLOR.pv(el);
-    //Theme-aware "predicted" shade for the dashed forecast curve: light theme blends toward black, dark toward white,
-    //so it stays a readable softer line on either plate.
+    //Theme-aware "predicted" shade for the dashed forecast curve: light theme blends toward black, dark toward
+    //white, so it stays a readable softer line on either plate.
     const isDarkTheme       = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
     const predictedPvColor  = isDarkTheme
         ? lerpHexToward(pvColor, '#ffffff', 0.55)
         : lerpHexToward(pvColor, '#000000', 0.35);
 
     //Day-boundary X positions from the shared timeline model (same source as the weather chart so separators line
-    //up). Bounded to <= 40 entries; empty on wide spans.
+    //up); empty on wide spans.
     const endMsAbs = range.end.getTime();
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
 
-    //Single-source read: unifiedStore carries the production series over the full J-2..J+2 window in watts (linearly
-    //interpolated, never mixed with forecast). sliceForRange returns one sample per DISPLAY bucket in view; empty
-    //before the first build -> empty frame.
+    //unifiedStore carries the production series over the full J-2..J+2 window in watts (linearly interpolated, never
+    //mixed with forecast). sliceForRange returns one sample per display bucket in view; empty before the first build
+    //gives an empty frame.
     const lu = (host._pvUnit || '').toLowerCase();
     const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-    //The store handles cumulative->W internally; keep these referenced to silence unused warnings.
-    void isCumulativeEnergy;
-    void hist;
     const store = host._unifiedStore;
     const rangeSlice = store ? sliceForRange(store, startMs, endMsAbs) : null;
 
@@ -62,8 +57,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         ((t.getTime() - startMs) / rangeMs) * W;
 
     //Observed samples are in the entity's native power unit; the forecast is in watts. Compute the W -> native scale
-    //once so both feed yMax on the same axis (mixing units would flatten a kW observed curve when the predicted is
-    //in W).
+    //once so both feed yMax on the same axis (mixing units would flatten a kW observed curve against a W predicted
+    //one).
     const nativeFromW = (() => {
         const native = isCumulativeEnergy
             ? (lu === 'kwh' ? 'kw' : lu === 'mwh' ? 'mw' : lu === 'wh' ? 'w' : '')
@@ -79,7 +74,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         return 1;
     })();
 
-    //Production samples: store watts × nativeFromW so the Y axis stays in the entity's native unit (store is the
+    //Production samples: store watts x nativeFromW so the Y axis stays in the entity's native unit (store is the
     //single conversion point).
     const samples: { t: Date; v: number }[] = [];
     if (rangeSlice)
@@ -92,8 +87,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
     }
 
-    //Forecast curve: same store, same conversion. The forecast series is already cap-clipped, calibration-applied
-    //and shading-aware at every DISPLAY bucket, no local model loop here.
+    //Forecast curve: same store, same conversion. Already cap-clipped, calibration-applied and shading-aware at every
+    //display bucket, no local model loop here.
     const predictedSamples: { t: Date; v: number }[] = [];
     if (rangeSlice)
     {
@@ -105,12 +100,12 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
     }
 
-    //Auto-scale Y to the running max (min 1 to avoid divide-by-zero on an all-zero window, keeping the curve pinned
-    //to the baseline). Predicted samples feed yMax too so the forecast line never clips above observed peaks.
+    //Auto-scale Y to the running max (min 1 avoids divide-by-zero on an all-zero window, keeping the curve pinned to
+    //the baseline). Predicted samples feed yMax too so the forecast line never clips above observed peaks.
     let yMax = 1;
     for (const s of samples)          { if (s.v > yMax) yMax = s.v; }
     for (const s of predictedSamples) { if (s.v > yMax) yMax = s.v; }
-    //Leave a sliver of headroom at the top so the production / forecast peak never kisses the top edge.
+    //Headroom at the top so the peak never kisses the top edge.
     const TOP_HEADROOM_PX = 10;
     const yOf = (v: number): number =>
         H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
@@ -128,9 +123,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
         line = `M ${points.join(' L ')}`;
     }
 
-    //Per-source STACKED areas (multi-source installs): each source's share of the aggregate at every bucket,
-    //stacked so the filled areas sum to the aggregate and never overlap. Same per-source colour ramp as the
-    //home histogram (energySolarColor by sorted index). Single-source installs keep the plain aggregate area.
+    //Per-source stacked areas (multi-source installs): each source's share of the aggregate at every bucket, stacked
+    //so the filled areas sum to the aggregate and never overlap. Same per-source colour ramp as the home histogram
+    //(energySolarColor by sorted index). Single-source installs keep the plain aggregate area.
     const perEntityIdsForCurves = host._pvHistoryPerEntity.size > 1
         ? Array.from(host._pvHistoryPerEntity.keys()).sort()
         : [];
@@ -141,8 +136,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         const darkc = chartIsDark(host);
         const S = perEntityIdsForCurves.length;
         const N = samples.length;
-        //Each source's instantaneous power at every aggregate-sample time (pvValueAtTime differentiates
-        //cumulative meters and floors below the horizon, in a unit consistent across sources).
+        //Each source's instantaneous power at every aggregate-sample time (pvValueAtTime differentiates cumulative
+        //meters and floors below the horizon, in a unit consistent across sources).
         const raw: number[][] = [];
         for (let s = 0; s < S; s++)
         {
@@ -191,7 +186,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     }
 
     //Hover dot at the interpolated PV value. Observed wins; with no observed value (future, gap, outage) it falls
-    //back to the predicted series. Same Y axis as the curve it rides, so it reads as a point on the curve.
+    //back to the predicted series. Same Y axis as the curve it rides.
     const hoverPct = host._chartHoverPct;
     let hoverX = 0;
     let hoverY = NaN;
@@ -201,8 +196,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
     {
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
-        //Observed dot only inside the observed window (else interpAt clamps and the dot freezes on yesterday's tail
-        //when hovering tomorrow). Forecast dot wherever it has a value, so both dots ride their own curves at once.
+        //Observed dot only inside the observed window (else interpAt clamps and it freezes on yesterday's tail when
+        //hovering tomorrow). Forecast dot wherever it has a value, so both dots ride their own curves at once.
         const lastObsMs = samples.length > 0
             ? samples[samples.length - 1].t.getTime()
             : -Infinity;
@@ -220,8 +215,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         showHover = isFinite(hoverY) || isFinite(hoverYPred);
     }
 
-    //Per-source hover dots: one dot riding the top of each stacked band at the hover instant, in the band's
-    //colour, so the curves carry the same dot vocabulary as the cloud chart.
+    //Per-source hover dots: one dot riding the top of each stacked band at the hover instant, in the band's colour,
+    //so the curves carry the same dot vocabulary as the cloud chart.
     const sourceHoverDots: { y: number; color: string }[] = [];
     if (showHover && hoverPct !== null && stackedAreas.length > 0)
     {

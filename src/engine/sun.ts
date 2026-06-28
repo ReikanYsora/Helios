@@ -1,9 +1,9 @@
-//Solar position and irradiance math: pure functions, no DOM/map. Validated against NOAA SPA over a year × 8 latitudes
+//Solar position and irradiance math: pure functions, no DOM/map. Validated against NOAA SPA over a year x 8 latitudes
 //(mean alt error 0.30°, az 0.36°, max alt ~1°), well under the fidelity needed for shadow direction and the W/m² estimate.
 
 //Sun altitude/azimuth (degrees, azimuth clockwise from north) at a UTC instant for a lat/lon point.
-//Single-entry cache: many render passes in one render cycle (atmosphere, shadows, PV legend) ask for the same (time, home)
-//tuple in succession. Key includes 6-decimal lat/lon so two cards at distinct homes don't poison each other.
+//Single-entry cache: many render passes in one cycle (atmosphere, shadows, PV legend) ask for the same (time, home)
+//tuple in succession. Key includes 6-decimal lat/lon so two distinct homes don't poison each other.
 let _sunCacheKey: string | null = null;
 let _sunCacheValue: { altitude: number; azimuth: number } | null = null;
 
@@ -56,7 +56,7 @@ export function getSunPosition(date: Date, lat: number, lon: number):
 //  5. Map effective POA to % of STC, clamp [0, 100].
 
 //One co-oriented group of panels. computePvPower is single-orientation by design; multi-array installs (split roofs, roof +
-//balcony) are summed by the card-layer caller (once per array, weighted by kWp share), keeping the config schema out of this
+//balcony) are summed by the caller (once per array, weighted by kWp share), keeping the config schema out of this
 //pure-math module.
 export interface PanelOrientation
 {
@@ -173,7 +173,7 @@ export function computePvPower(
         }
         else
         {
-            //kCloud ~0.25 (overcast) → 1.0 (clear) mapped to direct fraction 0 → 0.85; loose stand-in for a proper
+            //kCloud ~0.25 (overcast) -> 1.0 (clear) mapped to direct fraction 0 -> 0.85; loose stand-in for a proper
             //clearness-index decomposition (Erbs, Reindl), fine at hourly resolution.
             directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
         }

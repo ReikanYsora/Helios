@@ -1,5 +1,5 @@
-//Adaptive timeline model: tick granularity (hours/days/weeks/months) follows the visible span. Fed
-//[start, end]; outputs labels + separators + dayBoundaries.
+//Adaptive timeline model: tick granularity (hours/days/weeks/months) follows the visible span. Fed [start, end];
+//outputs labels + separators + dayBoundaries.
 
 
 import { TIMELINE_MAX_TICKS, HOUR_MS, DAY_MS } from '../constants';
@@ -76,8 +76,8 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
     let kind: TimelineKind;
     let firstTick: Date;
     let next: (d: Date) => Date;
-    let periodStart: ((d: Date) => Date) | null; //Start of the period containing `d`; null for intraday (labels sit on ticks).
-    let labelMode: 'boundary' | 'centered';      //'boundary': label sits ON the tick. 'centered': label names a span (weekday/month).
+    let periodStart: ((d: Date) => Date) | null; //start of the period containing `d`; null for intraday (labels sit on ticks)
+    let labelMode: 'boundary' | 'centered';      //'boundary': label sits on the tick. 'centered': label names a span (weekday/month)
 
     if (spanDays <= 2.05)
     {
@@ -116,7 +116,7 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
         labelMode   = 'centered';
     }
 
-    //'days' never thins (short weekday labels read fine across a full week; budget 16 is above its ~14-day cap);
+    //'days' never thins (short weekday labels read fine across a full week; budget 16 sits above its ~14-day cap);
     //other kinds keep maxTicks so wide week/month spans collapse to a readable tick count.
     const tickBudget = kind === 'days' ? Math.max(maxTicks, 16) : maxTicks;
     const thin = <T>(arr: T[]): T[] =>
@@ -164,8 +164,8 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
         labels = thin(allLabels);
     }
 
-    //Months: align the gridlines with the NAMED months — one separator at the start of each shown label —
-    //instead of thinning boundaries independently (which dropped lines onto the unlabelled months).
+    //Months: align the gridlines with the named months (one separator at the start of each shown label) instead of
+    //thinning boundaries independently (which dropped lines onto the unlabelled months).
     if (kind === 'months')
     {
         separators = labels
@@ -193,8 +193,8 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
 }
 
 
-//Kind-aware label for the timeline footer, honouring the HA language: intraday -> hour:minute,
-//days -> short weekday, weeks -> day + short month, months -> full month name.
+//Kind-aware label for the timeline footer, honouring the HA language: intraday -> hour:minute, days -> short
+//weekday, weeks -> day + short month, months -> full month name.
 export function formatTimelineLabel(kind: TimelineKind, d: Date, hass?: { language?: string }): string
 {
     const lang = (hass?.language as string | undefined) || undefined;
@@ -202,7 +202,7 @@ export function formatTimelineLabel(kind: TimelineKind, d: Date, hass?: { langua
           kind === 'intraday' ? { hour: '2-digit', minute: '2-digit' }
         : kind === 'days'     ? { weekday: 'short' }
         : kind === 'weeks'    ? { day: 'numeric', month: 'short' }
-        :                       { month: 'long' };
+        :                       { month: 'short' };
     try
     {
         return new Intl.DateTimeFormat(lang, opts).format(d);

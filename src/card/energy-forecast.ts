@@ -1,13 +1,13 @@
-//Reads HA's native solar-production forecast instead of computing its own. Mirrors the energy-prefs pattern: one
-//defensive WS round-trip cached on the host, a throttle / in-flight guard so duplicate cards don't hammer the call, and
-//a requestUpdate once the parsed result lands.
+//Reads HA's native solar-production forecast instead of computing its own: one defensive WS round-trip cached on the
+//host, a throttle / in-flight guard so duplicate cards don't hammer the call, and a requestUpdate once the parsed
+//result lands.
 
 import type { EnergyDefaults } from './energy-prefs';
 import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../constants';
 
 
 //One hourly forecast point. For an hourly wh value the average power across the hour in watts equals the wh number
-//(Wh over 1 h), so consumers read watts directly without conversion.
+//(Wh over 1 h), so consumers read watts directly.
 export interface SolarForecastPoint
 {
     tMs: number;
@@ -32,8 +32,8 @@ export interface EnergyForecastHost
 }
 
 
-//Fetch the HA solar forecast and update the host's cached snapshot. Safe to call repeatedly; any failure (RBAC denied,
-//nothing configured, older HA core) collapses silently to an empty forecast so the card never errors.
+//Fetch the HA solar forecast and update the host's cached snapshot. Safe to call repeatedly; any failure (RBAC
+//denied, nothing configured, older HA core) collapses silently to an empty forecast so the card never errors.
 export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<void>
 {
     if (!host.hass?.callWS)
@@ -53,8 +53,8 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
     host._haSolarForecastFetching = true;
     try
     {
-        //Preferred: Helios-Forecast's detail series (sub-hourly future + hourly past). Falls back to HA's generic
-        //`energy/solar_forecast` (hourly, future-only) when Helios-Forecast is not the configured provider.
+        //Preferred: the detail series (sub-hourly future + hourly past). Falls back to HA's generic
+        //`energy/solar_forecast` (hourly, future-only) when that provider is not configured.
         const detail = await fetchHeliosSeries(host);
         if (detail !== null)
         {
@@ -71,7 +71,7 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
     }
     catch (_)
     {
-        //Transient WS error, RBAC denied, or nothing configured. Leave the forecast empty but flip loaded so the boot
+        //Transient WS error, RBAC denied, or nothing configured: leave the forecast empty but flip loaded so the boot
         //spinner doesn't block on a payload that may never arrive.
         host._haSolarForecastLoaded = true;
     }
@@ -82,9 +82,9 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
 }
 
 
-//Try Helios-Forecast's detail websocket for each configured provider entry over the card's J-2..J+2 window. Returns the
-//merged points of the first entry that answers, or null when none is a Helios-Forecast entry (caller then falls back to
-//HA's generic surface). Each `pv_w` is watts, kept in the .wh slot (hourly: watts == Wh, read as watts either way).
+//Try the detail websocket for each configured provider entry over the card's J-2..J+2 window. Returns the merged
+//points of the first entry that answers, or null when no entry supports the command (caller then falls back to HA's
+//generic surface). Each `pv_w` is watts, kept in the .wh slot (hourly: watts == Wh, read as watts either way).
 async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecastPoint[] | null>
 {
     const candidates = host._energyDefaults?.solarForecastEntryIds ?? [];
@@ -124,13 +124,13 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
                 }
             }
             out.sort((a, b) => a.tMs - b.tMs);
-            //An empty (but valid) answer means a Helios-Forecast entry with no points in range; still prefer it over the
-            //generic surface to avoid double-fetching. A non-Helios entry rejects the command and is skipped.
+            //An empty (but valid) answer means an entry with no points in range; still prefer it over the generic
+            //surface to avoid double-fetching. An entry that doesn't support the command rejects it and is skipped.
             return out;
         }
         catch (_)
         {
-            //Not a Helios-Forecast entry (unknown command / not_found) or transient error: try the next candidate.
+            //Entry doesn't support the command (unknown command / not_found) or transient error: try the next.
             continue;
         }
     }
@@ -180,8 +180,8 @@ export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<strin
 }
 
 
-//Read the forecast WATTS at a bucket time. The forecast is hourly; we linearly interpolate between consecutive points
-//so the 15-minute store buckets draw a smooth curve instead of flat steps. Returns null when no point covers the time.
+//Read the forecast watts at a bucket time. The forecast is hourly; linearly interpolate between consecutive points so
+//the sub-hourly store buckets draw a smooth curve instead of flat steps. Null when no point covers the time.
 export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: number): number | null
 {
     if (forecast.length === 0)

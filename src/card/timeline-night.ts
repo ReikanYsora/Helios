@@ -11,9 +11,9 @@ import { type ChartHost, chartIsDark } from './charts';
 import { pvValueAtTime } from './series-sample';
 
 
-//Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd] in the requested direction. Returns null
-//during polar day/night (no crossing) or a degenerate bracket. Coarse 1-hour scan + 12 bisection iterations reach
-//seconds precision in ~22 getSunPosition calls, well under the per-frame budget.
+//Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd] in the requested direction. Null during polar
+//day/night (no crossing) or a degenerate bracket. Coarse 1-hour scan + 12 bisection iterations reach seconds
+//precision in ~22 getSunPosition calls, well under the per-frame budget.
 function findSunCrossing(
     lat: number,
     lon: number,
@@ -70,9 +70,9 @@ function findSunCrossing(
 //Per-day night intervals clipped to the visible range, each a (sunset[N] -> sunrise[N+1]) pair as
 //{ startPct, endPct } for `renderTimelineNightZones`. The walk pads one day each side so leading/trailing night
 //chunks still resolve when the window doesn't start/end on a solar boundary.
-//Memo for computeNightIntervals: the night zones depend only on the window + home coords, which are stable
-//across the frequent scrub + auto-rotate renders (those move _selectedTime / the camera, not _timeRange).
-//Without this the ~700 getSunPosition calls below ran on every one of those renders.
+//Memoised: night zones depend only on the window + home coords, stable across the frequent scrub + auto-rotate
+//renders (those move _selectedTime / the camera, not _timeRange). Without it the ~700 getSunPosition calls below
+//ran on every such render.
 let _nightMemo: { key: string; out: { startPct: number; endPct: number }[] } | null = null;
 
 function computeNightIntervals(host: ChartHost): { startPct: number; endPct: number }[]
@@ -174,7 +174,7 @@ function computeNightIntervals(host: ChartHost): { startPct: number; endPct: num
 
 
 //Night-zone overlays: one absolutely-positioned low-alpha-wash div per night interval, inside the chart card so it
-//inherits the card's positioning + clipping. z-index sits above the SVG curves but below the cursors (z-index 4).
+//inherits its positioning + clipping. z-index sits above the SVG curves but below the cursors (z-index 4).
 export function renderTimelineNightZones(host: ChartHost): TemplateResult | typeof nothing
 {
     const intervals = computeNightIntervals(host);
@@ -194,8 +194,8 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult | type
 
 
 //Semi-opaque overlay over the future portion of a chart card (z-index 3: above curves + night-zones, below the
-//z-index-4 cursors). Anchored to "now" so the forecast side reads behind a wash. Returns nothing when "now" is
-//outside the range, so the mask never shrinks to a sliver or fills the whole card.
+//z-index-4 cursors). Anchored to "now" so the forecast side reads behind a wash. Nothing when "now" is outside the
+//range, so the mask never shrinks to a sliver or fills the whole card.
 export function renderTimelineFutureMask(host: ChartHost): TemplateResult | typeof nothing
 {
     const range = host._timeRange;
@@ -225,10 +225,10 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult | type
 }
 
 
-//Per-PV-string production shares at an instant, for the home stacked histogram. Reads each source's raw
-//history (interpolated to the instant), keeps the producing ones, and returns {fraction, #rrggbb colour}
-//hue-spread off the solar token by source index — matching the per-source chart curves. Empty unless 2+
-//sources are producing right now; below that the home renders as a single solid block.
+//Per-PV-string production shares at an instant, for the home stacked histogram. Reads each source's raw history
+//(interpolated to the instant), keeps the producing ones, and returns {fraction, #rrggbb colour} hue-spread off the
+//solar token by source index, matching the per-source chart curves. Empty unless 2+ sources are producing right now;
+//below that the home renders as a single solid block.
 export function solarBands(host: ChartHost, atMs: number): { frac: number; color: string }[]
 {
     const map = host._pvHistoryPerEntity;
@@ -236,9 +236,9 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
     const ids  = Array.from(map.keys()).sort();
     const el   = host as unknown as Element;
     const dark = chartIsDark(host);
-    //At the live instant the per-source HISTORY (hourly calibration) doesn't reach "now", so read each
-    //source's live power straight off its state instead; only fall back to the history when scrubbing the
-    //past. ~5 min tolerance covers the gap between now and the freshest data without misclassifying a scrub.
+    //At the live instant the per-source history (hourly calibration) doesn't reach "now", so read each source's live
+    //power straight off its state; only fall back to the history when scrubbing the past. ~5 min tolerance covers the
+    //gap between now and the freshest data without misclassifying a scrub.
     const live  = atMs >= Date.now() - 5 * 60_000;
     const parts: { v: number; idx: number }[] = [];
     for (let i = 0; i < ids.length; i++)
@@ -247,8 +247,8 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
         let v = NaN;
         if (live)
         {
-            //Power (stat_rate) sources read directly; cumulative-only sources normalise to 0 here and drop
-            //to the history branch below (which differentiates them).
+            //Power (stat_rate) sources read directly; cumulative-only sources normalise to 0 here and drop to the
+            //history branch below (which differentiates them).
             const so = host.hass?.states?.[id];
             if (so)
             {

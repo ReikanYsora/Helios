@@ -1,10 +1,8 @@
 //Open-Meteo weather data layer: multi-model fetch, in-browser cache, and pure helpers around the weather signal.
-//No DOM, map, or engine state, all forecast-API code lives here so the engine stays focused on rendering.
+//No DOM, map, or engine state; all forecast-API code lives here so the engine stays focused on rendering.
 
-//Hourly forecast at the home location. Numeric arrays are aligned on `times`. `shortwave` uses -1 as a "no data"
-//sentinel since 0 is a legitimate night value.
-//Forecast window, back-off tables, cache TTL/precision live in constants.ts. Aliased on import so the in-file usages
-//below stay unchanged; the two back-off tables are also re-exported because helios-engine.ts imports them here.
+//Forecast window, back-off tables, cache TTL/precision live in constants.ts. Aliased on import so in-file usages
+//stay unchanged; the back-off tables are re-exported because helios-engine.ts imports them from here.
 import {
     WEATHER_PAST_DAYS          as PAST_DAYS,
     WEATHER_FORECAST_DAYS      as FORECAST_DAYS,
@@ -14,6 +12,8 @@ import {
 } from '../constants';
 
 
+//Hourly forecast at the home location. Numeric arrays are aligned on `times`. `shortwave` uses -1 as a
+//"no data" sentinel since 0 is a legitimate night value.
 export interface SampleHourly
 {
     lat:         number;
@@ -30,8 +30,7 @@ export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../constants';
 
 
 //Median ignoring null/undefined/NaN. Combines concurrent multi-model forecasts into one robust value per timestep.
-//Median over mean because individual models occasionally emit gross outliers (e.g. cloud_cover_low pegged at 100% from
-//the Sundqvist parametrisation hitting an underground pressure level).
+//Median over mean because individual models occasionally emit gross outliers (e.g. cloud_cover_low pegged at 100%).
 export function medianOfNumbers(values: readonly (number | null | undefined)[]): number | null
 {
     const clean: number[] = [];
@@ -117,10 +116,6 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 }
 
 
-//In-browser cache. The precision tag is part of the key so payloads at different precisions never collide.
-//CACHE_KEY_PREFIX lives in constants.ts.
-
-
 //Inflight Promise map keyed on cache key (`<precision>:<lat>,<lon>`). When several engines or call sites ask for the same
 //(lat, lon, precision) while a fetch is in flight, they await the SAME Promise instead of each firing its own round-trip.
 //Cleared in a finally block so an error path frees the slot for the next attempt.
@@ -142,14 +137,15 @@ interface CachedPayload
     };
 }
 
+//The precision tag is part of the key so payloads at different precisions never collide.
 function cacheKey(lat: number, lon: number, precision: 'standard' | 'high'): string
 {
     return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(CACHE_KEY_DECIMALS)},${lon.toFixed(CACHE_KEY_DECIMALS)}`;
 }
 
 
-//Wipe every Open-Meteo payload stashed in localStorage. Exposed for the editor's "reset data cache" button so a user can
-//force a fresh fetch without clearing browser storage manually. Safe to call repeatedly.
+//Wipe every Open-Meteo payload stashed in localStorage. Forces a fresh fetch without clearing browser storage manually.
+//Safe to call repeatedly.
 export function clearWeatherCache(): number
 {
     let cleared = 0;
@@ -246,10 +242,10 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 }
 
 
-//Variables we ask Open-Meteo for. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged over
-//the preceding one), matching our visual time cursor; it powers the live irradiance chip and sun-arc colouring. The split
-//cloud variables keep the total cloud_cover for rendering and let us detect the low-layer "fog spike" failure mode. The
-//PV forecast is read natively from Home Assistant, so the irradiance split and ambient series are not requested.
+//Variables requested from Open-Meteo. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged
+//over the preceding one), matching the visual time cursor; it powers the live irradiance chip and sun-arc colouring.
+//The split cloud variables keep total cloud_cover for rendering and let us detect the low-layer "fog spike" failure
+//mode. The PV forecast is read natively from Home Assistant, so the irradiance split and ambient series are not requested.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover',
@@ -259,7 +255,7 @@ const HOURLY_VARS = [
     'weather_code',
 ];
 
-//Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_meteofrance_seamless);
+//Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_<model>);
 //"best_match" mode uses bare keys. Try the bare key first then the suffixed ones so one code path handles both.
 function readSeries(row: any, varName: string, models: string[]): (number | null)[]
 {
@@ -311,7 +307,7 @@ function readWeatherCode(row: any, models: string[]): number[]
     return [];
 }
 
-//Gap fills: cloud → 0 (missing = clear); shortwave → -1 (0 is a valid night value).
+//Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value).
 const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
 const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
 
@@ -320,7 +316,7 @@ const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == nu
 //fusion (median per timestep), user elevation via &elevation= for sharper boundary conditions, and a layer-weighted
 //effective cloud cover matching both ground perception and shortwave attenuation:
 //  effective = low + 0.6·mid + 0.2·high  (capped at 100%)
-//This replaces the API's raw cloud_cover (satellite-view total) which over-counts high cirrus on otherwise clear days.
+//This replaces the API's raw cloud_cover (satellite-view total), which over-counts high cirrus on otherwise clear days.
 //Returns null on any failure so the caller can degrade gracefully.
 export async function fetchHomePointData(
     lat:       number,
@@ -331,8 +327,8 @@ export async function fetchHomePointData(
 ): Promise<SampleHourly | null>
 {
     //Round to cache-key precision up front so every downstream op (localStorage lookup, dedup key, API URL) uses the
-    //EXACT same coordinates. Otherwise two cards 80 m apart hit the network with different URLs but share a cache entry,
-    //defeating CDN-friendliness AND fragmenting our own inflight dedup.
+    //EXACT same coordinates. Otherwise two callers ~80 m apart hit the network with different URLs but share a cache
+    //entry, defeating CDN-friendliness AND fragmenting the inflight dedup.
     const fLat = Number(lat.toFixed(CACHE_KEY_DECIMALS));
     const fLon = Number(lon.toFixed(CACHE_KEY_DECIMALS));
 
@@ -342,8 +338,8 @@ export async function fetchHomePointData(
         return cached;
     }
 
-    //Inflight dedup: await an in-progress fetch for the same key instead of starting a fresh round-trip. Critical on
-    //multi-card dashboards where every card spawns its own engine and would race on a cold cache.
+    //Inflight dedup: await an in-progress fetch for the same key instead of starting a fresh round-trip. Critical when
+    //several engines spawn at once and would otherwise race on a cold cache.
     const inflightKey = cacheKey(fLat, fLon, precision);
     const pending = _inflightFetches.get(inflightKey);
     if (pending)
@@ -375,7 +371,7 @@ export async function fetchHomePointData(
             if (!res.ok)
             {
                 //Re-throw HTTP 429 with the status attached so the engine catch routes it to RATE_LIMIT_BACKOFF_MS;
-                //returning null would short-circuit that catch and the back-off would never arm, leaving the card
+                //returning null would short-circuit that catch and the back-off would never arm, leaving the engine
                 //hammering Open-Meteo. Other non-OK statuses fall through to the silent null path (generic network error).
                 if (res.status === 429)
                 {
@@ -422,8 +418,8 @@ export async function fetchHomePointData(
         }
         catch (e)
         {
-            //AbortError, network and JSON parse errors are swallowed (caller treats null as "no data", renders empty
-            //ramps). HTTP 429 is NOT swallowed: it propagates to the engine so the back-off table arms.
+            //AbortError, network, and JSON parse errors are swallowed (caller treats null as "no data"). HTTP 429 is
+            //NOT swallowed: it propagates to the engine so the back-off table arms.
             if (e && typeof e === 'object' && (e as { status?: number }).status === 429)
             {
                 throw e;
@@ -439,8 +435,8 @@ export async function fetchHomePointData(
     }
     finally
     {
-        //Release the slot so the next fetch (after caching) doesn't dedup against a stale Promise, later callers should
-        //see the cached payload, not a leftover reference to the round-trip we just finished.
+        //Release the slot so the next fetch doesn't dedup against a stale Promise; later callers should see the cached
+        //payload, not a leftover reference to the round-trip just finished.
         _inflightFetches.delete(inflightKey);
     }
 }

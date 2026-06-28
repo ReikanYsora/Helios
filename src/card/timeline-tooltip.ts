@@ -1,5 +1,5 @@
-//Hover tooltip + pointer handlers for the timeline chart stack: the per-target readout rows, the day kWh /
-//forecast line, and the magnet-snap live chip. Pure templates over the structural ChartHost.
+//Hover tooltip + pointer handlers for the timeline chart stack: the per-target readout rows, the day kWh / forecast
+//line, and the magnet-snap live chip. Pure templates over the structural ChartHost.
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
@@ -23,13 +23,13 @@ import { computeDailyKwhTotals } from './charts-generic';
 
 //Hover tooltip above the chart-card stack: the hover timestamp + one icon-coded row per series, plus the day's kWh
 //production (past) or forecast (future). A magnet-snap tab surfaces when the scrub enters the band around the live
-//cursor (snap logic in applyTimelinePointer, timeline.ts). The PV row is skipped silently when unavailable.
+//cursor (snap logic in applyTimelinePointer, timeline.ts). The PV row is skipped when unavailable.
 export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | typeof nothing
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
     //Tooltip stays available when _chartSeries is null (Open-Meteo unreachable): PV + per-entity rows read from the
-    //recorder fine, irradiance + cloud cells just fall back to NaN handled below.
+    //recorder fine, irradiance + cloud cells fall back to NaN handled below.
     if (!range)
     {
         return nothing;
@@ -42,8 +42,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         return nothing;
     }
 
-    //Tooltip shows only while the pointer is actively over the chart (or dragging the scrub). On gesture end
-    //_chartHoverPct goes null and the tooltip disappears, leaving just the scrub line.
+    //Shows only while the pointer is over the chart (or dragging the scrub). On gesture end _chartHoverPct goes null
+    //and the tooltip disappears, leaving just the scrub line.
     const hoverPct = host._chartHoverPct;
     if (hoverPct === null || hoverPct < 0 || hoverPct > 100)
     {
@@ -62,14 +62,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const pv   = pvValueAtTime(host, atMs);
 
     //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling).
-    //Grid/battery read from the store at the cursor instant (watts; kw() formats to kW; null -> NaN).
+    //Grid/battery read from the store at the cursor instant (watts; kw() formats to kW; null becomes NaN).
     const target   = host._chartTarget ?? 'production';
     const store    = host._unifiedStore;
     const gridImpW = store ? (valueAt(store.gridImport, store, atMs) ?? NaN) : NaN;
     const gridExpW = store ? (valueAt(store.gridExport, store, atMs) ?? NaN) : NaN;
     const battW    = store ? (valueAt(store.battery,    store, atMs) ?? NaN) : NaN;
-    //Home consumption (load) at the hovered instant: production + import − export − net battery (charge+),
-    //clamped at 0. Same formula as the consumption chart series. Hidden when no flow has any reading.
+    //Home consumption (load) at the hovered instant: production + import - export - net battery (charge+), clamped at
+    //0. Same formula as the consumption chart series. Hidden when no flow has any reading.
     const prodW          = store ? (valueAt(store.production, store, atMs) ?? NaN) : NaN;
     const hasConsumption = isFinite(prodW) || isFinite(gridImpW) || isFinite(gridExpW) || isFinite(battW);
     const consumptionW   = Math.max(0,
@@ -84,9 +84,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
-    //which would duplicate the headline row).
+    //duplicating the headline row).
     const perEntityMap     = host._pvHistoryPerEntity;
-    //Source order (NOT sorted), so row index lines up with solarSourceName + the clock.
+    //Source order (not sorted), so row index lines up with solarSourceName + the clock.
     const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()) : [];
     const perEntityRows: { id: string; label: string; valueText: string; colorIdx: number }[] = [];
     for (let i = 0; i < perEntityIds.length; i++)
@@ -108,16 +108,15 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     }
     const hasPv = isFinite(pv.value);
 
-    //Row names (icon -> name -> value): the metric name, or the configured entity's HA Energy name for the
-    //two-direction grid/battery rows.
+    //Row names: the metric name, or the configured entity's HA Energy name for the two-direction grid/battery rows.
     const tgtName        = clockTargetLabel(host, target);
     const gridFromName   = gridImportName(host);
     const gridToName     = gridExportName(host);
     const battChargeName = batteryChargeName(host);
     const battDisName    = batteryDischargeName(host);
-    //Each tooltip row's icon takes the colour of the series it represents (matching the chart curves) so the
-    //readout is scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the
-    //three stacked band shades in renderTargetChart.
+    //Each row's icon takes the colour of the series it represents (matching the chart curves) so the readout is
+    //scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the three stacked
+    //band shades in renderTargetChart.
     const el             = host as unknown as Element;
     const cloudBase      = ENERGY_COLOR.cloud(el);
     const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
@@ -125,8 +124,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
-    //Header granularity follows the window: an intraday span shows the time, a multi-day span adds the weekday,
-    //and a month/year span shows the calendar day (the scrub steps day by day), so you always know WHEN you are.
+    //Header granularity follows the window: intraday shows the time, a multi-day span adds the weekday, and a
+    //month/year span shows the calendar day (the scrub steps day by day), so you always know when you are.
     const spanDays  = rangeMs / 86_400_000;
     const timeOpts: Intl.DateTimeFormatOptions =
           spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }
@@ -136,7 +135,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     //Day total split observed/forecast by cursor-vs-"now" (not the day boundary), so later-today hours show the
     //full-day forecast and earlier hours the production so far. Today's past prefers recorder-backed
-    //`_haSolarTodayKwh`, else local trapezoidal integration; future stays on `computeDailyKwhTotals`.
+    //`_haSolarTodayKwh`, else local trapezoidal integration; future uses `computeDailyKwhTotals`.
     const dayKey = new Date(atDate);
     dayKey.setHours(0, 0, 0, 0);
     const todayKey = new Date();
@@ -149,8 +148,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     {
         dayKwh = host._haSolarTodayKwh;
     }
-    //Past cursor shows only the instantaneous power (the day total lives in the clock); a future cursor adds the
-    //forecast day total, which has no other home in the UI.
+    //Past cursor shows only instantaneous power (the day total lives in the clock); a future cursor adds the forecast
+    //day total, which has no other home in the UI.
     const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
         ? formatLocalisedNumber(host.hass, dayKwh, dec) + ' kWh'
@@ -158,7 +157,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     //Magnet-snap detection: when the scrub lands in a narrow band around the live cursor, applyTimelinePointer
     //(timeline.ts) auto-releases to live mode and a restore tab surfaces. The 8 px scrub check maps to ~1.2 % at
-    //typical chart widths (8 px on a 700 px chart).
+    //typical chart widths.
     const MAGNET_PCT   = 1.2;
     const nowMsRef     = Date.now();
     const inMagnetZone = nowMsRef >= startMs && nowMsRef <= startMs + rangeMs
@@ -174,8 +173,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         ? 'Retour au live'
         : 'Back to live';
 
-    //Tooltip horizontal anchor: a continuous translateX(-${pct}%) slide, so its left edge sits at 0 % and right edge
-    //at 100 % as the scrub sweeps. Never goes off-screen, no jump-to-edge magnet.
+    //Horizontal anchor: a continuous translateX(-${pct}%) slide, so its left edge sits at 0 % and right edge at
+    //100 % as the scrub sweeps. Never goes off-screen, no jump-to-edge magnet.
     return html`
         <div
             class="tb-hover-tooltip-tail ${inMagnetZone ? 'is-magnet-snap' : ''}"

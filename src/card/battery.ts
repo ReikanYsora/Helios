@@ -11,8 +11,8 @@ import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, 
 import { BATTERY_CACHE_TTL_MS } from '../constants';
 
 
-//Module-level history cache, survives Lit unmount+remount (navigate away from Helios and back) like the PV cache in pv.ts.
-//15-min TTL covers nav-around-the-dashboard without serving stale data forever.
+//Module-level history cache, survives Lit unmount+remount (navigate away and back) like the PV cache. 15-min TTL covers
+//nav-around-the-dashboard without serving stale data forever.
 
 interface BatteryHistoryCacheEntry
 {
@@ -69,7 +69,7 @@ export function resolveBatteryEntities(defaults: EnergyDefaults): { powerEntity:
 
 
 //Surface the host card exposes to this module. Mutable fields are non-readonly so refresh/fetch helpers can assign them;
-//Lit @state reactivity is preserved since each assignment hits the decorator's setter.
+//@state reactivity is preserved since each assignment hits the decorator's setter.
 export interface BatteryHost
 {
     readonly hass:       any;
@@ -90,8 +90,8 @@ export interface BatteryHost
     _batteryFetchKey:     string;
     _batteryFetching:     boolean;
     //Recorder `change` series for charge (`stat_energy_to`) and discharge (`stat_energy_from`) meters, 5-min buckets. SEPARATE
-    //directional meters, so the net power sign is structural (charge +, discharge -) not inferred from one signed sensor: this is
-    //what fixes the "charge stuck at 0 W" bug. Null until first fetch.
+    //directional meters, so the net power sign is structural (charge +, discharge -) not inferred from one signed sensor, which
+    //keeps charging from reading as 0 W. Null until first fetch.
     _batteryChargeChangeSeries:    ChangeBucket[] | null;
     _batteryDischargeChangeSeries: ChangeBucket[] | null;
     _batteryChangeFetchKey:        string;
@@ -142,10 +142,10 @@ export function refreshBattery(host: BatteryHost): void
         return;
     }
 
-    //Live SoC: clamped to [0, 100] since some BMS briefly report 100.5% during absorption or dip negative near calibration. Power
-    //normalised to watts so consumers work in one unit. Multi-bank SoC is the arithmetic mean of every wired `stat_soc` (NaN
-    //filtered, single-bank collapses to the one value); capacity-weighted averaging is not yet possible (no capacity field in the
-    //storage schema).
+    //Live SoC: clamped to [0, 100] since some battery management systems briefly report 100.5% during absorption or dip negative
+    //near calibration. Power normalised to watts so consumers work in one unit. Multi-bank SoC is the arithmetic mean of every
+    //wired `stat_soc` (NaN filtered, single-bank collapses to the one value); capacity-weighted averaging is not possible (no
+    //capacity field in the storage schema).
     let nextSoc: number | null = null;
     const socEntities = host._energyDefaults.batteryStatSocs;
     if (socEntities.length > 0)
@@ -170,7 +170,7 @@ export function refreshBattery(host: BatteryHost): void
     //Live battery power, "positive = charging". When sources declare a signed power sensor (`power_config.stat_rate`), sum its state
     //across banks like the HA Energy live tile (per-bank sign honoured via `invertedRateEntities`). Otherwise the net comes from the
     //two SEPARATE directional energy meters: latest charge bucket (stat_energy_to) minus latest discharge (stat_energy_from), so the
-    //sign is structural and charging is never lost (the "stuck at 0 W" fix).
+    //sign is structural and charging is never lost.
     let nextPower: number | null = null;
     let nextUnit        = '';
     const rateEntities = host._energyDefaults.batteryStatRates;
@@ -220,11 +220,11 @@ export function refreshBattery(host: BatteryHost): void
         host._batteryPowerUnit = nextUnit;
     }
 
-    //Past power series: recorder `change` on the two directional energy meters (charge from stat_energy_to, discharge from
-    //stat_energy_from); the store + scrub net them (charge - discharge) so the sign is structural. Fetched over the J-2 window.
+    //Past power series: recorder `change` on the two directional energy meters; the store + scrub net them (charge - discharge)
+    //so the sign is structural.
     fetchBatteryChangeSeries(host);
 
-    //History fetch only when the (entities, range) tuple changed, else we'd reissue the WS command every Lit cycle (every clock tick).
+    //History fetch only when the (entities, range) tuple changed, else we'd reissue the WS command every Lit cycle.
     if (!host._timeRange || host._batteryFetching)
     {
         return;
@@ -238,19 +238,18 @@ export function refreshBattery(host: BatteryHost): void
     }
     //Two-tier window. LTS arm uses `visibleStart` (full visible timeline) so today's charged/discharged kWh integrate across the
     //full day; LTS is near-free on the recorder. Raw arm uses `rawStart`, capped at 6 h, firing only when LTS is empty (custom
-    //sensor without `state_class`) since a wider raw window on a high-frequency BMS would drag the recorder. Both anchors are off
-    //`Date.now()` so the inner clamp in fetchBatteryHistory never tips into the future.
+    //sensor without `state_class`) since a wider raw window on a high-frequency battery feed would drag the recorder. Both anchors
+    //are off `Date.now()` so the inner clamp in fetchBatteryHistory never tips into the future.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders. An
-    //unquantised Date.now() anchor changes every millisecond, so the key never matches and the fetch
-    //re-fires on every render. The 6 h window is an approximate freshness cap, so the slop is harmless.
+    //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders; an unquantised Date.now()
+    //changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
+    //the minute of slop is harmless.
     const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
     const rawStart     = new Date(anchorMs - RAW_WINDOW_H * 3_600_000);
     const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
     const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
-    //Fetch key carries every wired entity (sorted) so adding/removing a bank flips the key and invalidates the snapshot. Same shape
-    //as the PV multi-source fetch key, see pv.ts.
+    //Fetch key carries every wired entity (sorted) so adding/removing a bank flips the key and invalidates the snapshot.
     const sortedSoc      = [...socEntities].sort();
     const sortedPower    = [...powerEntities].sort();
     const sig            = `${sortedSoc.join(',')}|${sortedPower.join(',')}`;
@@ -273,9 +272,9 @@ export function refreshBattery(host: BatteryHost): void
 }
 
 
-//Fetch the recorder `change` series for charge (stat_energy_to) + discharge (stat_energy_from) meters over the J-2 window. Gated on
-//a per-host key that re-arms every CHANGE_REFRESH_MS (and on entity-set/window changes) so the series tracks newly committed
-//buckets. Charge and discharge fetched as two independent series so the consumer can net them with a structural sign.
+//Fetch the recorder `change` series for charge (stat_energy_to) + discharge (stat_energy_from) meters. Gated on a per-host key
+//that re-arms every CHANGE_REFRESH_MS (and on entity-set/window changes) so the series tracks newly committed buckets. Charge
+//and discharge fetched as two independent series so the consumer can net them with a structural sign.
 function fetchBatteryChangeSeries(host: BatteryHost): void
 {
     const chargeIds    = host._energyDefaults.batteryStatEnergyTos;
@@ -288,10 +287,10 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
     const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
-    //End anchor rounded down to the refresh boundary, folded into the fetch key so the gate re-arms once per CHANGE_REFRESH_MS and
-    //the live-chip fallback + past curve keep tracking new buckets (a startMs-only key froze the series until midnight: a battery
-    //idle at load showed 0 W all day). Rounding also lands every card on the same energy-stats cache key, so an N-card dashboard
-    //still hits the recorder once per interval.
+    //End anchor rounded to the refresh boundary, folded into the fetch key so the gate re-arms once per CHANGE_REFRESH_MS and the
+    //live-chip fallback + past curve keep tracking new buckets (a startMs-only key froze the series until midnight: a battery idle
+    //at load showed 0 W all day). Rounding also lands every card on the same energy-stats cache key, so an N-card dashboard hits
+    //the recorder once per interval.
     const endMs   = changeRefreshAnchorMs();
     const sortedCharge    = [...chargeIds].sort();
     const sortedDischarge = [...dischargeIds].sort();
@@ -432,13 +431,13 @@ function parseStatBoundary(raw: unknown): number | null
 
 
 //History fetch for the battery overlay. Tries `recorder/statistics_during_period` first: the only path that scales on a
-//high-frequency BMS (5-min buckets, ~576 rows per 2-day window vs ~150-200k raw). When the entity has no LTS tracking (no
+//high-frequency feed (5-min buckets, ~576 rows per 2-day window vs ~150-200k raw). When the entity has no LTS tracking (no
 //`state_class`) the stats array is empty and we fall back to raw `history/history_during_period` with `significant_changes_only`
 //for custom/non-measurement entities. SoC + power entities are bundled into one WS roundtrip when both are configured.
 //
-//aggregateBatteryLkcf: last-known-carry-forward aggregator across N banks, plus two battery hooks: a per-entity `transform`
-//(flip sign on `stat_rate_inverted` wirings before the sum) and a `reducer` (`sum` for power, `mean` for SoC). Walks the union
-//of all timestamps in O(entities * union), sub-ms even at high BMS cadence.
+//aggregateBatteryLkcf: last-known-carry-forward aggregator across N banks, plus two hooks: a per-entity `transform` (flip sign
+//on `stat_rate_inverted` wirings before the sum) and a `reducer` (`sum` for power, `mean` for SoC). Walks the union of all
+//timestamps in O(entities * union), sub-ms even at high cadence.
 function aggregateBatteryLkcf(
     perEntity: BatteryHistory[],
     reducer:   'sum' | 'mean',
@@ -561,7 +560,7 @@ export async function fetchBatteryHistory(
         else
         {
             //No entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
-            //`significant_changes_only` for server-side dedup; raw arm capped at `rawStart` (6 h) so a high-frequency BMS doesn't drag the recorder.
+            //`significant_changes_only` for server-side dedup; raw arm capped at `rawStart` (6 h) so a high-frequency feed doesn't drag the recorder.
             const rawResult: any = await callWSWithTimeout<any>(host.hass, {
                 type:                     'history/history_during_period',
                 start_time:               rawStart.toISOString(),
@@ -593,7 +592,7 @@ export async function fetchBatteryHistory(
         host._batterySocHistory   = socSeries;
         host._batteryPowerHistory = powerSeries;
 
-        //Persist for the next mount: cross-mount cache hits short-circuit the WS round-trip on the navigation "lag on each return" case.
+        //Persist for the next mount: cross-mount cache hits short-circuit the WS round-trip on navigate-away-and-back.
         if (cacheKey)
         {
             _batteryHistoryCache.set(cacheKey, { soc: socSeries, power: powerSeries, ts: Date.now() });
@@ -613,7 +612,7 @@ export async function fetchBatteryHistory(
 
 
 //Locate the history sample at or before `time` and return its value, or null if outside the fetched window. 60 s tail grace keeps
-//"scrub to live" resolving cleanly (same convention as the PV chip).
+//"scrub to live" resolving cleanly.
 export function batterySampleAtTime(
     hist: BatteryHistory | null,
     time: Date

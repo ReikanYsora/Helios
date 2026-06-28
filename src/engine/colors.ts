@@ -1,6 +1,6 @@
 //Colour math for the 2.5D scene renderer: hex channel mixing + the time-of-day tints (night shade,
-//building altitude tint, sun-arc colour). Plus the shared 2D point type + its SVG-points formatter (a
-//leaf utility kept here so colours/geometry painters can depend on it without a circular import). Pure.
+//building altitude tint, sun-arc colour). Plus the shared 2D point type + its SVG-points formatter, a leaf
+//utility kept here so colour/geometry painters can depend on it without a circular import. Pure.
 
 //A 2D point in whatever space the caller is using ([x, y] or [east, north] metres).
 export type Point = [number, number];
@@ -27,8 +27,8 @@ export function mixHex(hexA: string, hexB: string, t: number): string
     return out;
 }
 
-//Full-frame night/twilight wash by sun altitude (deg): astronomical night → deep navy, twilight → blue,
-//dawn/dusk → warm amber, daylight → transparent.
+//Full-frame night/twilight wash by sun altitude (deg): astronomical night -> deep navy, twilight -> blue,
+//dawn/dusk -> warm amber, daylight -> transparent.
 export function nightShade(altitude: number): { color: string; opacity: number }
 {
     if (altitude < -12) { return { color: '#02040c', opacity: 0.68 }; }

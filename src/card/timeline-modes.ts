@@ -1,8 +1,7 @@
-//The timeline's rolling-window modes. One spec per mode drives the whole pipeline — the store window and whether
-//weather (irradiance/cloud) is available — so adding/tuning a mode is a one-line change here. The store CADENCE
-//and the recorder FETCH PERIOD are derived from the user's "Détails du graphique" setting
-//(display-update-frequency-per-hour, 1..12) capped per mode, NOT hard-coded — so the editor knob drives every
-//mode, not just Now. The scrub is free (no quantisation) in every mode.
+//The timeline's rolling-window modes. One spec per mode drives the whole pipeline (the store window and whether
+//weather is available), so adding/tuning a mode is a one-line change here. The store cadence and recorder fetch
+//period derive from the user's data-detail setting (display-update-frequency-per-hour, 1..12) capped per mode, not
+//hard-coded, so the editor knob drives every mode, not just Now. The scrub is free (no quantisation) in every mode.
 
 import type { StatPeriod } from './energy-stats';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../helios-config';
@@ -12,7 +11,7 @@ export type TimelineMode = 'now' | 'week' | 'month' | 'year';
 export interface TimelineModeSpec
 {
     pastDays:    number;       //days of history in the window
-    futureDays:  number;       //days of forecast (Now only — the past modes have no forecast)
+    futureDays:  number;       //days of forecast (Now only; the past modes have no forecast)
     weather:     boolean;      //irradiance + cloud available (Open-Meteo forecast only reaches ~16 days)
     //Cap on store buckets/hour for this window: Now + week honour the user's setting fully; month is capped at
     //hourly and year at daily so a long window can't pull a year of 5-min rows.

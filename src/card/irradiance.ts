@@ -1,11 +1,11 @@
 // Solar-irradiance override subsystem.
 //
-// When `solar-irradiance-entity` is wired to a physical W/m² sensor, its samples beat the weather model for the live + past
-// portions of the irradiance pipeline. Fetches history, keeps the live sample fresh each refresh cycle, and pushes the merged
-// set into the engine via setSolarRadiationSamples().
+// When `solar-irradiance-entity` is wired to a W/m² sensor, its samples beat the weather model for the live + past portions of
+// the irradiance pipeline. Fetches history, keeps the live sample fresh each refresh cycle, and pushes the merged set into the
+// engine via setSolarRadiationSamples().
 //
-// Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_irradiance*` fields; functions here
-// read/write them through the structural IrradianceHost interface.
+// Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_irradiance*` fields; functions here read/write
+// them through the structural IrradianceHost interface.
 
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
@@ -46,7 +46,7 @@ export function clearIrradianceModuleCaches(): void
 }
 
 
-// Coerce a `start`/`end` statistics field into a ms epoch. Duplicated from the PV/battery parsers to keep this module self-contained.
+// Coerce a `start`/`end` statistics field into a ms epoch. A private copy so this module stays self-contained.
 function parseStatBoundary(raw: unknown): number | null
 {
     if (raw === null || raw === undefined)
@@ -77,8 +77,8 @@ function parseStatBoundary(raw: unknown): number | null
 //
 // We deliberately do NOT fall back to `state`: a few installs surface irradiance as a cumulative MJ/m² counter
 // (`state_class: total_increasing`), so `state` is monotonically increasing. Pushing that would feed the engine values that look
-// like 10000+ W/m² and distort every downstream derivation (5-day calibration ratio, refined forecast, irradiance chip). Buckets
-// with null `mean` are skipped; an empty slot degrades to the raw-history fallback (which handles its own unit semantics).
+// like 10000+ W/m² and distort every downstream derivation (calibration ratio, refined forecast, irradiance chip). Buckets with
+// null `mean` are skipped; an empty result degrades to the raw-history fallback (which handles its own unit semantics).
 function parseIrradianceStats(arr: any[]): IrradianceHistory
 {
     const times:  Date[]   = [];
@@ -130,8 +130,8 @@ export interface IrradianceHost
 }
 
 
-// Live + history refresh, called from the card every lifecycle cycle. Fast-paths exit early with no entity configured; the engine
-// is then notified so it drops back to its built-in irradiance sources.
+// Live + history refresh, called every lifecycle cycle. Fast-paths exit early with no entity configured; the engine is then
+// notified so it drops back to its built-in irradiance sources.
 export function refreshIrradiance(host: IrradianceHost): void
 {
     const entity = String(host.config?.['solar-irradiance-entity'] ?? '').trim();
@@ -149,7 +149,7 @@ export function refreshIrradiance(host: IrradianceHost): void
     }
 
     // Push the latest live state on every Lit cycle to keep the engine's "now" sample fresh; the engine de-dupes on sort, so the
-    // cost is tiny even at sub-minute tick rates.
+    // cost is tiny even at sub-minute ticks.
     pushIrradianceToEngine(host);
 
     if (!host._timeRange || host._irradianceFetching)
@@ -157,17 +157,17 @@ export function refreshIrradiance(host: IrradianceHost): void
         return;
     }
     // Narrow raw-window cap: a per-second W/m² sensor over a multi-day timeline would drag the HA recorder for the whole fetch
-    // and block other cards reading the same entity. The chart only needs accurate live data
-    // at the head of the curve; older past values are interpolated from the engine's resampled series. 6 h gives the W/m² tooltip
-    // enough resolution while keeping the recorder responsive.
+    // and block other cards reading the same entity. The chart only needs accurate live data at the head of the curve; older past
+    // values are interpolated from the engine's resampled series. 6 h gives the W/m² tooltip enough resolution while keeping the
+    // recorder responsive.
     //
-    // Cap anchored on NOW so fetchStart stays in the past even when the visible timeline end sits in the forecast horizon (next
-    // day). Anchoring on timeline end would put fetchStart in the future and the inner clamp would leave the slot empty.
+    // Cap anchored on NOW so fetchStart stays in the past even when the visible timeline end sits in the forecast horizon.
+    // Anchoring on timeline end would put fetchStart in the future and the inner clamp would leave the result empty.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders. An
-    //unquantised Date.now() anchor changes every millisecond, so the key never matches and the fetch
-    //re-fires on every render. The 6 h window is an approximate freshness cap, so the slop is harmless.
+    // Quantise the now-anchor to the minute so the dedupe key below stays stable between renders; an unquantised Date.now()
+    // changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
+    // the minute of slop is harmless.
     const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
     const cap          = new Date(anchorMs - RAW_WINDOW_H * 3_600_000);
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
@@ -179,7 +179,7 @@ export function refreshIrradiance(host: IrradianceHost): void
     }
     host._irradianceFetchKey = fetchKey;
 
-    // Cache hit short-circuits the WS round-trip on navigation. Invalidates on TTL (15 min) or any entity/range change (which flips the fetch key).
+    // Cache hit short-circuits the WS round-trip on navigation. Invalidates on TTL (15 min) or any entity/range change.
     const cached = irradianceHistoryCacheGet(fetchKey);
     if (cached)
     {
@@ -195,8 +195,8 @@ export function refreshIrradiance(host: IrradianceHost): void
 // is always in) and once a history fetch lands. Cheap: array concat + a setter that sorts once O(n log n).
 //
 // Dirty-flag gate: inputs are stable between hass pushes and fetches, so we hash (history identity, state identity, entity) and
-// skip the rebuild when nothing changed. Without it, auto-rotate rebuilds ~700 sample objects per render (move events mutate
-// overlay @state -> updated() -> refreshIrradiance), causing massive GC churn.
+// skip the rebuild when nothing changed. Without it, auto-rotate rebuilds the full sample set per render (move events mutate
+// overlay @state -> updated() -> refreshIrradiance), causing GC churn.
 const _pushedIrradianceKey = new WeakMap<IrradianceHost, {
     histRef: unknown;
     stateRef: unknown;
@@ -251,7 +251,7 @@ export function pushIrradianceToEngine(host: IrradianceHost): void
 
 
 // Fetch the irradiance history: defensive parsing across HA's compaction / minimal_response variants. W/m² values are taken
-// as-is; the sensor is expected to expose irradiance in the unit the engine consumes, no normalisation step.
+// as-is; the sensor is expected to expose irradiance in the unit the engine consumes, no normalisation.
 export async function fetchIrradianceHistory(
     host:     IrradianceHost,
     entityId: string,
@@ -278,7 +278,7 @@ export async function fetchIrradianceHistory(
 
         // Try statistics first. HA-convention irradiance sensors expose `state_class: measurement` and land in LTS automatically,
         // so the stats path scales to high-frequency feeds at near-zero cost. Falls back to raw history for non-LTS custom sensors,
-        // at the cost of recorder bandwidth on the slim 2-day window.
+        // at the cost of recorder bandwidth on the slim window.
         let history: IrradianceHistory = { times: [], values: [] };
         const statsResult: any = await callWSWithTimeout<any>(host.hass, {
             type:           'recorder/statistics_during_period',
@@ -329,7 +329,7 @@ export async function fetchIrradianceHistory(
 }
 
 
-// Raw-history parser, kept for the statistics fallback path. Tolerates the compact `s`/`lu` and verbose `state`/`last_updated`
+// Raw-history parser, the fallback when statistics is empty. Tolerates the compact `s`/`lu` and verbose `state`/`last_updated`
 // shapes, drops `unavailable`/`unknown`/empty samples, and falls back to the previous timestamp on a missing `lu` (HA compaction
 // can omit it on consecutive identical samples).
 function parseRawIrradianceHistory(arr: any[]): IrradianceHistory

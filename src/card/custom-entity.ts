@@ -1,9 +1,8 @@
-//User-picked "custom" entity for the red chip + leader bead. The chip shows the value at the active instant
-//(live now, or the timeline scrub target), as POWER (kW) — never an energy meter's lifetime total. A power
-//entity (W/kW/MW) reads its instantaneous state; a cumulative-energy entity (Wh/kWh/MWh) is differentiated to
-//average watts (see customChipWatts + refreshCustomEntity). resolveCustomEntityLive still supplies the chip's
-//name + presence. The value's sign drives the bead direction (positive = home → chip, negative = chip →
-//home); its magnitude drives the cadence.
+//User-picked "custom" entity for the red chip + leader bead. The chip shows the value at the active instant (live
+//now, or the timeline scrub target) as power (kW), never an energy meter's lifetime total. A power entity (W/kW/MW)
+//reads its instantaneous state; a cumulative-energy entity (Wh/kWh/MWh) is differentiated to average watts (see
+//customChipWatts + refreshCustomEntity). resolveCustomEntityLive supplies the chip's name + presence. The value's
+//sign drives bead direction (positive = home to chip, negative = chip to home); its magnitude drives cadence.
 
 import { formatEntityValue, pvNormalizeToWatts, energyToKwh } from './format';
 import { type HeliosConfig, customEntityId } from '../helios-config';
@@ -36,7 +35,7 @@ export function resolveCustomEntityLive(hass: any, entityId: string): CustomEnti
     const isEnergy = dc === 'energy' || ENERGY_UNITS.has(lu);
 
     //W-equivalent magnitude for the bead cadence: power normalises to watts; energy scales its kWh value to a
-    //comparable scalar; anything else falls back to the bare magnitude.
+    //comparable scalar; anything else uses the bare magnitude.
     const magnitudeW = isPower  ? Math.abs(pvNormalizeToWatts(raw, unit))
                      : isEnergy ? Math.abs(energyToKwh(raw, unit)) * 1000
                      :            Math.abs(raw);
@@ -49,8 +48,8 @@ export function resolveCustomEntityLive(hass: any, entityId: string): CustomEnti
     };
 }
 
-//Step-sample the WATTS history (built by refreshCustomEntity) at an instant: the last bucket at or before it.
-//Null when there's no history or the instant sits outside it (hourly buckets, so allow up to 1 h past the last).
+//Step-sample the watts history (built by refreshCustomEntity) at an instant: the last bucket at or before it. Null
+//when there's no history or the instant sits outside it (hourly buckets, so allow up to 1 h past the last).
 export function customSampleAtTime(hist: { times: Date[]; values: number[] } | null, timeMs: number): number | null
 {
     if (!hist || hist.times.length === 0) { return null; }
@@ -63,10 +62,10 @@ export function customSampleAtTime(hist: { times: Date[]; values: number[] } | n
     return hist.values[idx < 0 ? 0 : idx];
 }
 
-//Instantaneous W-equivalent for the chip at the active instant — NEVER the lifetime total. Scrub: the W
-//history (mean for power, change-differentiated for energy) at that instant. Live: a power entity reads its
-//state directly (already instantaneous); a cumulative-energy entity has no meaningful instantaneous state, so
-//it falls back to the latest derived-power bucket from the history.
+//Instantaneous W-equivalent for the chip at the active instant, never the lifetime total. Scrub: the W history
+//(mean for power, change-differentiated for energy) at that instant. Live: a power entity reads its state directly
+//(already instantaneous); a cumulative-energy entity has no meaningful instantaneous state, so it uses the latest
+//derived-power bucket from the history.
 export function customChipWatts(
     hass: any,
     entityId: string,
@@ -103,7 +102,7 @@ export function resolveCustomEntityIcon(hass: any, config: HeliosConfig | undefi
 }
 
 
-//Host surface for the history fetch (clock ring + timeline curve). Mirrors the battery SoC fetch.
+//Host surface for the history fetch (clock ring + timeline curve).
 export interface CustomEntityHost
 {
     hass:                 any;
@@ -116,11 +115,11 @@ export interface CustomEntityHost
     requestUpdate():      void;
 }
 
-//Fetch the custom entity's 5-minute history over the visible window and store it as { times, values } in
-//WATTS, so the clock ring (binned into 15-min slots) and the timeline curve share one consistent, genuinely
-//fine series (not interpolated from hourly). Power sensors come back as `mean` (already W via unit
-//normalisation); cumulative energy meters come back as `change` (kWh per bucket) and are differentiated to
-//average watts via the bucket duration. Keyed so an unchanged window never refetches.
+//Fetch the custom entity's history over the visible window and store it as { times, values } in watts, so the clock
+//ring (binned into 15-min slots) and the timeline curve share one genuinely fine series (not interpolated from
+//hourly). Power sensors come back as `mean` (already W via unit normalisation); cumulative energy meters come back
+//as `change` (kWh per bucket) and are differentiated to average watts via the bucket duration. Keyed so an unchanged
+//window never refetches.
 export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
 {
     const id = customEntityId(host.config);

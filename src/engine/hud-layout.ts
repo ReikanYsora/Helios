@@ -1,9 +1,9 @@
-//Pure HUD layout ramps: canvas-size → scale factors for the on-map chip cluster and the sun-arc fallback
+//Pure HUD layout ramps: canvas-size -> scale factors for the on-map chip cluster and the sun-arc fallback
 //radius. No DOM or engine state; the engine measures the viewport and feeds the smaller side in.
 
-//Linear ramp on the card's smaller CSS side so the chip cluster expands on a kiosk layout: 1.0 below FLOOR
-//(standard grid cell), ramping to `max` at TOP. Used both for the horizontal spread (max 1.6) and the
-//steeper vertical lift (max 2.4); same FLOOR/TOP breakpoints so the two transitions hinge together.
+//Linear ramp on the smaller CSS side so the chip cluster expands on a kiosk layout: 1.0 below FLOOR
+//(standard grid cell), ramping to `max` at TOP. Used for the horizontal spread (max 1.6) and the steeper
+//vertical lift (max 2.4); same FLOOR/TOP breakpoints so the two transitions hinge together.
 export function clusterScaleRamp(minDim: number, max: number): number
 {
     if (!Number.isFinite(minDim) || minDim <= 0)

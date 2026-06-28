@@ -38,9 +38,8 @@ export function formatLocalisedNumber(
 }
 
 
-//HA's am/pm decision (mirror of the frontend's useAmPm): the user's explicit 12/24-hour choice from
-//hass.locale.time_format, falling back to the language/system default by probing the runtime. Kept in
-//step with HA so a time we format reads exactly as the rest of the dashboard does.
+//HA's am/pm decision: the user's explicit 12/24-hour choice from hass.locale.time_format, falling back to the
+//language/system default by probing the runtime, so a time we format reads exactly as the rest of the dashboard does.
 function haUseAmPm(locale: { time_format?: string; language?: string } | undefined): boolean
 {
     const tf = locale?.time_format;
@@ -59,9 +58,8 @@ function haUseAmPm(locale: { time_format?: string; language?: string } | undefin
     }
 }
 
-//Format a time the way the HA frontend's formatTime does: hour + minute in the user's language, honouring
-//their 12/24-hour setting. No time-zone conversion — callers pass a local Date for the clock face, so the
-//hour shown is the one meant, not a zone-shifted one.
+//Format a time like the HA frontend: hour + minute in the user's language, honouring their 12/24-hour setting. No
+//time-zone conversion: callers pass a local Date for the clock face, so the hour shown is the one meant.
 export function formatHaTime(hass: any, date: Date): string
 {
     const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
@@ -77,8 +75,8 @@ export function formatHaTime(hass: any, date: Date): string
 }
 
 
-//Date + time the way the HA frontend formats it (day, short month, hour:minute, honouring 12/24h), for the
-//timeline scrub readout where the coarse axis labels (months on a year window) don't pin the exact instant.
+//Date + time like the HA frontend (day, short month, hour:minute, honouring 12/24h), for the timeline scrub readout
+//where the coarse axis labels (months on a year window) don't pin the exact instant.
 export function formatHaDateTime(hass: any, date: Date): string
 {
     const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
@@ -96,9 +94,9 @@ export function formatHaDateTime(hass: any, date: Date): string
 }
 
 
-//Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every
-//chip prints the same unit/precision regardless of the source sensor's native unit. Input is watts.
-//`signed` prefixes an explicit + / − (figure-dash) so battery charge reads apart from discharge.
+//Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every chip prints the same
+//unit/precision regardless of the source sensor's native unit. Input is watts. `signed` prefixes an explicit +/-
+//(figure-dash) so battery charge reads apart from discharge.
 export function formatPowerKw(hass: any, watts: number, decimals: number, signed = false): string
 {
     if (signed)
@@ -130,12 +128,12 @@ export function energyToKwh(value: number, unit: string): number
 }
 
 
-//Convert a POWER RATE into watts on a unit-agnostic scale. Lives here (not pv.ts) so it sits next to the
-//other unit converters and the shared formatter below; pv.ts re-exports it so existing import sites hold.
+//Convert a POWER RATE into watts on a unit-agnostic scale. Lives here (not pv.ts) so it sits next to the other unit
+//converters and the shared formatter below; pv.ts re-exports it.
 //
 //Contract: `value` MUST already be an instantaneous power rate (W/kW/MW). Cumulative-energy (Wh/kWh/MWh) must be
-//differentiated caller-side first. Passing a raw cumulative reading returns 0 (pausing animation rather than
-//mis-scaling kWh as watts) — an intentional wiring trap for future callers.
+//differentiated caller-side first. Passing a raw cumulative reading returns 0 (pausing animation rather than mis-scaling
+//kWh as watts), an intentional wiring trap.
 export function pvNormalizeToWatts(value: number, unit: string): number
 {
     const lu = (unit || '').toLowerCase();
@@ -177,9 +175,8 @@ export function formatEntityValue(hass: any, value: number, unit: string, decima
 }
 
 
-//Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged, 1 = pure black). Multiplicative per
-//channel, keeping hue intact. Derives the darker sun-disc rim from the configured sun colour so the
-//rim stays visible without a second config key.
+//Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged, 1 = pure black). Multiplicative per channel, keeping hue
+//intact. Derives the darker sun-disc rim from the configured sun colour so the rim stays visible without a second config key.
 export function darkenHex(hex: string, factor: number): string
 {
     const f = 1 - Math.max(0, Math.min(1, factor));
@@ -210,11 +207,7 @@ export function lerpHexToward(a: string, b: string, t: number): string
 }
 
 
-// Cloud-cover icon
-//Cloud-cover MDI icon resolver for the cloud-cover chip.
-
-
-//Map a 0..100 cloud cover to a Material Design weather glyph.
+//Map a 0..100 cloud cover to a Material Design weather glyph for the cloud-cover chip.
 export function cloudCoverIcon(coverPct: number): string
 {
     if (coverPct < 0)
@@ -237,13 +230,11 @@ export function cloudCoverIcon(coverPct: number): string
 }
 
 
-// HA ui_color tokens
-//Mirror of HA's `ui_color` selector, which stores a STRING token — either a theme keyword (primary,
-//accent, disabled) or a Material colour name (red, grey, …). Each token maps to the CSS var
-//`--<token>-color`. We don't import HA: a token is just slugged into its var name, and the live theme
-//resolves it to a real colour. `uiColorVar` yields the var NAME (for the engine, which reads it to hex
-//via getComputedStyle); `resolveUiColor` yields a ready `var(--token-color, fallback)` for CSS/inline
-//styles, passing through values already given as #/rgb/var.
+//HA ui_color tokens: a STRING token, either a theme keyword (primary, accent, disabled) or a Material colour name
+//(red, grey, ...), mapping to the CSS var `--<token>-color`. A token is just slugged into its var name and the live
+//theme resolves it. `uiColorVar` yields the var NAME (for the engine, which reads it to hex via getComputedStyle);
+//`resolveUiColor` yields a ready `var(--token-color, fallback)` for CSS/inline styles, passing through values already
+//given as #/rgb/var.
 export function uiColorVar(token: string | undefined, fallbackToken: string): string
 {
     const t = (token ?? '').trim();
@@ -259,11 +250,9 @@ export function resolveUiColor(token: string | undefined, fallbackHex: string): 
 }
 
 
-// HA energy theme colours + LAB ramp
-//Theme colour resolution for the card. Wherever a colour must be a concrete string — canvas chart
-//fills, inline SVG attributes — rather than a CSS var(), we resolve the live HA theme token off a host
-//element's computed style, so a user's custom theme flows through and we don't hardcode hex. A literal
-//fallback covers the case where the token is unset.
+//Theme colour resolution for the card. Wherever a colour must be a concrete string (canvas chart fills, inline SVG
+//attributes) rather than a CSS var(), we resolve the live HA theme token off a host element's computed style, so a
+//user's custom theme flows through and we don't hardcode hex. A literal fallback covers an unset token.
 
 //Resolve a CSS custom property to #rrggbb off the host's computed style. Accepts #rgb / #rrggbb /
 //rgb()/rgba(); falls back when the token is empty or unparseable.
@@ -285,8 +274,8 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
     return fallback;
 }
 
-//Fallback luminance probe on a host element: reads --primary-background-color and decides dark vs light by
-//relative luminance. Costly (forces a style recompute), so only reached when hass.themes.darkMode is undefined.
+//Fallback luminance probe: reads --primary-background-color and decides dark vs light by relative luminance. Costly
+//(forces a style recompute), so only reached when hass.themes.darkMode is undefined.
 export function isDarkFromCss(host: Element): boolean
 {
     try
@@ -319,8 +308,7 @@ export function isDarkFromCss(host: Element): boolean
     return false;
 }
 
-//RGB↔LAB conversion (chroma.js, via HA's common/color), used for the per-energy-source colour ramp below.
-//The D65 white-point + LAB transfer thresholds live in constants.ts.
+//RGB/LAB conversion for the per-energy-source colour ramp below. The D65 white-point + LAB transfer thresholds live in constants.ts.
 const rgbXyz = (c: number): number => { const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4; };
 const xyzLab = (t: number): number => (t > LAB_T3 ? t ** (1 / 3) : t / LAB_T2 + LAB_T0);
 const xyzRgb = (r: number): number => 255 * (r <= 0.00304 ? 12.92 * r : 1.055 * r ** (1 / 2.4) - 0.055);
@@ -362,12 +350,12 @@ function labToHex([l, a, b]: [number, number, number]): string
     return '#' + h(r) + h(g) + h(b2);
 }
 
-//Per-energy-source colour, identical to HA Energy's getEnergyColor: source `idx` 0 is the base solar token;
-//higher indices brighten it (dark theme) or darken it (light theme) by 18 LAB-lightness units per step,
-//unless the theme defines an explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for both
-//the per-source chart curves and the home histogram bands so the two always match the energy dashboard.
-//Memo for the deterministic LAB ramp step, keyed by base+dark+idx — the per-source colours are recomputed
-//on every chart/tooltip/histogram render, but the conversion only depends on those three.
+//Per-energy-source colour, matching the HA Energy palette: source `idx` 0 is the base solar token; higher indices
+//brighten it (dark theme) or darken it (light theme) by 18 LAB-lightness units per step, unless the theme defines an
+//explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for the per-source chart curves and the home
+//histogram bands so the two always match the energy dashboard.
+//Memo for the deterministic LAB ramp step, keyed by base+dark+idx: per-source colours are recomputed every
+//chart/tooltip/histogram render, but the conversion only depends on those three.
 const _solarRampMemo = new Map<string, string>();
 
 export function energySolarColor(host: Element | null | undefined, dark: boolean, idx: number): string
@@ -394,8 +382,7 @@ export function energySolarColor(host: Element | null | undefined, dark: boolean
 //cards use) with the palette defaults as fallbacks. Pass the card element as host.
 export const ENERGY_COLOR = {
     pv:         (h: Element | null | undefined): string => cssHex(h, '--energy-solar-color', '#ff9800'),
-    //Home consumption (load): the frontend's named green, so it never reads as the grid-import blue (both used
-    //to resolve to --energy-grid-consumption-color and were indistinguishable).
+    //Home consumption (load): a dedicated green, so it never reads as the grid-import blue.
     consumption:(h: Element | null | undefined): string => cssHex(h, '--helios-consumption-color', '#4caf50'),
     gridImport: (h: Element | null | undefined): string => cssHex(h, '--energy-grid-consumption-color', '#488fc2'),
     gridExport: (h: Element | null | undefined): string => cssHex(h, '--energy-grid-return-color', '#8353d1'),

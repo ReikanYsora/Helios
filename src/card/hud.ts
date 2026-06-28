@@ -1,6 +1,6 @@
-//Screen-space HUD subsystem: pulls fresh projections from the engine (sun arc, cloud dome, home silhouettes,
-//label anchors), maps sun arc samples into stroke segments, gates SMIL play-state on card visibility, and exposes
-//the "flow duration" easing that ramps animation speed with the live production rate.
+//Screen-space HUD subsystem: pulls fresh projections from the engine (sun arc, cloud dome, home silhouettes, label
+//anchors), maps sun arc samples into stroke segments, gates SMIL play-state on card visibility, and exposes the
+//"flow duration" easing that ramps animation speed with the live production rate.
 
 import type { HeliosEngine } from '../helios-engine';
 import { EQ_EPS_PX } from '../constants';
@@ -8,7 +8,7 @@ import { arcColor } from '../engine/colors';
 
 
 //One arc sample from engine.projectSunScene(): (x,y) for placement, nearness/belowHorizon for visual modulation,
-//altitude (deg) for the time-of-day arc colour, irradiance carried for the legend.
+//altitude (deg) for the time-of-day arc colour, irradiance for the legend.
 export interface SunArcSample
 {
     x: number;
@@ -76,7 +76,6 @@ export interface HudHost
 
 //Sub-pixel epsilon for screen-space equality: below this the eye can't tell and Lit shouldn't re-render. Larger skips
 //real motion frames; smaller re-renders on floating-point projection noise.
-
 function nearlyEq(a: number, b: number): boolean
 {
     return Math.abs(a - b) <= EQ_EPS_PX;
@@ -170,19 +169,19 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     return true;
 }
 
-//Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per projection).
-//Called on every map transform, once at first weather update (projection matrix ready only after style load), and on
-//every clock tick in live mode (sun position depends on time).
+//Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per
+//projection). Called on every map transform, once at first weather update (projection matrix ready only after style
+//load), and on every clock tick in live mode (sun position depends on time).
 //
-//Each assignment is gated by an equality check: Lit dirty-checks @state by identity, so a fresh-identity assignment with
-//identical content still triggers a full re-render. During manual rotation the engine fires transform events at pointer
-//rate (up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields; Safari re-arms
-//the SMIL clock on every path mutation, so without these guards the clock state grows over ~10-15 s of drag and frame
-//budget collapses.
+//Each assignment is gated by an equality check: Lit dirty-checks @state by identity, so a fresh-identity assignment
+//with identical content still triggers a full re-render. During manual rotation the engine fires transform events at
+//pointer rate (up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields;
+//Safari re-arms the SMIL clock on every path mutation, so without these guards the clock state grows over a drag and
+//frame budget collapses.
 export function refreshHud(host: HudHost): void
 {
-    //Don't project until the camera knows its viewport: every projection would otherwise centre on the
-    //(0,0) seed and flash the whole HUD into the top-left corner for a frame.
+    //Don't project until the camera knows its viewport: every projection would otherwise centre on the (0,0) seed
+    //and flash the whole HUD into the top-left corner for a frame.
     if (host._engine && !host._engine.isViewportReady())
     {
         return;
@@ -202,9 +201,9 @@ export function refreshHud(host: HudHost): void
 }
 
 
-//Pause/resume CSS keyframe + SMIL animations when the card scrolls in/out of view. CSS side: toggle .helios-paused
-//(keyed off by the card stylesheet). SMIL side: walk the shadow tree calling (un)pauseAnimations() on every SVG root;
-//both are no-ops where unsupported, so no feature detection needed.
+//Pause/resume CSS keyframe + SMIL animations when the card scrolls in/out of view. CSS: toggle .helios-paused (keyed
+//off by the card stylesheet). SMIL: walk the shadow tree calling (un)pauseAnimations() on every SVG root; both are
+//no-ops where unsupported, so no feature detection needed.
 export function setAnimationsPaused(host: HudHost, paused: boolean): void
 {
     host.classList.toggle('helios-paused', paused);
@@ -251,8 +250,8 @@ export function buildArcSegments(
         out.push({
             x1: point.x, y1: point.y,
             x2: next.x,  y2: next.y,
-            //Time-of-day arc colour (grey under the horizon, warm near it, amber high). `sunColor` is the
-            //live --warning-color amber the high arc takes.
+            //Time-of-day arc colour (grey under the horizon, warm near it, amber high). `sunColor` is the live
+            //--warning-color amber the high arc takes.
             color:        arcColor(0.5 * (point.altitude + next.altitude), sunColor),
             nearness:     0.5 * (point.nearness + next.nearness),
             belowHorizon: point.belowHorizon || next.belowHorizon
@@ -262,9 +261,9 @@ export function buildArcSegments(
 }
 
 
-//Map a "rate" magnitude to an animation duration (seconds): rate<=0 -> 30s (paused, night), rate=saturation -> minDuration.
-//Ease-out cubic so half-saturation already feels notably faster than the night baseline ("raw power" feel). minDuration
-//is exposed per channel: the sun ray spans the whole map and wants a slightly slower flow than the short PV leader.
+//Map a "rate" magnitude to an animation duration (seconds): rate<=0 -> 30s (paused, night), rate=saturation ->
+//minDuration. Ease-out cubic so half-saturation already feels notably faster than the night baseline. minDuration is
+//per channel: the sun ray spans the whole map and wants a slightly slower flow than the short PV leader.
 export function flowDuration(
     rate:        number,
     saturation:  number,
@@ -275,8 +274,8 @@ export function flowDuration(
     {
         return 30;
     }
-    //Inline cubic instead of Math.pow(..,3): fires from every bead duration recompute per frame; the 3-multiply chain
-    //shaves a measurable slice off the hot path under auto-rotate.
+    //Inline cubic instead of Math.pow(..,3): runs on every bead-duration recompute per frame, so the 3-multiply
+    //chain shaves a measurable slice off the hot path under auto-rotate.
     const f = Math.min(1, rate / saturation);
     const oneMinusF = 1 - f;
     const eased = 1 - oneMinusF * oneMinusF * oneMinusF;

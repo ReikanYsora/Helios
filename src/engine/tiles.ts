@@ -1,12 +1,12 @@
 //Basemap ground plane for the 2.5D scene renderer. Stitches CARTO raster tiles into one seam-free
-//<canvas>, which the renderer then tilts + turns via a CSS 3D transform (see
-//SceneCamera.groundTransform). ONE style (Voyager) is fetched; the renderer tints it to a dark map in dark
-//mode with a CSS filter (DARK_FILTER), which reads better than swapping to a separate dark tile set.
+//<canvas>, which the renderer tilts + turns via a CSS 3D transform (see SceneCamera.groundTransform). ONE
+//style (Voyager) is fetched; the renderer tints it dark in dark mode with a CSS filter (DARK_FILTER),
+//which reads better than a separate dark tile set.
 //
 //Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane.
 
 import { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, EARTH_CIRCUMFERENCE_M, DEG } from '../constants';
-//Re-exported so importers (e.g. the card CSS imports GROUND_FADE_START from './tiles') keep resolving.
+//Re-exported so importers (e.g. consumers of GROUND_FADE_START from './tiles') keep resolving.
 export { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, GROUND_FADE_START } from '../constants';
 
 //Screen px per real metre at the ground plane for a given latitude + tile zoom. Drives SceneCamera.pxPerMetre.
@@ -15,7 +15,7 @@ export function pxPerMetreFor(latitude: number, zoom: number = GROUND_ZOOM): num
     return (TILE_PX * 2 ** zoom) / (EARTH_CIRCUMFERENCE_M * Math.cos(latitude * DEG));
 }
 
-//Web Mercator: lon/lat → fractional tile coordinates at the given zoom.
+//Web Mercator: lon/lat -> fractional tile coordinates at the given zoom.
 export function lonLatToTile(lon: number, lat: number, zoom: number): [number, number]
 {
     const world  = 2 ** zoom;
@@ -28,7 +28,7 @@ export interface Ground
 {
     //The basemap tile canvas to transform.
     el:    HTMLCanvasElement;
-    //Edge-fade overlay, transformed identically so the disc dissolves into the card background.
+    //Edge-fade overlay, transformed identically so the disc dissolves into the scene background.
     fade:  HTMLDivElement;
     //Home position in canvas px (the transform-origin the renderer pins the home to).
     homeX: number;
@@ -93,7 +93,7 @@ export async function buildGround(
         await Promise.all(loads);
     }
 
-    //Edge fade: same size + transform as the ground, dissolving its borders into the card background.
+    //Edge fade: same size + transform as the ground, dissolving its borders into the scene background.
     const fade = document.createElement('div');
     fade.className = 'ground-fade';
     fade.style.width  = `${size}px`;

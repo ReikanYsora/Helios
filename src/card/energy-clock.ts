@@ -1,8 +1,8 @@
-//Energy-clock mode: a ring of 24 hourly cylinders projected on the same 2.5D ground plane as the scene,
-//one per hour of the day, showing whichever metric the right-hand rail selects — production split per PV
-//string, grid into import/export, battery into charge/discharge, etc. Each hour aggregates the metric over
-//the whole rolling window (a single day shows that day's shape; a longer range averages it). The data comes
-//straight from the store + histories the timeline already loaded, binned by hour-of-day — no extra fetch.
+//Energy-clock mode: a ring of 24 hourly cylinders on the ground plane, one per hour, showing whichever
+//metric the rail selects (production split per source, grid into import/export, battery into
+//charge/discharge, etc.). Each hour aggregates the metric over the whole rolling window (a single day shows
+//that day's shape; a longer range averages it). Data comes from the store + histories already loaded, binned
+//by hour-of-day, no extra fetch.
 
 import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
@@ -17,43 +17,42 @@ import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import type { EnergyDefaults } from './energy-prefs';
 import { pickTranslations } from '../i18n';
 
-//Structural surface the clock reads off the card. It already satisfies ChartHost (the bottom chart consumes
-//it); themeIsDark resolves the live palette polarity for the per-source colour ramp.
+//Structural surface the clock reads off the card. themeIsDark resolves palette polarity for the per-source
+//colour ramp.
 export type ClockHost = ChartHost & {
     themeIsDark(): boolean;
     _weatherAvailable: boolean;
     _timelineMode: TimelineMode;
     _energyDefaults: EnergyDefaults;
-    //Decoupled hourly profile, present only when the store is sub-hourly (month/year) + clock mode. When set,
-    //buildClockData reads it instead of the daily store so the dial still shows an hour-of-day shape.
+    //Decoupled hourly profile, present only in month/year clock mode (daily store). When set, buildClockData
+    //reads it instead of the store so the dial still shows an hour-of-day shape.
     _clockHourly: ClockHourly | null;
 };
 
-//Ring geometry, expressed as fractions of the smaller viewport edge so the clock fills the card at any size.
+//Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
-const RING_INNER_MIN_FRAC = 0.4;//innermost concentric ring radius as a fraction of the outer one
-const CLOCK_MAX_FILTERS = 8;    //fixed slot count: rings always sit at their slot radius, so adding/removing
-                                //a filter never re-spaces the others (and the radii are constant)
+const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
+//Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
+const CLOCK_MAX_FILTERS = 8;
 const MAX_HEIGHT_FRAC = 0.30;   //tallest bar
-//Bar tangential half-width (frac of the smaller edge, scaled per ring) and radial half-depth (a fraction of
-//the slot spacing so consecutive rings' bars sit flush).
+//Bar tangential half-width (scaled per ring) and radial half-depth (fraction of slot spacing so consecutive
+//rings' bars sit flush).
 const BAR_TANGENT_FRAC = 0.018;
 const BAR_RADIAL_FRAC  = 0.45;
 const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
 const LABEL_MIN_OPACITY = 0.15; //farthest-back hour label opacity (nearest is opaque)
-//Clock-face guide: a faint centre ring (radius as a fraction of the outer ring) with 24 spokes reaching out
-//toward — but stopping short of — the hour labels, so the eye can trace an area to its hour.
+//Clock-face guide: faint centre ring + 24 spokes reaching toward (but stopping short of) the hour labels.
 const CLOCK_HUB_R_FRAC      = 0.12;
 const CLOCK_SPOKE_OUTER_FRAC = 1.10;
 const CLOCK_GUIDE_OPACITY   = 0.25;
-//Compass: filled N/S triangles just beyond the hour labels (fractions of the outer ring radius), with a
-//letter at each tip. Full opacity (no depth fade), so the orientation always reads.
+//Compass: filled N/S triangles just beyond the hour labels, with a letter at each tip. Full opacity (no
+//depth fade) so orientation always reads.
 const CLOCK_COMPASS_BASE_FRAC   = 1.30;
 const CLOCK_COMPASS_TIP_FRAC    = 1.42;
 const CLOCK_COMPASS_HALF_W_FRAC = 0.05;
 const CLOCK_COMPASS_LABEL_FRAC  = 1.50;
-//Grow/shrink + slot-slide duration: a ring rises (ease-out) over GROW_MS when added, falls + fades over it
-//when removed, and slides between slots over it when the stack recompacts.
+//Grow/shrink + slot-slide duration: a ring rises (ease-out) when added, falls + fades when removed, slides
+//between slots when the stack recompacts.
 export const CLOCK_GROW_MS = 320;
 //Shared ease-out for every clock transition (grow, shrink, slide, dim). p clamped to 0..1.
 export function easeOutCubic(p: number): number
@@ -73,23 +72,21 @@ export interface ClockLayer
     icon:       string;
     label:      string;       //per-source name for production layers, else ''
     values:     number[];     //CLOCK_SLOTS per-slot magnitudes (W, %, or W/m²)
-    predicted?: boolean;      //forecast-only layer (no actuals) — rendered translucent
 }
 
 export interface ClockData
 {
     target: ChartTarget;
     layers: ClockLayer[];
-    //The metric's representative colour, used for the rail button + the hovered slice glow.
+    //The metric's representative colour, for the rail button + the hovered slice glow.
     color:  string;
-    //Tooltip value formatter + aggregation. 'energy' metrics (production/consumption/grid/battery) SUM the kWh
-    //over the window per hour-of-day (a total, the user's ask); 'power'/'percent'/'irradiance' AVERAGE.
+    //Tooltip formatter + aggregation. 'energy' metrics (production/consumption/grid/battery) SUM kWh over the
+    //window per hour-of-day (a total); 'power'/'percent'/'irradiance' AVERAGE.
     unit:   'energy' | 'power' | 'percent' | 'irradiance';
 }
 
-//One ring to project, with its live animation scalars resolved by the card: `slot` is the (possibly
-//fractional) ring index driving the radius — the card interpolates it for the slide; `heightScale` is the
-//0..1 vertical grow/shrink; `opacity` the 0..1 exit fade.
+//One ring to project, with animation scalars resolved by the card: `slot` is the (possibly fractional) ring
+//index driving the radius (interpolated for the slide); `heightScale` 0..1 grow/shrink; `opacity` 0..1 exit fade.
 export interface ClockRingInput
 {
     data:        ClockData;
@@ -102,18 +99,18 @@ export interface ClockRingInput
 //that hour's first slot). Hovering highlights it.
 export interface ClockHit { slot: number; bx: number; by: number; tx: number; ty: number; }
 
-//One projected frame, split into two stacked SVG layers plus the per-element transforms the card writes onto
-//its DOM nodes. `guideSvg` is the flat-ground guide (centre hub + 24 hour spokes + compass), painted UNDER
-//the home prism; `svg` is the upright metric cylinders, painted OVER it.
+//One projected frame, split into two SVG layers so the home prism can sit between them: `guideSvg` (flat-ground
+//hub + 24 hour spokes + compass) paints UNDER the prism, `svg` (upright metric cylinders) OVER it. Plus the
+//per-element transforms the card writes onto its DOM nodes.
 export interface ClockFrame
 {
     guideSvg: string;
     svg:    string;
     hits:   ClockHit[];
     labels: { x: number; y: number; opacity: number; transform: string }[];
-    //N/S compass letters, laid flat like the hours but at full opacity (no depth fade).
+    //N/S compass letters, laid flat like the hours but at full opacity.
     compass: { x: number; y: number; transform: string; label: string }[];
-    //Home prism's projected centre + a screen-px hit radius (the inner empty disc), for the home-hover total.
+    //Home prism's projected centre + screen-px hit radius (the inner empty disc), for the home-hover total.
     home: { x: number; y: number; r: number };
 }
 
@@ -129,9 +126,8 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
 }
 
 
-//Dial resolution: sub-hourly slots binning the metric finer than hourly (the histogram re-aggregates them to
-//24 hourly bars). Fixed at 4 slots/hour — the per-hour totals are independent of the slot count, and 24 hour
-//labels always mark the dial, each hour spanning CLOCK_SLOTS_PER_HOUR slots.
+//Dial resolution: sub-hourly slots binning the metric finer than hourly (the histogram re-aggregates to 24
+//hourly bars). Fixed at 4 slots/hour: per-hour totals are independent of the slot count.
 export const CLOCK_SLOTS_PER_HOUR = 4;
 const CLOCK_SLOTS = 24 * CLOCK_SLOTS_PER_HOUR;
 
@@ -141,10 +137,9 @@ function slotOf(d: Date): number
     return d.getHours() * CLOCK_SLOTS_PER_HOUR + Math.floor(d.getMinutes() / (60 / CLOCK_SLOTS_PER_HOUR));
 }
 
-//Fill NaN gaps by linear interpolation between the nearest real samples, wrapping around the dial, so a
-//metric whose source is HOURLY (binned into sparse sub-hour slots — custom entity, battery SoC, cloud) reads
-//as a smooth ramp instead of a spike once per hour. Store-backed metrics are sub-hour dense, so there are no
-//gaps and this is a no-op. All-NaN (no data at all) collapses to zeros.
+//Fill NaN gaps by linear interpolation between nearest real samples, wrapping the dial, so an HOURLY-sourced
+//metric (sparse sub-hour slots: custom entity, battery SoC, cloud) reads as a smooth ramp instead of a spike
+//once per hour. Sub-hour-dense store metrics have no gaps (no-op). All-NaN collapses to zeros.
 function fillGaps(v: number[]): number[]
 {
     const n = v.length;
@@ -162,10 +157,9 @@ function fillGaps(v: number[]): number[]
     return out;
 }
 
-//Expand a 24-value hour-of-day profile (decoupled hourly clock source) to the dial's per-slot resolution. For
-//`sum` (energy) the hour's TOTAL is split evenly across its slots, so per-slot reads as the 15-min energy and
-//re-summing the hour recovers the total; otherwise the hourly value is HELD across its slots (the per-slot
-//currency is then the hourly value, and a histogram averages back to it).
+//Expand a 24-value hour-of-day profile to the dial's per-slot resolution. For `sum` (energy) the hour's TOTAL
+//splits evenly across its slots, so re-summing recovers the total; otherwise the hourly value is HELD across
+//its slots, and a histogram averages back to it.
 function expandHourly(hourly: number[], sum: boolean): number[]
 {
     const slots = CLOCK_SLOTS;
@@ -195,11 +189,10 @@ function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[
     return fillGaps(sum.map((x, s) => (cnt[s] ? x / cnt[s] : NaN)));
 }
 
-//Sum one store WATTS series into per-slot ENERGY (kWh) by hour-of-day across the window. Each bucket's energy is
-//SPREAD across the 15-min slots it actually covers, so a coarse store (e.g. hourly buckets in month mode) fills
-//every slot evenly instead of dumping a whole hour into one slot and leaving the other three at 0 (the sawtooth).
-//Summing kWh directly (not watts/duration) also keeps DST-folded buckets from inflating. This is the clock's
-//"total per period".
+//Sum one store WATTS series into per-slot ENERGY (kWh) by hour-of-day. Each bucket's energy is SPREAD across
+//the slots it covers, so a coarse store (e.g. hourly buckets in month mode) fills every slot evenly instead of
+//dumping a whole hour into one slot (the sawtooth). Summing kWh directly (not watts/duration) keeps DST-folded
+//buckets from inflating. This is the clock's "total per period".
 function binSlotSum(store: UnifiedDataStore, series: (number | null)[]): number[]
 {
     const sum    = new Array<number>(CLOCK_SLOTS).fill(0);
@@ -223,15 +216,15 @@ function binSlotSum(store: UnifiedDataStore, series: (number | null)[]): number[
     return sum;
 }
 
-//True when a series carries any real (non-null, non-zero) reading — drives which rail buttons appear.
+//True when a series carries any real (non-null, non-zero) reading: drives which rail buttons appear.
 function hasSignal(series: (number | null)[] | undefined): boolean
 {
     return !!series && series.some(v => v !== null && isFinite(v) && v !== 0);
 }
 
 
-//The metrics the rail offers, in display order, filtered to those actually configured/loaded so the buttons
-//stack with no gaps. Production sits first, then consumption, the battery pair, grid, and the weather metrics.
+//The metrics the rail offers, in display order, filtered to those configured/loaded so buttons stack with no
+//gaps. Order: production, consumption, battery pair, grid, weather, custom.
 export function availableClockTargets(host: ClockHost): ChartTarget[]
 {
     const store = host._unifiedStore;
@@ -250,12 +243,12 @@ export function availableClockTargets(host: ClockHost): ChartTarget[]
     //Weather metrics only when the active mode offers them (off for month/year).
     if (host._weatherAvailable && hasSignal(store?.irradiance)) { out.push('irradiance'); }
     if (host._weatherAvailable && hasSignal(store?.cloud))      { out.push('cloud'); }
-    //Custom entity sits last, present whenever it's configured (its ring may be sparse until history lands).
+    //Custom entity, present whenever configured (its ring may be sparse until history lands).
     if (customEntityId(host.config))  { out.push('custom'); }
     return out;
 }
 
-//Rail button appearance per metric: a single glyph + the metric's colour (idle icon tint + active fill).
+//Rail button appearance per metric: a glyph + the metric's colour (idle icon tint + active fill).
 export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: string; color: string }
 {
     const el = host as unknown as Element;
@@ -276,8 +269,8 @@ export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: s
 export { clockTargetLabel };
 
 
-//Build layers from the decoupled hourly profile (month/year, where the store is daily): each metric expands
-//its 24 hour-of-day totals to the dial's slots. Production splits per solar source like the short-window path;
+//Build layers from the decoupled hourly profile (month/year daily store): each metric expands its 24
+//hour-of-day totals to the dial's slots. Production splits per solar source like the short-window path;
 //weather metrics aren't offered in these modes, so they fall through to empty.
 function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHourly): ClockData
 {
@@ -307,10 +300,9 @@ function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: ClockHour
     }
 }
 
-//Build the stacked layers for the active metric. Production keeps a per-PV-string breakdown (plus a forecast
-//layer covering hours with no actuals yet); every other metric reuses the store series the timeline draws,
-//binned by hour-of-day — same numbers, same colours. On a long window the daily store carries no intraday
-//shape, so a decoupled hourly profile (host._clockHourly) takes over.
+//Build the stacked layers for the active metric. Production keeps a per-source breakdown; every other metric
+//reuses the store series the timeline draws, binned by hour-of-day (same numbers, same colours). On a long
+//window the daily store carries no intraday shape, so the decoupled hourly profile (host._clockHourly) takes over.
 export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
 {
     if (host._clockHourly) { return buildClockDataHourly(host, target, host._clockHourly); }
@@ -323,8 +315,8 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData =>
         ({ target, color: meta.color, unit, layers });
 
-    //Month/year need the decoupled hourly profile; until it lands, render an empty baseline rather than the
-    //daily store, which carries no hour-of-day shape and would draw a flat full-height ring.
+    //Month/year need the decoupled hourly profile; until it lands, render empty rather than the daily store,
+    //which has no hour-of-day shape and would draw a flat full-height ring.
     if (modeBucketsPerHour(host._timelineMode, host.config) < 1)
     {
         return data(target === 'irradiance' ? 'irradiance' : 'energy', []);
@@ -334,13 +326,13 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     {
         if (!store) { return data('energy', []); }
         //Source order (NOT sorted): the per-entity map is built in HA Energy source order, parallel to
-        //solarStatEnergyFroms, so string `s` here lines up with solarSourceName(host, s) + the other paths.
+        //solarStatEnergyFroms, so index `s` lines up with solarSourceName(host, s) and the other paths.
         const ids = Array.from(host._pvHistoryPerEntity.keys());
         const nowMs = Date.now();
         const stepH  = store.stepMs / HOUR_MS;
         const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
         //Per-source energy (kWh) SUMMED by hour-of-day: each bucket's power * its hours, SPREAD across the slots
-        //the bucket covers (so a coarse month/year store fills every slot instead of one — same fix as binSlotSum).
+        //it covers, so a coarse store fills every slot instead of one (as in binSlotSum).
         const wsum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
         for (let i = 0; i < store.bucketsTotal; i++)
         {
@@ -364,8 +356,8 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                 }
             });
         }
-        //Actuals only: the clock shows recorded energy, no forecast layer (a translucent forecast ring read as
-        //real PV and misled — the timeline carries the forecast instead).
+        //Actuals only: the clock shows recorded energy, no forecast layer (a translucent forecast ring reads as
+        //real production and misleads; the timeline carries the forecast instead).
         const layers: ClockLayer[] = ids.map((_id, s) => ({
             color: energySolarColor(el, dark, s),
             icon:  'mdi:solar-power',
@@ -376,7 +368,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     }
 
     //Average a sum/count pair into a per-slot series, interpolating empty slots (hourly sources land in 1 of
-    //every 4 slots — fillGaps ramps between them instead of spiking).
+    //every 4 slots; fillGaps ramps between them instead of spiking).
     const avgOf = (s: number[], c: number[]): number[] => fillGaps(s.map((v, i) => (c[i] ? v / c[i] : NaN)));
 
     if (target === 'battery-soc')
@@ -422,7 +414,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
 
     if (target === 'custom')
     {
-        //Custom entity from its fetched 5-min history (values in W), binned by slot-of-day. One red layer.
+        //Custom entity from its fetched history (values in W), binned by slot-of-day. One layer.
         const hist = host._customEntityHistory;
         const sum = new Array<number>(CLOCK_SLOTS).fill(0);
         const cnt = new Array<number>(CLOCK_SLOTS).fill(0);
@@ -454,7 +446,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     }
     else if (target === 'battery')
     {
-        //Signed net power: positive = charging. Split into two non-negative layers.
+        //Signed net power (positive = charging), split into two non-negative layers.
         const charge:    (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, v)));
         const discharge: (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, -v)));
         specs = [
@@ -469,7 +461,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     }
     else
     {
-        //Consumption derived per bucket: production + import − export − net battery, clamped at 0.
+        //Consumption derived per bucket: production + import - export - net battery, clamped at 0.
         const cons: (number | null)[] = new Array(store.bucketsTotal).fill(null);
         for (let i = 0; i < store.bucketsTotal; i++)
         {
@@ -486,9 +478,9 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
 }
 
 
-//Fraction of the outer radius for ring slot `i`. Slots are FIXED (reserved for CLOCK_MAX_FILTERS rings): slot
-//0 is the outer ring, each next slot a constant step inward to RING_INNER_MIN_FRAC. Independent of how many
-//filters are active, so adding/removing one never re-spaces the others.
+//Fraction of the outer radius for ring slot `i`. Slots are FIXED (CLOCK_MAX_FILTERS reserved): slot 0 is the
+//outer ring, each next a constant step inward to RING_INNER_MIN_FRAC, independent of how many filters are
+//active, so adding/removing one never re-spaces the others.
 function ringRadiusFrac(i: number): number
 {
     const slot = Math.min(i, CLOCK_MAX_FILTERS - 1);
@@ -517,8 +509,8 @@ function hourlyOf(values: number[], sum: boolean): number[]
 }
 
 //Busiest stacked hourly total of a ring. Drives the per-UNIT shared ceiling, so two metrics in the same unit
-//are plotted on the exact same axis — a 2 kW and a 5 kW power metric read at the right relative heights
-//instead of both filling their own ring.
+//plot on the same axis (a 2 kW and a 5 kW power metric read at the right relative heights instead of both
+//filling their own ring).
 function ringMax(data: ClockData): number
 {
     let m = 0;
@@ -536,8 +528,8 @@ export function clockUnitCeilings(datas: ClockData[]): Map<string, number>
     return m;
 }
 
-//Rectangular bar footprint (metres) for histogram mode, oriented to `angle`: `hr` half-depth along the radius
-//(rings sit flush), `ht` half-width along the tangent. Four sides — cheap to redraw each rotation frame.
+//Rectangular bar footprint (metres) oriented to `angle`: `hr` half-depth along the radius (rings sit flush),
+//`ht` half-width along the tangent.
 function foot(cx: number, cy: number, hr: number, ht: number, angle: number): [number, number][]
 {
     const rs = Math.sin(angle); const rc = Math.cos(angle);
@@ -670,20 +662,20 @@ function clockCompass(
 
 interface ClockFace { depth: number; svg: string }
 
-//Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward). SHARED here:
-//the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, and the global back-to-front
-//depth sort; per-ring geometry lives in projectHistogramRing. Pure — the card resolves each ring's animation
-//scalars (slot/heightScale/opacity) + the focused slot.
+//Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward). Shared here:
+//the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, the global back-to-front depth
+//sort; per-ring geometry lives in projectHistogramRing. Pure: the card resolves each ring's animation scalars
+//(slot/heightScale/opacity) and the focused slot.
 export function projectClockFrame(
     camera: SceneCamera,
     rings: ClockRingInput[],
     //Focused slot (hover/tap) + the 0..1 fade ramp. dimSlot persists through the fade-out so it ramps smoothly.
     dimSlot: number | null,
     dim: number,
-    //Localised compass letters (N/S/E/W — e.g. W→O in French), supplied by the card.
+    //Localised compass letters, supplied by the card.
     cardinals: { n: string; s: string; e: string; w: string },
-    //Per-unit ceiling override (the card eases it between filter changes so bars don't snap to a new scale).
-    //Units missing from the map fall back to the busiest current ring of that unit.
+    //Per-unit ceiling override (eased between filter changes so bars don't snap to a new scale). Units missing
+    //from the map fall back to the busiest current ring of that unit.
     unitCeil?: Map<string, number>,
 ): ClockFrame
 {
@@ -708,8 +700,8 @@ export function projectClockFrame(
     }));
 
     //Shared per-UNIT ceiling: every ring of the same unit normalises against the busiest among them, so
-    //same-unit metrics share one axis (no read dissonance). Different units keep their own ceiling. The card
-    //may pass an eased override (unitCeil); units it omits fall back to the busiest current ring.
+    //same-unit metrics share one axis; different units keep their own ceiling. The card may pass an eased
+    //override (unitCeil); units it omits fall back to the busiest current ring.
     const unitMax = new Map<string, number>();
     for (const ring of rings) { const u = ring.data.unit; unitMax.set(u, Math.max(unitMax.get(u) ?? 0, ringMax(ring.data))); }
 
@@ -728,9 +720,8 @@ export function projectClockFrame(
     rings.forEach((r, i) => { defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`; });
     defs += '</defs>';
 
-    //Two layers so the home prism sits between them: the flat-ground guide + compass go UNDER it (guideSvg),
-    //the upright cylinders OVER it (svg). defs (the per-ring glow filters) stay with the cylinders that use them.
-    //The bars carry their own per-bar highlight, so the guide stays static (no focused spoke).
+    //defs (per-ring glow filters) stay with the cylinders that use them. Bars carry their own highlight, so
+    //the guide stays static (no focused spoke).
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
     //Home hit target: the projected local origin (the prism's base centre) + the inner empty-disc radius.
     const homeC = camera.project3(0, 0, 0);
@@ -743,8 +734,8 @@ export function projectClockFrame(
     };
 }
 
-//24 stacked bars, one per hour, sitting BETWEEN the hour lines (centred at H+0.5 — each bar is the value over
-//H..H+1). The hovered bar glows; the others dim. Grow / slide / exit ride on the ring's animation scalars.
+//24 stacked bars, one per hour, sitting BETWEEN the hour lines (centred at H+0.5, each bar the value over
+//H..H+1). The hovered bar glows, others dim. Grow / slide / exit ride on the ring's animation scalars.
 function projectHistogramRing(
     camera: SceneCamera, R: number, outerR: number, ring: ClockRingInput, ri: number, maxHm: number, ceiling: number,
     minEdge: number, ppm: number, dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
@@ -772,7 +763,7 @@ function projectHistogramRing(
         const dimOp  = ring.opacity * (focusHour !== null && !active ? 1 - 0.5 * dim : 1);
         if (total <= 0)
         {
-            //Empty hour: a flat neutral puck so all 24 stay on the dial (as the old histogram did).
+            //Empty hour: a flat neutral puck so all 24 stay on the dial.
             const puckH = maxHm * 0.04 * ring.heightScale;
             let puck = stackedColumn(camera, foot(e, n, halfRadial, halfTan, a), puckH,
                 [{ frac: 1, wall: 'rgba(140,140,140,0.3)', roof: 'rgba(170,170,170,0.42)' }], 'rgba(0,0,0,0.25)');
@@ -795,7 +786,7 @@ function projectHistogramRing(
 
 
 //Slot nearest the cursor (within HOVER_PX of its axis); null when off every ring. The card maps the slot to
-//its hour for the highlight + tooltip, so hovering lights that whole hour across rings.
+//its hour, so hovering lights that whole hour across rings.
 export function clockHitTest(hits: ClockHit[], x: number, y: number): number | null
 {
     let best: number | null = null;
@@ -809,7 +800,7 @@ export function clockHitTest(hits: ClockHit[], x: number, y: number): number | n
 }
 
 
-//Read one layer aggregated over the hour the focused slot falls in: the hour's TOTAL (`sum`, energy) or its
+//Read one layer aggregated over the hour the focused slot falls in: the hour's TOTAL (`sum`, energy) or
 //AVERAGE (power/percent/irradiance), matching the histogram bar.
 export function hourlyAt(values: number[], hour: number, sum: boolean): number
 {

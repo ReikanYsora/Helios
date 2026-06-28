@@ -1,12 +1,12 @@
 import { css } from 'lit';
 
 //Clock-mode overlay: the 24-hour ring of cylinders projected on the basemap, the flat centre medallion,
-//the ground-laid hour labels, the hover tooltip, and the right-hand metric rail. Every transform that
-//glues an element to the rotating ground (medallion, labels) is written inline per frame from the camera
-//pose; this sheet carries only the static appearance.
+//the ground-laid hour labels, the hover tooltip, and the right-hand metric rail. Transforms that glue an
+//element to the rotating ground are written inline per frame from the camera pose; this sheet carries
+//only the static appearance.
 export const heliosCardEnergyClockCss = css`
-    /*  Overlay wrapper that holds the whole clock (svg + medallion + labels + tooltip). Full-bleed and
-        inert; its absolutely-positioned children share the card's coordinate space. Named so the scene's
+    /*  Overlay wrapper holding the whole clock (svg + medallion + labels + tooltip). Full-bleed and inert;
+        its absolutely-positioned children share the card's coordinate space. Named so the scene's
         clock-mode fade leaves it (and the right rail) untouched. */
     .clock-overlay
     {
@@ -15,8 +15,8 @@ export const heliosCardEnergyClockCss = css`
         pointer-events: none;
     }
 
-    /*  Screen-space SVG the cylinders paint into each frame (innerHTML set imperatively). Sits above the
-        basemap AND the home prism, below the controls; inert so map drag-rotate passes straight through. */
+    /*  Screen-space SVG the cylinders paint into each frame. Above the basemap and home prism, below the
+        controls; inert so map drag-rotate passes straight through. */
     .clock-svg
     {
         position: absolute;
@@ -47,7 +47,7 @@ export const heliosCardEnergyClockCss = css`
     }
 
     /*  Compass letters (N / S) laid flat on the ground at the triangle tips. Like the hour labels but bold
-        and at full opacity — they never fade with distance, so the orientation always reads. */
+        and at full opacity: they never fade with distance, so orientation always reads. */
     .clock-compass-label
     {
         position: absolute;
@@ -63,9 +63,8 @@ export const heliosCardEnergyClockCss = css`
         white-space: nowrap;
     }
 
-    /*  Hover tooltip; left/top set inline to the cursor, then clamped inside the card. */
-    /*  Anchored bottom-left, just above the period band — NOT under the cursor — so it never sits over the
-        dial or the scrub it describes. */
+    /*  Hover tooltip anchored bottom-left, just above the period band (not under the cursor), so it never
+        sits over the dial or the scrub it describes. */
     .clock-tip
     {
         position: absolute;
@@ -125,14 +124,9 @@ export const heliosCardEnergyClockCss = css`
         padding-top: 4px;
         border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  Forecast (not-yet-measured) hours: italic to echo the transparent cylinders. */
-    .clock-tip.is-predicted
-    {
-        font-style: italic;
-    }
 
-    /*  Right-hand metric rail: the dynamic list of clickable chips that retargets the clock. Mirrors the
-        top-left rail; only configured metrics render, stacked with no gaps. */
+    /*  Right-hand metric rail: a dynamic list of clickable chips that retargets the clock. Mirrors the
+        top-left rail; only configured metrics render. */
     .overlay-top-right
     {
         position: absolute;
@@ -146,7 +140,7 @@ export const heliosCardEnergyClockCss = css`
         pointer-events: none;
     }
     /*  Idle icon takes the metric's colour so the rail reads like the chips; the active button fills with
-        that same colour (overriding the shared --primary-color fill). */
+        that same colour, overriding the shared --primary-color fill. */
     .overlay-top-right .overlay-btn ha-icon
     {
         color: var(--clock-btn-color, var(--primary-text-color, #212121));

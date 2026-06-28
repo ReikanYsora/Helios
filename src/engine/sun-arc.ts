@@ -1,6 +1,6 @@
 //Pure sun-arc geometry: the celestial-hemisphere point for an instant and the daylight opacity ramp. No
-//DOM, map, renderer, or engine state — the engine projects the returned lon/lat/altitude through its
-//camera and owns the per-frame caches.
+//DOM, map, renderer, or engine state; the engine projects the returned lon/lat/altitude through its camera
+//and owns the per-frame caches.
 
 import { getSunPosition } from './sun';
 import { SUN_ARC_RADIUS_M } from '../constants';

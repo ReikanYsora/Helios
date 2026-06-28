@@ -1,16 +1,16 @@
 import type { Translations } from '../index';
 
 //Notes de traduction (FR) :
-//  - "Cloud cover" → "Couverture nuageuse" (terme météo standard FR)
-//  - "Global Horizontal Irradiance" → "Irradiance horizontale globale"
+//  - "Cloud cover" -> "Couverture nuageuse" (terme météo standard FR)
+//  - "Global Horizontal Irradiance" -> "Irradiance horizontale globale"
 //    (terme scientifique standard, repris par Météo-France et l'INES)
-//  - "Hillshade" → "Ombrage du relief" (rendu cartographique standard)
+//  - "Hillshade" -> "Ombrage du relief" (rendu cartographique standard)
 //  - On garde le tutoiement informel pour rester cohérent avec le ton
 //    de Home Assistant en français.
 
 export const fr: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel',
+    cardDescription: '☀️ Une vue 3D temps réel de ta maison avec le soleil, la météo, la production solaire, la batterie et le réseau, plus les ombres projetées, une frise temporelle interactive et une horloge énergétique sur 24 h',
 
     period:
     {
@@ -76,30 +76,13 @@ export const fr: Translations = {
         buildingOpacity:       'Opacité des bâtiments voisins',
         buildingColor:         'Couleur des bâtiments',
         buildingColorHelp:     'Teinte de base appliquée aux bâtiments environnants dans la scène.',
-        shadowsSection:        'Ombres & LiDAR',
+        shadowsSection:        'Ombres',
         shadowsEnabled:        'Afficher les ombres',
         shadowsEnabledOn:      'Affichées',
         shadowsEnabledOff:     'Masquées',
-        shadowsEnabledHint:    'Active ou masque les ombres projetées au sol. Quand actif, Helios choisit automatiquement la meilleure source disponible : un fournisseur LiDAR si ta zone est couverte (bâtiments + végétation), sinon les empreintes des bâtiments OpenFreeMap (bâtiments uniquement).',
+        shadowsEnabledHint:    'Active ou masque les ombres projetées au sol par les bâtiments au fil de la course du soleil.',
         shadowOpacity:         'Opacité des ombres',
         shadowOpacityHint:     'Opacité des ombres projetées au sol.',
-        lidarShadowQuality:    'Qualité des ombres LiDAR',
-        lidarShadowQualityHelp: 'Une qualité plus élevée échantillonne le LiDAR plus finement pour des ombres plus nettes, mais alourdit la carte. Baisse-la si la carte te paraît plus lourde.',
-        lidarQualityLow:       'Basse',
-        lidarQualityMedium:    'Moyenne',
-        lidarQualityHigh:      'Haute',
-        lidarSection:          'LiDAR local',
-        lidarHint:             'Pointe Helios vers un GeoTIFF nDSM (modèle numérique de surface normalisé) que tu héberges, pour des ombres LiDAR réelles (bâtiments ET végétation). Le fichier doit être accessible en HTTPS depuis ton navigateur ; la zone englobante (bounding box) indique à Helios la zone couverte, en EPSG:4326 (latitude/longitude simples).',
-        lidarEnabled:          'Utiliser le LiDAR local',
-        lidarEnabledOn:        'Activé',
-        lidarEnabledOff:       'Désactivé',
-        lidarUrl:              'URL du GeoTIFF nDSM',
-        lidarUrlHelp:          'URL HTTPS du raster GeoTIFF nDSM, accessible depuis le navigateur.',
-        lidarMinLat:           'Latitude sud (min)',
-        lidarMaxLat:           'Latitude nord (max)',
-        lidarMinLon:           'Longitude ouest (min)',
-        lidarMaxLon:           'Longitude est (max)',
-        lidarBboxHelp:         'La couverture du raster en EPSG:4326. Les quatre sont requis, et chaque max doit être supérieur à son min, sinon le LiDAR local est ignoré.',
         resetSection:          'Réinitialisation',
         resetSectionHint:      'Outils de maintenance pour purger les données mises en cache par la carte.',
         resetCacheButton:      'Réinitialiser le cache des données',

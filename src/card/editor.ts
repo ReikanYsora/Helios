@@ -5,8 +5,6 @@ import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
     type HeliosConfig,
-    hasLocalLidar,
-    lidarShadowQuality,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
@@ -29,18 +27,9 @@ import
 import { pickTranslations, type Translations } from '../i18n';
 
 
-//Colour-token fields (ui_color selectors). These always carry a token — there's no clear-colour affordance — so an
-//empty value-changed is a lazy-init artifact to ignore, unlike entity pickers where clearing is a valid edit.
-const COLOUR_FIELD_KEYS: ReadonlySet<keyof HeliosConfig> = new Set([
-    'custom-entity-color',
-    'home-color',
-    'building-color',
-]);
-
-
-// Render a localised hint with markdown-style `[text](url)` links as a Lit fragment of real `<a>` anchors. Built via Lit's tagged
-// template (no innerHTML) so URL + text stay escaped. URL safety: anything not http(s):// or same-origin is rendered as plain text,
-// blocking a corrupted translation from injecting a `javascript:` URI. Used by editor hints linking to public docs.
+// Render a localised hint with markdown-style `[text](url)` links as real `<a>` anchors via Lit's tagged template
+// (no innerHTML) so URL + text stay escaped. URL safety: anything not http(s):// or same-origin renders as plain
+// text, blocking a corrupted translation from injecting a `javascript:` URI.
 function renderMarkdownLinks(text: string): unknown[]
 {
     const parts: unknown[] = [];
@@ -79,19 +68,19 @@ function renderMarkdownLinks(text: string): unknown[]
 }
 
 
-// Visual editor exposing every config option through native HA form controls. Wired in via HeliosCard.getConfigElement().
+// Visual editor exposing every config option through native HA form controls.
 @customElement('helios-card-editor')
 export class HeliosCardEditor extends LitElement
 {
     @property({ attribute: false }) public hass?: any;
     @state()                        private _cfg: HeliosConfig = {};
     @state()                        private _pickerReady = false;
-    // Accordion: at most one top-level section open at a time (a stack of expanded blocks got too tall to scan). Id of the open
-    // section, or null when all collapsed. Defaults to 'location' so a fresh card opens on where the home sits.
+    // Accordion: at most one top-level section open at a time (a stack of expanded blocks got too tall to scan). Id
+    // of the open section, or null when all collapsed. Defaults to 'location' so a fresh card opens on the home spot.
     @state()                        private _openSection: string | null = 'location';
-    // Per-key debounce timers for slider @input. Sliders fire on every drag pixel; dispatching `config-changed` per tick would
-    // cascade a full engine re-render each pixel (painful during preview). _cfg updates synchronously so the bound .value tracks the
-    // drag, but `config-changed` only dispatches after a short idle window.
+    // Per-key debounce timers for slider @input. Sliders fire on every drag pixel; dispatching `config-changed` per
+    // tick would cascade a full engine re-render each pixel (painful during preview). _cfg updates synchronously so
+    // the bound .value tracks the drag, but `config-changed` only dispatches after a short idle window.
     private static readonly SLIDER_COMMIT_DELAY_MS = 250;
     //Give the lazily-imported ha-entity-picker this long to register before rendering the form unenhanced.
     private static readonly PICKER_LOAD_TIMEOUT_MS = 8000;
@@ -107,8 +96,8 @@ export class HeliosCardEditor extends LitElement
             window.clearTimeout(t);
         }
         this._sliderDebounce.clear();
-        // Clear the "Cache vidé" confirmation timer; otherwise a fast unmount lets it fire on a dead element and warn about
-        // touching @state after disconnect.
+        // Clear the cache-reset confirmation timer; otherwise a fast unmount lets it fire on a dead element and warn
+        // about touching @state after disconnect.
         if (this._resetFeedbackTimer !== undefined)
         {
             window.clearTimeout(this._resetFeedbackTimer);
@@ -119,9 +108,9 @@ export class HeliosCardEditor extends LitElement
     public setConfig(config: HeliosConfig): void
     {
         this._cfg = { ...config };
-        //Assign a hidden, per-card cache id the first time the card is configured (placed via the UI, which
-        //opens this editor). It keeps each card's saved view isolated and is never shown or editable. Deferred
-        //so we don't dispatch config-changed inside the host's setConfig call stack; guarded so it fires once.
+        //Assign a hidden, per-card cache id the first time the card is configured. It keeps each card's saved view
+        //isolated and is never shown or editable. Deferred so config-changed isn't dispatched inside the host's
+        //setConfig call stack; guarded so it fires once.
         if (!this._cfg['cache-id'])
         {
             const id = `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
@@ -141,9 +130,9 @@ export class HeliosCardEditor extends LitElement
         this._ensureEntityPicker();
     }
 
-    // ha-entity-picker ships in HA's lazy-loaded card-editor bundle and may be unregistered in a fresh tab. Force the load by
-    // creating a transient "entities" card and requesting its config element (the side effect registers the tag). Until then the
-    // field falls back to a plain text input so it's never broken.
+    // ha-entity-picker ships in HA's lazy-loaded card-editor bundle and may be unregistered in a fresh tab. Force the
+    // load by creating a transient "entities" card and requesting its config element (the side effect registers the
+    // tag). Until then the field falls back to a plain text input so it's never broken.
     private async _ensureEntityPicker(): Promise<void>
     {
         if (this._pickerReady)
@@ -200,13 +189,17 @@ export class HeliosCardEditor extends LitElement
 
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
-        const next = { ...this._cfg, [key]: value } as Record<string, unknown>;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //undefined clears the key entirely so the YAML drops it (resolvers fall back to their default), rather
+        //than persisting an explicit `key: undefined`.
+        if (value === undefined) { delete next[key]; }
+        else { next[key] = value; }
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
     }
 
-    // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits as-is; anything
-    // else is ignored, leaving the previous value.
+    // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits
+    // as-is; anything else is ignored, leaving the previous value.
     private _numField(key: keyof HeliosConfig, e: Event): void
     {
         const raw = (e.target as HTMLInputElement).value.trim();
@@ -223,7 +216,7 @@ export class HeliosCardEditor extends LitElement
         this._update(key, v);
     }
 
-    // Slider commit. Updates local state synchronously so the thumb tracks the drag, but defers `config-changed` by
+    // Updates local state synchronously so the thumb tracks the drag, but defers `config-changed` by
     // SLIDER_COMMIT_DELAY_MS so the engine doesn't see a flood of intermediate values.
     private _numSlider(key: keyof HeliosConfig, e: Event): void
     {
@@ -233,7 +226,6 @@ export class HeliosCardEditor extends LitElement
             return;
         }
 
-        // Local update only, no event dispatch yet.
         this._cfg = { ...this._cfg, [key]: v };
 
         const k        = String(key);
@@ -252,9 +244,9 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    // Accordion contract: opening a section closes the others (_openSection binds each <details>'s `open` attribute). Collapsing the
-    // open one falls back to "everything closed". Also scrolls the just-opened section into view on the next rAF tick (after layout
-    // reflects the expanded body) so the user isn't left at the bottom of the previous section.
+    // Opening a section closes the others (_openSection binds each <details>'s `open` attribute); collapsing the open
+    // one falls back to "everything closed". Scrolls the just-opened section into view on the next rAF tick (after
+    // layout reflects the expanded body) so the user isn't left at the bottom of the previous section.
     private _onSectionToggle(sectionId: string, e: Event): void
     {
         const el = e.currentTarget as HTMLDetailsElement;
@@ -272,9 +264,9 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
-    // Bound template delegates: each reads its parameter off the firing element's data-* attribute so the
-    // markup can pass bare method references (no in-template arrows). data-key maps to a HeliosConfig key,
-    // data-section to an accordion id, data-value to the boolean a toggle button commits.
+    // Bound template delegates: each reads its parameter off the firing element's data-* attribute so the markup can
+    // pass bare method references (no in-template arrows). data-key maps to a HeliosConfig key, data-section to an
+    // accordion id, data-value to the boolean a toggle button commits.
     private _onSectionToggleEvt = (e: Event): void =>
     {
         const section = (e.currentTarget as HTMLElement).dataset.section;
@@ -285,14 +277,6 @@ export class HeliosCardEditor extends LitElement
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
         if (key) { this._numField(key, e); }
     };
-    //Plain text field commit (e.g. the LiDAR nDSM URL): trims, stores the string, clears the key when empty.
-    private _onTextFieldChange = (e: Event): void =>
-    {
-        const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
-        if (!key) { return; }
-        const raw = (e.target as HTMLInputElement).value.trim();
-        this._update(key, raw === '' ? undefined : raw);
-    };
     private _onNumSliderInput = (e: Event): void =>
     {
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
@@ -302,13 +286,12 @@ export class HeliosCardEditor extends LitElement
     {
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
         if (!key) { return; }
-        //Skip the echo a selector emits on first paint (value-changed with the value we just set): without this
-        //the colour pickers clobber the saved value back to their default on editor reload.
-        const next = e.detail.value ?? '';
-        //A colour selector can emit an empty value-changed before its .value applies; ignore it so the saved token
-        //survives reload. Entity pickers keep accepting empty (clearing the entity is a real edit).
-        if (COLOUR_FIELD_KEYS.has(key) && next === '') { return; }
-        if (next === (this._cfg[key] ?? '')) { return; }
+        //Empty/undefined is a real edit: an entity cleared, or a colour reset to the card default via the picker's
+        //clear affordance (ui_color emits undefined when the chosen token equals its default). Store it as unset so
+        //the resolver falls back to the default. The picker never emits on init, so there is no echo to filter.
+        const raw  = (e as CustomEvent<{ value?: unknown }>).detail.value;
+        const next = raw === undefined || raw === null || raw === '' ? undefined : raw;
+        if ((this._cfg[key] ?? undefined) === (next ?? undefined)) { return; }
         this._update(key, next);
     };
     private _onBoolToggleClick = (e: Event): void =>
@@ -317,22 +300,14 @@ export class HeliosCardEditor extends LitElement
         const key = el.dataset.key as keyof HeliosConfig | undefined;
         if (key) { this._update(key, el.dataset.value === 'true'); }
     };
-    //String-valued segmented toggle setter (writes data-value as-is, for multi-choice options).
-    private _onChoiceClick = (e: Event): void =>
-    {
-        const el  = e.currentTarget as HTMLElement;
-        const key = el.dataset.key as keyof HeliosConfig | undefined;
-        const val = el.dataset.value;
-        if (key && val !== undefined) { this._update(key, val); }
-    };
 
     private _fmtNum(v: number, step: number): string
     {
         return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
     }
 
-    // Solar-irradiance entity filter: accepts the `irradiance` device class plus any sensor reporting W/m². The unit fallback covers
-    // template sensors (e.g. Ecowitt) that don't declare a device_class.
+    // Solar-irradiance entity filter: accepts the `irradiance` device class plus any sensor reporting W/m². The unit
+    // fallback covers template sensors that don't declare a device_class.
     private _solarIrradianceEntityFilter = (entity: any): boolean =>
     {
         if (!entity || !entity.attributes)
@@ -368,8 +343,9 @@ export class HeliosCardEditor extends LitElement
         const c = this._cfg;
         const t = this._t();
 
-        // Placeholders for the home lat/lon override fields: show HA's configured home (so the user sees what they'd override),
-        // falling back to Amsterdam when HA hasn't set one. Non-binding hint text only; empty input means "use HA's home".
+        // Placeholders for the home lat/lon override fields: show HA's configured home (so the user sees what they'd
+        // override), falling back to Amsterdam when HA hasn't set one. Hint text only; empty input means "use HA's
+        // home".
         const haLat = this.hass?.config?.latitude;
         const haLon = this.hass?.config?.longitude;
         const latPlaceholder = typeof haLat === 'number' && isFinite(haLat)
@@ -635,33 +611,6 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
 
-                ${hasLocalLidar(c) ? html`
-                <div class="field">
-                    <span class="label">${t.editor.lidarShadowQuality}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${lidarShadowQuality(c) === 'low' ? 'active' : ''}"
-                            data-key="lidar-shadow-quality" data-value="low"
-                            @click=${this._onChoiceClick}
-                        >${t.editor.lidarQualityLow}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${lidarShadowQuality(c) === 'medium' ? 'active' : ''}"
-                            data-key="lidar-shadow-quality" data-value="medium"
-                            @click=${this._onChoiceClick}
-                        >${t.editor.lidarQualityMedium}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${lidarShadowQuality(c) === 'high' ? 'active' : ''}"
-                            data-key="lidar-shadow-quality" data-value="high"
-                            @click=${this._onChoiceClick}
-                        >${t.editor.lidarQualityHigh}</button>
-                    </div>
-                </div>
-                <div class="field-help">${t.editor.lidarShadowQualityHelp}</div>
-                ` : nothing}
-
                 </details>
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
@@ -722,68 +671,6 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
 
-                <details class="advanced-section" data-section="lidar" ?open=${this._openSection === 'lidar'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:cube-scan"></ha-icon>${t.editor.lidarSection}</summary>
-                <div class="hint">${t.editor.lidarHint}</div>
-                <div class="field">
-                    <span class="label">${t.editor.lidarEnabled}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['lidar-local-ndsm-enabled'] === true) ? 'active' : ''}"
-                            data-key="lidar-local-ndsm-enabled" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.lidarEnabledOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['lidar-local-ndsm-enabled'] !== true) ? 'active' : ''}"
-                            data-key="lidar-local-ndsm-enabled" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.lidarEnabledOff}</button>
-                    </div>
-                </div>
-                ${c['lidar-local-ndsm-enabled'] === true ? html`
-                    <label class="field field-block">
-                        <span class="label">${t.editor.lidarUrl}</span>
-                        <input
-                            type="text"
-                            placeholder="https://…/ndsm.tif"
-                            .value=${String(c['lidar-local-ndsm-url'] ?? '')}
-                            data-key="lidar-local-ndsm-url"
-                            @change=${this._onTextFieldChange}
-                        />
-                    </label>
-                    <div class="field-help">${t.editor.lidarUrlHelp}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarMinLat}</span>
-                        <input type="number" min="-90" max="90" step="any"
-                            .value=${c['lidar-local-ndsm-min-lat'] != null ? String(c['lidar-local-ndsm-min-lat']) : ''}
-                            data-key="lidar-local-ndsm-min-lat" @change=${this._onNumFieldChange} />
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarMaxLat}</span>
-                        <input type="number" min="-90" max="90" step="any"
-                            .value=${c['lidar-local-ndsm-max-lat'] != null ? String(c['lidar-local-ndsm-max-lat']) : ''}
-                            data-key="lidar-local-ndsm-max-lat" @change=${this._onNumFieldChange} />
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarMinLon}</span>
-                        <input type="number" min="-180" max="180" step="any"
-                            .value=${c['lidar-local-ndsm-min-lon'] != null ? String(c['lidar-local-ndsm-min-lon']) : ''}
-                            data-key="lidar-local-ndsm-min-lon" @change=${this._onNumFieldChange} />
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarMaxLon}</span>
-                        <input type="number" min="-180" max="180" step="any"
-                            .value=${c['lidar-local-ndsm-max-lon'] != null ? String(c['lidar-local-ndsm-max-lon']) : ''}
-                            data-key="lidar-local-ndsm-max-lon" @change=${this._onNumFieldChange} />
-                    </label>
-                    <div class="field-help">${t.editor.lidarBboxHelp}</div>
-                ` : nothing}
-
-                </details>
-
-
                 <details class="advanced-section" data-section="reset" ?open=${this._openSection === 'reset'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:refresh"></ha-icon>${t.editor.resetSection}</summary>
                     <div class="hint">${t.editor.resetSectionHint}</div>
@@ -797,11 +684,9 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section about-section" data-section="about" ?open=${this._openSection === 'about'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:information-outline"></ha-icon>${t.editor.aboutSection}</summary>
-                    <!-- Identity + links column. Every row uses the same label-left, content-right
-                         layout the version row established: a single .about-row line per piece of
-                         info, the right side carrying the value (or a clickable link with icon).
-                         The X brand mark is an inline SVG because the MDI icon set doesn't ship
-                         the post-rebrand glyph and mdi:twitter would mis-label the platform. -->
+                    <!-- Identity + links column: one .about-row line per item, label left and value (or icon link)
+                         right. The X brand mark is an inline SVG because the MDI icon set doesn't ship the current
+                         glyph and mdi:twitter would mis-label the platform. -->
                     <div class="about-row">
                         <span class="about-label">${t.editor.aboutVersionLabel}</span>
                         <a class="about-row-link about-version-link"
@@ -850,8 +735,8 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    // Fires the window-level reset bus so every live HeliosCard drops its cached Open-Meteo payload + in-memory PV history and
-    // re-fetches. Flashes a 2 s "Cache vidé" confirmation on the button so the user sees the click landed without an editor toast.
+    // Fires the window-level reset bus so every live card drops its cached Open-Meteo payload + in-memory PV history
+    // and re-fetches. Flashes a brief confirmation on the button so the user sees the click landed without a toast.
     private _resetFeedbackTimer?: number;
     @state() private _resetFeedback: string | null = null;
 

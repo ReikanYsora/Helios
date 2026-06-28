@@ -1,6 +1,6 @@
-//Custom-card registration for the HA card picker. Runs once at import: writes (not insert-if-missing) the
-//Helios entry so the freshly-loaded bundle's metadata always wins. Card name/description are shown before
-//any hass exists, so language comes from navigator.
+//Custom-card registration for the HA card picker. Runs once at import: overwrites (not insert-if-missing) the entry
+//so the freshly-loaded bundle's metadata always wins. Card name/description show before any hass exists, so language
+//comes from navigator.
 import { pickTranslations } from '../i18n';
 
 declare global
@@ -18,8 +18,7 @@ declare global
 
 const _bootI18n = pickTranslations(typeof navigator !== 'undefined' ? navigator.language : 'en');
 
-//Overwrite (not insert-if-missing) so the freshly-loaded bundle's metadata always wins over any stale
-//entry pushed by other code (HACS placeholder, dev-tools mock, an older Helios bundle on the same page).
+//Overwrite any stale entry pushed by other code (HACS placeholder, dev-tools mock, an older bundle on the same page).
 window.customCards = window.customCards || [];
 {
     const heliosEntry =

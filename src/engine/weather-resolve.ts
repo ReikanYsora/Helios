@@ -1,6 +1,6 @@
 //Pure weather-at-time resolution: nearest-hour lookup and weather-code classification over an already
-//fetched hourly forecast. No DOM, map, network, or engine state — the fetch/cache/timer orchestration
-//stays in the engine; these helpers only read the hourly arrays it hands in.
+//fetched hourly forecast. No DOM, map, network, or engine state; the fetch/cache/timer orchestration stays
+//in the engine, and these helpers only read the hourly arrays it hands in.
 
 import type { SampleHourly } from './weather';
 

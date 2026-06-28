@@ -1,49 +1,42 @@
-//Central tunables for the Helios card: every "setting" number lives here so the whole card can be
-//re-tuned from one place. Structural constants (time units, geo/math, EPSG tables, shaders, layer-id
-//lists, internal cache keys, regexes) deliberately stay in their own modules. The DEFAULT_*/MIN/MAX
-//below are the editor's default values; helios-config.ts re-exports them and wraps them in the config
-//resolvers (displayRadiusM, valueDecimals, periodPastDays...).
-
-
-//Drawing colours are not constants: every colour is resolved at runtime from the live HA theme tokens —
-//the scene palette via the engine, the chips + charts via ENERGY_COLOR (card/format.ts) — so a
-//user's custom theme flows through with no hardcoded hex. The LAB conversion factors that ramp those
-//tokens live in the "Colour-space conversion" group below.
+//Central tunables for the card. The DEFAULT_*/MIN/MAX below are the editor's default values;
+//helios-config.ts re-exports them and wraps them in the config resolvers (displayRadiusM,
+//valueDecimals...). Drawing colours are not constants: each is resolved at runtime from the live HA
+//theme tokens (scene palette via the engine, chips + charts via ENERGY_COLOR), so a user's custom
+//theme flows through with no hardcoded hex. The LAB conversion factors that ramp those tokens live in
+//the "Colour-space conversion" group below.
 
 //=== Time units ===
 export const HOUR_MS = 3_600_000;
 export const DAY_MS  = 86_400_000;
 
 //=== Math ===
-//Single shared degrees→radians factor for the card and scene engine.
+//Shared degrees to radians factor.
 export const DEG = Math.PI / 180;
 
 //=== Display radius + buildings ===
-//Single on-screen radius (m) for buildings and shadows. 200 m default; the `display-radius`
-//slider lowers it for perf or raises it for a wider survey.
+//On-screen radius (m) for buildings and shadows; the `display-radius` slider trades perf for survey width.
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
 export const MIN_DISPLAY_RADIUS_M     = 0;
 export const MAX_DISPLAY_RADIUS_M     = 500;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;  //ghost surround; home stays 1.0
-export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = legacy single-polygon home detection
+export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = single-polygon home detection
 
 //=== Data cadence + value precision ===
-//Buckets/hour for the unified store + every graph. 4 = 15 min; clamp [1,12] (12 = the recorder's 5-min floor).
+//Buckets/hour for the unified store + every graph (4 = 15 min, max 6 = 10 min).
 export const DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR = 4;
 export const MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 1;
 export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 6;
-//Decimal places for every value readout (kW/kWh). Default 1, clamp [0,3].
+//Decimal places for every value readout (kW/kWh).
 export const DEFAULT_VALUE_DECIMALS = 1;
 export const MIN_VALUE_DECIMALS     = 0;
 export const MAX_VALUE_DECIMALS     = 3;
 
 
 //=== Colours ===
-//Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart) — a stable warm yellow rather
-//than the theme's --warning-color, which skews orange under many themes.
+//Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart): a stable warm yellow, not
+//the theme's --warning-color which skews orange under many themes.
 export const SUN_COLOR_HEX = '#ffc107';
-//Custom-entity chip identity: the HA frontend's named red (--red-color), with its hex as the literal
-//fallback. Used for the chip border, its leader and bead.
+//Custom-entity chip identity (chip border, leader, bead): HA's named red with hex literal fallback.
 export const CUSTOM_ENTITY_COLOR = 'var(--red-color, #f44336)';
 
 
@@ -81,11 +74,6 @@ export const TIMELINE_MAX_TICKS = 7;
 
 //=== Shadows ===
 export const DEFAULT_SHADOW_OPACITY = 0.32;
-//LiDAR shadow quality: the nDSM raster is sized cells = 2·radius·mult, clamped [MIN,MAX]. Higher quality =
-//finer shadows but a heavier card; lower = fewer cells = lighter.
-export const LIDAR_QUALITY_MULT: Record<'low' | 'medium' | 'high', number> = { low: 0.6, medium: 1.0, high: 3.0 };
-export const LIDAR_RASTER_MIN = 64;
-export const LIDAR_RASTER_MAX = 1280;
 
 //=== Weather fetch ===
 export const WEATHER_PAST_DAYS          = 5;
@@ -103,16 +91,16 @@ export const DENSE_FRACTION    = 0.6;
 
 
 //=== Buildings / Overpass ===
-//Fixed prism height (m) for every building (OSM heights ignored — tall ones break the faux-3D framing),
-//the cap on nearest footprints kept, the local-mode fallback house half-extents, the localStorage cache
-//TTL, the per-mirror retry delay, and the two CORS Overpass mirrors tried in order.
+//Fixed prism height (m) used when real heights are off (tall buildings break the 2.5D framing), the cap
+//on nearest footprints kept, the local-mode fallback house half-extents, the cache TTL, the per-mirror
+//retry delay, and the two CORS Overpass mirrors tried in order.
 export const FIXED_BUILDING_HEIGHT_M = 6;
 export const DEFAULT_BUILDING_COUNT  = 50;
 export const MIN_BUILDING_COUNT      = 10;
 export const MAX_BUILDING_COUNT      = 100;
 export const MIN_BUILDING_HEIGHT_M   = 3;
 export const MAX_BUILDING_HEIGHT_M   = 10;
-//OSM-height cap (m) so a nearby tower can't dominate the 2.5D framing; untagged buildings fall back.
+//Real-height cap (m) so a nearby tower can't dominate the 2.5D framing; untagged buildings fall back.
 export const REAL_HEIGHT_CAP_M       = 25;
 export const REAL_HEIGHT_FALLBACK_M  = 6;
 export const FALLBACK_HOUSE_HALF_W   = 5;
@@ -146,8 +134,8 @@ export const LAB_T2 = 0.12841855;
 export const LAB_T3 = 0.008856452;
 
 
-//Tunables for the self-contained 2.5D scene engine. The engine stays a standalone, card-agnostic unit:
-//nothing below depends on the card, and the engine modules reach up here via ../constants.
+//Tunables for the 2.5D scene engine, a card-agnostic unit: nothing below depends on the card, and the
+//engine modules reach up here via ../constants.
 
 //=== Camera + projection ===
 //Pitch bounds shared by the editor, drag-rotate and the initial-pose clamp. MIN = nearly top-down,
@@ -175,8 +163,8 @@ export const EARTH_CIRCUMFERENCE_M = 40075016.686;
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
 //=== Renderer shadows ===
-//Shadows fade in near the horizon (full at SHADOW_FADE_DEG above it); a cast shadow is capped at MAX_SHADOW_M
-//so a low sun doesn't streak a shadow across the whole disc.
+//Shadows fade to full at SHADOW_FADE_DEG above the horizon; cast length is capped at MAX_SHADOW_M so a
+//low sun doesn't streak a shadow across the whole disc.
 export const SHADOW_FADE_DEG = 10;
 export const MAX_SHADOW_M    = 50;
 

@@ -11,7 +11,6 @@ import
     customEntityColor,
     homeColor,
     cacheId,
-    hasLocalLidar
 } from './helios-config';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
@@ -21,7 +20,6 @@ import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
-import { heliosCardLidarCss } from './css/helios-card-lidar-css';
 import {
     type ClockData, type ClockHit, type ClockRingInput,
     availableClockTargets, buildClockData, clockTargetMeta, clockTargetLabel,
@@ -102,13 +100,13 @@ import './card/editor';
 //Side-effect import: writes the Helios entry into window.customCards for the HA card picker.
 import './card/registry';
 //Side-effect import: install banner, location-override debug helpers and the page-wide data-cache reset
-//bus. liveCards is the shared registry the card adds/removes itself from.
+//bus. liveCards is the shared registry each card adds/removes itself from.
 import { liveCards } from './card/diagnostics';
 
 
 //Live cards grouped by their (auto-generated) cache id, in connection order. A pasted card carries a copy of
 //the source's id; the registry hands each same-id card a distinct, order-stable storage slot so duplicates
-//never share — without the user ever seeing or managing the id.
+//never share, without the user ever seeing or managing the id.
 const _cacheIdRegistry = new Map<string, HeliosCard[]>();
 
 
@@ -124,7 +122,7 @@ export class HeliosCard extends LitElement
     private static readonly OUTLINE_NEAR = 5.0;
     private static readonly SEGMENT_FAR  = 1.0;
     private static readonly SEGMENT_NEAR = 4.0;
-    //Sun-disc radii in px. The inner irradiance fill needs ~9 px of diameter at apex to read as an annulus rather than a dot.
+    //Sun-disc radii in px. The inner irradiance fill needs ~9 px diameter at apex to read as an annulus, not a dot.
     private static readonly SUN_R_FAR    = 10.0;
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
@@ -168,8 +166,8 @@ export class HeliosCard extends LitElement
     //tooltip can break down by entity. Keyed by entity id; cleared + repopulated in fetchPvHistory.
     _pvHistoryPerEntity = new Map<string, { times: Date[]; values: number[] }>();
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same shape as _pvHistory
-    //but via recorder/statistics_during_period (~120 rows/5 days vs potentially millions on the raw path
-    //for high-frequency sensors). Null while first fetch is in flight; calibration.ts falls back to
+    //but via recorder/statistics_during_period (~120 rows/5 days, vs potentially millions on the raw path
+    //for a high-frequency sensor). Null while the first fetch is in flight; calibration.ts falls back to
     //_pvHistory when null/empty.
     @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
     _pvCalibStatsFetchKey  = '';
@@ -220,7 +218,7 @@ export class HeliosCard extends LitElement
     } | null = null;
     _customEntityKey = '';
     //Decoupled hourly clock profile (hour-of-day averages), built only in clock mode on a sub-hourly store
-    //(month/year). Null otherwise — buildClockData then reads the store. _clockHourlyKey dedupes refetches.
+    //(month/year). Null otherwise (buildClockData then reads the store). _clockHourlyKey dedupes refetches.
     @state() _clockHourly: ClockHourly | null = null;
     _clockHourlyKey = '';
     @state() _batteryPowerHistory: {
@@ -269,18 +267,20 @@ export class HeliosCard extends LitElement
     @state() _chartTarget: ChartTarget = 'production';
     //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap and paints the
     //hourly cylinder ring on top instead. Scene is the default.
-    @state() _viewMode: 'scene' | 'clock' | 'lidar' = 'scene';
+    @state() _viewMode: 'scene' | 'clock' = 'scene';
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
     //Persisted; the timeline (hidden in clock mode) follows the first when scene mode resumes.
     @state() _clockTargets: ChartTarget[] = [];
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     @state() private _clockData: ClockData[] = [];
-    //Per-unit displayed ceiling, eased toward the target between filter changes so the remaining bars rescale
-    //smoothly (toggling one of two same-unit metrics otherwise snaps the survivor to a new axis). The signature
-    //is the active filter set: the ease fires ONLY when it changes (a toggle) — entry, data loading and period
-    //changes snap, so the bars never flash at full height while the ceiling settles. null between clock sessions.
+    //Per-unit displayed ceiling, eased toward the target so the remaining bars rescale smoothly when a filter is
+    //toggled (toggling one of two same-unit metrics otherwise snaps the survivor to a new axis). Each entry eases
+    //from `from` to `to` over CLOCK_GROW_MS; `start === 0` means at rest (snapped to `to`). The ease is requested
+    //only by a filter toggle (via _clockCeilEase); entry, data loading and period changes snap.
     private _clockCeilAnim = new Map<string, { from: number; to: number; start: number }>();
-    private _clockCeilSig: string | null = null;
+    //Set by a filter toggle to ask paintClock to EASE the next ceiling change instead of snapping it; consumed on
+    //the first paint that applies it.
+    private _clockCeilEase = false;
     //Hovered slot; resolves to its hour and lights every ring's area for that hour + drives the tooltip. null = off.
     @state() private _clockHoverSlot: number | null = null;
     //Home prism hovered/tapped: brightens it + shows the window-total tooltip (does NOT dim the cylinders).
@@ -297,21 +297,21 @@ export class HeliosCard extends LitElement
     private _clockTapStartX = 0;
     private _clockTapStartY = 0;
     //Per-ring animation, keyed by metric so rapid toggles never desync (no held rebuild, no shared index):
-    //  _clockGrowStart  — when a ring's grow begins (0..1 height rise); absent = at rest. A start in the FUTURE
-    //                     holds the ring at 0 until then — the reload's shrink→hold→grow uses that. See
-    //                     _clockRingHeight for the resolved per-frame height, _clockSlotNow for the slide.
-    //  _clockExiting    — removed rings fading + shrinking out, independent of the live list so a toggle never
-    //                     blocks the rebuild; each carries the slot it held so survivors slide over it.
-    //  _clockSlotFrom + _clockSlideStart — captured source slot per ring + when the recompaction slide began,
-    //                     re-snapshotted from CURRENT animated positions on every toggle so nothing teleports.
-    //  _clockAnimSeq    — gates the single shared animation rAF loop.
+    //  _clockGrowStart: when a ring's grow begins (0..1 height rise); absent = at rest. A start in the FUTURE
+    //                   holds the ring at 0 until then (the reload's shrink/hold/grow uses that). See
+    //                   _clockRingHeight for the resolved per-frame height, _clockSlotNow for the slide.
+    //  _clockExiting:   removed rings fading + shrinking out, independent of the live list so a toggle never
+    //                   blocks the rebuild; each carries the slot it held so survivors slide over it.
+    //  _clockSlotFrom + _clockSlideStart: captured source slot per ring + when the recompaction slide began,
+    //                   re-snapshotted from CURRENT animated positions on every toggle so nothing teleports.
+    //  _clockAnimSeq:   gates the single shared animation rAF loop.
     private _clockGrowStart = new Map<ChartTarget, number>();
     private _clockExiting: { data: ClockData; slot: number; start: number; h0: number }[] = [];
     private _clockSlotFrom = new Map<ChartTarget, number>();
     private _clockSlideStart = 0;
     private _clockAnimSeq = 0;
     //Period-change reload: every ring shrinks to 0 and holds there while the new window's data is fetched,
-    //then grows back up once it lands — so the dial never pops abruptly from old data to new. 0 = idle.
+    //then grows back up once it lands, so the dial never pops abruptly from old data to new. 0 = idle.
     //_clockReloadWindowStartMs is the new window's series-start anchor, captured when the reload begins: the
     //grow only fires once the relevant change-series fetch keys carry THIS start (the now/week store rebuilds
     //eagerly from stale series at the new geometry, so non-null alone never proves the data is fresh).
@@ -398,8 +398,8 @@ export class HeliosCard extends LitElement
             throw new Error('Invalid HELIOS configuration');
         }
         this.config = { ...config };
-        //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, not
-        //the old config period keys, so setConfig no longer seeds it.
+        //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, so
+        //setConfig doesn't seed it.
         this._warnIfLegacyEntityKeys(config);
     }
 
@@ -427,8 +427,8 @@ export class HeliosCard extends LitElement
     }
 
     //Timeline mode selector (Now / 1 week / 1 month / 1 year). Derives the window from the mode spec, applies
-    //it (drops + rebuilds the store at the mode's cadence), persists, and — when in clock mode, where the band
-    //stays visible — replays the dial grow so the change animates.
+    //it (drops + rebuilds the store at the mode's cadence), persists, and (when in clock mode, where the band
+    //stays visible) replays the dial grow so the change animates.
     private _setTimelineMode(mode: TimelineMode): void
     {
         if (this._timelineMode === mode) { return; }
@@ -473,7 +473,7 @@ export class HeliosCard extends LitElement
     };
 
     //Recorder period for the energy change-series, per the active mode (5-min for Now, hourly for a week,
-    //daily for month/year) — so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
+    //daily for month/year), so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
     get _storeFetchPeriod(): StatPeriod { return modeFetchPeriod(this._timelineMode, this.config); }
 
     //Whether weather (irradiance + cloud) is offered in the active mode. Off for month/year (Open-Meteo only
@@ -520,7 +520,7 @@ export class HeliosCard extends LitElement
     }
 
     //Clock mode home colour: equal-size slices, one per active filter (3 filters -> thirds), each in its
-    //metric colour — a pure legend of the selected metrics, no averaging. One filter = a solid block.
+    //metric colour: a pure legend of the selected metrics, no averaging. One filter = a solid block.
     private _updateClockHomeAppearance(): void
     {
         if (!this._engine)
@@ -528,7 +528,7 @@ export class HeliosCard extends LitElement
             return;
         }
         //On home hover/tap the engine gives the prism the focused-bar treatment (glow + white edge + brighter
-        //roof) — the same effect as a tapped histogram bar — without dimming the cylinders.
+        //roof), the same effect as a tapped histogram bar, without dimming the cylinders.
         const hl = this._clockHomeHover;
         const colors = this._clockTargets.map(t => clockTargetMeta(this, t).color);
         if (colors.length === 0)
@@ -837,19 +837,6 @@ export class HeliosCard extends LitElement
         //Restore the saved view mode + selected chip once coords resolve (idempotent; retries until ready).
         this._restoreUiState();
 
-        //LiDAR mode requires a configured local nDSM; if it's removed (or never was), fall back to scene.
-        if (this._viewMode === 'lidar' && !hasLocalLidar(this.config))
-        {
-            this._viewMode = 'scene';
-        }
-
-        //Keep the engine's wireframe in step with the view mode. _setViewMode handles live switches, but a card
-        //that restores straight into the LiDAR view needs it turned on once the engine is ready (idempotent).
-        if (this._engine)
-        {
-            this._engine.setWireframe(this._viewMode === 'lidar');
-        }
-
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
         //(one hash compare), ~50 ms for a full 480 × 7 bucketization + forecast pass on a real refresh.
@@ -865,7 +852,7 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_selectedTime')
                 || _changedProperties.has('hass')
                 //Energy/PV data lands via callWS subscriptions that requestUpdate() WITHOUT touching hass,
-                //but they rebuild the unified store — so watch it too, else the default (PV) home never picks
+                //but they rebuild the unified store, so watch it too, else the default (PV) home never picks
                 //up its colour + per-source bands until the user clicks a chip.
                 || _changedProperties.has('_unifiedStore')))
         {
@@ -892,12 +879,12 @@ export class HeliosCard extends LitElement
                 this._rebuildClockData();
             }
             //Reload grow: once the new window's data source is ready (the store for now/week, the hourly
-            //profile for month/year), grow the shrunk rings back up — scheduled for the end of the shrink so
+            //profile for month/year), grow the shrunk rings back up, scheduled for the end of the shrink so
             //it always reads down-then-up.
             if (this._clockReloadStart)
             {
                 //month/year wait on the hourly profile (nulled up front on a window change, so non-null ⇒ fresh);
-                //now/week wait on every configured change-series having refetched for the new window — the store
+                //now/week wait on every configured change-series having refetched for the new window: the store
                 //rebuilds eagerly from stale series, so non-null alone would grow the OLD numbers.
                 const ready = clockNeedsHourly(this)
                     ? this._clockHourly !== null
@@ -1027,7 +1014,7 @@ export class HeliosCard extends LitElement
         //Custom entity: hourly history for the timeline curve + clock ring (fire-and-forget; keyed so an
         //unchanged window is a no-op).
         void refreshCustomEntity(this);
-        //Decoupled hourly clock profile — only does work in clock mode on a long (month/year) window; clears
+        //Decoupled hourly clock profile: only does work in clock mode on a long (month/year) window; clears
         //itself otherwise. Keyed so an unchanged window is a no-op.
         void refreshClockHourly(this);
         //Solar forecast: read natively from HA's Energy dashboard (energy/solar_forecast). Non-fatal; with
@@ -1066,9 +1053,9 @@ export class HeliosCard extends LitElement
 
 
     //Resolve the active theme polarity, used to drive the `theme-dark` / `theme-light` class on the card. The
-    //basemap's dark tint and every theme colour follow that class in CSS, so this no longer pushes anything to
-    //the engine. Authoritative: hass.themes.darkMode; the getComputedStyle fallback covers ancient HA builds
-    //and custom themes that scope --primary-background-color below :host (only the fallback is cached).
+    //basemap's dark tint and every theme colour follow that class in CSS, so this pushes nothing to the engine.
+    //Authoritative: hass.themes.darkMode; the getComputedStyle fallback covers older HA builds and custom
+    //themes that scope --primary-background-color below :host (only the fallback is cached).
     private _computeIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
     {
         if (themesObj && typeof themesObj.darkMode === 'boolean')
@@ -1106,7 +1093,7 @@ export class HeliosCard extends LitElement
 
 
     //One sunrise/sunset marker: a glyph + local time pinned just OUTSIDE the arc at the horizon crossing
-    //(offset radially out from the home so it clears the arc line). Null crossing (polar day/night) → nothing.
+    //(offset radially out from the home so it clears the arc line). Null crossing (polar day/night) -> nothing.
     private _renderSunCrossing(
         cross:   { x: number; y: number; time: Date } | null,
         home:    { x: number; y: number },
@@ -1195,7 +1182,7 @@ export class HeliosCard extends LitElement
             && pvActiveRate !== null
             && (!pvScrubFuture || isPvPredicted)
             //Scrub to an era with no production (no panels yet, or a flat 0) hides the chip AND its leader
-            //together — a stale 0 used to leave the leader dangling to the home.
+            //together, so a stale 0 never leaves the leader dangling to the home.
             && (!pvScrubbing || pvActiveRate.value > 0);
 
         //User-configured decimal precision, applied to every chip readout (kW/kWh).
@@ -1464,7 +1451,7 @@ export class HeliosCard extends LitElement
         const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
         const customLeaderColor = resolveUiColor(customEntityColor(this.config), '#f44336');
         const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
-        //Value at the active instant (scrub target in the past, else live now), in WATTS, shown as kW — never
+        //Value at the active instant (scrub target in the past, else live now), in WATTS, shown as kW, never
         //an energy meter's lifetime total (customChipWatts differentiates cumulative energy to average power).
         const customScrubMs = (!this._isLiveMode && this._selectedTime !== null) ? this._selectedTime.getTime() : null;
         const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customEntityHistory, customScrubMs);
@@ -1542,7 +1529,7 @@ export class HeliosCard extends LitElement
         let sunRayTargetY = sunScene?.home.y ?? 0;
         //Anchor the ray to the nearest point of the PV chip's stadium outline (centred at pvLabel, straight
         //middle + two end-caps of radius PV_HALF_HEIGHT_PX) so it glides along the outline as the sun arcs.
-        //Only when the chip is actually shown — scrubbing into the future hides it, so the ray falls back to the
+        //Only when the chip is actually shown: scrubbing into the future hides it, so the ray falls back to the
         //home instead of pointing at the vanished chip's slot.
         if (layout && sunScene && showPvLabel)
         {
@@ -1589,7 +1576,6 @@ export class HeliosCard extends LitElement
             cameraLocked      ? 'camera-locked'  : '',
             this.preview      ? 'helios-edit'    : '',
             this._viewMode === 'clock' ? 'mode-clock' : '',
-            this._viewMode === 'lidar' ? 'mode-lidar' : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -1618,7 +1604,7 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                ${hasHomeCoords && this._timeRange && (this._viewMode === 'scene' || this._viewMode === 'lidar') ? html`
+                ${hasHomeCoords && this._timeRange && this._viewMode === 'scene' ? html`
                     <div
                         class="time-bar"
                         @pointerdown=${this._onTimelinePointerDown}
@@ -1650,29 +1636,23 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Period-mode band: a separate strip BELOW the timeline (own card styling — same width,
+                <!--  Period-mode band: a separate strip BELOW the timeline (own card styling, same width,
                       radius and themed border), holding the Now / 1 week / 1 month / 1 year selector. Stays
                       visible in clock mode too so the window can be changed from there.  -->
-                ${hasHomeCoords && (this._viewMode === 'scene' || this._viewMode === 'clock' || this._viewMode === 'lidar') ? html`
+                ${hasHomeCoords && (this._viewMode === 'scene' || this._viewMode === 'clock') ? html`
                     <div class="tb-band">
                         ${this._renderPeriodSelector()}
                     </div>
                 ` : nothing}
 
-<!--  Camera lock chip (top-left). Tapping flips the
-                      lock and asks the engine to persist the pose
-                      (bearing + pitch + lock flag) to localStorage for
-                      the next reload. No tooltip/label: the padlock
-                      glyph carries the meaning and tooltips are
-                      useless on touch.                              -->
+<!--  Top-left button rail: scene/clock view toggle plus the camera-lock chip. Tapping the lock
+                      flips it and asks the engine to persist the pose (bearing + pitch + lock flag) to
+                      localStorage for the next reload. Glyphs only, no labels: tooltips are useless on touch.  -->
                 ${hasHomeCoords ? (() => {
                     const railCameraLocked = this._isCameraLocked();
                     const lockIcon      = railCameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
                     const sceneOn       = this._viewMode === 'scene';
                     const clockOn       = this._viewMode === 'clock';
-                    const lidarOn       = this._viewMode === 'lidar';
-                    //The LiDAR mode button only appears when a local nDSM is configured.
-                    const lidarAvailable = hasLocalLidar(this.config);
                     return html`
                         <div class="overlay-top-left">
                             <button
@@ -1695,18 +1675,6 @@ export class HeliosCard extends LitElement
                             >
                                 <ha-icon icon="mdi:clock-outline"></ha-icon>
                             </button>
-                            ${lidarAvailable ? html`
-                                <button
-                                    type="button"
-                                    class="overlay-btn ${lidarOn ? 'is-on' : ''}"
-                                    aria-pressed=${lidarOn ? 'true' : 'false'}
-                                    title="LiDAR"
-                                    data-view="lidar"
-                                    @click=${this._onViewModeClick}
-                                >
-                                    <ha-icon icon="mdi:satellite-variant"></ha-icon>
-                                </button>
-                            ` : nothing}
                             <button
                                 type="button"
                                 class="overlay-btn ${railCameraLocked ? 'is-on' : ''}"
@@ -1720,7 +1688,7 @@ export class HeliosCard extends LitElement
                 })() : nothing}
 
                 <!--  Right-hand metric rail (clock mode): one button per configured metric, stacked with no
-                      gaps. Multi-select FILTERS — each active metric adds a concentric ring; the active ones
+                      gaps. Multi-select FILTERS: each active metric adds a concentric ring; the active ones
                       fill with their own colour.  -->
                 ${hasHomeCoords && this._viewMode === 'clock' ? (() => {
                     const targets = availableClockTargets(this);
@@ -1750,13 +1718,9 @@ export class HeliosCard extends LitElement
                     `;
                 })() : nothing}
 
-                <!--  Solar arc, BACK pass. Renders only the dotted
-                      below-horizon segments (the sun's path through
-                      the underside of the celestial sphere), so the
-                      home and its chips read in front of the night
-                      half of the loop. Above-horizon segments, the
-                      ray, the disc and the W/m² readout move to the
-                      FRONT pass at the end of the overlay stack.  -->
+                <!--  Solar arc, BACK pass: only the dotted below-horizon segments (the sun's path under the
+                      celestial sphere), so the home + chips read in front of the night half of the loop.
+                      Above-horizon segments, ray, disc and W/m² readout are in the FRONT pass below.  -->
                 ${showSun && arcSegmentsBack.length > 0 ? html`
                     <svg
                         class="solar-svg solar-svg-back"
@@ -1787,17 +1751,9 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
 
-                <!--  PV → home animated leader. Vertical dashed line
-                      from the PV chip's bottom edge down to the home
-                      marker, painted in the configured PV colour and
-                      flowing toward the home at a pace proportional
-                      to live production over theoretical peak. Same
-                      dash vocabulary as the battery leader, no L bend
-                      because PV and the home share the same X anchor
-                      so a straight segment is the right vocabulary.
-                      Hidden when no PV entity is configured.  -->
-                <!--  Empty slot kept so the home stack stays
-                      vertically anchored for the leaders below. -->
+                <!--  Empty slot kept so the home stack stays vertically anchored for the leaders below.
+                      The PV leader itself (straight dashed line, no L bend since PV and home share the X
+                      anchor, flowing home-ward at a pace proportional to live production) renders below.  -->
                 ${nothing}
 
                 ${showPvLabel ? (() => {
@@ -1820,11 +1776,8 @@ export class HeliosCard extends LitElement
                             y2=${pvHomeEnd.y}
                         ></line>
                         ${!pvIdle ? svg`
-                            <!--  Moving bead, a small filled disc rides
-                                  the leader from the PV chip to the
-                                  home, at a speed proportional to live
-                                  production. No rotate="auto" needed
-                                  since a disc has no orientation.  -->
+                            <!--  Filled disc riding the leader from the PV chip to the home, speed
+                                  proportional to live production. No rotate="auto": a disc has no orientation.  -->
                             <circle
                                 class="pv-home-leader-bead"
                                 r="3"
@@ -1856,11 +1809,8 @@ export class HeliosCard extends LitElement
 
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
-                        <!--
-                            SoC → Power chip, solid straight vertical
-                            hairline between the two stacked chips. No
-                            animation: SoC is a level, not a flow.
-                        -->
+                        <!--  SoC -> Power chip: solid vertical hairline between the two stacked chips. No
+                              animation, SoC is a level, not a flow.  -->
                         ${socLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
@@ -1868,7 +1818,7 @@ export class HeliosCard extends LitElement
                                 d="${socLeaderPath}"
                             ></path>
                         ` : nothing}
-                        <!--  SoC → home static connector when the SoC chip is the only battery chip. -->
+                        <!--  SoC -> home static connector when the SoC chip is the only battery chip. -->
                         ${socHomeLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
@@ -1876,12 +1826,8 @@ export class HeliosCard extends LitElement
                                 d="${socHomeLeaderPath}"
                             ></path>
                         ` : nothing}
-                        <!--
-                            SoC → home, the battery→home discharge
-                            flow: solid rounded-L + bead toward the
-                            home, drawn only while the battery is
-                            discharging to feed the house.
-                        -->
+                        <!--  SoC -> home discharge flow: solid rounded-L + bead toward the home, drawn only
+                              while the battery is discharging to feed the house.  -->
                         ${dischargeLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
@@ -1902,12 +1848,8 @@ export class HeliosCard extends LitElement
                                 </circle>
                             ` : nothing}
                         ` : nothing}
-                        <!--
-                            PV → Power chip, only while charging: an
-                            inverted L (down then right) in the PV
-                            colour with a bead flowing toward the
-                            battery, so the user sees the PV feeding it.
-                        -->
+                        <!--  PV -> Power chip, only while charging: an inverted L (down then right) in the PV
+                              colour, bead flowing toward the battery so the user sees PV feeding it.  -->
                         ${pvToBatteryPath ? svg`
                             <path
                                 class="pv-home-leader-line"
@@ -1958,18 +1900,9 @@ export class HeliosCard extends LitElement
                     ` : nothing}
                 ` : nothing}
 
-                <!--  Grid chip on the LEFT of the home, sitting on the
-                      cluster's centre row. A single normal-size pill
-                      that shows the ACTIVE flow only: when importing it
-                      reads consumption blue with the import value and a
-                      grid → home bead, when exporting it flips to return
-                      purple with the export value and a home → grid
-                      bead. The dominant side wins when both are live.
-                      Same compact recipe as the other chips so the text
-                      stays crisp under camera rotation.               -->
                 <!--  Custom-entity chip (top-left, above grid). Red leader to the home; bead flows home ->
                       chip on a positive value, chip -> home on a negative one. Shown only when the entity is
-                      configured AND has a real value at the active instant — scrubbing into a gap (no history,
+                      configured AND has a real value at the active instant; scrubbing into a gap (no history,
                       or a flat 0 before the entity existed) drops the chip + leader instead of an empty pill.  -->
                 ${hasHomeCoords && layout !== null && customLive !== null && customW !== null
                   && (customScrubMs === null || customW !== 0) ? html`
@@ -2001,12 +1934,15 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
+                <!--  Grid chip on the LEFT of the home: one pill showing the ACTIVE flow only. Importing reads
+                      consumption blue with a grid -> home bead; exporting flips to return purple with a
+                      home -> grid bead. The dominant side wins when both are live.  -->
                 ${hasHomeCoords && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d=${gridLeaderPath} />
                         <!--  Single bead on the active flow. Import
-                              flows grid → home (default traversal),
-                              export flows home → grid (keyPoints 1;0
+                              flows grid -> home (default traversal),
+                              export flows home -> grid (keyPoints 1;0
                               reverses it). Dropped when the active side
                               is idle, no misleading motion.           -->
                         ${gridBeadDur !== null ? (gridImporting ? svg`
@@ -2035,14 +1971,9 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Solar arc, FAR-FRONT pass. Above-horizon
-                      segments whose nearness is below the 0.5 mid-
-                      point: the arc has already arched away from the
-                      eye but is still in front of the sky dome's
-                      back wall. These render BEHIND the home-anchored
-                      chips so a chip cluster doesn't get crossed by
-                      an arc segment that visually sits "in the back
-                      half" of the sky. -->
+                <!--  Solar arc, FAR-FRONT pass: above-horizon segments with nearness below the 0.5 midpoint
+                      (arched away from the eye but still ahead of the sky dome's back wall). These render
+                      BEHIND the home-anchored chips so the "back half" of the arc doesn't cross a chip.  -->
                 ${showSun && arcSegmentsFrontFar.length > 0 ? html`
                     <svg
                         class="solar-svg solar-svg-front-far"
@@ -2070,14 +2001,9 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                <!--  Solar arc, NEAR-FRONT pass. Above-horizon
-                      segments whose nearness is at or above 0.5: the
-                      part of the arc that is closer to the camera
-                      than the home. These render IN FRONT of the
-                      home-anchored chips + leaders so the live arc
-                      always reads on top of the HUD on its near side.
-                      The card is named Helios, the sun must dominate
-                      visually wherever it is. -->
+                <!--  Solar arc, NEAR-FRONT pass: above-horizon segments with nearness at or above 0.5 (closer
+                      to the camera than the home). These render IN FRONT of the home chips + leaders so the
+                      live arc reads on top of the HUD on its near side, keeping the sun visually dominant.  -->
                 ${showSun && arcSegmentsFrontNear.length > 0 ? html`
                     <svg
                         class="solar-svg solar-svg-front-near"
@@ -2105,14 +2031,10 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                <!--  Ray + bead live in their own SVG below the chip
-                      family (z 7 < pv-pct-label z 8) so the PV chip's
-                      background always occludes the ray endpoint at
-                      the chip border. The sun disc stays in the
-                      depth-split SVG below so it passes in front of /
-                      behind the home cluster depending on camera
-                      bearing, while the ray never rides over the
-                      production chip. -->
+                <!--  Ray + bead in their own SVG below the chip family (z 7 < pv-pct-label z 8) so the PV
+                      chip occludes the ray endpoint at its border. The sun disc stays in the depth-split SVG
+                      below (in front of / behind the home cluster by camera bearing), so the ray never rides
+                      over the production chip.  -->
                 ${showSun && showRay ? html`
                     <svg class="solar-svg solar-ray-svg"
                          style="--solar-daylight:${sunScene!.daylight}">
@@ -2123,12 +2045,8 @@ export class HeliosCard extends LitElement
                             x2=${sunRayTargetX}    y2=${sunRayTargetY}
                             stroke=${sunColor}
                         ></line>
-                        <!--  Bead uses an absolute-coordinate path
-                              with cx / cy left at the default 0
-                              origin, same vocabulary as the PV
-                              leader bead. Single-attribute updates
-                              keep the SMIL animation continuous
-                              during camera rotation. -->
+                        <!--  Bead rides an absolute-coordinate path with cx / cy at the default 0 origin.
+                              Single-attribute updates keep the SMIL animation continuous during rotation.  -->
                         <circle
                             class="solar-ray-bead"
                             r="3"
@@ -2213,11 +2131,8 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                <!--  W/m² label, pinned above the sun disc. Same
-                      visual language as the cloud-cover label, both
-                      read as a matched pair of cartographic readouts.
-                      Lands after the front-pass arc so the readout
-                      sits on top of the sun glyph as well.  -->
+                <!--  W/m² label, pinned above the sun disc (matched pair with the cloud-cover label). Lands
+                      after the front-pass arc so the readout sits on top of the sun glyph too.  -->
                 ${showSunLabel ? html`
                     <div
                         class="solar-pct-label ${this._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
@@ -2250,7 +2165,7 @@ export class HeliosCard extends LitElement
                     const HALF    = HeliosCard.CHIP_HALF_W_PX;                  //irradiance chip half-width
                     const CONN    = 16;                                         //leader length bridging the edges
                     const CLOUD_W = 76;                                         //cloud chip content-width upper bound
-                    const far     = HALF + CONN + CLOUD_W;                      //sun.x → the cloud's far edge
+                    const far     = HALF + CONN + CLOUD_W;                      //sun.x -> the cloud's far edge
                     const roomRight = cardW <= 0 || sx + far <= cardW - 8;
                     const roomLeft  = sx - far >= 8;
                     const side      = roomRight ? 1 : (roomLeft ? -1 : (sx < cardW / 2 ? 1 : -1));
@@ -2286,12 +2201,9 @@ export class HeliosCard extends LitElement
 
 
 
-                <!--  Home pill: the hub the whole chip cluster orbits,
-                      painted at the projected home centre with no
-                      drop-leader so every chip leader docks straight
-                      against its border. Hosts two stacked lines: the
-                      home glyph on top and the live home consumption
-                      below.                                           -->
+                <!--  Home pill: the hub the chip cluster orbits, at the projected home centre with no
+                      drop-leader so every chip leader docks straight against its border. Two stacked lines:
+                      the home glyph on top, the live home consumption below.  -->
                 ${hasHomeCoords && layout !== null ? html`
                     <div
                         class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this._homeHover ? 'is-hovered' : ''} ${this._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
@@ -2383,19 +2295,23 @@ export class HeliosCard extends LitElement
         }
         return false;
     }
-    //Lock-button click: flip the engine's lock state; the engine persists bearing, pitch and lock flag to
-    //localStorage (HA's lovelace doesn't persist config-changed from a live card). The next reload restores.
-    private _setViewMode(mode: 'scene' | 'clock' | 'lidar'): void
+    //Switch between scene (3D view) and clock (hourly ring dial) modes. Resets clock animation state so the
+    //dial enters/leaves cleanly, seeds/restores the filter set and home prism, persists, and kicks the
+    //decoupled hourly fetch (clock only). No-op when already in the requested mode.
+    private _setViewMode(mode: 'scene' | 'clock'): void
     {
         if (this._viewMode === mode)
         {
             return;
         }
-        //Reset any clock animation state so the dial enters/leaves cleanly.
+        //Reset any clock animation state so the dial enters/leaves cleanly. Ceiling eases reset too, so entry
+        //snaps to the target scale instead of easing from a stale one.
         this._clockAnimSeq++;
         this._clockExiting = [];
         this._clockSlotFrom.clear();
         this._clockSlideStart = 0;
+        this._clockCeilAnim.clear();
+        this._clockCeilEase = false;
         if (mode === 'clock')
         {
             //Entering clock with no saved filters: seed from the current chip so a ring shows immediately.
@@ -2408,9 +2324,8 @@ export class HeliosCard extends LitElement
             const now = Date.now();
             this._clockGrowStart.clear();
             this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
-            //Home prism becomes the dial anchor: render it alone, sliced by the active filters. No wireframe.
+            //Home prism becomes the dial anchor: render it alone, sliced by the active filters.
             this._engine?.setHomeOnly(true);
-            this._engine?.setWireframe(false);
             this._updateClockHomeAppearance();
             this._viewMode = mode;
             this._persistUiState();
@@ -2421,12 +2336,8 @@ export class HeliosCard extends LitElement
             return;
         }
         //Leaving clock: restore the full scene + the chart-driven home colour, clear the ground guide overlay.
-        //The nDSM wireframe shows only in the LiDAR view (covers entering scene/clock from lidar too).
         this._engine?.setHomeOnly(false);
-        this._engine?.setWireframe(mode === 'lidar');
         this._engine?.setGroundOverlay('');
-        this._clockCeilAnim.clear();
-        this._clockCeilSig = null;
         this._clockHomeHover = false;
         this._updateHomeAppearance(false);
         if (this._clockTargets.length > 0)
@@ -2443,13 +2354,14 @@ export class HeliosCard extends LitElement
     //Rail button delegate: the clicked element carries its mode in data-view.
     private _onViewModeClick = (e: Event): void =>
     {
-        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | 'lidar' | undefined;
+        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | undefined;
         if (view) { this._setViewMode(view); }
     };
 
     //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own concentric
-    //area; the first stays the timeline's target for when scene mode resumes. Order is preserved (append on
-    //add). Adding grows the new area in; removing shrinks + fades it out while the survivors slide to recompact.
+    //ring of hour bars; the first stays the timeline's target for when scene mode resumes. Order is preserved
+    //(append on add). Adding grows the new ring in; removing shrinks + fades it while the survivors slide to
+    //recompact and their shared-unit ceiling eases to the new scale.
     private _toggleClockTarget = (target: ChartTarget): void =>
     {
         const i = this._clockTargets.indexOf(target);
@@ -2482,6 +2394,8 @@ export class HeliosCard extends LitElement
             this._setChartTarget(this._clockTargets[0]);
         }
         this._persistUiState();
+        //A toggle rescales the shared-unit survivors: ask paintClock to ease the ceiling change rather than snap.
+        this._clockCeilEase = true;
         this._clockAnimate();
     };
 
@@ -2647,8 +2561,7 @@ export class HeliosCard extends LitElement
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object')
             {
-                if (parsed.viewMode === 'scene' || parsed.viewMode === 'clock'
-                    || (parsed.viewMode === 'lidar' && hasLocalLidar(this.config)))
+                if (parsed.viewMode === 'scene' || parsed.viewMode === 'clock')
                 {
                     this._viewMode = parsed.viewMode;
                 }
@@ -2729,10 +2642,10 @@ export class HeliosCard extends LitElement
     }
 
     //A present ring's 0..1 height for this frame, by explicit phase:
-    //  GROW   — a grow start exists. While it's scheduled in the future (the reload hold), it sits at 0;
-    //           from the start onward it eases up to full.
-    //  SHRINK — no grow start but a reload is in progress: ease down from full to 0, then hold there.
-    //  REST   — neither: full height.
+    //  GROW:   a grow start exists. While it's scheduled in the future (the reload hold), it sits at 0;
+    //          from the start onward it eases up to full.
+    //  SHRINK: no grow start but a reload is in progress: ease down from full to 0, then hold there.
+    //  REST:   neither: full height.
     private _clockRingHeight(target: ChartTarget, now: number): number
     {
         const gs = this._clockGrowStart.get(target);
@@ -2751,6 +2664,8 @@ export class HeliosCard extends LitElement
         if (this._clockSlideStart && now - this._clockSlideStart < CLOCK_GROW_MS) { return true; }
         //A future grow start (reload hold) keeps it active until that grow finishes.
         for (const t of this._clockGrowStart.values()) { if (now - t < CLOCK_GROW_MS) { return true; } }
+        //A ceiling rescale ease still running.
+        for (const a of this._clockCeilAnim.values()) { if (a.start && now - a.start < CLOCK_GROW_MS) { return true; } }
         return false;
     }
 
@@ -2763,6 +2678,8 @@ export class HeliosCard extends LitElement
             const now = Date.now();
             this._clockExiting = this._clockExiting.filter(e => now - e.start < CLOCK_GROW_MS);
             for (const [t, s] of this._clockGrowStart) { if (now - s >= CLOCK_GROW_MS) { this._clockGrowStart.delete(t); } }
+            //Settle finished ceiling eases to rest (start 0) so they stop driving the loop but keep their value.
+            for (const [, a] of this._clockCeilAnim) { if (a.start && now - a.start >= CLOCK_GROW_MS) { a.from = a.to; a.start = 0; } }
             if (this._clockSlideStart && now - this._clockSlideStart >= CLOCK_GROW_MS)
             {
                 this._clockSlideStart = 0;
@@ -2783,6 +2700,8 @@ export class HeliosCard extends LitElement
             this._clockSlideStart = 0;
             this._clockReloadStart = 0;
             this._clockSlotFrom.clear();
+            this._clockCeilAnim.clear();
+            this._clockCeilEase = false;
             this.paintClock();
             return;
         }
@@ -2802,7 +2721,7 @@ export class HeliosCard extends LitElement
         requestAnimationFrame(() => this.paintClock());
     }
 
-    //Project the rings for one frame and write them onto the overlay DOM: the area SVG, the ground-laid hour
+    //Project the rings for one frame and write them onto the overlay DOM: the bar SVG, the ground-laid hour
     //labels, and the clamped tooltip. Called every transform frame (init.ts) and during the grow/slide/exit
     //animation. Public so the engine's per-frame callback can reach it.
     public paintClock(): void
@@ -2828,29 +2747,29 @@ export class HeliosCard extends LitElement
             const p = easeOutCubic((now - e.start) / CLOCK_GROW_MS);
             rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
         }
-        //Ease the per-unit ceiling toward the present rings' target so a filter TOGGLE rescales the survivors
-        //smoothly. The ease fires only when the active filter set changed; entry, data loading and period
-        //changes snap straight to the target (otherwise the bars flash at full height while it settles).
+        //Per-unit ceiling for this frame. A toggle (via _clockCeilEase) eases the survivors from their current
+        //displayed ceiling to the new target; everything else (entry, data load, period change) snaps. An ease
+        //already in flight is left to run, so it never gets re-snapped on the next frame.
         const targetCeil = clockUnitCeilings(this._clockData);
-        const sig     = this._clockTargets.join(',');
-        const toggled = this._clockCeilSig !== null && this._clockCeilSig !== sig;
-        this._clockCeilSig = sig;
+        const ease       = this._clockCeilEase;
+        this._clockCeilEase = false;
         const dispCeil = new Map<string, number>();
+        const ceilAt = (a: { from: number; to: number; start: number }): number =>
+            a.start === 0 ? a.to : a.from + (a.to - a.from) * easeOutCubic((now - a.start) / CLOCK_GROW_MS);
         for (const u of [...this._clockCeilAnim.keys()]) { if (!targetCeil.has(u)) { this._clockCeilAnim.delete(u); } }
         for (const [u, to] of targetCeil)
         {
             const prev = this._clockCeilAnim.get(u);
-            if (toggled && prev && prev.to !== to)
+            if (!prev)
             {
-                const cur = prev.from + (prev.to - prev.from) * easeOutCubic((now - prev.start) / CLOCK_GROW_MS);
-                this._clockCeilAnim.set(u, { from: cur, to, start: now });
+                this._clockCeilAnim.set(u, { from: to, to, start: 0 });            //first sight: rest at target
             }
-            else if (!prev || !toggled)
+            else if (prev.to !== to)
             {
-                this._clockCeilAnim.set(u, { from: to, to, start: now });   //snap (entry / data / period change)
+                //Target moved: ease from the currently displayed value on a toggle, else snap.
+                this._clockCeilAnim.set(u, ease ? { from: ceilAt(prev), to, start: now } : { from: to, to, start: 0 });
             }
-            const a = this._clockCeilAnim.get(u)!;
-            dispCeil.set(u, a.from + (a.to - a.from) * easeOutCubic((now - a.start) / CLOCK_GROW_MS));
+            dispCeil.set(u, ceilAt(this._clockCeilAnim.get(u)!));
         }
         const tc = pickTranslations(this.hass?.language).clock;
         const frame = projectClockFrame(
@@ -2937,8 +2856,14 @@ export class HeliosCard extends LitElement
         return !!h && Math.hypot(x - h.x, y - h.y) <= h.r;
     }
 
-    private _onClockHoverEnd = (): void =>
+    private _onClockHoverEnd = (e: PointerEvent): void =>
     {
+        //Touch fires pointerleave on finger-up, right after the tap toggled the home/slot: ignore it so a tap
+        //isn't cancelled the instant it lands. Touch state is sticky and managed by _onClockTapEnd.
+        if (e.pointerType !== 'mouse')
+        {
+            return;
+        }
         if (this._clockHomeHover)
         {
             this._clockHomeHover = false;
@@ -2968,7 +2893,7 @@ export class HeliosCard extends LitElement
         this._clockTapStartY = e.clientY - rect.top;
     };
 
-    //Touch release: if the finger barely moved it's a tap — hit-test and toggle a sticky tooltip on the
+    //Touch release: if the finger barely moved it's a tap, hit-test and toggle a sticky tooltip on the
     //tapped cylinder (or dismiss when tapping empty space). A real drag (moved past the threshold) rotated
     //the camera and is ignored here.
     private _onClockTapEnd = (e: PointerEvent): void =>
@@ -3082,7 +3007,7 @@ export class HeliosCard extends LitElement
         `;
     }
 
-    //Home-hover tooltip: the window aggregate (energy summed, other units averaged) for every active filter —
+    //Home-hover tooltip: the window aggregate (energy summed, other units averaged) for every active filter,
     //the same rows as the hour tooltip but totalled over the whole selected period instead of one hour.
     private _renderClockHomeTooltip(): TemplateResult | typeof nothing
     {
@@ -3122,6 +3047,8 @@ export class HeliosCard extends LitElement
         `;
     }
 
+    //Lock-button click: flip the engine's lock state. The engine persists bearing, pitch and lock flag to
+    //localStorage (HA's lovelace doesn't persist config-changed from a live card), so the next reload restores.
     private _onCameraLockToggle = (): void =>
     {
         if (!this._engine)
@@ -3132,5 +3059,5 @@ export class HeliosCard extends LitElement
         this.requestUpdate();
     };
 
-    static styles = [heliosCardStyles, heliosTimelineStyles, heliosCardEnergyClockCss, heliosCardLidarCss];
+    static styles = [heliosCardStyles, heliosTimelineStyles, heliosCardEnergyClockCss];
 }

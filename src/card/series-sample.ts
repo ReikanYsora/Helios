@@ -1,5 +1,5 @@
-//Series sampling helpers shared across the timeline charts: generic linear interpolation and the PV-specific
-//value-at-instant resolver (observed history -> LTS calibration -> forecast, with a below-horizon floor).
+//Series sampling helpers shared across the timeline charts: generic linear interpolation and the PV value-at-instant
+//resolver (observed history -> LTS calibration -> forecast, with a below-horizon floor).
 
 import type { ChartHost } from './charts';
 import { getHomeCoords } from './init';
@@ -63,7 +63,7 @@ export function pvValueAtTime(
     targetMs: number,
     //Optional per-source history override (multi-source tooltip rows). Reads this series instead of the aggregated
     //`_pvHistory`; the calibration/LTS and forecast fallbacks are skipped in override mode (no per-entity LTS yet),
-    //so a per-entity row reads "—" past its history's tail.
+    //so a per-entity row reads a dash past its history's tail.
     seriesOverride?: { times: Date[]; values: number[] },
 ): { value: number; unit: string; isPredicted: boolean }
 {
@@ -84,7 +84,7 @@ export function pvValueAtTime(
 
     //Hard zero when the sun is below the horizon at the cursor instant. Catches stale observed samples clamped
     //forward into the night, forecast pairs straddling sunrise/sunset leaking a few watts, and inverter standby
-    //readings (0.5-2 W) all night. Panels can't produce without sun, so we enforce that physical floor.
+    //readings all night. Panels can't produce without sun, so enforce that physical floor.
     const coords = getHomeCoords(host.config, host.hass);
     if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0)
     {
@@ -92,8 +92,8 @@ export function pvValueAtTime(
     }
 
     //Observed history. Cumulative entities differentiate the bracketing pair; power entities interpolate. Floor at
-    //zero so sensor/net-meter noise never shows "-2 W". Instants beyond the last observed sample fall through to the
-    //forecast pass: clamping interpAt would freeze the tooltip on yesterday's late-afternoon reading.
+    //zero so sensor/net-meter noise never shows a small negative. Instants beyond the last observed sample fall
+    //through to the forecast pass: clamping interpAt would freeze the tooltip on yesterday's late-afternoon reading.
     const hist = seriesOverride ?? host._pvHistory;
     const rawFirstMs = (hist && hist.times.length >= 1)
         ? hist.times[0].getTime()
@@ -139,9 +139,10 @@ export function pvValueAtTime(
             }
         }
     }
-    //Older past, before the head of the raw 6-hour window: fall back to the hourly LTS slot calibration fetched.
-    //LTS values are already in native power units, so interpolation is correct regardless of entity type. Skipped in
-    //`seriesOverride` mode (no per-entity LTS yet, override carries only the 6 h raw window) -> per-entity rows read "—".
+    //Older past, before the head of the raw 6-hour window: fall back to the hourly LTS slot calibration. LTS values
+    //are already in native power units, so interpolation is correct regardless of entity type. Skipped in
+    //`seriesOverride` mode (no per-entity LTS yet, override carries only the 6 h raw window), so per-entity rows read
+    //a dash.
     if (!seriesOverride)
     {
         const calib = host._pvCalibStats;
@@ -149,7 +150,7 @@ export function pvValueAtTime(
         {
             if (isCumulative)
             {
-                //_pvCalibStats carries the meter's cumulative `state` (kWh) per LTS bucket for energy sensors, NOT
+                //_pvCalibStats carries the meter's cumulative `state` (kWh) per LTS bucket for energy sensors, not
                 //power. Differentiate the bracketing pair into average power; reading cumulative straight through
                 //inflates the readout ~1000x.
                 for (let i = 1; i < calib.times.length; i++)
@@ -188,14 +189,14 @@ export function pvValueAtTime(
         }
     }
 
-    //Override mode has no per-source forecast yet, so stop on a future cursor and let the caller show "—". The
-    //aggregated path below stays unchanged for the headline forecast.
+    //Override mode has no per-source forecast yet, so stop on a future cursor and let the caller show a dash. The
+    //aggregated path below handles the headline forecast.
     if (seriesOverride)
     {
         return { value: NaN, unit: displayUnit, isPredicted: false };
     }
 
-    //Forecast for future hours: read the store's CORRECTED forecast at the cursor instant (same series the dotted
+    //Forecast for future hours: read the store's corrected forecast at the cursor instant (same series the dotted
     //curve draws), so the tooltip never disagrees with its line. Already cap-clipped and correction-applied.
     const store = host._unifiedStore;
     if (store)

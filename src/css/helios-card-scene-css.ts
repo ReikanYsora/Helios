@@ -2,66 +2,65 @@ import { css, unsafeCSS } from 'lit';
 import { GROUND_FADE_START } from '../engine/tiles';
 import { CUSTOM_ENTITY_COLOR } from '../constants';
 
-//Visual styles for HeliosCard. Grouped by feature (layout, timeline,
-//overlays, solar arc, tooltips).
+//Visual styles for HeliosCard, grouped by feature (layout, overlays, solar arc, home cluster).
 export const heliosCardStyles = css`
     :host
     {
         display: block;
         height:  100%;
+        /*  Shared chip/surface drop shadow, so every floating pill and themed plate reads at the same depth. */
+        --helios-shadow-chip: 0 1px 3px var(--shadow-color);
     }
 
     ha-card
     {
         position: relative;
         overflow: hidden;
-        /*  Card background follows the HA theme (the basemap disc fades into it at its edges), so the card
-            reads as a first-party tile rather than a black box. */
+        /*  Background follows the HA theme; the basemap disc fades into it at its edges. */
         background: var(--ha-card-background, var(--card-background-color, #fff));
-        /*  Clip the backdrop to the padding box so it stops inside the <ha-card> border instead of bleeding
-            under it and painting a corner that breaks HA's subtle frame. */
+        /*  Clip the backdrop to the padding box so it stops inside the border instead of painting a
+            corner outside HA's frame. */
         background-clip: padding-box;
-        /*  Container-query host so the kiosk breakpoint at the bottom reacts to the card's own width,
-            not the viewport (which would mis-fire with several cards side by side). See issue #33. */
+        /*  Container-query host so the kiosk breakpoint reacts to the card's own width, not the viewport
+            (which would mis-fire with several cards side by side). See issue #33. */
         container-type: inline-size;
         container-name: helios-card;
-        /*  Border + shadow come from <ha-card>'s own --ha-card-* tokens; border-radius stays because
-            overflow:hidden clips the full-bleed map to it. */
+        /*  border-radius stays because overflow:hidden clips the full-bleed map to it. */
         border-radius: var(--ha-card-border-radius, 12px);
         font-family: var(--ha-font-family-body, 'Roboto', sans-serif);
         height:     100%;
         width:      100%;
-        /*  Floor for layouts where the parent gives no explicit height (vertical-stack, panel, some
-            grids): without it height:100% collapses to the children's intrinsic height and the 3D map
-            area vanishes. 480 px gives the map ~330 px. Layouts that pass a height override this. */
+        /*  Floor for layouts that give no explicit height (vertical-stack, panel, some grids): without it
+            height:100% collapses to the children's intrinsic height and the map area vanishes. 480 px
+            gives the map ~330 px; layouts passing a height override this. */
         min-height: 480px;
-        /*  Stacking context so absolute z-index children stay scoped to the card and don't escape
-            above HA chrome on scroll. */
+        /*  Stacking context so absolute z-index children stay scoped to the card and don't escape above
+            HA chrome on scroll. */
         isolation: isolate;
     }
 
     #map-container
     {
         /*  Absolute + inset so the container fills the ha-card via containing-block dimensions (which
-            respect min-height). A percentage height would collapse to 0 under Masonry (min-height-only
-            floor); absolute works under every layout. Hosts the 2.5D renderer's ground holder + scene SVG.
-            overflow:hidden clips the tilted basemap canvas (which extends past the frame at low pitch) to
-            the card; perspective gives the rotateX/rotateZ ground transform its vanishing point. */
+            respect min-height); a percentage height collapses to 0 under Masonry. Hosts the renderer's
+            ground holder + scene SVG. overflow:hidden clips the tilted basemap canvas (which extends past
+            the frame at low pitch); perspective gives the rotateX/rotateZ ground transform its vanishing
+            point. */
         position: absolute;
-        /*  Bleed 1 px under the border (re-clipped by the card's overflow:hidden) to cover the
-            anti-alias seam where the black backdrop would peek at the rounded corners. */
+        /*  Bleed 1 px under the border (re-clipped by overflow:hidden) to cover the anti-alias seam at
+            the rounded corners. */
         inset: -1px;
         overflow: hidden;
         perspective: 1200px;
-        /*  Explicit z-index so the container (and its home prism) sits ABOVE the clock's flat-ground guide
-            layer (.clock-guide-svg, z-index 0) yet still below every HUD overlay (z-index 4+) and the clock
-            cylinders (.clock-svg, z-index 5). Lets the dial spokes/hub pass under the house. */
+        /*  z-index 1 keeps the container (and home prism) above the clock's ground guide layer (z 0) yet
+            below every HUD overlay (z 4+) and the clock cylinders (z 5), so dial spokes/hub pass under
+            the house. */
         z-index: 1;
     }
 
-    /*  Renderer ground holder: the tilted basemap tile canvas + edge fade, driven by a CSS 3D transform
-        (rotateX = pitch, rotateZ = bearing) the renderer writes each frame. preserve-3d keeps the canvas
-        in the parent's perspective space. */
+    /*  Ground holder: tilted basemap canvas + edge fade, driven by a CSS 3D transform (rotateX = pitch,
+        rotateZ = bearing) written each frame. preserve-3d keeps the canvas in the parent's perspective
+        space. */
     .scene-ground-holder
     {
         position: absolute;
@@ -69,24 +68,23 @@ export const heliosCardStyles = css`
         transform-style: preserve-3d;
         pointer-events: none;
     }
-    /*  Basemap tile canvas (CARTO Voyager). Positioned by the renderer's transform-origin + transform;
-        sized in JS to the stitched tile grid. One light style is fetched for both themes. */
+    /*  Basemap tile canvas. Positioned by the renderer's transform-origin + transform; sized in JS to the
+        stitched tile grid. One light style is fetched for both themes. */
     .ground
     {
         position: absolute;
         top: 0;
         left: 0;
     }
-    /*  Dark theme tints the (light) Voyager basemap to a dark map purely in CSS — invert + hue-rotate keep
-        it legible, brightness + low saturation keep it calm under the HUD. Reads better than swapping to a
-        separate dark tile set (too bright in light, too dark in dark). */
+    /*  Dark theme tints the light basemap to a dark map purely in CSS: invert + hue-rotate keep it
+        legible, brightness + low saturation keep it calm under the HUD. */
     ha-card.theme-dark .ground
     {
         filter: invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4);
     }
-    /*  Edge fade: same size + transform as the ground, a radial gradient that's transparent out to 90%
-        (GROUND_FADE_START) then dissolves to the themed card background, turning the square tile grid into
-        a soft disc that melts into the card. */
+    /*  Edge fade: same size + transform as the ground, a radial gradient transparent out to
+        GROUND_FADE_START (90%) then dissolving to the card background, turning the square tile grid into a
+        soft disc. */
     .ground-fade
     {
         position: absolute;
@@ -101,9 +99,8 @@ export const heliosCardStyles = css`
             var(--ha-card-background, var(--card-background-color, #fff)) 100%
         );
     }
-    /*  Screen-space scene SVG: the renderer repaints night-shade + cast shadows + extruded buildings into
-        it every frame. Full-size overlay above the ground, click-transparent (the HUD SVGs above own
-        their own pointer events). */
+    /*  Screen-space scene SVG: night-shade + cast shadows + extruded buildings repainted every frame.
+        Full-size overlay above the ground, click-transparent (the HUD SVGs own their pointer events). */
     .scene-svg
     {
         position: absolute;
@@ -113,19 +110,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 1;
     }
-    /*  LiDAR-view wireframe canvas: topmost layer (DOM order keeps it over the scene SVG), sized via its
-        width/height attrs at devicePixelRatio while the style box maps it to the container. Click-transparent;
-        lives inside #map-container, so mode-lidar's selective hide (direct ha-card children only) leaves it. */
-    .scene-wireframe-canvas
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-    }
-    /*  Clock-mode ground guide overlay: screen-space, sits between the basemap and the home prism (DOM order +
-        scene-svg's z-index 1 keep it under the home), so the home reads over the hub + hour spokes. */
+    /*  Clock-mode ground guide overlay: screen-space, between the basemap and home prism (DOM order +
+        scene-svg z 1 keep it under the home), so the home reads over the hub + hour spokes. */
     .scene-ground-overlay
     {
         position: absolute;
@@ -144,11 +130,11 @@ export const heliosCardStyles = css`
 
 
     /*  ============================================================
-        HUD chips: ONE shared box recipe for all six floating pills so they
-        render at identical height, min-width, padding and font. Only the
-        DISTINCT bits (border-colour, z-index, colour, pointer behaviour,
-        active-glow, ha-icon, per-chip states) live in the per-chip rules
-        below. Do not re-declare the box geometry per chip.
+        HUD chips: ONE shared box recipe for every floating pill so they
+        match in height, width, padding and font. Only the distinct bits
+        (border-colour, z-index, pointer behaviour, active-glow, per-chip
+        states) live in the per-chip rules below; don't re-declare the box
+        geometry per chip.
         ============================================================ */
     .pv-pct-label,
     .battery-pct-label,
@@ -177,19 +163,9 @@ export const heliosCardStyles = css`
         line-height: 1.2;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
-        box-shadow: 0 1px 3px var(--shadow-color);
-    }
-
-    /*  Crisp-text: the chips land at fractional pixels (50% anchor + -50% translate), so geometric
-        precision + antialiased smoothing keeps the glyphs sharp. */
-    .pv-pct-label,
-    .battery-pct-label,
-    .grid-label,
-    .custom-label,
-    .solar-pct-label,
-    .cloud-chip,
-    .home-pill
-    {
+        box-shadow: var(--helios-shadow-chip);
+        /*  Chips land at fractional pixels (50% anchor + -50% translate), so geometric precision +
+            antialiased smoothing keeps the glyphs sharp. */
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
     }
@@ -247,8 +223,7 @@ export const heliosCardStyles = css`
     }
     .overlay-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .overlay-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
-    /*  Disabled state: button stays visible to show the lock state but is inert,
-        greyed out with no hover/active feedback. */
+    /*  Disabled: stays visible to show the lock state but is inert, greyed out with no feedback. */
     .overlay-btn.is-disabled,
     .overlay-btn[disabled]
     {
@@ -257,24 +232,24 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  View mode. Clock fades every layer but the basemap (and the top-left controls); Scene restores them.
-        The basemap (.scene-ground-holder) lives inside #map-container alongside .scene-svg, so the scene SVG
-        is faded by name while the map container itself (and the holder) stay. */
+    /*  View mode. Clock fades every layer but the basemap and top-left controls; Scene restores them. The
+        basemap holder lives inside #map-container alongside .scene-svg, so the scene SVG is faded by name
+        while the map container (and holder) stay. */
     ha-card > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right),
     ha-card .scene-svg
     {
         transition: opacity var(--ha-animation-duration-slow, 350ms) ease;
     }
-    /*  Clock mode hides the HUD chips/leaders/timeline; the scene SVG stays visible but the engine renders it
-        home-only (setHomeOnly), so the home prism anchors the dial centre. */
+    /*  Clock mode hides the HUD chips/leaders/timeline; the scene SVG stays but renders home-only, so the
+        home prism anchors the dial centre. */
     ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band)
     {
         opacity: 0;
         pointer-events: none;
     }
 
-    /*  Top-left rail hosting the mode toggles + camera-lock. pointer-events off on
-        the rail; the buttons opt back in so they don't steal map interactions. */
+    /*  Top-left rail hosting the mode toggles + camera-lock. pointer-events off on the rail; the buttons
+        opt back in so they don't steal map interactions. */
     .overlay-top-left
     {
         position: absolute;
@@ -287,9 +262,8 @@ export const heliosCardStyles = css`
         gap: 8px;
         pointer-events: none;
     }
-    /*  PV production chip: compact horizontal pill tinted in the production colour (--pv-leader-color,
-        set inline). Fixed min-width shared with the battery chips so the leader gap is identical
-        regardless of how wide the value reads. */
+    /*  PV production chip: pill tinted in the production colour (--pv-leader-color, set inline). Shares the
+        fixed width so the leader gap stays identical however wide the value reads. */
     .pv-pct-label
     {
         z-index: 8;
@@ -299,8 +273,8 @@ export const heliosCardStyles = css`
         border-color: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
     }
 
-    /*  Shared icon recipe for the five value chips (PV / battery / grid / cloud / sun). The home
-        pill's icon is coloured differently, so it keeps its own rule below. */
+    /*  Shared icon recipe for the value chips (PV / battery / grid / cloud / sun). The home pill's icon is
+        coloured differently, so it keeps its own rule below. */
     .pv-pct-label ha-icon,
     .battery-pct-label ha-icon,
     .grid-label ha-icon,
@@ -315,7 +289,7 @@ export const heliosCardStyles = css`
     }
 
     /*  Re-targetable chips: clicking one points the bottom chart at that metric. Base chips are
-        display-only; the [role="button"] selector re-enables events and out-specifies the base rule. */
+        display-only; [role="button"] re-enables events and out-specifies the base rule. */
     .pv-pct-label[role="button"],
     .battery-pct-label[role="button"],
     .grid-label[role="button"],
@@ -329,27 +303,27 @@ export const heliosCardStyles = css`
         at a glance. */
     .pv-pct-label.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 12px color-mix(in srgb, var(--pv-leader-color, var(--energy-solar-color, #ff9800)) 70%, transparent);
     }
     .battery-pct-label.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 12px color-mix(in srgb, var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac)) 70%, transparent);
     }
     .grid-label.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 12px color-mix(in srgb, var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2)) 70%, transparent);
     }
     .custom-label.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 12px color-mix(in srgb, var(--custom-leader-color, ${unsafeCSS(CUSTOM_ENTITY_COLOR)}) 70%, transparent);
     }
     .solar-pct-label.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 12px color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #ffc107)) 70%, transparent);
     }
 
@@ -371,9 +345,8 @@ export const heliosCardStyles = css`
         border-color: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
     }
 
-    /*  Grid chip, same pill recipe as the PV/battery chips. Shows the active flow only; the border
-        follows the inline --grid-leader-color (blue importing, purple exporting), icon + value flip
-        with it. */
+    /*  Grid chip, same pill recipe. Shows the active flow only; border follows the inline
+        --grid-leader-color (blue importing, purple exporting), icon + value flip with it. */
     .grid-label
     {
         z-index: 8;
@@ -382,8 +355,8 @@ export const heliosCardStyles = css`
         color:        var(--primary-text-color, #212121);
         border-color: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
     }
-    /*  Custom-entity chip, same pill recipe; red border + red leader from --custom-leader-color. Icon-only,
-        like the cluster's other chips — the icon (override / entity / generic) carries the identity. */
+    /*  Custom-entity chip, same pill recipe; red border + leader from --custom-leader-color. Icon-only
+        (override / entity / generic glyph carries the identity). */
     .custom-label
     {
         z-index: 8;
@@ -392,8 +365,8 @@ export const heliosCardStyles = css`
         color:        var(--primary-text-color, #212121);
         border-color: var(--custom-leader-color, ${unsafeCSS(CUSTOM_ENTITY_COLOR)});
     }
-    /*  Full-size overlay SVGs for the home-cluster leaders (grid, custom, PV→home, battery). Identical box;
-        each hosts its own coloured path(s) defined below. */
+    /*  Full-size overlay SVGs for the home-cluster leaders (grid, custom, PV to home, battery); each hosts
+        its own coloured path(s) below. */
     .grid-leader-svg,
     .custom-leader-svg,
     .pv-home-leader-svg,
@@ -406,8 +379,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 5;
     }
-    /*  Single grid leader; stroke + bead fill from the inline --grid-leader-color, so one path serves
-        both import (blue) and export (purple). */
+    /*  Grid/custom leader; stroke + bead fill from the inline colour, so one path serves both import
+        (blue) and export (purple). */
     .grid-leader-line,
     .custom-leader-line
     {
@@ -416,8 +389,8 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  PV → home leader: vertical dashed line from the PV chip down to the home, in the PV colour.
-        z 5, below the chip cluster (z 6) so the dashes pass behind the chips. */
+    /*  PV to home leader: vertical dashed line from the PV chip down to the home, in the PV colour. z 5,
+        below the chip cluster so the dashes pass behind the chips. */
     .pv-home-leader-line
     {
         stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
@@ -428,7 +401,7 @@ export const heliosCardStyles = css`
     }
 
     /*  Moving bead riding a leader at a speed proportional to live flow, like HA's energy-distribution
-        card. Shared by the PV→home, battery and sun→PV ray beads (identical recipe). */
+        card. Shared by the PV to home, battery and sun to PV ray beads. */
     .pv-home-leader-bead,
     .battery-leader-bead,
     .solar-svg .solar-ray-bead
@@ -441,9 +414,9 @@ export const heliosCardStyles = css`
 
 
 
-    /*  Battery leaders. SoC↔PV and PV↔Power share a solid L-shaped path with a rounded bend. The
-        PV↔Power leader carries a bead at a speed proportional to |P|, its path flipped inline when
-        discharging so travel matches the flow. The SoC leader is static: SoC is a level, not a flow. */
+    /*  Battery leaders. SoC and power leaders share a solid L-shaped path with a rounded bend. The power
+        leader carries a bead at a speed proportional to |P|, its path flipped inline when discharging so
+        travel matches the flow. The SoC leader is static: SoC is a level, not a flow. */
     .battery-leader-line
     {
         stroke: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
@@ -454,9 +427,9 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  Solar overlay split into two passes so chips never occlude the live sun while the night part
-        still reads as background: .solar-svg-back paints the below-horizon dots below the chip cluster
-        (z 4); .solar-svg-front paints the above-horizon arc + ray + sun disc above the chips (z 7). */
+    /*  Solar overlay split in two passes so chips never occlude the live sun while the night part still
+        reads as background: .solar-svg-back paints below-horizon dots below the chips (z 4),
+        .solar-svg-front paints the above-horizon arc + ray + sun disc above them (z 7). */
     .solar-svg
     {
         position: absolute;
@@ -487,13 +460,13 @@ export const heliosCardStyles = css`
     /*  Light glow on home hover; the hover state is driven from the hitbox by the card. */
     .home-pill.is-hovered
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 7px 1px color-mix(in srgb, var(--helios-consumption-color, #4caf50) 28%, transparent);
     }
     /*  Active consumption target: same retarget glow the other chips use, in the consumption green. */
     .home-pill.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 12px color-mix(in srgb, var(--helios-consumption-color, #4caf50) 70%, transparent);
     }
     .home-pill ha-icon
@@ -511,27 +484,24 @@ export const heliosCardStyles = css`
     }
 
     .solar-svg-back        { z-index: 4; }
-    /*  Above-horizon arc in two passes so depth drives the local z-order around the home cluster:
-        front-far (z 5) is behind the chips/pill (arc disappears behind the home), front-near (z 11) is
-        in front (arc comes over the top). Sun disc (z 12) + W/m² chip (z 13) paint last. */
+    /*  Above-horizon arc and sun disc in two depth passes around the home cluster: far half (z 5) behind
+        the chips/pill (passes behind the home), near half (arc z 11, disc z 12) over the top. W/m² chip
+        (z 13) paints last. */
     .solar-svg-front-far  { z-index: 5; }
     .solar-svg-front-near { z-index: 11; }
-    /*  Sun disc inherits the arc's depth split: far half under chips + leaders (z 5, passes behind the
-        home), near half over everything but the W/m² chip (z 12). */
     .solar-svg-sun-far    { z-index: 5;  }
     .solar-svg-sun-near   { z-index: 12; }
-    /*  Sun → PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the
-        ray endpoint at the chip border. The sun disc stays in the depth-split SVGs above. */
+    /*  Sun to PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the ray
+        endpoint at the chip border. */
     .solar-ray-svg        { z-index: 7;  }
 
-    /*  Arc: first pass a dark outline for legibility on light basemaps, second pass the sun colour on
-        top. Stroke widths set inline per segment. */
+    /*  Arc: first pass a dark outline for legibility on light basemaps, second pass the sun colour on top.
+        Stroke widths set inline per segment. */
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Below-horizon segments as round dots (dasharray "0 N" + round linecap = true circles
-        everywhere) so the underground leg reads without colour cues. Stroke alpha halved vs the
-        above-horizon arc so the dotted leg recedes as ambient context. */
+    /*  Below-horizon segments as round dots (dasharray "0 N" + round linecap = true circles) so the
+        underground leg reads without colour cues; stroke alpha halved vs the day arc so it recedes. */
     .solar-svg .solar-arc-night
     {
         stroke-linecap: round;
@@ -543,8 +513,8 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.25;
     }
 
-    /*  Incidence ray: dashes flow sun → home at a speed proportional to live irradiance. 1 px hairline
-        to match the home cluster's leaders. */
+    /*  Incidence ray: dashes flow sun to home at a speed proportional to live irradiance. 1 px hairline
+        matching the home cluster's leaders. */
     .solar-svg .solar-ray
     {
         stroke-width: 1;
@@ -560,10 +530,9 @@ export const heliosCardStyles = css`
         to   { stroke-dashoffset: -10; }
     }
 
-    /*  Cloud chip on the sun → home line: a grey pill showing live cover, clickable to re-target the
-        chart to the cloud bands. Same recipe + active glow as the other chips. */
-    /*  Cloud chip is the only chip with a custom width: it's just a short percentage, so it sizes to its
-        content (no fixed width) and reads about half as wide as the others, saving space. */
+    /*  Cloud chip on the sun-to-home line: a grey pill showing live cover, clickable to re-target the
+        chart to the cloud bands. Same recipe + active glow as the other chips, but the only one with a
+        custom width: it holds just a short percentage, so it sizes to content (about half as wide). */
     .cloud-chip
     {
         z-index: 11;
@@ -575,7 +544,7 @@ export const heliosCardStyles = css`
     }
     .cloud-chip.is-chart-active
     {
-        box-shadow: 0 1px 3px var(--shadow-color),
+        box-shadow: var(--helios-shadow-chip),
                     0 0 12px color-mix(in srgb, var(--secondary-text-color, #727272) 70%, transparent);
     }
     /*  Short cloud-coloured leader joining the irradiance chip to the cloud chip on its right. */
@@ -591,8 +560,8 @@ export const heliosCardStyles = css`
         z-index: 10;
     }
 
-    /*  Sunrise / sunset marker: a small glyph + local time pinned just outside the arc at the horizon
-        crossing, centred on its computed point. Sun-coloured, click-transparent. */
+    /*  Sunrise / sunset marker: glyph + local time pinned just outside the arc at the horizon crossing,
+        centred on its computed point. Sun-coloured, click-transparent. */
     .sun-cross-marker
     {
         position: absolute;
@@ -621,18 +590,17 @@ export const heliosCardStyles = css`
         line-height: 1;
     }
 
-    /*  Solar irradiance label pinned above the live sun, same chip language as the cloud/PV chips.
-        Distinct from the shared base: it anchors above the sun, so it uses a -100% vertical translate
-        instead of the shared -50%, and sits higher in the stack. */
+    /*  Solar irradiance label pinned above the live sun. Anchors above the sun via a -100% vertical
+        translate (not the shared -50%) and sits higher in the stack. */
     .solar-pct-label
     {
         transform: translate(-50%, -100%);
         pointer-events: none;
-        /*  Above the arc-front lines (z 11) so an arc segment never crosses the W/m² readout; the sun
-            disc (z 12) still paints on top. */
+        /*  Above the arc-front lines (z 11) so a segment never crosses the W/m² readout; the sun disc
+            (z 12) still paints on top. */
         z-index: 13;
         color: var(--primary-text-color, #212121);
-        /*  Sun chip uses the HA amber token so it stays distinct from the PV production chip (orange). */
+        /*  HA amber token so it stays distinct from the PV production chip (orange). */
         border-color: var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
     }
 
@@ -640,14 +608,14 @@ export const heliosCardStyles = css`
     /*  ============================================================
         Dark theme, opt-in via \`card-theme: dark\`. Affects only the chrome
         (chips, charts, cursors, labels, leaders, tooltips); the basemap
-        keeps its own colours. Chip plates flip white → near-black, text/
-        borders go light-grey, and chart hairlines flip to white-on-dark
-        with the same opacity envelopes. User-coloured fills, the scrub
-        blue and the live tooltip plate already read on dark, left alone.
+        keeps its own colours. Chip plates flip white to near-black, text/
+        borders go light-grey, chart hairlines flip to white-on-dark at the
+        same opacities. User-coloured fills, the scrub blue and the live
+        tooltip plate already read on dark, so they're left alone.
         ============================================================ */
 
-    /*  Solar arc outline: the light skin paints a black halo for legibility on bright basemaps; in
-        dark mode that halo would vanish into the map, so paint a faint white halo instead. */
+    /*  Solar arc outline: the light skin paints a black halo for legibility on bright basemaps; in dark
+        mode that would vanish into the map, so paint a faint white halo instead. */
     ha-card.theme-dark .solar-svg .solar-arc-outline
     {
         stroke: rgba(255, 255, 255, 0.45);
@@ -657,7 +625,7 @@ export const heliosCardStyles = css`
     /*  Animation perf hooks:
         1. .helios-paused (set by the card's IntersectionObserver when scrolled off-screen) pauses every
            CSS animation; SMIL <animateMotion> is paused in parallel via svg.pauseAnimations().
-        2. prefers-reduced-motion disables every helios animation + transition at the OS level. */
+        2. prefers-reduced-motion disables every animation + transition at the OS level. */
     :host(.helios-paused) *,
     :host(.helios-paused) *::before,
     :host(.helios-paused) *::after

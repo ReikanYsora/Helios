@@ -3,8 +3,8 @@
 //sensor = `stat_rate` / `power_config.stat_rate`.
 //
 //Past series (timeline + scrub) read the recorder's pre-computed `change` metric on the directional
-//meters, the same metric HA Energy consumes. Import and export are SEPARATE meters, so each direction's
-//watts come from its own meter with no sign inference or shared-buffer slope.
+//meters, the same metric the HA Energy dashboard consumes. Import and export are SEPARATE meters, so each
+//direction's watts come from its own meter with no sign inference or shared-buffer slope.
 //
 //Live "now" prefers the signed `stat_rate` sensor (entity state), summed across sources and split
 //into import (net >= 0) / export (net < 0), like the HA Energy live tile. Per-source inversion is
@@ -20,8 +20,8 @@ import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, 
 export interface GridHost
 {
     readonly hass:   any;
-    //HA Energy dashboard defaults (populated by card/energy-prefs.ts) — the sole source of grid
-    //wiring: import/export meters, live power sensors, and the sign-inversion set.
+    //HA Energy dashboard defaults (populated by card/energy-prefs.ts), the sole source of grid wiring:
+    //import/export meters, live power sensors, and the sign-inversion set.
     readonly _energyDefaults?: EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
     readonly _periodPastDays: number;
@@ -35,9 +35,8 @@ export interface GridHost
     _gridExportValue: number | null;
     _gridExportUnit:  string;
 
-    //Recorder `change` series (5-minute buckets) for the import / export meters over the store's
-    //past window. Consumer converts to average watts (kWh * 1000 / bucket-hours). Null until first
-    //fetch lands.
+    //Recorder `change` series (5-minute buckets) for the import / export meters over the store's past window.
+    //Consumer converts to average watts (kWh * 1000 / bucket-hours). Null until first fetch lands.
     _gridImportChangeSeries: ChangeBucket[] | null;
     _gridExportChangeSeries: ChangeBucket[] | null;
     _gridImportChangeFetchKey: string;
@@ -80,9 +79,9 @@ export function refreshGrid(host: GridHost): void
 }
 
 
-//Fetch the recorder `change` series for a direction's meters over the store's past window (2 days
-//back to now), gated on a per-host fetch key that re-arms every CHANGE_REFRESH_MS (and on entity-set
-/// window changes) to track newly committed buckets. Window matches the unified store's J-2 origin.
+//Fetch the recorder `change` series for a direction's meters over the store's past window, gated on a per-host
+//fetch key that re-arms every CHANGE_REFRESH_MS (and on entity-set / window changes) to track newly committed
+//buckets. Window matches the unified store's origin.
 function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 {
     const ed = host._energyDefaults;
@@ -99,8 +98,8 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
     const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
-    //Rounded end anchor in the key re-issues the fetch once per CHANGE_REFRESH_MS (as in
-    //fetchBatteryChangeSeries), so a cumulative-only grid keeps a live chip and fresh past curve.
+    //Rounded end anchor in the key re-issues the fetch once per CHANGE_REFRESH_MS, so a cumulative-only grid
+    //keeps a live chip and fresh past curve.
     const endMs   = changeRefreshAnchorMs();
     const sorted  = [...ids].sort();
     const key     = `${sorted.join(',')}|${startMs}|${endMs}`;
@@ -128,9 +127,9 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 }
 
 
-//Mirror of HA's live grid read: sum signed power across every `stat_rate` entity, then route the net
-//through applyCombinedSplit (non-negative net -> import, negative -> export). No integration; reads
-//the sensor as-is, SI-prefix-normalised like the official Energy dashboard.
+//Live grid read like the HA Energy dashboard: sum signed power across every `stat_rate` entity, then route the
+//net through applyCombinedSplit (non-negative net -> import, negative -> export). No integration; reads the sensor
+//as-is, SI-prefix-normalised.
 function readStatRates(host: GridHost, rates: string[]): void
 {
     let signedWatts = 0;
@@ -148,8 +147,8 @@ function readStatRates(host: GridHost, rates: string[]): void
         if (num === null) { continue; }
         const unit  = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
         const watts = pvNormalizeToWatts(num, unit);
-        //`power_config.stat_rate_inverted` flips the sign for one source in a multi-source wiring;
-        //apply at read time so the split below sees the canonical "positive = import" convention.
+        //`power_config.stat_rate_inverted` flips the sign for one source in a multi-source wiring; apply at read
+        //time so the split below sees the canonical "positive = import" convention.
         const inverted = host._energyDefaults?.invertedRateEntities.includes(entity) ?? false;
         signedWatts += inverted ? -watts : watts;
         sawAny = true;
@@ -176,9 +175,8 @@ function applyCombinedSplit(host: GridHost, signedWatts: number): void
 
 function applyValue(host: GridHost, slot: 'import' | 'export', value: number | null, unit: string): void
 {
-    //Negative on a directional slot is meaningless (a negative import is export, already reported by
-    //the other slot). Clamp to 0 so the chip stays readable and the absolute-watts bead animation
-    //never runs on the wrong direction.
+    //Negative on a directional slot is meaningless (a negative import is export, already reported by the other
+    //slot). Clamp to 0 so the chip stays readable and the absolute-watts bead animation never runs on the wrong direction.
     const clamped = (value === null) ? null : Math.max(0, value);
     if (slot === 'import')
     {
@@ -210,8 +208,8 @@ function parseNumericState(raw: unknown): number | null
 }
 
 
-//Format the grid chip value: power sources in kW, energy sources in kWh, at the configured precision
-//and locale-aware. Empty string when null so callers can collapse the chip. Thin wrapper over the shared formatter.
+//Format the grid chip value: power sources in kW, energy sources in kWh, locale-aware at the configured precision.
+//Empty string when null so callers can collapse the chip. Thin wrapper over the shared formatter.
 export function formatGridValue(hass: any, value: number | null, unit: string, decimals: number): string
 {
     if (value === null) { return ''; }

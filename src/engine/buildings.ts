@@ -1,23 +1,19 @@
-//Buildings for the 2.5D scene: the Building/ScenePalette/HomeAppearance types, the Overpass data fetch that
-//turns the home's surroundings into ready-to-extrude footprints, and the faux-3D building + shadow painters.
+//Buildings for the 2.5D scene: the Building/ScenePalette/HomeAppearance types, the Overpass data fetch, and
+//the faux-3D building + shadow painters. Pure functions over a SceneCamera + local-metric footprints.
 //
 //Data flow splits into fetch-once-at-max + interpret-on-read so a building-option tweak (radius, count,
-//height, cluster) never re-hits Overpass — it re-interprets cached raw data instantly.
-//  - fetchRawBuildings(): ask the OpenStreetMap Overpass API for every `way["building"]` and multipolygon
-//    `relation["building"]` within the max radius, convert each ring lat/lon -> local metres (east/north)
+//height, cluster) re-interprets cached raw data in memory instead of re-hitting Overpass.
+//  - fetchRawBuildings(): query the OpenStreetMap Overpass API for every `way["building"]` and multipolygon
+//    `relation["building"]` within the max radius, convert each ring lat/lon to local metres (east/north)
 //    relative to the home, keep the nearest MAX_BUILDING_COUNT complete footprints as option-independent
-//    RawBuilding[] (no height cap, no count slice, no home flag). Cached in localStorage keyed on the home
-//    location only (the home doesn't move), so a reload — or any option change — doesn't re-fetch.
-//  - interpretBuildings(): apply the editor options to the cached raw data in memory — filter to the radius,
-//    slice the count, resolve per-building height (real OSM capped under realSize, else a fixed prism), and
-//    mark the home (the building containing/nearest the position) plus any building whose centroid is within
-//    the cluster radius of it (attached outbuildings join the home set). When the raw set is empty (offline,
-//    all mirrors down, or no mapped buildings) it falls back to a single standard house at the origin so the
-//    scene always has a home to draw.
+//    RawBuilding[]. Cached in localStorage keyed on home location only, so option changes never re-fetch.
+//  - interpretBuildings(): apply the options to cached raw data: filter to radius, slice count, resolve
+//    per-building height, mark the home (containing/nearest the position) plus any building whose centroid
+//    lies within the cluster radius (attached outbuildings join the home set). Empty raw set falls back to a
+//    single standard house at the origin so the scene always has a home to draw.
 //
 //Painters: buildings are extruded prisms drawn with a per-face painter's algorithm (depth-sorted,
 //screen-space back-face culled); shadows are each footprint's cast envelope flattened by one group-opacity.
-//Pure functions over a SceneCamera + local-metric footprints.
 
 import type { SceneCamera} from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
@@ -49,9 +45,8 @@ export interface Building
     centerY:   number;  //centroid north
 }
 
-//The exact subset renderShadows reads from a caster: a local-metre footprint, a height, and a centroid for
-//the near-plane cull. Building satisfies it, so footprint shadows are unchanged; the LiDAR path supplies its
-//own clump casters through the same projector.
+//Subset renderShadows reads from a caster: footprint, height, and centroid (for the near-plane cull).
+//Building satisfies it, so buildings feed the projector directly.
 export interface ShadowCaster
 {
     footprint: Point[];
@@ -70,25 +65,23 @@ export interface ScenePalette
 //renders a solid `palette.home` block at full `growth`.
 export interface HomeAppearance
 {
-    //Solid fill colour — the active chip's colour. Defaults to palette.home.
+    //Solid fill colour. Defaults to palette.home.
     color?:  string;
-    //Stacked histogram: one band per producing PV string, `frac` summing to ~1, bottom→top. With 2+ bands
-    //the home paints as a vertical stack instead of a solid block.
+    //Stacked histogram: one band per producing PV string, `frac` summing to ~1, bottom to top. With 2+
+    //bands the home paints as a vertical stack instead of a solid block.
     bands?:  { frac: number; color: string }[];
-    //Extra height multiplier (0..1) for the squash/grow-on-retarget animation; multiplies `growth`.
+    //Extra height multiplier (0..1) for the squash/grow animation; multiplies `growth`.
     growth?: number;
-    //Focal highlight (clock home hover): the prism gets the focused-bar treatment — a coloured glow halo, a
-    //white edge and a brighter roof — so tapping the home reads exactly like tapping a histogram bar.
+    //Focal highlight: a coloured glow halo, white edge, and brighter roof, matching the focused histogram bar.
     highlight?: boolean;
 }
 
 //---------------------------------------------------------------------------------------------------------
-//Overpass data fetch — self-sourced footprints around the home.
+//Overpass data fetch: self-sourced footprints around the home.
 //---------------------------------------------------------------------------------------------------------
 
-//Option-independent, JSON-serialisable raw building parsed once at the max radius. interpretBuildings()
-//turns these into render-ready Building[] per the editor options; nothing here depends on radius/count/
-//height/cluster, so it's cached by location only and reused across every option change.
+//Option-independent, JSON-serialisable raw building parsed once at the max radius. Nothing here depends on
+//radius/count/height/cluster, so it's cached by location only; interpretBuildings() applies the options.
 export interface RawBuilding
 {
     footprint:  Point[];        //metres east/north relative to the home, CCW, open ring
@@ -98,8 +91,8 @@ export interface RawBuilding
     osmHeightM: number | null;  //raw uncapped OSM height/levels, null when untagged
 }
 
-//One Overpass element: a `way` carries its ring in `.geometry`; a multipolygon `relation` carries its
-//rings in `.members[].geometry` (we keep the outer ones).
+//One Overpass element: a `way` carries its ring in `.geometry`; a multipolygon `relation` carries its rings
+//in `.members[].geometry` (outer ones kept).
 interface OverpassWay
 {
     type:     string; //'way' | 'relation'
@@ -111,8 +104,8 @@ interface OverpassWay
     tags?:    Record<string, string>;
 }
 
-//Read a building's height (m) from its OSM `tags`: prefer `height` (leading float, e.g. "12", "12 m",
-//"12.5"), else `building:levels` x 3 m/level. Returns null when neither parses or yields a positive value.
+//Building height (m) from OSM `tags`: prefer `height` (leading float, e.g. "12", "12 m"), else
+//`building:levels` x 3 m/level. Null when neither parses to a positive value.
 function osmHeightM(tags: Record<string, string> | undefined): number | null
 {
     if (!tags)
@@ -132,7 +125,7 @@ function osmHeightM(tags: Record<string, string> | undefined): number | null
     return null;
 }
 
-//Ray-casting point-in-polygon for one footprint (local metres); true if (x, y) is inside.
+//Ray-casting point-in-polygon (local metres).
 function pointInPolygon(x: number, y: number, polygon: Point[]): boolean
 {
     let inside = false;
@@ -148,9 +141,9 @@ function pointInPolygon(x: number, y: number, polygon: Point[]): boolean
     return inside;
 }
 
-//Distance from the home (origin) to a footprint — 0 when the origin is INSIDE it. Used to rank buildings
-//and pick the home: a large building that contains the point ranks first even though its centroid may be
-//far (which would otherwise drop it or hand "home" to a closer-centroid neighbour).
+//Distance from the home (origin) to a footprint, 0 when the origin is INSIDE it. Ranks buildings and picks
+//the home: a large building containing the point ranks first even though its centroid may be far (which
+//would otherwise drop it or hand "home" to a closer-centroid neighbour).
 function distanceToHome(polygon: Point[]): number
 {
     if (pointInPolygon(0, 0, polygon))
@@ -170,17 +163,15 @@ function distanceToHome(polygon: Point[]): number
     return nearest;
 }
 
-//localStorage cache key — rounded home position only. The home doesn't move, so one entry serves every
-//option set.
+//localStorage cache key: rounded home position only, so one entry serves every option set.
 function cacheKey(lat: number, lng: number): string
 {
     return `helios-bld2:${lat.toFixed(4)}:${lng.toFixed(4)}`;
 }
 
-//Parse Overpass `elements` into option-independent RawBuilding[]. Each ring lat/lon -> local metres
-//east/north relative to the home, centroid + distance-to-footprint + raw OSM height computed, ranked by
-//distance, nearest MAX_BUILDING_COUNT kept. No height cap, fixed height, count slice, or home flag here —
-//those are interpret's job, so the same raw data serves any option set.
+//Parse Overpass `elements` into option-independent RawBuilding[]: each ring lat/lon to local metres
+//east/north relative to the home, with centroid, distance-to-footprint, and raw OSM height; ranked by
+//distance, nearest MAX_BUILDING_COUNT kept. No height cap, count slice, or home flag (interpret's job).
 export function parseRawBuildings(
     elements: OverpassWay[],
     lat:      number,
@@ -191,9 +182,9 @@ export function parseRawBuildings(
     const perLon = 111_320 * Math.cos(lat * DEG);
     const buildings: RawBuilding[] = [];
 
-    //Collect outer rings: simple `way` buildings + the outer ring(s) of multipolygon `relation` buildings.
-    //Dense cities map whole blocks as relations — without these the home can be missing. Each ring carries its
-    //element's `tags` so the per-building raw OSM height can read the height/levels.
+    //Collect outer rings: `way` buildings + the outer ring(s) of multipolygon `relation` buildings. Dense
+    //cities map whole blocks as relations, without which the home can be missing. Each ring carries its
+    //element's `tags` so the per-building OSM height can read height/levels.
     const rings: { geometry: { lat: number; lon: number }[]; tags?: Record<string, string> }[] = [];
     for (const el of elements)
     {
@@ -221,7 +212,7 @@ export function parseRawBuildings(
         ]);
 
         //OSM rings are CLOSED (last vertex repeats the first); drop it so the painter doesn't draw a
-        //degenerate wall looping back on itself.
+        //degenerate wall looping back to the start.
         if (footprint.length > 1 && footprint[0][0] === footprint[footprint.length - 1][0])
         {
             footprint.pop();
@@ -231,8 +222,8 @@ export function parseRawBuildings(
             continue;
         }
 
-        //Counter-clockwise winding so the painter's screen-space back-face cull has a consistent sign
-        //(OSM mixes CW + CCW footprints, which would otherwise flip walls inside-out).
+        //Force CCW winding so the painter's screen-space back-face cull has a consistent sign (OSM mixes
+        //CW + CCW footprints, which would otherwise flip walls inside-out).
         let signedArea = 0;
         for (let i = 0; i < footprint.length; i++)
         {
@@ -260,10 +251,9 @@ export function parseRawBuildings(
         });
     }
 
-    //Keep the nearest MAX_BUILDING_COUNT, COMPLETE buildings only (whole footprints, never clipped — OSM
-    //returns full geometry even for buildings only partly inside the radius). Rank by distance to the
-    //FOOTPRINT (0 when it contains the home), so a large building wrapping the home is never dropped. This
-    //bounds the cached payload and covers any count the user can pick.
+    //Keep the nearest MAX_BUILDING_COUNT complete buildings (footprints never clipped: OSM returns full
+    //geometry even for buildings only partly inside the radius). Ranked by distance to the FOOTPRINT (0 when
+    //it contains the home), so a large building wrapping the home is never dropped. Bounds the cached payload.
     buildings.sort((a, b) => a.distanceM - b.distanceM);
     return buildings.slice(0, MAX_BUILDING_COUNT);
 }
@@ -274,7 +264,7 @@ function fallbackHouse(): Building
     const w = FALLBACK_HOUSE_HALF_W;
     const d = FALLBACK_HOUSE_HALF_D;
     return {
-        //CCW winding (positive signed area), like parsed OSM footprints, for consistent culling.
+        //CCW winding (positive signed area), like parsed OSM footprints, for consistent back-face culling.
         footprint: [
             [-w, -d],
             [w, -d],
@@ -288,11 +278,10 @@ function fallbackHouse(): Building
     };
 }
 
-//Fetch the option-independent raw footprints around the home, at the max display radius, as RawBuilding[].
-//Serves a fresh localStorage cache first (keyed on location only, so it's reused across every option set),
-//then tries each Overpass mirror in turn; on total failure (offline, all mirrors down, no mapped buildings)
-//returns [] — interpretBuildings() supplies the fallback house, so the cache never holds it. Respects
-//`signal` — an abort propagates as an AbortError the caller already swallows.
+//Fetch the option-independent raw footprints around the home at the max display radius. Serves a fresh
+//localStorage cache (keyed on location only) first, else tries each Overpass mirror in turn; total failure
+//(offline, all mirrors down, no mapped buildings) returns [], which interpretBuildings() turns into the
+//fallback house, so the cache never holds it. Aborts propagate as an AbortError the caller swallows.
 export async function fetchRawBuildings(
     homeLat: number,
     homeLon: number,
@@ -305,8 +294,7 @@ export async function fetchRawBuildings(
     const radius = Math.round(MAX_DISPLAY_RADIUS_M);
     const key    = cacheKey(lat, lng);
 
-    //Cache hit: reuse the stored raw footprints directly. No home flag here — that's interpret's job. The
-    //cache never holds the fallback house, only real Overpass results.
+    //Cache hit: reuse the stored raw footprints directly (only real Overpass results, never the fallback).
     try
     {
         const raw    = localStorage.getItem(key);
@@ -320,7 +308,7 @@ export async function fetchRawBuildings(
     }
     catch (_)
     {
-        //Corrupt cache entry — ignore and re-fetch.
+        //Corrupt cache entry: ignore and re-fetch.
     }
 
     const overpassQuery =
@@ -353,7 +341,7 @@ export async function fetchRawBuildings(
                 }
                 catch (_)
                 {
-                    //Storage quota: not fatal — the footprints still render this session.
+                    //Storage quota: not fatal, the footprints still render this session.
                 }
                 return buildings;
             }
@@ -375,12 +363,11 @@ export async function fetchRawBuildings(
     /* eslint-enable no-await-in-loop */
 
     //Every mirror failed or returned nothing: return empty, NOT cached (a later retry can still recover the
-    //real buildings). interpretBuildings() turns this into the single fallback house.
+    //real buildings); interpretBuildings() turns this into the single fallback house.
     return [];
 }
 
-//Options interpretBuildings() applies to the cached raw data, on read. All cheap and in-memory: a change to
-//any of these re-interprets instantly with no Overpass re-fetch.
+//Options interpretBuildings() applies to cached raw data on read. All cheap and in-memory, no re-fetch.
 export interface InterpretBuildingsOptions
 {
     radiusM:        number;
@@ -390,22 +377,21 @@ export interface InterpretBuildingsOptions
     clusterRadiusM: number;
 }
 
-//Turn option-independent RawBuilding[] into render-ready Building[] per the editor options. Pure and cheap:
-//filter to the radius, slice the count, resolve per-building height, and mark the home + its cluster. Called
-//on every option change (no re-fetch) as well as once per fresh raw fetch.
+//Turn option-independent RawBuilding[] into render-ready Building[] per the options. Pure and cheap: filter
+//to radius, slice count, resolve per-building height, mark the home + its cluster.
 export function interpretBuildings(
     raw:  RawBuilding[],
     opts: InterpretBuildingsOptions
 ): Building[]
 {
-    //No raw data (offline, both mirrors down, or genuinely no mapped buildings): the single fallback house.
+    //No raw data (offline, all mirrors down, or no mapped buildings): the single fallback house.
     if (raw.length === 0)
     {
         return [fallbackHouse()];
     }
 
     //Filter to the display radius (raw is distance-sorted, so this is a prefix). Radius 0 leaves nothing, so
-    //keep the single nearest raw building — the home itself always shows.
+    //keep the single nearest raw building so the home itself always shows.
     let kept = raw.filter((b) => b.distanceM <= opts.radiusM);
     if (kept.length === 0)
     {
@@ -419,8 +405,8 @@ export function interpretBuildings(
         kept = [raw[0]];
     }
 
-    //Resolve per-building height: real OSM heights (capped, with a fallback for untagged buildings) when
-    //realSize is on, otherwise a uniform fixed prism. isHome resolved below.
+    //Per-building height: real OSM heights (capped, with a fallback for untagged buildings) when realSize is
+    //on, else a uniform fixed prism. isHome resolved below.
     const buildings: Building[] = kept.map((b) => ({
         footprint: b.footprint,
         height:    opts.realSize
@@ -431,9 +417,8 @@ export function interpretBuildings(
         centerY:   b.centerY,
     }));
 
-    //Mark the home: the building with the smallest distanceM (it's first after the sort), then every other
-    //kept building whose centroid is within clusterRadiusM of it (attached outbuildings join the home set).
-    //clusterRadiusM 0 = just the single home building.
+    //Mark the home: the smallest-distanceM building (first after the sort), then every other kept building
+    //whose centroid is within clusterRadiusM of it (attached outbuildings join the home set). 0 = home only.
     const homeIdx = 0;
     buildings[homeIdx].isHome = true;
     const home    = buildings[homeIdx];
@@ -459,21 +444,17 @@ export function interpretBuildings(
 }
 
 //---------------------------------------------------------------------------------------------------------
-//Painters — extrude + shade the footprints into SVG.
+//Painters: extrude + shade the footprints into SVG.
 //---------------------------------------------------------------------------------------------------------
 
 //Every footprint casts a shadow; one group-opacity flattens overlaps into a single even shade. `sun` is
-//{azimuth (deg from N, CW), altitude (deg)}. shadowColor is a solid colour; shadowOpacity its peak alpha.
+//{azimuth (deg from N, CW), altitude (deg)}. shadowOpacity is the peak alpha.
 export function renderShadows(
     cam:          SceneCamera,
     casters:      ShadowCaster[],
     sun:          { azimuth: number; altitude: number },
     shadowColor:  string,
-    shadowOpacity: number,
-    maxShadowM:   number = MAX_SHADOW_M,
-    //LiDAR shadows only: dissolve the shade toward the disc edge so a low sun can't paint a hard black mass
-    //(matches the basemap's edge fade). Footprint shadows are short + sparse, so they leave it off.
-    edgeFade = false
+    shadowOpacity: number
 ): string
 {
     const fade = Math.min(1, sun.altitude / SHADOW_FADE_DEG);
@@ -486,12 +467,12 @@ export function renderShadows(
     let inner = '';
     for (const b of casters)
     {
-        //Skip shadows of casters at/behind the camera (same near-plane cull as the buildings).
+        //Skip casters at/behind the camera (same near-plane cull as the buildings).
         if (cam.project3(b.centerX, b.centerY, 0).depth >= nearCull)
         {
             continue;
         }
-        const length = Math.min(b.height / Math.tan(sun.altitude * DEG), maxShadowM);
+        const length = Math.min(b.height / Math.tan(sun.altitude * DEG), MAX_SHADOW_M);
         const oe = Math.sin(away) * length;
         const on = Math.cos(away) * length;
         const base = b.footprint.map((p) => cam.project(p[0], p[1], 0));
@@ -502,27 +483,12 @@ export function renderShadows(
     {
         return '';
     }
-    const group = `<g opacity="${(shadowOpacity * fade).toFixed(3)}">${inner}</g>`;
-    if (!edgeFade)
-    {
-        return group;
-    }
-    //Radial dissolve centred on the home (the dial origin), full out to 70% of the display radius then fading to
-    //nothing at the rim, so dense low-sun shade melts into the faded basemap instead of ending on a hard circle.
-    const c = cam.project(0, 0, 0);
-    const r = (cam.pxPerMetre || 1) * maxShadowM;
-    const w = cam.centreX * 2;
-    const h = cam.centreY * 2;
-    return `<defs><radialGradient id="helios-shadow-fade" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${r.toFixed(1)}" gradientUnits="userSpaceOnUse">`
-        + '<stop offset="0.7" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>'
-        + `<mask id="helios-shadow-mask"><rect x="0" y="0" width="${w.toFixed(0)}" height="${h.toFixed(0)}" fill="url(#helios-shadow-fade)"/></mask></defs>`
-        + `<g mask="url(#helios-shadow-mask)">${group}</g>`;
+    return `<g opacity="${(shadowOpacity * fade).toFixed(3)}">${inner}</g>`;
 }
 
-//Extrude + paint the buildings far→near. `altitude` is the sun altitude (deg) for the time-of-day tint;
-//`growth` ∈ [0,1] animates the prisms rising on first load. `neighborOpacity` (0..1) sets how solid the
-//surrounding (non-home) prisms read. `home` customises the home prism only (colour, growth multiplier,
-//and optional 2+ band histogram).
+//Extrude + paint the buildings far to near. `altitude` is the sun altitude (deg) for the time-of-day tint;
+//`growth` in [0,1] animates the prisms rising. `neighborOpacity` (0..1) sets how solid the surrounding
+//(non-home) prisms read. `home` customises the home prism only (colour, growth multiplier, band histogram).
 export function renderBuildings(
     cam:             SceneCamera,
     buildings:       Building[],
@@ -539,16 +505,16 @@ export function renderBuildings(
         {
             const c = cam.project3(b.centerX, b.centerY, 0);
             //Order by the building's NEAREST footprint vertex (max cameraZ), not its centre: a big building
-            //behind a small one in front has a nearer centre yet must draw FIRST, which the centroid got wrong.
+            //behind a small one in front has a nearer centre yet must draw FIRST, which a centroid sort breaks.
             let near = -Infinity;
             for (const p of b.footprint) { const d = cam.project3(p[0], p[1], 0).depth; if (d > near) { near = d; } }
             return { index, depth: near, cameraZ: c.depth };
         })
-        //Near-plane cull: skip buildings at/behind the camera, else their walls smear over the card.
+        //Near-plane cull: skip buildings at/behind the camera, else their walls smear over the scene.
         .filter((o) => o.cameraZ < nearCull)
         .sort((a, b) => a.depth - b.depth);
 
-    //Neighbours use the raw colour (NOT altitude-tinted): the night shading would darken them to near the
+    //Neighbours use the raw colour (NOT altitude-tinted): night shading would darken them to near the
     //dark-theme background and make them vanish. Opacity (neighborOpacity) is user-controlled.
     const nb     = palette.neighbor;
     const nbRgba = (op: number): string =>
@@ -560,11 +526,11 @@ export function renderBuildings(
     {
         const b  = buildings[index];
         const fp = simplifyFootprint(b.footprint);
-        //Home prism height carries the extra squash/grow multiplier; the home colour follows the chip.
+        //Home prism height carries the extra squash/grow multiplier.
         const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);
 
-        //Vertical bands as cumulative height fractions [0 .. 1] with a fill per band. A solid prism is just
-        //one band spanning the full height; the home histogram is one band per producing PV string.
+        //Vertical bands as cumulative height fractions [0..1] with a fill per band. A solid prism is one
+        //band spanning the full height; the home histogram is one band per producing PV string.
         const cum:  number[] = [0];
         const fill: string[] = [];
         if (b.isHome && homeBands)
@@ -574,7 +540,7 @@ export function renderBuildings(
                 cum.push(Math.min(1, cum[cum.length - 1] + band.frac));
                 fill.push(tintedRgba(mixHex(band.color, '#000000', 0.22), altitude, 0.9));
             }
-            cum[cum.length - 1] = 1; //pin against rounding drift
+            cum[cum.length - 1] = 1; //pin the top against rounding drift
         }
         else
         {
@@ -589,8 +555,7 @@ export function renderBuildings(
         //Roof + edge stroke follow the top band (histogram) or the solid colour; the home keeps a brightened
         //edge so it reads as the focal building.
         const topColor = homeBands ? homeBands[homeBands.length - 1].color : (home.color ?? palette.home);
-        //Focused home (clock hover): the same look as the focused histogram bar — roof lifted harder toward
-        //white, a near-opaque white edge, and the coloured glow halo wrapped on below.
+        //Focused home: roof lifted harder toward white, near-opaque white edge, and the glow halo (below).
         const hl = !!(b.isHome && home.highlight);
         const roofFill = b.isHome
             ? tintedRgba(mixHex(topColor, '#ffffff', hl ? 0.4 : 0.18), altitude, 0.92)
@@ -607,8 +572,8 @@ export function renderBuildings(
         }
         const strokeW = b.isHome ? 1 : 0.4;
 
-        //All visible faces (walls + roof) painted strictly far→near by their centroid camera depth, so a
-        //nearer wing's wall correctly occludes a farther wing's roof (right even for concave footprints).
+        //All visible faces (walls + roof) painted strictly far to near by camera depth, so a nearer wing's
+        //wall correctly occludes a farther wing's roof (correct even for concave footprints).
         const faces: { depth: number; svg: string }[] = [];
         for (let i = 0; i < base.length; i++)
         {
@@ -617,9 +582,9 @@ export function renderBuildings(
             const p1 = base[next];
             const p2 = roof[next];
             const p3 = roof[i];
-            //Screen-space back-face cull: a wall facing the camera winds negative (shoelace) once
-            //projected. Using the PROJECTED quad (not a global bearing) stays correct for buildings off
-            //to the sides where perspective makes the view angle differ from bearing.
+            //Screen-space back-face cull: a wall facing the camera winds negative (shoelace) once projected.
+            //Using the PROJECTED quad (not a global bearing) stays correct for buildings off to the sides,
+            //where perspective makes the view angle differ from bearing.
             const facing =
                 p0[0] * p1[1] - p1[0] * p0[1] +
                 (p1[0] * p2[1] - p2[0] * p1[1]) +
@@ -629,7 +594,7 @@ export function renderBuildings(
             {
                 continue;
             }
-            //One quad per band, stacked up the wall; a solid prism is the single full-height band.
+            //One quad per band, stacked up the wall; a solid prism is one full-height band.
             let wall = '';
             for (let k = 0; k < fill.length; k++)
             {
@@ -637,8 +602,8 @@ export function renderBuildings(
                 const hi = rings[k + 1];
                 wall += `<polygon points="${pointsAttr([lo[i], lo[next], hi[next], hi[i]])}" fill="${fill[k]}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
             }
-            //Histogram separations: a crisp horizontal edge at each colour boundary, so the stacked bands read
-            //as distinct layers on the home prism (mirrors the chart's stacked areas).
+            //Histogram separations: a crisp horizontal edge at each colour boundary, so the stacked bands
+            //read as distinct layers on the home prism.
             if (homeBands && fill.length > 1)
             {
                 for (let k = 1; k < fill.length; k++)
@@ -648,8 +613,8 @@ export function renderBuildings(
                     wall += `<line x1="${r[i][0].toFixed(2)}" y1="${r[i][1].toFixed(2)}" x2="${r[next][0].toFixed(2)}" y2="${r[next][1].toFixed(2)}" stroke="${sep}" stroke-width="0.9"/>`;
                 }
             }
-            //Sort key = the wall's NEAREST corner (max cameraZ, where larger = nearer). On a concave footprint
-            //the edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
+            //Sort key = the wall's NEAREST corner (max cameraZ, larger = nearer). On a concave footprint an
+            //edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
             const wallDepth = Math.max(
                 cam.project3(fp[i][0], fp[i][1], 0).depth,
                 cam.project3(fp[next][0], fp[next][1], 0).depth,
@@ -658,15 +623,15 @@ export function renderBuildings(
             );
             faces.push({ depth: wallDepth, svg: wall });
         }
-        //Walls far -> near; the flat roof painted LAST. The roof sits at the top, so in any above-horizon view
-        //it never overlaps a wall in screen space — drawing it over the sorted walls removes any roof/wall
-        //mis-order and leaves only the (now nearest-point-sorted) wall ordering.
+        //Walls far to near, the flat roof LAST. The roof sits at the top, so in any above-horizon view it
+        //never overlaps a wall in screen space; drawing it over the sorted walls removes any roof/wall
+        //mis-order and leaves only the (nearest-point-sorted) wall ordering.
         faces.sort((a, c) => a.depth - c.depth);
         const roofSvg = `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`;
         const buildingSvg = faces.map((f) => f.svg).join('') + roofSvg;
         svg += hl ? `<g filter="url(#home-glow)">${buildingSvg}</g>` : buildingSvg;
     }
-    //Focused-home glow halo: the same drop-shadow recipe as the focused histogram bar, tinted to the home colour.
+    //Focused-home glow halo: a drop-shadow tinted to the home colour, matching the focused histogram bar.
     const homeGlow = home.highlight
         ? `<defs><filter id="home-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${home.color ?? palette.home}" flood-opacity="0.95"/></filter></defs>`
         : '';
@@ -704,8 +669,8 @@ function simplifyFootprint(points: Point[]): Point[]
     return out.length >= 3 ? out : points;
 }
 
-//Andrew's monotone-chain convex hull. Returns vertices counter-clockwise, NOT closed. Used to wrap a
-//building's base + cast-shadow points into one shadow envelope, and to wrap each LiDAR clump's cells.
+//Andrew's monotone-chain convex hull, returning vertices CCW and NOT closed. Wraps a building's base +
+//cast-shadow points into one shadow envelope.
 export function convexHull(pts: Point[]): Point[]
 {
     if (pts.length < 3)

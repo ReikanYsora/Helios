@@ -1,9 +1,8 @@
-//Pure HUD geometry helpers extracted from the card so the class file stays focused on element behaviour.
-//Each function depends only on its arguments — no card state, no DOM.
+//Pure HUD geometry helpers. Each function depends only on its arguments (no card state, no DOM).
 
-//Nearest point on the home pill's stadium outline to (chipX, chipY): the straight top/bottom edge over the
-//middle, the rounded end-cap arc beyond it. All chip leaders dock here so the home reads as the focal energy
-//node. halfW/halfH are the pill's half-extents.
+//Nearest point on the home pill's stadium outline to (chipX, chipY): the straight top/bottom edge over the middle,
+//the rounded end-cap arc beyond it. All chip leaders dock here so the home reads as the focal energy node. halfW and
+//halfH are the pill's half-extents.
 export function nudgeToHomePill(
     chipX: number, chipY: number,
     homeX: number, homeY: number,

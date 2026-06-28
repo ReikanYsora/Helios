@@ -1,6 +1,5 @@
 import { SceneRenderer } from './engine/renderer';
-import type { Building, RawBuilding, ShadowCaster } from './engine/buildings';
-import { fetchNdsmRaster, rasterToCasters, type NdsmRaster } from './engine/lidar-ndsm';
+import type { Building, RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
@@ -15,15 +14,11 @@ import {
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
     SUN_COLOR_HEX,
-    LIDAR_QUALITY_MULT, LIDAR_RASTER_MIN, LIDAR_RASTER_MAX,
 } from './constants';
 import
 {
     type HeliosConfig,
     displayRadiusM,
-    hasLocalLidar,
-    localLidarConfig,
-    lidarShadowQuality,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
@@ -35,12 +30,10 @@ import
 import { uiColorVar } from './card/format';
 
 
-//-----------------------------------------------------------------
-//Shared module-scope cache for the RAW (option-independent) building footprints. HA re-creates the card
-//element on every config commit; a fresh engine picks up the already-fetched raw data synchronously and
-//skips the Overpass round-trip + parse. TTL is wide since the data is static; the key is the home LOCATION
-//only, so a building-option change reuses the same entry (interpret applies the options in memory).
-//SHARED_FETCH_CACHE_TTL_MS lives in constants.ts.
+//Module-scope cache for the RAW (option-independent) building footprints. HA re-creates the card element
+//on every config commit; a fresh engine picks up the already-fetched raw data synchronously, skipping the
+//fetch + parse. TTL is wide (data is static); keyed on home LOCATION only, so a building-option change
+//reuses the same entry (interpret applies options in memory). SHARED_FETCH_CACHE_TTL_MS lives in constants.
 
 interface SharedBuildingsCacheEntry
 {
@@ -72,8 +65,7 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 
 
 
-//Re-exported from engine/weather-resolve (where the pure classification lives) so existing importers of
-//CloudIntensity from this module keep resolving.
+//Re-exported from engine/weather-resolve so importers of CloudIntensity from this module keep resolving.
 export type { CloudIntensity };
 
 //Source of the irradiance shown in the PV legend, in precedence order:
@@ -88,9 +80,9 @@ export type IrradianceSource = 'haurwitz' | 'shortwave' | 'sensor';
 export interface WeatherData
 {
     cloudCover:     number;
-    cloudLow:       number;        //%, low-level clouds (≤ 3 km)
-    cloudMid:       number;        //%, mid-level clouds (3–8 km)
-    cloudHigh:      number;        //%, high-level clouds (≥ 8 km)
+    cloudLow:       number;        //%, low-level clouds (<= 3 km)
+    cloudMid:       number;        //%, mid-level clouds (3 to 8 km)
+    cloudHigh:      number;        //%, high-level clouds (>= 8 km)
     cloudIntensity: CloudIntensity;
     timeRange:      { start: Date; end: Date } | null;
     isLiveTime:     boolean;
@@ -107,14 +99,12 @@ export interface WeatherData
 
 export class HeliosEngine
 {
-    //2.5D canvas/SVG renderer. Owns its own DOM inside #map-container and the SceneCamera every projection
-    //routes through.
+    //Renderer: owns its own DOM inside #map-container and the SceneCamera every projection routes through.
     _renderer?: SceneRenderer;
     homeLat:  number;
     homeLon:  number;
-    //Home altitude (metres above sea level), forwarded to Open-Meteo
-    //via &elevation= for sharper boundary conditions. Undefined falls
-    //back to the API's global 90 m DEM.
+    //Home altitude (m above sea level), forwarded to Open-Meteo via &elevation= for sharper boundary
+    //conditions. Undefined falls back to the API's global DEM.
     private homeElevation?: number;
     cfg:      HeliosConfig;
 
@@ -122,8 +112,7 @@ export class HeliosEngine
     private _fetchLon = 0;
 
     private _mapReady     = false;
-    //Single source of truth for hourly forecast data. Populated by
-    //fetchHomePointData(); null until the first successful fetch.
+    //Single source of truth for hourly forecast data; null until the first successful fetch.
     private _homeHourlyData: SampleHourly | null = null;
     private _selectedTime:  Date | null       = null;
 
@@ -168,9 +157,9 @@ export class HeliosEngine
 
     //Irradiance samples from a HA irradiance sensor (history + live state), sorted ascending by time.
     //Null = no entity or no usable samples (model irradiance used unchanged). Each is W/m², treated as
-    //ground-truth shortwave irradiance at the home in the same units as shortwave_radiation_instant, so it
-    //slots into the pipeline unscaled. Lookup is nearest-neighbour within a strict ±30 min window; outside
-    //it (and always for forecast time) we fall through to the model rather than extrapolate stale values.
+    //ground-truth shortwave irradiance at the home in the same units as the model's shortwave field, so it
+    //slots into the pipeline unscaled. Lookup is nearest-neighbour within a strict +/-30 min window; outside
+    //it (and always for forecast time) fall through to the model rather than extrapolate stale values.
     private _sensorIrradianceSamples: { tMs: number; wm2: number }[] | null = null;
     private static readonly SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1000;
     public setSolarRadiationSamples(
@@ -269,7 +258,7 @@ export class HeliosEngine
                 bestDelta = d;
                 bestIdx   = i;
             }
-            //Samples are sorted, once delta starts growing again we can short-circuit, the rest is monotonically worse.
+            //Samples are sorted: once delta grows again the rest is monotonically worse, so stop.
             else if (d > bestDelta)
             {
                 break;
@@ -284,11 +273,11 @@ export class HeliosEngine
     //Map transform changed: card recomputes screen-space projections (arc, chips, leaders) from this hook.
     public onMapTransform?:  () => void;
 
-    //Camera pose persistence via localStorage keyed on home coords. Lovelace doesn't persist config-changed
-    //from a live card (only the editor preview), so YAML round-trip isn't an option. 3-decimal rounding
-    //(~111 m) separates neighbouring homes while tolerating GPS jitter.
-    //Per-card storage discriminator (the card's effective cache id, including any duplicate `#N` suffix). Set
-    //by the card; empty keys the pose on the home coordinates instead.
+    //Camera pose persists via localStorage: Lovelace doesn't persist config-changed from a live card (only
+    //the editor preview), so a YAML round-trip isn't an option. cacheKey is the per-card storage
+    //discriminator (card's effective cache id, including any duplicate `#N` suffix), set by the card; empty
+    //keys the pose on home coordinates, rounded to 3 decimals (~111 m) to separate neighbours yet tolerate
+    //GPS jitter.
     public cacheKey = '';
     private _cameraPoseStorageKey(): string
     {
@@ -446,7 +435,7 @@ export class HeliosEngine
     {
         this._renderer?.setHomeOnly(on);
     }
-    //Card -> renderer: the clock-mode ground guide, painted between the basemap and the home prism. '' clears it.
+    //Clock-mode ground guide, painted between the basemap and the home prism. '' clears it.
     public setGroundOverlay(svg: string): void
     {
         this._renderer?.setGroundOverlay(svg);
@@ -468,8 +457,6 @@ export class HeliosEngine
     public getViewportWidth(): number { return this._cachedCanvasCssW; }
 
 
-    //Auto-rotation: when idle a few seconds the map slowly orbits the home counter to the sun's motion
-    //(~1.5°/s). Any interaction resets the inactivity timer, pausing then resuming from the new bearing.
     _autoRotateRaf?:           number;
     _autoRotateLastFrame = 0;
     _autoRotateLastUserAction = 0;
@@ -477,11 +464,11 @@ export class HeliosEngine
     //sub-degree increment into jitter.
     private _autoRotateBearing?: number;
 
-    //Smooth time-based auto-rotation around the home, counter to the sun's apparent motion so camera and
-    //sun visually counter-orbit. Idempotent rAF loop; pauses for AUTO_ROTATE_INACTIVITY_MS after every user
-    //gesture, then resumes from the camera's current bearing. Integrates in seconds (delta-time) so the
-    //speed is constant across refresh rates. Self-terminates when the renderer goes away or rotation is
-    //disabled; updateConfig re-arms it when the toggle/lock flips back.
+    //Time-based auto-orbit around the home, counter to the sun's apparent motion so camera and sun visually
+    //counter-orbit. Idempotent rAF loop integrating in seconds (delta-time) so speed is constant across
+    //refresh rates; pauses for AUTO_ROTATE_INACTIVITY_MS after every user gesture, then resumes from the
+    //camera's current bearing. Self-terminates when the renderer goes away or rotation is disabled;
+    //updateConfig re-arms it when the toggle/lock flips back.
     private _startAutoRotateLoop(): void
     {
         if (this._autoRotateRaf !== undefined || !this._renderer)
@@ -516,7 +503,7 @@ export class HeliosEngine
             if (sinceUser >= AUTO_ROTATE_INACTIVITY_MS)
             {
                 //Negative delta: bearing decreases (camera CCW), map content drifts CW, opposite the sun.
-                //Re-sync from the live camera right when the user stops touching it, else a mid-loop drag snaps back.
+                //Re-sync from the live camera right when the user stops, else a mid-loop drag snaps back.
                 if (this._autoRotateBearing === undefined || sinceUser - AUTO_ROTATE_INACTIVITY_MS < 16)
                 {
                     this._autoRotateBearing = renderer.getCameraBearing();
@@ -546,9 +533,9 @@ export class HeliosEngine
 
     //Building lifecycle: LOCATION drives the FETCH, OPTIONS drive the INTERPRET. _buildingsRaw holds the
     //option-independent footprints fetched once at the max radius (the home doesn't move during a session,
-    //so we fetch once and reuse across style reloads instead of re-hitting Overpass); _buildingsLocKey is
-    //the location key they were fetched for. _buildingsData is the INTERPRETED Building[] the renderer draws,
-    //recomputed in memory on every option change with no re-fetch.
+    //so fetch once and reuse across style reloads); _buildingsLocKey is the location key they were fetched
+    //for. _buildingsData is the INTERPRETED Building[] the renderer draws, recomputed in memory on every
+    //option change with no re-fetch.
     private _buildingsData:   Building[] | null    = null;
     private _buildingsRaw:    RawBuilding[] | null = null;
     private _buildingsLocKey               = '';
@@ -557,15 +544,6 @@ export class HeliosEngine
     //Editor-preview mode: HA rebuilds the preview card on every keystroke, so intro animations are skipped.
     private readonly _editMode: boolean;
     private _buildingsAbort?: AbortController;
-
-    //Local-LiDAR decode: when a local nDSM is configured the decoded raster feeds both the LiDAR-view wireframe
-    //and (when shadows are on) the ground-shadow casters, which replace the OSM building footprints (buildings
-    //still render as prisms). The decode is cached against _lidarKey (home | bbox | radius | url); an in-flight
-    //decode is cancelled via _lidarAbort on any change. Null raster/casters = no wireframe / footprint shadows.
-    private _lidarRaster:  NdsmRaster | null      = null;
-    private _lidarCasters: ShadowCaster[] | null = null;
-    private _lidarKey:     string | null         = null;
-    private _lidarAbort:   AbortController | null = null;
 
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
     //and the refresh runs once on expiry. Curves+chips still update every move; only the costly shadow
@@ -624,9 +602,9 @@ export class HeliosEngine
 
     private _initMapInstance(container: HTMLElement, _haCoords: [number, number]): void
     {
-        //Spin up the 2.5D renderer. It builds its own DOM (ground holder + scene SVG) inside the container,
-        //owns the SceneCamera every projection routes through, and paints night-shade + cast shadows +
-        //extruded buildings itself. The home colour + shadow colour/opacity are merged into its palette.
+        //Spin up the renderer. It builds its own DOM (ground holder + scene SVG) inside the container, owns
+        //the SceneCamera every projection routes through, and paints night-shade + cast shadows + extruded
+        //buildings itself. The home colour + shadow colour/opacity are merged into its palette.
         this._container = container;
         this._renderer = new SceneRenderer(container, {
             sun:           SUN_COLOR_HEX,
@@ -645,9 +623,9 @@ export class HeliosEngine
         };
 
         //Keep the cached CSS dims (they feed _heliosScale()/_sunArcScale() + the HUD layout) and the arc-scale
-        //memo fresh on a real size change. The renderer owns the resize→redraw itself, so we don't redraw
+        //memo fresh on a real size change. The renderer owns the resize->redraw itself, so we don't redraw
         //here. Guarded on size change: a redraw repaints the HUD, which writes DOM, which can re-fire the
-        //observer — without the guard that no-op notification would loop.
+        //observer, and without the guard that no-op notification would loop.
         this._resizeObserver = new ResizeObserver(entries =>
         {
             const cr = entries[entries.length - 1]?.contentRect;
@@ -759,8 +737,8 @@ export class HeliosEngine
         this._refreshWeather();
     }
 
-    //Async bootstrap: resolve the CARTO basemap for the home,
-    //then mark ready, feed buildings + sun, and kick off the periodic atmosphere refresh + auto-rotate loop.
+    //Async bootstrap: resolve the basemap for the home, then mark ready, feed buildings + sun, and kick off
+    //the periodic atmosphere refresh + auto-rotate loop.
     private async _bootstrapRenderer(): Promise<void>
     {
         const renderer = this._renderer;
@@ -784,8 +762,8 @@ export class HeliosEngine
         this._onRendererReady();
     }
 
-    //Called once the renderer's basemap has resolved. Feeds the (possibly already-cached) buildings, paints
-    //the first atmosphere pass, arms the 60 s refresh and auto-rotate loop, and renders the current selection.
+    //Called once the renderer's basemap has resolved: feeds the (possibly already-cached) buildings, paints
+    //the first atmosphere pass, arms the sky refresh + auto-rotate loop, and renders the current selection.
     private _onRendererReady(): void
     {
         if (!this._renderer)
@@ -801,7 +779,6 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
-        this._refreshLidar();
         //60 s sky/atmosphere refresh. _refreshShadowsAndAtmosphere short-circuits when the sun barely moved,
         //so the cost is negligible; the paused skip avoids even the signature check while invisible.
         this._skyTimer = window.setInterval(() =>
@@ -821,9 +798,9 @@ export class HeliosEngine
         }
     }
 
-    //The card-side host element (#map-container) the renderer mounts into; carries the cascaded HA theme
-    //CSS custom properties we resolve the scene palette from. The basemap's light/dark is handled by CSS on
-    //the card, so the engine no longer tracks theme polarity.
+    //The card-side host element (#map-container) the renderer mounts into; carries the cascaded HA theme CSS
+    //custom properties the scene palette resolves from. The basemap's light/dark is handled by card CSS, so
+    //the engine itself does not track theme polarity.
     private _container?: HTMLElement;
 
     //Resolve a theme colour token to #rrggbb. Reads the CSS custom property off the host's computed style
@@ -1026,7 +1003,7 @@ export class HeliosEngine
     }
 
     //Location-keyed key for the raw fetch + shared cache. Options are deliberately absent: a building-option
-    //change keeps the same key, so it never triggers a re-fetch — only a re-interpret.
+    //change keeps the same key, so it never triggers a re-fetch, only a re-interpret.
     private _buildingsLocationKey(): string
     {
         return `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}`;
@@ -1098,7 +1075,7 @@ export class HeliosEngine
 
     //Interpret the raw footprints with the CURRENT options (radius/count/real-size/height/cluster) and hand
     //the result to the renderer (it extrudes home + surroundings and casts their shadows itself). Pure +
-    //cheap, so this is the re-render path for every building-option change — no Overpass round-trip.
+    //cheap, so this is the re-render path for every building-option change (no Overpass round-trip).
     private _applyBuildings(): void
     {
         if (!this._renderer)
@@ -1115,9 +1092,8 @@ export class HeliosEngine
         this._pushRenderableSources();
     }
 
-    //Hand the current interpreted footprints to the renderer (it extrudes home + surroundings and casts
-    //their shadows itself). interpretBuildings always returns at least the fallback house, so this is empty
-    //only before the first interpret pass.
+    //Hand the interpreted footprints to the renderer. interpretBuildings always returns at least the
+    //fallback house, so `buildings` is empty only before the first interpret pass.
     private _pushRenderableSources(): void
     {
         if (!this._renderer)
@@ -1165,99 +1141,6 @@ export class HeliosEngine
             shadowOpacity: this._shadowsEnabled() ? this._shadowOpacity() : 0,
         });
         this._renderer.setSun(azimuth, altitude);
-    }
-
-    //Decode the local nDSM when one is configured and feed both consumers: the LiDAR-view wireframe (always,
-    //independent of shadows) and the ground-shadow casters (only when shadows are on; otherwise footprints
-    //cast the shadows). Re-run on config change, home move, and at boot. The decode is cached by
-    //home | bbox | radius | quality | url, so an idle re-run (same inputs) just re-applies cached results; the
-    //shadow toggle re-applies the cached casters without re-decoding. A failed/aborted decode degrades
-    //silently to no wireframe + footprint shadows (no logging).
-    private _refreshLidar(): void
-    {
-        const renderer = this._renderer;
-        if (!renderer)
-        {
-            return;
-        }
-
-        const shadowsOn = this._shadowsEnabled();
-        const lidar = hasLocalLidar(this.cfg) ? localLidarConfig(this.cfg) : null;
-
-        //No LiDAR: drop any decode + cancel an in-flight one so there's no wireframe and footprints cast shadows.
-        if (!lidar)
-        {
-            this._lidarAbort?.abort();
-            this._lidarAbort   = null;
-            this._lidarKey     = null;
-            this._lidarRaster  = null;
-            this._lidarCasters = null;
-            renderer.setShadowCasters(null);
-            renderer.setWireframeRaster(null);
-            return;
-        }
-
-        const radius = this._buildingRadiusMeters();
-        const q          = lidarShadowQuality(this.cfg);
-        const rasterSize = Math.max(LIDAR_RASTER_MIN, Math.min(LIDAR_RASTER_MAX, Math.round(2 * radius * LIDAR_QUALITY_MULT[q])));
-        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|`
-            + `${lidar.minLat}|${lidar.maxLat}|${lidar.minLon}|${lidar.maxLon}|${radius}|${q}|${lidar.url}`;
-
-        //Unchanged inputs with the raster already decoded: re-apply both idempotently (shadow toggle path too).
-        if (key === this._lidarKey && this._lidarRaster)
-        {
-            renderer.setWireframeRaster(this._lidarRaster);
-            renderer.setShadowCasters(shadowsOn ? this._lidarCasters : null, radius);
-            return;
-        }
-
-        this._lidarAbort?.abort();
-        const ac = new AbortController();
-        this._lidarAbort = ac;
-        this._lidarKey   = key;
-
-        fetchNdsmRaster({
-            url:     lidar.url,
-            minLat:  lidar.minLat,
-            maxLat:  lidar.maxLat,
-            minLon:  lidar.minLon,
-            maxLon:  lidar.maxLon,
-            homeLat:    this.homeLat,
-            homeLon:    this.homeLon,
-            radiusM:    radius,
-            rasterSize: rasterSize,
-            signal:     ac.signal,
-        })
-        .then(raster =>
-        {
-            //Ignore a resolution that lost its race (aborted, or the key/renderer moved on).
-            if (ac.signal.aborted || this._lidarKey !== key || this._renderer !== renderer)
-            {
-                return;
-            }
-            this._lidarRaster  = raster;
-            this._lidarCasters = rasterToCasters(raster, radius);
-            renderer.setWireframeRaster(raster);
-            renderer.setShadowCasters(this._shadowsEnabled() ? this._lidarCasters : null, radius);
-        })
-        .catch(() =>
-        {
-            //Decode/fetch failed or was aborted: degrade silently to no wireframe + footprint shadows.
-            if (ac.signal.aborted || this._renderer !== renderer)
-            {
-                return;
-            }
-            this._lidarRaster  = null;
-            this._lidarCasters = null;
-            renderer.setWireframeRaster(null);
-            renderer.setShadowCasters(null);
-        });
-    }
-
-    //LiDAR view toggle: show/hide the nDSM wireframe (the raster is fed via _refreshLidar).
-    public setWireframe(on: boolean): void
-    {
-        this._renderer?.setWireframeEnabled(on);
     }
 
     //Precision fixed to 'high' (multi-model median).
@@ -1329,10 +1212,8 @@ export class HeliosEngine
             let retryDelay: number;
             if (e.status === 429)
             {
-                //Pick the back-off slot for the current streak, capped
-                //at the last entry. setTimeout (not setInterval): we
-                //only want one retry, then either we succeed and reset
-                //the streak, or we fail again and bump the streak.
+                //Back-off slot for the current streak, capped at the last entry. setTimeout (not setInterval)
+                //so exactly one retry fires: success resets the streak, another failure bumps it.
                 const idx = Math.min(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS.length - 1);
                 retryDelay = RATE_LIMIT_BACKOFF_MS[idx];
                 this._rateLimitStreak++;
@@ -1450,7 +1331,6 @@ export class HeliosEngine
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
-        this._refreshLidar();
         void this._refreshWeather(lat, lon);
     }
 
@@ -1849,22 +1729,14 @@ export class HeliosEngine
         }
         if (!sunScreen)
         {
-            //Even at night we want a defined sun position so the
-            //incidence ray has somewhere to anchor (offscreen below
-            //the home is fine, the ray just won't be drawn). Fall
-            //back to the home location so downstream maths stays
-            //finite. Depth is borrowed from home so the sun's
-            //nearness factor degrades gracefully (it's not visible
-            //in this case anyway).
+            //Keep a defined sun position even at night so the incidence ray has an anchor and downstream
+            //maths stays finite (the ray just isn't drawn). Borrow home's depth so nearness degrades
+            //gracefully.
             sunScreen = { ...homeScreen, depth: homeScreen.depth };
         }
 
-        //Establish the depth range across the full arc + the sun,
-        //so every visible element shares one consistent perspective
-        //scale. nearness = 1 at the smallest depth (nearest), 0 at
-        //the largest (furthest). The arc spans 24 h so the depth
-        //range usually covers everything from the sun behind the
-        //camera at noon to the sun on the far horizon at dusk.
+        //Depth range across the full arc + the sun, so every element shares one perspective scale. Spans the
+        //24 h arc, from the sun behind the camera at noon to the far horizon at dusk. (nearness defined below.)
         let dMin = Infinity;
         let dMax = -Infinity;
         for (const p of raw)
@@ -2090,7 +1962,7 @@ export class HeliosEngine
         //Building option updates (radius/count/real-size/height/cluster): re-interpret the cached raw
         //footprints in memory via _ensureBuildings -> _applyBuildings. The location key is unchanged, so this
         //never re-hits Overpass; the renderer re-extrudes from the freshly interpreted Building[]. We always
-        //re-interpret (cheap) rather than diffing every option key — _applyBuildings is pure and idempotent.
+        //re-interpret (cheap) rather than diffing every option key; _applyBuildings is pure and idempotent.
         const nextRadius = this._buildingRadiusMeters();
         this._ensureBuildings();
         if (nextRadius !== prevRadius)
@@ -2110,10 +1982,6 @@ export class HeliosEngine
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         }
-        //LiDAR decode (wireframe + shadow casters): re-resolve on every config commit. _refreshLidar is cached
-        //by home | bbox | radius | quality | url, so an unrelated option change just re-applies the cached
-        //results; a LiDAR-enable, shadow-toggle or radius change re-decodes / clears as needed.
-        this._refreshLidar();
         this._renderer.scheduleRedraw();
 
         if (this._homeHourlyData && this._mapReady)
@@ -2134,10 +2002,6 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
-        this._lidarAbort?.abort();
-        this._lidarAbort   = null;
-        this._lidarRaster  = null;
-        this._lidarCasters = null;
         this._arcInputsCache         = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
