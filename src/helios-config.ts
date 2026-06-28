@@ -45,7 +45,7 @@ export interface HeliosConfig
     //Global display radius (m) around the home within which buildings and shadows render. Clamped [50,500],
     //default 200. Lowering it is the main perf lever on weak hardware.
     'display-radius'?:         unknown;
-    //Opacity 0..1 of surrounding buildings (home stays 1.0). Default 0.25.
+    //Opacity 0..1 of surrounding buildings (home stays 1.0). Default 0.5.
     'building-opacity'?:       unknown;
     //Cluster radius (m): buildings within it (or containing the home) join the home group and paint at full
     //opacity, so attached garages/verandas don't render as transparent neighbours. Default 0.
