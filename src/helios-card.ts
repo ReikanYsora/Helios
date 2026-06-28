@@ -910,6 +910,15 @@ export class HeliosCard extends LitElement
                 this._engine?.setHomeOnly(true);
                 this._updateClockHomeAppearance();
             }
+            //Engine (re)spawn (e.g. returning to the tab): replay the bar grow on every present ring, the same
+            //rise the home prism plays, so the dial re-enters with the build animation instead of popping in.
+            if (_changedProperties.has('_engine') && this._engine)
+            {
+                const now = Date.now();
+                this._clockGrowStart.clear();
+                this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
+                this._clockAnimate();
+            }
             if (_changedProperties.has('_clockHoverSlot'))
             {
                 this._startClockDim();
