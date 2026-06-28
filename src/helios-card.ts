@@ -28,7 +28,6 @@ import {
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
 import { nightFractionByHour } from './card/sun-zones';
-import { getSunPosition } from './engine/sun';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
@@ -2857,19 +2856,6 @@ export class HeliosCard extends LitElement
         return { pH: vec(dP), prevH: vec(dPrev), isE, data: dP ?? dPrev };
     }
 
-    //Sun position for the hovered hour (today at that hour), so the dial casts the central column's shadow in
-    //that direction. Null when no hour is hovered or the home isn't resolved.
-    private _hoverSun(): { azimuth: number; altitude: number } | null
-    {
-        if (this._clockHoverSlot === null) { return null; }
-        const coords = getHomeCoords(this.config, this.hass);
-        if (!coords) { return null; }
-        const hour = Math.floor(this._clockHoverSlot / CLOCK_SLOTS_PER_HOUR);
-        const d = new Date();
-        d.setHours(hour, 30, 0, 0);
-        return getSunPosition(d, coords.lat, coords.lon);
-    }
-
     //Recompute the per-hour night share for the ground wedges when the home or the window (rounded to the hour)
     //changes. Cheap + keyed, so idle frames never recompute.
     private _refreshNightFrac(): void
@@ -2918,7 +2904,7 @@ export class HeliosCard extends LitElement
                 camera, pH, prevH,
                 clockTargetMeta(this, target).color, trendGoodDirection(target),
                 cardinals, this._clockDimSlot, this._clockDim,
-                totalOf(pH), totalOf(prevH), this._clockHomeHover, this._nightFrac ?? [], this._hoverSun(),
+                totalOf(pH), totalOf(prevH), this._clockHomeHover, this._nightFrac ?? [],
             );
             this._applyClockFrame(frame);
             return;
@@ -2970,7 +2956,6 @@ export class HeliosCard extends LitElement
             dispCeil,
             this._clockHomeHover,
             this._nightFrac ?? [],
-            this._hoverSun(),
         );
         this._applyClockFrame(frame);
     }

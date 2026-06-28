@@ -5,8 +5,6 @@
 //by hour-of-day, no extra fetch.
 
 import type { SceneCamera } from '../engine/projection';
-import { convexHull } from '../engine/buildings';
-import type { Point } from '../engine/colors';
 import { HOUR_MS } from '../constants';
 import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from './charts';
@@ -706,28 +704,6 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
     return s;
 }
 
-//Shadow the central cylinder casts on the ground for a given sun position (hovered hour), so the dial shows
-//where the sun sits at that hour: a dark blob offset opposite the sun, length from the sun altitude. Empty at
-//night (sun below the fade angle).
-function centralShadow(camera: SceneCamera, hubR: number, colH: number, sun: { azimuth: number; altitude: number }): string
-{
-    const fade = Math.min(1, sun.altitude / 10);   //match the scene's SHADOW_FADE_DEG ramp
-    if (fade <= 0) { return ''; }
-    const away = (sun.azimuth + 180) * Math.PI / 180;
-    const len  = Math.min(colH / Math.tan(sun.altitude * Math.PI / 180), colH * 6);
-    const oe = Math.sin(away) * len; const on = Math.cos(away) * len;
-    const pts: Point[] = [];
-    for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
-    {
-        const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
-        const e = hubR * Math.cos(a); const n = hubR * Math.sin(a);
-        pts.push([e, n]);
-        pts.push([e + oe, n + on]);
-    }
-    const d = convexHull(pts).map(p => { const pr = camera.project(p[0], p[1], 0); return `${pr[0].toFixed(1)},${pr[1].toFixed(1)}`; }).join(' ');
-    return `<polygon points="${d}" fill="#000000" opacity="${(0.32 * fade).toFixed(3)}"/>`;
-}
-
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
 //no body below, so a marker placed lower stays visible.
 function floatingSlice(camera: SceneCamera, fp: [number, number][], loH: number, hiH: number, wall: string, roof: string, stroke: string): string
@@ -771,8 +747,6 @@ export function projectClockFrame(
     columnHighlight = false,
     //Per-hour night share for the ground day/night wedges (empty = none drawn).
     nightFrac: number[] = [],
-    //Sun position for the hovered hour: the central column casts its shadow on the ground in that direction.
-    hoverSun: { azimuth: number; altitude: number } | null = null,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -838,10 +812,9 @@ export function projectClockFrame(
     const homeX = (colBase[0] + colTop[0]) / 2;
     const homeY = (colBase[1] + colTop[1]) / 2;
     const homeR = Math.hypot(colTop[0] - colBase[0], colTop[1] - colBase[1]) / 2 + hubR * ppm;
-    const night  = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
-    const shadow = hoverSun ? centralShadow(camera, hubR, colH, hoverSun) : '';
+    const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
-        guideSvg: night + shadow + clockGuide(camera, outerR) + compass.svg,
+        guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, 0),
         hits, labels, compass: compass.labels,
         home: { x: homeX, y: homeY, r: homeR },
@@ -986,8 +959,6 @@ export function projectTrendFrame(
     columnHighlight: boolean,
     //Per-hour night share for the ground day/night wedges (empty = none drawn).
     nightFrac: number[] = [],
-    //Sun position for the hovered hour: the central column casts its shadow on the ground in that direction.
-    hoverSun: { azimuth: number; altitude: number } | null = null,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1083,10 +1054,9 @@ export function projectTrendFrame(
     //Central-gauge hit target: a disc over the whole projected column body (base to top), like the clock hub.
     const cBase = camera.project(0, 0, 0);
     const cTop  = camera.project(0, 0, colH);
-    const night  = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
-    const shadow = hoverSun ? centralShadow(camera, hubR, colH, hoverSun) : '';
+    const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
-        guideSvg: night + shadow + clockGuide(camera, outerR) + compass.svg,
+        guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[new Date().getHours()]) * zScale),
         hits, labels, compass: compass.labels,
         home: {
