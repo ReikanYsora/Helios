@@ -7,7 +7,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
-## 2026.7.1 (beta)
+## 2026.7.1
 
 A new chapter for Helios. This release describes the card as it is **today**:
 a single, self-contained Lovelace card that gives your solar setup a living,
