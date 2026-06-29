@@ -28,7 +28,7 @@ import {
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
 import { nightFractionByHour } from './card/sun-zones';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
     refreshPv,
@@ -3127,7 +3127,7 @@ export class HeliosCard extends LitElement
     //time_format setting). The Date is local so the hour shown is the one meant.
     private _formatClockHour(h: number): string
     {
-        return formatHaTime(this.hass, new Date(2000, 0, 1, h));
+        return formatHaHour(this.hass, new Date(2000, 0, 1, h));
     }
 
     //Localised compass letters in the SAME order projectClockFrame/clockCompass emit them (N, E, S, W), so each

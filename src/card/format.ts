@@ -75,6 +75,24 @@ export function formatHaTime(hass: any, date: Date): string
 }
 
 
+//Hour-only label (no minutes), localised + 12/24h aware: "12 AM" / "1 PM" in
+//am/pm locales, the bare hour in 24h ones. For the clock/trend dial's 24 ground
+//labels, where a ":00" on every hour is noise (and very long in English am/pm).
+export function formatHaHour(hass: any, date: Date): string
+{
+    const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
+    const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', hour12: haUseAmPm(locale) };
+    try
+    {
+        return new Intl.DateTimeFormat(locale?.language, opts).format(date);
+    }
+    catch (_)
+    {
+        return new Intl.DateTimeFormat(undefined, opts).format(date);
+    }
+}
+
+
 //Date + time like the HA frontend (day, short month, hour:minute, honouring 12/24h), for the timeline scrub readout
 //where the coarse axis labels (months on a year window) don't pin the exact instant.
 export function formatHaDateTime(hass: any, date: Date): string
