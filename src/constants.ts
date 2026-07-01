@@ -88,6 +88,11 @@ export const OTHER_ERROR_BACKOFF_MS: readonly number[] = [1 * 60_000, 5 * 60_000
 export const CHANGE_REFRESH_MS = 60_000;
 export const COARSE_PROBE_MS   = 15 * 60_000;
 export const DENSE_FRACTION    = 0.6;
+//Store-curve coarse-meter smoothing: the largest report cadence (in store buckets) still spread back into a
+//smooth curve, and the fraction of gaps that must sit at that cadence to treat a meter as regularly coarse
+//(below it, the non-zero buckets read as genuine intermittent flow and are left untouched).
+export const COARSE_MAX_SPREAD_BUCKETS = 6;
+export const COARSE_REGULARITY         = 0.6;
 
 
 //=== Buildings / Overpass ===
