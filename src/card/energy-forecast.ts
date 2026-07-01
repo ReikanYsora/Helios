@@ -6,12 +6,12 @@ import type { EnergyDefaults } from './energy-prefs';
 import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../constants';
 
 
-//One forecast point. The `wh` slot always holds AVERAGE WATTS for the point's bucket: the fetch layer normalises
-//each provider bucket's energy by its duration, so consumers read watts directly regardless of the feed cadence.
+//One forecast point. `w` holds the AVERAGE WATTS across the point's bucket: the fetch layer normalises each
+//provider bucket's energy by its duration, so consumers read watts directly regardless of the feed cadence.
 export interface SolarForecastPoint
 {
     tMs: number;
-    wh:  number;
+    w:   number;
 }
 
 
@@ -84,7 +84,7 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
 
 //Try the detail websocket for each configured provider entry over the card's J-2..J+2 window. Returns the merged
 //points of the first entry that answers, or null when no entry supports the command (caller then falls back to HA's
-//generic surface). Each `pv_w` is watts, kept in the .wh slot (hourly: watts == Wh, read as watts either way).
+//generic surface). Each `pv_w` is already watts, so it goes straight into the point's `w`.
 async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecastPoint[] | null>
 {
     const candidates = host._energyDefaults?.solarForecastEntryIds ?? [];
@@ -120,7 +120,7 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
                 const tMs = Date.parse(p.t);
                 if (Number.isFinite(tMs) && typeof p.pv_w === 'number' && Number.isFinite(p.pv_w))
                 {
-                    out.push({ tMs, wh: p.pv_w });
+                    out.push({ tMs, w: p.pv_w });
                 }
             }
             out.sort((a, b) => a.tMs - b.tMs);
@@ -140,9 +140,9 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
 
 //Merge the per-config-entry wh_hours maps into one combined forecast, then normalise each point to AVERAGE WATTS.
 //HA's energy/solar_forecast reports ENERGY per bucket (Wh), and providers differ in bucket width (Forecast.Solar is
-//hourly, Solcast is 30-minute, ...). Consumers of this array read the .wh slot as watts, so we divide each bucket's
-//summed energy by the bucket duration in hours. The duration is derived from the median spacing of the merged
-//timeline, so a 30-minute feed scales x2, an hourly feed is unchanged, and any other cadence is handled generically.
+//hourly, Solcast is 30-minute, ...). Consumers read `w` as watts, so we divide each bucket's summed energy by the
+//bucket duration in hours. The duration is derived from the median spacing of the merged timeline, so a 30-minute
+//feed scales x2, an hourly feed is unchanged, and any other cadence is handled generically.
 export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<string, number> }> | null | undefined): SolarForecastPoint[]
 {
     if (!raw || typeof raw !== 'object')
@@ -173,12 +173,9 @@ export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<strin
             byMs.set(tMs, (byMs.get(tMs) ?? 0) + v);
         }
     }
-    const sorted: SolarForecastPoint[] = [];
-    for (const [tMs, wh] of byMs)
-    {
-        sorted.push({ tMs, wh });
-    }
-    sorted.sort((a, b) => a.tMs - b.tMs);
+    const sorted = [...byMs.entries()]
+        .map(([tMs, wh]) => ({ tMs, wh }))
+        .sort((a, b) => a.tMs - b.tMs);
 
     //Detect the native bucket width from the median positive gap between consecutive points, so per-point anomalies
     //(overnight jumps, missing samples) don't distort the conversion. Fall back to one hour when it can't be measured.
@@ -203,12 +200,8 @@ export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<strin
     }
     const wattFactor = HOUR_MS / bucketMs;
 
-    //Convert each bucket's summed energy to average watts in place; consumers read the .wh slot as watts.
-    for (const point of sorted)
-    {
-        point.wh *= wattFactor;
-    }
-    return sorted;
+    //Energy per bucket -> average watts (Wh * hour/bucket): a 30-minute feed scales x2, an hourly feed is unchanged.
+    return sorted.map((p) => ({ tMs: p.tMs, w: p.wh * wattFactor }));
 }
 
 
@@ -248,12 +241,12 @@ export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: num
     {
         const f = (ms - pt.tMs) / (next.tMs - pt.tMs);
         const frac = f < 0 ? 0 : f > 1 ? 1 : f;
-        return pt.wh + (next.wh - pt.wh) * frac;
+        return pt.w + (next.w - pt.w) * frac;
     }
     //No usable next point: the value only applies inside this point's own hour window.
     if (ms >= pt.tMs + HOUR_MS)
     {
         return null;
     }
-    return pt.wh;
+    return pt.w;
 }
