@@ -120,13 +120,5 @@ export const el: Translations = {
         solarNoon:  'Ηλιακό μεσημέρι',
         sunset:     'Δύση',
         dayLength:  'Διάρκεια ημέρας',
-        condClear:        'Αίθριος',
-        condPartlyCloudy: 'Μερικώς νεφελώδης',
-        condCloudy:       'Νεφελώδης',
-        condFog:          'Ομίχλη',
-        condDrizzle:      'Ψιχάλα',
-        condRain:         'Βροχή',
-        condSnow:         'Χιόνι',
-        condThunder:      'Καταιγίδα',
     }
 };

@@ -221,15 +221,6 @@ export interface Translations
         solarNoon?:  string;
         sunset?:     string;
         dayLength?:  string;
-        //Weather-condition labels (WMO buckets, see card/info-panel.ts).
-        condClear?:        string;
-        condPartlyCloudy?: string;
-        condCloudy?:       string;
-        condFog?:          string;
-        condDrizzle?:      string;
-        condRain?:         string;
-        condSnow?:         string;
-        condThunder?:      string;
     };
 }
 

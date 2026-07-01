@@ -120,13 +120,5 @@ export const sk: Translations = {
         solarNoon:  'Slnečné poludnie',
         sunset:     'Západ slnka',
         dayLength:  'Dĺžka dňa',
-        condClear:        'Jasno',
-        condPartlyCloudy: 'Polojasno',
-        condCloudy:       'Zamračené',
-        condFog:          'Hmla',
-        condDrizzle:      'Mrholenie',
-        condRain:         'Dážď',
-        condSnow:         'Sneženie',
-        condThunder:      'Búrka',
     }
 };

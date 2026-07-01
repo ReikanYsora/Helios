@@ -120,13 +120,5 @@ export const zhHans: Translations = {
         solarNoon:  '太阳正午',
         sunset:     '日落',
         dayLength:  '昼长',
-        condClear:        '晴',
-        condPartlyCloudy: '局部多云',
-        condCloudy:       '多云',
-        condFog:          '雾',
-        condDrizzle:      '毛毛雨',
-        condRain:         '雨',
-        condSnow:         '雪',
-        condThunder:      '雷暴',
     }
 };

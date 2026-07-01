@@ -120,13 +120,5 @@ export const lv: Translations = {
         solarNoon:  'Saules pusdienlaiks',
         sunset:     'Saulriets',
         dayLength:  'Dienas garums',
-        condClear:        'Skaidrs',
-        condPartlyCloudy: 'Daļēji mākoņains',
-        condCloudy:       'Mākoņains',
-        condFog:          'Migla',
-        condDrizzle:      'Smidzināšana',
-        condRain:         'Lietus',
-        condSnow:         'Sniegs',
-        condThunder:      'Pērkona negaiss',
     }
 };

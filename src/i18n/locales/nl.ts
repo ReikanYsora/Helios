@@ -120,13 +120,5 @@ export const nl: Translations = {
         solarNoon:  'Zonhoogste stand',
         sunset:     'Zonsondergang',
         dayLength:  'Daglengte',
-        condClear:        'Helder',
-        condPartlyCloudy: 'Gedeeltelijk bewolkt',
-        condCloudy:       'Bewolkt',
-        condFog:          'Mist',
-        condDrizzle:      'Motregen',
-        condRain:         'Regen',
-        condSnow:         'Sneeuw',
-        condThunder:      'Onweer',
     }
 };

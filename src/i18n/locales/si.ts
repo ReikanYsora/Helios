@@ -120,13 +120,5 @@ export const si: Translations = {
         solarNoon:  'සූර්ය මධ්‍යාහ්නය',
         sunset:     'හිරු බැසීම',
         dayLength:  'දින දිග',
-        condClear:        'පැහැදිලි',
-        condPartlyCloudy: 'අර්ධ වශයෙන් වළාකුළු සහිත',
-        condCloudy:       'වළාකුළු සහිත',
-        condFog:          'මීදුම',
-        condDrizzle:      'ඉසිනවා',
-        condRain:         'වැස්ස',
-        condSnow:         'හිම',
-        condThunder:      'ගිගුරුම් සහිත වැස්ස',
     }
 };

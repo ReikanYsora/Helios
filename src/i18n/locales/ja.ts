@@ -120,13 +120,5 @@ export const ja: Translations = {
         solarNoon:  '南中',
         sunset:     '日の入り',
         dayLength:  '昼の長さ',
-        condClear:        '快晴',
-        condPartlyCloudy: '晴れときどき曇り',
-        condCloudy:       '曇り',
-        condFog:          '霧',
-        condDrizzle:      '霧雨',
-        condRain:         '雨',
-        condSnow:         '雪',
-        condThunder:      '雷雨',
     }
 };

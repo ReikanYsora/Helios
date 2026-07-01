@@ -120,13 +120,5 @@ export const et: Translations = {
         solarNoon:  'Päikese keskpäev',
         sunset:     'Päikeseloojang',
         dayLength:  'Päeva pikkus',
-        condClear:        'Selge',
-        condPartlyCloudy: 'Vahelduva pilvisusega',
-        condCloudy:       'Pilvine',
-        condFog:          'Udu',
-        condDrizzle:      'Uduvihm',
-        condRain:         'Vihm',
-        condSnow:         'Lumi',
-        condThunder:      'Äike',
     }
 };

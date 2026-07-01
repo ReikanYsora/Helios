@@ -120,13 +120,5 @@ export const ro: Translations = {
         solarNoon:  'Amiaza solara',
         sunset:     'Apus',
         dayLength:  'Durata zilei',
-        condClear:        'Senin',
-        condPartlyCloudy: 'Partial noros',
-        condCloudy:       'Noros',
-        condFog:          'Ceata',
-        condDrizzle:      'Burnita',
-        condRain:         'Ploaie',
-        condSnow:         'Ninsoare',
-        condThunder:      'Furtuna',
     }
 };

@@ -15,9 +15,9 @@ and unit options, and a batch of accuracy fixes for specific setups.
 ### New: weather and astronomy panel
 
 * A small **info panel** in the top-right corner showing the local weather right
-  now: temperature, sky condition and wind, sourced from Open-Meteo, with
-  optional Home Assistant entity overrides for outdoor temperature and wind
-  speed.
+  now: temperature, feels-like and wind, with the sky condition shown as an icon,
+  sourced from Open-Meteo, with optional Home Assistant entity overrides for
+  outdoor temperature and wind speed.
 * An optional **astronomical readout** (a toggle in the editor) that adds the
   sun's altitude and azimuth, sunrise, solar noon, sunset and day length.
 * The wind-direction arrow is **projected onto the tilted 3D ground**, so it

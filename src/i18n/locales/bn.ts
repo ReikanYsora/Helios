@@ -120,13 +120,5 @@ export const bn: Translations = {
         solarNoon:  'সৌর মধ্যাহ্ন',
         sunset:     'সূর্যাস্ত',
         dayLength:  'দিনের দৈর্ঘ্য',
-        condClear:        'পরিষ্কার',
-        condPartlyCloudy: 'আংশিক মেঘলা',
-        condCloudy:       'মেঘলা',
-        condFog:          'কুয়াশা',
-        condDrizzle:      'গুঁড়ি গুঁড়ি বৃষ্টি',
-        condRain:         'বৃষ্টি',
-        condSnow:         'তুষার',
-        condThunder:      'বজ্রঝড়',
     }
 };

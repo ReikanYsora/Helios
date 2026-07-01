@@ -120,13 +120,5 @@ export const hi: Translations = {
         solarNoon:  'सौर मध्याह्न',
         sunset:     'सूर्यास्त',
         dayLength:  'दिन की अवधि',
-        condClear:        'साफ़',
-        condPartlyCloudy: 'आंशिक रूप से बादल',
-        condCloudy:       'बादल',
-        condFog:          'कोहरा',
-        condDrizzle:      'बूँदाबाँदी',
-        condRain:         'बारिश',
-        condSnow:         'बर्फ़',
-        condThunder:      'आँधी-तूफ़ान',
     }
 };

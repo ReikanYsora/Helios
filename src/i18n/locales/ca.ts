@@ -120,13 +120,5 @@ export const ca: Translations = {
         solarNoon:  'Migdia solar',
         sunset:     'Posta del sol',
         dayLength:  'Durada del dia',
-        condClear:        'Serè',
-        condPartlyCloudy: 'Parcialment ennuvolat',
-        condCloudy:       'Ennuvolat',
-        condFog:          'Boira',
-        condDrizzle:      'Plovisqueig',
-        condRain:         'Pluja',
-        condSnow:         'Neu',
-        condThunder:      'Tempesta',
     }
 };

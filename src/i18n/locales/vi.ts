@@ -120,13 +120,5 @@ export const vi: Translations = {
         solarNoon:  'Trưa mặt trời',
         sunset:     'Hoàng hôn',
         dayLength:  'Độ dài ngày',
-        condClear:        'Quang đãng',
-        condPartlyCloudy: 'Có mây rải rác',
-        condCloudy:       'Nhiều mây',
-        condFog:          'Sương mù',
-        condDrizzle:      'Mưa phùn',
-        condRain:         'Mưa',
-        condSnow:         'Tuyết',
-        condThunder:      'Giông bão',
     }
 };

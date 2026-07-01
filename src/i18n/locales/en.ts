@@ -130,13 +130,5 @@ export const en: Translations = {
         solarNoon:  'Solar noon',
         sunset:     'Sunset',
         dayLength:  'Day length',
-        condClear:        'Clear',
-        condPartlyCloudy: 'Partly cloudy',
-        condCloudy:       'Cloudy',
-        condFog:          'Fog',
-        condDrizzle:      'Drizzle',
-        condRain:         'Rain',
-        condSnow:         'Snow',
-        condThunder:      'Thunderstorm',
     }
 };

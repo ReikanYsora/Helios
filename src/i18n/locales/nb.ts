@@ -120,13 +120,5 @@ export const nb: Translations = {
         solarNoon:  'Soltoppunkt',
         sunset:     'Solnedgang',
         dayLength:  'Daglengde',
-        condClear:        'Klart',
-        condPartlyCloudy: 'Delvis skyet',
-        condCloudy:       'Skyet',
-        condFog:          'Tåke',
-        condDrizzle:      'Yr',
-        condRain:         'Regn',
-        condSnow:         'Snø',
-        condThunder:      'Tordenvær',
     }
 };

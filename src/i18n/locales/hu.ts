@@ -120,13 +120,5 @@ export const hu: Translations = {
         solarNoon:  'Delelés',
         sunset:     'Napnyugta',
         dayLength:  'Nappal hossza',
-        condClear:        'Derült',
-        condPartlyCloudy: 'Részben felhős',
-        condCloudy:       'Felhős',
-        condFog:          'Köd',
-        condDrizzle:      'Szitálás',
-        condRain:         'Eső',
-        condSnow:         'Hó',
-        condThunder:      'Zivatar',
     }
 };

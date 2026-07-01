@@ -120,13 +120,5 @@ export const pt: Translations = {
         solarNoon:  'Meio-dia solar',
         sunset:     'Pôr do sol',
         dayLength:  'Duração do dia',
-        condClear:        'Céu limpo',
-        condPartlyCloudy: 'Parcialmente nublado',
-        condCloudy:       'Nublado',
-        condFog:          'Nevoeiro',
-        condDrizzle:      'Chuvisco',
-        condRain:         'Chuva',
-        condSnow:         'Neve',
-        condThunder:      'Trovoada',
     }
 };

@@ -120,13 +120,5 @@ export const uk: Translations = {
         solarNoon:  'Сонячний полудень',
         sunset:     'Захід сонця',
         dayLength:  'Тривалість дня',
-        condClear:        'Ясно',
-        condPartlyCloudy: 'Мінлива хмарність',
-        condCloudy:       'Хмарно',
-        condFog:          'Туман',
-        condDrizzle:      'Мряка',
-        condRain:         'Дощ',
-        condSnow:         'Сніг',
-        condThunder:      'Гроза',
     }
 };

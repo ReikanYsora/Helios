@@ -120,13 +120,5 @@ export const ru: Translations = {
         solarNoon:  'Солнечный полдень',
         sunset:     'Закат',
         dayLength:  'Длина дня',
-        condClear:        'Ясно',
-        condPartlyCloudy: 'Переменная облачность',
-        condCloudy:       'Облачно',
-        condFog:          'Туман',
-        condDrizzle:      'Морось',
-        condRain:         'Дождь',
-        condSnow:         'Снег',
-        condThunder:      'Гроза',
     }
 };

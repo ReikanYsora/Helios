@@ -120,13 +120,5 @@ export const id: Translations = {
         solarNoon:  'Tengah hari surya',
         sunset:     'Matahari terbenam',
         dayLength:  'Panjang hari',
-        condClear:        'Cerah',
-        condPartlyCloudy: 'Berawan sebagian',
-        condCloudy:       'Berawan',
-        condFog:          'Kabut',
-        condDrizzle:      'Gerimis',
-        condRain:         'Hujan',
-        condSnow:         'Salju',
-        condThunder:      'Badai petir',
     }
 };

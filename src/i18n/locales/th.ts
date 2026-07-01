@@ -120,13 +120,5 @@ export const th: Translations = {
         solarNoon:  'เที่ยงสุริยะ',
         sunset:     'พระอาทิตย์ตก',
         dayLength:  'ความยาวของวัน',
-        condClear:        'ท้องฟ้าแจ่มใส',
-        condPartlyCloudy: 'มีเมฆบางส่วน',
-        condCloudy:       'มีเมฆมาก',
-        condFog:          'หมอก',
-        condDrizzle:      'ฝนปรอย',
-        condRain:         'ฝนตก',
-        condSnow:         'หิมะตก',
-        condThunder:      'พายุฝนฟ้าคะนอง',
     }
 };

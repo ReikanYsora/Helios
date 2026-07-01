@@ -583,24 +583,9 @@ export class HeliosCard extends LitElement
         const wind: PanelValue | null = windOverride ?? (amb ? formatWindKmh(this.hass, amb.windSpeed) : null);
         const feels: PanelValue | null = amb ? formatTempC(this.hass, amb.apparent) : null;
 
-        let condIcon = '';
-        let condText = '';
-        if (amb)
-        {
-            const key = wmoConditionKey(amb.weatherCode);
-            condIcon  = conditionIcon(key, night);
-            const labels: Record<string, string | undefined> = {
-                clear:        p?.condClear        ?? 'Clear',
-                partlyCloudy: p?.condPartlyCloudy ?? 'Partly cloudy',
-                cloudy:       p?.condCloudy       ?? 'Cloudy',
-                fog:          p?.condFog          ?? 'Fog',
-                drizzle:      p?.condDrizzle      ?? 'Drizzle',
-                rain:         p?.condRain         ?? 'Rain',
-                snow:         p?.condSnow         ?? 'Snow',
-                thunder:      p?.condThunder      ?? 'Thunderstorm',
-            };
-            condText = labels[key] ?? '';
-        }
+        //The sky condition reads from the icon alone: the text label ("Partly cloudy") is long enough to force the
+        //panel wide or wrap, so the feels-like temperature takes its slot under the reading instead (see below).
+        const condIcon = amb ? conditionIcon(wmoConditionKey(amb.weatherCode), night) : '';
         const windDir = amb && Number.isFinite(amb.windDir) ? amb.windDir : null;
         //Arrow points DOWNWIND (where the wind blows to = FROM-bearing + 180), projected onto the tilted ground so
         //it stays aligned with the true direction as the camera orbits. Falls back to a flat rotation if the
@@ -638,19 +623,16 @@ export class HeliosCard extends LitElement
                         ${condIcon ? html`<ha-icon class="ip-cond-icon" icon=${condIcon}></ha-icon>` : nothing}
                         <div class="ip-primary">
                             ${temp ? html`<div class="ip-temp">${temp.value}<span class="ip-unit">${temp.unit}</span></div>` : nothing}
-                            ${condText ? html`<div class="ip-cond">${condText}</div>` : nothing}
+                            ${feels ? html`<div class="ip-cond">${p?.feelsLike ?? 'Feels like'} ${feels.value}${feels.unit}</div>` : nothing}
                         </div>
                     </div>
-                    ${feels || wind ? html`
+                    ${wind ? html`
                         <div class="ip-secondary">
-                            ${feels ? html`<div class="ip-line">${p?.feelsLike ?? 'Feels like'} ${feels.value}${feels.unit}</div>` : nothing}
-                            ${wind ? html`
-                                <div class="ip-line">
-                                    <ha-icon class="ip-wind-icon" icon="mdi:weather-windy"></ha-icon>
-                                    <span>${p?.wind ?? 'Wind'} ${wind.value} ${wind.unit}</span>
-                                    ${windArrowRot !== null ? html`<ha-icon class="ip-wind-dir" icon="mdi:navigation" style="transform:rotate(${Math.round(windArrowRot)}deg)"></ha-icon>` : nothing}
-                                </div>
-                            ` : nothing}
+                            <div class="ip-line">
+                                <ha-icon class="ip-wind-icon" icon="mdi:weather-windy"></ha-icon>
+                                <span>${p?.wind ?? 'Wind'} ${wind.value} ${wind.unit}</span>
+                                ${windArrowRot !== null ? html`<ha-icon class="ip-wind-dir" icon="mdi:navigation" style="transform:rotate(${Math.round(windArrowRot)}deg)"></ha-icon>` : nothing}
+                            </div>
                         </div>
                     ` : nothing}
                 ` : nothing}

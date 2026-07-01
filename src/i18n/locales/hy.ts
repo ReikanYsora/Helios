@@ -120,13 +120,5 @@ export const hy: Translations = {
         solarNoon:  'Արևային կեսօր',
         sunset:     'Մայրամուտ',
         dayLength:  'Օրվա տևողություն',
-        condClear:        'Պարզ',
-        condPartlyCloudy: 'Մասամբ ամպամած',
-        condCloudy:       'Ամպամած',
-        condFog:          'Մառախուղ',
-        condDrizzle:      'Մաղող անձրև',
-        condRain:         'Անձրև',
-        condSnow:         'Ձյուն',
-        condThunder:      'Ամպրոպ',
     }
 };

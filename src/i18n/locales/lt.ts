@@ -120,13 +120,5 @@ export const lt: Translations = {
         solarNoon:  'Saulės vidurdienis',
         sunset:     'Saulėlydis',
         dayLength:  'Dienos ilgumas',
-        condClear:        'Giedra',
-        condPartlyCloudy: 'Mažai debesuota',
-        condCloudy:       'Debesuota',
-        condFog:          'Rūkas',
-        condDrizzle:      'Dulksna',
-        condRain:         'Lietus',
-        condSnow:         'Sniegas',
-        condThunder:      'Perkūnija',
     }
 };

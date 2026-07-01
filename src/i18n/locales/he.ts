@@ -120,13 +120,5 @@ export const he: Translations = {
         solarNoon:  'חצות שמש',
         sunset:     'שקיעה',
         dayLength:  'אורך היום',
-        condClear:        'בהיר',
-        condPartlyCloudy: 'מעונן חלקית',
-        condCloudy:       'מעונן',
-        condFog:          'ערפל',
-        condDrizzle:      'טפטוף',
-        condRain:         'גשם',
-        condSnow:         'שלג',
-        condThunder:      'סופת רעמים',
     }
 };

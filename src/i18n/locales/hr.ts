@@ -120,13 +120,5 @@ export const hr: Translations = {
         solarNoon:  'Solarno podne',
         sunset:     'Zalazak sunca',
         dayLength:  'Trajanje dana',
-        condClear:        'Vedro',
-        condPartlyCloudy: 'Djelomično oblačno',
-        condCloudy:       'Oblačno',
-        condFog:          'Magla',
-        condDrizzle:      'Rosulja',
-        condRain:         'Kiša',
-        condSnow:         'Snijeg',
-        condThunder:      'Grmljavina',
     }
 };

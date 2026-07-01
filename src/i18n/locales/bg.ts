@@ -120,13 +120,5 @@ export const bg: Translations = {
         solarNoon:  'Слънчево пладне',
         sunset:     'Залез',
         dayLength:  'Продължителност на деня',
-        condClear:        'Ясно',
-        condPartlyCloudy: 'Разкъсана облачност',
-        condCloudy:       'Облачно',
-        condFog:          'Мъгла',
-        condDrizzle:      'Ръмеж',
-        condRain:         'Дъжд',
-        condSnow:         'Сняг',
-        condThunder:      'Гръмотевична буря',
     }
 };

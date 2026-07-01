@@ -120,13 +120,5 @@ export const da: Translations = {
         solarNoon:  'Solar middag',
         sunset:     'Solnedgang',
         dayLength:  'Dagslængde',
-        condClear:        'Klart',
-        condPartlyCloudy: 'Delvist skyet',
-        condCloudy:       'Skyet',
-        condFog:          'Tåge',
-        condDrizzle:      'Støvregn',
-        condRain:         'Regn',
-        condSnow:         'Sne',
-        condThunder:      'Tordenvejr',
     }
 };

@@ -120,13 +120,5 @@ export const es419: Translations = {
         solarNoon:  'Mediodía solar',
         sunset:     'Puesta del sol',
         dayLength:  'Duración del día',
-        condClear:        'Despejado',
-        condPartlyCloudy: 'Parcialmente nublado',
-        condCloudy:       'Nublado',
-        condFog:          'Niebla',
-        condDrizzle:      'Llovizna',
-        condRain:         'Lluvia',
-        condSnow:         'Nieve',
-        condThunder:      'Tormenta eléctrica',
     }
 };

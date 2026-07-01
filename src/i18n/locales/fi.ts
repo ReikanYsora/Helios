@@ -120,13 +120,5 @@ export const fi: Translations = {
         solarNoon:  'Aurinkokeskipäivä',
         sunset:     'Auringonlasku',
         dayLength:  'Päivän pituus',
-        condClear:        'Selkeää',
-        condPartlyCloudy: 'Puolipilvistä',
-        condCloudy:       'Pilvistä',
-        condFog:          'Sumua',
-        condDrizzle:      'Tihkusadetta',
-        condRain:         'Sadetta',
-        condSnow:         'Lunta',
-        condThunder:      'Ukkosta',
     }
 };

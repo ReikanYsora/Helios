@@ -120,13 +120,5 @@ export const srLatn: Translations = {
         solarNoon:  'Sunčevo podne',
         sunset:     'Zalazak sunca',
         dayLength:  'Dužina dana',
-        condClear:        'Vedro',
-        condPartlyCloudy: 'Delimično oblačno',
-        condCloudy:       'Oblačno',
-        condFog:          'Magla',
-        condDrizzle:      'Rominjanje',
-        condRain:         'Kiša',
-        condSnow:         'Sneg',
-        condThunder:      'Grmljavina',
     }
 };

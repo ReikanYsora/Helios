@@ -120,13 +120,5 @@ export const lb: Translations = {
         solarNoon:  'Sonnenhéichstand',
         sunset:     'Sonnenënnergang',
         dayLength:  'Dageslängt',
-        condClear:        'Kloer',
-        condPartlyCloudy: 'Deelweis bewëllkt',
-        condCloudy:       'Bewëllkt',
-        condFog:          'Niwwel',
-        condDrizzle:      'Sprëtzereen',
-        condRain:         'Reen',
-        condSnow:         'Schnéi',
-        condThunder:      'Donnerwieder',
     }
 };

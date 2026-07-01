@@ -120,13 +120,5 @@ export const fy: Translations = {
         solarNoon:  'Sinnemiddei',
         sunset:     'Sinne-ûndergong',
         dayLength:  'Deidoer',
-        condClear:        'Helder',
-        condPartlyCloudy: 'Foar in part bewolke',
-        condCloudy:       'Bewolke',
-        condFog:          'Dize',
-        condDrizzle:      'Motrein',
-        condRain:         'Rein',
-        condSnow:         'Snie',
-        condThunder:      'Ûnwaar',
     }
 };

@@ -120,13 +120,5 @@ export const zhHant: Translations = {
         solarNoon:  '太陽正午',
         sunset:     '日落',
         dayLength:  '晝長',
-        condClear:        '晴',
-        condPartlyCloudy: '局部多雲',
-        condCloudy:       '多雲',
-        condFog:          '霧',
-        condDrizzle:      '毛毛雨',
-        condRain:         '雨',
-        condSnow:         '雪',
-        condThunder:      '雷暴',
     }
 };

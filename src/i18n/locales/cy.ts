@@ -120,13 +120,5 @@ export const cy: Translations = {
         solarNoon:  'Canol dydd solar',
         sunset:     'Machlud haul',
         dayLength:  'Hyd y dydd',
-        condClear:        'Clir',
-        condPartlyCloudy: 'Cymylog rhannol',
-        condCloudy:       'Cymylog',
-        condFog:          'Niwl',
-        condDrizzle:      'Glaw mân',
-        condRain:         'Glaw',
-        condSnow:         'Eira',
-        condThunder:      'Storm daranau',
     }
 };

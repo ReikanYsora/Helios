@@ -120,13 +120,5 @@ export const ar: Translations = {
         solarNoon:  'الظهيرة الشمسية',
         sunset:     'الغروب',
         dayLength:  'طول النهار',
-        condClear:        'صافٍ',
-        condPartlyCloudy: 'غائم جزئياً',
-        condCloudy:       'غائم',
-        condFog:          'ضباب',
-        condDrizzle:      'رذاذ',
-        condRain:         'مطر',
-        condSnow:         'ثلج',
-        condThunder:      'عاصفة رعدية',
     }
 };

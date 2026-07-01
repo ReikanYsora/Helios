@@ -120,13 +120,5 @@ export const isLocale: Translations = {
         solarNoon:  'Sólarhádegi',
         sunset:     'Sólsetur',
         dayLength:  'Lengd dags',
-        condClear:        'Heiðskírt',
-        condPartlyCloudy: 'Léttskýjað',
-        condCloudy:       'Skýjað',
-        condFog:          'Þoka',
-        condDrizzle:      'Súld',
-        condRain:         'Rigning',
-        condSnow:         'Snjór',
-        condThunder:      'Þrumuveður',
     }
 };

@@ -120,13 +120,5 @@ export const eo: Translations = {
         solarNoon:  'Suna tagmezo',
         sunset:     'Sunsubiro',
         dayLength:  'Tagdauxro',
-        condClear:        'Klara',
-        condPartlyCloudy: 'Parte nuba',
-        condCloudy:       'Nuba',
-        condFog:          'Nebulo',
-        condDrizzle:      'Pluveto',
-        condRain:         'Pluvo',
-        condSnow:         'Negxo',
-        condThunder:      'Fulmotondro',
     }
 };

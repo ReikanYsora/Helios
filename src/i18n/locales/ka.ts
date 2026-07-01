@@ -120,13 +120,5 @@ export const ka: Translations = {
         solarNoon:  'მზის შუადღე',
         sunset:     'მზის ჩასვლა',
         dayLength:  'დღის ხანგრძლივობა',
-        condClear:        'მოწმენდილი',
-        condPartlyCloudy: 'ნაწილობრივ მოღრუბლული',
-        condCloudy:       'მოღრუბლული',
-        condFog:          'ნისლი',
-        condDrizzle:      'წვიმა-ჟინჟლი',
-        condRain:         'წვიმა',
-        condSnow:         'თოვლი',
-        condThunder:      'ჭექა-ქუხილი',
     }
 };

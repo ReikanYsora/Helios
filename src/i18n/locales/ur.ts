@@ -120,13 +120,5 @@ export const ur: Translations = {
         solarNoon:  'نصف النہار',
         sunset:     'غروبِ آفتاب',
         dayLength:  'دن کی لمبائی',
-        condClear:        'صاف',
-        condPartlyCloudy: 'جزوی طور پر ابر آلود',
-        condCloudy:       'ابر آلود',
-        condFog:          'دھند',
-        condDrizzle:      'ہلکی بارش',
-        condRain:         'بارش',
-        condSnow:         'برف باری',
-        condThunder:      'گرج چمک کے ساتھ طوفان',
     }
 };

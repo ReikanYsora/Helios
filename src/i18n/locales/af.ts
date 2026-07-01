@@ -120,13 +120,5 @@ export const af: Translations = {
         solarNoon:  'Sonhoogtepunt',
         sunset:     'Sonsondergang',
         dayLength:  'Daglengte',
-        condClear:        'Helder',
-        condPartlyCloudy: 'Gedeeltelik bewolk',
-        condCloudy:       'Bewolk',
-        condFog:          'Mis',
-        condDrizzle:      'Motreën',
-        condRain:         'Reën',
-        condSnow:         'Sneeu',
-        condThunder:      'Donderstorm',
     }
 };

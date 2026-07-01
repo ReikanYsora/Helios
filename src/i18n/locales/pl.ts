@@ -120,13 +120,5 @@ export const pl: Translations = {
         solarNoon:  'Południe słoneczne',
         sunset:     'Zachód słońca',
         dayLength:  'Długość dnia',
-        condClear:        'Bezchmurnie',
-        condPartlyCloudy: 'Częściowe zachmurzenie',
-        condCloudy:       'Pochmurno',
-        condFog:          'Mgła',
-        condDrizzle:      'Mżawka',
-        condRain:         'Deszcz',
-        condSnow:         'Śnieg',
-        condThunder:      'Burza',
     }
 };

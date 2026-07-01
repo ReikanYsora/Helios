@@ -120,13 +120,5 @@ export const ta: Translations = {
         solarNoon:  'நண்பகல் சூரியன்',
         sunset:     'சூரிய அஸ்தமனம்',
         dayLength:  'பகல் நேர நீளம்',
-        condClear:        'தெளிவானது',
-        condPartlyCloudy: 'ஓரளவு மேகமூட்டம்',
-        condCloudy:       'மேகமூட்டம்',
-        condFog:          'மூடுபனி',
-        condDrizzle:      'தூறல்',
-        condRain:         'மழை',
-        condSnow:         'பனிப்பொழிவு',
-        condThunder:      'இடியுடன் கூடிய மழை',
     }
 };

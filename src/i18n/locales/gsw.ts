@@ -120,13 +120,5 @@ export const gsw: Translations = {
         solarNoon:  'Sunnehöchschtand',
         sunset:     'Sunneuntergang',
         dayLength:  'Taglängi',
-        condClear:        'Klar',
-        condPartlyCloudy: 'Teilwiis bewölkt',
-        condCloudy:       'Bewölkt',
-        condFog:          'Näbel',
-        condDrizzle:      'Niesle',
-        condRain:         'Rägen',
-        condSnow:         'Schnee',
-        condThunder:      'Gwitter',
     }
 };

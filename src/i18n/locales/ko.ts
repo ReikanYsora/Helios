@@ -120,13 +120,5 @@ export const ko: Translations = {
         solarNoon:  '남중',
         sunset:     '일몰',
         dayLength:  '낮 길이',
-        condClear:        '맑음',
-        condPartlyCloudy: '구름 조금',
-        condCloudy:       '흐림',
-        condFog:          '안개',
-        condDrizzle:      '이슬비',
-        condRain:         '비',
-        condSnow:         '눈',
-        condThunder:      '뇌우',
     }
 };

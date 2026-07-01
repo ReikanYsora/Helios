@@ -120,13 +120,5 @@ export const gl: Translations = {
         solarNoon:  'Mediodía solar',
         sunset:     'Posta do sol',
         dayLength:  'Duración do día',
-        condClear:        'Despexado',
-        condPartlyCloudy: 'Parcialmente nubrado',
-        condCloudy:       'Nubrado',
-        condFog:          'Néboa',
-        condDrizzle:      'Chuvisca',
-        condRain:         'Choiva',
-        condSnow:         'Neve',
-        condThunder:      'Tormenta',
     }
 };

@@ -120,13 +120,5 @@ export const te: Translations = {
         solarNoon:  'మధ్యాహ్న సూర్యుడు',
         sunset:     'సూర్యాస్తమయం',
         dayLength:  'పగటి నిడివి',
-        condClear:        'నిర్మలం',
-        condPartlyCloudy: 'పాక్షికంగా మేఘావృతం',
-        condCloudy:       'మేఘావృతం',
-        condFog:          'పొగమంచు',
-        condDrizzle:      'తుంపర',
-        condRain:         'వర్షం',
-        condSnow:         'మంచు',
-        condThunder:      'ఉరుములతో కూడిన వర్షం',
     }
 };

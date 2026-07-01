@@ -120,13 +120,5 @@ export const ml: Translations = {
         solarNoon:  'സൗരമധ്യാഹ്നം',
         sunset:     'സൂര്യാസ്തമയം',
         dayLength:  'പകലിന്റെ ദൈർഘ്യം',
-        condClear:        'തെളിഞ്ഞ ആകാശം',
-        condPartlyCloudy: 'ഭാഗികമായി മേഘാവൃതം',
-        condCloudy:       'മേഘാവൃതം',
-        condFog:          'മൂടൽമഞ്ഞ്',
-        condDrizzle:      'ചാറ്റൽമഴ',
-        condRain:         'മഴ',
-        condSnow:         'മഞ്ഞുവീഴ്ച',
-        condThunder:      'ഇടിമഴ',
     }
 };

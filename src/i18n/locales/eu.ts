@@ -120,13 +120,5 @@ export const eu: Translations = {
         solarNoon:  'Eguerdi solarra',
         sunset:     'Eguzki-sartzea',
         dayLength:  'Eguneko iraupena',
-        condClear:        'Oskarbi',
-        condPartlyCloudy: 'Zati hodeitsu',
-        condCloudy:       'Hodeitsu',
-        condFog:          'Lainoa',
-        condDrizzle:      'Zirimiria',
-        condRain:         'Euria',
-        condSnow:         'Elurra',
-        condThunder:      'Ekaitza',
     }
 };

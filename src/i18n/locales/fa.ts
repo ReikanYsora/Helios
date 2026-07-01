@@ -120,13 +120,5 @@ export const fa: Translations = {
         solarNoon:  'ظهر خورشیدی',
         sunset:     'غروب آفتاب',
         dayLength:  'طول روز',
-        condClear:        'صاف',
-        condPartlyCloudy: 'نیمه‌ابری',
-        condCloudy:       'ابری',
-        condFog:          'مه',
-        condDrizzle:      'نم‌نم باران',
-        condRain:         'باران',
-        condSnow:         'برف',
-        condThunder:      'رعد و برق',
     }
 };

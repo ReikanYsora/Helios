@@ -120,13 +120,5 @@ export const tr: Translations = {
         solarNoon:  'Ogle vakti',
         sunset:     'Gun batimi',
         dayLength:  'Gun uzunlugu',
-        condClear:        'Acik',
-        condPartlyCloudy: 'Parcali bulutlu',
-        condCloudy:       'Bulutlu',
-        condFog:          'Sis',
-        condDrizzle:      'Ciseleme',
-        condRain:         'Yagmur',
-        condSnow:         'Kar',
-        condThunder:      'Gok gurultulu firtina',
     }
 };
