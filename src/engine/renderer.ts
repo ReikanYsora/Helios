@@ -139,6 +139,7 @@ export class SceneRenderer
     public async setLocation(lat: number, lon: number): Promise<void>
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
+        this.camera.southern   = lat < 0;
         const token  = ++this._groundToken;
         const ground = await buildGround(lat, lon);
         if (!this._alive || token !== this._groundToken) { return; }

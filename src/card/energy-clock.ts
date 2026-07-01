@@ -15,6 +15,7 @@ import { resolveCustomEntityIcon } from './custom-entity';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import type { EnergyDefaults } from './energy-prefs';
+import { serverHour, serverHourFrac } from './tz';
 import { pickTranslations } from '../i18n';
 
 //Structural surface the clock reads off the card. themeIsDark resolves palette polarity for the per-source
@@ -135,10 +136,20 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
 export const CLOCK_SLOTS_PER_HOUR = 4;
 const CLOCK_SLOTS = 24 * CLOCK_SLOTS_PER_HOUR;
 
-//Slot-of-day [0..CLOCK_SLOTS) for a local time.
-function slotOf(d: Date): number
+//Hour-of-day placement on the dial. `frac` is the fraction of the day (0..1). The southern hemisphere
+//reflects the ring about the east-west axis so noon sits north, sunrise east and sunset west, matching the
+//real austral sky and the scene's own compass, sun arc and shadows. The dial therefore runs anticlockwise
+//there (a reflection reverses the hour order), which is correct for the southern sun even if it reads
+//unusually. The compass letters keep their true north/south/east/west, so they are not adjusted.
+const hourFracAdj = (frac: number, southern: boolean): number => (southern ? 0.5 - frac : frac);
+const hourRad = (frac: number, southern: boolean): number => hourFracAdj(frac, southern) * 2 * Math.PI;
+const hourDeg = (frac: number, southern: boolean): number => hourFracAdj(frac, southern) * 360;
+
+//Slot-of-day [0..CLOCK_SLOTS) for an instant, in the HOME time zone (see ./tz) so the dial groups by the home's
+//real hour of day, not the browser's.
+function slotOf(ms: number): number
 {
-    return d.getHours() * CLOCK_SLOTS_PER_HOUR + Math.floor(d.getMinutes() / (60 / CLOCK_SLOTS_PER_HOUR));
+    return Math.min(CLOCK_SLOTS - 1, Math.floor(serverHourFrac(ms) * CLOCK_SLOTS_PER_HOUR));
 }
 
 //Fill NaN gaps by linear interpolation between nearest real samples, wrapping the dial, so an HOURLY-sourced
@@ -186,7 +197,7 @@ function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[
     {
         const v = series[i];
         if (v === null || !isFinite(v)) { continue; }
-        const s = slotOf(new Date(store.storeStartMs + (i + 0.5) * store.stepMs));
+        const s = slotOf(store.storeStartMs + (i + 0.5) * store.stepMs);
         sum[s] += Math.abs(v);
         cnt[s] += 1;
     }
@@ -213,7 +224,7 @@ function binSlotSum(store: UnifiedDataStore, series: (number | null)[]): number[
         {
             const slotEnd = Math.floor(t / slotMs) * slotMs + slotMs;
             const segEnd  = Math.min(bEnd, slotEnd);
-            sum[slotOf(new Date(t))] += energy * ((segEnd - t) / store.stepMs);
+            sum[slotOf(t)] += energy * ((segEnd - t) / store.stepMs);
             t = segEnd;
         }
     }
@@ -355,7 +366,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                 {
                     const slotEnd = Math.floor(t / slotMs) * slotMs + slotMs;
                     const segEnd  = Math.min(bEnd, slotEnd);
-                    wsum[s][slotOf(new Date(t))] += energy * ((segEnd - t) / store.stepMs);
+                    wsum[s][slotOf(t)] += energy * ((segEnd - t) / store.stepMs);
                     t = segEnd;
                 }
             });
@@ -386,7 +397,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             {
                 const v = hist.values[i];
                 if (!isFinite(v)) { continue; }
-                const h = slotOf(hist.times[i]);
+                const h = slotOf(hist.times[i].getTime());
                 sum[h] += v; cnt[h] += 1;
             }
         }
@@ -403,7 +414,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         {
             for (let i = 0; i < cs.times.length; i++)
             {
-                const h = slotOf(cs.times[i]);
+                const h = slotOf(cs.times[i].getTime());
                 const vals = [cs.cloudLow[i], cs.cloudMid[i], cs.cloudHigh[i]];
                 vals.forEach((v, b) => { if (isFinite(v)) { sum[b][h] += Math.max(0, v); cnt[b][h] += 1; } });
             }
@@ -428,7 +439,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             {
                 const v = hist.values[i];
                 if (!isFinite(v)) { continue; }
-                const h = slotOf(hist.times[i]);
+                const h = slotOf(hist.times[i].getTime());
                 sum[h] += Math.abs(v); cnt[h] += 1;
             }
         }
@@ -612,7 +623,7 @@ function clockGuide(camera: SceneCamera, outerR: number): string
     //24 spokes, each along its hour angle from the ring edge out toward the label.
     for (let h = 0; h < 24; h++)
     {
-        const a  = (h / 24) * 2 * Math.PI;
+        const a  = hourRad(h / 24, camera.southern);
         const p1 = camera.project(hubR * Math.sin(a), hubR * Math.cos(a), 0);
         const p2 = camera.project(tipR * Math.sin(a), tipR * Math.cos(a), 0);
         svg += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${col}" stroke-opacity="${CLOCK_GUIDE_OPACITY}" stroke-width="1" stroke-dasharray="2 2.5"/>`;
@@ -671,8 +682,8 @@ interface ClockFace { depth: number; svg: string }
 //Drawn last (always on top).
 function currentHourArrow(camera: SceneCamera, R: number, maxHm: number, toH: number): string
 {
-    const hour = new Date().getHours();
-    const a = ((hour + 0.5) / 24) * 2 * Math.PI;
+    const hour = serverHour(Date.now());
+    const a = hourRad((hour + 0.5) / 24, camera.southern);
     const e = R * Math.sin(a); const n = R * Math.cos(a);
     const apex = camera.project(e, n, maxHm * 1.15);
     const drop = camera.project(e, n, Math.max(0, toH));
@@ -694,8 +705,8 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
     {
         const frac = nightFrac[h] ?? 0;
         if (frac < 0.02) { continue; }
-        const a0 = (h / 24) * 2 * Math.PI;
-        const a1 = ((h + 1) / 24) * 2 * Math.PI;
+        const a0 = hourRad(h / 24, camera.southern);
+        const a1 = hourRad((h + 1) / 24, camera.southern);
         const pts: string[] = [];
         for (let k = 0; k <= SEG; k++) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(outerR * Math.sin(a), outerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
         for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
@@ -759,14 +770,14 @@ export function projectClockFrame(
     //Hour labels, laid flat just outside the OUTER ring; each fades with its distance from the camera.
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
-        camera.project3(labelR * Math.sin((h / 24) * 2 * Math.PI), labelR * Math.cos((h / 24) * 2 * Math.PI), 0));
+        camera.project3(labelR * Math.sin(hourRad(h / 24, camera.southern)), labelR * Math.cos(hourRad(h / 24, camera.southern)), 0));
     let depthMin = Infinity; let depthMax = -Infinity;
     for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
     const depthRange = depthMax - depthMin || 1;
     const labels = projLabels.map((p, h) => ({
         x: p.x, y: p.y,
         opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
-        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (h / 24) * 360 + 180}deg)`,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / 24, camera.southern) + 180}deg)`,
     }));
 
     //Shared per-UNIT ceiling: every ring of the same unit normalises against the busiest among them, so
@@ -839,7 +850,7 @@ function projectHistogramRing(
 
     for (let h = 0; h < 24; h++)
     {
-        const a = ((h + 0.5) / 24) * 2 * Math.PI;   //BETWEEN the hour lines
+        const a = hourRad((h + 0.5) / 24, camera.southern);   //BETWEEN the hour lines
         const e = R * Math.sin(a); const n = R * Math.cos(a);
         const total = totalAt(h);
         const base  = camera.project(e, n, 0);
@@ -970,14 +981,14 @@ export function projectTrendFrame(
 
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
-        camera.project3(labelR * Math.sin((h / 24) * 2 * Math.PI), labelR * Math.cos((h / 24) * 2 * Math.PI), 0));
+        camera.project3(labelR * Math.sin(hourRad(h / 24, camera.southern)), labelR * Math.cos(hourRad(h / 24, camera.southern)), 0));
     let depthMin = Infinity; let depthMax = -Infinity;
     for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
     const depthRange = depthMax - depthMin || 1;
     const labels = projLabels.map((p, h) => ({
         x: p.x, y: p.y,
         opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
-        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (h / 24) * 360 + 180}deg)`,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / 24, camera.southern) + 180}deg)`,
     }));
 
     let ceiling = 0;
@@ -996,7 +1007,7 @@ export function projectTrendFrame(
     const FADE_MIN = 0.6;
     const depths = Array.from({ length: 24 }, (_u, h) =>
     {
-        const a = ((h + 0.5) / 24) * 2 * Math.PI;
+        const a = hourRad((h + 0.5) / 24, camera.southern);
         return camera.project3(R * Math.sin(a), R * Math.cos(a), 0).depth;
     });
     let dMin = Infinity; let dMax = -Infinity;
@@ -1006,7 +1017,7 @@ export function projectTrendFrame(
     const faces: ClockFace[] = [];
     for (let h = 0; h < 24; h++)
     {
-        const a = ((h + 0.5) / 24) * 2 * Math.PI;
+        const a = hourRad((h + 0.5) / 24, camera.southern);
         const e = R * Math.sin(a); const n = R * Math.cos(a);
         const p = Math.max(0, perHourP[h]); const prev = Math.max(0, perHourPrev[h]);
         const pH = p * zScale; const prevH = prev * zScale;
@@ -1057,7 +1068,7 @@ export function projectTrendFrame(
     const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
         guideSvg: night + clockGuide(camera, outerR) + compass.svg,
-        svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[new Date().getHours()]) * zScale),
+        svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[serverHour(Date.now())]) * zScale),
         hits, labels, compass: compass.labels,
         home: {
             x: (cBase[0] + cTop[0]) / 2,

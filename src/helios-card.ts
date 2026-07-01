@@ -28,6 +28,7 @@ import {
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
 import { nightFractionByHour } from './card/sun-zones';
+import { setServerTimeZone } from './card/tz';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
@@ -819,6 +820,18 @@ export class HeliosCard extends LitElement
     //Engine init policy: re-init only when an identity input changes (home coordinates). Container reflow
     //just resizes the existing engine; we never tear down the engine for a sibling re-render (it would
     //trash the user's in-progress editor edits).
+    protected willUpdate(_changedProperties: PropertyValues): void
+    {
+        super.willUpdate(_changedProperties);
+        //Bind the clock's hour-of-day binning to the HOME time zone (see ./card/tz) before any frame projects or
+        //the store rebuilds this cycle, so the dial, the "now" marker and the day/night wedges all group by the
+        //home's real hour rather than the browser's. Idempotent, so it is cheap to run on every hass update.
+        if (_changedProperties.has('hass'))
+        {
+            setServerTimeZone(this.hass?.config?.time_zone);
+        }
+    }
+
     protected updated(_changedProperties: PropertyValues): void
     {
         //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it. Resolve
