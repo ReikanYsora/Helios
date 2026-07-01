@@ -6,8 +6,8 @@ import type { EnergyDefaults } from './energy-prefs';
 import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../constants';
 
 
-//One hourly forecast point. For an hourly wh value the average power across the hour in watts equals the wh number
-//(Wh over 1 h), so consumers read watts directly.
+//One forecast point. The `wh` slot always holds AVERAGE WATTS for the point's bucket: the fetch layer normalises
+//each provider bucket's energy by its duration, so consumers read watts directly regardless of the feed cadence.
 export interface SolarForecastPoint
 {
     tMs: number;
@@ -138,8 +138,11 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
 }
 
 
-//Merge the per-config-entry wh_hours maps into one hourly forecast: sum wh across every entry reporting the same
-//timestamp, then emit a time-sorted array (multi-source installs land one combined curve). Bad rows are skipped.
+//Merge the per-config-entry wh_hours maps into one combined forecast, then normalise each point to AVERAGE WATTS.
+//HA's energy/solar_forecast reports ENERGY per bucket (Wh), and providers differ in bucket width (Forecast.Solar is
+//hourly, Solcast is 30-minute, ...). Consumers of this array read the .wh slot as watts, so we divide each bucket's
+//summed energy by the bucket duration in hours. The duration is derived from the median spacing of the merged
+//timeline, so a 30-minute feed scales x2, an hourly feed is unchanged, and any other cadence is handled generically.
 export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<string, number> }> | null | undefined): SolarForecastPoint[]
 {
     if (!raw || typeof raw !== 'object')
@@ -170,13 +173,42 @@ export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<strin
             byMs.set(tMs, (byMs.get(tMs) ?? 0) + v);
         }
     }
-    const out: SolarForecastPoint[] = [];
+    const sorted: SolarForecastPoint[] = [];
     for (const [tMs, wh] of byMs)
     {
-        out.push({ tMs, wh });
+        sorted.push({ tMs, wh });
     }
-    out.sort((a, b) => a.tMs - b.tMs);
-    return out;
+    sorted.sort((a, b) => a.tMs - b.tMs);
+
+    //Detect the native bucket width from the median positive gap between consecutive points, so per-point anomalies
+    //(overnight jumps, missing samples) don't distort the conversion. Fall back to one hour when it can't be measured.
+    const gaps: number[] = [];
+    for (let i = 1; i < sorted.length; i++)
+    {
+        const d = sorted[i].tMs - sorted[i - 1].tMs;
+        if (Number.isFinite(d) && d > 0)
+        {
+            gaps.push(d);
+        }
+    }
+    let bucketMs = HOUR_MS;
+    if (gaps.length > 0)
+    {
+        gaps.sort((a, b) => a - b);
+        const medianGap = gaps[Math.floor(gaps.length / 2)];
+        if (Number.isFinite(medianGap) && medianGap > 0)
+        {
+            bucketMs = medianGap;
+        }
+    }
+    const wattFactor = HOUR_MS / bucketMs;
+
+    //Convert each bucket's summed energy to average watts in place; consumers read the .wh slot as watts.
+    for (const point of sorted)
+    {
+        point.wh *= wattFactor;
+    }
+    return sorted;
 }
 
 
