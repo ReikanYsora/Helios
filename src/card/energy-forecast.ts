@@ -82,9 +82,11 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
 }
 
 
-//Try the detail websocket for each configured provider entry over the card's J-2..J+2 window. Returns the merged
-//points of the first entry that answers, or null when no entry supports the command (caller then falls back to HA's
-//generic surface). Each `pv_w` is already watts, so it goes straight into the point's `w`.
+//Try the detail websocket for EVERY configured provider entry over the card's J-2..J+2 window, and SUM their curves:
+//a multi-string install wires one forecast config entry per array (east roof + west roof, ...), and the card must
+//show their combined output, not just the first. Each `pv_w` is already watts, so summing watts per timestamp is
+//correct. Entries that reject the command (not the Helios provider) are skipped; null only when NONE answered, so
+//the caller falls back to HA's generic surface.
 async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecastPoint[] | null>
 {
     const candidates = host._energyDefaults?.solarForecastEntryIds ?? [];
@@ -98,43 +100,40 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     const startIso = new Date(midnight.getTime() - 2 * DAY_MS).toISOString();
     const endIso   = new Date(midnight.getTime() + 3 * DAY_MS).toISOString();
 
-    for (const entryId of candidates)
+    //Fetch every entry in parallel, then sum the answering ones per timestamp. A rejecting entry (not the Helios
+    //provider) resolves to null and drops out; an empty-but-valid answer counts as answered but adds nothing.
+    const results = await Promise.all(candidates.map((entryId) =>
+        host.hass.callWS({
+            type:     'helios_forecast/series',
+            entry_id: entryId,
+            start:    startIso,
+            end:      endIso,
+        })
+            .then((res: { points?: { t: string; pv_w: number }[] }) => res?.points ?? null)
+            .catch(() => null)));
+
+    const byMs = new Map<number, number>();
+    let anyAnswered = false;
+    for (const raw of results)
     {
-        try
+        if (!Array.isArray(raw)) { continue; }
+        anyAnswered = true;
+        for (const p of raw)
         {
-            // eslint-disable-next-line no-await-in-loop -- sequential by design: return the first candidate that answers, skip the rest
-            const res = await host.hass.callWS({
-                type:     'helios_forecast/series',
-                entry_id: entryId,
-                start:    startIso,
-                end:      endIso,
-            }) as { points?: { t: string; pv_w: number }[] };
-            const raw = res?.points;
-            if (!Array.isArray(raw))
+            const tMs = Date.parse(p.t);
+            if (Number.isFinite(tMs) && typeof p.pv_w === 'number' && Number.isFinite(p.pv_w))
             {
-                continue;
+                byMs.set(tMs, (byMs.get(tMs) ?? 0) + p.pv_w);
             }
-            const out: SolarForecastPoint[] = [];
-            for (const p of raw)
-            {
-                const tMs = Date.parse(p.t);
-                if (Number.isFinite(tMs) && typeof p.pv_w === 'number' && Number.isFinite(p.pv_w))
-                {
-                    out.push({ tMs, w: p.pv_w });
-                }
-            }
-            out.sort((a, b) => a.tMs - b.tMs);
-            //An empty (but valid) answer means an entry with no points in range; still prefer it over the generic
-            //surface to avoid double-fetching. An entry that doesn't support the command rejects it and is skipped.
-            return out;
-        }
-        catch (_)
-        {
-            //Entry doesn't support the command (unknown command / not_found) or transient error: try the next.
-            continue;
         }
     }
-    return null;
+    if (!anyAnswered)
+    {
+        return null;
+    }
+    return [...byMs.entries()]
+        .map(([tMs, w]) => ({ tMs, w }))
+        .sort((a, b) => a.tMs - b.tMs);
 }
 
 

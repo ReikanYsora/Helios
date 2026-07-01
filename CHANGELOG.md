@@ -54,6 +54,11 @@ and unit options, and a batch of accuracy fixes for specific setups.
   solar production now keep their night-time hours on the Clock and Trend dials,
   and each per-source ring reads the exact recorder energy, matching the Energy
   dashboard instead of the slightly lagging calibration series.
+* **Multi-string solar forecast** now sums every configured forecast provider
+  instead of showing only the first string's prediction.
+* **Multi-battery** installs with mixed wiring (one bank with a live power
+  sensor, another with only energy meters) no longer drop a battery from the
+  live power readout.
 
 ---
 

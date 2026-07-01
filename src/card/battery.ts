@@ -174,7 +174,11 @@ export function refreshBattery(host: BatteryHost): void
     let nextPower: number | null = null;
     let nextUnit        = '';
     const rateEntities = host._energyDefaults.batteryStatRates;
-    if (rateEntities.length > 0)
+    //Sum the live power sensors ONLY when they cover EVERY battery source. On a mixed or energy-only wiring
+    //(some bank has no `power_config`), fall through to the directional energy meters instead: their change series net
+    //every bank, so a battery without a power sensor is never dropped from the live power.
+    const ratesCoverAllBanks = rateEntities.length > 0 && host._energyDefaults.batterySourcesWithoutRate === 0;
+    if (ratesCoverAllBanks)
     {
         let sum = 0;
         let anyValid = false;
