@@ -55,6 +55,8 @@ export const ko: Translations = {
         batterySignHidden:            '숨김',
         homeConsumptionEntity:        '가정 소비량 재정의',
         homeConsumptionEntityHelp:    '계산된 값 대신 이 센서를 가정 소비량 표시에 사용합니다. 이 표시만 변경되며, 애니메이션 흐름과 히스토리는 태양광, 계통, 배터리 균형을 그대로 유지합니다. 직접 소비 센서는 보통 몇 와트 정도 차이가 납니다(측정 손실, 센서 간 약간의 비동기화). 이 차이는 흐름 안에 깔끔하게 넣을 자리가 없습니다.',
+        noUiMode:                     'UI 없음 모드',
+        noUiModeHint:                 '몇 초 동안 아무 조작이 없으면 timeline과 카드의 controls가 서서히 사라집니다. 탭하거나 움직이면 다시 나타납니다. wall display에 적합합니다.',
         installationSection: '태양광 설비',
         installationHint:   'Helios가 읽는 모든 엔티티(PV 발전, 전력망 수전 / 송전, 배터리 전력과 충전 상태)는 [Home Assistant 에너지 대시보드](/config/energy)에서 가져옵니다. 이 섹션은 예측 정확도를 높이는 설비 수준의 세부 정보만 추가합니다: 선택적 일사량 센서.',
         solarIrradianceEntity:     '일사량 엔티티',

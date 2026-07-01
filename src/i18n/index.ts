@@ -136,6 +136,9 @@ export interface Translations
         batterySignHidden?:           string;
         homeConsumptionEntity?:       string;
         homeConsumptionEntityHelp?:   string;
+        //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
+        noUiMode?:                    string;
+        noUiModeHint?:                string;
         //Global display radius slider (50-500 m). Optional, FR-only.
         displayRadius?:               string;
         displayRadiusHelp?:           string;

@@ -11,6 +11,7 @@ import
     irradianceUnit,
     batterySign,
     homeConsumptionEntityId,
+    autoHideUi,
     customEntityId,
     customEntityColor,
     homeColor,
@@ -19,7 +20,7 @@ import
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
-import { DAY_MS, HOUR_MS } from './constants';
+import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -275,6 +276,9 @@ export class HeliosCard extends LitElement
     //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap and paints the
     //hourly cylinder ring; 'trend' paints one ring comparing the period to the previous one. Scene is the default.
     @state() _viewMode: 'scene' | 'clock' | 'trend' = 'scene';
+    //"No UI" mode: true once the idle timer fires, hiding (fading) the timeline + controls; any input clears it.
+    @state() private _uiHidden = false;
+    private _uiHideTimer: number | undefined;
     //Trend mode single metric (one choice, unlike clock's multi-filter) + the two compared hour-of-day profiles
     //(current period P, previous period P-1) with their cache key.
     @state() _trendTarget: ChartTarget = 'consumption';
@@ -417,6 +421,8 @@ export class HeliosCard extends LitElement
         //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, so
         //setConfig doesn't seed it.
         this._warnIfLegacyEntityKeys(config);
+        //Re-arm (or stop) the "No UI" idle fade when the option changes.
+        this._scheduleUiHide();
     }
 
     //Apply the active rolling-window span to engine, store and timeline. Called from setConfig and the
@@ -730,6 +736,30 @@ export class HeliosCard extends LitElement
         };
     }
 
+    //"No UI" mode: fade the timeline + controls after UI_AUTOHIDE_MS of no input; any input brings them back and
+    //restarts the countdown. Listeners are attached in connectedCallback; a no-op when the mode is off.
+    private _onUiActivity = (): void =>
+    {
+        if (!autoHideUi(this.config)) { return; }
+        if (this._uiHidden) { this._uiHidden = false; }
+        this._scheduleUiHide();
+    };
+
+    private _scheduleUiHide(): void
+    {
+        if (this._uiHideTimer !== undefined)
+        {
+            window.clearTimeout(this._uiHideTimer);
+            this._uiHideTimer = undefined;
+        }
+        if (!autoHideUi(this.config))
+        {
+            if (this._uiHidden) { this._uiHidden = false; }
+            return;
+        }
+        this._uiHideTimer = window.setTimeout(() => { this._uiHidden = true; }, UI_AUTOHIDE_MS);
+    }
+
     public connectedCallback(): void
     {
         super.connectedCallback();
@@ -766,6 +796,12 @@ export class HeliosCard extends LitElement
         //One-shot refresh at connect so the headline lights up on first render rather than waiting 30 s.
         //No-op when no HA stat is wired.
         refreshHaDailyTotals(this);
+        //"No UI" mode: watch for any input on the card and arm the idle fade (both no-ops when the mode is off).
+        this.addEventListener('pointerdown', this._onUiActivity);
+        this.addEventListener('pointermove', this._onUiActivity, { passive: true });
+        this.addEventListener('wheel', this._onUiActivity, { passive: true });
+        this.addEventListener('touchstart', this._onUiActivity, { passive: true });
+        this._scheduleUiHide();
     }
 
     public disconnectedCallback(): void
@@ -773,6 +809,11 @@ export class HeliosCard extends LitElement
         super.disconnectedCallback();
         liveCards.delete(this);
         window.clearInterval(this._timer);
+        this.removeEventListener('pointerdown', this._onUiActivity);
+        this.removeEventListener('pointermove', this._onUiActivity);
+        this.removeEventListener('wheel', this._onUiActivity);
+        this.removeEventListener('touchstart', this._onUiActivity);
+        if (this._uiHideTimer !== undefined) { window.clearTimeout(this._uiHideTimer); this._uiHideTimer = undefined; }
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
         if (this._onVisibilityChange)
@@ -838,6 +879,9 @@ export class HeliosCard extends LitElement
 
     protected updated(_changedProperties: PropertyValues): void
     {
+        //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
+        this.toggleAttribute('data-ui-hidden', this._uiHidden);
+
         //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it. Resolve
         //the configured ui_color token to a hex once per token change (getComputedStyle forces a reflow).
         const homeToken = homeColor(this.config);

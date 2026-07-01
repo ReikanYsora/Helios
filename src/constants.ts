@@ -58,6 +58,8 @@ export const PV_CHIP_OFFSET_PX     = 70;    //PV chip lift above the home cluste
 //=== Animation / timing ===
 export const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
 export const AUTO_ROTATE_INACTIVITY_MS = 5_000;
+//"No UI" mode: idle time before the timeline + controls fade away (any input brings them back).
+export const UI_AUTOHIDE_MS            = 5_000;
 
 //=== Cache TTLs / timeouts / throttles ===
 export const PV_CACHE_TTL_MS        = 15 * 60_000;

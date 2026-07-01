@@ -644,6 +644,24 @@ export const heliosCardStyles = css`
         }
     }
 
+    /* "No UI" mode: the timeline + on-card controls fade out after an idle delay and reappear on any input
+       (driven by the data-ui-hidden host attribute; see _uiHidden / UI_AUTOHIDE_MS). The reduced-motion block
+       above drops the fade to an instant show/hide. */
+    .time-bar,
+    .tb-band,
+    .overlay-top-left,
+    .overlay-top-right
+    {
+        transition: opacity 1000ms ease;
+    }
+    :host([data-ui-hidden]) .time-bar,
+    :host([data-ui-hidden]) .tb-band,
+    :host([data-ui-hidden]) .overlay-top-left,
+    :host([data-ui-hidden]) .overlay-top-right
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
 
 
 `;

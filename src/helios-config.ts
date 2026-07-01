@@ -94,6 +94,9 @@ export interface HeliosConfig
     //consumption sensor differing by a few watts from the balance). The flows and history keep the computed
     //value on purpose: that small gap has no consistent place in the solar/grid/battery flow.
     'home-consumption-entity'?: unknown;
+    //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
+    //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
+    'auto-hide-ui'?:           unknown;
 }
 
 
@@ -195,6 +198,13 @@ export function homeConsumptionEntityId(config: HeliosConfig | undefined): strin
 {
     const raw = config?.['home-consumption-entity'];
     return typeof raw === 'string' ? raw.trim() : '';
+}
+
+
+//"No UI" mode: timeline + controls fade out after an idle delay, back on any input. Default false.
+export function autoHideUi(config: HeliosConfig | undefined): boolean
+{
+    return config?.['auto-hide-ui'] === true;
 }
 
 

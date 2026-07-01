@@ -55,6 +55,8 @@ export const ja: Translations = {
         batterySignHidden:            '非表示',
         homeConsumptionEntity:        '家庭消費量の上書き',
         homeConsumptionEntityHelp:    '計算値の代わりに、このセンサーを家庭消費量の表示に使用します。変わるのはこの表示だけで、アニメーションのフローや履歴は太陽光、系統、バッテリーのバランスのままです。直接消費センサーは通常、数ワットずれます（測定損失やセンサーのわずかな同期ずれ）。このずれはフローの中にきれいに収める場所がありません。',
+        noUiMode:                     'UIなしモード',
+        noUiModeHint:                 '数秒間操作がないと、timelineとカード上のコントロールがフェードします。タップまたは移動すると再び表示されます。wall displayに最適です。',
         installationSection: '太陽光発電設備',
         installationHint:   'Helios が読み取るすべてのエンティティ（PV 発電、系統への買電 / 売電、バッテリー電力と充電状態）は [Home Assistant エネルギーダッシュボード](/config/energy) から取得されます。このセクションは予測精度を高める設備レベルの詳細を追加するだけです：任意の日射量センサー。',
         solarIrradianceEntity:     '日射量エンティティ',
