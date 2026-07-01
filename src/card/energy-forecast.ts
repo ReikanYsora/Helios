@@ -6,13 +6,12 @@ import type { EnergyDefaults } from './energy-prefs';
 import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../constants';
 
 
-//One forecast point: the average PV power in watts at tMs. Provider periods differ (Forecast.Solar is
-//hourly, Solcast is 30-minute), so mergeSolarForecast converts energy-per-period to watts; consumers
-//read watts directly whatever the resolution.
+//One hourly forecast point. For an hourly wh value the average power across the hour in watts equals the wh number
+//(Wh over 1 h), so consumers read watts directly.
 export interface SolarForecastPoint
 {
     tMs: number;
-    w:   number;
+    wh:  number;
 }
 
 
@@ -85,7 +84,7 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
 
 //Try the detail websocket for each configured provider entry over the card's J-2..J+2 window. Returns the merged
 //points of the first entry that answers, or null when no entry supports the command (caller then falls back to HA's
-//generic surface). Each `pv_w` is already watts, so it goes straight into the point's .w.
+//generic surface). Each `pv_w` is watts, kept in the .wh slot (hourly: watts == Wh, read as watts either way).
 async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecastPoint[] | null>
 {
     const candidates = host._energyDefaults?.solarForecastEntryIds ?? [];
@@ -121,7 +120,7 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
                 const tMs = Date.parse(p.t);
                 if (Number.isFinite(tMs) && typeof p.pv_w === 'number' && Number.isFinite(p.pv_w))
                 {
-                    out.push({ tMs, w: p.pv_w });
+                    out.push({ tMs, wh: p.pv_w });
                 }
             }
             out.sort((a, b) => a.tMs - b.tMs);
@@ -139,10 +138,8 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
 }
 
 
-//Merge the per-config-entry wh_hours maps into one forecast: sum the energy across every entry reporting the
-//same timestamp, then convert each period's energy to average watts (W = Wh / periodHours, the period taken
-//from the gap to the next point). Without this a sub-hourly provider (Solcast, 30-minute) reads half its
-//real power. Bad rows are skipped.
+//Merge the per-config-entry wh_hours maps into one hourly forecast: sum wh across every entry reporting the same
+//timestamp, then emit a time-sorted array (multi-source installs land one combined curve). Bad rows are skipped.
 export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<string, number> }> | null | undefined): SolarForecastPoint[]
 {
     if (!raw || typeof raw !== 'object')
@@ -173,23 +170,18 @@ export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<strin
             byMs.set(tMs, (byMs.get(tMs) ?? 0) + v);
         }
     }
-    const sorted = [...byMs.entries()]
-        .map(([tMs, wh]) => ({ tMs, wh }))
-        .sort((a, b) => a.tMs - b.tMs);
-    //Energy per period -> average watts. periodHours = gap to the next point (1 h for Forecast.Solar,
-    //0.5 h for Solcast); a missing or overnight gap falls back to 1 h so it can't deflate the value.
-    return sorted.map((p, i) =>
+    const out: SolarForecastPoint[] = [];
+    for (const [tMs, wh] of byMs)
     {
-        const next   = sorted[i + 1];
-        const gapH   = next ? (next.tMs - p.tMs) / HOUR_MS : 1;
-        const period = gapH > 0 && gapH <= 1.5 ? gapH : 1;
-        return { tMs: p.tMs, w: p.wh / period };
-    });
+        out.push({ tMs, wh });
+    }
+    out.sort((a, b) => a.tMs - b.tMs);
+    return out;
 }
 
 
-//Read the forecast watts at a bucket time. Linearly interpolate between consecutive points so the store
-//buckets draw a smooth curve instead of flat steps. Null when no point covers the time.
+//Read the forecast watts at a bucket time. The forecast is hourly; linearly interpolate between consecutive points so
+//the sub-hourly store buckets draw a smooth curve instead of flat steps. Null when no point covers the time.
 export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: number): number | null
 {
     if (forecast.length === 0)
@@ -219,17 +211,17 @@ export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: num
     }
     const pt   = forecast[idx];
     const next = forecast[idx + 1];
-    //Interpolate toward the next point when it is consecutive (no gap larger than ~1 h).
+    //Interpolate toward the next hour when it is consecutive (no gap larger than ~1 h).
     if (next && next.tMs - pt.tMs <= HOUR_MS * 1.5 && next.tMs > pt.tMs)
     {
         const f = (ms - pt.tMs) / (next.tMs - pt.tMs);
         const frac = f < 0 ? 0 : f > 1 ? 1 : f;
-        return pt.w + (next.w - pt.w) * frac;
+        return pt.wh + (next.wh - pt.wh) * frac;
     }
     //No usable next point: the value only applies inside this point's own hour window.
     if (ms >= pt.tMs + HOUR_MS)
     {
         return null;
     }
-    return pt.w;
+    return pt.wh;
 }
