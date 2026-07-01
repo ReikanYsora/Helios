@@ -2,9 +2,10 @@ name: HACS validation
 
 on:
   push:
+    branches:
+      - main
+      - 'develop-**'
   pull_request:
-  schedule:
-    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions: {}
@@ -14,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: HACS validation
-        uses: hacs/action@main
+        # hacs/action@main pinned by commit for reproducibility; bump periodically.
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
         with:
           category: plugin
