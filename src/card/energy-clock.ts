@@ -187,6 +187,16 @@ function expandHourly(hourly: number[], sum: boolean): number[]
     return out;
 }
 
+//Convert a pvValueAtTime reading to watts. Its `.value` is in its native power unit (`.unit` is W/kW/MW): a
+//cumulative kWh source differentiates to kW, an MWh source to MW. The clock integrates watts into energy, so a
+//kW/MW reading taken as watts would come out 1000x/1e6x too small (the source of the near-zero totals on
+//energy-only installs). Case-insensitive so a raw power sensor's own unit string is handled too.
+function pvReadingToWatts(value: number, unit: string): number
+{
+    const u = unit.toLowerCase();
+    return u === 'mw' ? value * 1_000_000 : u === 'kw' ? value * 1000 : value;
+}
+
 //Bin one store series into per-slot averages of its absolute value (export/charge come back negative); empty
 //slots stay NaN so fillGaps can interpolate them rather than reading as a zero spike.
 function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[]
@@ -359,7 +369,8 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             {
                 const ph = host._pvHistoryPerEntity.get(id);
                 if (!ph) { return; }
-                const v = pvValueAtTime(host, tMs, ph).value;
+                const sample = pvValueAtTime(host, tMs, ph);
+                const v = pvReadingToWatts(sample.value, sample.unit);
                 if (!(isFinite(v) && v > 0)) { return; }
                 const energy = (v * stepH) / 1000;
                 for (let t = bStart; t < bEnd; )
