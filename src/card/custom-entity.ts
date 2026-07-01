@@ -4,7 +4,7 @@
 //customChipWatts + refreshCustomEntity). resolveCustomEntityLive supplies the chip's name + presence. The value's
 //sign drives bead direction (positive = home to chip, negative = chip to home); its magnitude drives cadence.
 
-import { formatEntityValue, pvNormalizeToWatts, energyToKwh } from './format';
+import { formatEntityValue, pvNormalizeToWatts, energyToKwh, type PowerUnit } from './format';
 import { type HeliosConfig, customEntityId } from '../helios-config';
 import { callWSWithTimeout } from './ws-timeout';
 import type { StatPeriod } from './energy-stats';
@@ -20,7 +20,7 @@ export interface CustomEntityLive
 const POWER_UNITS  = new Set(['w', 'kw', 'mw']);
 const ENERGY_UNITS = new Set(['wh', 'kwh', 'mwh']);
 
-export function resolveCustomEntityLive(hass: any, entityId: string): CustomEntityLive | null
+export function resolveCustomEntityLive(hass: any, entityId: string, powerU: PowerUnit = 'kW'): CustomEntityLive | null
 {
     if (!entityId) { return null; }
     const st = hass?.states?.[entityId];
@@ -42,7 +42,7 @@ export function resolveCustomEntityLive(hass: any, entityId: string): CustomEnti
 
     return {
         name:        String(st.attributes?.friendly_name ?? entityId),
-        display:     formatEntityValue(hass, raw, unit, 1),
+        display:     formatEntityValue(hass, raw, unit, 1, powerU),
         signedValue: raw,
         magnitudeW,
     };

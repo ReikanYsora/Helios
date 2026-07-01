@@ -83,6 +83,10 @@ export interface HeliosConfig
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
+    //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW' (unchanged). Energy always stays kWh.
+    'power-unit'?:             unknown;
+    //Irradiance (solar constant) readout unit: 'W/m²' or 'kW/m²'. Default 'W/m²'.
+    'irradiance-unit'?:        unknown;
 }
 
 
@@ -152,6 +156,21 @@ export function valueDecimals(config: HeliosConfig | undefined): number
     if (rounded < MIN_VALUE_DECIMALS) { return MIN_VALUE_DECIMALS; }
     if (rounded > MAX_VALUE_DECIMALS) { return MAX_VALUE_DECIMALS; }
     return rounded;
+}
+
+
+//Resolved power readout unit ('W' or 'kW') for every power value on the card. Default 'kW' so existing cards
+//are unchanged; energy readouts always stay kWh regardless.
+export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
+{
+    return config?.['power-unit'] === 'W' ? 'W' : 'kW';
+}
+
+
+//Resolved irradiance (solar constant) readout unit ('W/m²' or 'kW/m²'). Default 'W/m²'.
+export function irradianceUnit(config: HeliosConfig | undefined): 'W/m²' | 'kW/m²'
+{
+    return config?.['irradiance-unit'] === 'kW/m²' ? 'kW/m²' : 'W/m²';
 }
 
 

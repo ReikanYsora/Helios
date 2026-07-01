@@ -7,6 +7,8 @@ import
 {
     type HeliosConfig,
     valueDecimals,
+    powerUnit,
+    irradianceUnit,
     customEntityId,
     customEntityColor,
     homeColor,
@@ -29,7 +31,7 @@ import {
 import { refreshTrendProfiles } from './card/trend';
 import { nightFractionByHour } from './card/sun-zones';
 import { setServerTimeZone } from './card/tz';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, formatIrradiance, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
     refreshPv,
@@ -1242,8 +1244,10 @@ export class HeliosCard extends LitElement
 
         //User-configured decimal precision, applied to every chip readout (kW/kWh).
         const valueDec = valueDecimals(this.config);
+        const powerU   = powerUnit(this.config);
+        const irradU   = irradianceUnit(this.config);
         const pvDisplayValue = showPvLabel
-            ? (isPvPredicted ? '≈ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec)
+            ? (isPvPredicted ? '≈ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec, powerU)
             : '';
 
         //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against a 5 kW
@@ -1324,7 +1328,7 @@ export class HeliosCard extends LitElement
         //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
         //coherent with the dashboard. Colour + leader direction below keep the physical sign.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec)
+            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec, powerU)
             : '';
 
         //Home consumption chip:
@@ -1349,7 +1353,7 @@ export class HeliosCard extends LitElement
             && !batteryScrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
-            ? formatGridValue(this.hass, homeUsageWatts, 'W', valueDec)
+            ? formatGridValue(this.hass, homeUsageWatts, 'W', valueDec, powerU)
             : '';
 
         //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader
@@ -1502,7 +1506,7 @@ export class HeliosCard extends LitElement
         //Custom user-picked entity chip: red pill top-left (above grid) with a leader to the home and a
         //sign-driven bead. Positive value flows home -> chip (reversed traversal), negative flows chip ->
         //home (default). Cadence scales with the value's magnitude; below the idle floor the bead is dropped.
-        const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config));
+        const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config), powerU);
         const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
         const customLeaderColor = resolveUiColor(customEntityColor(this.config), '#f44336');
         const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
@@ -1510,7 +1514,7 @@ export class HeliosCard extends LitElement
         //an energy meter's lifetime total (customChipWatts differentiates cumulative energy to average power).
         const customScrubMs = (!this._isLiveMode && this._selectedTime !== null) ? this._selectedTime.getTime() : null;
         const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customEntityHistory, customScrubMs);
-        const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec);
+        const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec, powerU);
         const CUSTOM_BEAD_CAP_W     = 5000;
         const CUSTOM_BEAD_MIN_DUR_S = 1.2;
         const CUSTOM_BEAD_MAX_DUR_S = 8.0;
@@ -1568,7 +1572,7 @@ export class HeliosCard extends LitElement
         //STC (1000 W/m²) the fill reaches the rim, at zero it vanishes. The sqrt mapping linearises AREA
         //perception (area ∝ r²) so a 50% reading covers half the rim's area, not its radius.
         const sunWm2          = sunScene?.sun.irradiance ?? 0;
-        const sunWm2Round     = Math.round(sunWm2);
+        const sunIrradText    = formatIrradiance(this.hass, sunWm2, valueDec, irradU);
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
         //The W/m² readout + cloud chip are weather; hidden in modes without it (month/year). The sun
         //disc/arc (pure geometry) stays.
@@ -2070,7 +2074,7 @@ export class HeliosCard extends LitElement
                         @click=${this._onChartTargetClick}
                     >
                         <ha-icon icon=${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}></ha-icon>
-                        <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec)}</span>
+                        <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
                     </div>
                 ` : nothing}
 
@@ -2246,7 +2250,7 @@ export class HeliosCard extends LitElement
                         @click=${this._onChartTargetClick}
                     >
                         <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
-                        <span>${sunWm2Round} W/m²</span>
+                        <span>${sunIrradText}</span>
                     </div>
                 ` : nothing}
 

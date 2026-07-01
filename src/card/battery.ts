@@ -3,7 +3,7 @@
 //The user wires their battery on the HA Energy dashboard (per-source lists of `stat_rate`, `stat_energy_from`, `stat_energy_to`,
 //`stat_soc`). Live reads aggregate across every wired bank (sum for power, mean for SoC).
 
-import { formatPowerKw } from './format';
+import { formatPowerKw, type PowerUnit } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
@@ -643,11 +643,11 @@ export function batterySampleAtTime(
 }
 
 
-//Format a signed battery power value for the chip: always kW at the configured precision, with explicit +/- so charging vs
-//discharging reads at a glance.
-export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number): string
+//Format a signed battery power value for the chip in the card's configured unit (W or kW), at the configured
+//precision, with explicit +/- so charging vs discharging reads at a glance.
+export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
-    return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals, true);
+    return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals, true, powerU);
 }
 
 

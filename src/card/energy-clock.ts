@@ -8,9 +8,9 @@ import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
 import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from './charts';
-import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatLocalisedNumber, cssHex, uiColorVar } from './format';
+import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
-import { customEntityId, customEntityColor, valueDecimals } from '../helios-config';
+import { customEntityId, customEntityColor, valueDecimals, powerUnit, irradianceUnit } from '../helios-config';
 import { resolveCustomEntityIcon } from './custom-entity';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
@@ -1147,8 +1147,8 @@ export function clockPeriodTotal(data: ClockData): number
 export function formatClockValue(host: ClockHost, data: ClockData, v: number): string
 {
     if (data.unit === 'percent')    { return `${Math.round(Math.max(0, v))} %`; }
-    if (data.unit === 'irradiance') { return `${Math.round(Math.max(0, v))} W/m²`; }
     const dec = valueDecimals(host.config);
-    if (data.unit === 'energy')     { return `${formatLocalisedNumber(host.hass, v, dec)} kWh`; }
-    return `${formatLocalisedNumber(host.hass, v / 1000, dec)} kW`;
+    if (data.unit === 'irradiance') { return formatIrradiance(host.hass, v, dec, irradianceUnit(host.config)); }
+    if (data.unit === 'energy')     { return formatEnergyKwh(host.hass, v, dec, powerUnit(host.config)); }
+    return formatPower(host.hass, v, dec, powerUnit(host.config));
 }

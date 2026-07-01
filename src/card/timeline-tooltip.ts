@@ -3,8 +3,8 @@
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { valueDecimals, customEntityColor } from '../helios-config';
-import { ENERGY_COLOR, energySolarColor, formatLocalisedNumber, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from './format';
+import { valueDecimals, powerUnit, irradianceUnit, customEntityColor } from '../helios-config';
+import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from './format';
 import { valueAt } from './unifiedStore';
 import { resolveCustomEntityIcon } from './custom-entity';
 import {
@@ -80,7 +80,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         : NaN;
     //User decimals apply to every kW/kWh readout; raw watts stay integers.
     const dec = valueDecimals(host.config);
-    const kw = (w: number): string => `${formatLocalisedNumber(host.hass, w / 1000, dec)} kW`;
+    const powerU = powerUnit(host.config);
+    const irradU = irradianceUnit(host.config);
+    const kw = (w: number): string => formatPower(host.hass, w, dec, powerU);
 
     //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
@@ -102,8 +104,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         {
             continue;
         }
-        const localDec    = val.unit === 'W' ? 0 : dec;
-        const valueText   = `${formatLocalisedNumber(host.hass, val.value, localDec)} ${val.unit}`;
+        const valueText   = formatPower(host.hass, pvNormalizeToWatts(val.value, val.unit), dec, powerU);
         perEntityRows.push({ id, label: solarSourceName(host, i), valueText, colorIdx: i });
     }
     const hasPv = isFinite(pv.value);
@@ -152,7 +153,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //day total, which has no other home in the UI.
     const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
-        ? formatLocalisedNumber(host.hass, dayKwh, dec) + ' kWh'
+        ? formatEnergyKwh(host.hass, dayKwh, dec, powerU)
         : '';
 
     //Magnet-snap detection: when the scrub lands in a narrow band around the live cursor, applyTimelinePointer
@@ -163,8 +164,6 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const inMagnetZone = nowMsRef >= startMs && nowMsRef <= startMs + rangeMs
         && Math.abs(pct - ((nowMsRef - startMs) / rangeMs) * 100) <= MAGNET_PCT;
 
-    //PV decimals: user setting for kW/MW, raw watts as integers.
-    const pvDecimals = (!hasPv || pv.unit === 'W') ? 0 : dec;
 
     const haLang   = (host.hass?.language as string | undefined) || '';
     //Short inline label for the magnet-snap tab; the title + aria-label carry the long phrase for screen readers.
@@ -211,7 +210,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:solar-power"></ha-icon>
                             <span class="tb-hover-tooltip-name">${tgtName}</span>
-                            <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
+                            <span class="tb-hover-tooltip-value">${formatPower(host.hass, pvNormalizeToWatts(pv.value, pv.unit), dec, powerU)}</span>
                         </div>
                     ` : nothing}
                     ${perEntityRows.map(prow => html`
@@ -272,14 +271,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.sun(el)}" icon="mdi:white-balance-sunny"></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
-                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+                        <span class="tb-hover-tooltip-value">${formatIrradiance(host.hass, irrV, dec, irradU)}</span>
                     </div>
                 ` : nothing}
                 ${target === 'custom' && isFinite(customV) ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336')}" icon=${resolveCustomEntityIcon(host.hass, host.config)}></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
-                        <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, Math.abs(customV) / 1000, dec)} kW</span>
+                        <span class="tb-hover-tooltip-value">${formatPower(host.hass, Math.abs(customV), dec, powerU)}</span>
                     </div>
                 ` : nothing}
                 ${target === 'cloud' ? html`

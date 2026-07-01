@@ -647,6 +647,32 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.powerUnit ?? 'Power unit'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ select: { mode: 'box', options: [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }] } }}
+                            .value=${String(c['power-unit'] ?? 'kW')}
+                            data-key="power-unit"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.powerUnitHelp ?? 'Unit for every power readout on the card. Energy always stays in kWh.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.irradianceUnit ?? 'Solar constant unit'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ select: { mode: 'box', options: [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }] } }}
+                            .value=${String(c['irradiance-unit'] ?? 'W/m²')}
+                            data-key="irradiance-unit"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.irradianceUnitHelp ?? 'Unit for the solar constant (irradiance) readout.'}</div>
                 </details>
 
                 <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>

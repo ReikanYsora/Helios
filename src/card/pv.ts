@@ -5,7 +5,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
-import { pvNormalizeToWatts, formatEntityValue } from './format';
+import { pvNormalizeToWatts, formatEntityValue, type PowerUnit } from './format';
 import { callWSWithTimeout } from './ws-timeout';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
@@ -630,9 +630,9 @@ export function currentPvRate(host: PvHost): PvRate | null
 
 
 
-//Format a PV reading for the chip below the home. Power auto-rescales W -> kW; energy keeps its native unit. Thin wrapper over
-//the shared formatter.
-export function formatPvValue(hass: any, value: number, unit: string, decimals: number): string
+//Format a PV reading for the chip below the home. Power prints in the card's configured unit (W or kW); energy keeps
+//its native unit. Thin wrapper over the shared formatter.
+export function formatPvValue(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
-    return formatEntityValue(hass, value, unit, decimals);
+    return formatEntityValue(hass, value, unit, decimals, powerU);
 }
