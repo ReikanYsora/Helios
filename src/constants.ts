@@ -107,9 +107,10 @@ export const FALLBACK_HOUSE_HALF_W   = 5;
 export const FALLBACK_HOUSE_HALF_D   = 4;
 export const BUILDING_CACHE_TTL_MS   = 30 * DAY_MS;
 export const OVERPASS_RETRY_DELAY_MS = 1200;
+//European Overpass mirrors, tried in order.
 export const OVERPASS_ENDPOINTS = [
     'https://overpass-api.de/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
 ];
 
 //=== Engine lifecycle ===
