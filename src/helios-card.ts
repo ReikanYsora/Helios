@@ -201,6 +201,9 @@ export class HeliosCard extends LitElement
     @state() _pvChangeSeries: ChangeBucket[] | null = null;
     _pvChangeSeriesFetchKey  = '';
     _pvChangeSeriesFetching  = false;
+    @state() _pvChangeSeriesPerEntity = new Map<string, ChangeBucket[]>();
+    _pvChangePerEntityFetchKey  = '';
+    _pvChangePerEntityFetching  = false;
     //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries.
     //The unified store reads this into its forecast series. Empty when no forecast source is configured.
     @state() _haSolarForecast: SolarForecastPoint[] = [];
@@ -791,6 +794,8 @@ export class HeliosCard extends LitElement
         this._pvCalibStats                = null;
         this._pvChangeSeries              = null;
         this._pvChangeSeriesFetchKey      = '';
+        this._pvChangeSeriesPerEntity     = new Map();
+        this._pvChangePerEntityFetchKey   = '';
         this._haSolarForecast             = [];
         this._haSolarForecastLoaded       = false;
         this._haSolarForecastFetching     = false;

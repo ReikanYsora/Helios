@@ -50,6 +50,10 @@ and unit options, and a batch of accuracy fixes for specific setups.
   smoothed so their curves no longer sawtooth.
 * Fixed the **solar forecast** reading half power on sub-hourly buckets
   (contributed by @adamhf).
+* **Non-solar 24/7 producers** (water turbines, micro-hydro) configured under
+  solar production now keep their night-time hours on the Clock and Trend dials,
+  and each per-source ring reads the exact recorder energy, matching the Energy
+  dashboard instead of the slightly lagging calibration series.
 
 ---
 

@@ -82,6 +82,13 @@ export interface PvHost
     _pvChangeSeries:         ChangeBucket[] | null;
     _pvChangeSeriesFetchKey: string;
     _pvChangeSeriesFetching: boolean;
+    //Per-source recorder `change` series, keyed by the source's energy meter (`stat_energy_from`). Same reset-corrected,
+    //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the Clock/Trend dial
+    //shows each string with the exact dashboard energy (and recorded night production from non-solar sources fed in as PV),
+    //instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
+    _pvChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
+    _pvChangePerEntityFetchKey:  string;
+    _pvChangePerEntityFetching:  boolean;
 }
 
 
@@ -342,6 +349,35 @@ export function refreshPv(host: PvHost): void
                 .finally(() =>
                 {
                     host._pvChangeSeriesFetching = false;
+                });
+        }
+
+        //Per-source change series (one fetch per solar meter), so the Clock/Trend dial can split production by source
+        //with the exact recorder energy instead of the lagging hourly LTS. Only worth it with 2+ sources; a single
+        //source already reads the aggregate. Gated on the same key so it re-arms with the aggregate fetch.
+        if (changeIds.length >= 2 && !host._pvChangePerEntityFetching && changeKey !== host._pvChangePerEntityFetchKey)
+        {
+            host._pvChangePerEntityFetchKey = changeKey;
+            host._pvChangePerEntityFetching = true;
+            const startMs = seriesStart.getTime();
+            const endMs   = fetchEnd.getTime();
+            const period  = host._storeFetchPeriod;
+            void Promise.all(changeIds.map((meter) =>
+                fetchChangeSeries(host.hass, [meter], startMs, endMs, period)
+                    .then((series) => ({ meter, series }))))
+                .then((results) =>
+                {
+                    const next = new Map<string, ChangeBucket[]>();
+                    for (const { meter, series } of results)
+                    {
+                        if (series !== null) { next.set(meter, series); }
+                    }
+                    if (next.size > 0) { host._pvChangeSeriesPerEntity = next; }
+                    host.requestUpdate();
+                })
+                .finally(() =>
+                {
+                    host._pvChangePerEntityFetching = false;
                 });
         }
     }

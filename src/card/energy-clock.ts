@@ -8,6 +8,7 @@ import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
 import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from './charts';
+import { changeSeriesToWatts } from './energy-stats';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
 import { customEntityId, customEntityColor, valueDecimals, powerUnit, irradianceUnit } from '../helios-config';
@@ -350,12 +351,21 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     if (target === 'production')
     {
         if (!store) { return data('energy', []); }
-        //Source order (NOT sorted): the per-entity map is built in HA Energy source order, parallel to
-        //solarStatEnergyFroms, so index `s` lines up with solarSourceName(host, s) and the other paths.
-        const ids = Array.from(host._pvHistoryPerEntity.keys());
         const nowMs = Date.now();
         const stepH  = store.stepMs / HOUR_MS;
         const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
+        //Per-source production. Preferred path: the recorder `change` metric per solar meter (reset-corrected, exact HA
+        //Energy energy, no sun floor), so each string matches the dashboard and recorded night production from non-solar
+        //sources fed in as PV shows. Fallback (single source, or before the per-source fetch lands): re-derive from the
+        //per-entity hourly LTS via pvValueAtTime, which lags a little and floors below the horizon.
+        //Source order (NOT sorted): both the meter list and the per-entity map are in HA Energy source order, parallel to
+        //solarStatEnergyFroms, so index `s` lines up with solarSourceName(host, s).
+        const meters = host._energyDefaults.solarStatEnergyFroms;
+        const usePerSourceChange = meters.length >= 2 && meters.every((m) => host._pvChangeSeriesPerEntity.has(m));
+        const ids = usePerSourceChange ? meters : Array.from(host._pvHistoryPerEntity.keys());
+        const perSourceWatts = usePerSourceChange
+            ? meters.map((m) => changeSeriesToWatts(host._pvChangeSeriesPerEntity.get(m) ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs))
+            : null;
         //Per-source energy (kWh) SUMMED by hour-of-day: each bucket's power * its hours, SPREAD across the slots
         //it covers, so a coarse store fills every slot instead of one (as in binSlotSum).
         const wsum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
@@ -365,13 +375,23 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             if (tMs > nowMs) { break; }
             const bStart = store.storeStartMs + i * store.stepMs;
             const bEnd   = bStart + store.stepMs;
-            ids.forEach((id, s) =>
+            for (let s = 0; s < ids.length; s++)
             {
-                const ph = host._pvHistoryPerEntity.get(id);
-                if (!ph) { return; }
-                const sample = pvValueAtTime(host, tMs, ph);
-                const v = pvReadingToWatts(sample.value, sample.unit);
-                if (!(isFinite(v) && v > 0)) { return; }
+                let v: number;
+                if (perSourceWatts)
+                {
+                    const w = perSourceWatts[s][i];
+                    if (w === null || !(w > 0)) { continue; }
+                    v = w;
+                }
+                else
+                {
+                    const ph = host._pvHistoryPerEntity.get(ids[s]);
+                    if (!ph) { continue; }
+                    const sample = pvValueAtTime(host, tMs, ph);
+                    v = pvReadingToWatts(sample.value, sample.unit);
+                    if (!(isFinite(v) && v > 0)) { continue; }
+                }
                 const energy = (v * stepH) / 1000;
                 for (let t = bStart; t < bEnd; )
                 {
@@ -380,7 +400,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
                     wsum[s][slotOf(t)] += energy * ((segEnd - t) / store.stepMs);
                     t = segEnd;
                 }
-            });
+            }
         }
         //Actuals only: the clock shows recorded energy, no forecast layer (a translucent forecast ring reads as
         //real production and misleads; the timeline carries the forecast instead).
