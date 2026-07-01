@@ -64,6 +64,12 @@ export const fr: Translations = {
         homeConsumptionEntityHelp:    'Affiche la valeur de ce capteur sur l\'indicateur de consommation maison, au lieu de la valeur calculée. Seul cet affichage change : les flux animés et l\'historique restent sur le bilan solaire, réseau et batterie. Un capteur direct s\'écarte souvent de quelques watts (pertes de mesure, capteurs désynchronisés), un écart qui ne se place pas proprement dans les flux.',
         noUiMode:                     'Mode sans interface',
         noUiModeHint:                 'Fait disparaître la timeline et les contrôles de la carte après quelques secondes d\'inactivité. Le moindre appui ou mouvement les fait revenir. Idéal pour un affichage mural.',
+        showAstro:                    'Afficher les données astronomiques',
+        showAstroHint:                'Ajoute les données astronomiques du soleil (altitude, azimut, lever, midi solaire, coucher, durée du jour) au panneau d\'informations en haut à droite, sous la météo.',
+        outdoorTemperatureEntity:     'Température extérieure',
+        outdoorTemperatureEntityHelp: 'Affiche ce capteur sur le panneau d\'informations au lieu de la température Open-Meteo. Lu dans sa propre unité.',
+        windSpeedEntity:              'Vitesse du vent',
+        windSpeedEntityHelp:          'Affiche ce capteur sur le panneau d\'informations au lieu du vent Open-Meteo. Lu dans sa propre unité.',
         installationSection: 'Installation photovoltaïque',
         installationHint:   'Toutes les entités lues par Helios (production PV, import / export grid, puissance batterie et SoC) sont récupérées depuis le [dashboard Énergie de Home Assistant](/config/energy). Cette section sert uniquement à ajouter des détails sur ton installation pour affiner la prévision : capteur d\'irradiance optionnel.',
         solarIrradianceEntity:     'Entité d\'irradiance solaire',
@@ -110,5 +116,25 @@ export const fr: Translations = {
         aboutDeveloperLabel:    'Développeur',
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
+    },
+
+    panel:
+    {
+        feelsLike:  'Ressenti',
+        wind:       'Vent',
+        altitude:   'Altitude',
+        azimuth:    'Azimut',
+        sunrise:    'Lever',
+        solarNoon:  'Midi solaire',
+        sunset:     'Coucher',
+        dayLength:  'Durée du jour',
+        condClear:        'Dégagé',
+        condPartlyCloudy: 'Partiellement nuageux',
+        condCloudy:       'Couvert',
+        condFog:          'Brouillard',
+        condDrizzle:      'Bruine',
+        condRain:         'Pluie',
+        condSnow:         'Neige',
+        condThunder:      'Orage',
     }
 };

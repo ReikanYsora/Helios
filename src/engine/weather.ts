@@ -25,6 +25,12 @@ export interface SampleHourly
     cloudHigh:   number[];
     weatherCode: number[];
     shortwave:   number[];
+    //Ambient readout series for the top-right info panel. Metric units from Open-Meteo (temperature C,
+    //wind km/h, direction deg); the card converts for display. NaN fills a missing hour.
+    temperature: number[];
+    apparent:    number[];
+    windSpeed:   number[];
+    windDir:     number[];
 }
 export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../constants';
 
@@ -134,6 +140,10 @@ interface CachedPayload
         cloudHigh:   number[];
         weatherCode: number[];
         shortwave:   number[];
+        temperature: number[];
+        apparent:    number[];
+        windSpeed:   number[];
+        windDir:     number[];
     };
 }
 
@@ -206,6 +216,10 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudHigh:   p.cloudHigh   ?? [],
             weatherCode: p.weatherCode ?? [],
             shortwave:   p.shortwave   ?? [],
+            temperature: p.temperature ?? [],
+            apparent:    p.apparent    ?? [],
+            windSpeed:   p.windSpeed   ?? [],
+            windDir:     p.windDir     ?? [],
         };
     }
     catch
@@ -231,6 +245,10 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 cloudHigh:   data.cloudHigh,
                 weatherCode: data.weatherCode,
                 shortwave:   data.shortwave,
+                temperature: data.temperature,
+                apparent:    data.apparent,
+                windSpeed:   data.windSpeed,
+                windDir:     data.windDir,
             }
         };
         window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -253,6 +271,11 @@ const HOURLY_VARS = [
     'cloud_cover_mid',
     'cloud_cover_high',
     'weather_code',
+    //Ambient readout for the info panel: dry-bulb + feels-like temperature (C), wind speed (km/h) and bearing (deg).
+    'temperature_2m',
+    'apparent_temperature',
+    'wind_speed_10m',
+    'wind_direction_10m',
 ];
 
 //Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_<model>);
@@ -307,9 +330,31 @@ function readWeatherCode(row: any, models: string[]): number[]
     return [];
 }
 
-//Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value).
+//Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value); ambient -> NaN (0 is a
+//legitimate temperature/wind value, so a missing hour must read as "no data", not zero).
 const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
 const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
+const fillAmbient   = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
+
+//Circular series (wind direction, deg): a cross-model median wraps wrong across 0/360, so take the first model
+//that carries it, like weather_code.
+function readFirstModelSeries(row: any, varName: string, models: string[]): number[]
+{
+    const direct = row?.hourly?.[varName];
+    if (Array.isArray(direct))
+    {
+        return direct.map((v: any) => (v == null || Number.isNaN(v)) ? NaN : Number(v));
+    }
+    for (const m of models)
+    {
+        const arr = row?.hourly?.[`${varName}_${m}`];
+        if (Array.isArray(arr))
+        {
+            return arr.map((v: any) => (v == null || Number.isNaN(v)) ? NaN : Number(v));
+        }
+    }
+    return [];
+}
 
 
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
@@ -411,6 +456,10 @@ export async function fetchHomePointData(
                 cloudHigh:   highSeries,
                 weatherCode: readWeatherCode(row, models),
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
+                temperature: fillAmbient(readSeries(row, 'temperature_2m',       models)),
+                apparent:    fillAmbient(readSeries(row, 'apparent_temperature',  models)),
+                windSpeed:   fillAmbient(readSeries(row, 'wind_speed_10m',        models)),
+                windDir:     readFirstModelSeries(row, 'wind_direction_10m', models),
             };
 
             writeCache(fLat, fLon, precision, data);

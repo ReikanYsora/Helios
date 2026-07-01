@@ -664,4 +664,113 @@ export const heliosCardStyles = css`
     }
 
 
+    /*  Ambient info panel, top-right. A small low-opacity plate over the card background (frosted where the
+        browser supports backdrop-filter), holding the local weather now and the optional astronomical data.
+        Deliberately NOT in the No UI fade list above, so it stays visible on a wall display when the timeline and
+        controls fade away. Info-only, so pointer-events stay off. */
+    .info-panel
+    {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 55;
+        max-width: 44%;
+        padding: var(--ha-space-2, 8px) var(--ha-space-3, 10px);
+        border-radius: 12px;
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        background: var(--ha-card-background, var(--card-background-color, #fff));
+        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #fff)) 60%, transparent);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+        box-shadow: var(--helios-shadow-chip, 0 1px 3px var(--shadow-color));
+        color: var(--primary-text-color, #212121);
+        pointer-events: none;
+        text-align: start;
+    }
+
+    .info-panel .ip-weather
+    {
+        display: flex;
+        align-items: center;
+        gap: var(--ha-space-2, 8px);
+    }
+    .info-panel .ip-cond-icon
+    {
+        --mdc-icon-size: 30px;
+        color: var(--primary-text-color, #212121);
+        flex: 0 0 auto;
+    }
+    .info-panel .ip-primary
+    {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.05;
+    }
+    .info-panel .ip-temp
+    {
+        font-size: 22px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    .info-panel .ip-unit
+    {
+        font-size: 13px;
+        font-weight: 500;
+        opacity: 0.7;
+        margin-inline-start: 1px;
+    }
+    .info-panel .ip-cond
+    {
+        font-size: 11px;
+        opacity: 0.8;
+        white-space: nowrap;
+    }
+    .info-panel .ip-secondary
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-top: 4px;
+        font-size: 11px;
+        opacity: 0.85;
+    }
+    .info-panel .ip-line
+    {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .info-panel .ip-wind-icon,
+    .info-panel .ip-wind-dir
+    {
+        --mdc-icon-size: 14px;
+        opacity: 0.75;
+    }
+
+    .info-panel .ip-astro
+    {
+        margin-top: var(--ha-space-2, 8px);
+        padding-top: var(--ha-space-2, 8px);
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+    .info-panel .ip-astro-row
+    {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--ha-space-4, 16px);
+        font-size: 11px;
+    }
+    .info-panel .ip-astro-label { opacity: 0.7; }
+    .info-panel .ip-astro-val
+    {
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+    }
+
+
 `;

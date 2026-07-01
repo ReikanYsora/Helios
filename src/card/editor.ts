@@ -426,6 +426,24 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.'}</div>
+                <div class="field">
+                    <span class="label">${t.editor.showAstro ?? 'Show astronomical data'}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-astro'] === true) ? 'active' : ''}"
+                            data-key="show-astro" data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-astro'] !== true) ? 'active' : ''}"
+                            data-key="show-astro" data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.showAstroHint ?? 'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.'}</div>
 
                 </details>
 
@@ -722,6 +740,36 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.homeConsumptionEntityHelp ?? 'Shows this sensor on the home consumption readout instead of the computed value. Only this readout changes: the animated flows and the history stay on your solar, grid and battery balance. A direct consumption sensor is usually off by a few watts (measurement losses, sensors slightly out of sync), a gap that has no clean place in the flows.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.outdoorTemperatureEntity ?? 'Outdoor temperature'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['outdoor-temperature-entity'] ?? '')}
+                            .includeDomains=${['sensor']}
+                            .includeDeviceClasses=${['temperature']}
+                            data-key="outdoor-temperature-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.outdoorTemperatureEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo temperature. Read in its own unit.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.windSpeedEntity ?? 'Wind speed'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['wind-speed-entity'] ?? '')}
+                            .includeDomains=${['sensor']}
+                            .includeDeviceClasses=${['wind_speed']}
+                            data-key="wind-speed-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.windSpeedEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo wind speed. Read in its own unit.'}</div>
                 </details>
 
                 <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>

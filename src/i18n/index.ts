@@ -139,6 +139,13 @@ export interface Translations
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
         noUiMode?:                    string;
         noUiModeHint?:                string;
+        //Info panel: astro toggle + outdoor temperature / wind-speed override entities. Optional; fall back to English.
+        showAstro?:                   string;
+        showAstroHint?:               string;
+        outdoorTemperatureEntity?:     string;
+        outdoorTemperatureEntityHelp?: string;
+        windSpeedEntity?:             string;
+        windSpeedEntityHelp?:         string;
         //Global display radius slider (50-500 m). Optional, FR-only.
         displayRadius?:               string;
         displayRadiusHelp?:           string;
@@ -199,6 +206,30 @@ export interface Translations
         //Developer block (X profile + LinkedIn), right after the version row.
         aboutDeveloperLabel:      string;
         aboutDeveloperLinkedIn:   string;
+    };
+
+    //Top-right ambient info panel (weather + optional astronomical data). All optional; the renderer falls back
+    //to inline English, so a locale that omits `panel` still builds.
+    panel?:
+    {
+        //Field labels.
+        feelsLike?:  string; //'Feels like'
+        wind?:       string; //'Wind'
+        altitude?:   string; //sun altitude
+        azimuth?:    string; //sun azimuth
+        sunrise?:    string;
+        solarNoon?:  string;
+        sunset?:     string;
+        dayLength?:  string;
+        //Weather-condition labels (WMO buckets, see card/info-panel.ts).
+        condClear?:        string;
+        condPartlyCloudy?: string;
+        condCloudy?:       string;
+        condFog?:          string;
+        condDrizzle?:      string;
+        condRain?:         string;
+        condSnow?:         string;
+        condThunder?:      string;
     };
 }
 

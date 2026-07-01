@@ -66,6 +66,12 @@ export const en: Translations = {
         homeConsumptionEntityHelp:    'Shows this sensor on the home consumption readout instead of the computed value. Only this readout changes: the animated flows and the history stay on your solar, grid and battery balance. A direct consumption sensor is usually off by a few watts (measurement losses, sensors slightly out of sync), a gap that has no clean place in the flows.',
         noUiMode:                     'No UI mode',
         noUiModeHint:                 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.',
+        showAstro:                    'Show astronomical data',
+        showAstroHint:                'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.',
+        outdoorTemperatureEntity:     'Outdoor temperature',
+        outdoorTemperatureEntityHelp: 'Shows this sensor on the info panel instead of the Open-Meteo temperature. Read in its own unit.',
+        windSpeedEntity:              'Wind speed',
+        windSpeedEntityHelp:          'Shows this sensor on the info panel instead of the Open-Meteo wind speed. Read in its own unit.',
         installationSection: 'PV installation',
         installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: optional irradiance sensor.',
         solarIrradianceEntity:     'Solar irradiance entity',
@@ -112,5 +118,25 @@ export const en: Translations = {
         aboutDeveloperLabel:    'Developer',
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
+    },
+
+    panel:
+    {
+        feelsLike:  'Feels like',
+        wind:       'Wind',
+        altitude:   'Altitude',
+        azimuth:    'Azimuth',
+        sunrise:    'Sunrise',
+        solarNoon:  'Solar noon',
+        sunset:     'Sunset',
+        dayLength:  'Day length',
+        condClear:        'Clear',
+        condPartlyCloudy: 'Partly cloudy',
+        condCloudy:       'Cloudy',
+        condFog:          'Fog',
+        condDrizzle:      'Drizzle',
+        condRain:         'Rain',
+        condSnow:         'Snow',
+        condThunder:      'Thunderstorm',
     }
 };
