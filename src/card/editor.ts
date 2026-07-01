@@ -409,48 +409,6 @@ export class HeliosCardEditor extends LitElement
                 </div>
                 <div class="hint">${t.editor.autoRotateHint}</div>
 
-                <div class="field field-block">
-                    <span class="label">${t.editor.customEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['custom-entity'] ?? '')}
-                            .includeDomains=${['sensor', 'input_number', 'number']}
-                            .entityFilter=${this._customEntityFilter}
-                            data-key="custom-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.customEntityHelp}</div>
-                ${String(c['custom-entity'] ?? '') !== '' ? html`
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityIcon}</span>
-                        ${this._pickerReady ? html`
-                            <ha-icon-picker
-                                .hass=${this.hass}
-                                .value=${String(c['custom-entity-icon'] ?? '')}
-                                data-key="custom-entity-icon"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-icon-picker>
-                        ` : nothing}
-                    </div>
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityColor}</span>
-                        ${this._pickerReady ? html`
-                            <ha-selector
-                                .hass=${this.hass}
-                                .selector=${{ ui_color: { default_color: 'red' } }}
-                                .value=${String(c['custom-entity-color'] ?? 'red')}
-                                data-key="custom-entity-color"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-selector>
-                        ` : nothing}
-                    </div>
-                    <div class="field-help">${t.editor.customEntityColorHelp}</div>
-                ` : nothing}
-
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
@@ -614,7 +572,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:chart-timeline-variant"></ha-icon>${t.editor.dataDisplaySection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.displayUpdateFrequency}</span>
                     <div class="slider-row">
@@ -673,6 +631,79 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.irradianceUnitHelp ?? 'Unit for the solar constant (irradiance) readout.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.batterySign ?? 'Battery sign'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ select: { mode: 'box', options: [
+                                { value: 'default', label: t.editor.batterySignDefault ?? 'Default' },
+                                { value: 'inverted', label: t.editor.batterySignInverted ?? 'Inverted' },
+                                { value: 'hidden', label: t.editor.batterySignHidden ?? 'Hidden' },
+                            ] } }}
+                            .value=${String(c['battery-sign'] ?? 'default')}
+                            data-key="battery-sign"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.customEntity}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['custom-entity'] ?? '')}
+                            .includeDomains=${['sensor', 'input_number', 'number']}
+                            .entityFilter=${this._customEntityFilter}
+                            data-key="custom-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.customEntityHelp}</div>
+                ${String(c['custom-entity'] ?? '') !== '' ? html`
+                    <div class="field field-block">
+                        <span class="label">${t.editor.customEntityIcon}</span>
+                        ${this._pickerReady ? html`
+                            <ha-icon-picker
+                                .hass=${this.hass}
+                                .value=${String(c['custom-entity-icon'] ?? '')}
+                                data-key="custom-entity-icon"
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-icon-picker>
+                        ` : nothing}
+                    </div>
+                    <div class="field field-block">
+                        <span class="label">${t.editor.customEntityColor}</span>
+                        ${this._pickerReady ? html`
+                            <ha-selector
+                                .hass=${this.hass}
+                                .selector=${{ ui_color: { default_color: 'red' } }}
+                                .value=${String(c['custom-entity-color'] ?? 'red')}
+                                data-key="custom-entity-color"
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-selector>
+                        ` : nothing}
+                    </div>
+                    <div class="field-help">${t.editor.customEntityColorHelp}</div>
+                ` : nothing}
+                <div class="field field-block">
+                    <span class="label">${t.editor.homeConsumptionEntity ?? 'Home consumption override'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['home-consumption-entity'] ?? '')}
+                            .includeDomains=${['sensor']}
+                            .includeDeviceClasses=${['power']}
+                            data-key="home-consumption-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.homeConsumptionEntityHelp ?? 'Shows this sensor on the home consumption readout instead of the computed value. Only this readout changes: the animated flows and the history stay on your solar, grid and battery balance. A direct consumption sensor is usually off by a few watts (measurement losses, sensors slightly out of sync), a gap that has no clean place in the flows.'}</div>
                 </details>
 
                 <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>

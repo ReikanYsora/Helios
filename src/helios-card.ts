@@ -9,6 +9,8 @@ import
     valueDecimals,
     powerUnit,
     irradianceUnit,
+    batterySign,
+    homeConsumptionEntityId,
     customEntityId,
     customEntityColor,
     homeColor,
@@ -1328,7 +1330,7 @@ export class HeliosCard extends LitElement
         //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
         //coherent with the dashboard. Colour + leader direction below keep the physical sign.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec, powerU)
+            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec, powerU, batterySign(this.config))
             : '';
 
         //Home consumption chip:
@@ -1348,12 +1350,23 @@ export class HeliosCard extends LitElement
         const homeUsageWatts = (usagePvW === null && usageGridW === null && usageBatteryW === null)
             ? null
             : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0));
+        //Optional CHIP-ONLY override: some inverters expose a direct home-consumption sensor that differs by a few
+        //watts from the balance. When set, its live value replaces the chip readout; the flows, home glyph and
+        //history deliberately keep the computed balance (that small gap has no consistent place in the flow).
+        const homeOverrideId = homeConsumptionEntityId(this.config);
+        let homeDisplayW = homeUsageWatts;
+        if (homeOverrideId)
+        {
+            const st = this.hass.states[homeOverrideId];
+            const v  = parseFloat(st?.state ?? '');
+            if (isFinite(v)) { homeDisplayW = Math.max(0, pvNormalizeToWatts(v, String(st?.attributes?.unit_of_measurement ?? ''))); }
+        }
         const showHomeUsageChip = hasHomeCoords
             && layout !== null
             && !batteryScrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
-            ? formatGridValue(this.hass, homeUsageWatts, 'W', valueDec, powerU)
+            ? formatGridValue(this.hass, homeDisplayW, 'W', valueDec, powerU)
             : '';
 
         //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader

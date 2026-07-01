@@ -643,11 +643,14 @@ export function batterySampleAtTime(
 }
 
 
-//Format a signed battery power value for the chip in the card's configured unit (W or kW), at the configured
-//precision, with explicit +/- so charging vs discharging reads at a glance.
-export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
+//Format a battery power value for the chip in the card's configured unit (W or kW), at the configured precision.
+//`sign` picks the convention: 'default' keeps the +/- as given (charging negative, discharging positive after the
+//caller's negation), 'inverted' flips it, 'hidden' drops the sign and shows the magnitude only.
+export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW', sign: 'default' | 'inverted' | 'hidden' = 'default'): string
 {
-    return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals, true, powerU);
+    const watts = pvNormalizeToWatts(value, unit);
+    if (sign === 'hidden') { return formatPowerKw(hass, Math.abs(watts), decimals, false, powerU); }
+    return formatPowerKw(hass, sign === 'inverted' ? -watts : watts, decimals, true, powerU);
 }
 
 

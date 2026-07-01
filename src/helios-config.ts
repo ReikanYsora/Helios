@@ -87,6 +87,13 @@ export interface HeliosConfig
     'power-unit'?:             unknown;
     //Irradiance (solar constant) readout unit: 'W/m²' or 'kW/m²'. Default 'W/m²'.
     'irradiance-unit'?:        unknown;
+    //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
+    //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
+    'battery-sign'?:           unknown;
+    //Entity whose live value replaces the home-consumption CHIP readout only (some inverters expose a direct
+    //consumption sensor differing by a few watts from the balance). The flows and history keep the computed
+    //value on purpose: that small gap has no consistent place in the solar/grid/battery flow.
+    'home-consumption-entity'?: unknown;
 }
 
 
@@ -171,6 +178,23 @@ export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 export function irradianceUnit(config: HeliosConfig | undefined): 'W/m²' | 'kW/m²'
 {
     return config?.['irradiance-unit'] === 'kW/m²' ? 'kW/m²' : 'W/m²';
+}
+
+
+//Resolved battery chip sign convention. Default keeps charging negative / discharging positive.
+export function batterySign(config: HeliosConfig | undefined): 'default' | 'inverted' | 'hidden'
+{
+    const raw = config?.['battery-sign'];
+    return raw === 'inverted' || raw === 'hidden' ? raw : 'default';
+}
+
+
+//Resolved home-consumption override entity id (empty when unset). Overrides the chip readout only; the flows and
+//history stay on the computed balance.
+export function homeConsumptionEntityId(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['home-consumption-entity'];
+    return typeof raw === 'string' ? raw.trim() : '';
 }
 
 

@@ -128,6 +128,14 @@ export interface Translations
         powerUnitHelp?:               string;
         irradianceUnit?:              string;
         irradianceUnitHelp?:          string;
+        //Battery-sign selector + home-consumption override entity. Optional; fall back to English.
+        batterySign?:                 string;
+        batterySignHelp?:             string;
+        batterySignDefault?:          string;
+        batterySignInverted?:         string;
+        batterySignHidden?:           string;
+        homeConsumptionEntity?:       string;
+        homeConsumptionEntityHelp?:   string;
         //Global display radius slider (50-500 m). Optional, FR-only.
         displayRadius?:               string;
         displayRadiusHelp?:           string;
