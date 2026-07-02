@@ -1015,7 +1015,11 @@ export class HeliosCard extends LitElement
                 //Energy/PV data lands via callWS subscriptions that requestUpdate() WITHOUT touching hass,
                 //but they rebuild the unified store, so watch it too, else the default (PV) home never picks
                 //up its colour + per-source bands until the user clicks a chip.
-                || _changedProperties.has('_unifiedStore')))
+                || _changedProperties.has('_unifiedStore')
+                //Engine (re)spawn: after a remount the chip may have been RESTORED to a non-default metric
+                //while the engine was still null, so repaint the home for the active chip once it lands.
+                //Without this the prism keeps the engine's default colour while the chip shows another mode.
+                || _changedProperties.has('_engine')))
         {
             this._updateHomeAppearance(_changedProperties.has('_chartTarget'));
         }
