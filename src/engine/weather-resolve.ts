@@ -74,6 +74,12 @@ interface WeatherAtTime
     cloudHigh:      number;
     shortwave:      number;
     cloudIntensity: CloudIntensity;
+    //Ambient readout for the info panel. Raw WMO code (for condition icon/text) plus temperature (C), wind speed
+    //(km/h) and bearing (deg). NaN where the hour had no value.
+    weatherCode:    number;
+    temperature:    number;
+    windSpeed:      number;
+    windDir:        number;
 }
 
 //Resolve weather variables at `t` from an hourly forecast. `home` null (initial/failed/in-flight) returns
@@ -87,7 +93,11 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
         cloudMid:       0,
         cloudHigh:      0,
         shortwave:      -1,
-        cloudIntensity: 'clear'
+        cloudIntensity: 'clear',
+        weatherCode:    0,
+        temperature:    NaN,
+        windSpeed:      NaN,
+        windDir:        NaN,
     };
 
     if (!home || !home.times.length)
@@ -114,6 +124,10 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
         cloudMid:       cMid,
         cloudHigh:      cHi,
         shortwave:      sw,
-        cloudIntensity: weatherCodeToIntensity(wc, cc)
+        cloudIntensity: weatherCodeToIntensity(wc, cc),
+        weatherCode:    wc,
+        temperature:    home.temperature?.[idx] ?? NaN,
+        windSpeed:      home.windSpeed?.[idx]   ?? NaN,
+        windDir:        home.windDir?.[idx]     ?? NaN,
     };
 }

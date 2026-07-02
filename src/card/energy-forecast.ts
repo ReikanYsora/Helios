@@ -6,12 +6,12 @@ import type { EnergyDefaults } from './energy-prefs';
 import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../constants';
 
 
-//One hourly forecast point. For an hourly wh value the average power across the hour in watts equals the wh number
-//(Wh over 1 h), so consumers read watts directly.
+//One forecast point. `w` holds the AVERAGE WATTS across the point's bucket: the fetch layer normalises each
+//provider bucket's energy by its duration, so consumers read watts directly regardless of the feed cadence.
 export interface SolarForecastPoint
 {
     tMs: number;
-    wh:  number;
+    w:   number;
 }
 
 
@@ -82,9 +82,11 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
 }
 
 
-//Try the detail websocket for each configured provider entry over the card's J-2..J+2 window. Returns the merged
-//points of the first entry that answers, or null when no entry supports the command (caller then falls back to HA's
-//generic surface). Each `pv_w` is watts, kept in the .wh slot (hourly: watts == Wh, read as watts either way).
+//Try the detail websocket for EVERY configured provider entry over the card's J-2..J+2 window, and SUM their curves:
+//a multi-string install wires one forecast config entry per array (east roof + west roof, ...), and the card must
+//show their combined output, not just the first. Each `pv_w` is already watts, so summing watts per timestamp is
+//correct. Entries that reject the command (not the Helios provider) are skipped; null only when NONE answered, so
+//the caller falls back to HA's generic surface.
 async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecastPoint[] | null>
 {
     const candidates = host._energyDefaults?.solarForecastEntryIds ?? [];
@@ -98,48 +100,48 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     const startIso = new Date(midnight.getTime() - 2 * DAY_MS).toISOString();
     const endIso   = new Date(midnight.getTime() + 3 * DAY_MS).toISOString();
 
-    for (const entryId of candidates)
+    //Fetch every entry in parallel, then sum the answering ones per timestamp. A rejecting entry (not the Helios
+    //provider) resolves to null and drops out; an empty-but-valid answer counts as answered but adds nothing.
+    const results = await Promise.all(candidates.map((entryId) =>
+        host.hass.callWS({
+            type:     'helios_forecast/series',
+            entry_id: entryId,
+            start:    startIso,
+            end:      endIso,
+        })
+            .then((res: { points?: { t: string; pv_w: number }[] }) => res?.points ?? null)
+            .catch(() => null)));
+
+    const byMs = new Map<number, number>();
+    let anyAnswered = false;
+    for (const raw of results)
     {
-        try
+        if (!Array.isArray(raw)) { continue; }
+        anyAnswered = true;
+        for (const p of raw)
         {
-            // eslint-disable-next-line no-await-in-loop -- sequential by design: return the first candidate that answers, skip the rest
-            const res = await host.hass.callWS({
-                type:     'helios_forecast/series',
-                entry_id: entryId,
-                start:    startIso,
-                end:      endIso,
-            }) as { points?: { t: string; pv_w: number }[] };
-            const raw = res?.points;
-            if (!Array.isArray(raw))
+            const tMs = Date.parse(p.t);
+            if (Number.isFinite(tMs) && typeof p.pv_w === 'number' && Number.isFinite(p.pv_w))
             {
-                continue;
+                byMs.set(tMs, (byMs.get(tMs) ?? 0) + p.pv_w);
             }
-            const out: SolarForecastPoint[] = [];
-            for (const p of raw)
-            {
-                const tMs = Date.parse(p.t);
-                if (Number.isFinite(tMs) && typeof p.pv_w === 'number' && Number.isFinite(p.pv_w))
-                {
-                    out.push({ tMs, wh: p.pv_w });
-                }
-            }
-            out.sort((a, b) => a.tMs - b.tMs);
-            //An empty (but valid) answer means an entry with no points in range; still prefer it over the generic
-            //surface to avoid double-fetching. An entry that doesn't support the command rejects it and is skipped.
-            return out;
-        }
-        catch (_)
-        {
-            //Entry doesn't support the command (unknown command / not_found) or transient error: try the next.
-            continue;
         }
     }
-    return null;
+    if (!anyAnswered)
+    {
+        return null;
+    }
+    return [...byMs.entries()]
+        .map(([tMs, w]) => ({ tMs, w }))
+        .sort((a, b) => a.tMs - b.tMs);
 }
 
 
-//Merge the per-config-entry wh_hours maps into one hourly forecast: sum wh across every entry reporting the same
-//timestamp, then emit a time-sorted array (multi-source installs land one combined curve). Bad rows are skipped.
+//Merge the per-config-entry wh_hours maps into one combined forecast, then normalise each point to AVERAGE WATTS.
+//HA's energy/solar_forecast reports ENERGY per bucket (Wh), and providers differ in bucket width (Forecast.Solar is
+//hourly, Solcast is 30-minute, ...). Consumers read `w` as watts, so we divide each bucket's summed energy by the
+//bucket duration in hours. The duration is derived from the median spacing of the merged timeline, so a 30-minute
+//feed scales x2, an hourly feed is unchanged, and any other cadence is handled generically.
 export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<string, number> }> | null | undefined): SolarForecastPoint[]
 {
     if (!raw || typeof raw !== 'object')
@@ -170,13 +172,35 @@ export function mergeSolarForecast(raw: Record<string, { wh_hours?: Record<strin
             byMs.set(tMs, (byMs.get(tMs) ?? 0) + v);
         }
     }
-    const out: SolarForecastPoint[] = [];
-    for (const [tMs, wh] of byMs)
+    const sorted = [...byMs.entries()]
+        .map(([tMs, wh]) => ({ tMs, wh }))
+        .sort((a, b) => a.tMs - b.tMs);
+
+    //Detect the native bucket width from the median positive gap between consecutive points, so per-point anomalies
+    //(overnight jumps, missing samples) don't distort the conversion. Fall back to one hour when it can't be measured.
+    const gaps: number[] = [];
+    for (let i = 1; i < sorted.length; i++)
     {
-        out.push({ tMs, wh });
+        const d = sorted[i].tMs - sorted[i - 1].tMs;
+        if (Number.isFinite(d) && d > 0)
+        {
+            gaps.push(d);
+        }
     }
-    out.sort((a, b) => a.tMs - b.tMs);
-    return out;
+    let bucketMs = HOUR_MS;
+    if (gaps.length > 0)
+    {
+        gaps.sort((a, b) => a - b);
+        const medianGap = gaps[Math.floor(gaps.length / 2)];
+        if (Number.isFinite(medianGap) && medianGap > 0)
+        {
+            bucketMs = medianGap;
+        }
+    }
+    const wattFactor = HOUR_MS / bucketMs;
+
+    //Energy per bucket -> average watts (Wh * hour/bucket): a 30-minute feed scales x2, an hourly feed is unchanged.
+    return sorted.map((p) => ({ tMs: p.tMs, w: p.wh * wattFactor }));
 }
 
 
@@ -216,12 +240,12 @@ export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: num
     {
         const f = (ms - pt.tMs) / (next.tMs - pt.tMs);
         const frac = f < 0 ? 0 : f > 1 ? 1 : f;
-        return pt.wh + (next.wh - pt.wh) * frac;
+        return pt.w + (next.w - pt.w) * frac;
     }
     //No usable next point: the value only applies inside this point's own hour window.
     if (ms >= pt.tMs + HOUR_MS)
     {
         return null;
     }
-    return pt.wh;
+    return pt.w;
 }

@@ -9,6 +9,7 @@ import { callWSWithTimeout } from './ws-timeout';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import { customEntityId, type HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
+import { serverHour } from './tz';
 import { HOUR_MS } from '../constants';
 
 //24 hour-of-day values per metric: energy meters are kWh totals summed over the window; soc is an average %, custom
@@ -58,7 +59,7 @@ function binChangeByHour(buckets: ChangeBucket[] | null): number[]
     for (const b of buckets)
     {
         if (!isFinite(b.kwh) || Math.abs(b.kwh) > cap) { continue; }
-        sum[new Date(b.startMs).getHours()] += Math.max(0, b.kwh);
+        sum[serverHour(b.startMs)] += Math.max(0, b.kwh);
     }
     return sum;
 }
@@ -97,7 +98,7 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
                     v = hours > 0 ? (b.change / hours) * 1000 : null;
                 }
                 if (v === null || !isFinite(v)) { continue; }
-                const h = new Date(tMs).getHours();
+                const h = serverHour(tMs);
                 sum[h] += power ? Math.abs(v) : v;
                 cnt[h] += 1;
             }

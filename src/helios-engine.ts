@@ -865,6 +865,18 @@ export class HeliosEngine
         return resolveWeatherAtTime(this._homeHourlyData, t);
     }
 
+    //Ambient readout (WMO code, temperature C, wind km/h + bearing deg) at `t` for the top-right info panel.
+    //Null until the first Open-Meteo payload lands so the card hides the rows instead of showing NaN.
+    public getAmbientReadout(t: Date): { weatherCode: number; temperature: number; windSpeed: number; windDir: number } | null
+    {
+        if (!this._homeHourlyData)
+        {
+            return null;
+        }
+        const w = resolveWeatherAtTime(this._homeHourlyData, t);
+        return { weatherCode: w.weatherCode, temperature: w.temperature, windSpeed: w.windSpeed, windDir: w.windDir };
+    }
+
     //Public wrapper for _getTimeRange so the card's 30 s tick can re-fetch the window after midnight rollover.
     public getTimelineRange(): { start: Date; end: Date } | null
     {
@@ -1586,6 +1598,32 @@ export class HeliosEngine
         const east  = (lon - this.homeLon) * perLon;
         const north = (lat - this.homeLat) * perLat;
         return this._renderer.camera.project3(east, north, altitudeM);
+    }
+
+    //Screen-space rotation (deg, CSS clockwise) that points an up-pointing arrow icon along a real-world compass
+    //bearing (deg CW from North) projected onto the tilted ground. Because it routes through the live camera, the
+    //angle tracks camera orbit + pitch, so a panel arrow stays aligned with the true direction as the scene turns.
+    //Null until the renderer is ready or when the projected vector is degenerate (bearing edge-on to the camera).
+    public projectGroundBearing(bearingDeg: number): number | null
+    {
+        if (!this._renderer || !Number.isFinite(bearingDeg))
+        {
+            return null;
+        }
+        const rad = bearingDeg * Math.PI / 180;
+        //Any positive radius works: only the projected direction (not the length) is used.
+        const east  = Math.sin(rad) * 10;
+        const north = Math.cos(rad) * 10;
+        const origin = this._renderer.camera.project3(0, 0, 0);
+        const tip    = this._renderer.camera.project3(east, north, 0);
+        const dx = tip.x - origin.x;
+        const dy = tip.y - origin.y;
+        if (dx === 0 && dy === 0)
+        {
+            return null;
+        }
+        //mdi:navigation points up (screen -Y) at 0deg; rotate "up" onto (dx, dy).
+        return Math.atan2(dx, -dy) * 180 / Math.PI;
     }
 
     //Screen-space layout of the solar arc, the sun's current position, and the incidence ray. Null until

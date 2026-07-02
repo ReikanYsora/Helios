@@ -7,15 +7,36 @@ import
 {
     type HeliosConfig,
     valueDecimals,
+    powerUnit,
+    irradianceUnit,
+    batterySign,
+    homeConsumptionEntityId,
+    autoHideUi,
+    showWeather,
+    showAstro,
+    outdoorTemperatureEntityId,
+    windSpeedEntityId,
     customEntityId,
     customEntityColor,
     homeColor,
     cacheId,
 } from './helios-config';
+import { getSunPosition } from './engine/sun';
+import
+{
+    wmoConditionKey,
+    conditionIcon,
+    formatTempC,
+    formatWindKmh,
+    readEntityValue,
+    formatClock,
+    formatDayLength,
+    type PanelValue,
+} from './card/info-panel';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
-import { DAY_MS, HOUR_MS } from './constants';
+import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -28,7 +49,8 @@ import {
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
 import { nightFractionByHour } from './card/sun-zones';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
+import { setServerTimeZone } from './card/tz';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, formatIrradiance, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
     refreshPv,
@@ -180,6 +202,9 @@ export class HeliosCard extends LitElement
     @state() _pvChangeSeries: ChangeBucket[] | null = null;
     _pvChangeSeriesFetchKey  = '';
     _pvChangeSeriesFetching  = false;
+    @state() _pvChangeSeriesPerEntity = new Map<string, ChangeBucket[]>();
+    _pvChangePerEntityFetchKey  = '';
+    _pvChangePerEntityFetching  = false;
     //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries.
     //The unified store reads this into its forecast series. Empty when no forecast source is configured.
     @state() _haSolarForecast: SolarForecastPoint[] = [];
@@ -270,6 +295,9 @@ export class HeliosCard extends LitElement
     //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap and paints the
     //hourly cylinder ring; 'trend' paints one ring comparing the period to the previous one. Scene is the default.
     @state() _viewMode: 'scene' | 'clock' | 'trend' = 'scene';
+    //"No UI" mode: true once the idle timer fires, hiding (fading) the timeline + controls; any input clears it.
+    @state() private _uiHidden = false;
+    private _uiHideTimer: number | undefined;
     //Trend mode single metric (one choice, unlike clock's multi-filter) + the two compared hour-of-day profiles
     //(current period P, previous period P-1) with their cache key.
     @state() _trendTarget: ChartTarget = 'consumption';
@@ -412,6 +440,8 @@ export class HeliosCard extends LitElement
         //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, so
         //setConfig doesn't seed it.
         this._warnIfLegacyEntityKeys(config);
+        //Re-arm (or stop) the "No UI" idle fade when the option changes.
+        this._scheduleUiHide();
     }
 
     //Apply the active rolling-window span to engine, store and timeline. Called from setConfig and the
@@ -534,6 +564,88 @@ export class HeliosCard extends LitElement
         this._lastHomeTarget = this._chartTarget;
         this._engine.setHomeAppearance(color, bands, play);
     }
+
+    //Top-right ambient info panel: local weather now (condition, temperature, wind), plus the sun's astronomical
+    //data when 'show-astro' is on. Rendered only in scene view + live (the caller gates on that). Returns nothing
+    //when neither the weather payload nor the astro data is available yet, so the frame never shows empty.
+    private _renderInfoPanel(): TemplateResult | typeof nothing
+    {
+        const coords = getHomeCoords(this.config, this.hass);
+        if (!coords) { return nothing; }
+
+        //Weather: Open-Meteo at "now", each field overridable by a user-picked HA entity (read in its own unit).
+        const amb   = this._engine?.getAmbientReadout(this._now) ?? null;
+        const night = (this._sunScene?.sun.altitude ?? 1) <= 0;
+
+        const tempOverride = readEntityValue(this.hass, outdoorTemperatureEntityId(this.config));
+        const windOverride = readEntityValue(this.hass, windSpeedEntityId(this.config));
+        const temp: PanelValue | null = tempOverride ?? (amb ? formatTempC(this.hass, amb.temperature) : null);
+        const wind: PanelValue | null = windOverride ?? (amb ? formatWindKmh(this.hass, amb.windSpeed) : null);
+
+        //The sky condition reads from the icon alone: its text label ("Partly cloudy") is long enough to force the
+        //panel wide or wrap, so only the icon is shown.
+        const condIcon = amb ? conditionIcon(wmoConditionKey(amb.weatherCode), night) : '';
+        const windDir = amb && Number.isFinite(amb.windDir) ? amb.windDir : null;
+        //Arrow points DOWNWIND (where the wind blows to = FROM-bearing + 180), projected onto the tilted ground so
+        //it stays aligned with the true direction as the camera orbits. Falls back to a flat rotation if the
+        //renderer can't project yet.
+        const windArrowRot = windDir !== null
+            ? (this._engine?.projectGroundBearing(windDir + 180) ?? (windDir + 180))
+            : null;
+        const hasWeather = temp !== null || wind !== null || condIcon !== '';
+
+        //Astro (optional): current altitude/azimuth from the ephemeris, sunrise/noon/sunset from the projected arc.
+        const astroOn = showAstro(this.config);
+        const sunPos  = astroOn ? getSunPosition(this._now, coords.lat, coords.lon) : null;
+        const sunrise = this._sunScene?.sunrise?.time ?? null;
+        const sunset  = this._sunScene?.sunset?.time  ?? null;
+        const solarNoon = (sunrise && sunset) ? new Date((sunrise.getTime() + sunset.getTime()) / 2) : null;
+        const dayLength = formatDayLength(sunrise, sunset);
+
+        //Icon-only rows to keep the panel compact: each astro field reads from its icon alone.
+        const astroRows: { icon: string; value: string }[] = [];
+        if (astroOn && sunPos)
+        {
+            astroRows.push({ icon: 'mdi:sun-angle',           value: `${Math.round(sunPos.altitude)}°` });
+            astroRows.push({ icon: 'mdi:sun-compass',         value: `${Math.round(sunPos.azimuth)}°` });
+            if (sunrise)   { astroRows.push({ icon: 'mdi:weather-sunset-up',   value: formatClock(this.hass, sunrise) }); }
+            if (solarNoon) { astroRows.push({ icon: 'mdi:weather-sunny',       value: formatClock(this.hass, solarNoon) }); }
+            if (sunset)    { astroRows.push({ icon: 'mdi:weather-sunset-down', value: formatClock(this.hass, sunset) }); }
+            if (dayLength) { astroRows.push({ icon: 'mdi:timer-sand',          value: dayLength }); }
+        }
+
+        if (!hasWeather && astroRows.length === 0) { return nothing; }
+
+        return html`
+            <div class="info-panel">
+                ${hasWeather ? html`
+                    <div class="ip-weather">
+                        ${condIcon ? html`<ha-icon class="ip-cond-icon" icon=${condIcon}></ha-icon>` : nothing}
+                        <div class="ip-primary">
+                            ${temp ? html`<div class="ip-temp">${temp.value}<span class="ip-unit">${temp.unit}</span></div>` : nothing}
+                        </div>
+                    </div>
+                    ${wind ? html`
+                        <div class="ip-secondary">
+                            <div class="ip-line">
+                                <ha-icon class="ip-wind-icon" icon="mdi:weather-windy"></ha-icon>
+                                <span>${wind.value} ${wind.unit}</span>
+                                ${windArrowRot !== null ? html`<ha-icon class="ip-wind-dir" icon="mdi:navigation" style="transform:rotate(${Math.round(windArrowRot)}deg)"></ha-icon>` : nothing}
+                            </div>
+                        </div>
+                    ` : nothing}
+                ` : nothing}
+                ${astroRows.length > 0 ? html`
+                    <div class="ip-astro">
+                        ${astroRows.map((r) => html`
+                            <div class="ip-astro-row"><ha-icon class="ip-astro-icon" icon=${r.icon}></ha-icon><span class="ip-astro-val">${r.value}</span></div>
+                        `)}
+                    </div>
+                ` : nothing}
+            </div>
+        `;
+    }
+
 
     //Timeline mode selector: Standard / Today / Week / Month / Year. The active mode is highlighted.
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
@@ -663,6 +775,8 @@ export class HeliosCard extends LitElement
         this._pvCalibStats                = null;
         this._pvChangeSeries              = null;
         this._pvChangeSeriesFetchKey      = '';
+        this._pvChangeSeriesPerEntity     = new Map();
+        this._pvChangePerEntityFetchKey   = '';
         this._haSolarForecast             = [];
         this._haSolarForecastLoaded       = false;
         this._haSolarForecastFetching     = false;
@@ -725,6 +839,30 @@ export class HeliosCard extends LitElement
         };
     }
 
+    //"No UI" mode: fade the timeline + controls after UI_AUTOHIDE_MS of no input; any input brings them back and
+    //restarts the countdown. Listeners are attached in connectedCallback; a no-op when the mode is off.
+    private _onUiActivity = (): void =>
+    {
+        if (!autoHideUi(this.config)) { return; }
+        if (this._uiHidden) { this._uiHidden = false; }
+        this._scheduleUiHide();
+    };
+
+    private _scheduleUiHide(): void
+    {
+        if (this._uiHideTimer !== undefined)
+        {
+            window.clearTimeout(this._uiHideTimer);
+            this._uiHideTimer = undefined;
+        }
+        if (!autoHideUi(this.config))
+        {
+            if (this._uiHidden) { this._uiHidden = false; }
+            return;
+        }
+        this._uiHideTimer = window.setTimeout(() => { this._uiHidden = true; }, UI_AUTOHIDE_MS);
+    }
+
     public connectedCallback(): void
     {
         super.connectedCallback();
@@ -761,6 +899,12 @@ export class HeliosCard extends LitElement
         //One-shot refresh at connect so the headline lights up on first render rather than waiting 30 s.
         //No-op when no HA stat is wired.
         refreshHaDailyTotals(this);
+        //"No UI" mode: watch for any input on the card and arm the idle fade (both no-ops when the mode is off).
+        this.addEventListener('pointerdown', this._onUiActivity);
+        this.addEventListener('pointermove', this._onUiActivity, { passive: true });
+        this.addEventListener('wheel', this._onUiActivity, { passive: true });
+        this.addEventListener('touchstart', this._onUiActivity, { passive: true });
+        this._scheduleUiHide();
     }
 
     public disconnectedCallback(): void
@@ -768,6 +912,11 @@ export class HeliosCard extends LitElement
         super.disconnectedCallback();
         liveCards.delete(this);
         window.clearInterval(this._timer);
+        this.removeEventListener('pointerdown', this._onUiActivity);
+        this.removeEventListener('pointermove', this._onUiActivity);
+        this.removeEventListener('wheel', this._onUiActivity);
+        this.removeEventListener('touchstart', this._onUiActivity);
+        if (this._uiHideTimer !== undefined) { window.clearTimeout(this._uiHideTimer); this._uiHideTimer = undefined; }
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
         if (this._onVisibilityChange)
@@ -819,8 +968,23 @@ export class HeliosCard extends LitElement
     //Engine init policy: re-init only when an identity input changes (home coordinates). Container reflow
     //just resizes the existing engine; we never tear down the engine for a sibling re-render (it would
     //trash the user's in-progress editor edits).
+    protected willUpdate(_changedProperties: PropertyValues): void
+    {
+        super.willUpdate(_changedProperties);
+        //Bind the clock's hour-of-day binning to the HOME time zone (see ./card/tz) before any frame projects or
+        //the store rebuilds this cycle, so the dial, the "now" marker and the day/night wedges all group by the
+        //home's real hour rather than the browser's. Idempotent, so it is cheap to run on every hass update.
+        if (_changedProperties.has('hass'))
+        {
+            setServerTimeZone(this.hass?.config?.time_zone);
+        }
+    }
+
     protected updated(_changedProperties: PropertyValues): void
     {
+        //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
+        this.toggleAttribute('data-ui-hidden', this._uiHidden);
+
         //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it. Resolve
         //the configured ui_color token to a hex once per token change (getComputedStyle forces a reflow).
         const homeToken = homeColor(this.config);
@@ -850,7 +1014,11 @@ export class HeliosCard extends LitElement
                 //Energy/PV data lands via callWS subscriptions that requestUpdate() WITHOUT touching hass,
                 //but they rebuild the unified store, so watch it too, else the default (PV) home never picks
                 //up its colour + per-source bands until the user clicks a chip.
-                || _changedProperties.has('_unifiedStore')))
+                || _changedProperties.has('_unifiedStore')
+                //Engine (re)spawn: after a remount the chip may have been RESTORED to a non-default metric
+                //while the engine was still null, so repaint the home for the active chip once it lands.
+                //Without this the prism keeps the engine's default colour while the chip shows another mode.
+                || _changedProperties.has('_engine')))
         {
             this._updateHomeAppearance(_changedProperties.has('_chartTarget'));
         }
@@ -1229,8 +1397,10 @@ export class HeliosCard extends LitElement
 
         //User-configured decimal precision, applied to every chip readout (kW/kWh).
         const valueDec = valueDecimals(this.config);
+        const powerU   = powerUnit(this.config);
+        const irradU   = irradianceUnit(this.config);
         const pvDisplayValue = showPvLabel
-            ? (isPvPredicted ? '≈ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec)
+            ? (isPvPredicted ? '≈ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec, powerU)
             : '';
 
         //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against a 5 kW
@@ -1311,7 +1481,7 @@ export class HeliosCard extends LitElement
         //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
         //coherent with the dashboard. Colour + leader direction below keep the physical sign.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec)
+            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec, powerU, batterySign(this.config))
             : '';
 
         //Home consumption chip:
@@ -1331,12 +1501,23 @@ export class HeliosCard extends LitElement
         const homeUsageWatts = (usagePvW === null && usageGridW === null && usageBatteryW === null)
             ? null
             : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0));
+        //Optional CHIP-ONLY override: some inverters expose a direct home-consumption sensor that differs by a few
+        //watts from the balance. When set, its live value replaces the chip readout; the flows, home glyph and
+        //history deliberately keep the computed balance (that small gap has no consistent place in the flow).
+        const homeOverrideId = homeConsumptionEntityId(this.config);
+        let homeDisplayW = homeUsageWatts;
+        if (homeOverrideId)
+        {
+            const st = this.hass.states[homeOverrideId];
+            const v  = parseFloat(st?.state ?? '');
+            if (isFinite(v)) { homeDisplayW = Math.max(0, pvNormalizeToWatts(v, String(st?.attributes?.unit_of_measurement ?? ''))); }
+        }
         const showHomeUsageChip = hasHomeCoords
             && layout !== null
             && !batteryScrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
-            ? formatGridValue(this.hass, homeUsageWatts, 'W', valueDec)
+            ? formatGridValue(this.hass, homeDisplayW, 'W', valueDec, powerU)
             : '';
 
         //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader
@@ -1489,7 +1670,7 @@ export class HeliosCard extends LitElement
         //Custom user-picked entity chip: red pill top-left (above grid) with a leader to the home and a
         //sign-driven bead. Positive value flows home -> chip (reversed traversal), negative flows chip ->
         //home (default). Cadence scales with the value's magnitude; below the idle floor the bead is dropped.
-        const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config));
+        const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config), powerU);
         const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
         const customLeaderColor = resolveUiColor(customEntityColor(this.config), '#f44336');
         const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
@@ -1497,7 +1678,7 @@ export class HeliosCard extends LitElement
         //an energy meter's lifetime total (customChipWatts differentiates cumulative energy to average power).
         const customScrubMs = (!this._isLiveMode && this._selectedTime !== null) ? this._selectedTime.getTime() : null;
         const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customEntityHistory, customScrubMs);
-        const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec);
+        const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec, powerU);
         const CUSTOM_BEAD_CAP_W     = 5000;
         const CUSTOM_BEAD_MIN_DUR_S = 1.2;
         const CUSTOM_BEAD_MAX_DUR_S = 8.0;
@@ -1555,7 +1736,7 @@ export class HeliosCard extends LitElement
         //STC (1000 W/m²) the fill reaches the rim, at zero it vanishes. The sqrt mapping linearises AREA
         //perception (area ∝ r²) so a 50% reading covers half the rim's area, not its radius.
         const sunWm2          = sunScene?.sun.irradiance ?? 0;
-        const sunWm2Round     = Math.round(sunWm2);
+        const sunIrradText    = formatIrradiance(this.hass, sunWm2, valueDec, irradU);
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
         //The W/m² readout + cloud chip are weather; hidden in modes without it (month/year). The sun
         //disc/arc (pure geometry) stays.
@@ -1631,6 +1812,13 @@ export class HeliosCard extends LitElement
                     @pointerdown=${this._onClockTapStart}
                     @pointerup=${this._onClockTapEnd}
                 ></div>
+
+                <!--  Ambient info panel (top-right): local weather now, plus the sun's astronomical data when the
+                      "show astro" option is on. Scene view + live only (hidden in clock/trend and past scrub); it
+                      is exempt from the No UI fade on purpose, as ambient info suited to a wall display.  -->
+                ${hasHomeCoords && showWeather(this.config) && this._viewMode === 'scene' && this._isLiveMode && this._selectedTime === null
+                    ? this._renderInfoPanel()
+                    : nothing}
 
                 ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'trend') ? html`
                     <div class="clock-overlay">
@@ -2057,7 +2245,7 @@ export class HeliosCard extends LitElement
                         @click=${this._onChartTargetClick}
                     >
                         <ha-icon icon=${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}></ha-icon>
-                        <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec)}</span>
+                        <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
                     </div>
                 ` : nothing}
 
@@ -2233,7 +2421,7 @@ export class HeliosCard extends LitElement
                         @click=${this._onChartTargetClick}
                     >
                         <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
-                        <span>${sunWm2Round} W/m²</span>
+                        <span>${sunIrradText}</span>
                     </div>
                 ` : nothing}
 

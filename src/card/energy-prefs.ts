@@ -23,6 +23,10 @@ export interface EnergyDefaults
     batteryStatEnergyTos:   string[]; //Battery charge kWh meters (`stat_energy_to`). Drives `charged today`.
     //Battery state-of-charge sensors (`stat_soc`), uniform-averaged across sources (HA Energy has no per-source capacity).
     batteryStatSocs:        string[];
+    //Count of battery SOURCES that expose no live-power sensor (`power_config`). >0 means a mixed/energy-only wiring:
+    //the live readout must then net the directional energy meters (which cover every bank) instead of summing the
+    //partial set of power sensors, otherwise a battery without a power sensor drops out of the live power.
+    batterySourcesWithoutRate: number;
     //Entity ids whose raw value reads opposite to the card's canonical sign (battery: positive = charging, grid:
     //positive = import). HA's conventions: battery `stat_rate` is discharge-positive (flips), grid `stat_rate`
     //import-positive (no flip); directional from/to slots flip on the opposing side. Full mapping in
@@ -45,6 +49,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     batteryStatEnergyFroms: [],
     batteryStatEnergyTos:   [],
     batteryStatSocs:        [],
+    batterySourcesWithoutRate: 0,
     invertedRateEntities:   [],
     solarForecastEntryIds:  [],
 };
@@ -312,6 +317,7 @@ export function parseEnergyPrefs(prefs: {
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
         batteryStatSocs:        [],
+        batterySourcesWithoutRate: 0,
         invertedRateEntities:   [],
         solarForecastEntryIds:  [],
     };
@@ -402,13 +408,21 @@ export function parseEnergyPrefs(prefs: {
             }
             //A battery source may also carry a top-level `stat_rate` (net-power statistic). Deliberately skipped: the
             //directional pair below already nets to the same value, so reading both would double-count.
-            for (const slot of collectPowerConfigRates(src['power_config'], 'battery'))
+            const batteryRates = collectPowerConfigRates(src['power_config'], 'battery');
+            for (const slot of batteryRates)
             {
                 out.batteryStatRates.push(slot.entity);
                 if (slot.inverted)
                 {
                     out.invertedRateEntities.push(slot.entity);
                 }
+            }
+            //A source with no power_config rate contributes its live power only through the directional energy meters,
+            //so note it: the consumer nets the energy meters (covering every bank) rather than summing a partial set of
+            //power sensors that would omit this one.
+            if (batteryRates.length === 0)
+            {
+                out.batterySourcesWithoutRate += 1;
             }
         }
     }

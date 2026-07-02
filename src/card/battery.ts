@@ -3,7 +3,7 @@
 //The user wires their battery on the HA Energy dashboard (per-source lists of `stat_rate`, `stat_energy_from`, `stat_energy_to`,
 //`stat_soc`). Live reads aggregate across every wired bank (sum for power, mean for SoC).
 
-import { formatPowerKw } from './format';
+import { formatPowerKw, type PowerUnit } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
@@ -174,7 +174,11 @@ export function refreshBattery(host: BatteryHost): void
     let nextPower: number | null = null;
     let nextUnit        = '';
     const rateEntities = host._energyDefaults.batteryStatRates;
-    if (rateEntities.length > 0)
+    //Sum the live power sensors ONLY when they cover EVERY battery source. On a mixed or energy-only wiring
+    //(some bank has no `power_config`), fall through to the directional energy meters instead: their change series net
+    //every bank, so a battery without a power sensor is never dropped from the live power.
+    const ratesCoverAllBanks = rateEntities.length > 0 && host._energyDefaults.batterySourcesWithoutRate === 0;
+    if (ratesCoverAllBanks)
     {
         let sum = 0;
         let anyValid = false;
@@ -643,11 +647,14 @@ export function batterySampleAtTime(
 }
 
 
-//Format a signed battery power value for the chip: always kW at the configured precision, with explicit +/- so charging vs
-//discharging reads at a glance.
-export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number): string
+//Format a battery power value for the chip in the card's configured unit (W or kW), at the configured precision.
+//`sign` picks the convention: 'default' keeps the +/- as given (charging negative, discharging positive after the
+//caller's negation), 'inverted' flips it, 'hidden' drops the sign and shows the magnitude only.
+export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW', sign: 'default' | 'inverted' | 'hidden' = 'default'): string
 {
-    return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals, true);
+    const watts = pvNormalizeToWatts(value, unit);
+    if (sign === 'hidden') { return formatPowerKw(hass, Math.abs(watts), decimals, false, powerU); }
+    return formatPowerKw(hass, sign === 'inverted' ? -watts : watts, decimals, true, powerU);
 }
 
 

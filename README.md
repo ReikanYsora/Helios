@@ -34,6 +34,8 @@ Helios has **three view modes**, switched from the round buttons in the top-left
 * **Day / night ground**, the ground darkens where the sun is below the horizon, so dawn and dusk read at a glance.
 * **Hover glow + auto-rotation**, a soft halo signals the home is interactive; an opt-in idle orbit slowly turns the scene counter to the sun's motion and pauses the moment you touch the card.
 * **Timeline**, the active period as a re-targetable chart below the scene: production (with dashed forecast and per-string breakdown), consumption, grid, battery, battery SoC, irradiance, cloud cover or your custom entity. Click or drag to scrub; the whole scene snaps to the selected instant.
+* **Weather + astronomy panel**, a small plate in the top-right corner showing the local temperature and wind, with the sky condition as an icon (from Open-Meteo, or your own temperature / wind sensors). An optional toggle adds the sun's altitude, azimuth, sunrise, solar noon, sunset and day length, each shown as an icon to keep it compact. You can show or hide the whole panel; when shown, the wind-direction arrow is projected onto the tilted ground so it keeps pointing the true way as you orbit the camera, and it stays visible in No UI mode.
+* **No UI mode** *(optional)*, fades the timeline and the on-card controls after a few seconds of inactivity and brings them back on any tap or move; the weather panel stays. Built for kiosks and wall displays.
 
 ### Clock mode, the 24-hour dial
 
@@ -124,6 +126,14 @@ The visual editor exposes every option below. Direct YAML editing also works.
 
 > The card also remembers the live camera pose, the active mode, the selected clock filters and the lock per home (or per `cache-id`), so reopening the dashboard restores exactly what you left.
 
+### Interface
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `auto-hide-ui` | boolean | `false` | No UI mode: fade the timeline and the on-card controls after a few seconds of inactivity, bringing them back on any tap or move. The weather panel stays visible. For kiosks and wall displays. |
+| `show-weather` | boolean | `true` | Show the top-right weather panel (scene view). Set to `false` to hide it. Independent of No UI mode. |
+| `show-astro` | boolean | `false` | Add the sun's astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather. Only applies when `show-weather` is on. |
+
 ### Buildings + shadows
 
 | Key | Type | Default | Description |
@@ -144,6 +154,9 @@ The visual editor exposes every option below. Direct YAML editing also works.
 |---|---|---|---|
 | `display-update-frequency-per-hour` | 1-6 | `4` | Storage + render cadence (buckets per hour) for the data store and every graph. `4` = 15-minute granularity (the HA Energy bucket size); raise for smoother curves, lower to save memory. Live numeric chips bypass this and stay on the direct `hass.states` path. |
 | `value-decimals` | 0-3 | `1` | Decimal places on every kW / kWh / % readout. |
+| `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips, dial). Energy follows it, so `kW` pairs with `kWh` and `W` with `Wh`. |
+| `irradiance-unit` | `W/m²` \| `kW/m²` | `W/m²` | Unit for the solar-constant (irradiance) readout above the sun. |
+| `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
 
 The rolling window itself is chosen live from the timeline's period selector (**Standard**, **Today**, **Week**, **Month**, **Year**) and remembered per card; it needs no YAML key.
 
@@ -152,6 +165,9 @@ The rolling window itself is chosen live from the timeline's period selector (**
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `solar-irradiance-entity` | entity_id | none | Optional physical irradiance sensor (W/m²). When set, its live state + recorder history feed the sun chip number, the irradiance chart and the sun-arc colouring for past + present; forecast hours still come from Open-Meteo. |
+| `outdoor-temperature-entity` | entity_id | none | Optional sensor shown on the info panel instead of the Open-Meteo temperature. Read in its own unit. |
+| `wind-speed-entity` | entity_id | none | Optional sensor shown on the info panel instead of the Open-Meteo wind speed. Read in its own unit. |
+| `home-consumption-entity` | entity_id | none | Optional sensor whose live value replaces the home-consumption **chip** readout only. The animated flows and the history keep the computed solar / grid / battery balance. |
 | `custom-entity` | entity_id | none | Optional power (W/kW/MW) or energy (Wh/kWh/MWh) entity surfaced as an extra chip top-left and as a clock / trend metric. |
 | `custom-entity-icon` | MDI icon | entity icon | Optional icon override for the custom-entity chip; falls back to the entity's own icon, then a generic glyph. |
 | `custom-entity-color` | color | theme red | Optional colour for the custom-entity chip, its leader and its clock ring. |
@@ -230,12 +246,13 @@ Source layout:
 | `src/card/sun-zones.ts`         | Per-hour day / night fraction for the dial ground wedge |
 | `src/card/hud.ts` `hud-geometry.ts` | Scene HUD projection (sun arc, chips, leaders) refreshed each frame |
 | `src/card/format.ts`            | Locale-aware number / value formatting + energy colour tokens |
+| `src/card/info-panel.ts`        | Weather + astronomy info panel helpers (WMO condition to icon, unit conversion, formatting) |
 | `src/engine/renderer.ts`        | Scene painter: ground tilt + buildings + shadows + night wash (canvas + SVG) |
 | `src/engine/projection.ts`      | 2.5D camera + bearing / pitch / perspective projection |
 | `src/engine/tiles.ts`           | CARTO basemap raster stitching + Web Mercator math |
 | `src/engine/buildings.ts`       | Overpass fetch + interpret (radius / count / height / cluster) |
 | `src/engine/sun.ts` `sun-arc.ts` | Solar position + Haurwitz / Kasten-Czeplak irradiance + PV math + arc geometry |
-| `src/engine/weather.ts` `weather-resolve.ts` | Open-Meteo multi-model fetch + cache + back-off |
+| `src/engine/weather.ts` `weather-resolve.ts` | Open-Meteo multi-model fetch + cache + back-off (cloud, irradiance, temperature, wind) |
 | `src/engine/colors.ts`          | Hex blending + time-of-day tints (night shade, building tint) |
 | `src/css/`                      | Card + editor + clock + timeline style literals |
 | `src/i18n/`                     | Strict-typed translations (63 languages) |

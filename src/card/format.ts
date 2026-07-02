@@ -112,23 +112,51 @@ export function formatHaDateTime(hass: any, date: Date): string
 }
 
 
-//Uniform power readout: always kilowatts, locale-aware, with the caller's decimal count, so every chip prints the same
-//unit/precision regardless of the source sensor's native unit. Input is watts. `signed` prefixes an explicit +/-
-//(figure-dash) so battery charge reads apart from discharge.
-export function formatPowerKw(hass: any, watts: number, decimals: number, signed = false): string
+//Power display unit for the whole card, resolved from config (see powerUnit()). Energy readouts stay kWh.
+export type PowerUnit = 'W' | 'kW';
+
+//Uniform power readout in the card's configured unit, locale-aware. Input is watts. 'kW' divides by 1000 at the
+//caller's decimal count; 'W' prints whole watts (a fractional watt is meaningless). `signed` prefixes an explicit
+//+/- (figure-dash) so battery charge reads apart from discharge.
+export function formatPower(hass: any, watts: number, decimals: number, unit: PowerUnit, signed = false): string
 {
-    if (signed)
+    const sign = signed ? (watts > 0 ? '+' : (watts < 0 ? '−' : '')) : '';
+    const mag  = signed ? Math.abs(watts) : watts;
+    if (unit === 'W')
     {
-        const sign = watts > 0 ? '+' : (watts < 0 ? '−' : '');
-        return `${sign}${formatLocalisedNumber(hass, Math.abs(watts) / 1000, decimals)} kW`;
+        return `${sign}${formatLocalisedNumber(hass, Math.round(mag), 0)} W`;
     }
-    return `${formatLocalisedNumber(hass, watts / 1000, decimals)} kW`;
+    return `${sign}${formatLocalisedNumber(hass, mag / 1000, decimals)} kW`;
+}
+
+//Back-compat power readout; `unit` defaults to 'kW' (the historical always-kW behaviour). Callers that respect the
+//user's power-unit setting pass it through.
+export function formatPowerKw(hass: any, watts: number, decimals: number, signed = false, unit: PowerUnit = 'kW'): string
+{
+    return formatPower(hass, watts, decimals, unit, signed);
+}
+
+//Irradiance (solar constant) readout in the configured unit. Input is W/m². 'W/m²' prints whole units; 'kW/m²'
+//divides by 1000 at the caller's decimal count (a typical peak reads ~1 kW/m²).
+export function formatIrradiance(hass: any, wPerM2: number, decimals: number, unit: 'W/m²' | 'kW/m²'): string
+{
+    const v = Math.max(0, wPerM2);
+    if (unit === 'kW/m²')
+    {
+        return `${formatLocalisedNumber(hass, v / 1000, decimals)} kW/m²`;
+    }
+    return `${Math.round(v)} W/m²`;
 }
 
 
-//Uniform energy readout: always kilowatt-hours, locale-aware, caller's decimal count. Input already in kWh.
-export function formatEnergyKwh(hass: any, kwh: number, decimals: number): string
+//Uniform energy readout, locale-aware. Input is kWh. The card's power unit drives the energy scale too, so the
+//whole card stays SI-consistent: 'kW' keeps kWh at the caller's decimals; 'W' prints whole watt-hours (Wh).
+export function formatEnergyKwh(hass: any, kwh: number, decimals: number, unit: PowerUnit = 'kW'): string
 {
+    if (unit === 'W')
+    {
+        return `${formatLocalisedNumber(hass, Math.round(kwh * 1000), 0)} Wh`;
+    }
     return `${formatLocalisedNumber(hass, kwh, decimals)} kWh`;
 }
 
@@ -175,18 +203,18 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 //locale-aware at the configured precision so chips read uniform regardless of the source sensor's native unit.
 //An unknown unit keeps the entity's own unit string but still honours the decimal setting. Callers add their
 //own null-handling / signing around this.
-export function formatEntityValue(hass: any, value: number, unit: string, decimals: number): string
+export function formatEntityValue(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
     const u  = (unit || '').trim();
     const lu = u.toLowerCase();
 
     if (lu === 'w' || lu === 'kw' || lu === 'mw')
     {
-        return formatPowerKw(hass, pvNormalizeToWatts(value, unit), decimals);
+        return formatPower(hass, pvNormalizeToWatts(value, unit), decimals, powerU);
     }
     if (lu === 'wh' || lu === 'kwh' || lu === 'mwh')
     {
-        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals);
+        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals, powerU);
     }
     const formatted = formatLocalisedNumber(hass, value, decimals);
     return u ? `${formatted} ${u}` : formatted;

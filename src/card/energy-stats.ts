@@ -7,7 +7,7 @@
 //unit conversion (`units: { energy: 'kWh' }` normalises Wh/kWh/MWh server-side). The only math here is
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number the card shows the same number.
 
-import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, HOUR_MS, DAY_MS } from '../constants';
+import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, COARSE_REGULARITY, HOUR_MS, DAY_MS } from '../constants';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
@@ -168,10 +168,51 @@ export function outlierCapKwh(buckets: ChangeBucket[] | null): number
     return mags.length ? mags[Math.floor(mags.length / 2)] * OUTLIER_CAP_FACTOR : Infinity;
 }
 
+//Coarse-meter smoothing on the binned per-bucket energy (sums/hit). A meter that reports its cumulative energy
+//less often than a store bucket lands each delta in one bucket and leaves 0 in the buckets between reports, which
+//draws a sawtooth (production looks spiky while a dense grid meter stays smooth). When the non-zero buckets are
+//REGULARLY spaced (a real report cadence, not intermittent flow), spread each delta back over its report interval,
+//capped so a night-long gap before the first daytime reading is never smeared. Energy-conserving: the sum over each
+//interval is unchanged, so totals still match the Energy dashboard. No-op for dense meters (cadence 1) and for
+//irregular series (export that only flows sometimes).
+function smoothCoarseReports(sums: number[], hit: boolean[]): void
+{
+    const reports: number[] = [];
+    for (let i = 0; i < sums.length; i++)
+    {
+        if (hit[i] && sums[i] !== 0) { reports.push(i); }
+    }
+    if (reports.length < 3) { return; }
+    const gaps: number[] = [];
+    for (let k = 1; k < reports.length; k++) { gaps.push(reports[k] - reports[k - 1]); }
+    const cadence = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)];   //median gap
+    if (cadence <= 1 || cadence > COARSE_MAX_SPREAD_BUCKETS) { return; }
+    const regular = gaps.filter(g => Math.abs(g - cadence) <= 1).length / gaps.length;
+    if (regular < COARSE_REGULARITY) { return; }
+    //Spread each report back over its own interval (capped at the cadence), evenly. Left to right; a report's range
+    //never reaches the previous report (span <= cadence <= gap), so the in-place writes never collide, and the
+    //genuine-gap buckets before a capped range keep their zero.
+    let prev = -1;
+    for (const i of reports)
+    {
+        const span  = prev < 0 ? cadence : Math.min(i - prev, cadence);
+        const start = Math.max(0, i - span + 1);
+        const share = sums[i] / (i - start + 1);
+        for (let j = start; j <= i; j++)
+        {
+            sums[j] = share;
+            hit[j]  = true;
+        }
+        prev = i;
+    }
+}
+
+
 //Project a change series onto the unified-store bucket grid as average watts: per store bucket, sum the kWh of every
 //source bucket starting inside it, then W = kWh * 1000 / bucket-duration-hours. Store buckets are always >= the
-//source period, so each contains whole source buckets and the conversion is exact. Empty buckets stay null (caller
-//interpolates the past); future buckets (start >= nowMs) stay null for the forecast.
+//source period, so each contains whole source buckets and the conversion is exact. A coarse-reporting meter is then
+//smoothed (smoothCoarseReports) so it does not sawtooth. Empty buckets stay null (caller interpolates the past);
+//future buckets (start >= nowMs) stay null for the forecast.
 export function changeSeriesToWatts(
     buckets:      ChangeBucket[] | null,
     storeStartMs: number,
@@ -194,6 +235,7 @@ export function changeSeriesToWatts(
         sums[idx] += b.kwh;
         hit[idx]   = true;
     }
+    smoothCoarseReports(sums, hit);
     const stepH = stepMs / HOUR_MS;
     for (let i = 0; i < bucketsTotal; i++)
     {

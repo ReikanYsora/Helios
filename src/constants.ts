@@ -58,6 +58,8 @@ export const PV_CHIP_OFFSET_PX     = 70;    //PV chip lift above the home cluste
 //=== Animation / timing ===
 export const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
 export const AUTO_ROTATE_INACTIVITY_MS = 5_000;
+//"No UI" mode: idle time before the timeline + controls fade away (any input brings them back).
+export const UI_AUTOHIDE_MS            = 5_000;
 
 //=== Cache TTLs / timeouts / throttles ===
 export const PV_CACHE_TTL_MS        = 15 * 60_000;
@@ -88,6 +90,11 @@ export const OTHER_ERROR_BACKOFF_MS: readonly number[] = [1 * 60_000, 5 * 60_000
 export const CHANGE_REFRESH_MS = 60_000;
 export const COARSE_PROBE_MS   = 15 * 60_000;
 export const DENSE_FRACTION    = 0.6;
+//Store-curve coarse-meter smoothing: the largest report cadence (in store buckets) still spread back into a
+//smooth curve, and the fraction of gaps that must sit at that cadence to treat a meter as regularly coarse
+//(below it, the non-zero buckets read as genuine intermittent flow and are left untouched).
+export const COARSE_MAX_SPREAD_BUCKETS = 6;
+export const COARSE_REGULARITY         = 0.6;
 
 
 //=== Buildings / Overpass ===
@@ -107,9 +114,10 @@ export const FALLBACK_HOUSE_HALF_W   = 5;
 export const FALLBACK_HOUSE_HALF_D   = 4;
 export const BUILDING_CACHE_TTL_MS   = 30 * DAY_MS;
 export const OVERPASS_RETRY_DELAY_MS = 1200;
+//European Overpass mirrors, tried in order.
 export const OVERPASS_ENDPOINTS = [
     'https://overpass-api.de/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
 ];
 
 //=== Engine lifecycle ===

@@ -5,7 +5,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
-import { pvNormalizeToWatts, formatEntityValue } from './format';
+import { pvNormalizeToWatts, formatEntityValue, type PowerUnit } from './format';
 import { callWSWithTimeout } from './ws-timeout';
 import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
@@ -82,6 +82,13 @@ export interface PvHost
     _pvChangeSeries:         ChangeBucket[] | null;
     _pvChangeSeriesFetchKey: string;
     _pvChangeSeriesFetching: boolean;
+    //Per-source recorder `change` series, keyed by the source's energy meter (`stat_energy_from`). Same reset-corrected,
+    //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the Clock/Trend dial
+    //shows each string with the exact dashboard energy (and recorded night production from non-solar sources fed in as PV),
+    //instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
+    _pvChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
+    _pvChangePerEntityFetchKey:  string;
+    _pvChangePerEntityFetching:  boolean;
 }
 
 
@@ -342,6 +349,35 @@ export function refreshPv(host: PvHost): void
                 .finally(() =>
                 {
                     host._pvChangeSeriesFetching = false;
+                });
+        }
+
+        //Per-source change series (one fetch per solar meter), so the Clock/Trend dial can split production by source
+        //with the exact recorder energy instead of the lagging hourly LTS. Only worth it with 2+ sources; a single
+        //source already reads the aggregate. Gated on the same key so it re-arms with the aggregate fetch.
+        if (changeIds.length >= 2 && !host._pvChangePerEntityFetching && changeKey !== host._pvChangePerEntityFetchKey)
+        {
+            host._pvChangePerEntityFetchKey = changeKey;
+            host._pvChangePerEntityFetching = true;
+            const startMs = seriesStart.getTime();
+            const endMs   = fetchEnd.getTime();
+            const period  = host._storeFetchPeriod;
+            void Promise.all(changeIds.map((meter) =>
+                fetchChangeSeries(host.hass, [meter], startMs, endMs, period)
+                    .then((series) => ({ meter, series }))))
+                .then((results) =>
+                {
+                    const next = new Map<string, ChangeBucket[]>();
+                    for (const { meter, series } of results)
+                    {
+                        if (series !== null) { next.set(meter, series); }
+                    }
+                    if (next.size > 0) { host._pvChangeSeriesPerEntity = next; }
+                    host.requestUpdate();
+                })
+                .finally(() =>
+                {
+                    host._pvChangePerEntityFetching = false;
                 });
         }
     }
@@ -630,9 +666,9 @@ export function currentPvRate(host: PvHost): PvRate | null
 
 
 
-//Format a PV reading for the chip below the home. Power auto-rescales W -> kW; energy keeps its native unit. Thin wrapper over
-//the shared formatter.
-export function formatPvValue(hass: any, value: number, unit: string, decimals: number): string
+//Format a PV reading for the chip below the home. Power prints in the card's configured unit (W or kW); energy keeps
+//its native unit. Thin wrapper over the shared formatter.
+export function formatPvValue(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
-    return formatEntityValue(hass, value, unit, decimals);
+    return formatEntityValue(hass, value, unit, decimals, powerU);
 }

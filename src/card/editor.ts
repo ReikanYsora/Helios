@@ -408,47 +408,61 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.autoRotateHint}</div>
-
-                <div class="field field-block">
-                    <span class="label">${t.editor.customEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['custom-entity'] ?? '')}
-                            .includeDomains=${['sensor', 'input_number', 'number']}
-                            .entityFilter=${this._customEntityFilter}
-                            data-key="custom-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
+                <div class="field">
+                    <span class="label">${t.editor.showWeather ?? 'Show weather panel'}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-weather'] !== false) ? 'active' : ''}"
+                            data-key="show-weather" data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-weather'] === false) ? 'active' : ''}"
+                            data-key="show-weather" data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOff}</button>
+                    </div>
                 </div>
-                <div class="field-help">${t.editor.customEntityHelp}</div>
-                ${String(c['custom-entity'] ?? '') !== '' ? html`
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityIcon}</span>
-                        ${this._pickerReady ? html`
-                            <ha-icon-picker
-                                .hass=${this.hass}
-                                .value=${String(c['custom-entity-icon'] ?? '')}
-                                data-key="custom-entity-icon"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-icon-picker>
-                        ` : nothing}
+                <div class="hint">${t.editor.showWeatherHint ?? 'Show the top-right panel with the local weather. Scene view only.'}</div>
+                <div class="field">
+                    <span class="label">${t.editor.noUiMode ?? 'No UI mode'}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-hide-ui'] === true) ? 'active' : ''}"
+                            data-key="auto-hide-ui" data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-hide-ui'] !== true) ? 'active' : ''}"
+                            data-key="auto-hide-ui" data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOff}</button>
                     </div>
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityColor}</span>
-                        ${this._pickerReady ? html`
-                            <ha-selector
-                                .hass=${this.hass}
-                                .selector=${{ ui_color: { default_color: 'red' } }}
-                                .value=${String(c['custom-entity-color'] ?? 'red')}
-                                data-key="custom-entity-color"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-selector>
-                        ` : nothing}
+                </div>
+                <div class="hint">${t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.'}</div>
+                ${(c['show-weather'] !== false) ? html`
+                <div class="field">
+                    <span class="label">${t.editor.showAstro ?? 'Show astronomical data'}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-astro'] === true) ? 'active' : ''}"
+                            data-key="show-astro" data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-astro'] !== true) ? 'active' : ''}"
+                            data-key="show-astro" data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOff}</button>
                     </div>
-                    <div class="field-help">${t.editor.customEntityColorHelp}</div>
+                </div>
+                <div class="hint">${t.editor.showAstroHint ?? 'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.'}</div>
                 ` : nothing}
 
                 </details>
@@ -614,7 +628,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:chart-timeline-variant"></ha-icon>${t.editor.dataDisplaySection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.displayUpdateFrequency}</span>
                     <div class="slider-row">
@@ -647,6 +661,135 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.powerUnit ?? 'Power unit'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ select: { mode: 'box', options: [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }] } }}
+                            .value=${String(c['power-unit'] ?? 'kW')}
+                            data-key="power-unit"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.powerUnitHelp ?? 'Unit for every power readout on the card. Energy always stays in kWh.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.irradianceUnit ?? 'Solar constant unit'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ select: { mode: 'box', options: [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }] } }}
+                            .value=${String(c['irradiance-unit'] ?? 'W/m²')}
+                            data-key="irradiance-unit"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.irradianceUnitHelp ?? 'Unit for the solar constant (irradiance) readout.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.batterySign ?? 'Battery sign'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ select: { mode: 'box', options: [
+                                { value: 'default', label: t.editor.batterySignDefault ?? 'Default' },
+                                { value: 'inverted', label: t.editor.batterySignInverted ?? 'Inverted' },
+                                { value: 'hidden', label: t.editor.batterySignHidden ?? 'Hidden' },
+                            ] } }}
+                            .value=${String(c['battery-sign'] ?? 'default')}
+                            data-key="battery-sign"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.customEntity}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['custom-entity'] ?? '')}
+                            .includeDomains=${['sensor', 'input_number', 'number']}
+                            .entityFilter=${this._customEntityFilter}
+                            data-key="custom-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.customEntityHelp}</div>
+                ${String(c['custom-entity'] ?? '') !== '' ? html`
+                    <div class="field field-block">
+                        <span class="label">${t.editor.customEntityIcon}</span>
+                        ${this._pickerReady ? html`
+                            <ha-icon-picker
+                                .hass=${this.hass}
+                                .value=${String(c['custom-entity-icon'] ?? '')}
+                                data-key="custom-entity-icon"
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-icon-picker>
+                        ` : nothing}
+                    </div>
+                    <div class="field field-block">
+                        <span class="label">${t.editor.customEntityColor}</span>
+                        ${this._pickerReady ? html`
+                            <ha-selector
+                                .hass=${this.hass}
+                                .selector=${{ ui_color: { default_color: 'red' } }}
+                                .value=${String(c['custom-entity-color'] ?? 'red')}
+                                data-key="custom-entity-color"
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-selector>
+                        ` : nothing}
+                    </div>
+                    <div class="field-help">${t.editor.customEntityColorHelp}</div>
+                ` : nothing}
+                <div class="field field-block">
+                    <span class="label">${t.editor.homeConsumptionEntity ?? 'Home consumption override'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['home-consumption-entity'] ?? '')}
+                            .includeDomains=${['sensor']}
+                            .includeDeviceClasses=${['power']}
+                            data-key="home-consumption-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.homeConsumptionEntityHelp ?? 'Shows this sensor on the home consumption readout instead of the computed value. Only this readout changes: the animated flows and the history stay on your solar, grid and battery balance. A direct consumption sensor is usually off by a few watts (measurement losses, sensors slightly out of sync), a gap that has no clean place in the flows.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.outdoorTemperatureEntity ?? 'Outdoor temperature'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['outdoor-temperature-entity'] ?? '')}
+                            .includeDomains=${['sensor']}
+                            .includeDeviceClasses=${['temperature']}
+                            data-key="outdoor-temperature-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.outdoorTemperatureEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo temperature. Read in its own unit.'}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.windSpeedEntity ?? 'Wind speed'}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c['wind-speed-entity'] ?? '')}
+                            .includeDomains=${['sensor']}
+                            .includeDeviceClasses=${['wind_speed']}
+                            data-key="wind-speed-entity"
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.windSpeedEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo wind speed. Read in its own unit.'}</div>
                 </details>
 
                 <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>

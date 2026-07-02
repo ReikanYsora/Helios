@@ -82,14 +82,9 @@ export function pvValueAtTime(
                          : duLow === 'mw' ? 1 / 1_000_000
                          : 1;
 
-    //Hard zero when the sun is below the horizon at the cursor instant. Catches stale observed samples clamped
-    //forward into the night, forecast pairs straddling sunrise/sunset leaking a few watts, and inverter standby
-    //readings all night. Panels can't produce without sun, so enforce that physical floor.
-    const coords = getHomeCoords(host.config, host.hass);
-    if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0)
-    {
-        return { value: 0, unit: displayUnit, isPredicted: false };
-    }
+    //The sun-below-horizon floor applies to the FORECAST branch only (see below), not to recorded data: a predicted
+    //PV curve straddling sunrise/sunset can leak a few watts under the horizon, but observed production is trusted
+    //as-is so that 24/7 non-solar sources configured under solar (water turbines, micro-hydro) keep their night hours.
 
     //Observed history. Cumulative entities differentiate the bracketing pair; power entities interpolate. Floor at
     //zero so sensor/net-meter noise never shows a small negative. Instants beyond the last observed sample fall
@@ -204,6 +199,13 @@ export function pvValueAtTime(
         const w = valueAt(store.forecast, store, targetMs);
         if (w !== null && w > 0)
         {
+            //Forecast-only sun floor: a predicted pair straddling sunrise/sunset can leak a few watts below the
+            //horizon. Zero it so the dashed curve doesn't glow at night; recorded data above is left untouched.
+            const coords = getHomeCoords(host.config, host.hass);
+            if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0)
+            {
+                return { value: 0, unit: displayUnit, isPredicted: true };
+            }
             return { value: Math.max(0, w) * nativeFromW, unit: displayUnit, isPredicted: true };
         }
     }

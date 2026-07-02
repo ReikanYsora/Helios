@@ -7,6 +7,64 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.7.2
+
+A refinement release on top of 2026.7.1: a new ambient info panel, more display
+and unit options, and a batch of accuracy fixes for specific setups.
+
+### New: weather and astronomy panel
+
+* A small **info panel** in the top-right corner showing the local weather right
+  now: temperature and wind, with the sky condition shown as an icon, sourced
+  from Open-Meteo, with optional Home Assistant entity overrides for outdoor
+  temperature and wind speed. It can be **shown or hidden** from the editor.
+* An optional **astronomical readout** (a toggle in the editor, shown only when
+  the panel is on) that adds the sun's altitude and azimuth, sunrise, solar noon,
+  sunset and day length, each labelled with an icon to keep the panel compact.
+* The wind-direction arrow is **projected onto the tilted 3D ground**, so it
+  keeps pointing at the true compass direction as you orbit the camera.
+* The panel stays visible in **No UI mode**, so a wall display keeps its ambient
+  weather even once the timeline and controls have faded away.
+
+### New: No UI mode
+
+* An opt-in mode that **fades the timeline and the on-card controls** after a few
+  seconds of inactivity and brings them back on any tap or move. Built for
+  kiosks and wall displays.
+
+### Display and units
+
+* A **power unit** selector (W or kW); energy follows it, so kW pairs with kWh
+  and W with Wh.
+* A separate **solar-constant (irradiance) unit** selector.
+* A **battery-sign** option: default (minus charging, plus discharging),
+  inverted, or hidden on the battery chip.
+* An optional **home-consumption override** entity for the consumption chip
+  readout, when an inverter exposes a direct sensor.
+
+### Accuracy fixes
+
+* Correct **southern-hemisphere** Clock and Trend, with hour binning now done in
+  the server's timezone rather than the browser's.
+* Fixed near-zero Clock and Trend totals on kWh-only solar sources.
+* **Coarse-reporting meters** (those that report every 15 minutes or more) are
+  smoothed so their curves no longer sawtooth.
+* Fixed the **solar forecast** reading half power on sub-hourly buckets
+  (contributed by @adamhf).
+* **Non-solar 24/7 producers** (water turbines, micro-hydro) configured under
+  solar production now keep their night-time hours on the Clock and Trend dials,
+  and each per-source ring reads the exact recorder energy, matching the Energy
+  dashboard instead of the slightly lagging calibration series.
+* **Multi-string solar forecast** now sums every configured forecast provider
+  instead of showing only the first string's prediction.
+* **Multi-battery** installs with mixed wiring (one bank with a live power
+  sensor, another with only energy meters) no longer drop a battery from the
+  live power readout.
+* The home now keeps the **colour of the selected chip** after you leave the
+  dashboard and return, instead of resetting to the default metric.
+
+---
+
 ## 2026.7.1
 
 A new chapter for Helios. This release describes the card as it is **today**:
