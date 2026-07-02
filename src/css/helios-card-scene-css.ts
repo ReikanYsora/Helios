@@ -719,12 +719,6 @@ export const heliosCardStyles = css`
         opacity: 0.7;
         margin-inline-start: 1px;
     }
-    .info-panel .ip-cond
-    {
-        font-size: 11px;
-        opacity: 0.8;
-        white-space: nowrap;
-    }
     .info-panel .ip-secondary
     {
         display: flex;
@@ -765,7 +759,11 @@ export const heliosCardStyles = css`
         gap: var(--ha-space-4, 16px);
         font-size: 11px;
     }
-    .info-panel .ip-astro-label { opacity: 0.7; }
+    .info-panel .ip-astro-icon
+    {
+        --mdc-icon-size: 15px;
+        opacity: 0.7;
+    }
     .info-panel .ip-astro-val
     {
         font-weight: 500;

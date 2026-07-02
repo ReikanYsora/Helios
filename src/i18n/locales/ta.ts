@@ -112,13 +112,6 @@ export const ta: Translations = {
     },
     panel:
     {
-        feelsLike:  'உணரப்படும் வெப்பம்',
         wind:       'காற்று',
-        altitude:   'உயரம்',
-        azimuth:    'திசைகோணம்',
-        sunrise:    'சூரிய உதயம்',
-        solarNoon:  'நண்பகல் சூரியன்',
-        sunset:     'சூரிய அஸ்தமனம்',
-        dayLength:  'பகல் நேர நீளம்',
     }
 };

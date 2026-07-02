@@ -112,13 +112,6 @@ export const zhHans: Translations = {
     },
     panel:
     {
-        feelsLike:  '体感温度',
         wind:       '风',
-        altitude:   '高度角',
-        azimuth:    '方位角',
-        sunrise:    '日出',
-        solarNoon:  '太阳正午',
-        sunset:     '日落',
-        dayLength:  '昼长',
     }
 };

@@ -112,13 +112,6 @@ export const si: Translations = {
     },
     panel:
     {
-        feelsLike:  'දැනෙන ලෙස',
         wind:       'සුළං',
-        altitude:   'උන්නතාංශය',
-        azimuth:    'දිගංශය',
-        sunrise:    'හිරු උදාව',
-        solarNoon:  'සූර්ය මධ්‍යාහ්නය',
-        sunset:     'හිරු බැසීම',
-        dayLength:  'දින දිග',
     }
 };

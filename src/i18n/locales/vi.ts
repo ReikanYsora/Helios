@@ -112,13 +112,6 @@ export const vi: Translations = {
     },
     panel:
     {
-        feelsLike:  'Cảm giác như',
         wind:       'Gió',
-        altitude:   'Độ cao',
-        azimuth:    'Phương vị',
-        sunrise:    'Bình minh',
-        solarNoon:  'Trưa mặt trời',
-        sunset:     'Hoàng hôn',
-        dayLength:  'Độ dài ngày',
     }
 };

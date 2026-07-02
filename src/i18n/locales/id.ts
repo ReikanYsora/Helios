@@ -112,13 +112,6 @@ export const id: Translations = {
     },
     panel:
     {
-        feelsLike:  'Terasa seperti',
         wind:       'Angin',
-        altitude:   'Ketinggian',
-        azimuth:    'Azimut',
-        sunrise:    'Matahari terbit',
-        solarNoon:  'Tengah hari surya',
-        sunset:     'Matahari terbenam',
-        dayLength:  'Panjang hari',
     }
 };

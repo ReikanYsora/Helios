@@ -112,13 +112,6 @@ export const he: Translations = {
     },
     panel:
     {
-        feelsLike:  'מרגיש כמו',
         wind:       'רוח',
-        altitude:   'גובה',
-        azimuth:    'אזימוט',
-        sunrise:    'זריחה',
-        solarNoon:  'חצות שמש',
-        sunset:     'שקיעה',
-        dayLength:  'אורך היום',
     }
 };

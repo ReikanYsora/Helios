@@ -112,13 +112,6 @@ export const ro: Translations = {
     },
     panel:
     {
-        feelsLike:  'Se simte ca',
         wind:       'Vant',
-        altitude:   'Altitudine',
-        azimuth:    'Azimut',
-        sunrise:    'Rasarit',
-        solarNoon:  'Amiaza solara',
-        sunset:     'Apus',
-        dayLength:  'Durata zilei',
     }
 };

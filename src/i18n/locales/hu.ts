@@ -112,13 +112,6 @@ export const hu: Translations = {
     },
     panel:
     {
-        feelsLike:  'Hőérzet',
         wind:       'Szél',
-        altitude:   'Magasság',
-        azimuth:    'Azimut',
-        sunrise:    'Napkelte',
-        solarNoon:  'Delelés',
-        sunset:     'Napnyugta',
-        dayLength:  'Nappal hossza',
     }
 };

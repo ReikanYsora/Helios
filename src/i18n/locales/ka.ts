@@ -112,13 +112,6 @@ export const ka: Translations = {
     },
     panel:
     {
-        feelsLike:  'შეგრძნებით',
         wind:       'ქარი',
-        altitude:   'სიმაღლე',
-        azimuth:    'აზიმუტი',
-        sunrise:    'მზის ამოსვლა',
-        solarNoon:  'მზის შუადღე',
-        sunset:     'მზის ჩასვლა',
-        dayLength:  'დღის ხანგრძლივობა',
     }
 };

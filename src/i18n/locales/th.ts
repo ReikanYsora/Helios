@@ -112,13 +112,6 @@ export const th: Translations = {
     },
     panel:
     {
-        feelsLike:  'รู้สึกเหมือน',
         wind:       'ลม',
-        altitude:   'มุมเงย',
-        azimuth:    'มุมทิศ',
-        sunrise:    'พระอาทิตย์ขึ้น',
-        solarNoon:  'เที่ยงสุริยะ',
-        sunset:     'พระอาทิตย์ตก',
-        dayLength:  'ความยาวของวัน',
     }
 };

@@ -112,13 +112,6 @@ export const nl: Translations = {
     },
     panel:
     {
-        feelsLike:  'Gevoelstemperatuur',
         wind:       'Wind',
-        altitude:   'Hoogte',
-        azimuth:    'Azimut',
-        sunrise:    'Zonsopkomst',
-        solarNoon:  'Zonhoogste stand',
-        sunset:     'Zonsondergang',
-        dayLength:  'Daglengte',
     }
 };

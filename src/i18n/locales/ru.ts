@@ -112,13 +112,6 @@ export const ru: Translations = {
     },
     panel:
     {
-        feelsLike:  'Ощущается как',
         wind:       'Ветер',
-        altitude:   'Высота',
-        azimuth:    'Азимут',
-        sunrise:    'Восход',
-        solarNoon:  'Солнечный полдень',
-        sunset:     'Закат',
-        dayLength:  'Длина дня',
     }
 };

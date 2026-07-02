@@ -112,13 +112,6 @@ export const es419: Translations = {
     },
     panel:
     {
-        feelsLike:  'Sensación térmica',
         wind:       'Viento',
-        altitude:   'Altitud',
-        azimuth:    'Azimut',
-        sunrise:    'Salida del sol',
-        solarNoon:  'Mediodía solar',
-        sunset:     'Puesta del sol',
-        dayLength:  'Duración del día',
     }
 };

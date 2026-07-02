@@ -112,13 +112,6 @@ export const lv: Translations = {
     },
     panel:
     {
-        feelsLike:  'Sajūtas kā',
         wind:       'Vējš',
-        altitude:   'Augstums',
-        azimuth:    'Azimuts',
-        sunrise:    'Saullēkts',
-        solarNoon:  'Saules pusdienlaiks',
-        sunset:     'Saulriets',
-        dayLength:  'Dienas garums',
     }
 };

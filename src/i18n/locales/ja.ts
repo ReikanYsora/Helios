@@ -112,13 +112,6 @@ export const ja: Translations = {
     },
     panel:
     {
-        feelsLike:  '体感温度',
         wind:       '風',
-        altitude:   '高度',
-        azimuth:    '方位角',
-        sunrise:    '日の出',
-        solarNoon:  '南中',
-        sunset:     '日の入り',
-        dayLength:  '昼の長さ',
     }
 };

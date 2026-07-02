@@ -112,13 +112,6 @@ export const hy: Translations = {
     },
     panel:
     {
-        feelsLike:  'Զգացվում է որպես',
         wind:       'Քամի',
-        altitude:   'Բարձրություն',
-        azimuth:    'Ազիմուտ',
-        sunrise:    'Արևածագ',
-        solarNoon:  'Արևային կեսօր',
-        sunset:     'Մայրամուտ',
-        dayLength:  'Օրվա տևողություն',
     }
 };

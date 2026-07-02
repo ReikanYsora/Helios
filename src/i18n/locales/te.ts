@@ -112,13 +112,6 @@ export const te: Translations = {
     },
     panel:
     {
-        feelsLike:  'అనుభూతి',
         wind:       'గాలి',
-        altitude:   'ఎత్తు',
-        azimuth:    'దిగంతకోణం',
-        sunrise:    'సూర్యోదయం',
-        solarNoon:  'మధ్యాహ్న సూర్యుడు',
-        sunset:     'సూర్యాస్తమయం',
-        dayLength:  'పగటి నిడివి',
     }
 };

@@ -112,13 +112,6 @@ export const sk: Translations = {
     },
     panel:
     {
-        feelsLike:  'Pocitovo',
         wind:       'Vietor',
-        altitude:   'Výška',
-        azimuth:    'Azimut',
-        sunrise:    'Východ slnka',
-        solarNoon:  'Slnečné poludnie',
-        sunset:     'Západ slnka',
-        dayLength:  'Dĺžka dňa',
     }
 };

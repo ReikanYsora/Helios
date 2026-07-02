@@ -112,13 +112,6 @@ export const ml: Translations = {
     },
     panel:
     {
-        feelsLike:  'അനുഭവപ്പെടുന്നത്',
         wind:       'കാറ്റ്',
-        altitude:   'ഉയരം',
-        azimuth:    'ദിഗംശം',
-        sunrise:    'സൂര്യോദയം',
-        solarNoon:  'സൗരമധ്യാഹ്നം',
-        sunset:     'സൂര്യാസ്തമയം',
-        dayLength:  'പകലിന്റെ ദൈർഘ്യം',
     }
 };

@@ -112,13 +112,6 @@ export const uk: Translations = {
     },
     panel:
     {
-        feelsLike:  'Відчувається як',
         wind:       'Вітер',
-        altitude:   'Висота',
-        azimuth:    'Азимут',
-        sunrise:    'Схід сонця',
-        solarNoon:  'Сонячний полудень',
-        sunset:     'Захід сонця',
-        dayLength:  'Тривалість дня',
     }
 };

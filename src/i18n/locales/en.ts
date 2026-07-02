@@ -64,6 +64,8 @@ export const en: Translations = {
         batterySignHidden:            'Hidden',
         homeConsumptionEntity:        'Home consumption override',
         homeConsumptionEntityHelp:    'Shows this sensor on the home consumption readout instead of the computed value. Only this readout changes: the animated flows and the history stay on your solar, grid and battery balance. A direct consumption sensor is usually off by a few watts (measurement losses, sensors slightly out of sync), a gap that has no clean place in the flows.',
+        showWeather:                  'Show weather panel',
+        showWeatherHint:              'Show the top-right panel with the local weather. Scene view only.',
         noUiMode:                     'No UI mode',
         noUiModeHint:                 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.',
         showAstro:                    'Show astronomical data',
@@ -122,13 +124,6 @@ export const en: Translations = {
 
     panel:
     {
-        feelsLike:  'Feels like',
         wind:       'Wind',
-        altitude:   'Altitude',
-        azimuth:    'Azimuth',
-        sunrise:    'Sunrise',
-        solarNoon:  'Solar noon',
-        sunset:     'Sunset',
-        dayLength:  'Day length',
     }
 };

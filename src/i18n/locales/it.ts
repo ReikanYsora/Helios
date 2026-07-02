@@ -112,13 +112,6 @@ export const it: Translations = {
     },
     panel:
     {
-        feelsLike:  'Percepita',
         wind:       'Vento',
-        altitude:   'Altitudine',
-        azimuth:    'Azimut',
-        sunrise:    'Alba',
-        solarNoon:  'Mezzogiorno solare',
-        sunset:     'Tramonto',
-        dayLength:  'Durata del giorno',
     }
 };

@@ -112,13 +112,6 @@ export const isLocale: Translations = {
     },
     panel:
     {
-        feelsLike:  'Upplifað hitastig',
         wind:       'Vindur',
-        altitude:   'Hæð',
-        azimuth:    'Áttarhorn',
-        sunrise:    'Sólarupprás',
-        solarNoon:  'Sólarhádegi',
-        sunset:     'Sólsetur',
-        dayLength:  'Lengd dags',
     }
 };

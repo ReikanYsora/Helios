@@ -112,13 +112,6 @@ export const gl: Translations = {
     },
     panel:
     {
-        feelsLike:  'Sensación térmica',
         wind:       'Vento',
-        altitude:   'Altitude',
-        azimuth:    'Acimut',
-        sunrise:    'Saída do sol',
-        solarNoon:  'Mediodía solar',
-        sunset:     'Posta do sol',
-        dayLength:  'Duración do día',
     }
 };

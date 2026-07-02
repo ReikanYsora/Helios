@@ -112,13 +112,6 @@ export const et: Translations = {
     },
     panel:
     {
-        feelsLike:  'Tajutav temperatuur',
         wind:       'Tuul',
-        altitude:   'Kõrgus',
-        azimuth:    'Asimuut',
-        sunrise:    'Päikesetõus',
-        solarNoon:  'Päikese keskpäev',
-        sunset:     'Päikeseloojang',
-        dayLength:  'Päeva pikkus',
     }
 };

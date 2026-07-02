@@ -112,13 +112,6 @@ export const cy: Translations = {
     },
     panel:
     {
-        feelsLike:  'Yn teimlo fel',
         wind:       'Gwynt',
-        altitude:   'Uchder',
-        azimuth:    'Asimwth',
-        sunrise:    'Codiad haul',
-        solarNoon:  'Canol dydd solar',
-        sunset:     'Machlud haul',
-        dayLength:  'Hyd y dydd',
     }
 };

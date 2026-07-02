@@ -112,13 +112,6 @@ export const ar: Translations = {
     },
     panel:
     {
-        feelsLike:  'الإحساس الفعلي',
         wind:       'الرياح',
-        altitude:   'الارتفاع',
-        azimuth:    'السمت',
-        sunrise:    'الشروق',
-        solarNoon:  'الظهيرة الشمسية',
-        sunset:     'الغروب',
-        dayLength:  'طول النهار',
     }
 };

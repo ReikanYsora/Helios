@@ -112,13 +112,6 @@ export const bn: Translations = {
     },
     panel:
     {
-        feelsLike:  'অনুভূত হয়',
         wind:       'বাতাস',
-        altitude:   'উচ্চতা',
-        azimuth:    'দিগংশ',
-        sunrise:    'সূর্যোদয়',
-        solarNoon:  'সৌর মধ্যাহ্ন',
-        sunset:     'সূর্যাস্ত',
-        dayLength:  'দিনের দৈর্ঘ্য',
     }
 };

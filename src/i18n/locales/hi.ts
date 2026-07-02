@@ -112,13 +112,6 @@ export const hi: Translations = {
     },
     panel:
     {
-        feelsLike:  'महसूस होता है',
         wind:       'हवा',
-        altitude:   'ऊँचाई',
-        azimuth:    'दिगंश',
-        sunrise:    'सूर्योदय',
-        solarNoon:  'सौर मध्याह्न',
-        sunset:     'सूर्यास्त',
-        dayLength:  'दिन की अवधि',
     }
 };

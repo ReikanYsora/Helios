@@ -62,6 +62,8 @@ export const fr: Translations = {
         batterySignHidden:            'Masqué',
         homeConsumptionEntity:        'Remplacer la consommation maison',
         homeConsumptionEntityHelp:    'Affiche la valeur de ce capteur sur l\'indicateur de consommation maison, au lieu de la valeur calculée. Seul cet affichage change : les flux animés et l\'historique restent sur le bilan solaire, réseau et batterie. Un capteur direct s\'écarte souvent de quelques watts (pertes de mesure, capteurs désynchronisés), un écart qui ne se place pas proprement dans les flux.',
+        showWeather:                  'Afficher le bandeau météo',
+        showWeatherHint:              'Affiche le bandeau en haut à droite avec la météo locale. Vue scène uniquement.',
         noUiMode:                     'Mode sans interface',
         noUiModeHint:                 'Fait disparaître la timeline et les contrôles de la carte après quelques secondes d\'inactivité. Le moindre appui ou mouvement les fait revenir. Idéal pour un affichage mural.',
         showAstro:                    'Afficher les données astronomiques',
@@ -120,13 +122,6 @@ export const fr: Translations = {
 
     panel:
     {
-        feelsLike:  'Ressenti',
         wind:       'Vent',
-        altitude:   'Altitude',
-        azimuth:    'Azimut',
-        sunrise:    'Lever',
-        solarNoon:  'Midi solaire',
-        sunset:     'Coucher',
-        dayLength:  'Durée du jour',
     }
 };

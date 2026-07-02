@@ -112,13 +112,6 @@ export const lt: Translations = {
     },
     panel:
     {
-        feelsLike:  'Juntama kaip',
         wind:       'Vėjas',
-        altitude:   'Aukštis',
-        azimuth:    'Azimutas',
-        sunrise:    'Saulėtekis',
-        solarNoon:  'Saulės vidurdienis',
-        sunset:     'Saulėlydis',
-        dayLength:  'Dienos ilgumas',
     }
 };

@@ -112,13 +112,6 @@ export const af: Translations = {
     },
     panel:
     {
-        feelsLike:  'Voel soos',
         wind:       'Wind',
-        altitude:   'Hoogte',
-        azimuth:    'Asimut',
-        sunrise:    'Sonsopkoms',
-        solarNoon:  'Sonhoogtepunt',
-        sunset:     'Sonsondergang',
-        dayLength:  'Daglengte',
     }
 };

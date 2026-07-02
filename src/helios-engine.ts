@@ -865,16 +865,16 @@ export class HeliosEngine
         return resolveWeatherAtTime(this._homeHourlyData, t);
     }
 
-    //Ambient readout (WMO code, temperature C, feels-like C, wind km/h + bearing deg) at `t` for the top-right
-    //info panel. Null until the first Open-Meteo payload lands so the card hides the rows instead of showing NaN.
-    public getAmbientReadout(t: Date): { weatherCode: number; temperature: number; apparent: number; windSpeed: number; windDir: number } | null
+    //Ambient readout (WMO code, temperature C, wind km/h + bearing deg) at `t` for the top-right info panel.
+    //Null until the first Open-Meteo payload lands so the card hides the rows instead of showing NaN.
+    public getAmbientReadout(t: Date): { weatherCode: number; temperature: number; windSpeed: number; windDir: number } | null
     {
         if (!this._homeHourlyData)
         {
             return null;
         }
         const w = resolveWeatherAtTime(this._homeHourlyData, t);
-        return { weatherCode: w.weatherCode, temperature: w.temperature, apparent: w.apparent, windSpeed: w.windSpeed, windDir: w.windDir };
+        return { weatherCode: w.weatherCode, temperature: w.temperature, windSpeed: w.windSpeed, windDir: w.windDir };
     }
 
     //Public wrapper for _getTimeRange so the card's 30 s tick can re-fetch the window after midnight rollover.

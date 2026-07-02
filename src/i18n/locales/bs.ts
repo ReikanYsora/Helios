@@ -112,13 +112,6 @@ export const bs: Translations = {
     },
     panel:
     {
-        feelsLike:  'Osjeća se kao',
         wind:       'Vjetar',
-        altitude:   'Visina',
-        azimuth:    'Azimut',
-        sunrise:    'Izlazak sunca',
-        solarNoon:  'Sunčevo podne',
-        sunset:     'Zalazak sunca',
-        dayLength:  'Dužina dana',
     }
 };

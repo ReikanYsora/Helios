@@ -112,13 +112,6 @@ export const eo: Translations = {
     },
     panel:
     {
-        feelsLike:  'Sentata kiel',
         wind:       'Vento',
-        altitude:   'Alto',
-        azimuth:    'Azimuto',
-        sunrise:    'Sunlevigxo',
-        solarNoon:  'Suna tagmezo',
-        sunset:     'Sunsubiro',
-        dayLength:  'Tagdauxro',
     }
 };

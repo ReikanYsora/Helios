@@ -112,13 +112,6 @@ export const fy: Translations = {
     },
     panel:
     {
-        feelsLike:  'Fielt as',
         wind:       'Wyn',
-        altitude:   'Hichte',
-        azimuth:    'Azimut',
-        sunrise:    'Sinne-opgong',
-        solarNoon:  'Sinnemiddei',
-        sunset:     'Sinne-ûndergong',
-        dayLength:  'Deidoer',
     }
 };

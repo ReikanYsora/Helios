@@ -112,13 +112,6 @@ export const ko: Translations = {
     },
     panel:
     {
-        feelsLike:  '체감 온도',
         wind:       '바람',
-        altitude:   '고도',
-        azimuth:    '방위각',
-        sunrise:    '일출',
-        solarNoon:  '남중',
-        sunset:     '일몰',
-        dayLength:  '낮 길이',
     }
 };

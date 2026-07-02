@@ -409,6 +409,24 @@ export class HeliosCardEditor extends LitElement
                 </div>
                 <div class="hint">${t.editor.autoRotateHint}</div>
                 <div class="field">
+                    <span class="label">${t.editor.showWeather ?? 'Show weather panel'}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-weather'] !== false) ? 'active' : ''}"
+                            data-key="show-weather" data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['show-weather'] === false) ? 'active' : ''}"
+                            data-key="show-weather" data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${t.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.showWeatherHint ?? 'Show the top-right panel with the local weather. Scene view only.'}</div>
+                <div class="field">
                     <span class="label">${t.editor.noUiMode ?? 'No UI mode'}</span>
                     <div class="segmented-toggle">
                         <button
@@ -426,6 +444,7 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.'}</div>
+                ${(c['show-weather'] !== false) ? html`
                 <div class="field">
                     <span class="label">${t.editor.showAstro ?? 'Show astronomical data'}</span>
                     <div class="segmented-toggle">
@@ -444,6 +463,7 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.showAstroHint ?? 'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.'}</div>
+                ` : nothing}
 
                 </details>
 

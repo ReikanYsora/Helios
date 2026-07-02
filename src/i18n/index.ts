@@ -136,6 +136,9 @@ export interface Translations
         batterySignHidden?:           string;
         homeConsumptionEntity?:       string;
         homeConsumptionEntityHelp?:   string;
+        //Weather-panel show/hide toggle. Optional; fall back to English.
+        showWeather?:                 string;
+        showWeatherHint?:             string;
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
         noUiMode?:                    string;
         noUiModeHint?:                string;
@@ -212,15 +215,7 @@ export interface Translations
     //to inline English, so a locale that omits `panel` still builds.
     panel?:
     {
-        //Field labels.
-        feelsLike?:  string; //'Feels like'
         wind?:       string; //'Wind'
-        altitude?:   string; //sun altitude
-        azimuth?:    string; //sun azimuth
-        sunrise?:    string;
-        solarNoon?:  string;
-        sunset?:     string;
-        dayLength?:  string;
     };
 }
 

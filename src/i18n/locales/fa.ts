@@ -112,13 +112,6 @@ export const fa: Translations = {
     },
     panel:
     {
-        feelsLike:  'دمای احساسی',
         wind:       'باد',
-        altitude:   'ارتفاع',
-        azimuth:    'سمت',
-        sunrise:    'طلوع آفتاب',
-        solarNoon:  'ظهر خورشیدی',
-        sunset:     'غروب آفتاب',
-        dayLength:  'طول روز',
     }
 };

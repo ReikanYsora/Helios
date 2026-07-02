@@ -112,13 +112,6 @@ export const ca: Translations = {
     },
     panel:
     {
-        feelsLike:  'Sensació tèrmica',
         wind:       'Vent',
-        altitude:   'Altitud',
-        azimuth:    'Azimut',
-        sunrise:    'Sortida del sol',
-        solarNoon:  'Migdia solar',
-        sunset:     'Posta del sol',
-        dayLength:  'Durada del dia',
     }
 };

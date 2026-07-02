@@ -112,13 +112,6 @@ export const eu: Translations = {
     },
     panel:
     {
-        feelsLike:  'Sentsazio termikoa',
         wind:       'Haizea',
-        altitude:   'Altuera',
-        azimuth:    'Azimuta',
-        sunrise:    'Eguzki-irteera',
-        solarNoon:  'Eguerdi solarra',
-        sunset:     'Eguzki-sartzea',
-        dayLength:  'Eguneko iraupena',
     }
 };

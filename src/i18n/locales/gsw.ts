@@ -112,13 +112,6 @@ export const gsw: Translations = {
     },
     panel:
     {
-        feelsLike:  'Gfüehlt',
         wind:       'Wind',
-        altitude:   'Höchi',
-        azimuth:    'Azimut',
-        sunrise:    'Sunneufgang',
-        solarNoon:  'Sunnehöchschtand',
-        sunset:     'Sunneuntergang',
-        dayLength:  'Taglängi',
     }
 };

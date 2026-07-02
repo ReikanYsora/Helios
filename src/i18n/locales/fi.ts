@@ -112,13 +112,6 @@ export const fi: Translations = {
     },
     panel:
     {
-        feelsLike:  'Tuntuu kuin',
         wind:       'Tuuli',
-        altitude:   'Korkeus',
-        azimuth:    'Atsimuutti',
-        sunrise:    'Auringonnousu',
-        solarNoon:  'Aurinkokeskipäivä',
-        sunset:     'Auringonlasku',
-        dayLength:  'Päivän pituus',
     }
 };

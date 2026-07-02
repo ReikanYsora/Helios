@@ -112,13 +112,6 @@ export const ur: Translations = {
     },
     panel:
     {
-        feelsLike:  'محسوس ہوتا ہے',
         wind:       'ہوا',
-        altitude:   'بلندی',
-        azimuth:    'سمت',
-        sunrise:    'طلوعِ آفتاب',
-        solarNoon:  'نصف النہار',
-        sunset:     'غروبِ آفتاب',
-        dayLength:  'دن کی لمبائی',
     }
 };

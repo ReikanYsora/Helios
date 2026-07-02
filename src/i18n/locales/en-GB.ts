@@ -112,13 +112,6 @@ export const enGB: Translations = {
     },
     panel:
     {
-        feelsLike:  'Feels like',
         wind:       'Wind',
-        altitude:   'Altitude',
-        azimuth:    'Azimuth',
-        sunrise:    'Sunrise',
-        solarNoon:  'Solar noon',
-        sunset:     'Sunset',
-        dayLength:  'Day length',
     }
 };

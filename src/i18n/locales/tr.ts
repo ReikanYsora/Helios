@@ -112,13 +112,6 @@ export const tr: Translations = {
     },
     panel:
     {
-        feelsLike:  'Hissedilen',
         wind:       'Ruzgar',
-        altitude:   'Yukseklik',
-        azimuth:    'Azimut',
-        sunrise:    'Gun dogumu',
-        solarNoon:  'Ogle vakti',
-        sunset:     'Gun batimi',
-        dayLength:  'Gun uzunlugu',
     }
 };

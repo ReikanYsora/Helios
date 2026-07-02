@@ -112,13 +112,6 @@ export const el: Translations = {
     },
     panel:
     {
-        feelsLike:  'Αίσθηση σαν',
         wind:       'Άνεμος',
-        altitude:   'Ύψος',
-        azimuth:    'Αζιμούθιο',
-        sunrise:    'Ανατολή',
-        solarNoon:  'Ηλιακό μεσημέρι',
-        sunset:     'Δύση',
-        dayLength:  'Διάρκεια ημέρας',
     }
 };

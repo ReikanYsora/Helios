@@ -28,7 +28,6 @@ export interface SampleHourly
     //Ambient readout series for the top-right info panel. Metric units from Open-Meteo (temperature C,
     //wind km/h, direction deg); the card converts for display. NaN fills a missing hour.
     temperature: number[];
-    apparent:    number[];
     windSpeed:   number[];
     windDir:     number[];
 }
@@ -141,7 +140,6 @@ interface CachedPayload
         weatherCode: number[];
         shortwave:   number[];
         temperature: number[];
-        apparent:    number[];
         windSpeed:   number[];
         windDir:     number[];
     };
@@ -217,7 +215,6 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             weatherCode: p.weatherCode ?? [],
             shortwave:   p.shortwave   ?? [],
             temperature: p.temperature ?? [],
-            apparent:    p.apparent    ?? [],
             windSpeed:   p.windSpeed   ?? [],
             windDir:     p.windDir     ?? [],
         };
@@ -246,7 +243,6 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 weatherCode: data.weatherCode,
                 shortwave:   data.shortwave,
                 temperature: data.temperature,
-                apparent:    data.apparent,
                 windSpeed:   data.windSpeed,
                 windDir:     data.windDir,
             }
@@ -271,9 +267,8 @@ const HOURLY_VARS = [
     'cloud_cover_mid',
     'cloud_cover_high',
     'weather_code',
-    //Ambient readout for the info panel: dry-bulb + feels-like temperature (C), wind speed (km/h) and bearing (deg).
+    //Ambient readout for the info panel: dry-bulb temperature (C), wind speed (km/h) and bearing (deg).
     'temperature_2m',
-    'apparent_temperature',
     'wind_speed_10m',
     'wind_direction_10m',
 ];
@@ -457,7 +452,6 @@ export async function fetchHomePointData(
                 weatherCode: readWeatherCode(row, models),
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
                 temperature: fillAmbient(readSeries(row, 'temperature_2m',       models)),
-                apparent:    fillAmbient(readSeries(row, 'apparent_temperature',  models)),
                 windSpeed:   fillAmbient(readSeries(row, 'wind_speed_10m',        models)),
                 windDir:     readFirstModelSeries(row, 'wind_direction_10m', models),
             };

@@ -12,6 +12,7 @@ import
     batterySign,
     homeConsumptionEntityId,
     autoHideUi,
+    showWeather,
     showAstro,
     outdoorTemperatureEntityId,
     windSpeedEntityId,
@@ -571,7 +572,6 @@ export class HeliosCard extends LitElement
     {
         const coords = getHomeCoords(this.config, this.hass);
         if (!coords) { return nothing; }
-        const p = pickTranslations(this.hass?.language).panel;
 
         //Weather: Open-Meteo at "now", each field overridable by a user-picked HA entity (read in its own unit).
         const amb   = this._engine?.getAmbientReadout(this._now) ?? null;
@@ -581,10 +581,9 @@ export class HeliosCard extends LitElement
         const windOverride = readEntityValue(this.hass, windSpeedEntityId(this.config));
         const temp: PanelValue | null = tempOverride ?? (amb ? formatTempC(this.hass, amb.temperature) : null);
         const wind: PanelValue | null = windOverride ?? (amb ? formatWindKmh(this.hass, amb.windSpeed) : null);
-        const feels: PanelValue | null = amb ? formatTempC(this.hass, amb.apparent) : null;
 
-        //The sky condition reads from the icon alone: the text label ("Partly cloudy") is long enough to force the
-        //panel wide or wrap, so the feels-like temperature takes its slot under the reading instead (see below).
+        //The sky condition reads from the icon alone: its text label ("Partly cloudy") is long enough to force the
+        //panel wide or wrap, so only the icon is shown.
         const condIcon = amb ? conditionIcon(wmoConditionKey(amb.weatherCode), night) : '';
         const windDir = amb && Number.isFinite(amb.windDir) ? amb.windDir : null;
         //Arrow points DOWNWIND (where the wind blows to = FROM-bearing + 180), projected onto the tilted ground so
@@ -603,15 +602,16 @@ export class HeliosCard extends LitElement
         const solarNoon = (sunrise && sunset) ? new Date((sunrise.getTime() + sunset.getTime()) / 2) : null;
         const dayLength = formatDayLength(sunrise, sunset);
 
-        const astroRows: { label: string; value: string }[] = [];
+        //Icon-only rows to keep the panel compact: each astro field reads from its icon alone.
+        const astroRows: { icon: string; value: string }[] = [];
         if (astroOn && sunPos)
         {
-            astroRows.push({ label: p?.altitude ?? 'Altitude', value: `${Math.round(sunPos.altitude)}°` });
-            astroRows.push({ label: p?.azimuth  ?? 'Azimuth',  value: `${Math.round(sunPos.azimuth)}°` });
-            if (sunrise)   { astroRows.push({ label: p?.sunrise   ?? 'Sunrise',    value: formatClock(this.hass, sunrise) }); }
-            if (solarNoon) { astroRows.push({ label: p?.solarNoon ?? 'Solar noon', value: formatClock(this.hass, solarNoon) }); }
-            if (sunset)    { astroRows.push({ label: p?.sunset    ?? 'Sunset',     value: formatClock(this.hass, sunset) }); }
-            if (dayLength) { astroRows.push({ label: p?.dayLength ?? 'Day length', value: dayLength }); }
+            astroRows.push({ icon: 'mdi:sun-angle',           value: `${Math.round(sunPos.altitude)}°` });
+            astroRows.push({ icon: 'mdi:sun-compass',         value: `${Math.round(sunPos.azimuth)}°` });
+            if (sunrise)   { astroRows.push({ icon: 'mdi:weather-sunset-up',   value: formatClock(this.hass, sunrise) }); }
+            if (solarNoon) { astroRows.push({ icon: 'mdi:weather-sunny',       value: formatClock(this.hass, solarNoon) }); }
+            if (sunset)    { astroRows.push({ icon: 'mdi:weather-sunset-down', value: formatClock(this.hass, sunset) }); }
+            if (dayLength) { astroRows.push({ icon: 'mdi:timer-sand',          value: dayLength }); }
         }
 
         if (!hasWeather && astroRows.length === 0) { return nothing; }
@@ -623,14 +623,13 @@ export class HeliosCard extends LitElement
                         ${condIcon ? html`<ha-icon class="ip-cond-icon" icon=${condIcon}></ha-icon>` : nothing}
                         <div class="ip-primary">
                             ${temp ? html`<div class="ip-temp">${temp.value}<span class="ip-unit">${temp.unit}</span></div>` : nothing}
-                            ${feels ? html`<div class="ip-cond">${p?.feelsLike ?? 'Feels like'} ${feels.value}${feels.unit}</div>` : nothing}
                         </div>
                     </div>
                     ${wind ? html`
                         <div class="ip-secondary">
                             <div class="ip-line">
                                 <ha-icon class="ip-wind-icon" icon="mdi:weather-windy"></ha-icon>
-                                <span>${p?.wind ?? 'Wind'} ${wind.value} ${wind.unit}</span>
+                                <span>${wind.value} ${wind.unit}</span>
                                 ${windArrowRot !== null ? html`<ha-icon class="ip-wind-dir" icon="mdi:navigation" style="transform:rotate(${Math.round(windArrowRot)}deg)"></ha-icon>` : nothing}
                             </div>
                         </div>
@@ -639,7 +638,7 @@ export class HeliosCard extends LitElement
                 ${astroRows.length > 0 ? html`
                     <div class="ip-astro">
                         ${astroRows.map((r) => html`
-                            <div class="ip-astro-row"><span class="ip-astro-label">${r.label}</span><span class="ip-astro-val">${r.value}</span></div>
+                            <div class="ip-astro-row"><ha-icon class="ip-astro-icon" icon=${r.icon}></ha-icon><span class="ip-astro-val">${r.value}</span></div>
                         `)}
                     </div>
                 ` : nothing}
@@ -1817,7 +1816,7 @@ export class HeliosCard extends LitElement
                 <!--  Ambient info panel (top-right): local weather now, plus the sun's astronomical data when the
                       "show astro" option is on. Scene view + live only (hidden in clock/trend and past scrub); it
                       is exempt from the No UI fade on purpose, as ambient info suited to a wall display.  -->
-                ${hasHomeCoords && this._viewMode === 'scene' && this._isLiveMode && this._selectedTime === null
+                ${hasHomeCoords && showWeather(this.config) && this._viewMode === 'scene' && this._isLiveMode && this._selectedTime === null
                     ? this._renderInfoPanel()
                     : nothing}
 

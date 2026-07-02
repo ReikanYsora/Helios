@@ -112,13 +112,6 @@ export const cs: Translations = {
     },
     panel:
     {
-        feelsLike:  'Pocitová teplota',
         wind:       'Vítr',
-        altitude:   'Výška',
-        azimuth:    'Azimut',
-        sunrise:    'Východ slunce',
-        solarNoon:  'Sluneční poledne',
-        sunset:     'Západ slunce',
-        dayLength:  'Délka dne',
     }
 };
