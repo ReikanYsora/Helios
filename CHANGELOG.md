@@ -15,11 +15,12 @@ and unit options, and a batch of accuracy fixes for specific setups.
 ### New: weather and astronomy panel
 
 * A small **info panel** in the top-right corner showing the local weather right
-  now: temperature, feels-like and wind, with the sky condition shown as an icon,
-  sourced from Open-Meteo, with optional Home Assistant entity overrides for
-  outdoor temperature and wind speed.
-* An optional **astronomical readout** (a toggle in the editor) that adds the
-  sun's altitude and azimuth, sunrise, solar noon, sunset and day length.
+  now: temperature and wind, with the sky condition shown as an icon, sourced
+  from Open-Meteo, with optional Home Assistant entity overrides for outdoor
+  temperature and wind speed. It can be **shown or hidden** from the editor.
+* An optional **astronomical readout** (a toggle in the editor, shown only when
+  the panel is on) that adds the sun's altitude and azimuth, sunrise, solar noon,
+  sunset and day length, each labelled with an icon to keep the panel compact.
 * The wind-direction arrow is **projected onto the tilted 3D ground**, so it
   keeps pointing at the true compass direction as you orbit the camera.
 * The panel stays visible in **No UI mode**, so a wall display keeps its ambient
@@ -59,6 +60,8 @@ and unit options, and a batch of accuracy fixes for specific setups.
 * **Multi-battery** installs with mixed wiring (one bank with a live power
   sensor, another with only energy meters) no longer drop a battery from the
   live power readout.
+* The home now keeps the **colour of the selected chip** after you leave the
+  dashboard and return, instead of resetting to the default metric.
 
 ---
 

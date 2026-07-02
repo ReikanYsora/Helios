@@ -34,7 +34,7 @@ Helios has **three view modes**, switched from the round buttons in the top-left
 * **Day / night ground**, the ground darkens where the sun is below the horizon, so dawn and dusk read at a glance.
 * **Hover glow + auto-rotation**, a soft halo signals the home is interactive; an opt-in idle orbit slowly turns the scene counter to the sun's motion and pauses the moment you touch the card.
 * **Timeline**, the active period as a re-targetable chart below the scene: production (with dashed forecast and per-string breakdown), consumption, grid, battery, battery SoC, irradiance, cloud cover or your custom entity. Click or drag to scrub; the whole scene snaps to the selected instant.
-* **Weather + astronomy panel**, a small plate in the top-right corner showing the local temperature, feels-like and wind, with the sky condition as an icon (from Open-Meteo, or your own temperature / wind sensors). An optional toggle adds the sun's altitude, azimuth, sunrise, solar noon, sunset and day length. The wind-direction arrow is projected onto the tilted ground, so it keeps pointing the true way as you orbit the camera, and the panel stays visible in No UI mode.
+* **Weather + astronomy panel**, a small plate in the top-right corner showing the local temperature and wind, with the sky condition as an icon (from Open-Meteo, or your own temperature / wind sensors). An optional toggle adds the sun's altitude, azimuth, sunrise, solar noon, sunset and day length, each shown as an icon to keep it compact. You can show or hide the whole panel; when shown, the wind-direction arrow is projected onto the tilted ground so it keeps pointing the true way as you orbit the camera, and it stays visible in No UI mode.
 * **No UI mode** *(optional)*, fades the timeline and the on-card controls after a few seconds of inactivity and brings them back on any tap or move; the weather panel stays. Built for kiosks and wall displays.
 
 ### Clock mode, the 24-hour dial
@@ -131,7 +131,8 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `auto-hide-ui` | boolean | `false` | No UI mode: fade the timeline and the on-card controls after a few seconds of inactivity, bringing them back on any tap or move. The weather panel stays visible. For kiosks and wall displays. |
-| `show-astro` | boolean | `false` | Add the sun's astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather. |
+| `show-weather` | boolean | `true` | Show the top-right weather panel (scene view). Set to `false` to hide it. Independent of No UI mode. |
+| `show-astro` | boolean | `false` | Add the sun's astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather. Only applies when `show-weather` is on. |
 
 ### Buildings + shadows
 
