@@ -1,5 +1,1 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Discussions
-    url: https://github.com/ReikanYsora/Helios/discussions
-    about: Questions, ideas and general chat — please post in Discussions instead of opening an issue.
+blank_issues_enabled: true
