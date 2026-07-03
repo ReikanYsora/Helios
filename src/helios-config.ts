@@ -97,7 +97,7 @@ export interface HeliosConfig
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
-    //Top-right weather panel: when false, hide it (scene view). Independent of "No UI" mode. Default true (shown).
+    //Top-right weather panel: when true, show it (scene view). Independent of "No UI" mode. Default false (hidden).
     'show-weather'?:           unknown;
     //Top-right info panel: when true, the panel also lists the sun's astronomical data (altitude, azimuth,
     //sunrise, solar noon, sunset, day length) below the weather. Default false (weather only).
@@ -217,10 +217,10 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 }
 
 
-//Top-right weather panel: shown unless explicitly disabled. Default true.
+//Top-right weather panel: hidden unless explicitly enabled. Default false.
 export function showWeather(config: HeliosConfig | undefined): boolean
 {
-    return config?.['show-weather'] !== false;
+    return config?.['show-weather'] === true;
 }
 
 

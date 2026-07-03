@@ -123,8 +123,8 @@ absolutely-positioned chips + SVG leaders at those coordinates. Each chip has a
 leader to the home with an animated **bead** whose direction and speed encode
 the live flow. Clicking a chip points the timeline at that metric.
 
-A fixed **info panel** sits top-right (scene view + live only, shown unless
-disabled via `show-weather`, exempt from the No UI fade): local weather now
+A fixed **info panel** sits top-right (scene view + live only, opt-in via
+`show-weather`, exempt from the No UI fade): local weather now
 (temperature, condition icon, wind) plus, optionally, the sun's astronomical data
 as icon-labelled rows. Its helpers live in `card/info-panel.ts` (WMO code to
 icon, unit conversion, formatting). The wind-direction arrow is

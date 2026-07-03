@@ -2230,13 +2230,13 @@ return new Date((d+u)/2)}var dt=null;function renderTimelineNightZones(e){const 
                     <div class="segmented-toggle">
                         <button
                             type="button"
-                            class="seg-option ${!1!==e["show-weather"]?"active":""}"
+                            class="seg-option ${!0===e["show-weather"]?"active":""}"
                             data-key="show-weather" data-value="true"
                             @click=${this._onBoolToggleClick}
                         >${t.editor.autoRotateOn}</button>
                         <button
                             type="button"
-                            class="seg-option ${!1===e["show-weather"]?"active":""}"
+                            class="seg-option ${!0!==e["show-weather"]?"active":""}"
                             data-key="show-weather" data-value="false"
                             @click=${this._onBoolToggleClick}
                         >${t.editor.autoRotateOff}</button>
@@ -2261,7 +2261,7 @@ return new Date((d+u)/2)}var dt=null;function renderTimelineNightZones(e){const 
                     </div>
                 </div>
                 <div class="hint">${t.editor.noUiModeHint??"Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display."}</div>
-                ${!1!==e["show-weather"]?B`
+                ${!0===e["show-weather"]?B`
                 <div class="field">
                     <span class="label">${t.editor.showAstro??"Show astronomical data"}</span>
                     <div class="segmented-toggle">
@@ -2752,7 +2752,7 @@ return new Date((d+u)/2)}var dt=null;function renderTimelineNightZones(e){const 
                 <!--  Ambient info panel (top-right): local weather now, plus the sun's astronomical data when the
                       "show astro" option is on. Scene view + live only (hidden in clock/trend and past scrub); it
                       is exempt from the No UI fade on purpose, as ambient info suited to a wall display.  -->
-                ${e&&function showWeather(e){return!1!==e?.["show-weather"]}(this.config)&&"scene"===this._viewMode&&this._isLiveMode&&null===this._selectedTime?this._renderInfoPanel():G}
+                ${e&&function showWeather(e){return!0===e?.["show-weather"]}(this.config)&&"scene"===this._viewMode&&this._isLiveMode&&null===this._selectedTime?this._renderInfoPanel():G}
 
                 ${!e||"clock"!==this._viewMode&&"trend"!==this._viewMode?G:B`
                     <div class="clock-overlay">

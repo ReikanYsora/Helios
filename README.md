@@ -131,7 +131,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `auto-hide-ui` | boolean | `false` | No UI mode: fade the timeline and the on-card controls after a few seconds of inactivity, bringing them back on any tap or move. The weather panel stays visible. For kiosks and wall displays. |
-| `show-weather` | boolean | `true` | Show the top-right weather panel (scene view). Set to `false` to hide it. Independent of No UI mode. |
+| `show-weather` | boolean | `false` | Show the top-right weather panel (scene view). Set to `true` to show it. Independent of No UI mode. |
 | `show-astro` | boolean | `false` | Add the sun's astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather. Only applies when `show-weather` is on. |
 
 ### Buildings + shadows
