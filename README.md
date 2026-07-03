@@ -77,10 +77,7 @@ Helios is available directly in the [HACS](https://hacs.xyz/) store.
 2. Search for **HELIOS**.
 3. Install it.
 4. Reload your browser.
-5. Add the card to your dashboard:
-   ```yaml
-   type: custom:helios-card
-   ```
+5. Add the card to your dashboard (see [Adding the card to a dashboard](#adding-the-card-to-a-dashboard)).
 
 ### Manual installation
 
@@ -91,6 +88,18 @@ Helios is available directly in the [HACS](https://hacs.xyz/) store.
    url: /local/community/helios/helios.js
    type: module
    ```
+
+### Adding the card to a dashboard
+
+1. Open the dashboard where you want the card and click the pencil icon (Edit dashboard) in the top right.
+2. Click **+ Add card**.
+3. Search for **Helios** in the card picker and select it. Or scroll to the bottom, pick **Manual**, and paste:
+   ```yaml
+   type: custom:helios-card
+   ```
+4. Save. Helios picks up your Energy dashboard configuration automatically, no other setup is required.
+
+If Helios does not appear in the picker, the resource is probably not loaded. With a HACS install it is registered automatically. For a manual install, go to `Settings` then `Dashboards`, open the three-dot menu, choose `Resources`, and add the resource as described above, then hard-refresh your browser.
 
 ---
 
