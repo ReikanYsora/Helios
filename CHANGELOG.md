@@ -7,6 +7,45 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.7.3 (unreleased)
+
+Accuracy release focused on the grid export family of reports (#253, #254, #278):
+wrong or missing export values, and a house consumption that "absorbed" the
+exported power on some setups.
+
+### Fixed: export suppressed by a mis-scoped live power sensor
+
+* The optional live power sensor of the HA Energy grid settings ("Standard"
+  mode) is expected to be **signed**: positive while importing, negative while
+  exporting. Some integrations only offer an **import-only** sensor there, and
+  nothing in Home Assistant warns about it; with such a sensor the card (like
+  HA's own live tiles) could never show an export. Helios now **audits that
+  sensor against the billing meters**: an hour in which the export meter
+  recorded energy while the sensor never went meaningfully negative is
+  physically impossible, and after enough independent proven hours the card
+  stops trusting the sensor's split and reads the export from the meters
+  themselves. Correctly wired sensors are untouched, and the audit un-flags
+  itself if the sensor is fixed later.
+
+### New: near-real-time readings from cumulative meters
+
+* Installs without a live power sensor (and flagged installs) no longer wait
+  for the recorder's 5-minute buckets: when a kWh counter updates every few
+  seconds, its live slope now drives the import/export chips with
+  near-real-time values. Counters that report in coarse batches keep the
+  previous bucket-based readout.
+
+### Fixed: house consumption inflated by mixed data freshness
+
+* The home chip is a balance (solar + grid - battery). Mixing an instantaneous
+  solar reading with a minutes-old export value made the house silently
+  "absorb" the exported watts. The balance is now computed over a **single
+  shared time window** whenever any of its inputs comes from the recorder, and
+  the chip shows a `≈` prefix in that mode; with live inputs all around
+  (including the new counter slope), nothing changes.
+
+---
+
 ## 2026.7.2
 
 A refinement release on top of 2026.7.1: a new ambient info panel, more display

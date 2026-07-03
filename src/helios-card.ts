@@ -36,7 +36,7 @@ import
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
-import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS } from './constants';
+import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS, COARSE_PROBE_MS } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -67,6 +67,7 @@ import
     batterySampleAtTime,
     formatBatteryPower,
     resolveBatteryEntities,
+    batteryLiveIsBucketSourced,
     clearBatteryModuleCaches
 } from './card/battery';
 import { refreshIrradiance, clearIrradianceModuleCaches } from './card/irradiance';
@@ -102,6 +103,8 @@ import
     onTimelinePointerUp
 } from './card/timeline';
 import { refreshGrid, formatGridValue } from './card/grid';
+import { createGridGuard, type GridGuardState } from './card/grid-guard';
+import { clearCounterSlopeSamples } from './card/counter-slope';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -109,7 +112,7 @@ import {
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
-import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod, type ChangeBucket } from './card/energy-stats';
+import { clearEnergyStatsCache, wattsAtFromChangeSeries, averageWattsOverWindow, type StatPeriod, type ChangeBucket } from './card/energy-stats';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
 import
@@ -231,6 +234,13 @@ export class HeliosCard extends LitElement
     _gridExportChangeFetchKey = '';
     _gridImportChangeFetching = false;
     _gridExportChangeFetching = false;
+    //Mis-scope guard for the live grid sensor (grid-guard.ts). Plain field: transitions are pushed through
+    //requestUpdate() by the guard itself, so no @state on the mutable object.
+    _gridGuard: GridGuardState = createGridGuard();
+    //True when the matching live grid value came from a lagged recorder bucket (no live sensor, no counter
+    //slope). Any lagged term flips the home chip to its shared-window balance.
+    @state() _gridImportLagged = false;
+    @state() _gridExportLagged = false;
     //Historical series for the active timeline range. Both battery entities fetched in one
     //history/history_during_period WS call when both are set.
     @state() _batterySocHistory: {
@@ -786,6 +796,9 @@ export class HeliosCard extends LitElement
         this._gridExportChangeSeries      = null;
         this._gridImportChangeFetchKey    = '';
         this._gridExportChangeFetchKey    = '';
+        this._gridGuard                   = createGridGuard();
+        this._gridImportLagged            = false;
+        this._gridExportLagged            = false;
         this._batterySocHistory           = null;
         this._batteryPowerHistory         = null;
         this._batteryFetchKey             = '';
@@ -805,9 +818,59 @@ export class HeliosCard extends LitElement
         clearBatteryModuleCaches();
         clearIrradianceModuleCaches();
         clearEnergyStatsCache();
+        clearCounterSlopeSamples();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot, refetches.
         this._engine?.resetDataCache();
         this.requestUpdate();
+    }
+
+
+    //Shared-window home balance: every wired family evaluated over the SAME recent span, so no cross-cadence
+    //subtraction can inflate the home. Null (chip hidden) when a wired family's series has not landed yet: a
+    //partial balance would silently drop kilowatts, worse than a brief absence.
+    private _windowedHomeWatts(nowMs: number): number | null
+    {
+        const d    = this._energyDefaults;
+        const loMs = nowMs - COARSE_PROBE_MS;
+        let sum = 0;
+        let any = false;
+        if (d.solarStatEnergyFroms.length > 0)
+        {
+            const w = averageWattsOverWindow(this._pvChangeSeries, loMs, nowMs);
+            if (w === null) { return null; }
+            sum += Math.max(0, w);
+            any  = true;
+        }
+        if (d.gridStatEnergyFroms.length > 0)
+        {
+            const w = averageWattsOverWindow(this._gridImportChangeSeries, loMs, nowMs);
+            if (w === null) { return null; }
+            sum += Math.max(0, w);
+            any  = true;
+        }
+        if (d.gridStatEnergyTos.length > 0)
+        {
+            const w = averageWattsOverWindow(this._gridExportChangeSeries, loMs, nowMs);
+            if (w === null) { return null; }
+            sum -= Math.max(0, w);
+            any  = true;
+        }
+        //Battery charge consumes without reaching the home; discharge supplies it.
+        if (d.batteryStatEnergyTos.length > 0)
+        {
+            const w = averageWattsOverWindow(this._batteryChargeChangeSeries, loMs, nowMs);
+            if (w === null) { return null; }
+            sum -= Math.max(0, w);
+            any  = true;
+        }
+        if (d.batteryStatEnergyFroms.length > 0)
+        {
+            const w = averageWattsOverWindow(this._batteryDischargeChangeSeries, loMs, nowMs);
+            if (w === null) { return null; }
+            sum += Math.max(0, w);
+            any  = true;
+        }
+        return any ? Math.max(0, sum) : null;
     }
 
 
@@ -1498,9 +1561,20 @@ export class HeliosCard extends LitElement
         //activeBatteryPower is charge-positive, so it SUBTRACTS: charging is consumption that never reaches
         //the home, discharging (negative) adds supply.
         const usageBatteryW = showPowerChip ? activeBatteryPower! : null;
-        const homeUsageWatts = (usagePvW === null && usageGridW === null && usageBatteryW === null)
-            ? null
-            : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0));
+        //Cadence coherence: the balance must never subtract a lagged term from a live one (instantaneous PV
+        //minus a minutes-old export bucket "absorbs" the exported watts into the home). The moment ANY live
+        //family reads through recorder buckets, every term is re-evaluated over ONE shared recent window and
+        //the chip shows the "approximately" prefix. Scrub mode keeps the per-family values above: they
+        //already share the bucket domain at the scrub instant.
+        const homeWindowed = !batteryScrubbing && (
+            (usagePvW      !== null && this._energyDefaults.solarStatRates.length === 0)
+         || (usageBatteryW !== null && batteryLiveIsBucketSourced(this._energyDefaults))
+         || this._gridImportLagged || this._gridExportLagged);
+        const homeUsageWatts = homeWindowed
+            ? this._windowedHomeWatts(Date.now())
+            : ((usagePvW === null && usageGridW === null && usageBatteryW === null)
+                ? null
+                : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0)));
         //Optional CHIP-ONLY override: some inverters expose a direct home-consumption sensor that differs by a few
         //watts from the balance. When set, its live value replaces the chip readout; the flows, home glyph and
         //history deliberately keep the computed balance (that small gap has no consistent place in the flow).
@@ -1517,7 +1591,8 @@ export class HeliosCard extends LitElement
             && !batteryScrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
-            ? formatGridValue(this.hass, homeDisplayW, 'W', valueDec, powerU)
+            ? (homeWindowed && !homeOverrideId ? '≈ ' : '')
+                + formatGridValue(this.hass, homeDisplayW, 'W', valueDec, powerU)
             : '';
 
         //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader

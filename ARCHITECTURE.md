@@ -184,6 +184,18 @@ two surfaces agree to the watt-hour. `card/pv.ts`, `card/battery.ts`,
 `card/energy-forecast.ts` reads the dashboard's configured solar-forecast
 provider.
 
+The grid live readout carries two safety layers. `card/grid-guard.ts` audits the
+optional live power sensor against the billing meters (hourly recorder stats: an
+hour of metered export while the "signed net" sensor never went meaningfully
+negative is physically impossible) and, once proven mis-scoped, reroutes the live
+split to the meters, self-clearing if the sensor is later fixed.
+`card/counter-slope.ts` derives near-real-time watts from a cumulative kWh
+counter's own state changes over a short rolling window, so meter-driven chips
+do not wait for the recorder's 5-minute buckets; coarse counters fall back to
+the bucket read. The home chip balance never mixes cadences: if any input is
+bucket-sourced, every term is evaluated over one shared window and the chip is
+prefixed with `≈`.
+
 ### Weather, `engine/weather.ts`, `engine/weather-resolve.ts`
 
 One fetch per home point against Open-Meteo, fusing a global model with the best

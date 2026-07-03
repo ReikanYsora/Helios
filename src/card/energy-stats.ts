@@ -287,13 +287,17 @@ function wattsFromBucket(b: ChangeBucket): number
 
 
 //Live power for the chip on cumulative-only installs (no stat_rate). Fine: latest completed bucket. Coarse: average
-//of the recent probe window. Null only when no completed bucket exists.
+//of the recent probe window. Null only when no completed bucket exists. Reset/rollover spikes are dropped through
+//the shared outlier rule first, so a statistics-surgery artefact never renders as a megawatt chip.
 export function latestWattsFromChangeSeries(
-    buckets: ChangeBucket[] | null,
-    nowMs:   number,
+    rawBuckets: ChangeBucket[] | null,
+    nowMs:      number,
 ): number | null
 {
-    if (!buckets || buckets.length === 0) { return null; }
+    if (!rawBuckets || rawBuckets.length === 0) { return null; }
+    const cap     = outlierCapKwh(rawBuckets);
+    const buckets = cap === Infinity ? rawBuckets : rawBuckets.filter(b => Math.abs(b.kwh) <= cap);
+    if (buckets.length === 0) { return null; }
     //Most recent completed bucket (end <= now, never a half-filled in-progress one).
     let lastIdx = -1;
     for (let i = buckets.length - 1; i >= 0; i--)
@@ -338,6 +342,25 @@ export function wattsAtFromChangeSeries(
     }
     //Coarse meter (or tMs between buckets): average the probe window.
     return probe.ms > 0 ? Math.max(0, (probe.kwh * 1000) / (probe.ms / HOUR_MS)) : 0;
+}
+
+
+//Average watts over an explicit shared window, for the home-balance formula when any family's live value is
+//bucket-sourced: every term is then evaluated over the SAME span, so a fast-moving live term can never be
+//subtracted against a lagged one (the mixed-cadence inflation this replaces). Same outlier rule as the live
+//read. Null when no bucket overlaps the window, so the caller hides rather than sums a partial balance.
+export function averageWattsOverWindow(
+    rawBuckets: ChangeBucket[] | null,
+    loMs:       number,
+    hiMs:       number,
+): number | null
+{
+    if (!rawBuckets || rawBuckets.length === 0 || hiMs <= loMs) { return null; }
+    const cap     = outlierCapKwh(rawBuckets);
+    const buckets = cap === Infinity ? rawBuckets : rawBuckets.filter(b => Math.abs(b.kwh) <= cap);
+    const probe   = probeChangeWindow(buckets, loMs, hiMs);
+    if (probe.total === 0 || probe.ms <= 0) { return null; }
+    return (probe.kwh * 1000) / (probe.ms / HOUR_MS);
 }
 
 

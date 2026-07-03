@@ -68,6 +68,15 @@ export function resolveBatteryEntities(defaults: EnergyDefaults): { powerEntity:
 }
 
 
+//True when the live battery power derives from the directional energy meters (bucket cadence) instead of a
+//COMPLETE set of live power sensors. Shared with the card's home formula, which switches to its shared-window
+//balance whenever any contributing family is bucket-sourced.
+export function batteryLiveIsBucketSourced(defaults: EnergyDefaults): boolean
+{
+    return !(defaults.batteryStatRates.length > 0 && defaults.batterySourcesWithoutRate === 0);
+}
+
+
 //Surface the host card exposes to this module. Mutable fields are non-readonly so refresh/fetch helpers can assign them;
 //@state reactivity is preserved since each assignment hits the decorator's setter.
 export interface BatteryHost
@@ -177,7 +186,7 @@ export function refreshBattery(host: BatteryHost): void
     //Sum the live power sensors ONLY when they cover EVERY battery source. On a mixed or energy-only wiring
     //(some bank has no `power_config`), fall through to the directional energy meters instead: their change series net
     //every bank, so a battery without a power sensor is never dropped from the live power.
-    const ratesCoverAllBanks = rateEntities.length > 0 && host._energyDefaults.batterySourcesWithoutRate === 0;
+    const ratesCoverAllBanks = !batteryLiveIsBucketSourced(host._energyDefaults);
     if (ratesCoverAllBanks)
     {
         let sum = 0;
