@@ -27,6 +27,7 @@ import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
     BUILDING_CACHE_TTL_MS,
     OVERPASS_RETRY_DELAY_MS,
     OVERPASS_ENDPOINTS,
+    OVERPASS_FETCH_TIMEOUT_MS,
     REAL_HEIGHT_CAP_M,
     REAL_HEIGHT_FALLBACK_M } from '../constants';
 //Re-exported so importers of SHADOW_FADE_DEG from './buildings' keep resolving.
@@ -278,15 +279,51 @@ function fallbackHouse(): Building
     };
 }
 
+//Watchdog fetch for one mirror: fetch has no native timeout, so a hung mirror would stall the whole
+//cascade for minutes instead of failing over. A local controller carries both the caller's abort
+//(location change) and the deadline; the caller tells them apart through the outer signal's state.
+async function fetchWithWatchdog(url: string, signal?: AbortSignal): Promise<Response>
+{
+    const controller = new AbortController();
+    const onAbort = (): void =>
+    {
+        controller.abort();
+    };
+    if (signal?.aborted)
+    {
+        controller.abort();
+    }
+    signal?.addEventListener('abort', onAbort);
+    const timer = setTimeout(() =>
+    {
+        controller.abort();
+    }, OVERPASS_FETCH_TIMEOUT_MS);
+    try
+    {
+        return await fetch(url, {
+            referrerPolicy: 'no-referrer', //don't leak the HA instance URL to Overpass
+            signal:         controller.signal,
+        });
+    }
+    finally
+    {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+    }
+}
+
+
 //Fetch the option-independent raw footprints around the home at the max display radius. Serves a fresh
-//localStorage cache (keyed on location only) first, else tries each Overpass mirror in turn; total failure
-//(offline, all mirrors down, no mapped buildings) returns [], which interpretBuildings() turns into the
-//fallback house, so the cache never holds it. Aborts propagate as an AbortError the caller swallows.
+//localStorage cache (keyed on location only) first, else tries each Overpass mirror in turn. Return
+//contract: an array on success ([] = the area genuinely has no mapped buildings), NULL when every
+//mirror failed (offline, outage), so the caller can schedule a re-attempt instead of treating the
+//outage as a final answer; the cache never holds either empty shape. Aborts propagate as an
+//AbortError the caller swallows.
 export async function fetchRawBuildings(
     homeLat: number,
     homeLon: number,
     signal?: AbortSignal
-): Promise<RawBuilding[]>
+): Promise<RawBuilding[] | null>
 {
     const lat    = homeLat;
     const lng    = homeLon;
@@ -315,17 +352,18 @@ export async function fetchRawBuildings(
         `[out:json][timeout:25];(way["building"](around:${radius},${lat},${lng});`
         + `relation["building"](around:${radius},${lat},${lng}););out geom;`;
 
+    //True once any mirror answered with parseable data, so an all-mirrors outage (null) is
+    //distinguishable from a genuinely building-free area ([]).
+    let anySuccess = false;
+
     /* eslint-disable no-await-in-loop -- retries are intentionally sequential */
     for (const endpoint of OVERPASS_ENDPOINTS)
     {
         try
         {
-            const response = await fetch(
+            const response = await fetchWithWatchdog(
                 endpoint + '?data=' + encodeURIComponent(overpassQuery),
-                {
-                    referrerPolicy: 'no-referrer', //don't leak the HA instance URL to Overpass
-                    signal,
-                }
+                signal
             );
             if (!response.ok)
             {
@@ -333,6 +371,7 @@ export async function fetchRawBuildings(
             }
             const data      = (await response.json()) as { elements?: OverpassWay[] };
             const buildings = parseRawBuildings(data.elements ?? [], lat, lng);
+            anySuccess = true;
             if (buildings.length)
             {
                 try
@@ -348,8 +387,10 @@ export async function fetchRawBuildings(
         }
         catch (err)
         {
-            //Propagate aborts so a rapid location change cancels cleanly (the caller swallows AbortError).
-            if ((err as { name?: string })?.name === 'AbortError')
+            //Propagate the CALLER's abort so a rapid location change cancels cleanly (the caller
+            //swallows AbortError); a watchdog timeout raises the same error name but must fall
+            //through to the next mirror instead.
+            if ((err as { name?: string })?.name === 'AbortError' && signal?.aborted)
             {
                 throw err;
             }
@@ -362,9 +403,8 @@ export async function fetchRawBuildings(
     }
     /* eslint-enable no-await-in-loop */
 
-    //Every mirror failed or returned nothing: return empty, NOT cached (a later retry can still recover the
-    //real buildings); interpretBuildings() turns this into the single fallback house.
-    return [];
+    //Never cached in either case; interpretBuildings() renders the fallback house for both shapes.
+    return anySuccess ? [] : null;
 }
 
 //Options interpretBuildings() applies to cached raw data on read. All cheap and in-memory, no re-fetch.

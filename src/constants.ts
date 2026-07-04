@@ -142,11 +142,21 @@ export const FALLBACK_HOUSE_HALF_W   = 5;
 export const FALLBACK_HOUSE_HALF_D   = 4;
 export const BUILDING_CACHE_TTL_MS   = 30 * DAY_MS;
 export const OVERPASS_RETRY_DELAY_MS = 1200;
-//European Overpass mirrors, tried in order.
+//European Overpass mirrors, tried in order: openstreetmap.fr first (measured fast and stable, CORS
+//open, worldwide coverage), overpass-api.de second (chronically loaded and rejects some origins
+//with a 406), kumi.systems kept as a last-resort net; the per-mirror watchdog makes a dead mirror
+//cost at most one timeout.
 export const OVERPASS_ENDPOINTS = [
+    'https://overpass.openstreetmap.fr/api/interpreter',
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
 ];
+//Per-mirror watchdog: fetch has no native timeout, so a hung mirror would otherwise stall the whole
+//cascade for minutes instead of failing over.
+export const OVERPASS_FETCH_TIMEOUT_MS = 10_000;
+//Re-attempt delay after EVERY mirror failed: a transient Overpass outage heals without a page
+//reload (the scene shows the fallback house in the meantime).
+export const OVERPASS_REFETCH_DELAY_MS = 5 * 60_000;
 
 //=== Engine lifecycle ===
 //TTL of the shared module-scope parsed-buildings cache.

@@ -35,6 +35,14 @@ exported power on some setups.
   near-real-time values. Counters that report in coarse batches keep the
   previous bucket-based readout.
 
+### Fixed: 3D buildings disappearing (Overpass mirrors)
+
+* The mirror list is refreshed (a fast, stable European mirror now leads) and
+  each mirror gets a **10-second watchdog**: a hung mirror fails over to the
+  next one instead of stalling the load for minutes. When every mirror is
+  down, the card now **retries automatically after a few minutes** instead of
+  showing the fallback house until the page is reloaded.
+
 ### Fixed: house consumption inflated by mixed data freshness
 
 * The home chip is a balance (solar + grid - battery). Mixing an instantaneous

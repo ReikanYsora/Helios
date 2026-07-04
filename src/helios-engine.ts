@@ -13,7 +13,7 @@ import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
-    SUN_COLOR_HEX,
+    SUN_COLOR_HEX, OVERPASS_REFETCH_DELAY_MS,
 } from './constants';
 import
 {
@@ -545,6 +545,9 @@ export class HeliosEngine
     private readonly _editMode: boolean;
     private _buildingsAbort?: AbortController;
 
+    //Pending re-attempt after an all-mirrors Overpass outage (cleared on re-fetch and teardown).
+    private _buildingsRetryTimer?: number;
+
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
     //and the refresh runs once on expiry. Curves+chips still update every move; only the costly shadow
     //raster paint is coalesced.
@@ -1052,8 +1055,10 @@ export class HeliosEngine
             return;
         }
 
-        //Abort any in-flight request so a rapid location change doesn't race a stale fetch into the sources.
+        //Abort any in-flight request so a rapid location change doesn't race a stale fetch into the
+        //sources, and drop any pending outage re-attempt: this call IS the fresh attempt.
         this._buildingsAbort?.abort();
+        this._clearBuildingsRetry();
         const ac = new AbortController();
         this._buildingsAbort = ac;
 
@@ -1064,6 +1069,14 @@ export class HeliosEngine
         {
             if (ac.signal.aborted || !this._renderer)
             {
+                return;
+            }
+            //Null = every mirror failed. The location stays UNCLAIMED (no raw, no shared cache) so a
+            //later pass re-fetches, and a timed re-attempt heals a transient Overpass outage without a
+            //page reload; the fallback house stays on screen in the meantime.
+            if (result === null)
+            {
+                this._scheduleBuildingsRetry();
                 return;
             }
             this._buildingsRaw    = result;
@@ -1083,6 +1096,33 @@ export class HeliosEngine
         {
             try { this.onBuildingsFetchEnd?.(); } catch (_) { /* host progress callback threw; nothing left to do */ }
         });
+    }
+
+
+    private _scheduleBuildingsRetry(): void
+    {
+        if (this._buildingsRetryTimer !== undefined)
+        {
+            return;
+        }
+        this._buildingsRetryTimer = window.setTimeout(() =>
+        {
+            this._buildingsRetryTimer = undefined;
+            if (this._renderer)
+            {
+                this._ensureBuildings();
+            }
+        }, OVERPASS_REFETCH_DELAY_MS);
+    }
+
+
+    private _clearBuildingsRetry(): void
+    {
+        if (this._buildingsRetryTimer !== undefined)
+        {
+            window.clearTimeout(this._buildingsRetryTimer);
+            this._buildingsRetryTimer = undefined;
+        }
     }
 
     //Interpret the raw footprints with the CURRENT options (radius/count/real-size/height/cluster) and hand
@@ -2040,6 +2080,7 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
+        this._clearBuildingsRetry();
         this._arcInputsCache         = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
