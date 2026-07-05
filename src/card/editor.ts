@@ -28,6 +28,7 @@ import { pickTranslations, type Translations } from '../i18n';
 import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type EnergyPrefsHost } from './energy-prefs';
 import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from './grid-guard';
 import { batteryLiveIsBucketSourced } from './battery';
+import { lastBuildingsFetchReport } from '../engine/buildings';
 import './editor-custom-entity';
 import type { CustomEntityConfigValue } from './editor-custom-entity';
 
@@ -97,6 +98,7 @@ export class HeliosCardEditor extends LitElement
     {
         super.disconnectedCallback();
         unsubscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
+        window.removeEventListener('helios-buildings-report', this._onBuildingsReport);
         for (const t of this._sliderDebounce.values())
         {
             window.clearTimeout(t);
@@ -147,7 +149,15 @@ export class HeliosCardEditor extends LitElement
         super.connectedCallback();
         this._ensureEntityPicker();
         subscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
+        window.addEventListener('helios-buildings-report', this._onBuildingsReport);
     }
+
+    //Repaint the buildings diagnostic block when a fetch attempt completes (the force button, a retry,
+    //or a normal load), so the phone editor shows the outcome without a console.
+    private _onBuildingsReport = (): void =>
+    {
+        this.requestUpdate();
+    };
 
     // ha-entity-picker ships in HA's lazy-loaded card-editor bundle and may be unregistered in a fresh tab. Force the
     // load by creating a transient "entities" card and requesting its config element (the side effect registers the
@@ -705,6 +715,17 @@ export class HeliosCardEditor extends LitElement
                     @click=${this._onRefetchBuildingsClick}
                 >${this._refetchFeedback ?? t.editor.buildingsRefetchButton}</button>
                 <div class="field-help">${t.editor.buildingsRefetchHelp}</div>
+                ${(() =>
+                {
+                    //Per-mirror outcome of the last download attempt: the phone-readable diagnosis of a
+                    //missing-buildings report (values deliberately raw and untranslated).
+                    const report = lastBuildingsFetchReport();
+                    return report ? html`
+                        <div class="buildings-diag">
+                            ${report.lines.map(line => html`<div>${line}</div>`)}
+                        </div>
+                    ` : nothing;
+                })()}
 
                 </details>
 

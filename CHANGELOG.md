@@ -58,6 +58,19 @@ dashboard, so it is gone. The new rule is simple:
   its cloud filter (an instantaneous coverage has no meaning in a cumulative
   view).
 
+### Fixed: a minus sign on zero values
+
+* A sensor blipping a few negative milliwatts could render as "-0.00 kW" on a
+  chip. Values that round to zero at the displayed precision now render as a
+  true zero, everywhere.
+
+### Added: buildings download diagnostic
+
+* The editor's buildings section now shows the outcome of the last download
+  attempt, mirror by mirror (building count, HTTP error or timeout), right
+  under the force-download button, so a missing-buildings problem can be
+  diagnosed from a phone.
+
 ### Fixed: production curve flattening into a plateau
 
 * On days with a deep production bell and a long dawn/dusk tail, the

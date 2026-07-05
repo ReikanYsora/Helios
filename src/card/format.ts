@@ -21,6 +21,13 @@ export function formatLocalisedNumber(
     {
         return integer ? '0' : (0).toFixed(fractionDigits);
     }
+    //Snap values that ROUND to zero at the requested precision to a true zero: a -0.4 W sensor
+    //blip otherwise renders as "-0,00 kW" (Intl keeps the sign of a negative near-zero).
+    const snapEps = integer ? 0.5 : 0.5 * 10 ** -fractionDigits;
+    if (Math.abs(value) < snapEps)
+    {
+        value = 0;
+    }
     const locale = (hass?.locale?.language as string | undefined)
         ?? (hass?.language as string | undefined)
         ?? undefined;

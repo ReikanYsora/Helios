@@ -170,6 +170,30 @@ function cacheKey(lat: number, lng: number): string
     return `helios-bld2:${lat.toFixed(4)}:${lng.toFixed(4)}`;
 }
 
+//Diagnostic report of the last fetch attempt (per-mirror outcome), surfaced verbatim in the editor's
+//buildings section so a phone user can see WHY buildings are missing without a console. Published on
+//every completed attempt via the window event below; technical values stay untranslated on purpose.
+let _lastFetchReport: { at: number; lines: string[] } | null = null;
+
+export function lastBuildingsFetchReport(): { at: number; lines: string[] } | null
+{
+    return _lastFetchReport;
+}
+
+function publishFetchReport(lines: string[]): void
+{
+    _lastFetchReport = { at: Date.now(), lines };
+    try
+    {
+        window.dispatchEvent(new CustomEvent('helios-buildings-report'));
+    }
+    catch (_)
+    {
+        //CustomEvent unsupported: the report still lands on the next editor render.
+    }
+}
+
+
 //Drop the persisted raw footprints for a location, so the next fetch hits Overpass again. Editor
 //"force building download" support.
 export function clearBuildingsLocationCache(lat: number, lng: number): void
@@ -354,6 +378,7 @@ export async function fetchRawBuildings(
             : null;
         if (cached?.buildings?.length && Date.now() - cached.time < BUILDING_CACHE_TTL_MS)
         {
+            publishFetchReport([`cache: ${cached.buildings.length} buildings (${Math.round((Date.now() - cached.time) / 86_400_000)} d old)`]);
             return cached.buildings;
         }
     }
@@ -369,6 +394,11 @@ export async function fetchRawBuildings(
     //True once any mirror answered with parseable data, so an all-mirrors outage (null) is
     //distinguishable from a genuinely building-free area ([]).
     let anySuccess = false;
+    const report: string[] = [];
+    const mirrorHost = (endpoint: string): string =>
+    {
+        try { return new URL(endpoint).host; } catch (_) { return endpoint; }
+    };
 
     /* eslint-disable no-await-in-loop -- retries are intentionally sequential */
     for (const endpoint of OVERPASS_ENDPOINTS)
@@ -388,6 +418,8 @@ export async function fetchRawBuildings(
             anySuccess = true;
             if (buildings.length)
             {
+                report.push(`${mirrorHost(endpoint)}: OK, ${buildings.length} buildings`);
+                publishFetchReport(report);
                 try
                 {
                     localStorage.setItem(key, JSON.stringify({ time: Date.now(), buildings }));
@@ -398,6 +430,7 @@ export async function fetchRawBuildings(
                 }
                 return buildings;
             }
+            report.push(`${mirrorHost(endpoint)}: OK, 0 buildings in range`);
         }
         catch (err)
         {
@@ -408,6 +441,10 @@ export async function fetchRawBuildings(
             {
                 throw err;
             }
+            const e = err as { name?: string; message?: string };
+            report.push(e?.name === 'AbortError'
+                ? `${mirrorHost(endpoint)}: timeout`
+                : `${mirrorHost(endpoint)}: ${e?.message || e?.name || 'error'}`);
             //Mirror failed: wait, then try the next endpoint.
             await new Promise<void>((resolve) =>
             {
@@ -417,6 +454,7 @@ export async function fetchRawBuildings(
     }
     /* eslint-enable no-await-in-loop */
 
+    publishFetchReport(report);
     //Never cached in either case; interpretBuildings() renders the fallback house for both shapes.
     return anySuccess ? [] : null;
 }
