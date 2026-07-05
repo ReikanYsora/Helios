@@ -7,7 +7,7 @@ import { formatPowerKw, type PowerUnit } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
-import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { BATTERY_CACHE_TTL_MS } from '../constants';
 
 
@@ -176,18 +176,15 @@ export function refreshBattery(host: BatteryHost): void
             nextSoc = Math.max(0, Math.min(100, sum / count));
         }
     }
-    //Live battery power, "positive = charging". When sources declare a signed power sensor (`power_config.stat_rate`), sum its state
-    //across banks like the HA Energy live tile (per-bank sign honoured via `invertedRateEntities`). Otherwise the net comes from the
-    //two SEPARATE directional energy meters: latest charge bucket (stat_energy_to) minus latest discharge (stat_energy_from), so the
-    //sign is structural and charging is never lost.
+    //Live battery power, "positive = charging": measured or absent. When power sensors cover EVERY bank
+    //(`power_config` on each source), sum their states like the HA Energy live tile (per-bank sign honoured
+    //via `invertedRateEntities`). A mixed or energy-only wiring shows NO live power (the sum would silently
+    //miss a bank, and a live value is never derived from the meters); scrub and curves keep netting the
+    //directional change series regardless.
     let nextPower: number | null = null;
     let nextUnit        = '';
     const rateEntities = host._energyDefaults.batteryStatRates;
-    //Sum the live power sensors ONLY when they cover EVERY battery source. On a mixed or energy-only wiring
-    //(some bank has no `power_config`), fall through to the directional energy meters instead: their change series net
-    //every bank, so a battery without a power sensor is never dropped from the live power.
-    const ratesCoverAllBanks = !batteryLiveIsBucketSourced(host._energyDefaults);
-    if (ratesCoverAllBanks)
+    if (!batteryLiveIsBucketSourced(host._energyDefaults))
     {
         let sum = 0;
         let anyValid = false;
@@ -205,18 +202,6 @@ export function refreshBattery(host: BatteryHost): void
         if (anyValid)
         {
             nextPower = sum;
-            nextUnit  = 'W';
-        }
-    }
-    else if (host._energyDefaults.batteryStatEnergyTos.length > 0
-          || host._energyDefaults.batteryStatEnergyFroms.length > 0)
-    {
-        const nowMs     = Date.now();
-        const chargeW   = latestWattsFromChangeSeries(host._batteryChargeChangeSeries, nowMs);
-        const dischargeW = latestWattsFromChangeSeries(host._batteryDischargeChangeSeries, nowMs);
-        if (chargeW !== null || dischargeW !== null)
-        {
-            nextPower = Math.max(0, chargeW ?? 0) - Math.max(0, dischargeW ?? 0);
             nextUnit  = 'W';
         }
     }
@@ -301,9 +286,8 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     //wide window (e.g. 7 d) come back empty.
     const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
     //End anchor rounded to the refresh boundary, folded into the fetch key so the gate re-arms once per CHANGE_REFRESH_MS and the
-    //live-chip fallback + past curve keep tracking new buckets (a startMs-only key froze the series until midnight: a battery idle
-    //at load showed 0 W all day). Rounding also lands every card on the same energy-stats cache key, so an N-card dashboard hits
-    //the recorder once per interval.
+    //past curve + scrub keep tracking new buckets (a startMs-only key froze the series until midnight). Rounding also lands every
+    //card on the same energy-stats cache key, so an N-card dashboard hits the recorder once per interval.
     const endMs   = changeRefreshAnchorMs();
     const sortedCharge    = [...chargeIds].sort();
     const sortedDischarge = [...dischargeIds].sort();

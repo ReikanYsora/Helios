@@ -16,7 +16,6 @@ describe('evaluateGuardHours', () =>
         ];
         const ev = evaluateGuardHours(hours);
         expect(ev.contradictions).toBe(0);
-        expect(ev.importOnly).toBe(false);
     });
 
     it('import-only sensor (ThoHilde / maxi07): export metered while min never leaves zero', () =>
@@ -27,7 +26,6 @@ describe('evaluateGuardHours', () =>
         const ev = evaluateGuardHours(hours);
         //Hours 1-4 are candidates; non-adjacent greedy keeps 2 of the 4-cluster -> plus none elsewhere.
         expect(ev.contradictions).toBeGreaterThanOrEqual(2);
-        expect(ev.importOnly).toBe(true);
     });
 
     it('import-only sensor across a full day reaches the flag threshold', () =>
@@ -40,7 +38,6 @@ describe('evaluateGuardHours', () =>
         }
         const ev = evaluateGuardHours(hours);
         expect(ev.contradictions).toBeGreaterThanOrEqual(3);
-        expect(ev.importOnly).toBe(true);
     });
 
     it('asymmetric-phase net sensor: token -100 W dips cannot vouch for kilowatts of export', () =>
@@ -55,7 +52,6 @@ describe('evaluateGuardHours', () =>
         }
         const ev = evaluateGuardHours(hours);
         expect(ev.contradictions).toBeGreaterThanOrEqual(3);
-        expect(ev.importOnly).toBe(false);
     });
 
     it('coarse export meter: delta landing one hour late is exculpated by the genuinely negative hour', () =>
@@ -87,7 +83,6 @@ describe('evaluateGuardHours', () =>
         const ev = evaluateGuardHours(hours);
         expect(ev.contradictions).toBe(0);
         expect(ev.realExportHours).toBe(0);
-        expect(ev.importOnly).toBe(false);
     });
 });
 
@@ -116,7 +111,6 @@ describe('nextGuardState', () =>
     {
         const next = nextGuardState(createGridGuard(), importOnlyDay());
         expect(next.status).toBe('flagged');
-        expect(next.importLive).toBe(true);
     });
 
     it('stays healthy on a healthy install (zero-regression path)', () =>
@@ -135,7 +129,6 @@ describe('nextGuardState', () =>
         expect(state.status).toBe('flagged');
         state = nextGuardState(state, healthyDay());
         expect(state.status).toBe('healthy');
-        expect(state.importLive).toBe(false);
     });
 
     it('a windowless night (no export at all) neither clears nor accumulates', () =>

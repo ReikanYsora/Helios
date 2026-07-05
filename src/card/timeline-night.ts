@@ -225,31 +225,30 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult | type
 }
 
 
-//Per-PV-string production shares at an instant, for the home stacked histogram. Reads each source's raw history
-//(interpolated to the instant), keeps the producing ones, and returns {fraction, #rrggbb colour} hue-spread off the
-//solar token by source index, matching the per-source chart curves. Empty unless 2+ sources are producing right now;
-//below that the home renders as a single solid block.
+//Per-PV-string production shares at an instant, for the home stacked histogram. Measured-only sources:
+//in true live mode each source reads its own live power sensor (stat_rate, when the install declares one
+//per source); at any past instant, and whenever the live sensors don't cover the sources, each share
+//reads its meter's recorder change series. Returns {fraction, #rrggbb colour} hue-spread off the solar
+//token by source index, matching the per-source chart curves. Empty unless 2+ sources are producing.
 export function solarBands(host: ChartHost, atMs: number): { frac: number; color: string }[]
 {
-    const map = host._pvHistoryPerEntity;
-    if (!map || map.size < 2) { return []; }
-    const ids  = Array.from(map.keys()).sort();
-    const el   = host as unknown as Element;
-    const dark = chartIsDark(host);
-    //At the live instant the per-source history (hourly calibration) doesn't reach "now", so read each source's live
-    //power straight off its state; only fall back to the history when scrubbing the past. ~5 min tolerance covers the
-    //gap between now and the freshest data without misclassifying a scrub.
-    const live  = atMs >= Date.now() - 5 * 60_000;
+    const meters = host._energyDefaults.solarStatEnergyFroms;
+    if (meters.length < 2 || host._pvChangeSeriesPerEntity.size < 2) { return []; }
+    const el    = host as unknown as Element;
+    const dark  = chartIsDark(host);
+    const rates = host._energyDefaults.solarStatRates;
+    //Live shares only when the instant is genuinely "now" AND every source has its own live sensor
+    //(a partial set would skew the split); otherwise the recorder change series carries every source.
+    const live = host._isLiveMode
+        && atMs >= Date.now() - 5 * 60_000
+        && rates.length === meters.length;
     const parts: { v: number; idx: number }[] = [];
-    for (let i = 0; i < ids.length; i++)
+    for (let i = 0; i < meters.length; i++)
     {
-        const id = ids[i];
         let v = NaN;
         if (live)
         {
-            //Power (stat_rate) sources read directly; cumulative-only sources normalise to 0 here and drop to the
-            //history branch below (which differentiates them).
-            const so = host.hass?.states?.[id];
+            const so = host.hass?.states?.[rates[i]];
             if (so)
             {
                 const raw = parseFloat(so.state);
@@ -258,10 +257,7 @@ export function solarBands(host: ChartHost, atMs: number): { frac: number; color
         }
         if (!(isFinite(v) && v > 0))
         {
-            //Scrub, or a live read that yielded nothing: instantaneous power from the per-source history
-            //(pvValueAtTime differentiates cumulative meters, in a unit consistent across sources).
-            const ph = map.get(id);
-            if (ph) { v = pvValueAtTime(host, atMs, ph).value; }
+            v = pvValueAtTime(host, atMs, meters[i]).value;
         }
         if (isFinite(v) && v > 0) { parts.push({ v, idx: i }); }
     }

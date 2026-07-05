@@ -16,7 +16,7 @@ export interface ChartSeries
     times:        Date[];
     irradiance:   number[];
     cloud:        number[];
-    //Hourly low / mid / high cloud cover (%), for the timeline's cloud target (three altitude bands).
+    //Hourly low / mid / high cloud cover (%), overlaid on the timeline's irradiance view (three altitude bands).
     cloudLow:     number[];
     cloudMid:     number[];
     cloudHigh:    number[];
@@ -25,7 +25,7 @@ export interface ChartSeries
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (default) adds
 //the dashed forecast + per-source breakdown; 'grid'/'battery' draw two-direction flows (accent = dominant side);
 //'irradiance' draws W/m² on a fixed 0..1000 scale.
-export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'cloud' | 'custom';
+export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'custom';
 
 //Friendly name of the first configured entity in a stat list (the HA Energy dashboard's own name), for a tooltip
 //row. Empty when none is configured.
@@ -54,11 +54,11 @@ export function batteryDischargeName(host: ChartHost): string { return statFrien
 //name. Every tooltip name comes from here or from statFriendly.
 const TARGET_LABELS_EN: Record<ChartTarget, string> = {
     production: 'Production', consumption: 'Consumption', grid: 'Grid', battery: 'Battery',
-    'battery-soc': 'Battery charge', irradiance: 'Irradiance', cloud: 'Cloud cover', custom: 'Custom',
+    'battery-soc': 'Battery charge', irradiance: 'Irradiance', custom: 'Custom',
 };
 const TARGET_LABELS_FR: Record<ChartTarget, string> = {
     production: 'Production', consumption: 'Consommation', grid: 'Réseau', battery: 'Batterie',
-    'battery-soc': 'Charge batterie', irradiance: 'Irradiance', cloud: 'Nébulosité', custom: 'Personnalisé',
+    'battery-soc': 'Charge batterie', irradiance: 'Irradiance', custom: 'Personnalisé',
 };
 export function clockTargetLabel(host: ChartHost, target: ChartTarget): string
 {
@@ -90,11 +90,10 @@ export interface ChartHost
     //Per-entity histories alongside aggregated `_pvHistory` for per-source curves + tooltip breakdown. Single-source
     //installs carry one entry equal to the aggregate; multi-source carry one per HA Energy source.
     readonly _pvHistoryPerEntity: Map<string, PvHistory>;
-    //Hourly LTS series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` (same
+    //Hourly LTS series feeding the 5-day forecast calibration (same
     //window, far fewer rows on high-frequency installs). Null while fetching / empty when not LTS-tracked, then
     //degrades to `_pvHistory`.
     readonly _pvCalibStats:   PvHistory | null;
-    readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
     //Today's produced kWh from the recorder `change` statistic over the `stat_energy_from` arrays. Null when

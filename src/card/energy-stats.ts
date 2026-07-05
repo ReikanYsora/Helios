@@ -11,7 +11,7 @@ import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_B
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
-//re-arming once a minute keeps cumulative-only live chips within ~1 min of the freshest bucket without WS spam.
+//re-arming once a minute keeps the past curves and scrub within ~1 min of the freshest bucket without WS spam.
 //Callers fold floor(now / CHANGE_REFRESH_MS) into their fetch key so the gate re-arms on this boundary. Defined in
 //constants.ts; re-exported here because pv/grid/battery import it from this module.
 export { CHANGE_REFRESH_MS } from '../constants';
@@ -155,9 +155,15 @@ export async function fetchChangeSeries(
 
 
 
-//A change bucket whose magnitude exceeds this multiple of the median is a meter reset/rollover artefact, not real
-//flow. Single source of the outlier rule for every change-series consumer (store curves and the clock).
+//A change bucket whose magnitude exceeds this multiple of the reference quantile is a meter reset/rollover
+//artefact, not real flow. Single source of the outlier rule for every change-series consumer (store curves
+//and the clock).
 const OUTLIER_CAP_FACTOR = 20;
+//Reference quantile for the cap. The 90th percentile, NOT the median: a summer production day carries a long
+//twilight tail of tiny non-zero buckets that drags the median far below the midday peak, and a median-based
+//cap then rejects the whole top of a genuine bell (the curve flat-lines at the cap through interpolation).
+//A real reset spike (a lifetime total dumped into one bucket) still exceeds 20x the p90 by orders of magnitude.
+const OUTLIER_CAP_QUANTILE = 0.9;
 
 //kWh magnitude above which a change bucket is rejected as a reset/rollover spike (the whole accumulated total
 //dumped into one bucket). Infinity when there's nothing to compare against.
@@ -165,7 +171,9 @@ export function outlierCapKwh(buckets: ChangeBucket[] | null): number
 {
     if (!buckets) { return Infinity; }
     const mags = buckets.map(b => Math.abs(b.kwh)).filter(k => isFinite(k) && k > 0).sort((a, b) => a - b);
-    return mags.length ? mags[Math.floor(mags.length / 2)] * OUTLIER_CAP_FACTOR : Infinity;
+    if (!mags.length) { return Infinity; }
+    const idx = Math.min(mags.length - 1, Math.floor(mags.length * OUTLIER_CAP_QUANTILE));
+    return mags[idx] * OUTLIER_CAP_FACTOR;
 }
 
 //Coarse-meter smoothing on the binned per-bucket energy (sums/hit). A meter that reports its cumulative energy
@@ -248,13 +256,12 @@ export function changeSeriesToWatts(
 }
 
 
-//Deriving live power from a `change` series must cope with two meter types:
-//  - Fine: counter advances every few seconds, so every 5-min bucket carries energy and the latest bucket alone is
-//    the responsive, correct read.
-//  - Coarse (reports every 15 min): counter only advances on report, so the recorder lands the whole 15-min delta in
-//    one bucket and zeroes the other two; the latest bucket then reads 0 two-thirds of the time and ~3x one-third.
-//Distinguished by density of non-zero buckets in a probe window: dense = fine (read latest direct), sparse = coarse
-//(average the probe window so the lone delta spreads over its real interval). Fine installs are untouched.
+//Scrub-time reads must cope with two meter types:
+//  - Fine: counter advances every few seconds, so every 5-min bucket carries energy and the bucket containing the
+//    instant is the correct read.
+//  - Coarse (reports every 15 min): counter only advances on report, so the recorder lands the whole delta in one
+//    bucket and zeroes the ones between; the probe window average spreads it back over its real interval.
+//Distinguished by density of non-zero buckets in the probe window.
 
 //Average power (W) over buckets overlapping [loMs, hiMs), pro-rating straddlers. Returns kwh/ms/nonZero/total so the
 //caller can both average AND judge meter density.
@@ -286,40 +293,6 @@ function wattsFromBucket(b: ChangeBucket): number
 }
 
 
-//Live power for the chip on cumulative-only installs (no stat_rate). Fine: latest completed bucket. Coarse: average
-//of the recent probe window. Null only when no completed bucket exists. Reset/rollover spikes are dropped through
-//the shared outlier rule first, so a statistics-surgery artefact never renders as a megawatt chip.
-export function latestWattsFromChangeSeries(
-    rawBuckets: ChangeBucket[] | null,
-    nowMs:      number,
-): number | null
-{
-    if (!rawBuckets || rawBuckets.length === 0) { return null; }
-    const cap     = outlierCapKwh(rawBuckets);
-    const buckets = cap === Infinity ? rawBuckets : rawBuckets.filter(b => Math.abs(b.kwh) <= cap);
-    if (buckets.length === 0) { return null; }
-    //Most recent completed bucket (end <= now, never a half-filled in-progress one).
-    let lastIdx = -1;
-    for (let i = buckets.length - 1; i >= 0; i--)
-    {
-        if (buckets[i].endMs <= nowMs) { lastIdx = i; break; }
-    }
-    if (lastIdx < 0) { return null; }
-    const lastEnd = buckets[lastIdx].endMs;
-
-    const probe = probeChangeWindow(buckets, lastEnd - COARSE_PROBE_MS, lastEnd);
-    if (probe.total === 0) { return wattsFromBucket(buckets[lastIdx]); }
-    const dense = probe.nonZero >= Math.ceil(probe.total * DENSE_FRACTION);
-    if (dense)
-    {
-        //Fine meter: latest bucket is the responsive, correct read (0 immediately on a real dip).
-        return wattsFromBucket(buckets[lastIdx]);
-    }
-    //Coarse meter: spread the sparse delta over the probe span -> true average power.
-    return probe.ms > 0 ? Math.max(0, (probe.kwh * 1000) / (probe.ms / HOUR_MS)) : 0;
-}
-
-
 //Average watts at an arbitrary past instant, for the scrub tooltip. Same fine/coarse split centred on tMs. Null only
 //when no bucket covers the probe window (future scrub, gap before data starts).
 export function wattsAtFromChangeSeries(
@@ -342,25 +315,6 @@ export function wattsAtFromChangeSeries(
     }
     //Coarse meter (or tMs between buckets): average the probe window.
     return probe.ms > 0 ? Math.max(0, (probe.kwh * 1000) / (probe.ms / HOUR_MS)) : 0;
-}
-
-
-//Average watts over an explicit shared window, for the home-balance formula when any family's live value is
-//bucket-sourced: every term is then evaluated over the SAME span, so a fast-moving live term can never be
-//subtracted against a lagged one (the mixed-cadence inflation this replaces). Same outlier rule as the live
-//read. Null when no bucket overlaps the window, so the caller hides rather than sums a partial balance.
-export function averageWattsOverWindow(
-    rawBuckets: ChangeBucket[] | null,
-    loMs:       number,
-    hiMs:       number,
-): number | null
-{
-    if (!rawBuckets || rawBuckets.length === 0 || hiMs <= loMs) { return null; }
-    const cap     = outlierCapKwh(rawBuckets);
-    const buckets = cap === Infinity ? rawBuckets : rawBuckets.filter(b => Math.abs(b.kwh) <= cap);
-    const probe   = probeChangeWindow(buckets, loMs, hiMs);
-    if (probe.total === 0 || probe.ms <= 0) { return null; }
-    return (probe.kwh * 1000) / (probe.ms / HOUR_MS);
 }
 
 

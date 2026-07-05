@@ -25,21 +25,21 @@ Helios has **three view modes**, switched from the round buttons in the top-left
 * **Live sun disc + irradiance halo**, pinned on the arc; the inner fill scales with the live W/m², a soft sun-coloured halo fades from the centre out.
 * **Incidence ray**, a dashed line from the sun to the home, animated to flow faster the stronger the sun.
 * **Sunrise / sunset markers**, placed where the arc crosses the horizon, with the local time (hidden in polar day / night where there is no crossing).
-* **PV production chip + leader + bead** *(when a solar source is configured)*, shows the **instantaneous** production; a bead rides the leader to the home at a speed proportional to current output. Cumulative-energy meters (kWh) are differentiated to watts on the fly; power-native sources are read directly.
+* **PV production chip + leader + bead** *(when the solar source has a live power sensor)*, shows the **measured instantaneous** production; a bead rides the leader to the home at a speed proportional to current output.
 * **Battery chips** *(when a battery is configured)*, state of charge and signed instantaneous power, with a bead whose direction follows charge / discharge.
 * **Grid chip + leader + bead** *(when a grid source is configured)*, the active import / export flow, with a bead whose direction and speed track the power.
-* **Custom entity chip** *(optional)*, pick any power or energy entity in the editor and Helios surfaces it as an extra chip top-left, with a leader to the home and a bead that flows with the value's sign.
-* **Home pill**, the hub the chip cluster orbits, showing the home consumption when the Energy dashboard exposes enough to derive it. Click any chip (or the home) to point the timeline at that metric; the home pill even grows a per-source stacked column when several solar sources are configured.
+* **Custom entity chip** *(optional)*, pick a power sensor AND an energy meter in the editor and Helios surfaces them as an extra chip top-left, with a leader to the home and a bead that flows with the value's sign.
+* **Home pill**, the hub the chip cluster orbits, showing the live home consumption balance (the energy dashboard's own definition) once every configured family has its live sensor. Click any chip (or the home) to point the timeline at that metric; the home pill even grows a per-source stacked column when several solar sources are configured.
 * **Cast ground shadows**, projected from the surrounding building footprints, fading as the sun nears the horizon. Toggle and opacity are configurable.
 * **Day / night ground**, the ground darkens where the sun is below the horizon, so dawn and dusk read at a glance.
 * **Hover glow + auto-rotation**, a soft halo signals the home is interactive; an opt-in idle orbit slowly turns the scene counter to the sun's motion and pauses the moment you touch the card.
-* **Timeline**, the active period as a re-targetable chart below the scene: production (with dashed forecast and per-string breakdown), consumption, grid, battery, battery SoC, irradiance, cloud cover or your custom entity. Click or drag to scrub; the whole scene snaps to the selected instant.
+* **Timeline**, the active period as a re-targetable chart below the scene: production (with dashed forecast and per-string breakdown), consumption, grid, battery, battery SoC, irradiance (with the cloud layers overlaid) or your custom entity. Click or drag to scrub; the whole scene snaps to the selected instant.
 * **Weather + astronomy panel**, a small plate in the top-right corner showing the local temperature and wind, with the sky condition as an icon (from Open-Meteo, or your own temperature / wind sensors). An optional toggle adds the sun's altitude, azimuth, sunrise, solar noon, sunset and day length, each shown as an icon to keep it compact. You can show or hide the whole panel; when shown, the wind-direction arrow is projected onto the tilted ground so it keeps pointing the true way as you orbit the camera, and it stays visible in No UI mode.
 * **No UI mode** *(optional)*, fades the timeline and the on-card controls after a few seconds of inactivity and brings them back on any tap or move; the weather panel stays. Built for kiosks and wall displays.
 
 ### Clock mode, the 24-hour dial
 
-A radial instrument that bins each metric into **24 hours of the day** and stands a ring of cylinders around a central column, one bar per hour. The right-hand rail toggles metrics as **filters**: each active metric adds its own **concentric ring** (production, consumption, battery SoC, battery, grid, irradiance, cloud, custom). Hover or tap a slice to light up that hour across every ring and read each metric's value in the tooltip. A soft **day / night wedge** on the ground shows when the sun is up over the period, and an N / S compass keeps the dial legible as it rotates with the scene.
+A radial instrument that bins each metric into **24 hours of the day** and stands a ring of cylinders around a central column, one bar per hour. The right-hand rail toggles metrics as **filters**: each active metric adds its own **concentric ring** (production, consumption, battery SoC, battery, grid, irradiance, custom). Hover or tap a slice to light up that hour across every ring and read each metric's value in the tooltip. A soft **day / night wedge** on the ground shows when the sun is up over the period, and an N / S compass keeps the dial legible as it rotates with the scene.
 
 ### Trend mode, the period-over-period comparison
 
@@ -109,6 +109,31 @@ No API key required. The basemap is served by [CARTO](https://carto.com/basemaps
 
 Solar, grid and battery wiring is **not configured per-card**: Helios resolves every entity slot from the **HA Energy dashboard** (`Settings` then `Dashboards` then `Energy`), the same global config the official Energy card reads. Set the slots there once and Helios picks them up automatically. The options below cover only the visual and install-specific bits.
 
+### Where do the numbers come from
+
+Helios follows the energy dashboard at 100% and **never estimates a value**:
+
+* **Live chips** (real-time values in the scene) read the **live power sensors**
+  of your energy dashboard sources: the optional "power" field of each source.
+  If a source has no live power sensor, its chip is simply not shown, and the
+  editor's live-data panel tells you what to add. Nothing is ever derived from
+  cumulative meters to fake a "now" value.
+* **Curves, scrub, energy clock and totals** read your **kWh meters** through
+  the recorder statistics, the exact data the energy dashboard's bars are made
+  of. Where the dashboard has a number, Helios shows the same number.
+* **Home consumption** is the dashboard's own balance (solar + import - export
+  - battery), computed live from the live sensors, shown once every configured
+  family has one.
+* If the grid's live sensor is detected as mis-wired (for example an
+  import-only sensor configured as a signed net sensor), Helios hides the grid
+  chips and the editor explains what to fix, instead of showing values that
+  cannot be trusted.
+
+So: **a visible chip is always a real-time measurement; a curve is always your
+official meter data.** If a chip you expect is missing, open the editor: the
+live-data panel lists, family by family, what your dashboard provides and what
+is missing.
+
 Minimal config:
 
 ```yaml
@@ -176,8 +201,8 @@ The rolling window itself is chosen live from the timeline's period selector (**
 | `solar-irradiance-entity` | entity_id | none | Optional physical irradiance sensor (W/m²). When set, its live state + recorder history feed the sun chip number, the irradiance chart and the sun-arc colouring for past + present; forecast hours still come from Open-Meteo. |
 | `outdoor-temperature-entity` | entity_id | none | Optional sensor shown on the info panel instead of the Open-Meteo temperature. Read in its own unit. |
 | `wind-speed-entity` | entity_id | none | Optional sensor shown on the info panel instead of the Open-Meteo wind speed. Read in its own unit. |
-| `home-consumption-entity` | entity_id | none | Optional sensor whose live value replaces the home-consumption **chip** readout only. The animated flows and the history keep the computed solar / grid / battery balance. |
-| `custom-entity` | entity_id | none | Optional power (W/kW/MW) or energy (Wh/kWh/MWh) entity surfaced as an extra chip top-left and as a clock / trend metric. |
+| `custom-power-entity` | entity_id | none | Custom entity, live half: a real power sensor (W/kW) feeding the extra chip top-left, its scrub and its curve. The custom entity displays only when BOTH halves are set. |
+| `custom-energy-entity` | entity_id | none | Custom entity, energy half: a cumulative energy meter (Wh/kWh) feeding the energy views. |
 | `custom-entity-icon` | MDI icon | entity icon | Optional icon override for the custom-entity chip; falls back to the entity's own icon, then a generic glyph. |
 | `custom-entity-color` | color | theme red | Optional colour for the custom-entity chip, its leader and its clock ring. |
 | `home-color` | color | theme | Optional colour for the home pill and its consumption readout. |

@@ -1,8 +1,8 @@
-//Characterisation of the change-series live reads: pins the fine/coarse behaviour the chips rely on, plus
-//the shared-window average feeding the home balance and the outlier rule on both.
+//Characterisation of the change-series reads: the outlier rule protecting the store curves, and the
+//fine/coarse scrub read. Live chips no longer derive from these series (measured sensors only).
 
 import { describe, it, expect } from 'vitest';
-import { latestWattsFromChangeSeries, averageWattsOverWindow, type ChangeBucket } from '../src/card/energy-stats';
+import { wattsAtFromChangeSeries, outlierCapKwh, type ChangeBucket } from '../src/card/energy-stats';
 
 const T0 = Date.UTC(2026, 6, 3, 12, 0, 0);
 const MIN5 = 5 * 60_000;
@@ -18,64 +18,62 @@ function denseBuckets(n: number, kwh: number): ChangeBucket[]
     return out;
 }
 
-describe('latestWattsFromChangeSeries (characterisation)', () =>
+describe('outlierCapKwh', () =>
 {
-    it('fine meter: the latest completed bucket is the read', () =>
+    it('a genuine production bell with a long twilight tail is never capped', () =>
     {
-        //0.1 kWh per 5-min bucket = 1200 W.
-        expect(latestWattsFromChangeSeries(denseBuckets(6, 0.1), T0)).toBeCloseTo(1200, 0);
+        //Summer day: 40 twilight buckets trickling 0.01 kWh, 10 midday buckets at 0.3 kWh.
+        //A median-based cap (0.01 * 20 = 0.2) would reject the whole midday top and the curve
+        //would flat-line at the cap through interpolation; the p90-based cap must keep it.
+        const buckets: ChangeBucket[] = [];
+        for (let i = 0; i < 40; i++)
+        {
+            buckets.push({ startMs: T0 + i * MIN5, endMs: T0 + (i + 1) * MIN5, kwh: 0.01 });
+        }
+        for (let i = 40; i < 50; i++)
+        {
+            buckets.push({ startMs: T0 + i * MIN5, endMs: T0 + (i + 1) * MIN5, kwh: 0.3 });
+        }
+        expect(outlierCapKwh(buckets)).toBeGreaterThan(0.3);
     });
 
-    it('coarse meter: the lone delta spreads over the probe window', () =>
+    it('a meter reset dumping a lifetime total into one bucket is still rejected', () =>
     {
-        //One 0.3 kWh report in the last 15 minutes, two empty buckets around it.
+        const buckets = denseBuckets(50, 0.2);
+        buckets.push({ startMs: T0, endMs: T0 + MIN5, kwh: 35000 });
+        const cap = outlierCapKwh(buckets);
+        expect(cap).toBeLessThan(35000);
+        expect(cap).toBeGreaterThan(0.2);
+    });
+
+    it('empty input means no cap', () =>
+    {
+        expect(outlierCapKwh(null)).toBe(Infinity);
+        expect(outlierCapKwh([])).toBe(Infinity);
+    });
+});
+
+describe('wattsAtFromChangeSeries (characterisation)', () =>
+{
+    it('fine meter: reads the bucket containing the instant', () =>
+    {
+        expect(wattsAtFromChangeSeries(denseBuckets(6, 0.1), T0 - MIN5 / 2)).toBeCloseTo(1200, 0);
+    });
+
+    it('coarse meter: spreads the lone delta over the probe window', () =>
+    {
         const buckets: ChangeBucket[] = [
             { startMs: T0 - 3 * MIN5, endMs: T0 - 2 * MIN5, kwh: 0 },
             { startMs: T0 - 2 * MIN5, endMs: T0 - 1 * MIN5, kwh: 0.3 },
             { startMs: T0 - 1 * MIN5, endMs: T0,            kwh: 0 },
         ];
-        //0.3 kWh over 15 min = 1200 W.
-        expect(latestWattsFromChangeSeries(buckets, T0)).toBeCloseTo(1200, 0);
+        //15-min probe centred on the instant: 0.3 kWh spread over the 12.5 covered minutes = 1440 W.
+        expect(wattsAtFromChangeSeries(buckets, T0 - MIN5)).toBeCloseTo(1440, 0);
     });
 
-    it('null on empty input', () =>
+    it('null outside any covered window', () =>
     {
-        expect(latestWattsFromChangeSeries(null, T0)).toBeNull();
-        expect(latestWattsFromChangeSeries([], T0)).toBeNull();
-    });
-
-    it('a reset/rollover artefact bucket is dropped instead of rendering a megawatt chip', () =>
-    {
-        const buckets = denseBuckets(12, 0.1);
-        //Statistics surgery dumps 40 kWh into the latest bucket (median 0.1 -> cap 2 kWh).
-        buckets[buckets.length - 1] = { ...buckets[buckets.length - 1], kwh: 40 };
-        const w = latestWattsFromChangeSeries(buckets, T0);
-        expect(w).not.toBeNull();
-        //The read falls back to the previous sane bucket, not 480 kW.
-        expect(w!).toBeLessThan(2000);
-    });
-});
-
-describe('averageWattsOverWindow', () =>
-{
-    it('averages the shared window, pro-rating straddlers', () =>
-    {
-        //Last 15 minutes at 0.1 kWh/bucket = steady 1200 W.
-        expect(averageWattsOverWindow(denseBuckets(6, 0.1), T0 - 15 * 60_000, T0)).toBeCloseTo(1200, 0);
-    });
-
-    it('null when nothing overlaps the window (series not landed / long gap)', () =>
-    {
-        expect(averageWattsOverWindow(null, T0 - 15 * 60_000, T0)).toBeNull();
-        expect(averageWattsOverWindow(denseBuckets(6, 0.1), T0 + MIN5, T0 + 2 * MIN5)).toBeNull();
-    });
-
-    it('applies the same outlier rule as the live read', () =>
-    {
-        const buckets = denseBuckets(12, 0.1);
-        buckets[buckets.length - 1] = { ...buckets[buckets.length - 1], kwh: 40 };
-        const w = averageWattsOverWindow(buckets, T0 - 15 * 60_000, T0);
-        expect(w).not.toBeNull();
-        expect(w!).toBeLessThan(2000);
+        expect(wattsAtFromChangeSeries(null, T0)).toBeNull();
+        expect(wattsAtFromChangeSeries(denseBuckets(6, 0.1), T0 + 3_600_000)).toBeNull();
     });
 });

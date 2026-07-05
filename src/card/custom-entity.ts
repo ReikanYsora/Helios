@@ -1,51 +1,27 @@
-//User-picked "custom" entity for the red chip + leader bead. The chip shows the value at the active instant (live
-//now, or the timeline scrub target) as power (kW), never an energy meter's lifetime total. A power entity (W/kW/MW)
-//reads its instantaneous state; a cumulative-energy entity (Wh/kWh/MWh) is differentiated to average watts (see
-//customChipWatts + refreshCustomEntity). resolveCustomEntityLive supplies the chip's name + presence. The value's
-//sign drives bead direction (positive = home to chip, negative = chip to home); its magnitude drives cadence.
+//User-picked "custom" entity for the red chip + leader bead, measured-only: the id every function receives
+//here is the POWER sensor (customEntityId gates on both halves being configured, and resolves to the power
+//one). The chip and scrub read that sensor's state and recorded mean, never a value derived from the energy
+//meter; the energy meter half feeds the energy surfaces. The value's sign drives bead direction (positive =
+//home to chip, negative = chip to home); its magnitude drives cadence.
 
-import { formatEntityValue, pvNormalizeToWatts, energyToKwh, type PowerUnit } from './format';
+import { pvNormalizeToWatts } from './format';
 import { type HeliosConfig, customEntityId } from '../helios-config';
 import { callWSWithTimeout } from './ws-timeout';
 import type { StatPeriod } from './energy-stats';
 
 export interface CustomEntityLive
 {
-    name:        string;   //friendly name (honours a user override) or the entity id, for the chip's title
-    display:     string;   //value + unit (kW for power, kWh for energy), shown next to the icon
-    signedValue: number;   //raw numeric state; its sign is the bead direction
-    magnitudeW:  number;   //flow magnitude (W-equivalent) for the bead cadence
+    name: string;   //friendly name (honours a user override) or the entity id, for the chip's title
 }
 
-const POWER_UNITS  = new Set(['w', 'kw', 'mw']);
-const ENERGY_UNITS = new Set(['wh', 'kwh', 'mwh']);
-
-export function resolveCustomEntityLive(hass: any, entityId: string, powerU: PowerUnit = 'kW'): CustomEntityLive | null
+export function resolveCustomEntityLive(hass: any, entityId: string): CustomEntityLive | null
 {
     if (!entityId) { return null; }
     const st = hass?.states?.[entityId];
     if (!st) { return null; }
     const raw = parseFloat(st.state);
     if (!isFinite(raw)) { return null; }
-
-    const unit = String(st.attributes?.unit_of_measurement ?? '');
-    const lu   = unit.trim().toLowerCase();
-    const dc   = String(st.attributes?.device_class ?? '');
-    const isPower  = dc === 'power'  || POWER_UNITS.has(lu);
-    const isEnergy = dc === 'energy' || ENERGY_UNITS.has(lu);
-
-    //W-equivalent magnitude for the bead cadence: power normalises to watts; energy scales its kWh value to a
-    //comparable scalar; anything else uses the bare magnitude.
-    const magnitudeW = isPower  ? Math.abs(pvNormalizeToWatts(raw, unit))
-                     : isEnergy ? Math.abs(energyToKwh(raw, unit)) * 1000
-                     :            Math.abs(raw);
-
-    return {
-        name:        String(st.attributes?.friendly_name ?? entityId),
-        display:     formatEntityValue(hass, raw, unit, 1, powerU),
-        signedValue: raw,
-        magnitudeW,
-    };
+    return { name: String(st.attributes?.friendly_name ?? entityId) };
 }
 
 //Step-sample the watts history (built by refreshCustomEntity) at an instant: the last bucket at or before it. Null
@@ -62,10 +38,8 @@ export function customSampleAtTime(hist: { times: Date[]; values: number[] } | n
     return hist.values[idx < 0 ? 0 : idx];
 }
 
-//Instantaneous W-equivalent for the chip at the active instant, never the lifetime total. Scrub: the W history
-//(mean for power, change-differentiated for energy) at that instant. Live: a power entity reads its state directly
-//(already instantaneous); a cumulative-energy entity has no meaningful instantaneous state, so it uses the latest
-//derived-power bucket from the history.
+//Instantaneous watts for the chip at the active instant. Live: the power sensor's state (already
+//instantaneous). Scrub: its recorded per-bucket mean at that instant, served from the fetched history.
 export function customChipWatts(
     hass: any,
     entityId: string,
@@ -77,15 +51,8 @@ export function customChipWatts(
     if (selectedTimeMs !== null) { return customSampleAtTime(history, selectedTimeMs); }
     const st = hass?.states?.[entityId];
     if (!st) { return null; }
-    const unit = String(st.attributes?.unit_of_measurement ?? '');
-    const dc   = String(st.attributes?.device_class ?? '');
-    const isEnergy = dc === 'energy' || ENERGY_UNITS.has(unit.trim().toLowerCase());
-    if (isEnergy)
-    {
-        return history && history.values.length > 0 ? history.values[history.values.length - 1] : null;
-    }
     const raw = parseFloat(st.state);
-    return isFinite(raw) ? pvNormalizeToWatts(raw, unit) : null;
+    return isFinite(raw) ? pvNormalizeToWatts(raw, String(st.attributes?.unit_of_measurement ?? '')) : null;
 }
 
 //Resolve the icon to show for the custom entity: the user's editor override, else the entity's own icon,
@@ -115,11 +82,9 @@ export interface CustomEntityHost
     requestUpdate():      void;
 }
 
-//Fetch the custom entity's history over the visible window and store it as { times, values } in watts, so the clock
-//ring (binned into 15-min slots) and the timeline curve share one genuinely fine series (not interpolated from
-//hourly). Power sensors come back as `mean` (already W via unit normalisation); cumulative energy meters come back
-//as `change` (kWh per bucket) and are differentiated to average watts via the bucket duration. Keyed so an unchanged
-//window never refetches.
+//Fetch the custom power sensor's recorded history over the visible window and store it as { times,
+//values } in watts (per-bucket `mean`, normalised server-side), shared by the clock ring, the timeline
+//curve and the scrub. Keyed so an unchanged window never refetches.
 export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
 {
     const id = customEntityId(host.config);
@@ -151,11 +116,12 @@ export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
             end_time:      end.toISOString(),
             statistic_ids: [id],
             //Period follows the active mode (5-min for Now / hourly for a week / daily for month+year), so a
-            //long window stays light. The differentiation below reads each bucket's own duration.
+            //long window stays light.
             period,
-            //Normalise so `mean` lands in watts and `change` in kWh regardless of the sensor's native unit.
-            types:         ['mean', 'change'],
-            units:         { energy: 'kWh', power: 'W' },
+            //The gated id is the power sensor: its recorded per-bucket `mean` IS measured watts (normalised
+            //server-side), no differentiation of anything.
+            types:         ['mean'],
+            units:         { power: 'W' },
         });
         const buckets: any[] = Array.isArray(res?.[id]) ? res[id] : [];
         const times:  Date[]   = [];
@@ -164,19 +130,8 @@ export async function refreshCustomEntity(host: CustomEntityHost): Promise<void>
         {
             const tMs = typeof b?.start === 'number' ? b.start : Date.parse(b?.start);
             if (!isFinite(tMs)) { continue; }
-            let w: number | null = null;
-            if (typeof b?.mean === 'number' && isFinite(b.mean))
-            {
-                w = b.mean;
-            }
-            else if (typeof b?.change === 'number' && isFinite(b.change))
-            {
-                const hours = typeof b?.end === 'number'
-                    ? (b.end - tMs) / 3_600_000
-                    : (Date.parse(b?.end) - tMs) / 3_600_000;
-                w = hours > 0 ? (b.change / hours) * 1000 : null;
-            }
-            if (w === null || !isFinite(w)) { continue; }
+            const w = typeof b?.mean === 'number' && isFinite(b.mean) ? b.mean : null;
+            if (w === null) { continue; }
             times.push(new Date(tMs));
             values.push(w);
         }

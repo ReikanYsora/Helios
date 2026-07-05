@@ -6,6 +6,7 @@ import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, irradianceUnit, customEntityColor } from '../helios-config';
 import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from './format';
 import { valueAt } from './unifiedStore';
+import { pickTranslations } from '../i18n';
 import { resolveCustomEntityIcon } from './custom-entity';
 import {
     type ChartHost,
@@ -87,19 +88,15 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
     //duplicating the headline row).
-    const perEntityMap     = host._pvHistoryPerEntity;
-    //Source order (not sorted), so row index lines up with solarSourceName + the clock.
+    const perEntityMap     = host._pvChangeSeriesPerEntity;
+    //Source order (not sorted), so row index lines up with solarSourceName + the clock: the per-source
+    //change map is keyed by the solar meters in HA Energy source order.
     const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()) : [];
     const perEntityRows: { id: string; label: string; valueText: string; colorIdx: number }[] = [];
     for (let i = 0; i < perEntityIds.length; i++)
     {
         const id    = perEntityIds[i];
-        const ph    = perEntityMap.get(id);
-        if (!ph)
-        {
-            continue;
-        }
-        const val   = pvValueAtTime(host, atMs, ph);
+        const val   = pvValueAtTime(host, atMs, id);
         if (!isFinite(val.value))
         {
             continue;
@@ -111,6 +108,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     //Row names: the metric name, or the configured entity's HA Energy name for the two-direction grid/battery rows.
     const tgtName        = clockTargetLabel(host, target);
+    //Cloud layer names for the irradiance view's overlay rows (percent unit, separate from the W/m² row).
+    const cloudNames     = pickTranslations(host.hass?.language).clock;
     const gridFromName   = gridImportName(host);
     const gridToName     = gridExportName(host);
     const battChargeName = batteryChargeName(host);
@@ -281,25 +280,25 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                         <span class="tb-hover-tooltip-value">${formatPower(host.hass, Math.abs(customV), dec, powerU)}</span>
                     </div>
                 ` : nothing}
-                ${target === 'cloud' ? html`
+                ${target === 'irradiance' ? html`
                     ${isFinite(cloudHighV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudHighColor}" icon="mdi:format-vertical-align-top"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudHigh}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudHighV)))} %</span>
                         </div>
                     ` : nothing}
                     ${isFinite(cloudMidV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudBase}" icon="mdi:format-vertical-align-center"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudMid}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudMidV)))} %</span>
                         </div>
                     ` : nothing}
                     ${isFinite(cloudLowV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudLowColor}" icon="mdi:format-vertical-align-bottom"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudLow}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
                         </div>
                     ` : nothing}

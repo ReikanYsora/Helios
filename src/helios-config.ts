@@ -68,8 +68,12 @@ export interface HeliosConfig
     //Live irradiance sensor (W/m²) at the home, preferred over the model for the live "now" reading. Past +
     //forecast still come from the model.
     'solar-irradiance-entity'?: unknown;
-    //User-picked power/energy entity surfaced as the "custom" chip (top-left, above grid) and a clock metric.
+    //Custom entity, measured-only contract: BOTH sensors are required for it to display anywhere. The
+    //power sensor feeds the live chip + scrub + curve; the energy meter feeds the energy surfaces. The
+    //legacy single slot below is only read by the editor to prefill a migration, never at runtime.
     //Empty = no chip. The displayed name follows the entity's friendly name.
+    'custom-power-entity'?:     unknown;
+    'custom-energy-entity'?:    unknown;
     'custom-entity'?:           unknown;
     //MDI icon override for the custom entity (chip + clock medallion/button). Empty falls back to the entity's
     //own icon, then a generic glyph.
@@ -90,10 +94,6 @@ export interface HeliosConfig
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
-    //Entity whose live value replaces the home-consumption CHIP readout only (some inverters expose a direct
-    //consumption sensor differing by a few watts from the balance). The flows and history keep the computed
-    //value on purpose: that small gap has no consistent place in the solar/grid/battery flow.
-    'home-consumption-entity'?: unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
@@ -109,11 +109,27 @@ export interface HeliosConfig
 }
 
 
-//Resolved custom-entity id (empty string when unset); the chip/clock gate on emptiness.
+//Custom power sensor id (empty when unset).
+export function customPowerEntityId(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['custom-power-entity'];
+    return typeof raw === 'string' ? raw.trim() : '';
+}
+
+//Custom energy meter id (empty when unset).
+export function customEnergyEntityId(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['custom-energy-entity'];
+    return typeof raw === 'string' ? raw.trim() : '';
+}
+
+//Validity-gated custom id, the single string every consumer gates on: the POWER sensor (the live
+//source), non-empty only when BOTH halves are configured. One incomplete half hides the custom
+//entity everywhere instead of displaying a surface we would have to invent.
 export function customEntityId(config: HeliosConfig | undefined): string
 {
-    const raw = config?.['custom-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
+    const power = customPowerEntityId(config);
+    return power !== '' && customEnergyEntityId(config) !== '' ? power : '';
 }
 
 
@@ -198,15 +214,6 @@ export function batterySign(config: HeliosConfig | undefined): 'default' | 'inve
 {
     const raw = config?.['battery-sign'];
     return raw === 'inverted' || raw === 'hidden' ? raw : 'default';
-}
-
-
-//Resolved home-consumption override entity id (empty when unset). Overrides the chip readout only; the flows and
-//history stay on the computed balance.
-export function homeConsumptionEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['home-consumption-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
 }
 
 

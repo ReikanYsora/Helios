@@ -141,7 +141,6 @@ export const heliosCardStyles = css`
     .grid-label,
     .custom-label,
     .solar-pct-label,
-    .cloud-chip,
     .home-pill
     {
         position: absolute;
@@ -280,7 +279,6 @@ export const heliosCardStyles = css`
     .battery-pct-label ha-icon,
     .grid-label ha-icon,
     .custom-label ha-icon,
-    .cloud-chip ha-icon,
     .solar-pct-label ha-icon
     {
         --mdc-icon-size: 16px;
@@ -549,18 +547,6 @@ export const heliosCardStyles = css`
                     0 0 12px color-mix(in srgb, var(--secondary-text-color, #727272) 70%, transparent);
     }
     /*  Short cloud-coloured leader joining the irradiance chip to the cloud chip on its right. */
-    .cloud-chip-leader
-    {
-        position: absolute;
-        transform: translateY(-50%);
-        width: 14px;
-        height: 2px;
-        background: var(--secondary-text-color, #727272);
-        border-radius: 1px;
-        pointer-events: none;
-        z-index: 10;
-    }
-
     /*  Sunrise / sunset marker: glyph + local time pinned just outside the arc at the horizon crossing,
         centred on its computed point. Sun-coloured, click-transparent. */
     .sun-cross-marker

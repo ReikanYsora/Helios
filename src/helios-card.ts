@@ -10,7 +10,6 @@ import
     powerUnit,
     irradianceUnit,
     batterySign,
-    homeConsumptionEntityId,
     autoHideUi,
     showWeather,
     showAstro,
@@ -36,7 +35,7 @@ import
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
-import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS, COARSE_PROBE_MS } from './constants';
+import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS } from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -67,7 +66,6 @@ import
     batterySampleAtTime,
     formatBatteryPower,
     resolveBatteryEntities,
-    batteryLiveIsBucketSourced,
     clearBatteryModuleCaches
 } from './card/battery';
 import { refreshIrradiance, clearIrradianceModuleCaches } from './card/irradiance';
@@ -104,7 +102,6 @@ import
 } from './card/timeline';
 import { refreshGrid, formatGridValue } from './card/grid';
 import { createGridGuard, type GridGuardState } from './card/grid-guard';
-import { clearCounterSlopeSamples } from './card/counter-slope';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -112,7 +109,7 @@ import {
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
-import { clearEnergyStatsCache, wattsAtFromChangeSeries, averageWattsOverWindow, type StatPeriod, type ChangeBucket } from './card/energy-stats';
+import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod, type ChangeBucket } from './card/energy-stats';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
 import
@@ -153,10 +150,6 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_FAR    = 10.0;
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
-    //Chip geometry shared with the CSS (chips have a fixed 96px width): half-width docks the cloud chip past
-    //the irradiance chip's edge, half-height centres the connecting leader on their shared mid-line.
-    private static readonly CHIP_HALF_W_PX = 48;
-    private static readonly CHIP_HALF_H_PX = 12;
     //Home pill is a horizontal stadium (like the other chips), not a circle. Half-extents of its outline;
     //leaders dock against this stadium so they all meet the same focal energy node.
     private static readonly HOME_PILL_HALF_WIDTH_PX  = 38;
@@ -237,10 +230,6 @@ export class HeliosCard extends LitElement
     //Mis-scope guard for the live grid sensor (grid-guard.ts). Plain field: transitions are pushed through
     //requestUpdate() by the guard itself, so no @state on the mutable object.
     _gridGuard: GridGuardState = createGridGuard();
-    //True when the matching live grid value came from a lagged recorder bucket (no live sensor, no counter
-    //slope). Any lagged term flips the home chip to its shared-window balance.
-    @state() _gridImportLagged = false;
-    @state() _gridExportLagged = false;
     //Historical series for the active timeline range. Both battery entities fetched in one
     //history/history_during_period WS call when both are set.
     @state() _batterySocHistory: {
@@ -490,8 +479,8 @@ export class HeliosCard extends LitElement
         //Entering a no-weather mode: drop weather metrics from the clock filters + retarget the chart off them.
         if (!spec.weather)
         {
-            this._clockTargets = this._clockTargets.filter(t => t !== 'irradiance' && t !== 'cloud');
-            if (this._chartTarget === 'irradiance' || this._chartTarget === 'cloud')
+            this._clockTargets = this._clockTargets.filter(t => t !== 'irradiance');
+            if (this._chartTarget === 'irradiance')
             {
                 this._chartTarget = this._clockTargets[0] ?? 'production';
             }
@@ -776,6 +765,13 @@ export class HeliosCard extends LitElement
     }
 
 
+    //Editor "force building download" button: drop every buildings cache layer and hit Overpass again.
+    public refetchBuildings(): void
+    {
+        this._engine?.forceBuildingsRefetch();
+    }
+
+
     //Wipe all card-side cached production/forecast data and refetch from HA + Open-Meteo. Used by the
     //editor's "reset data cache" button to recover from a stuck calibration or stale weather payload.
     public resetDataCache(): void
@@ -797,8 +793,6 @@ export class HeliosCard extends LitElement
         this._gridImportChangeFetchKey    = '';
         this._gridExportChangeFetchKey    = '';
         this._gridGuard                   = createGridGuard();
-        this._gridImportLagged            = false;
-        this._gridExportLagged            = false;
         this._batterySocHistory           = null;
         this._batteryPowerHistory         = null;
         this._batteryFetchKey             = '';
@@ -818,60 +812,11 @@ export class HeliosCard extends LitElement
         clearBatteryModuleCaches();
         clearIrradianceModuleCaches();
         clearEnergyStatsCache();
-        clearCounterSlopeSamples();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot, refetches.
         this._engine?.resetDataCache();
         this.requestUpdate();
     }
 
-
-    //Shared-window home balance: every wired family evaluated over the SAME recent span, so no cross-cadence
-    //subtraction can inflate the home. Null (chip hidden) when a wired family's series has not landed yet: a
-    //partial balance would silently drop kilowatts, worse than a brief absence.
-    private _windowedHomeWatts(nowMs: number): number | null
-    {
-        const d    = this._energyDefaults;
-        const loMs = nowMs - COARSE_PROBE_MS;
-        let sum = 0;
-        let any = false;
-        if (d.solarStatEnergyFroms.length > 0)
-        {
-            const w = averageWattsOverWindow(this._pvChangeSeries, loMs, nowMs);
-            if (w === null) { return null; }
-            sum += Math.max(0, w);
-            any  = true;
-        }
-        if (d.gridStatEnergyFroms.length > 0)
-        {
-            const w = averageWattsOverWindow(this._gridImportChangeSeries, loMs, nowMs);
-            if (w === null) { return null; }
-            sum += Math.max(0, w);
-            any  = true;
-        }
-        if (d.gridStatEnergyTos.length > 0)
-        {
-            const w = averageWattsOverWindow(this._gridExportChangeSeries, loMs, nowMs);
-            if (w === null) { return null; }
-            sum -= Math.max(0, w);
-            any  = true;
-        }
-        //Battery charge consumes without reaching the home; discharge supplies it.
-        if (d.batteryStatEnergyTos.length > 0)
-        {
-            const w = averageWattsOverWindow(this._batteryChargeChangeSeries, loMs, nowMs);
-            if (w === null) { return null; }
-            sum -= Math.max(0, w);
-            any  = true;
-        }
-        if (d.batteryStatEnergyFroms.length > 0)
-        {
-            const w = averageWattsOverWindow(this._batteryDischargeChangeSeries, loMs, nowMs);
-            if (w === null) { return null; }
-            sum += Math.max(0, w);
-            any  = true;
-        }
-        return any ? Math.max(0, sum) : null;
-    }
 
 
     //Masonry sizing. 1 unit = 50 px so 15 ≈ 750 px, leaving the basemap ~480 px after the timeline's ~150 px.
@@ -1423,10 +1368,8 @@ export class HeliosCard extends LitElement
         const pvScrubFuture = pvScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
 
-        //The chip shows instantaneous production at the active instant (live now by default, the scrub
-        //target in the past). Power sensors (W/kW) plot their state/historical sample; cumulative-energy
-        //sensors (Wh/kWh) are differentiated over the rolling buffer (live) or the bracketing history pair
-        //(scrub). Never the lifetime total, which is meaningless on a "current production" readout.
+        //The chip shows measured instantaneous production at the active instant: the power sensors' summed
+        //state live, the meters' recorder change series at a scrubbed instant. No sensor, no chip.
         const pvRate = (pvEntityId !== '' && layout !== null)
             ? (pvScrubbing
                 ? pvRateAtTime(this, this._selectedTime!)
@@ -1561,38 +1504,26 @@ export class HeliosCard extends LitElement
         //activeBatteryPower is charge-positive, so it SUBTRACTS: charging is consumption that never reaches
         //the home, discharging (negative) adds supply.
         const usageBatteryW = showPowerChip ? activeBatteryPower! : null;
-        //Cadence coherence: the balance must never subtract a lagged term from a live one (instantaneous PV
-        //minus a minutes-old export bucket "absorbs" the exported watts into the home). The moment ANY live
-        //family reads through recorder buckets, every term is re-evaluated over ONE shared recent window and
-        //the chip shows the "approximately" prefix. Scrub mode keeps the per-family values above: they
-        //already share the bucket domain at the scrub instant.
-        const homeWindowed = !batteryScrubbing && (
-            (usagePvW      !== null && this._energyDefaults.solarStatRates.length === 0)
-         || (usageBatteryW !== null && batteryLiveIsBucketSourced(this._energyDefaults))
-         || this._gridImportLagged || this._gridExportLagged);
-        const homeUsageWatts = homeWindowed
-            ? this._windowedHomeWatts(Date.now())
+        //Live balance is measured or absent: in live mode, every CONFIGURED family must have a real live
+        //reading (a wired family with no live power sensor would silently unbalance the sum, so the chip
+        //hides and the editor explains). Scrub mode keeps the bucket-domain balance: all terms share the
+        //meters' cadence there, the same bookkeeping the HA Energy dashboard does.
+        const d = this._energyDefaults;
+        const homeLiveComplete = batteryScrubbing || (
+            (d.solarStatEnergyFroms.length === 0 || usagePvW !== null)
+            && ((d.gridStatEnergyFroms.length === 0 && d.gridStatEnergyTos.length === 0) || usageGridW !== null)
+            && ((d.batteryStatEnergyFroms.length === 0 && d.batteryStatEnergyTos.length === 0) || usageBatteryW !== null));
+        const homeUsageWatts = !homeLiveComplete
+            ? null
             : ((usagePvW === null && usageGridW === null && usageBatteryW === null)
                 ? null
                 : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0)));
-        //Optional CHIP-ONLY override: some inverters expose a direct home-consumption sensor that differs by a few
-        //watts from the balance. When set, its live value replaces the chip readout; the flows, home glyph and
-        //history deliberately keep the computed balance (that small gap has no consistent place in the flow).
-        const homeOverrideId = homeConsumptionEntityId(this.config);
-        let homeDisplayW = homeUsageWatts;
-        if (homeOverrideId)
-        {
-            const st = this.hass.states[homeOverrideId];
-            const v  = parseFloat(st?.state ?? '');
-            if (isFinite(v)) { homeDisplayW = Math.max(0, pvNormalizeToWatts(v, String(st?.attributes?.unit_of_measurement ?? ''))); }
-        }
         const showHomeUsageChip = hasHomeCoords
             && layout !== null
             && !batteryScrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
-            ? (homeWindowed && !homeOverrideId ? '≈ ' : '')
-                + formatGridValue(this.hass, homeDisplayW, 'W', valueDec, powerU)
+            ? formatGridValue(this.hass, homeUsageWatts, 'W', valueDec, powerU)
             : '';
 
         //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader
@@ -1716,11 +1647,13 @@ export class HeliosCard extends LitElement
         const GRID_BEAD_MIN_DUR_S = 1.2;
         const GRID_BEAD_MAX_DUR_S = 8.0;
         const GRID_BEAD_IDLE_W    = 5;
-        const importWattsAbs = this._gridImportValue !== null
-            ? Math.abs(pvNormalizeToWatts(this._gridImportValue, this._gridImportUnit))
+        //Scrub-aware like the chip values above, so the bead's cadence always matches the instant the
+        //chip displays (never today's live pace on yesterday's scrub).
+        const importWattsAbs = gridImportDisplayWatts !== null
+            ? Math.abs(pvNormalizeToWatts(gridImportDisplayWatts, gridImportDisplayUnit))
             : 0;
-        const exportWattsAbs = this._gridExportValue !== null
-            ? Math.abs(pvNormalizeToWatts(this._gridExportValue, this._gridExportUnit))
+        const exportWattsAbs = gridExportDisplayWatts !== null
+            ? Math.abs(pvNormalizeToWatts(gridExportDisplayWatts, gridExportDisplayUnit))
             : 0;
         const proportionalBeadDur = (watts: number, capW: number): number =>
         {
@@ -1745,12 +1678,12 @@ export class HeliosCard extends LitElement
         //Custom user-picked entity chip: red pill top-left (above grid) with a leader to the home and a
         //sign-driven bead. Positive value flows home -> chip (reversed traversal), negative flows chip ->
         //home (default). Cadence scales with the value's magnitude; below the idle floor the bead is dropped.
-        const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config), powerU);
+        const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config));
         const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
         const customLeaderColor = resolveUiColor(customEntityColor(this.config), '#f44336');
         const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
-        //Value at the active instant (scrub target in the past, else live now), in WATTS, shown as kW, never
-        //an energy meter's lifetime total (customChipWatts differentiates cumulative energy to average power).
+        //Value at the active instant (scrub target in the past, else live now), in WATTS: the power
+        //sensor's state live, its recorded per-bucket mean in scrub.
         const customScrubMs = (!this._isLiveMode && this._selectedTime !== null) ? this._selectedTime.getTime() : null;
         const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customEntityHistory, customScrubMs);
         const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec, powerU);
@@ -2044,7 +1977,7 @@ export class HeliosCard extends LitElement
                 ${hasHomeCoords && this._viewMode === 'trend' ? (() => {
                     //Weather metrics (irradiance, cloud) have no per-hour P / P-1 profile (they're not recorder
                     //stats), and they're not consumption habits anyway, so the trend selector drops them.
-                    const targets = availableClockTargets(this).filter(t => t !== 'irradiance' && t !== 'cloud');
+                    const targets = availableClockTargets(this).filter(t => t !== 'irradiance');
                     if (!targets.length) { return nothing; }
                     return html`
                         <div class="overlay-top-right trend-rail">
@@ -2484,8 +2417,10 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                <!--  W/m² label, pinned above the sun disc (matched pair with the cloud-cover label). Lands
-                      after the front-pass arc so the readout sits on top of the sun glyph too.  -->
+                <!--  Weather chip, pinned above the sun disc: the cloud-cover glyph (clear / partly / overcast)
+                      next to the live irradiance value. One chip carries both stories, the icon for the sky
+                      condition and the number for the W/m²; clicking it targets the timeline's irradiance
+                      view, where the cloud layers overlay the curve.  -->
                 ${showSunLabel ? html`
                     <div
                         class="solar-pct-label ${this._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
@@ -2495,55 +2430,10 @@ export class HeliosCard extends LitElement
                         data-target="irradiance"
                         @click=${this._onChartTargetClick}
                     >
-                        <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
+                        <ha-icon icon=${this._cloudCover >= 0 ? cloudCoverIcon(this._cloudCover) : 'mdi:white-balance-sunny'}></ha-icon>
                         <span>${sunIrradText}</span>
                     </div>
                 ` : nothing}
-
-                <!--  Cloud chip: a standalone pill just to the RIGHT of the irradiance chip, joined by a
-                      short fixed cloud-coloured leader, showing the live cloud cover with a dynamic glyph.
-                      Clicking it re-targets the timeline chart to the cloud cover (three altitude-band
-                      curves), same chip <-> chart coupling as the other chips. Anchored off the sun so it
-                      tracks the irradiance chip.  -->
-                ${showSunLabel && this._cloudCover >= 0 ? (() =>
-                {
-                    //The cloud chip shares the irradiance chip's baseline (both bottom-anchored at sun.y-22,
-                    //identical fixed width) and docks just past its edge, joined by a short cloud-coloured
-                    //leader. It defaults to the RIGHT edge and flips to the LEFT when the cloud's far edge
-                    //would overflow the card; when neither side fits, the roomier one wins.
-                    const sx      = sunScene!.sun.x;
-                    const bottomY = sunScene!.sun.y - 22;                       //shared chip baseline
-                    const midY    = bottomY - HeliosCard.CHIP_HALF_H_PX;        //chips' centre, for the leader
-                    const cardW   = this._engine?.getViewportWidth() ?? 0;
-                    const HALF    = HeliosCard.CHIP_HALF_W_PX;                  //irradiance chip half-width
-                    const CONN    = 16;                                         //leader length bridging the edges
-                    const CLOUD_W = 76;                                         //cloud chip content-width upper bound
-                    const far     = HALF + CONN + CLOUD_W;                      //sun.x -> the cloud's far edge
-                    const roomRight = cardW <= 0 || sx + far <= cardW - 8;
-                    const roomLeft  = sx - far >= 8;
-                    const side      = roomRight ? 1 : (roomLeft ? -1 : (sx < cardW / 2 ? 1 : -1));
-                    const leaderLeft = side > 0 ? sx + HALF : sx - HALF - CONN;
-                    const chipLeft   = side > 0 ? sx + HALF + CONN : sx - HALF - CONN;
-                    //Bottom-align with the irradiance chip; anchor by the edge nearest it so the leader meets it.
-                    const chipTransform = side > 0 ? 'translate(0, -100%)' : 'translate(-100%, -100%)';
-                    return html`
-                        <div
-                            class="cloud-chip-leader"
-                            style="left:${leaderLeft.toFixed(1)}px; top:${midY.toFixed(1)}px; width:${CONN}px"
-                        ></div>
-                        <div
-                            class="cloud-chip ${this._chartTarget === 'cloud' ? 'is-chart-active' : ''}"
-                            style="left:${chipLeft.toFixed(1)}px; top:${bottomY.toFixed(1)}px; transform:${chipTransform}"
-                            role="button"
-                            tabindex="0"
-                            data-target="cloud"
-                            @click=${this._onChartTargetClick}
-                        >
-                            <ha-icon icon=${cloudCoverIcon(this._cloudCover)}></ha-icon>
-                            <span>${Math.round(this._cloudCover)} %</span>
-                        </div>
-                    `;
-                })() : nothing}
 
                 <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
                       each horizon crossing.  -->
@@ -2692,7 +2582,7 @@ export class HeliosCard extends LitElement
         if (mode === 'trend')
         {
             //Weather metrics have no P / P-1 profile; if one was restored, fall back to consumption.
-            if (this._trendTarget === 'irradiance' || this._trendTarget === 'cloud') { this._trendTarget = 'consumption'; }
+            if (this._trendTarget === 'irradiance') { this._trendTarget = 'consumption'; }
             //Dial draws no scene geometry; the overlay paints the comparison dial. Fetch the two profiles.
             this._engine?.setHomeOnly(true);
             this._viewMode = mode;
@@ -2944,7 +2834,7 @@ export class HeliosCard extends LitElement
                 {
                     this._trendTarget = parsed.trendTarget as ChartTarget;
                 }
-                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'cloud', 'custom'];
+                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'custom'];
                 if (typeof parsed.chartTarget === 'string' && valid.includes(parsed.chartTarget as ChartTarget))
                 {
                     this._chartTarget = parsed.chartTarget as ChartTarget;

@@ -7,27 +7,19 @@ import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
 import { pvNormalizeToWatts, formatEntityValue, type PowerUnit } from './format';
 import { callWSWithTimeout } from './ws-timeout';
-import { fetchChangeSeries, latestWattsFromChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { PV_CACHE_TTL_MS, DAY_MS } from '../constants';
 //Re-export so battery/grid/charts/helios-card can import pvNormalizeToWatts from './pv'.
 export { pvNormalizeToWatts } from './format';
 
 
-//Resolve the live PV entity from the HA Energy solar source. Prefers `stat_rate` (signed W/kW) over cumulative `stat_energy_from`
-//(kWh) so the chart plots live power directly instead of through trapezoidal differentiation (flat-topped on sparse meters).
-//Empty string = no solar source configured (chip + chart hidden). Multi-source installs use the first entry here; live aggregation
-//across every wired source happens in refreshPv.
+//Resolve the live PV entity: the first declared power sensor (`stat_rate`), or empty when the install
+//has none. Measured-only: a cumulative meter is never treated as a live entity; installs without a
+//power sensor simply have no live PV state (their curves and totals read the recorder meters). The
+//history/calibration fetches key on the meters separately.
 export function resolvePvLiveEntity(defaults: EnergyDefaults): string
 {
-    if (defaults.solarStatRates.length > 0)
-    {
-        return defaults.solarStatRates[0];
-    }
-    if (defaults.solarStatEnergyFroms.length > 0)
-    {
-        return defaults.solarStatEnergyFroms[0];
-    }
-    return '';
+    return defaults.solarStatRates[0] ?? '';
 }
 
 
@@ -138,11 +130,13 @@ export function clearPvModuleCaches(): void
 //tuple matches the last successful fetch.
 export function refreshPv(host: PvHost): void
 {
+    if (!host.hass) { return; }
     const entity = resolvePvLiveEntity(host._energyDefaults);
+    const meters = host._energyDefaults.solarStatEnergyFroms;
 
-    if (!entity || !host.hass)
+    if (!entity && meters.length === 0)
     {
-        //Reset everything when the entity field is cleared so the chip and graph disappear instead of sticking with stale data.
+        //Nothing configured: clear so the chip and graph disappear instead of sticking with stale data.
         if (host._pvCurrent !== null || host._pvHistory !== null)
         {
             host._pvCurrent = null;
@@ -150,6 +144,13 @@ export function refreshPv(host: PvHost): void
             host._pvUnit    = '';
         }
         return;
+    }
+    if (!entity && host._pvCurrent !== null)
+    {
+        //Live sensors unwired (measured-only: the chip has no live state); curves and scrub below keep
+        //reading the recorder meters.
+        host._pvCurrent = null;
+        host._pvUnit    = '';
     }
 
     //Seed `_pvHistory` empty so the boot gate clears on entity resolution and the live-tail extension below appends without a
@@ -159,16 +160,14 @@ export function refreshPv(host: PvHost): void
         host._pvHistory = { times: [], values: [] };
     }
 
-    //Multi-source LIVE aggregation. A split E/W install (one solar source per string in HA Energy) sees the SUM of every wired
-    //stat_rate / stat_energy_from on chip, tooltip and headline. The history fetch + scrub-past path stays single-entity
-    //(uses `entity` above).
-    const liveEntities = host._energyDefaults.solarStatRates.length > 0
-        ? host._energyDefaults.solarStatRates
-        : host._energyDefaults.solarStatEnergyFroms;
+    //Multi-source LIVE aggregation across the declared power sensors ONLY (measured-only: cumulative
+    //meters never masquerade as live entities). A split E/W install with a stat_rate per source sees the
+    //SUM of every sensor on chip, tooltip and headline.
+    const liveEntities  = host._energyDefaults.solarStatRates;
     const isMultiEntity = liveEntities.length > 1;
 
-    //Live state read, always cheap, runs on every Lit cycle.
-    const stateObj = host.hass.states?.[entity];
+    //Live state read, always cheap, runs on every Lit cycle. Skipped entirely without a power sensor.
+    const stateObj = entity ? host.hass.states?.[entity] : undefined;
     if (stateObj)
     {
         let nextValue:    number | null = null;
@@ -290,10 +289,11 @@ export function refreshPv(host: PvHost): void
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
 
-    //Shared entity set + fetch-key part, so the calibration path keys against the same set; a drift would re-fetch on every
-    //refresh, defeating the cadence.
-    const sortedLive   = [...liveEntities].sort();
-    const fetchKeyPart = sortedLive.length > 0 ? sortedLive.join(',') : entity;
+    //Shared entity set + fetch-key part for the calibration LTS: the power sensors when declared, else the
+    //meters (recorded statistics of either are measured data; only LIVE reads are sensor-only).
+    const calibEntities = liveEntities.length > 0 ? liveEntities : meters;
+    const sortedLive   = [...calibEntities].sort();
+    const fetchKeyPart = sortedLive.join(',');
 
     //The chart blends `_pvCalibStats` LTS for any portion `_pvHistory` does not cover; with `_pvHistory` empty the whole past
     //flows through LTS, and the right-edge live tail is pushed from `hass.states[entity]`.
@@ -315,10 +315,10 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                const calibIds     = sortedLive.length > 0 ? sortedLive : [entity];
-                const unitLow      = (host._pvUnit || '').toLowerCase();
-                const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
-                fetchPvStatistics(host, calibIds, calibStart, fetchEnd, 'hour', calibKey, isCumulative);
+                //Cumulative flag from the SET being fetched (meters when no power sensor is declared), not
+                //from the live unit: the aggregator must baseline lifetime counters.
+                const isCumulative = liveEntities.length === 0;
+                fetchPvStatistics(host, sortedLive, calibStart, fetchEnd, 'hour', calibKey, isCumulative);
             }
         }
     }
@@ -326,7 +326,7 @@ export function refreshPv(host: PvHost): void
     //Past-production curve for the unified store + chip scrub. From the recorder `change` metric on the solar ENERGY meter(s)
     //(`stat_energy_from`), like the HA Energy dashboard: reset-corrected, unit-normalised kWh per 5-min bucket, divided by bucket
     //duration for average watts. No client-side differentiation, so coarse-reporting or daily-reset meters work natively.
-    const changeIds = host._energyDefaults.solarStatEnergyFroms;
+    const changeIds = meters;
     if (changeIds.length > 0 && !host._pvChangeSeriesFetching)
     {
         //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
@@ -631,33 +631,27 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 }
 
 
-//Live "now" PV rate, sourced like the HA Energy live tile:
-//  - With a power sensor (`stat_rate`), read its state directly, summed across every wired stat_rate.
-//  - Cumulative-only install (no power sensor): fall back to the average power of the latest completed 5-min recorder `change`
-//    bucket, the closest HA-consistent live read, so a coarse counter still shows a "now" value.
-//Returns null when neither yields a value, so the caller hides the chip rather than printing the lifetime cumulative total.
+//Live "now" PV rate: measured or absent. With power sensors (`stat_rate`), read their states directly,
+//summed across every wired source, like the HA Energy live tile. Without one, return null so the chip
+//hides (and the editor explains what to configure): a live value is never derived from the cumulative
+//meters. Past curves and scrub keep reading the recorder series regardless.
 export function currentPvRate(host: PvHost): PvRate | null
 {
     const rates = host._energyDefaults.solarStatRates;
-    if (rates.length > 0)
+    if (rates.length === 0) { return null; }
+    let sumW = 0;
+    let any  = false;
+    for (const id of rates)
     {
-        let sumW = 0;
-        let any  = false;
-        for (const id of rates)
-        {
-            const so = host.hass?.states?.[id];
-            if (!so) { continue; }
-            const v = parseFloat(so.state);
-            if (!isFinite(v)) { continue; }
-            sumW += pvNormalizeToWatts(v, String(so.attributes?.unit_of_measurement ?? ''));
-            any   = true;
-        }
-        if (any) { return { value: Math.max(0, sumW), unit: 'W' }; }
+        const so = host.hass?.states?.[id];
+        if (!so) { continue; }
+        const v = parseFloat(so.state);
+        if (!isFinite(v)) { continue; }
+        sumW += pvNormalizeToWatts(v, String(so.attributes?.unit_of_measurement ?? ''));
+        any   = true;
     }
-
-    const w = latestWattsFromChangeSeries(host._pvChangeSeries, Date.now());
-    if (w === null) { return null; }
-    return { value: Math.max(0, w), unit: 'W' };
+    if (!any) { return null; }
+    return { value: Math.max(0, sumW), unit: 'W' };
 }
 
 

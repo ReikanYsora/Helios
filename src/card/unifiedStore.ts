@@ -82,7 +82,6 @@ export interface UnifiedStoreHost
     //kWh to average watts.
     readonly _pvChangeSeries:         ChangeBucket[] | null;
     readonly _pvCalibStats:           PvHistory | null;
-    readonly _pvUnit:                 string;
     //Recorder `change` series for battery charge (stat_energy_to) + discharge (stat_energy_from). buildBattery nets
     //them (charge - discharge) so the sign is structural.
     readonly _batteryChargeChangeSeries:    ChangeBucket[] | null;

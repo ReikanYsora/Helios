@@ -134,8 +134,6 @@ export interface Translations
         batterySignDefault?:          string;
         batterySignInverted?:         string;
         batterySignHidden?:           string;
-        homeConsumptionEntity?:       string;
-        homeConsumptionEntityHelp?:   string;
         //Weather-panel show/hide toggle. Optional; fall back to English.
         showWeather?:                 string;
         showWeatherHint?:             string;
@@ -169,11 +167,26 @@ export interface Translations
         //hours always fall through to the model.
         solarIrradianceEntity:     string;
         solarIrradianceEntityHelp: string;
-        customEntity:              string;
-        customEntityHelp:          string;
+        //Custom entity (measured-only: both sensors required). Optional; fall back to English.
+        customEntityIntro?:        string;
+        customLegacyHint?:         string;
+        customPowerEntity?:        string;
+        customPowerEntityHelp?:    string;
+        customEnergyEntity?:       string;
+        customEnergyEntityHelp?:   string;
         customEntityIcon:          string;
         customEntityColor:         string;
         customEntityColorHelp:     string;
+        //Measured-only status lines (live chips per configured energy family). Optional; fall back to English.
+        liveDataIntro?:            string;
+        liveSolarOk?:              string;
+        liveSolarMissing?:         string;
+        liveGridOk?:               string;
+        liveGridMissing?:          string;
+        liveGridMiswired?:         string;
+        liveBatteryOk?:            string;
+        liveBatteryMissing?:       string;
+        liveHomeNote?:             string;
         //Surrounding buildings: cluster radius, neighbour opacity, base tint.
         buildingsSection:         string;
         homeColor:                string;
@@ -200,6 +213,11 @@ export interface Translations
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
+        //Buildings section: force-download button bypassing every buildings cache (mirror diagnosis),
+        //with its transient confirmation and help line.
+        buildingsRefetchButton:   string;
+        buildingsRefetchDone:     string;
+        buildingsRefetchHelp:     string;
         //About section: version string, source repo, appreciation line + Buy Me A Coffee link.
         aboutSection:             string;
         aboutVersionLabel:        string;

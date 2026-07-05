@@ -170,6 +170,20 @@ function cacheKey(lat: number, lng: number): string
     return `helios-bld2:${lat.toFixed(4)}:${lng.toFixed(4)}`;
 }
 
+//Drop the persisted raw footprints for a location, so the next fetch hits Overpass again. Editor
+//"force building download" support.
+export function clearBuildingsLocationCache(lat: number, lng: number): void
+{
+    try
+    {
+        localStorage.removeItem(cacheKey(lat, lng));
+    }
+    catch (_)
+    {
+        //Storage unavailable (private mode): nothing persisted, nothing to drop.
+    }
+}
+
 //Parse Overpass `elements` into option-independent RawBuilding[]: each ring lat/lon to local metres
 //east/north relative to the home, with centroid, distance-to-footprint, and raw OSM height; ranked by
 //distance, nearest MAX_BUILDING_COUNT kept. No height cap, count slice, or home flag (interpret's job).

@@ -9,31 +9,61 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.7.3 (unreleased)
 
-Accuracy release focused on the grid export family of reports (#253, #254, #278):
-wrong or missing export values, and a house consumption that "absorbed" the
-exported power on some setups.
+**This release changes how Helios reads your data: it now follows the Home
+Assistant energy dashboard at 100%, and never estimates a value.** Please read
+the first section below, it may change what you see on your card.
 
-### Fixed: export suppressed by a mis-scoped live power sensor
+### Measured values only (energy dashboard alignment)
 
-* The optional live power sensor of the HA Energy grid settings ("Standard"
-  mode) is expected to be **signed**: positive while importing, negative while
-  exporting. Some integrations only offer an **import-only** sensor there, and
-  nothing in Home Assistant warns about it; with such a sensor the card (like
-  HA's own live tiles) could never show an export. Helios now **audits that
-  sensor against the billing meters**: an hour in which the export meter
-  recorded energy while the sensor never went meaningfully negative is
-  physically impossible, and after enough independent proven hours the card
-  stops trusting the sensor's split and reads the export from the meters
-  themselves. Correctly wired sensors are untouched, and the audit un-flags
-  itself if the sensor is fixed later.
+Helios used to derive some real-time values from your cumulative meters when no
+live sensor was available. That created confusing differences with the energy
+dashboard, so it is gone. The new rule is simple:
 
-### New: near-real-time readings from cumulative meters
+* **Live chips** (the real-time values in the scene) appear **only when a real
+  live power sensor** is configured on the matching source of your energy
+  dashboard (the optional "power" field). No sensor, no chip: nothing is
+  derived from meters anymore.
+* **Curves, scrub, energy clock and totals** come only from your **kWh
+  meters**, through the same recorder data the energy dashboard reads. They
+  match it by construction.
+* **The home consumption readout** is the same live balance the energy
+  dashboard defines (solar + import - export - battery) and appears once every
+  configured family has its live sensor.
+* If a live grid sensor is detected as **mis-wired** (for example an
+  import-only sensor configured as a signed net sensor), Helios hides the
+  affected chips and the editor explains exactly what to fix, instead of
+  displaying values that cannot be trusted.
+* The editor gains a **live-data status panel** telling you, family by family,
+  which live chips can exist with your current configuration and what to add.
+* The **home consumption override** option is removed: the dashboard's balance
+  is the single source of truth (a diverging per-card sensor was exactly the
+  kind of confusion this release ends). The old option is simply ignored.
 
-* Installs without a live power sensor (and flagged installs) no longer wait
-  for the recorder's 5-minute buckets: when a kWh counter updates every few
-  seconds, its live slope now drives the import/export chips with
-  near-real-time values. Counters that report in coarse batches keep the
-  previous bucket-based readout.
+### Changed: custom entity now takes its two sensors
+
+* The custom entity follows the same rule: a **power sensor** (live chip and
+  curve) and an **energy sensor** (energy views), plus the optional colour and
+  icon, in a redesigned editor block. It displays only when both sensors are
+  set. An entity configured with the old single field is pre-moved to the
+  matching new field in the editor; add the missing one and save.
+
+### Changed: cloud coverage merged into the irradiance chip
+
+* The floating cloud chip is gone (it collided with the home cluster on
+  phones). Its weather glyph (clear / partly cloudy / overcast) now lives on
+  the irradiance chip: one compact chip, the icon for the sky and the number
+  for the W/m². Clicking it opens the irradiance view where the three cloud
+  layers are drawn **over the curve** as translucent bands (100% total cover =
+  top of the axis), so the clouds visibly eat the sun. The energy clock drops
+  its cloud filter (an instantaneous coverage has no meaning in a cumulative
+  view).
+
+### Fixed: production curve flattening into a plateau
+
+* On days with a deep production bell and a long dawn/dusk tail, the
+  spike-protection filter could reject the real midday peak and bridge it with
+  a flat line. Its threshold now uses the 90th percentile instead of the
+  median: genuine peaks always pass, meter-reset spikes are still rejected.
 
 ### Fixed: 3D buildings disappearing (Overpass mirrors)
 
@@ -41,16 +71,10 @@ exported power on some setups.
   each mirror gets a **10-second watchdog**: a hung mirror fails over to the
   next one instead of stalling the load for minutes. When every mirror is
   down, the card now **retries automatically after a few minutes** instead of
-  showing the fallback house until the page is reloaded.
+  showing the fallback house until the page is reloaded. A **"Force building
+  download"** button in the editor's buildings section re-downloads the
+  surroundings on demand, bypassing every cache.
 
-### Fixed: house consumption inflated by mixed data freshness
-
-* The home chip is a balance (solar + grid - battery). Mixing an instantaneous
-  solar reading with a minutes-old export value made the house silently
-  "absorb" the exported watts. The balance is now computed over a **single
-  shared time window** whenever any of its inputs comes from the recorder, and
-  the chip shows a `≈` prefix in that mode; with live inputs all around
-  (including the new counter slope), nothing changes.
 
 ---
 

@@ -6,7 +6,7 @@
 
 import type { SceneCamera } from '../engine/projection';
 import { HOUR_MS } from '../constants';
-import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, solarSourceName,
+import { type ChartTarget, type ChartHost, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from './charts';
 import { changeSeriesToWatts } from './energy-stats';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, cssHex, uiColorVar } from './format';
@@ -17,7 +17,6 @@ import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import type { EnergyDefaults } from './energy-prefs';
 import { serverHour, serverHourFrac } from './tz';
-import { pickTranslations } from '../i18n';
 
 //Structural surface the clock reads off the card. themeIsDark resolves palette polarity for the per-source
 //colour ramp.
@@ -188,16 +187,6 @@ function expandHourly(hourly: number[], sum: boolean): number[]
     return out;
 }
 
-//Convert a pvValueAtTime reading to watts. Its `.value` is in its native power unit (`.unit` is W/kW/MW): a
-//cumulative kWh source differentiates to kW, an MWh source to MW. The clock integrates watts into energy, so a
-//kW/MW reading taken as watts would come out 1000x/1e6x too small (the source of the near-zero totals on
-//energy-only installs). Case-insensitive so a raw power sensor's own unit string is handled too.
-function pvReadingToWatts(value: number, unit: string): number
-{
-    const u = unit.toLowerCase();
-    return u === 'mw' ? value * 1_000_000 : u === 'kw' ? value * 1000 : value;
-}
-
 //Bin one store series into per-slot averages of its absolute value (export/charge come back negative); empty
 //slots stay NaN so fillGaps can interpolate them rather than reading as a zero spike.
 function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[]
@@ -268,7 +257,6 @@ export function availableClockTargets(host: ClockHost): ChartTarget[]
     if (hasGrid)    { out.push('grid'); }
     //Weather metrics only when the active mode offers them (off for month/year).
     if (host._weatherAvailable && hasSignal(store?.irradiance)) { out.push('irradiance'); }
-    if (host._weatherAvailable && hasSignal(store?.cloud))      { out.push('cloud'); }
     //Custom entity, present whenever configured (its ring may be sparse until history lands).
     if (customEntityId(host.config))  { out.push('custom'); }
     return out;
@@ -285,7 +273,6 @@ export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: s
         case 'battery':     return { icon: 'mdi:battery-charging',     color: ENERGY_COLOR.batteryOut(el) };
         case 'battery-soc': return { icon: 'mdi:battery',              color: ENERGY_COLOR.batteryOut(el) };
         case 'irradiance':  return { icon: 'mdi:white-balance-sunny',  color: ENERGY_COLOR.sun(el) };
-        case 'cloud':       return { icon: 'mdi:weather-cloudy',       color: ENERGY_COLOR.cloud(el) };
         case 'custom':      return { icon: resolveCustomEntityIcon(host.hass, host.config), color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') };
         default:            return { icon: 'mdi:solar-power',          color: ENERGY_COLOR.pv(el) };
     }
@@ -354,18 +341,17 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         const nowMs = Date.now();
         const stepH  = store.stepMs / HOUR_MS;
         const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
-        //Per-source production. Preferred path: the recorder `change` metric per solar meter (reset-corrected, exact HA
-        //Energy energy, no sun floor), so each string matches the dashboard and recorded night production from non-solar
-        //sources fed in as PV shows. Fallback (single source, or before the per-source fetch lands): re-derive from the
-        //per-entity hourly LTS via pvValueAtTime, which lags a little and floors below the horizon.
-        //Source order (NOT sorted): both the meter list and the per-entity map are in HA Energy source order, parallel to
-        //solarStatEnergyFroms, so index `s` lines up with solarSourceName(host, s).
+        //Per-source production from the recorder `change` metric (reset-corrected, exact HA Energy energy,
+        //no sun floor), so each string matches the dashboard and recorded night production from non-solar
+        //sources fed in as PV shows. Multi-source rings wait for the per-source fetch (a beat after load);
+        //a single source reads the aggregate series, which IS its meter. Source order (NOT sorted):
+        //parallel to solarStatEnergyFroms, so index `s` lines up with solarSourceName(host, s).
         const meters = host._energyDefaults.solarStatEnergyFroms;
         const usePerSourceChange = meters.length >= 2 && meters.every((m) => host._pvChangeSeriesPerEntity.has(m));
-        const ids = usePerSourceChange ? meters : Array.from(host._pvHistoryPerEntity.keys());
+        const ids = usePerSourceChange ? meters : meters.slice(0, 1);
         const perSourceWatts = usePerSourceChange
             ? meters.map((m) => changeSeriesToWatts(host._pvChangeSeriesPerEntity.get(m) ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs))
-            : null;
+            : (meters.length === 1 ? [changeSeriesToWatts(host._pvChangeSeries, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs)] : []);
         //Per-source energy (kWh) SUMMED by hour-of-day: each bucket's power * its hours, SPREAD across the slots
         //it covers, so a coarse store fills every slot instead of one (as in binSlotSum).
         const wsum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
@@ -377,21 +363,9 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             const bEnd   = bStart + store.stepMs;
             for (let s = 0; s < ids.length; s++)
             {
-                let v: number;
-                if (perSourceWatts)
-                {
-                    const w = perSourceWatts[s][i];
-                    if (w === null || !(w > 0)) { continue; }
-                    v = w;
-                }
-                else
-                {
-                    const ph = host._pvHistoryPerEntity.get(ids[s]);
-                    if (!ph) { continue; }
-                    const sample = pvValueAtTime(host, tMs, ph);
-                    v = pvReadingToWatts(sample.value, sample.unit);
-                    if (!(isFinite(v) && v > 0)) { continue; }
-                }
+                const w = perSourceWatts[s]?.[i];
+                if (w === null || w === undefined || !(w > 0)) { continue; }
+                const v = w;
                 const energy = (v * stepH) / 1000;
                 for (let t = bStart; t < bEnd; )
                 {
@@ -433,29 +407,6 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             }
         }
         return data('percent', [{ color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery', label: clockTargetLabel(host, target), values: avgOf(sum, cnt) }]);
-    }
-
-    if (target === 'cloud')
-    {
-        const cs = host._chartSeries;
-        const slots = CLOCK_SLOTS;
-        const sum = [new Array<number>(slots).fill(0), new Array<number>(slots).fill(0), new Array<number>(slots).fill(0)];
-        const cnt = [new Array<number>(slots).fill(0), new Array<number>(slots).fill(0), new Array<number>(slots).fill(0)];
-        if (cs)
-        {
-            for (let i = 0; i < cs.times.length; i++)
-            {
-                const h = slotOf(cs.times[i].getTime());
-                const vals = [cs.cloudLow[i], cs.cloudMid[i], cs.cloudHigh[i]];
-                vals.forEach((v, b) => { if (isFinite(v)) { sum[b][h] += Math.max(0, v); cnt[b][h] += 1; } });
-            }
-        }
-        const base  = ENERGY_COLOR.cloud(el);
-        const cols  = [lerpHexToward(base, '#ffffff', 0.55), base, lerpHexToward(base, '#000000', 0.50)];
-        const icons = ['mdi:format-vertical-align-bottom', 'mdi:format-vertical-align-center', 'mdi:format-vertical-align-top'];
-        const cl    = pickTranslations(host.hass?.language).clock;
-        const names = [cl.cloudLow, cl.cloudMid, cl.cloudHigh];
-        return data('percent', [0, 1, 2].map(b => ({ color: cols[b], icon: icons[b], label: names[b], values: avgOf(sum[b], cnt[b]) })));
     }
 
     if (target === 'custom')

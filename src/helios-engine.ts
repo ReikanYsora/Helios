@@ -2,7 +2,7 @@ import { SceneRenderer } from './engine/renderer';
 import type { Building, RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
-import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
+import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './engine/buildings';
 import {
     type CloudIntensity,
     resolveWeatherAtTime,
@@ -1096,6 +1096,19 @@ export class HeliosEngine
         {
             try { this.onBuildingsFetchEnd?.(); } catch (_) { /* host progress callback threw; nothing left to do */ }
         });
+    }
+
+
+    //Editor "force building download": drop every cache layer for the current location (persisted raw,
+    //shared module cache, in-memory raw) and re-fetch right away, bypassing any pending outage retry.
+    public forceBuildingsRefetch(): void
+    {
+        clearBuildingsLocationCache(this.homeLat, this.homeLon);
+        _sharedBuildingsCache.delete(this._buildingsLocationKey());
+        this._buildingsRaw    = null;
+        this._buildingsLocKey = '';
+        this._clearBuildingsRetry();
+        this._ensureBuildings();
     }
 
 

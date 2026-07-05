@@ -6,8 +6,8 @@
 //The evidence is physical: an hour in which the billing export meter recorded energy while the "net" sensor's
 //recorded minimum never went meaningfully negative is impossible for a correctly scoped sensor. The guard
 //fetches hourly recorder stats over a rolling window (export meter `change` + rate sensor `min`/`max`) and
-//flags the sensor once enough independent proven hours accumulate. While flagged, grid.ts routes the live
-//readout to the directional meters instead of the sign-split.
+//flags the sensor once enough independent proven hours accumulate. While flagged, grid.ts leaves the
+//live chips EMPTY (measured-only: nothing is derived from the meters) and the editor explains the fix.
 //
 //Anti-false-positive rules, each earned against a concrete failure mode:
 //  - Bounds on the hourly export (MIN filters integration noise, MAX filters statistics-surgery artefacts).
@@ -35,10 +35,6 @@ export type GridGuardStatus = 'unknown' | 'healthy' | 'flagged';
 export interface GridGuardState
 {
     status:     GridGuardStatus;
-    //Flagged only: the sensor proved import-only (never meaningfully negative over the window), so its live
-    //value IS the import power and the import chip keeps full freshness. Classified once at flag time with a
-    //robust percentile, never re-evaluated on the fly (a single glitchy sample must not flip the import path).
-    importLive: boolean;
     //Consecutive contradiction-free evaluations (with real export present) while flagged; unflags at GUARD_CLEAN_EVALS.
     cleanEvals: number;
     fetchKey:   string;
@@ -50,7 +46,7 @@ export interface GridGuardState
 
 export function createGridGuard(): GridGuardState
 {
-    return { status: 'unknown', importLive: false, cleanEvals: 0, fetchKey: '', fetching: false, entityKey: '' };
+    return { status: 'unknown', cleanEvals: 0, fetchKey: '', fetching: false, entityKey: '' };
 }
 
 
@@ -69,8 +65,6 @@ interface GuardEvaluation
     contradictions:  number;
     //Hours with in-bounds export AND min data present: the only hours that can testify either way.
     realExportHours: number;
-    //Robust import-only classification: 5th percentile of the hourly mins stays above the negative band.
-    importOnly:      boolean;
 }
 
 
@@ -124,10 +118,7 @@ export function evaluateGuardHours(hours: GuardHour[]): GuardEvaluation
             lastPicked = i;
         }
     }
-    //Robust import-only classification over every hour with min data.
-    const mins = hours.map(h => h.minW).filter((m): m is number => m !== null).sort((a, b) => a - b);
-    const importOnly = mins.length > 0 && mins[Math.floor(mins.length * 0.05)] >= GUARD_NEGATIVE_BAND_W;
-    return { contradictions, realExportHours, importOnly };
+    return { contradictions, realExportHours };
 }
 
 
@@ -139,7 +130,7 @@ export function nextGuardState(prev: GridGuardState, hours: GuardHour[]): GridGu
     {
         if (ev.contradictions >= GUARD_CONTRADICTION_HOURS)
         {
-            return { ...prev, status: 'flagged', importLive: ev.importOnly, cleanEvals: 0 };
+            return { ...prev, status: 'flagged', cleanEvals: 0 };
         }
         return { ...prev, status: 'healthy' };
     }
@@ -155,7 +146,7 @@ export function nextGuardState(prev: GridGuardState, hours: GuardHour[]): GridGu
     const cleanEvals = prev.cleanEvals + 1;
     if (cleanEvals >= GUARD_CLEAN_EVALS)
     {
-        return { ...prev, status: 'healthy', importLive: false, cleanEvals: 0 };
+        return { ...prev, status: 'healthy', cleanEvals: 0 };
     }
     return { ...prev, cleanEvals };
 }

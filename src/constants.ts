@@ -97,14 +97,6 @@ export const COARSE_MAX_SPREAD_BUCKETS = 6;
 export const COARSE_REGULARITY         = 0.6;
 
 
-//=== Live counter slope ===
-//Rolling window over a cumulative kWh counter's live state changes; two value changes inside it give a
-//near-real-time watts read without touching the recorder. MIN_SPAN rejects a pair too close together
-//(counter-resolution quantisation dominates below it); a counter silent for the whole window reads 0 W
-//(a directional meter only advances while its direction flows).
-export const SLOPE_WINDOW_MS   = 150_000;
-export const SLOPE_MIN_SPAN_MS = 60_000;
-
 //=== Grid mis-scope guard ===
 //Detector for a mis-scoped live grid sensor: hourly recorder stats over the window, contradiction = the
 //export meter recorded energy while the "signed net" sensor never went meaningfully negative (physically
@@ -112,8 +104,7 @@ export const SLOPE_MIN_SPAN_MS = 60_000;
 //artefacts (MAX) out of the evidence; the negative band scales with the hour's implied export power
 //(RELATIVE) so a brief -100 W dip cannot vouch for a sensor missing kilowatts of export. Flag needs
 //CONTRADICTION_HOURS non-adjacent proven hours; it self-clears after CLEAN_EVALS contradiction-free
-//evaluations that contained real export. IMPORT_GATE: with a proven import-only sensor, any live import
-//above the gate pins export to 0 (the grid cannot flow both ways at once).
+//evaluations that contained real export.
 export const GUARD_REFRESH_MS         = 30 * 60_000;
 export const GUARD_WINDOW_MS          = 24 * HOUR_MS;
 export const GUARD_MIN_EXPORT_KWH     = 0.1;
@@ -122,7 +113,6 @@ export const GUARD_NEGATIVE_BAND_W    = -50;
 export const GUARD_RELATIVE_BAND      = 0.2;
 export const GUARD_CONTRADICTION_HOURS = 3;
 export const GUARD_CLEAN_EVALS        = 3;
-export const GRID_IMPORT_GATE_W       = 50;
 
 
 //=== Buildings / Overpass ===

@@ -47,35 +47,14 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     //unifiedStore carries the production series over the full J-2..J+2 window in watts (linearly interpolated, never
     //mixed with forecast). sliceForRange returns one sample per display bucket in view; empty before the first build
-    //gives an empty frame.
-    const lu = (host._pvUnit || '').toLowerCase();
-    const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
+    //gives an empty frame. Both curves live in watts (the store is the single source), so they share the Y axis with
+    //no unit conversion.
     const store = host._unifiedStore;
     const rangeSlice = store ? sliceForRange(store, startMs, endMsAbs) : null;
 
     const xOf = (t: Date): number =>
         ((t.getTime() - startMs) / rangeMs) * W;
 
-    //Observed samples are in the entity's native power unit; the forecast is in watts. Compute the W -> native scale
-    //once so both feed yMax on the same axis (mixing units would flatten a kW observed curve against a W predicted
-    //one).
-    const nativeFromW = (() => {
-        const native = isCumulativeEnergy
-            ? (lu === 'kwh' ? 'kw' : lu === 'mwh' ? 'mw' : lu === 'wh' ? 'w' : '')
-            : lu;
-        if (native === 'kw')
-        {
-            return 1 / 1000;
-        }
-        if (native === 'mw')
-        {
-            return 1 / 1_000_000;
-        }
-        return 1;
-    })();
-
-    //Production samples: store watts x nativeFromW so the Y axis stays in the entity's native unit (store is the
-    //single conversion point).
     const samples: { t: Date; v: number }[] = [];
     if (rangeSlice)
     {
@@ -83,11 +62,11 @@ export function renderPvChart(host: ChartHost): TemplateResult
         {
             const v = rangeSlice.production[i];
             if (v === null || !isFinite(v)) { continue; }
-            samples.push({ t: rangeSlice.times[i], v: v * nativeFromW });
+            samples.push({ t: rangeSlice.times[i], v });
         }
     }
 
-    //Forecast curve: same store, same conversion. Already cap-clipped, calibration-applied and shading-aware at every
+    //Forecast curve: same store, same unit. Already cap-clipped, calibration-applied and shading-aware at every
     //display bucket, no local model loop here.
     const predictedSamples: { t: Date; v: number }[] = [];
     if (rangeSlice)
@@ -96,7 +75,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         {
             const v = rangeSlice.forecast[i];
             if (v === null || !isFinite(v) || v <= 0) { continue; }
-            predictedSamples.push({ t: rangeSlice.times[i], v: v * nativeFromW });
+            predictedSamples.push({ t: rangeSlice.times[i], v });
         }
     }
 
@@ -126,8 +105,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //Per-source stacked areas (multi-source installs): each source's share of the aggregate at every bucket, stacked
     //so the filled areas sum to the aggregate and never overlap. Same per-source colour ramp as the home histogram
     //(energySolarColor by sorted index). Single-source installs keep the plain aggregate area.
-    const perEntityIdsForCurves = host._pvHistoryPerEntity.size > 1
-        ? Array.from(host._pvHistoryPerEntity.keys()).sort()
+    //Keyed by solar meter in HA Energy source order (matches solarSourceName + the clock + the tooltip).
+    const perEntityIdsForCurves = host._pvChangeSeriesPerEntity.size > 1
+        ? Array.from(host._pvChangeSeriesPerEntity.keys())
         : [];
     const stackedAreas: { color: string; path: string }[] = [];
     if (perEntityIdsForCurves.length > 1 && samples.length >= 2)
@@ -136,20 +116,17 @@ export function renderPvChart(host: ChartHost): TemplateResult
         const darkc = chartIsDark(host);
         const S = perEntityIdsForCurves.length;
         const N = samples.length;
-        //Each source's instantaneous power at every aggregate-sample time (pvValueAtTime differentiates cumulative
-        //meters and floors below the horizon, in a unit consistent across sources).
+        //Each source's average power at every aggregate-sample time, from its own recorder change series
+        //(watts across every source, same data as the aggregate curve).
         const raw: number[][] = [];
         for (let s = 0; s < S; s++)
         {
-            const ph  = host._pvHistoryPerEntity.get(perEntityIdsForCurves[s]);
+            const id  = perEntityIdsForCurves[s];
             const arr = new Array<number>(N).fill(0);
-            if (ph)
+            for (let j = 0; j < N; j++)
             {
-                for (let j = 0; j < N; j++)
-                {
-                    const v = pvValueAtTime(host, samples[j].t.getTime(), ph).value;
-                    arr[j] = isFinite(v) && v > 0 ? v : 0;
-                }
+                const v = pvValueAtTime(host, samples[j].t.getTime(), id).value;
+                arr[j] = isFinite(v) && v > 0 ? v : 0;
             }
             raw.push(arr);
         }
@@ -226,9 +203,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         {
             const rawAtHover = perEntityIdsForCurves.map(id =>
             {
-                const ph = host._pvHistoryPerEntity.get(id);
-                if (!ph) { return 0; }
-                const v = pvValueAtTime(host, hoverMs, ph).value;
+                const v = pvValueAtTime(host, hoverMs, id).value;
                 return isFinite(v) && v > 0 ? v : 0;
             });
             const total = rawAtHover.reduce((a, b) => a + b, 0);

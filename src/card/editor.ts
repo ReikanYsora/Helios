@@ -25,6 +25,11 @@ import
     MAX_VALUE_DECIMALS,
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
+import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type EnergyPrefsHost } from './energy-prefs';
+import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from './grid-guard';
+import { batteryLiveIsBucketSourced } from './battery';
+import './editor-custom-entity';
+import type { CustomEntityConfigValue } from './editor-custom-entity';
 
 
 // Render a localised hint with markdown-style `[text](url)` links as real `<a>` anchors via Lit's tagged template
@@ -91,6 +96,7 @@ export class HeliosCardEditor extends LitElement
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
+        unsubscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
         for (const t of this._sliderDebounce.values())
         {
             window.clearTimeout(t);
@@ -102,6 +108,11 @@ export class HeliosCardEditor extends LitElement
         {
             window.clearTimeout(this._resetFeedbackTimer);
             this._resetFeedbackTimer = undefined;
+        }
+        if (this._refetchFeedbackTimer !== undefined)
+        {
+            window.clearTimeout(this._refetchFeedbackTimer);
+            this._refetchFeedbackTimer = undefined;
         }
     }
 
@@ -124,10 +135,18 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
+    //Energy dashboard wiring snapshot + mis-scope guard, powering the live-data status lines: the editor
+    //states plainly which live chips can exist with the current HA Energy configuration and why.
+    @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
+    @state() _energyDefaultsLoaded = false;
+    _energyPrefsUnsub?: (() => void) | undefined;
+    _gridGuard: GridGuardState = createGridGuard();
+
     public connectedCallback(): void
     {
         super.connectedCallback();
         this._ensureEntityPicker();
+        subscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
     }
 
     // ha-entity-picker ships in HA's lazy-loaded card-editor bundle and may be unregistered in a fresh tab. Force the
@@ -187,6 +206,49 @@ export class HeliosCardEditor extends LitElement
         return pickTranslations(this.hass?.language);
     }
 
+    protected updated(): void
+    {
+        //Guard evaluation for the grid status line; no-op outside its preconditions / between re-arms.
+        if (this.hass) { refreshGridGuard(this as unknown as GridGuardHost); }
+    }
+
+    //One live-data status line: check or alert glyph + the explanation.
+    private _liveStatusLine(ok: boolean, warn: boolean, text: string)
+    {
+        const icon = ok ? 'mdi:check-circle' : (warn ? 'mdi:alert-circle' : 'mdi:information-outline');
+        const cls  = ok ? 'is-ok' : (warn ? 'is-warn' : 'is-info');
+        return html`
+            <div class="live-status ${cls}">
+                <ha-icon icon=${icon}></ha-icon>
+                <span>${text}</span>
+            </div>
+        `;
+    }
+
+    //The measured-only status block: one line per family CONFIGURED in the HA Energy dashboard, stating
+    //whether its live chip can exist and, if not, what to add. Silent until the prefs snapshot lands.
+    private _renderLiveDataStatus(t: Translations)
+    {
+        if (!this._energyDefaultsLoaded) { return nothing; }
+        const d = this._energyDefaults;
+        const solarWired   = d.solarStatEnergyFroms.length > 0;
+        const gridWired    = d.gridStatEnergyFroms.length > 0 || d.gridStatEnergyTos.length > 0;
+        const batteryWired = d.batteryStatEnergyFroms.length > 0 || d.batteryStatEnergyTos.length > 0;
+        if (!solarWired && !gridWired && !batteryWired) { return nothing; }
+        const gridFlagged = this._gridGuard.status === 'flagged';
+        const gridOk      = d.gridStatRates.length > 0 && !gridFlagged;
+        return html`
+            <div class="hint">${t.editor.liveDataIntro ?? 'Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source; curves and totals always come from your meters.'}</div>
+            ${solarWired ? this._liveStatusLine(d.solarStatRates.length > 0, false,
+                d.solarStatRates.length > 0 ? (t.editor.liveSolarOk ?? 'Solar: live power sensor detected.') : (t.editor.liveSolarMissing ?? 'Solar: no live power sensor, the production chip stays hidden. Add one under Settings > Dashboards > Energy > Solar panels.')) : nothing}
+            ${gridWired ? this._liveStatusLine(gridOk, gridFlagged,
+                gridFlagged ? (t.editor.liveGridMiswired ?? 'Grid: the live power sensor contradicts your meters (it seems to measure a single direction). The chips stay hidden; configure a signed sensor or the Two sensors mode.') : (gridOk ? (t.editor.liveGridOk ?? 'Grid: live power sensor detected.') : (t.editor.liveGridMissing ?? 'Grid: no live power sensor, the import/export chips stay hidden. Add one under Settings > Dashboards > Energy > Grid.'))) : nothing}
+            ${batteryWired ? this._liveStatusLine(!batteryLiveIsBucketSourced(d), false,
+                !batteryLiveIsBucketSourced(d) ? (t.editor.liveBatteryOk ?? 'Battery: live power sensors cover every battery.') : (t.editor.liveBatteryMissing ?? 'Battery: live power missing on at least one battery, the power chip stays hidden. Add the power sensor(s) under Settings > Dashboards > Energy > Battery.')) : nothing}
+            <div class="field-help">${t.editor.liveHomeNote ?? 'The home consumption readout appears once every configured family above has its live sensor.'}</div>
+        `;
+    }
+
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
         const next = { ...this._cfg } as Record<string, unknown>;
@@ -197,6 +259,70 @@ export class HeliosCardEditor extends LitElement
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
     }
+
+    //---- Custom entity (measured-only: both sensors required) -------------------------------------------
+    //Migration from the legacy single slot: while the new keys are empty, the old entity prefills the field
+    //matching its device class so the user only adds the missing half; the first edit persists the new keys
+    //and drops the legacy one.
+    private _legacyCustomId(): string
+    {
+        const raw = this._cfg?.['custom-entity'];
+        return typeof raw === 'string' ? raw.trim() : '';
+    }
+
+    private _legacyCustomIsPower(): boolean
+    {
+        const st = this.hass?.states?.[this._legacyCustomId()];
+        const dc = String(st?.attributes?.device_class ?? '');
+        const u  = String(st?.attributes?.unit_of_measurement ?? '').trim().toLowerCase();
+        return dc === 'power' || u === 'w' || u === 'kw' || u === 'mw';
+    }
+
+    private _customLegacyPending(): boolean
+    {
+        const c = this._cfg as Record<string, unknown> | undefined;
+        return this._legacyCustomId() !== ''
+            && !c?.['custom-power-entity']
+            && !c?.['custom-energy-entity'];
+    }
+
+    private _customConfigValue(): CustomEntityConfigValue
+    {
+        const c = (this._cfg ?? {}) as Record<string, unknown>;
+        let power  = typeof c['custom-power-entity']  === 'string' ? String(c['custom-power-entity'])  : '';
+        let energy = typeof c['custom-energy-entity'] === 'string' ? String(c['custom-energy-entity']) : '';
+        if (this._customLegacyPending())
+        {
+            if (this._legacyCustomIsPower()) { power = this._legacyCustomId(); }
+            else                             { energy = this._legacyCustomId(); }
+        }
+        return {
+            power,
+            energy,
+            color: typeof c['custom-entity-color'] === 'string' ? String(c['custom-entity-color']) : 'red',
+            icon:  typeof c['custom-entity-icon']  === 'string' ? String(c['custom-entity-icon'])  : '',
+        };
+    }
+
+    private _onCustomEntityChanged = (e: CustomEvent<{ value: CustomEntityConfigValue }>): void =>
+    {
+        e.stopPropagation();
+        const v    = e.detail.value;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //One write for the four keys; empties clear their key so the YAML stays minimal. The legacy single
+        //slot is dropped on the first edit (its value now lives in the matching new field).
+        const setOrClear = (key: string, val: string): void =>
+        {
+            if (val) { next[key] = val; } else { delete next[key]; }
+        };
+        setOrClear('custom-power-entity',  v.power);
+        setOrClear('custom-energy-entity', v.energy);
+        setOrClear('custom-entity-icon',   v.icon);
+        if (v.color && v.color !== 'red') { next['custom-entity-color'] = v.color; } else { delete next['custom-entity-color']; }
+        delete next['custom-entity'];
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+    };
 
     // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits
     // as-is; anything else is ignored, leaving the previous value.
@@ -323,21 +449,6 @@ export class HeliosCardEditor extends LitElement
     };
 
     //Custom-entity picker filter: any power (W/kW/MW) or energy (Wh/kWh/MWh) entity, by device_class or unit.
-    private _customEntityFilter = (entity: any): boolean =>
-    {
-        if (!entity || !entity.attributes)
-        {
-            return false;
-        }
-        const dc = String(entity.attributes.device_class ?? '');
-        if (dc === 'power' || dc === 'energy')
-        {
-            return true;
-        }
-        const u = String(entity.attributes.unit_of_measurement ?? '').trim().toLowerCase();
-        return u === 'w' || u === 'kw' || u === 'mw' || u === 'wh' || u === 'kwh' || u === 'mwh';
-    };
-
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -588,6 +699,13 @@ export class HeliosCardEditor extends LitElement
                 </div>
                 <div class="field-help">${t.editor.buildingColorHelp}</div>
 
+                <button
+                    type="button"
+                    class="reset-btn"
+                    @click=${this._onRefetchBuildingsClick}
+                >${this._refetchFeedback ?? t.editor.buildingsRefetchButton}</button>
+                <div class="field-help">${t.editor.buildingsRefetchHelp}</div>
+
                 </details>
 
                 <details class="advanced-section" data-section="shadows" ?open=${this._openSection === 'shadows'} @toggle=${this._onSectionToggleEvt}>
@@ -629,6 +747,7 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
+                ${this._renderLiveDataStatus(t)}
                 <label class="field">
                     <span class="label">${t.editor.displayUpdateFrequency}</span>
                     <div class="slider-row">
@@ -704,62 +823,25 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.customEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['custom-entity'] ?? '')}
-                            .includeDomains=${['sensor', 'input_number', 'number']}
-                            .entityFilter=${this._customEntityFilter}
-                            data-key="custom-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.customEntityHelp}</div>
-                ${String(c['custom-entity'] ?? '') !== '' ? html`
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityIcon}</span>
-                        ${this._pickerReady ? html`
-                            <ha-icon-picker
-                                .hass=${this.hass}
-                                .value=${String(c['custom-entity-icon'] ?? '')}
-                                data-key="custom-entity-icon"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-icon-picker>
-                        ` : nothing}
-                    </div>
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityColor}</span>
-                        ${this._pickerReady ? html`
-                            <ha-selector
-                                .hass=${this.hass}
-                                .selector=${{ ui_color: { default_color: 'red' } }}
-                                .value=${String(c['custom-entity-color'] ?? 'red')}
-                                data-key="custom-entity-color"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-selector>
-                        ` : nothing}
-                    </div>
-                    <div class="field-help">${t.editor.customEntityColorHelp}</div>
+                <div class="hint">${t.editor.customEntityIntro ?? 'Custom entity: displayed only when BOTH sensors below are set. The power sensor feeds the live chip and the curve, the energy sensor feeds the energy views. Nothing is estimated.'}</div>
+                ${this._customLegacyPending() ? html`
+                    <div class="hint reset-warning">${t.editor.customLegacyHint ?? 'Your previous custom entity was moved to its matching field below. Add the missing sensor to show the chip again.'}</div>
                 ` : nothing}
-                <div class="field field-block">
-                    <span class="label">${t.editor.homeConsumptionEntity ?? 'Home consumption override'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['home-consumption-entity'] ?? '')}
-                            .includeDomains=${['sensor']}
-                            .includeDeviceClasses=${['power']}
-                            data-key="home-consumption-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.homeConsumptionEntityHelp ?? 'Shows this sensor on the home consumption readout instead of the computed value. Only this readout changes: the animated flows and the history stay on your solar, grid and battery balance. A direct consumption sensor is usually off by a few watts (measurement losses, sensors slightly out of sync), a gap that has no clean place in the flows.'}</div>
+                <helios-custom-entity-config
+                    .hass=${this.hass}
+                    .pickerReady=${this._pickerReady}
+                    .value=${this._customConfigValue()}
+                    .labels=${{
+                        power:      t.editor.customPowerEntity ?? 'Power sensor (live)',
+                        powerHelp:  t.editor.customPowerEntityHelp ?? 'A real power sensor (W/kW). Feeds the live chip, the scrub and the curve.',
+                        energy:     t.editor.customEnergyEntity ?? 'Energy sensor (totals)',
+                        energyHelp: t.editor.customEnergyEntityHelp ?? 'A cumulative energy meter (Wh/kWh). Feeds the energy views.',
+                        icon:       t.editor.customEntityIcon,
+                        color:      t.editor.customEntityColor,
+                    }}
+                    @value-changed=${this._onCustomEntityChanged}
+                ></helios-custom-entity-config>
+                <div class="field-help">${t.editor.customEntityColorHelp}</div>
                 <div class="field field-block">
                     <span class="label">${t.editor.outdoorTemperatureEntity ?? 'Outdoor temperature'}</span>
                     ${this._pickerReady ? html`
@@ -899,6 +981,30 @@ export class HeliosCardEditor extends LitElement
         this._resetFeedbackTimer = window.setTimeout(() =>
         {
             this._resetFeedback = null;
+        }, HeliosCardEditor.RESET_FEEDBACK_MS);
+    }
+
+
+    // Same bus + confirmation pattern for the buildings force-download button in the buildings section.
+    private _refetchFeedbackTimer?: number;
+    @state() private _refetchFeedback: string | null = null;
+
+    private _onRefetchBuildingsClick(): void
+    {
+        try
+        {
+            window.dispatchEvent(new CustomEvent('helios-buildings-refetch'));
+        }
+        catch (_) { /* CustomEvent unsupported: skip the cross-card refetch broadcast */ }
+        const t = pickTranslations(this.hass?.language);
+        this._refetchFeedback = t.editor.buildingsRefetchDone;
+        if (this._refetchFeedbackTimer !== undefined)
+        {
+            window.clearTimeout(this._refetchFeedbackTimer);
+        }
+        this._refetchFeedbackTimer = window.setTimeout(() =>
+        {
+            this._refetchFeedback = null;
         }, HeliosCardEditor.RESET_FEEDBACK_MS);
     }
 

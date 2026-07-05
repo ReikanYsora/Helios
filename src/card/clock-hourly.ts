@@ -79,8 +79,10 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
             end_time:      new Date(endMs).toISOString(),
             statistic_ids: [...ids].sort(),
             period:        'hour',
-            types:         power ? ['mean', 'change'] : ['mean'],
-            ...(power ? { units: { energy: 'kWh', power: 'W' } } : {}),
+            //Power slots read the recorded per-bucket mean ONLY (measured watts): a mis-picked energy
+            //meter yields nothing rather than watts derived from its kWh deltas.
+            types:         ['mean'],
+            ...(power ? { units: { power: 'W' } } : {}),
         });
         for (const id of ids)
         {
@@ -89,15 +91,8 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
             {
                 const tMs = typeof b?.start === 'number' ? b.start : Date.parse(b?.start);
                 if (!isFinite(tMs)) { continue; }
-                let v: number | null = null;
-                if (typeof b?.mean === 'number' && isFinite(b.mean)) { v = b.mean; }
-                else if (power && typeof b?.change === 'number' && isFinite(b.change))
-                {
-                    const endB  = typeof b?.end === 'number' ? b.end : Date.parse(b?.end);
-                    const hours = (endB - tMs) / HOUR_MS;
-                    v = hours > 0 ? (b.change / hours) * 1000 : null;
-                }
-                if (v === null || !isFinite(v)) { continue; }
+                const v = typeof b?.mean === 'number' && isFinite(b.mean) ? b.mean : null;
+                if (v === null) { continue; }
                 const h = serverHour(tMs);
                 sum[h] += power ? Math.abs(v) : v;
                 cnt[h] += 1;
