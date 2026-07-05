@@ -2,6 +2,7 @@
 //entity slots). Subscribed once per card; HA's `energy_preferences_updated` event triggers a fresh fetch.
 
 import { HA_DAILY_TOTALS_TTL_MS } from '../constants';
+import { callWSWithTimeout } from './ws-timeout';
 
 
 export interface EnergyDefaults
@@ -35,6 +36,10 @@ export interface EnergyDefaults
     //Solar-forecast provider config entry ids (`config_entry_solar_forecast`). Each is probed via the
     //`helios_forecast/series` websocket for the richer curve, falling back to HA's generic `energy/solar_forecast`.
     solarForecastEntryIds:  string[];
+    //User-given source names from the dashboard settings (first named source per family, '' when none):
+    //displayed instead of the entities' friendly names wherever the family is titled.
+    gridName:               string;
+    batteryName:            string;
 }
 
 
@@ -52,6 +57,8 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     batterySourcesWithoutRate: 0,
     invertedRateEntities:   [],
     solarForecastEntryIds:  [],
+    gridName:               '',
+    batteryName:            '',
 };
 
 
@@ -77,7 +84,7 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
     }
     try
     {
-        const prefs = await host.hass.callWS({ type: 'energy/get_prefs' }) as {
+        const prefs = await callWSWithTimeout(host.hass, { type: 'energy/get_prefs' }) as {
             energy_sources?: Record<string, unknown>[];
         };
         const next = parseEnergyPrefs(prefs);
@@ -134,17 +141,13 @@ export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
 }
 
 
-//Host shape for `refreshHaDailyTotals`. The card writes these slots when the recorder query lands; render functions
-//prefer them over local-integration values for the detail-panel headlines.
+//Host shape for `refreshHaDailyTotals`. The card writes the slot when the recorder query lands; the timeline tooltip
+//prefers it over local integration for today's produced-kWh headline.
 export interface HaDailyTotalsHost
 {
     readonly hass: any;
     readonly _energyDefaults: EnergyDefaults;
     _haSolarTodayKwh:          number | null;
-    _haGridImportTodayKwh:     number | null;
-    _haGridExportTodayKwh:     number | null;
-    _haBatteryChargedKwh:      number | null;
-    _haBatteryDischargedKwh:   number | null;
     requestUpdate(): void;
 }
 
@@ -194,7 +197,7 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
     {
         try
         {
-            const result = await host.hass.callWS({
+            const result = await callWSWithTimeout(host.hass, {
                 type:          'recorder/statistics_during_period',
                 start_time:    midnight.toISOString(),
                 end_time:      now.toISOString(),
@@ -244,46 +247,13 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
 
 
 
-//Refresh the five HA Energy daily-total slots from the recorder. Fired from the card's tick loop; one WS round-trip
-//per non-empty list, in parallel.
+//Refresh today's produced-kWh slot from the recorder. Fired from the card's tick loop; one WS round-trip.
 export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<void>
 {
-    const defaults = host._energyDefaults;
-    const [solar, imp, exp, charged, discharged] = await Promise.all([
-        fetchTodayKwhChange(host, defaults.solarStatEnergyFroms),
-        fetchTodayKwhChange(host, defaults.gridStatEnergyFroms),
-        fetchTodayKwhChange(host, defaults.gridStatEnergyTos),
-        fetchTodayKwhChange(host, defaults.batteryStatEnergyTos),
-        fetchTodayKwhChange(host, defaults.batteryStatEnergyFroms),
-    ]);
-    let changed = false;
+    const solar = await fetchTodayKwhChange(host, host._energyDefaults.solarStatEnergyFroms);
     if (solar !== null && solar !== host._haSolarTodayKwh)
     {
         host._haSolarTodayKwh = solar;
-        changed = true;
-    }
-    if (imp !== null && imp !== host._haGridImportTodayKwh)
-    {
-        host._haGridImportTodayKwh = imp;
-        changed = true;
-    }
-    if (exp !== null && exp !== host._haGridExportTodayKwh)
-    {
-        host._haGridExportTodayKwh = exp;
-        changed = true;
-    }
-    if (charged !== null && charged !== host._haBatteryChargedKwh)
-    {
-        host._haBatteryChargedKwh = charged;
-        changed = true;
-    }
-    if (discharged !== null && discharged !== host._haBatteryDischargedKwh)
-    {
-        host._haBatteryDischargedKwh = discharged;
-        changed = true;
-    }
-    if (changed)
-    {
         host.requestUpdate();
     }
 }
@@ -298,8 +268,8 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
 //  - grid:    { type: 'grid', stat_energy_from, stat_energy_to?, stat_rate?, power_config? }
 //  - battery: { type: 'battery', stat_energy_from, stat_energy_to, stat_soc?, power_config? }
 //
-//`power_config.stat_rate` is the newer grid/battery live-power slot; the top-level grid `stat_rate` is the older slot
-//HA still serves. Both are read so any encountered config maps cleanly.
+//HA exposes the live-power slot in two shapes: `power_config.stat_rate` and the top-level grid `stat_rate`. Both are
+//read so any encountered config maps cleanly.
 export function parseEnergyPrefs(prefs: {
     energy_sources?: Record<string, unknown>[];
 }): EnergyDefaults
@@ -320,6 +290,8 @@ export function parseEnergyPrefs(prefs: {
         batterySourcesWithoutRate: 0,
         invertedRateEntities:   [],
         solarForecastEntryIds:  [],
+        gridName:               '',
+        batteryName:            '',
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -362,6 +334,10 @@ export function parseEnergyPrefs(prefs: {
         }
         else if (type === 'grid')
         {
+            if (!out.gridName)
+            {
+                out.gridName = pickFirstString(src['name']) ?? '';
+            }
             const imp = pickFirstString(src['stat_energy_from']);
             if (imp)
             {
@@ -391,6 +367,10 @@ export function parseEnergyPrefs(prefs: {
         }
         else if (type === 'battery')
         {
+            if (!out.batteryName)
+            {
+                out.batteryName = pickFirstString(src['name']) ?? '';
+            }
             const discharge = pickFirstString(src['stat_energy_from']);
             if (discharge)
             {

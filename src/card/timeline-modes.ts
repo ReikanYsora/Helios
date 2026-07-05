@@ -5,6 +5,7 @@
 
 import type { StatPeriod } from './energy-stats';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../helios-config';
+import { DAY_MS } from '../constants';
 
 export type TimelineMode = 'standard' | 'today' | 'week' | 'month' | 'year';
 
@@ -33,7 +34,7 @@ function daysInPrevMonth(): number
 function daysInPrevYear(): number
 {
     const y = new Date().getFullYear() - 1;
-    return (Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1)) / 86_400_000;
+    return (Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1)) / DAY_MS;
 }
 
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {

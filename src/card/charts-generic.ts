@@ -9,7 +9,9 @@ import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { sumChangeForDay } from './energy-stats';
 import type { ChartHost, ChartTarget } from './charts';
 import { interpAt } from './series-sample';
+import { sliceForRange } from './unifiedStore';
 import { renderPvChart } from './charts-pv';
+import { HOUR_MS } from '../constants';
 
 
 //Production routes to its dedicated renderer (forecast + per-source breakdown + native-unit scaling); every
@@ -34,7 +36,6 @@ export function chartAccentColor(host: ChartHost): string
     if (target === 'production') { return ENERGY_COLOR.pv(el); }
     if (target === 'consumption'){ return ENERGY_COLOR.consumption(el); }
     if (target === 'irradiance') { return ENERGY_COLOR.sun(el); }
-    if (target === 'cloud')      { return ENERGY_COLOR.cloud(el); }
     if (target === 'battery-soc'){ return ENERGY_COLOR.batteryOut(el); }
     if (target === 'custom')     { return cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336'); }
     const store = host._unifiedStore;
@@ -174,54 +175,24 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'custom')
     {
-        //Custom entity over the window, from the fetched hourly history (values in W). One curve in the configured
-        //custom colour, magnitude only so a signed sensor reads as a single area; axis auto-scales.
-        const hist = host._customEntityHistory;
+        //Custom energy meter over the window, from its recorder `change` series: each bucket's kWh converted to
+        //average watts (kWh * 3600000 / bucket-ms), like the production curve. One curve in the configured custom
+        //colour, magnitude only so a signed meter reads as a single area; axis auto-scales.
+        const buckets = host._customChangeSeries;
         const pts: { t: number; v: number }[] = [];
-        if (hist)
+        if (buckets)
         {
-            for (let i = 0; i < hist.times.length; i++)
+            for (const b of buckets)
             {
-                const tMs = hist.times[i].getTime();
+                const durMs = b.endMs - b.startMs;
+                if (durMs <= 0) { continue; }
+                const tMs = (b.startMs + b.endMs) / 2;
                 if (tMs < startMs || tMs > endMsAbs) { continue; }
-                const v = hist.values[i];
-                if (!isFinite(v)) { continue; }
-                pts.push({ t: tMs, v: Math.abs(v) });
+                if (!isFinite(b.kwh)) { continue; }
+                pts.push({ t: tMs, v: Math.abs((b.kwh * HOUR_MS) / durMs) });
             }
         }
         series = [{ pts, color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') }];
-    }
-    else if (target === 'cloud')
-    {
-        //Cloud-cover bands from the hourly weather series, low -> mid -> high. Built at identical times so they
-        //index-align and stack cleanly (each band continues above the one below); Y axis auto-scales to the stacked
-        //total. Three distinct cloud-grey levels (low lightest, high darkest) so the layers read apart at the higher
-        //fill opacity, not as one flat grey.
-        const cs = host._chartSeries;
-        const lowPts:  { t: number; v: number }[] = [];
-        const midPts:  { t: number; v: number }[] = [];
-        const highPts: { t: number; v: number }[] = [];
-        if (cs)
-        {
-            for (let i = 0; i < cs.times.length; i++)
-            {
-                const tMs = cs.times[i].getTime();
-                if (tMs < startMs || tMs > endMsAbs) { continue; }
-                const lo = cs.cloudLow[i];
-                const mi = cs.cloudMid[i];
-                const hi = cs.cloudHigh[i];
-                if (!(isFinite(lo) || isFinite(mi) || isFinite(hi))) { continue; }
-                lowPts.push( { t: tMs, v: isFinite(lo) ? Math.max(0, lo) : 0 });
-                midPts.push( { t: tMs, v: isFinite(mi) ? Math.max(0, mi) : 0 });
-                highPts.push({ t: tMs, v: isFinite(hi) ? Math.max(0, hi) : 0 });
-            }
-        }
-        series = [
-            { pts: lowPts,  color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
-            { pts: midPts,  color: ENERGY_COLOR.cloud(el) },
-            { pts: highPts, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.50) },
-        ];
-        fixedMax = 0;
     }
     else
     {
@@ -229,78 +200,109 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         fixedMax = 1000;
     }
 
-    //Only the cloud bands stack (low + mid + high layer up to total sky cover). The two-direction targets (grid
-    //import/export, battery charge/discharge) draw both areas from the baseline so each flow reads on its own;
-    //stacking them would sum two opposite flows into a meaningless total.
-    const isStacked =target === 'cloud'
-        && series.length > 1
-        && series.every(s => s.pts.length === series[0].pts.length && s.pts.length >= 2);
-
-    //Y scale: fixed where set, else auto to the stacked total when stacked, else the per-series running max.
+    //Y scale: fixed where set, else the per-series running max. No target stacks its own series; the cloud bands
+    //are an overlay of the irradiance view, stacked in their own percent scale below.
     let yMax = fixedMax;
     if (yMax <= 0)
     {
         yMax = 1;
-        if (isStacked)
-        {
-            const N = series[0].pts.length;
-            for (let j = 0; j < N; j++)
-            {
-                let total = 0;
-                for (const s of series) { total += s.pts[j].v; }
-                if (total > yMax) { yMax = total; }
-            }
-        }
-        else
-        {
-            for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
-        }
+        for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
     }
     //Headroom at the top so a curve's peak never kisses the top edge.
     const TOP_HEADROOM_PX = 10;
     const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
 
-    let drawn: { area: string; line: string; color: string; total: number }[];
-    if (isStacked)
+    const drawn = series.map(s =>
     {
-        const N = series[0].pts.length;
-        const lower = new Array<number>(N).fill(0);
-        drawn = series.map(s =>
+        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, total: sum(s.pts) }; }
+        const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
+        const x0 = xOf(s.pts[0].t);
+        const xN = xOf(s.pts[s.pts.length - 1].t);
+        return {
+            area:  `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
+            line:  `M ${pp.join(' L ')}`,
+            color: s.color,
+            total: sum(s.pts),
+        };
+    });
+
+    //Merged irradiance view: the three cloud-cover bands (low -> mid -> high) overlay the irradiance curve
+    //as translucent stacked areas drawn ON TOP of it, so the sky literally covers the sun's curve and the
+    //anti-correlation reads at a glance. Their own scale maps 100% cumulated cover to the axis top; the
+    //bands stay areas-only (no stroke) at a low opacity, keeping the irradiance line in the lead.
+    const overlays: { area: string; color: string }[] = [];
+    if (target === 'irradiance' && host._chartSeries)
+    {
+        const cs = host._chartSeries;
+        const bands: { t: number; lo: number; mi: number; hi: number }[] = [];
+        for (let i = 0; i < cs.times.length; i++)
         {
-            const up: string[] = [];
-            const lo: string[] = [];
-            for (let j = 0; j < N; j++)
+            const tMs = cs.times[i].getTime();
+            if (tMs < startMs || tMs > endMsAbs) { continue; }
+            const lo = cs.cloudLow[i];
+            const mi = cs.cloudMid[i];
+            const hi = cs.cloudHigh[i];
+            if (!(isFinite(lo) || isFinite(mi) || isFinite(hi))) { continue; }
+            bands.push({
+                t:  tMs,
+                lo: isFinite(lo) ? Math.max(0, lo) : 0,
+                mi: isFinite(mi) ? Math.max(0, mi) : 0,
+                hi: isFinite(hi) ? Math.max(0, hi) : 0,
+            });
+        }
+        if (bands.length >= 2)
+        {
+            const yOfPct = (pct: number): number =>
+                H - Math.max(0, Math.min(1, pct / 100)) * (H - TOP_HEADROOM_PX);
+            const layers: { pick: (b: { lo: number; mi: number; hi: number }) => number; color: string }[] = [
+                { pick: b => b.lo, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
+                { pick: b => b.mi, color: ENERGY_COLOR.cloud(el) },
+                { pick: b => b.hi, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.50) },
+            ];
+            const lower = new Array<number>(bands.length).fill(0);
+            for (const layer of layers)
             {
-                const y0 = lower[j];
-                const y1 = y0 + s.pts[j].v;
-                lower[j] = y1;
-                up.push(`${xOf(s.pts[j].t).toFixed(2)},${yOf(y1).toFixed(2)}`);
-                lo.push(`${xOf(s.pts[j].t).toFixed(2)},${yOf(y0).toFixed(2)}`);
+                const up: string[] = [];
+                const lo: string[] = [];
+                for (let j = 0; j < bands.length; j++)
+                {
+                    const y0 = lower[j];
+                    const y1 = y0 + layer.pick(bands[j]);
+                    lower[j] = y1;
+                    up.push(`${xOf(bands[j].t).toFixed(2)},${yOfPct(y1).toFixed(2)}`);
+                    lo.push(`${xOf(bands[j].t).toFixed(2)},${yOfPct(y0).toFixed(2)}`);
+                }
+                overlays.push({
+                    area:  `M ${up.join(' L ')} L ${lo.reverse().join(' L ')} Z`,
+                    color: layer.color,
+                });
             }
-            const line = `M ${up.join(' L ')}`;
-            return {
-                area:  `M ${up.join(' L ')} L ${lo.reverse().join(' L ')} Z`,
-                line,
-                color: s.color,
-                total: sum(s.pts),
-            };
-        });
+        }
     }
-    else
+
+    //The solar forecast rides the irradiance view (with its cloud overlay) as a ghosted reference: the
+    //three sun-driven curves live together, and the forecast's shape reads against the clouds that will
+    //eat it. Normalised to its own maximum (W against W/m2, sharing the axis would squash one curve);
+    //production keeps its true shared-scale forecast in charts-pv; other targets stay clean.
+    let forecastLine = '';
+    if (target === 'irradiance' && store)
     {
-        drawn = series.map(s =>
+        const slice = sliceForRange(store, startMs, endMsAbs);
+        const pts: { t: Date; v: number }[] = [];
+        let fMax = 0;
+        for (let i = 0; i < slice.times.length; i++)
         {
-            if (s.pts.length < 2) { return { area: '', line: '', color: s.color, total: sum(s.pts) }; }
-            const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
-            const x0 = xOf(s.pts[0].t);
-            const xN = xOf(s.pts[s.pts.length - 1].t);
-            return {
-                area:  `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
-                line:  `M ${pp.join(' L ')}`,
-                color: s.color,
-                total: sum(s.pts),
-            };
-        });
+            const v = slice.forecast[i];
+            if (v === null || !isFinite(v) || v <= 0) { continue; }
+            pts.push({ t: slice.times[i], v });
+            if (v > fMax) { fMax = v; }
+        }
+        if (pts.length >= 2 && fMax > 0)
+        {
+            const yOfF = (v: number): number =>
+                H - Math.max(0, Math.min(1, v / fMax)) * (H - TOP_HEADROOM_PX);
+            forecastLine = `M ${pts.map(p => `${xOf(p.t.getTime()).toFixed(2)},${yOfF(p.v).toFixed(2)}`).join(' L ')}`;
+        }
     }
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
@@ -315,23 +317,12 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     {
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
-        //Stacked: the dot rides the cumulative top of each band, not the raw value, so it sits on the visible
-        //boundary. Unstacked: the dot rides the series' own value.
-        let cum = 0;
         for (const s of series)
         {
             if (s.pts.length < 1) { continue; }
             const v = interpAt(s.pts.map(p => new Date(p.t)), s.pts.map(p => p.v), hoverMs);
             if (!isFinite(v)) { continue; }
-            if (isStacked)
-            {
-                cum += Math.max(0, v);
-                hoverDots.push({ y: yOf(cum), color: s.color });
-            }
-            else
-            {
-                hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
-            }
+            hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
             showHover = true;
         }
     }
@@ -343,11 +334,19 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             `)}
             <g class="hc-chart-grow">
                 ${drawn.map(d => d.area ? svg`
-                    <path d="${d.area}" fill="${d.color}" fill-opacity="${isStacked ? '0.6' : '0.22'}"></path>
+                    <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
                 ` : nothing)}
                 ${drawn.map(d => d.line ? svg`
                     <path class="hc-chart-line" d="${d.line}" stroke="${d.color}"></path>
                 ` : nothing)}
+                ${overlays.map(o => svg`
+                    <path d="${o.area}" fill="${o.color}" fill-opacity="0.35"></path>
+                `)}
+                <!--  Forecast silhouette drawn LAST so it reads as a ghosted reference on top of the target's
+                      own fill + the cloud overlay, instead of being buried under them.  -->
+                ${forecastLine ? svg`
+                    <path class="hc-chart-predicted hc-chart-forecast-ghost" d="${forecastLine}" stroke="${ENERGY_COLOR.pv(el)}" fill="none"></path>
+                ` : nothing}
             </g>
             ${showHover ? svg`
                 <line class="hc-hover-guide" x1="${hoverX.toFixed(2)}" y1="0" x2="${hoverX.toFixed(2)}" y2="${H}"></line>
@@ -478,7 +477,7 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     if (store)
     {
         const nowMs = Date.now();
-        const stepH = store.stepMs / 3_600_000;   //bucket length in hours
+        const stepH = store.stepMs / HOUR_MS;   //bucket length in hours
         for (let i = 0; i < store.bucketsTotal; i++)
         {
             const mid = store.storeStartMs + (i + 0.5) * store.stepMs;

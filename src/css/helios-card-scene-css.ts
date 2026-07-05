@@ -121,6 +121,32 @@ export const heliosCardStyles = css`
         pointer-events: none;
         overflow: visible;
     }
+    /*  Helios mark on the dial centre (clock/trend): a flat CSS-3D decal centred on the screen-space home, tilted
+        + turned onto the ground plane each frame by the engine. Sits above the basemap/guide yet under the
+        upright bars (they live in a later sibling overlay), so nearer bars occlude it. The hover glow is a
+        filter set inline; a short transition softens its appearance/removal. */
+    .scene-logo-decal
+    {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform-origin: 50% 50%;
+        pointer-events: none;
+        z-index: 0;
+        /*  Rests at half opacity; fades to full on hover/tap (the .is-active class). Reads on any background
+            (bright basemap or dark night wash) without depending on an edge colour. */
+        opacity: 0.5;
+        will-change: transform, opacity;
+        transition: opacity var(--ha-animation-duration-normal, 250ms) ease;
+    }
+    .scene-logo-decal.is-active
+    {
+        opacity: 1;
+    }
+    .scene-logo-decal .logo-decal-svg
+    {
+        display: block;
+    }
     /*  Camera-locked cursor: default cursor when rotation is disabled, so the scene doesn't advertise an
         interaction that doesn't exist. */
     ha-card.camera-locked #map-container
@@ -141,7 +167,6 @@ export const heliosCardStyles = css`
     .grid-label,
     .custom-label,
     .solar-pct-label,
-    .cloud-chip,
     .home-pill
     {
         position: absolute;
@@ -223,14 +248,6 @@ export const heliosCardStyles = css`
     }
     .overlay-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .overlay-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
-    /*  Disabled: stays visible to show the lock state but is inert, greyed out with no feedback. */
-    .overlay-btn.is-disabled,
-    .overlay-btn[disabled]
-    {
-        opacity: 0.45;
-        cursor: default;
-        pointer-events: none;
-    }
 
     /*  View mode. Clock fades every layer but the basemap and top-left controls; Scene restores them. The
         basemap holder lives inside #map-container alongside .scene-svg, so the scene SVG is faded by name
@@ -280,7 +297,6 @@ export const heliosCardStyles = css`
     .battery-pct-label ha-icon,
     .grid-label ha-icon,
     .custom-label ha-icon,
-    .cloud-chip ha-icon,
     .solar-pct-label ha-icon
     {
         --mdc-icon-size: 16px;
@@ -325,11 +341,88 @@ export const heliosCardStyles = css`
     .solar-pct-label.is-chart-active
     {
         box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #ffc107)) 70%, transparent);
+                    0 0 12px color-mix(in srgb, var(--amber-color, #ffc107) 70%, transparent);
+    }
+
+    /*  ============================================================
+        Per-chip detail panel (scene mode). Double-tapping the active
+        chip opens this compact, vertical readout top-right, tinted in
+        the selection colour (--detail-accent, set inline). Icons only,
+        values in the card's configured unit. Kept narrow so it never
+        crowds a small card.
+        ============================================================ */
+    .detail-panel
+    {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        box-sizing: border-box;
+        min-width: 84px;
+        max-width: 40%;
+        padding: 6px 10px;
+        border: 2px solid var(--detail-accent, var(--primary-color, #03a9f4));
+        border-radius: var(--ha-card-border-radius, 12px);
+        background: var(--card-background-color, #ffffff);
+        background-clip: padding-box;
+        box-shadow: var(--helios-shadow-chip);
+        color: var(--primary-text-color, #212121);
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+        -webkit-font-smoothing: antialiased;
+    }
+    .detail-panel .dp-row
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .detail-panel .dp-row ha-icon
+    {
+        --mdc-icon-size: 16px;
+        flex: 0 0 auto;
+        color: var(--detail-accent, var(--primary-color, #03a9f4));
+    }
+    .detail-panel .dp-row span
+    {
+        flex: 1 1 auto;
+        text-align: right;
+    }
+
+    /*  "i" badge on the chip whose panel is open: a small circle in the selection colour, top-right of the
+        active chip. One rule covers every chip type via its shared .is-chart-active marker. */
+    .info-open .pv-pct-label.is-chart-active::after,
+    .info-open .battery-pct-label.is-chart-active::after,
+    .info-open .grid-label.is-chart-active::after,
+    .info-open .custom-label.is-chart-active::after,
+    .info-open .solar-pct-label.is-chart-active::after,
+    .info-open .home-pill.is-chart-active::after
+    {
+        content: "i";
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--detail-accent, var(--primary-color, #03a9f4));
+        color: var(--text-on-primary-color, #ffffff);
+        font-size: 10px;
+        font-weight: 700;
+        font-style: normal;
+        line-height: 14px;
+        text-align: center;
+        pointer-events: none;
     }
 
     /*  Predicted PV chip when scrubbing into the future: the value is modelled, not measured, so the
-        chip dims and a leading "≈" (set by render) signals "estimate". */
+        chip dims and a leading "~" (set by render) signals "estimate". */
     .pv-pct-label.is-predicted
     {
         opacity: 0.55;
@@ -531,36 +624,6 @@ export const heliosCardStyles = css`
         to   { stroke-dashoffset: -10; }
     }
 
-    /*  Cloud chip on the sun-to-home line: a grey pill showing live cover, clickable to re-target the
-        chart to the cloud bands. Same recipe + active glow as the other chips, but the only one with a
-        custom width: it holds just a short percentage, so it sizes to content (about half as wide). */
-    .cloud-chip
-    {
-        z-index: 11;
-        width: auto;
-        pointer-events: auto;
-        cursor: pointer;
-        color: var(--primary-text-color, #212121);
-        border-color: var(--secondary-text-color, #727272);
-    }
-    .cloud-chip.is-chart-active
-    {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--secondary-text-color, #727272) 70%, transparent);
-    }
-    /*  Short cloud-coloured leader joining the irradiance chip to the cloud chip on its right. */
-    .cloud-chip-leader
-    {
-        position: absolute;
-        transform: translateY(-50%);
-        width: 14px;
-        height: 2px;
-        background: var(--secondary-text-color, #727272);
-        border-radius: 1px;
-        pointer-events: none;
-        z-index: 10;
-    }
-
     /*  Sunrise / sunset marker: glyph + local time pinned just outside the arc at the horizon crossing,
         centred on its computed point. Sun-coloured, click-transparent. */
     .sun-cross-marker
@@ -602,7 +665,7 @@ export const heliosCardStyles = css`
         z-index: 13;
         color: var(--primary-text-color, #212121);
         /*  HA amber token so it stays distinct from the PV production chip (orange). */
-        border-color: var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
+        border-color: var(--amber-color, var(--warning-color, #ffc107));
     }
 
 
@@ -663,112 +726,6 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-
-    /*  Ambient info panel, top-right. A small low-opacity plate over the card background (frosted where the
-        browser supports backdrop-filter), holding the local weather now and the optional astronomical data.
-        Deliberately NOT in the No UI fade list above, so it stays visible on a wall display when the timeline and
-        controls fade away. Info-only, so pointer-events stay off. */
-    .info-panel
-    {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 55;
-        max-width: 44%;
-        padding: var(--ha-space-2, 8px) var(--ha-space-3, 10px);
-        border-radius: 12px;
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        background: var(--ha-card-background, var(--card-background-color, #fff));
-        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #fff)) 60%, transparent);
-        -webkit-backdrop-filter: blur(6px);
-        backdrop-filter: blur(6px);
-        box-shadow: var(--helios-shadow-chip, 0 1px 3px var(--shadow-color));
-        color: var(--primary-text-color, #212121);
-        pointer-events: none;
-        text-align: start;
-    }
-
-    .info-panel .ip-weather
-    {
-        display: flex;
-        align-items: center;
-        gap: var(--ha-space-2, 8px);
-    }
-    .info-panel .ip-cond-icon
-    {
-        --mdc-icon-size: 30px;
-        color: var(--primary-text-color, #212121);
-        flex: 0 0 auto;
-    }
-    .info-panel .ip-primary
-    {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.05;
-    }
-    .info-panel .ip-temp
-    {
-        font-size: 22px;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-    }
-    .info-panel .ip-unit
-    {
-        font-size: 13px;
-        font-weight: 500;
-        opacity: 0.7;
-        margin-inline-start: 1px;
-    }
-    .info-panel .ip-secondary
-    {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        margin-top: 4px;
-        font-size: 11px;
-        opacity: 0.85;
-    }
-    .info-panel .ip-line
-    {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-    }
-    .info-panel .ip-wind-icon,
-    .info-panel .ip-wind-dir
-    {
-        --mdc-icon-size: 14px;
-        opacity: 0.75;
-    }
-
-    .info-panel .ip-astro
-    {
-        margin-top: var(--ha-space-2, 8px);
-        padding-top: var(--ha-space-2, 8px);
-        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-    }
-    .info-panel .ip-astro-row
-    {
-        display: flex;
-        justify-content: space-between;
-        gap: var(--ha-space-4, 16px);
-        font-size: 11px;
-    }
-    .info-panel .ip-astro-icon
-    {
-        --mdc-icon-size: 15px;
-        opacity: 0.7;
-    }
-    .info-panel .ip-astro-val
-    {
-        font-weight: 500;
-        font-variant-numeric: tabular-nums;
-    }
 
 
 `;

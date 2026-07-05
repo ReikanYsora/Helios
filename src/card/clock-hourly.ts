@@ -7,14 +7,15 @@
 import { fetchChangeSeries, outlierCapKwh, type ChangeBucket } from './energy-stats';
 import { callWSWithTimeout } from './ws-timeout';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
-import { customEntityId, type HeliosConfig } from '../helios-config';
+import { customEntityId, customEnergyEntityId, type HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
-import { serverHour } from './tz';
-import { HOUR_MS } from '../constants';
+import { serverHour } from './timezone';
+import { HOUR_MS, HOURS_PER_DAY} from '../constants';
 
-//24 hour-of-day values per metric: energy meters are kWh totals summed over the window; soc is an average %, custom
-//an average (watts); consumption is derived from the energy totals. `pv` is per solar source (one 24-vector each, in
-//source order), so the dial can split production by string like the short-window path.
+//24 hour-of-day values per metric: energy meters are kWh totals summed over the window; soc is an average %; custom
+//is the kWh total of its energy meter (measured, same change-series path as the grid/pv/battery rings); consumption
+//is derived from the energy totals. `pv` is per solar source (one 24-vector each, in source order), so the dial can
+//split production by string like the short-window path.
 export interface ClockHourly
 {
     pv:               number[][];
@@ -52,7 +53,7 @@ export function clockNeedsHourly(host: ClockHourlyHost): boolean
 //buckets that a /duration average blows up into a spike at 23h/13h.
 function binChangeByHour(buckets: ChangeBucket[] | null): number[]
 {
-    const sum = new Array<number>(24).fill(0);
+    const sum = new Array<number>(HOURS_PER_DAY).fill(0);
     if (!buckets) { return sum; }
     //Same shared outlier rule as the store curves: a reset/rollover dumps the accumulated total into one bucket.
     const cap = outlierCapKwh(buckets);
@@ -68,8 +69,8 @@ function binChangeByHour(buckets: ChangeBucket[] | null): number[]
 //preferred, else change/duration); otherwise the raw mean (SoC %).
 async function statByHour(hass: any, ids: string[], startMs: number, endMs: number, power: boolean): Promise<number[]>
 {
-    const sum = new Array<number>(24).fill(0);
-    const cnt = new Array<number>(24).fill(0);
+    const sum = new Array<number>(HOURS_PER_DAY).fill(0);
+    const cnt = new Array<number>(HOURS_PER_DAY).fill(0);
     if (!ids.length) { return sum; }
     try
     {
@@ -79,8 +80,10 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
             end_time:      new Date(endMs).toISOString(),
             statistic_ids: [...ids].sort(),
             period:        'hour',
-            types:         power ? ['mean', 'change'] : ['mean'],
-            ...(power ? { units: { energy: 'kWh', power: 'W' } } : {}),
+            //Power slots read the recorded per-bucket mean ONLY (measured watts): a mis-picked energy
+            //meter yields nothing rather than watts derived from its kWh deltas.
+            types:         ['mean'],
+            ...(power ? { units: { power: 'W' } } : {}),
         });
         for (const id of ids)
         {
@@ -89,15 +92,8 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
             {
                 const tMs = typeof b?.start === 'number' ? b.start : Date.parse(b?.start);
                 if (!isFinite(tMs)) { continue; }
-                let v: number | null = null;
-                if (typeof b?.mean === 'number' && isFinite(b.mean)) { v = b.mean; }
-                else if (power && typeof b?.change === 'number' && isFinite(b.change))
-                {
-                    const endB  = typeof b?.end === 'number' ? b.end : Date.parse(b?.end);
-                    const hours = (endB - tMs) / HOUR_MS;
-                    v = hours > 0 ? (b.change / hours) * 1000 : null;
-                }
-                if (v === null || !isFinite(v)) { continue; }
+                const v = typeof b?.mean === 'number' && isFinite(b.mean) ? b.mean : null;
+                if (v === null) { continue; }
                 const h = serverHour(tMs);
                 sum[h] += power ? Math.abs(v) : v;
                 cnt[h] += 1;
@@ -120,22 +116,24 @@ export async function fetchHourlyProfile(
     //solarSourceName(host, s) + the store path.
     const solarIds = d.solarStatEnergyFroms;
 
-    const [solarPerSource, gImp, gExp, bChg, bDis, soc, custom] = await Promise.all([
+    const [solarPerSource, gImp, gExp, bChg, bDis, soc, customChg] = await Promise.all([
         Promise.all(solarIds.map(id => fetchChangeSeries(hass, [id], startMs, endMs, 'hour'))),
         chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
         chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
         statByHour(hass, d.batteryStatSocs, startMs, endMs, false),
-        cid ? statByHour(hass, [cid], startMs, endMs, true) : Promise.resolve(new Array<number>(24).fill(0)),
+        //Custom energy meter on the same measured change-series path as the other rings (kWh binned by hour).
+        chg(cid ? [cid] : []),
     ]);
 
     const pv               = solarPerSource.map(buckets => binChangeByHour(buckets));
-    const pvTotal          = new Array<number>(24).fill(0);
-    for (const src of pv) { for (let h = 0; h < 24; h++) { pvTotal[h] += src[h]; } }
+    const custom           = binChangeByHour(customChg);
+    const pvTotal          = new Array<number>(HOURS_PER_DAY).fill(0);
+    for (const src of pv) { for (let h = 0; h < HOURS_PER_DAY; h++) { pvTotal[h] += src[h]; } }
     const gridImport       = binChangeByHour(gImp);
     const gridExport       = binChangeByHour(gExp);
     const batteryCharge    = binChangeByHour(bChg);
     const batteryDischarge = binChangeByHour(bDis);
-    //Consumption from the same identity the timeline uses: production + import − export − net battery, clamped.
+    //Consumption from the same identity the timeline uses: production + import - export - net battery, clamped.
     const consumption = pvTotal.map((p, h) => Math.max(0, p + gridImport[h] - gridExport[h] - (batteryCharge[h] - batteryDischarge[h])));
 
     return { pv, gridImport, gridExport, batteryCharge, batteryDischarge, consumption, soc, custom };
@@ -151,7 +149,8 @@ export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
         return;
     }
     const d   = host._energyDefaults;
-    const cid = customEntityId(host.config);
+    //Custom ring reads the ENERGY meter (measured kWh), gated on the entity being fully configured (both halves).
+    const cid = customEntityId(host.config) ? customEnergyEntityId(host.config) : '';
     const startMs = host._timeRange.start.getTime();
     //Quantise the end to the whole hour: Date.now() advances every frame, and an unquantised end would churn the key
     //every render, refetching in a loop and (with the null-on-change below) flashing the dial.

@@ -2,19 +2,15 @@ import { SceneRenderer } from './engine/renderer';
 import type { Building, RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
-import { fetchRawBuildings, interpretBuildings } from './engine/buildings';
-import {
-    type CloudIntensity,
-    resolveWeatherAtTime,
-} from './engine/weather-resolve';
+import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './engine/buildings';
+import { resolveWeatherAtTime } from './engine/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './engine/hud-layout';
 import { sunSpherePoint, daylightRamp } from './engine/sun-arc';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
-    SUN_COLOR_HEX,
-} from './constants';
+    SUN_COLOR_HEX, BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS} from './constants';
 import
 {
     type HeliosConfig,
@@ -65,9 +61,6 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 
 
 
-//Re-exported from engine/weather-resolve so importers of CloudIntensity from this module keep resolving.
-export type { CloudIntensity };
-
 //Source of the irradiance shown in the PV legend, in precedence order:
 //  haurwitz  - analytical clear-sky GHI (Haurwitz 1945) + cloud attenuation (Kasten-Czeplak 1980);
 //              always available, used as fallback past the forecast horizon or when shortwave is missing.
@@ -83,10 +76,9 @@ export interface WeatherData
     cloudLow:       number;        //%, low-level clouds (<= 3 km)
     cloudMid:       number;        //%, mid-level clouds (3 to 8 km)
     cloudHigh:      number;        //%, high-level clouds (>= 8 km)
-    cloudIntensity: CloudIntensity;
     timeRange:      { start: Date; end: Date } | null;
     isLiveTime:     boolean;
-    pvPower:        number;        //primary value, normalised 0..100 (≈ GHI/10 W/m²)
+    pvPower:        number;        //primary value, normalised 0..100 (~ GHI/10 W/m²)
     pvPowerHaurwitz:  number;      //always populated (analytical fallback)
     pvPowerShortwave: number;      //-1 if shortwave_radiation is unavailable
     irradianceSource: IrradianceSource;
@@ -116,7 +108,7 @@ export class HeliosEngine
     private _homeHourlyData: SampleHourly | null = null;
     private _selectedTime:  Date | null       = null;
 
-    //Skip atmosphere repaint when the sun moved less than 0.5° since last call (≈ 2 min).
+    //Skip atmosphere repaint when the sun moved less than 0.5° since last call (~ 2 min).
     private _lastAtmosphereAlt = -999;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
@@ -148,12 +140,7 @@ export class HeliosEngine
         }
     }
 
-    public onFetchStart?:    () => void;
-    public onFetchEnd?:      () => void;
     public onWeatherUpdate?: (data: WeatherData) => void;
-    //Buildings fetch lifecycle (around fetchRawBuildings) for the loading banner.
-    public onBuildingsFetchStart?: () => void;
-    public onBuildingsFetchEnd?:   () => void;
 
     //Irradiance samples from a HA irradiance sensor (history + live state), sorted ascending by time.
     //Null = no entity or no usable samples (model irradiance used unchanged). Each is W/m², treated as
@@ -359,26 +346,6 @@ export class HeliosEngine
         }
         return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
     }
-    //Live setter so the editor slider previews a bearing without a config commit. Wraps to [0, 360).
-    public setCameraBearing(deg: number): void
-    {
-        if (!this._renderer || !Number.isFinite(deg))
-        {
-            return;
-        }
-        const wrapped = ((deg % 360) + 360) % 360;
-        this._renderer.setCameraBearing(wrapped);
-    }
-    //Live setter for the editor's pitch slider, clamped to the drag-pitch bounds.
-    public setCameraPitch(deg: number): void
-    {
-        if (!this._renderer || !Number.isFinite(deg))
-        {
-            return;
-        }
-        const clamped = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, deg));
-        this._renderer.setCameraPitch(clamped);
-    }
     //Persist the camera's CURRENT bearing/pitch (with the live lock flag) to localStorage, so reopening the
     //dashboard restores the exact view. Called on drag-end and by the card on teardown (captures an
     //auto-rotated bearing too). No-op before the renderer exists.
@@ -440,21 +407,13 @@ export class HeliosEngine
     {
         this._renderer?.setGroundOverlay(svg);
     }
-    //Defaults the editor's reset button restores: always the hemisphere-aware boot pose, never the user's
-    //customised values (reading _initialBearing/_initialPitch would echo back what they just changed).
-    public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }
-    public getDefaultPitch():   number { return CAMERA_PITCH_REST_DEG; }
-    //Live pose readers so the editor pre-fills its sliders with the current view, not the committed YAML.
-    public getCameraBearing(): number { return this._renderer ? this._renderer.getCameraBearing() : this.getDefaultBearing(); }
-    public getCameraPitch():   number { return this._renderer ? this._renderer.getCameraPitch()   : this.getDefaultPitch(); }
+    public setGroundDecal(svg: string | null, active = false): void
+    {
+        this._renderer?.setGroundDecal(svg, active);
+    }
     //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
-    //sun-arc-scale memo key + any zoom-aware callers keep a stable value.
+    //sun-arc-scale memo key keeps a stable value.
     public getCameraZoom():    number { return 18; }
-
-    //Cached CSS width of the scene viewport (px), maintained on resize so HUD layout can read it without
-    //forcing a mid-frame layout flush. 0 until the first measure. Used by the card to decide which side of
-    //the irradiance chip the cloud chip fits on.
-    public getViewportWidth(): number { return this._cachedCanvasCssW; }
 
 
     _autoRotateRaf?:           number;
@@ -483,6 +442,13 @@ export class HeliosEngine
         {
             const renderer = this._renderer;
             if (!renderer)
+            {
+                this._autoRotateRaf = undefined;
+                return;
+            }
+            //Stop integrating while paused: an off-screen card is not throttled by rAF (only hidden tabs are),
+            //so the loop would keep forcing full repaints. setPaused(false) restarts the loop.
+            if (this._paused)
             {
                 this._autoRotateRaf = undefined;
                 return;
@@ -538,12 +504,19 @@ export class HeliosEngine
     //option change with no re-fetch.
     private _buildingsData:   Building[] | null    = null;
     private _buildingsRaw:    RawBuilding[] | null = null;
+    //True once a fetch for the current location has settled (data, empty, or outage). Before that, the scene shows
+    //no buildings at all rather than the fallback house: the fallback is for a genuine "no data" outcome, not the
+    //brief loading window before OpenFreeMap answers.
+    private _buildingsFetchDone            = false;
     private _buildingsLocKey               = '';
     //One-shot prism-rise guard (plays once the first time footprints land).
     private _grown = false;
     //Editor-preview mode: HA rebuilds the preview card on every keystroke, so intro animations are skipped.
     private readonly _editMode: boolean;
     private _buildingsAbort?: AbortController;
+
+    //Pending re-attempt after a total buildings-fetch outage (cleared on re-fetch and teardown).
+    private _buildingsRetryTimer?: number;
 
     //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
     //and the refresh runs once on expiry. Curves+chips still update every move; only the costly shadow
@@ -644,10 +617,6 @@ export class HeliosEngine
         this._cachedCanvasCssW = container.clientWidth  || this._cachedCanvasCssW;
         this._cachedCanvasCssH = container.clientHeight || this._cachedCanvasCssH;
 
-        //Sibling global for the editor UI: camera setters live on the engine.
-        try { (window as unknown as { __heliosEngine?: HeliosEngine }).__heliosEngine = this; }
-        catch (_) { /* window not writable: skip the optional editor global */ }
-
         //Bootstrap the basemap + initial scene asynchronously, then mark ready and feed sun/buildings.
         this._bootstrapRenderer();
 
@@ -674,12 +643,6 @@ export class HeliosEngine
             }
             //Single-pointer rotation; ignore additional touches.
             if (activeId !== null)
-            {
-                return;
-            }
-            //Swallow gestures during the post-exit cooldown so the dismissing click can't bleed into a
-            //fresh drag-rotate on the scene behind.
-            if (this.isUserGestureSuppressed())
             {
                 return;
             }
@@ -859,22 +822,9 @@ export class HeliosEngine
         cloudMid:       number;
         cloudHigh:      number;
         shortwave:      number;
-        cloudIntensity: CloudIntensity;
     }
     {
         return resolveWeatherAtTime(this._homeHourlyData, t);
-    }
-
-    //Ambient readout (WMO code, temperature C, wind km/h + bearing deg) at `t` for the top-right info panel.
-    //Null until the first Open-Meteo payload lands so the card hides the rows instead of showing NaN.
-    public getAmbientReadout(t: Date): { weatherCode: number; temperature: number; windSpeed: number; windDir: number } | null
-    {
-        if (!this._homeHourlyData)
-        {
-            return null;
-        }
-        const w = resolveWeatherAtTime(this._homeHourlyData, t);
-        return { weatherCode: w.weatherCode, temperature: w.temperature, windSpeed: w.windSpeed, windDir: w.windDir };
     }
 
     //Public wrapper for _getTimeRange so the card's 30 s tick can re-fetch the window after midnight rollover.
@@ -903,9 +853,9 @@ export class HeliosEngine
         const futureDays = this._periodFutureDays ?? 1;
         const today0 = new Date();
         today0.setHours(0, 0, 0, 0);
-        const visibleStartMs = today0.getTime() - pastDays * 24 * 3_600_000;
+        const visibleStartMs = today0.getTime() - pastDays * DAY_MS;
         //End at the midnight after the last future day so the axis spans futureDays full days plus today.
-        const visibleEndMs   = today0.getTime() + (futureDays + 1) * 24 * 3_600_000;
+        const visibleEndMs   = today0.getTime() + (futureDays + 1) * DAY_MS;
 
         //The axis is exactly the configured span. Weather traces may not reach the far past, but the
         //recorder-backed curves span the whole window so a 30-day period really shows 30 days.
@@ -965,7 +915,6 @@ export class HeliosEngine
             cloudLow:         w.cloudLow,
             cloudMid:         w.cloudMid,
             cloudHigh:        w.cloudHigh,
-            cloudIntensity:   w.cloudIntensity,
             timeRange:        this._getTimeRange(),
             isLiveTime:       this._selectedTime === null,
             pvPower,
@@ -1022,7 +971,7 @@ export class HeliosEngine
     }
 
     //Ensure the raw footprints for the current LOCATION are in hand, then interpret + render them. Re-fetches
-    //Overpass only when the home location changed; a pure option change finds the raw data already present
+    //the tiles only when the home location changed; a pure option change finds the raw data already present
     //and just re-interprets via _applyBuildings (no network).
     private _ensureBuildings(): void
     {
@@ -1044,20 +993,21 @@ export class HeliosEngine
         const sharedRaw = sharedBuildingsCacheGet(locKey);
         if (sharedRaw)
         {
-            this._buildingsRaw    = sharedRaw;
-            this._buildingsLocKey = locKey;
+            this._buildingsRaw       = sharedRaw;
+            this._buildingsFetchDone = true;
+            this._buildingsLocKey    = locKey;
             this._applyBuildings();
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
             return;
         }
 
-        //Abort any in-flight request so a rapid location change doesn't race a stale fetch into the sources.
+        //Abort any in-flight request so a rapid location change doesn't race a stale fetch into the
+        //sources, and drop any pending outage re-attempt: this call IS the fresh attempt.
         this._buildingsAbort?.abort();
+        this._clearBuildingsRetry();
         const ac = new AbortController();
         this._buildingsAbort = ac;
-
-        try { this.onBuildingsFetchStart?.(); } catch (_) { /* host progress callback threw; fetch continues */ }
 
         fetchRawBuildings(this.homeLat, this.homeLon, ac.signal)
         .then(result =>
@@ -1066,8 +1016,19 @@ export class HeliosEngine
             {
                 return;
             }
-            this._buildingsRaw    = result;
-            this._buildingsLocKey = locKey;
+            //Null = the tile fetch failed entirely. The location stays UNCLAIMED (no raw, no shared cache) so a
+            //later pass re-fetches. Mark the fetch settled and interpret, so the fallback house now shows (a
+            //genuine outage) until a re-attempt heals it, instead of an empty scene.
+            if (result === null)
+            {
+                this._buildingsFetchDone = true;
+                this._scheduleBuildingsRetry();
+                this._applyBuildings();
+                return;
+            }
+            this._buildingsRaw       = result;
+            this._buildingsFetchDone = true;
+            this._buildingsLocKey    = locKey;
             _sharedBuildingsCache.set(locKey, { data: result, ts: Date.now() });
             this._applyBuildings();
             //Buildings just arrived; bypass the "sun hardly moved" guard so the next call repaints a full
@@ -1078,20 +1039,66 @@ export class HeliosEngine
         .catch(() =>
         {
             //Buildings fetch failed or was aborted on teardown: the scene renders without 3D buildings.
-        })
-        .finally(() =>
-        {
-            try { this.onBuildingsFetchEnd?.(); } catch (_) { /* host progress callback threw; nothing left to do */ }
         });
+    }
+
+
+    //Editor "force building download": drop every cache layer for the current location (persisted raw,
+    //shared module cache, in-memory raw) and re-fetch right away, bypassing any pending outage retry.
+    public forceBuildingsRefetch(): void
+    {
+        clearBuildingsLocationCache(this.homeLat, this.homeLon);
+        _sharedBuildingsCache.delete(this._buildingsLocationKey());
+        this._buildingsRaw       = null;
+        this._buildingsFetchDone = false;
+        this._buildingsLocKey    = '';
+        this._clearBuildingsRetry();
+        this._ensureBuildings();
+    }
+
+
+    private _scheduleBuildingsRetry(): void
+    {
+        if (this._buildingsRetryTimer !== undefined)
+        {
+            return;
+        }
+        this._buildingsRetryTimer = window.setTimeout(() =>
+        {
+            this._buildingsRetryTimer = undefined;
+            if (this._renderer)
+            {
+                this._ensureBuildings();
+            }
+        }, BUILDINGS_REFETCH_DELAY_MS);
+    }
+
+
+    private _clearBuildingsRetry(): void
+    {
+        if (this._buildingsRetryTimer !== undefined)
+        {
+            window.clearTimeout(this._buildingsRetryTimer);
+            this._buildingsRetryTimer = undefined;
+        }
     }
 
     //Interpret the raw footprints with the CURRENT options (radius/count/real-size/height/cluster) and hand
     //the result to the renderer (it extrudes home + surroundings and casts their shadows itself). Pure +
-    //cheap, so this is the re-render path for every building-option change (no Overpass round-trip).
+    //cheap, so this is the re-render path for every building-option change (no tile round-trip).
     private _applyBuildings(): void
     {
         if (!this._renderer)
         {
+            return;
+        }
+        //Loading window: no fetch has settled yet, so draw NO buildings rather than the fallback house. Once a
+        //fetch resolves (data, empty, or outage) the normal interpret runs and the fallback appears only if there
+        //genuinely is no data.
+        if (this._buildingsRaw === null && !this._buildingsFetchDone)
+        {
+            this._buildingsData = [];
+            this._pushRenderableSources();
             return;
         }
         this._buildingsData = interpretBuildings(this._buildingsRaw ?? [], {
@@ -1104,8 +1111,8 @@ export class HeliosEngine
         this._pushRenderableSources();
     }
 
-    //Hand the interpreted footprints to the renderer. interpretBuildings always returns at least the
-    //fallback house, so `buildings` is empty only before the first interpret pass.
+    //Hand the interpreted footprints to the renderer. `buildings` is empty during the loading window (no fetch
+    //settled yet) and otherwise carries at least the fallback house.
     private _pushRenderableSources(): void
     {
         if (!this._renderer)
@@ -1172,8 +1179,6 @@ export class HeliosEngine
 
         this._clearWeatherTimer();
 
-        this.onFetchStart?.();
-
         try
         {
             //Single home-point fetch (with elevation): the only weather source; surroundings reuse the series.
@@ -1187,7 +1192,9 @@ export class HeliosEngine
             this._rateLimitStreak  = 0;
             this._otherErrorStreak = 0;
 
-            if (this._selectedTime === null)
+            //Never re-arm while paused: a fetch launched before setPaused(true) can resolve after it, and an
+            //unconditional re-arm here would resurrect the interval an off-screen card just stopped.
+            if (this._selectedTime === null && !this._paused)
             {
                 this._weatherTimer = window.setInterval(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
@@ -1212,7 +1219,6 @@ export class HeliosEngine
                 cloudLow:         0,
                 cloudMid:         0,
                 cloudHigh:        0,
-                cloudIntensity:   'clear',
                 timeRange:        this._getTimeRange(),
                 isLiveTime:       this._selectedTime === null,
                 pvPower:          0,
@@ -1220,6 +1226,10 @@ export class HeliosEngine
                 pvPowerShortwave: -1,
                 irradianceSource: 'haurwitz',
             });
+
+            //Paused mid-flight: emit the one fallback frame but schedule no retry timer (the finally still
+            //runs). Un-pausing calls _refreshWeather again, which restarts the cycle from a clean slate.
+            if (this._paused) { return; }
 
             let retryDelay: number;
             if (e.status === 429)
@@ -1248,15 +1258,7 @@ export class HeliosEngine
                 );
             }
         }
-        finally
-        {
-            this.onFetchEnd?.();
-        }
     }
-
-    //Wall-clock until which fresh gestures are ignored. Read via isUserGestureSuppressed() to filter scrubs
-    //and drag-rotate; for view transitions needing a post-animation input cooldown.
-    _postExitCooldownUntil = 0;
 
     //Wipe cached Open-Meteo payloads, drop the in-memory snapshot, and re-fetch (editor's "reset data
     //cache" button). Returns the count removed for a UI confirmation.
@@ -1295,6 +1297,8 @@ export class HeliosEngine
         else
         {
             this._refreshShadowsAndAtmosphere();
+            //Restart the auto-rotate loop the tick stopped on pause (no-op via its own guard if still running).
+            this._startAutoRotateLoop();
             if (this._skyTimer === undefined)
             {
                 this._skyTimer = window.setInterval(() =>
@@ -1346,13 +1350,6 @@ export class HeliosEngine
         void this._refreshWeather(lat, lon);
     }
 
-    //True during the post-exit cooldown. Card gates scrubs, engine gates drag-rotate; both read the same
-    //clock so the suppression window is symmetric.
-    public isUserGestureSuppressed(): boolean
-    {
-        return Date.now() < this._postExitCooldownUntil;
-    }
-
     //Screen-space layout of the on-map readout chips and their leader lines. Returns positions (CSS px
     //relative to the canvas) for the cloud chip (outside the ring), PV chip, battery SoC/Power chips, the
     //grid chip, the ring edge (hemisphere-aware anchor direction for the cloud fill interp), and
@@ -1366,13 +1363,6 @@ export class HeliosEngine
         //Custom-entity chip anchor: top-left, above the grid chip (mirrors battery-power on the right).
         customLabel:       { x: number; y: number };
         home:              { x: number; y: number };
-        //Projected roof-top of the home building (home at render_height), the drop-leader's bottom endpoint
-        //so the line lands on the roof at any size/pitch/zoom. Falls back to ground home when unresolved.
-        homeRoof:          { x: number; y: number };
-        //SVG polygon `points` for the PV home-anchor ground disc: 48 points on a circle of
-        //PV_HOME_ANCHOR_RADIUS_M around the home, projected and expressed relative to home so the SVG can
-        //wrap it in a translate-to-home group and pulse by scaling around the origin.
-        homeAnchorPoints:  string;
     } | null
     {
         if (!this._renderer)
@@ -1386,12 +1376,6 @@ export class HeliosEngine
             return null;
         }
 
-        //Hemisphere-aware fixed anchor on the disc edge (NE of home in NH, SW in SH). Both project to
-        //screen-lower-left at the resting bearing, keeping the cloud chip clear of the irradiance chip's
-        //top-of-arc. Anchoring to one lon/lat lets the chip orbit smoothly under rotation.
-        const lat0   = this.homeLat;
-        const cosLat = Math.cos(lat0 * Math.PI / 180);
-
         //Chip cluster, organised into columns: PV anchored above the home, battery (SoC/Power) stacked on
         //the right, the grid chip on the left, so "what's in" and "what's stored/consumed" split.
         //All offsets scale by _heliosScale() so the cluster spreads on a kiosk layout (= 1.0 at standard
@@ -1404,30 +1388,6 @@ export class HeliosEngine
         const CHIP_SIDE_X_OFFSET_PX = 84 * scale;
         //Vertical gap between the top and bottom chip rows; 60 leaves room for the L-leaders' fillet.
         const CHIP_STACK_GAP_PX     = 60 * scale;
-        //Home roof Y = home lat/lon projected at the tallest render_height. Used as the drop-leader endpoint
-        //and to anchor the cluster above the roof so it follows the silhouette as the canvas grows. Falls
-        //back to ground home before _buildingsData lands.
-        let roofY = home.y;
-        const homeBuildings = this._buildingsData?.filter((b) => b.isHome) ?? [];
-        if (homeBuildings.length > 0)
-        {
-            let maxH = 0;
-            for (const b of homeBuildings)
-            {
-                if (b.height > maxH)
-                {
-                    maxH = b.height;
-                }
-            }
-            if (maxH > 0)
-            {
-                const projectedRoof = this._projectScenePoint(this.homeLon, this.homeLat, maxH);
-                if (projectedRoof)
-                {
-                    roofY = projectedRoof.y;
-                }
-            }
-        }
 
         //The cluster centres on the home pill (the chips' orbit hub), lifted modestly off the ground point
         //so it sits over the building body; liftScale lets a kiosk canvas breathe.
@@ -1448,41 +1408,6 @@ export class HeliosEngine
         const customXLeft       = home.x - CHIP_SIDE_X_OFFSET_PX;
         const customY           = clusterY - CHIP_STACK_GAP_PX / 2;
 
-        //PV home-anchor ground disc as a polygon: sample N points on a circle of PV_HOME_ANCHOR_RADIUS_M
-        //around the home, project each, and express relative to the home so the SVG can translate-to-home.
-        //Flat on the ground, it projects to an ellipse under pitch like the rest of the map.
-        const PV_HOME_ANCHOR_RADIUS_M = 4.0;
-        const ANCHOR_SAMPLES          = 48;
-        const anchorLatPerM = 1 / 111_320;
-        const anchorLonPerM = anchorLatPerM / cosLat;
-        //Reuse a single instance-level scratch array + string buffer instead of allocating a 48-entry array
-        //per call; this function fires on every map move during auto-rotate.
-        const anchorPts = this._anchorPtsBuf;
-        if (anchorPts.length !== ANCHOR_SAMPLES)
-        {
-            anchorPts.length = ANCHOR_SAMPLES;
-        }
-        for (let i = 0; i < ANCHOR_SAMPLES; i++)
-        {
-            const a = (i / ANCHOR_SAMPLES) * Math.PI * 2;
-            const dE = Math.cos(a) * PV_HOME_ANCHOR_RADIUS_M;
-            const dN = Math.sin(a) * PV_HOME_ANCHOR_RADIUS_M;
-            const p  = this._projectScenePoint(
-                this.homeLon + dE * anchorLonPerM,
-                this.homeLat + dN * anchorLatPerM,
-                0
-            );
-            if (!p)
-            {
-                anchorPts[i] = '0,0';
-                continue;
-            }
-            //Direct number-to-string concat with one decimal of precision (cheaper than toFixed per call).
-            const dx = Math.trunc((p.x - home.x) * 100) / 100;
-            const dy = Math.trunc((p.y - home.y) * 100) / 100;
-            anchorPts[i] = dx + ',' + dy;
-        }
-
         return {
             pvLabel:           { x: pvX,            y: pvY          },
             batterySocLabel:   { x: batteryXRight,  y: batterySocY  },
@@ -1490,13 +1415,8 @@ export class HeliosEngine
             gridLabel:         { x: gridXLeft,      y: gridY        },
             customLabel:       { x: customXLeft,    y: customY      },
             home:              { x: home.x,         y: clusterY     },
-            homeRoof:          { x: home.x,         y: roofY        },
-            homeAnchorPoints:  anchorPts.join(' '),
         };
     }
-
-    //Scratch array for the PV home-anchor SVG points, reused across projectHomeLabelLayout() calls.
-    private _anchorPtsBuf: string[] = [];
 
     //Cached container CSS dimensions, fed by the ResizeObserver. Drives _heliosScale()/_sunArcScale() and
     //the HUD layout without re-reading clientWidth (which would force a layout flush mid-frame).
@@ -1540,8 +1460,8 @@ export class HeliosEngine
         if (this._renderer && Number.isFinite(minDim) && minDim > 0)
         {
             const D          = Math.PI / 180;
-            const mPerDegLat = 111_320;
-            const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
+            const mPerDegLat = METRES_PER_DEGREE;
+            const mPerDegLon = METRES_PER_DEGREE * Math.cos(this.homeLat * D);
             const PROBE_M    = 60;
             const home = this._projectScenePoint(this.homeLon, this.homeLat, 0);
             if (home)
@@ -1593,37 +1513,11 @@ export class HeliosEngine
         {
             return null;
         }
-        const perLat = 111_320;
-        const perLon = 111_320 * Math.cos(this.homeLat * Math.PI / 180);
+        const perLat = METRES_PER_DEGREE;
+        const perLon = METRES_PER_DEGREE * Math.cos(this.homeLat * Math.PI / 180);
         const east  = (lon - this.homeLon) * perLon;
         const north = (lat - this.homeLat) * perLat;
         return this._renderer.camera.project3(east, north, altitudeM);
-    }
-
-    //Screen-space rotation (deg, CSS clockwise) that points an up-pointing arrow icon along a real-world compass
-    //bearing (deg CW from North) projected onto the tilted ground. Because it routes through the live camera, the
-    //angle tracks camera orbit + pitch, so a panel arrow stays aligned with the true direction as the scene turns.
-    //Null until the renderer is ready or when the projected vector is degenerate (bearing edge-on to the camera).
-    public projectGroundBearing(bearingDeg: number): number | null
-    {
-        if (!this._renderer || !Number.isFinite(bearingDeg))
-        {
-            return null;
-        }
-        const rad = bearingDeg * Math.PI / 180;
-        //Any positive radius works: only the projected direction (not the length) is used.
-        const east  = Math.sin(rad) * 10;
-        const north = Math.cos(rad) * 10;
-        const origin = this._renderer.camera.project3(0, 0, 0);
-        const tip    = this._renderer.camera.project3(east, north, 0);
-        const dx = tip.x - origin.x;
-        const dy = tip.y - origin.y;
-        if (dx === 0 && dy === 0)
-        {
-            return null;
-        }
-        //mdi:navigation points up (screen -Y) at 0deg; rotate "up" onto (dx, dy).
-        return Math.atan2(dx, -dy) * 180 / Math.PI;
     }
 
     //Screen-space layout of the solar arc, the sun's current position, and the incidence ray. Null until
@@ -1889,11 +1783,15 @@ export class HeliosEngine
         if (time === null)
         {
             this._clearWeatherTimer();
-            //Returning to live mode resumes the standard 10-min refresh cadence.
-            this._weatherTimer = window.setInterval(
-                () => this._refreshWeather(this._fetchLat, this._fetchLon),
-                600_000
-            );
+            //Returning to live mode resumes the standard refresh cadence, unless the card is paused
+            //(off-screen): un-pausing re-arms via _refreshWeather, so arming here too would defeat setPaused.
+            if (!this._paused)
+            {
+                this._weatherTimer = window.setInterval(
+                    () => this._refreshWeather(this._fetchLat, this._fetchLon),
+                    WEATHER_REFRESH_INTERVAL_MS
+                );
+            }
         }
         else
         {
@@ -1925,7 +1823,6 @@ export class HeliosEngine
     public getTimelineSeries(): {
         times:        Date[];
         irradiance:   number[];
-        cloud:        number[];
         //Per-hour low/mid/high cloud cover %, so the timeline draws the three altitude bands separately.
         cloudLow:     number[];
         cloudMid:     number[];
@@ -1957,7 +1854,6 @@ export class HeliosEngine
             return pct * 10;
         });
 
-        const cloud     = home.times.map((_, i) => home.cloudCover[i] ?? 0);
         const cloudLow  = home.times.map((_, i) => home.cloudLow[i]  ?? 0);
         const cloudMid  = home.times.map((_, i) => home.cloudMid[i]  ?? 0);
         const cloudHigh = home.times.map((_, i) => home.cloudHigh[i] ?? 0);
@@ -1965,7 +1861,6 @@ export class HeliosEngine
         return {
             times:       home.times.slice(),
             irradiance,
-            cloud,
             cloudLow,
             cloudMid,
             cloudHigh,
@@ -1999,7 +1894,7 @@ export class HeliosEngine
 
         //Building option updates (radius/count/real-size/height/cluster): re-interpret the cached raw
         //footprints in memory via _ensureBuildings -> _applyBuildings. The location key is unchanged, so this
-        //never re-hits Overpass; the renderer re-extrudes from the freshly interpreted Building[]. We always
+        //never re-fetches the tiles; the renderer re-extrudes from the freshly interpreted Building[]. We always
         //re-interpret (cheap) rather than diffing every option key; _applyBuildings is pure and idempotent.
         const nextRadius = this._buildingRadiusMeters();
         this._ensureBuildings();
@@ -2040,6 +1935,7 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
+        this._clearBuildingsRetry();
         this._arcInputsCache         = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
@@ -2062,6 +1958,7 @@ export class HeliosEngine
         //Drop heavy instance state.
         this._buildingsData     = null;
         this._buildingsRaw      = null;
+        this._buildingsFetchDone = false;
         this._buildingsLocKey   = '';
         this._homeHourlyData    = null;
         this._dragRotateHandlers    = undefined;
@@ -2071,16 +1968,5 @@ export class HeliosEngine
         catch (_) { /* renderer may already be torn down */ }
         this._renderer      = undefined;
         this._mapReady      = false;
-
-        //Clear the debug global so it doesn't pin the dead engine.
-        try
-        {
-            const w = window as unknown as { __heliosEngine?: unknown };
-            if (w.__heliosEngine !== undefined)
-            {
-                delete w.__heliosEngine;
-            }
-        }
-        catch (_) { /* window not writable: editor global cleanup not needed */ }
     }
 }

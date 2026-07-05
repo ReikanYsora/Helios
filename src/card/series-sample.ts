@@ -1,10 +1,12 @@
-//Series sampling helpers shared across the timeline charts: generic linear interpolation and the PV value-at-instant
-//resolver (observed history -> LTS calibration -> forecast, with a below-horizon floor).
+//Series sampling helpers shared across the timeline charts: generic linear interpolation and the PV
+//value-at-instant resolver (recorder change series -> forecast, with a below-horizon floor on the
+//forecast branch only).
 
 import type { ChartHost } from './charts';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { valueAt } from './unifiedStore';
+import { wattsAtFromChangeSeries } from './energy-stats';
 
 
 //Linear-interpolate a (strictly time-ascending) series at a target timestamp. Out-of-range targets clamp to the
@@ -61,154 +63,48 @@ export function interpAt(times: Date[], values: number[], targetMs: number): num
 export function pvValueAtTime(
     host: ChartHost,
     targetMs: number,
-    //Optional per-source history override (multi-source tooltip rows). Reads this series instead of the aggregated
-    //`_pvHistory`; the calibration/LTS and forecast fallbacks are skipped in override mode (no per-entity LTS yet),
-    //so a per-entity row reads a dash past its history's tail.
-    seriesOverride?: { times: Date[]; values: number[] },
+    //Optional per-source meter id (multi-source tooltip rows, stacked bands, clock rings): reads that
+    //meter's own recorder change series; rows read a dash until the per-source fetch lands.
+    sourceMeterId?: string,
 ): { value: number; unit: string; isPredicted: boolean }
 {
-    const luRaw = (host._pvUnit || '').trim();
-    if (!luRaw)
+    //Observed past (and the live edge): the recorder `change` metric of the solar meter(s), the exact
+    //data the HA Energy dashboard consumes, expressed as the bucket's average watts. Never a
+    //client-side differentiation of counter states.
+    const series = sourceMeterId
+        ? host._pvChangeSeriesPerEntity.get(sourceMeterId) ?? null
+        : host._pvChangeSeries;
+    const w = wattsAtFromChangeSeries(series, targetMs);
+    if (w !== null)
     {
-        return { value: NaN, unit: '', isPredicted: false };
+        return { value: Math.max(0, w), unit: 'W', isPredicted: false };
     }
-    const lu             = luRaw.toLowerCase();
-    const isCumulative   = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-    const displayUnit    = isCumulative
-        ? (lu === 'kwh' ? 'kW' : lu === 'mwh' ? 'MW' : 'W')
-        : luRaw;
-    const duLow = displayUnit.toLowerCase();
-    const nativeFromW    = duLow === 'kw' ? 1 / 1000
-                         : duLow === 'mw' ? 1 / 1_000_000
-                         : 1;
-
-    //The sun-below-horizon floor applies to the FORECAST branch only (see below), not to recorded data: a predicted
-    //PV curve straddling sunrise/sunset can leak a few watts under the horizon, but observed production is trusted
-    //as-is so that 24/7 non-solar sources configured under solar (water turbines, micro-hydro) keep their night hours.
-
-    //Observed history. Cumulative entities differentiate the bracketing pair; power entities interpolate. Floor at
-    //zero so sensor/net-meter noise never shows a small negative. Instants beyond the last observed sample fall
-    //through to the forecast pass: clamping interpAt would freeze the tooltip on yesterday's late-afternoon reading.
-    const hist = seriesOverride ?? host._pvHistory;
-    const rawFirstMs = (hist && hist.times.length >= 1)
-        ? hist.times[0].getTime()
-        : Infinity;
-    const lastObsMs = (hist && hist.times.length >= 1)
-        ? hist.times[hist.times.length - 1].getTime()
-        : -Infinity;
-    if (hist && hist.times.length >= 2 && targetMs >= rawFirstMs && targetMs <= lastObsMs)
+    //Per-source rows carry no forecast: a future (or not-yet-fetched) cursor reads a dash.
+    if (sourceMeterId)
     {
-        if (isCumulative)
-        {
-            for (let i = 1; i < hist.times.length; i++)
-            {
-                const t1 = hist.times[i].getTime();
-                if (targetMs > t1)
-                {
-                    continue;
-                }
-                const t0 = hist.times[i - 1].getTime();
-                if (targetMs < t0)
-                {
-                    break;
-                }
-                const dtH = (t1 - t0) / 3_600_000;
-                if (dtH <= 0 || dtH > 6)
-                {
-                    break;
-                }
-                const dv = hist.values[i] - hist.values[i - 1];
-                if (!isFinite(dv) || dv < 0)
-                {
-                    break;
-                }
-                return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
-            }
-        }
-        else
-        {
-            const v = interpAt(hist.times, hist.values, targetMs);
-            if (isFinite(v))
-            {
-                return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
-            }
-        }
-    }
-    //Older past, before the head of the raw 6-hour window: fall back to the hourly LTS slot calibration. LTS values
-    //are already in native power units, so interpolation is correct regardless of entity type. Skipped in
-    //`seriesOverride` mode (no per-entity LTS yet, override carries only the 6 h raw window), so per-entity rows read
-    //a dash.
-    if (!seriesOverride)
-    {
-        const calib = host._pvCalibStats;
-        if (calib && calib.times.length >= 2 && targetMs <= lastObsMs)
-        {
-            if (isCumulative)
-            {
-                //_pvCalibStats carries the meter's cumulative `state` (kWh) per LTS bucket for energy sensors, not
-                //power. Differentiate the bracketing pair into average power; reading cumulative straight through
-                //inflates the readout ~1000x.
-                for (let i = 1; i < calib.times.length; i++)
-                {
-                    const t1 = calib.times[i].getTime();
-                    if (targetMs > t1)
-                    {
-                        continue;
-                    }
-                    const t0 = calib.times[i - 1].getTime();
-                    if (targetMs < t0)
-                    {
-                        break;
-                    }
-                    const dtH = (t1 - t0) / 3_600_000;
-                    if (dtH <= 0 || dtH > 6)
-                    {
-                        break;
-                    }
-                    const dv = calib.values[i] - calib.values[i - 1];
-                    if (!isFinite(dv) || dv < 0)
-                    {
-                        break;
-                    }
-                    return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
-                }
-            }
-            else
-            {
-                const v = interpAt(calib.times, calib.values, targetMs);
-                if (isFinite(v))
-                {
-                    return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
-                }
-            }
-        }
+        return { value: NaN, unit: 'W', isPredicted: false };
     }
 
-    //Override mode has no per-source forecast yet, so stop on a future cursor and let the caller show a dash. The
-    //aggregated path below handles the headline forecast.
-    if (seriesOverride)
-    {
-        return { value: NaN, unit: displayUnit, isPredicted: false };
-    }
-
-    //Forecast for future hours: read the store's corrected forecast at the cursor instant (same series the dotted
-    //curve draws), so the tooltip never disagrees with its line. Already cap-clipped and correction-applied.
+    //Forecast for future hours: read the store's corrected forecast at the cursor instant (same series
+    //the dotted curve draws), so the tooltip never disagrees with its line. Already cap-clipped and
+    //correction-applied.
     const store = host._unifiedStore;
     if (store)
     {
-        const w = valueAt(store.forecast, store, targetMs);
-        if (w !== null && w > 0)
+        const fw = valueAt(store.forecast, store, targetMs);
+        if (fw !== null && fw > 0)
         {
-            //Forecast-only sun floor: a predicted pair straddling sunrise/sunset can leak a few watts below the
-            //horizon. Zero it so the dashed curve doesn't glow at night; recorded data above is left untouched.
+            //Forecast-only sun floor: a predicted pair straddling sunrise/sunset can leak a few watts
+            //below the horizon. Zero it so the dashed curve doesn't glow at night; recorded data above
+            //is left untouched.
             const coords = getHomeCoords(host.config, host.hass);
             if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0)
             {
-                return { value: 0, unit: displayUnit, isPredicted: true };
+                return { value: 0, unit: 'W', isPredicted: true };
             }
-            return { value: Math.max(0, w) * nativeFromW, unit: displayUnit, isPredicted: true };
+            return { value: Math.max(0, fw), unit: 'W', isPredicted: true };
         }
     }
 
-    return { value: NaN, unit: displayUnit, isPredicted: false };
+    return { value: NaN, unit: 'W', isPredicted: false };
 }

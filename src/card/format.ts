@@ -21,6 +21,13 @@ export function formatLocalisedNumber(
     {
         return integer ? '0' : (0).toFixed(fractionDigits);
     }
+    //Snap values that ROUND to zero at the requested precision to a true zero: a -0.4 W sensor
+    //blip otherwise renders as "-0,00 kW" (Intl keeps the sign of a negative near-zero).
+    const snapEps = integer ? 0.5 : 0.5 * 10 ** -fractionDigits;
+    if (Math.abs(value) < snapEps)
+    {
+        value = 0;
+    }
     const locale = (hass?.locale?.language as string | undefined)
         ?? (hass?.language as string | undefined)
         ?? undefined;
@@ -117,10 +124,10 @@ export type PowerUnit = 'W' | 'kW';
 
 //Uniform power readout in the card's configured unit, locale-aware. Input is watts. 'kW' divides by 1000 at the
 //caller's decimal count; 'W' prints whole watts (a fractional watt is meaningless). `signed` prefixes an explicit
-//+/- (figure-dash) so battery charge reads apart from discharge.
+//+/- so battery charge reads apart from discharge.
 export function formatPower(hass: any, watts: number, decimals: number, unit: PowerUnit, signed = false): string
 {
-    const sign = signed ? (watts > 0 ? '+' : (watts < 0 ? '−' : '')) : '';
+    const sign = signed ? (watts > 0 ? '+' : (watts < 0 ? '-' : '')) : '';
     const mag  = signed ? Math.abs(watts) : watts;
     if (unit === 'W')
     {
@@ -129,8 +136,7 @@ export function formatPower(hass: any, watts: number, decimals: number, unit: Po
     return `${sign}${formatLocalisedNumber(hass, mag / 1000, decimals)} kW`;
 }
 
-//Back-compat power readout; `unit` defaults to 'kW' (the historical always-kW behaviour). Callers that respect the
-//user's power-unit setting pass it through.
+//Power readout defaulting to 'kW'. Callers that respect the user's power-unit setting pass it through.
 export function formatPowerKw(hass: any, watts: number, decimals: number, signed = false, unit: PowerUnit = 'kW'): string
 {
     return formatPower(hass, watts, decimals, unit, signed);
@@ -171,6 +177,23 @@ export function energyToKwh(value: number, unit: string): number
         case 'mwh': return value * 1000;
         default:    return value;
     }
+}
+
+
+//Parse a hass state string into a finite number, tolerant of a comma decimal separator (locales that render
+//`1,23`). Returns null on empty/non-numeric so callers gate cleanly. Shared by every live chip read so the same
+//state parses identically on the grid, pv, battery and custom chips.
+export function parseNumericState(raw: unknown): number | null
+{
+    if (typeof raw === 'number')
+    {
+        return Number.isFinite(raw) ? raw : null;
+    }
+    if (typeof raw !== 'string') { return null; }
+    const trimmed = raw.trim();
+    if (trimmed === '') { return null; }
+    const n = parseFloat(trimmed.replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
 }
 
 

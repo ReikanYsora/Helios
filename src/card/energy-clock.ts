@@ -5,19 +5,19 @@
 //by hour-of-day, no extra fetch.
 
 import type { SceneCamera } from '../engine/projection';
-import { HOUR_MS } from '../constants';
-import { type ChartTarget, type ChartHost, pvValueAtTime, clockTargetLabel, solarSourceName,
+import { HOUR_MS, HOURS_PER_DAY} from '../constants';
+import { type ChartTarget, type ChartHost, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from './charts';
 import { changeSeriesToWatts } from './energy-stats';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
 import { customEntityId, customEntityColor, valueDecimals, powerUnit, irradianceUnit } from '../helios-config';
 import { resolveCustomEntityIcon } from './custom-entity';
+import { buildLogoDecal } from './helios-logo';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import type { EnergyDefaults } from './energy-prefs';
-import { serverHour, serverHourFrac } from './tz';
-import { pickTranslations } from '../i18n';
+import { serverHour, serverHourFrac } from './timezone';
 
 //Structural surface the clock reads off the card. themeIsDark resolves palette polarity for the per-source
 //colour ramp.
@@ -43,10 +43,6 @@ const BAR_TANGENT_FRAC = 0.018;
 const BAR_RADIAL_FRAC  = 0.45;
 const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
 const LABEL_MIN_OPACITY = 0.15; //farthest-back hour label opacity (nearest is opaque)
-//Central column filling the hub: a stacked cylinder (one band per active filter) replacing the home prism at
-//the dial centre. Height is a fraction of the tallest bar; the polygon count fakes a smooth cylinder.
-const CLOCK_COLUMN_H_FRAC = 0.5;
-const CLOCK_COLUMN_SIDES  = 24;
 //Clock-face guide: faint centre ring + 24 spokes reaching toward (but stopping short of) the hour labels.
 const CLOCK_HUB_R_FRAC      = 0.12;
 const CLOCK_SPOKE_OUTER_FRAC = 1.10;
@@ -118,6 +114,9 @@ export interface ClockFrame
     compass: { x: number; y: number; transform: string; label: string }[];
     //Home prism's projected centre + screen-px hit radius (the inner empty disc), for the home-hover total.
     home: { x: number; y: number; r: number };
+    //Ground-laid Helios mark that replaces the old central column: inner SVG + whether it is hover/tap-active
+    //(drives the opacity fade). The engine tilts it onto the ground plane under the upright bars.
+    decal: { svg: string; active: boolean };
 }
 
 
@@ -188,16 +187,6 @@ function expandHourly(hourly: number[], sum: boolean): number[]
     return out;
 }
 
-//Convert a pvValueAtTime reading to watts. Its `.value` is in its native power unit (`.unit` is W/kW/MW): a
-//cumulative kWh source differentiates to kW, an MWh source to MW. The clock integrates watts into energy, so a
-//kW/MW reading taken as watts would come out 1000x/1e6x too small (the source of the near-zero totals on
-//energy-only installs). Case-insensitive so a raw power sensor's own unit string is handled too.
-function pvReadingToWatts(value: number, unit: string): number
-{
-    const u = unit.toLowerCase();
-    return u === 'mw' ? value * 1_000_000 : u === 'kw' ? value * 1000 : value;
-}
-
 //Bin one store series into per-slot averages of its absolute value (export/charge come back negative); empty
 //slots stay NaN so fillGaps can interpolate them rather than reading as a zero spike.
 function binSlotAvg(store: UnifiedDataStore, series: (number | null)[]): number[]
@@ -254,7 +243,7 @@ function hasSignal(series: (number | null)[] | undefined): boolean
 export function availableClockTargets(host: ClockHost): ChartTarget[]
 {
     const store = host._unifiedStore;
-    const hasProduction = host._pvHistoryPerEntity.size > 0
+    const hasProduction = host._energyDefaults.solarStatEnergyFroms.length > 0
         || hasSignal(store?.production) || hasSignal(store?.forecast);
     const hasGrid    = hasSignal(store?.gridImport) || hasSignal(store?.gridExport);
     const hasBattery = hasSignal(store?.battery);
@@ -268,7 +257,6 @@ export function availableClockTargets(host: ClockHost): ChartTarget[]
     if (hasGrid)    { out.push('grid'); }
     //Weather metrics only when the active mode offers them (off for month/year).
     if (host._weatherAvailable && hasSignal(store?.irradiance)) { out.push('irradiance'); }
-    if (host._weatherAvailable && hasSignal(store?.cloud))      { out.push('cloud'); }
     //Custom entity, present whenever configured (its ring may be sparse until history lands).
     if (customEntityId(host.config))  { out.push('custom'); }
     return out;
@@ -285,7 +273,6 @@ export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: s
         case 'battery':     return { icon: 'mdi:battery-charging',     color: ENERGY_COLOR.batteryOut(el) };
         case 'battery-soc': return { icon: 'mdi:battery',              color: ENERGY_COLOR.batteryOut(el) };
         case 'irradiance':  return { icon: 'mdi:white-balance-sunny',  color: ENERGY_COLOR.sun(el) };
-        case 'cloud':       return { icon: 'mdi:weather-cloudy',       color: ENERGY_COLOR.cloud(el) };
         case 'custom':      return { icon: resolveCustomEntityIcon(host.hass, host.config), color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') };
         default:            return { icon: 'mdi:solar-power',          color: ENERGY_COLOR.pv(el) };
     }
@@ -321,7 +308,7 @@ export function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: Cl
             oneE(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', batteryChargeName(host),   h.batteryCharge),
         ]);
         case 'battery-soc': return data('percent', [oneA(ENERGY_COLOR.batteryOut(el), 'mdi:battery', tgtLabel, h.soc)]);
-        case 'custom':      return data('power', [oneA(meta.color, meta.icon, tgtLabel, h.custom)]);
+        case 'custom':      return data('energy', [oneE(meta.color, meta.icon, tgtLabel, h.custom)]);
         default:            return data(target === 'irradiance' ? 'irradiance' : 'energy', []);
     }
 }
@@ -354,18 +341,17 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         const nowMs = Date.now();
         const stepH  = store.stepMs / HOUR_MS;
         const slotMs = HOUR_MS / CLOCK_SLOTS_PER_HOUR;
-        //Per-source production. Preferred path: the recorder `change` metric per solar meter (reset-corrected, exact HA
-        //Energy energy, no sun floor), so each string matches the dashboard and recorded night production from non-solar
-        //sources fed in as PV shows. Fallback (single source, or before the per-source fetch lands): re-derive from the
-        //per-entity hourly LTS via pvValueAtTime, which lags a little and floors below the horizon.
-        //Source order (NOT sorted): both the meter list and the per-entity map are in HA Energy source order, parallel to
-        //solarStatEnergyFroms, so index `s` lines up with solarSourceName(host, s).
+        //Per-source production from the recorder `change` metric (reset-corrected, exact HA Energy energy,
+        //no sun floor), so each string matches the dashboard and recorded night production from non-solar
+        //sources fed in as PV shows. Multi-source rings wait for the per-source fetch (a beat after load);
+        //a single source reads the aggregate series, which IS its meter. Source order (NOT sorted):
+        //parallel to solarStatEnergyFroms, so index `s` lines up with solarSourceName(host, s).
         const meters = host._energyDefaults.solarStatEnergyFroms;
         const usePerSourceChange = meters.length >= 2 && meters.every((m) => host._pvChangeSeriesPerEntity.has(m));
-        const ids = usePerSourceChange ? meters : Array.from(host._pvHistoryPerEntity.keys());
+        const ids = usePerSourceChange ? meters : meters.slice(0, 1);
         const perSourceWatts = usePerSourceChange
             ? meters.map((m) => changeSeriesToWatts(host._pvChangeSeriesPerEntity.get(m) ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs))
-            : null;
+            : (meters.length === 1 ? [changeSeriesToWatts(host._pvChangeSeries, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs)] : []);
         //Per-source energy (kWh) SUMMED by hour-of-day: each bucket's power * its hours, SPREAD across the slots
         //it covers, so a coarse store fills every slot instead of one (as in binSlotSum).
         const wsum = ids.map(() => new Array<number>(CLOCK_SLOTS).fill(0));
@@ -377,21 +363,9 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             const bEnd   = bStart + store.stepMs;
             for (let s = 0; s < ids.length; s++)
             {
-                let v: number;
-                if (perSourceWatts)
-                {
-                    const w = perSourceWatts[s][i];
-                    if (w === null || !(w > 0)) { continue; }
-                    v = w;
-                }
-                else
-                {
-                    const ph = host._pvHistoryPerEntity.get(ids[s]);
-                    if (!ph) { continue; }
-                    const sample = pvValueAtTime(host, tMs, ph);
-                    v = pvReadingToWatts(sample.value, sample.unit);
-                    if (!(isFinite(v) && v > 0)) { continue; }
-                }
+                const w = perSourceWatts[s]?.[i];
+                if (w === null || w === undefined || !(w > 0)) { continue; }
+                const v = w;
                 const energy = (v * stepH) / 1000;
                 for (let t = bStart; t < bEnd; )
                 {
@@ -435,46 +409,14 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         return data('percent', [{ color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery', label: clockTargetLabel(host, target), values: avgOf(sum, cnt) }]);
     }
 
-    if (target === 'cloud')
-    {
-        const cs = host._chartSeries;
-        const slots = CLOCK_SLOTS;
-        const sum = [new Array<number>(slots).fill(0), new Array<number>(slots).fill(0), new Array<number>(slots).fill(0)];
-        const cnt = [new Array<number>(slots).fill(0), new Array<number>(slots).fill(0), new Array<number>(slots).fill(0)];
-        if (cs)
-        {
-            for (let i = 0; i < cs.times.length; i++)
-            {
-                const h = slotOf(cs.times[i].getTime());
-                const vals = [cs.cloudLow[i], cs.cloudMid[i], cs.cloudHigh[i]];
-                vals.forEach((v, b) => { if (isFinite(v)) { sum[b][h] += Math.max(0, v); cnt[b][h] += 1; } });
-            }
-        }
-        const base  = ENERGY_COLOR.cloud(el);
-        const cols  = [lerpHexToward(base, '#ffffff', 0.55), base, lerpHexToward(base, '#000000', 0.50)];
-        const icons = ['mdi:format-vertical-align-bottom', 'mdi:format-vertical-align-center', 'mdi:format-vertical-align-top'];
-        const cl    = pickTranslations(host.hass?.language).clock;
-        const names = [cl.cloudLow, cl.cloudMid, cl.cloudHigh];
-        return data('percent', [0, 1, 2].map(b => ({ color: cols[b], icon: icons[b], label: names[b], values: avgOf(sum[b], cnt[b]) })));
-    }
-
     if (target === 'custom')
     {
-        //Custom entity from its fetched history (values in W), binned by slot-of-day. One layer.
-        const hist = host._customEntityHistory;
-        const sum = new Array<number>(CLOCK_SLOTS).fill(0);
-        const cnt = new Array<number>(CLOCK_SLOTS).fill(0);
-        if (hist)
-        {
-            for (let i = 0; i < hist.times.length; i++)
-            {
-                const v = hist.values[i];
-                if (!isFinite(v)) { continue; }
-                const h = slotOf(hist.times[i].getTime());
-                sum[h] += Math.abs(v); cnt[h] += 1;
-            }
-        }
-        return data('power', [{ color: meta.color, icon: meta.icon, label: clockTargetLabel(host, target), values: avgOf(sum, cnt) }]);
+        //Custom energy meter, mapped onto the store grid then summed to kWh totals per slot, exactly like the
+        //grid/battery rings. Magnitude only so a signed meter reads as a single ring.
+        if (!store) { return data('energy', []); }
+        const watts  = changeSeriesToWatts(host._customChangeSeries ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, Date.now());
+        const values = binSlotSum(store, watts.map(v => (v === null ? null : Math.abs(v))));
+        return data('energy', [{ color: meta.color, icon: meta.icon, label: clockTargetLabel(host, target), values }]);
     }
 
     //Remaining metrics are single- or dual-layer store series, binned by hour-of-day.
@@ -544,8 +486,8 @@ function ringSpacingM(outerR: number): number
 //(energy) totals the hour's slots; otherwise (power/percent/irradiance) it averages them.
 export function hourlyOf(values: number[], sum: boolean): number[]
 {
-    const out = new Array<number>(24).fill(0);
-    for (let h = 0; h < 24; h++)
+    const out = new Array<number>(HOURS_PER_DAY).fill(0);
+    for (let h = 0; h < HOURS_PER_DAY; h++)
     {
         let s = 0;
         for (let j = 0; j < CLOCK_SLOTS_PER_HOUR; j++) { s += Math.max(0, values[h * CLOCK_SLOTS_PER_HOUR + j] ?? 0); }
@@ -561,7 +503,7 @@ function ringMax(data: ClockData): number
 {
     let m = 0;
     const hourly = data.layers.map(L => hourlyOf(L.values, data.unit === 'energy'));
-    for (let h = 0; h < 24; h++) { let t = 0; for (const hv of hourly) { t += Math.max(0, hv[h]); } m = Math.max(m, t); }
+    for (let h = 0; h < HOURS_PER_DAY; h++) { let t = 0; for (const hv of hourly) { t += Math.max(0, hv[h]); } m = Math.max(m, t); }
     return m;
 }
 
@@ -652,9 +594,9 @@ function clockGuide(camera: SceneCamera, outerR: number): string
     let svg = ringAt(hubR, 32) + ringAt(tipR, 64);
 
     //24 spokes, each along its hour angle from the ring edge out toward the label.
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < HOURS_PER_DAY; h++)
     {
-        const a  = hourRad(h / 24, camera.southern);
+        const a  = hourRad(h / HOURS_PER_DAY, camera.southern);
         const p1 = camera.project(hubR * Math.sin(a), hubR * Math.cos(a), 0);
         const p2 = camera.project(tipR * Math.sin(a), tipR * Math.cos(a), 0);
         svg += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${col}" stroke-opacity="${CLOCK_GUIDE_OPACITY}" stroke-width="1" stroke-dasharray="2 2.5"/>`;
@@ -700,7 +642,7 @@ function clockCompass(
         const p = camera.project(labelR * Math.sin(angle), labelR * Math.cos(angle), 0);
         return {
             x: p[0], y: p[1], label,
-            transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (hourEquiv / 24) * 360 + 180}deg)`,
+            transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + (hourEquiv / HOURS_PER_DAY) * 360 + 180}deg)`,
         };
     });
     return { svg, labels };
@@ -714,7 +656,7 @@ interface ClockFace { depth: number; svg: string }
 function currentHourArrow(camera: SceneCamera, R: number, maxHm: number, toH: number): string
 {
     const hour = serverHour(Date.now());
-    const a = hourRad((hour + 0.5) / 24, camera.southern);
+    const a = hourRad((hour + 0.5) / HOURS_PER_DAY, camera.southern);
     const e = R * Math.sin(a); const n = R * Math.cos(a);
     const apex = camera.project(e, n, maxHm * 1.15);
     const drop = camera.project(e, n, Math.max(0, toH));
@@ -732,12 +674,12 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
 {
     const SEG = 4;
     let s = '';
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < HOURS_PER_DAY; h++)
     {
         const frac = nightFrac[h] ?? 0;
         if (frac < 0.02) { continue; }
-        const a0 = hourRad(h / 24, camera.southern);
-        const a1 = hourRad((h + 1) / 24, camera.southern);
+        const a0 = hourRad(h / HOURS_PER_DAY, camera.southern);
+        const a1 = hourRad((h + 1) / HOURS_PER_DAY, camera.southern);
         const pts: string[] = [];
         for (let k = 0; k <= SEG; k++) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(outerR * Math.sin(a), outerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
         for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
@@ -801,14 +743,14 @@ export function projectClockFrame(
     //Hour labels, laid flat just outside the OUTER ring; each fades with its distance from the camera.
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
-        camera.project3(labelR * Math.sin(hourRad(h / 24, camera.southern)), labelR * Math.cos(hourRad(h / 24, camera.southern)), 0));
+        camera.project3(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0));
     let depthMin = Infinity; let depthMax = -Infinity;
     for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
     const depthRange = depthMax - depthMin || 1;
     const labels = projLabels.map((p, h) => ({
         x: p.x, y: p.y,
         opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
-        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / 24, camera.southern) + 180}deg)`,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
     }));
 
     //Shared per-UNIT ceiling: every ring of the same unit normalises against the busiest among them, so
@@ -825,41 +767,36 @@ export function projectClockFrame(
         const ceiling = unitCeil?.get(ring.data.unit) ?? unitMax.get(ring.data.unit) ?? 0;
         projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits);
     });
-    //Central column: one stacked band per active filter (its colour), drawn in the same depth pass so the
-    //nearer bars occlude it and the farther bars sit behind. Grows with the bars (max ring heightScale).
+    //The central column is gone: a flat Helios mark now fills the hub (drawn by the engine on the ground plane,
+    //UNDER these bars, so the nearer bars occlude it). The bars alone populate the upright depth pass.
     const hubR = outerR * CLOCK_HUB_R_FRAC;
-    const grow = rings.length ? rings.reduce((m, r) => Math.max(m, r.heightScale), 0) : 0;
-    const colH = maxHm * CLOCK_COLUMN_H_FRAC * grow;
-    if (rings.length)
-    {
-        faces.push(centralColumn(camera, hubR, colH, rings, columnHighlight));
-    }
     faces.sort((a, b) => a.depth - b.depth);
 
-    //One glow filter per ring, tinted to its metric colour, for the focused slice / bar; plus the central
-    //column's own glow (first filter colour) used when it is hovered.
+    //One glow filter per ring, tinted to its metric colour, for the focused slice / bar. Bars carry their own
+    //highlight, so the guide stays static (no focused spoke).
     let defs = '<defs>';
     rings.forEach((r, i) => { defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`; });
-    defs += `<filter id="clock-col-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${rings[0]?.data.color ?? '#ffffff'}" flood-opacity="0.95"/></filter>`;
     defs += '</defs>';
 
-    //defs (per-ring glow filters) stay with the cylinders that use them. Bars carry their own highlight, so
-    //the guide stays static (no focused spoke).
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
-    //Central-column hit target: a disc over the WHOLE projected column body, not just its base. The cylinder
-    //rises above its base on screen (height + tilt), so a base-only disc would miss every tap on the body.
-    //Centre it between the projected base and top, radius covering that span plus the hub width.
-    const colBase = camera.project(0, 0, 0);
-    const colTop  = camera.project(0, 0, colH);
-    const homeX = (colBase[0] + colTop[0]) / 2;
-    const homeY = (colBase[1] + colTop[1]) / 2;
-    const homeR = Math.hypot(colTop[0] - colBase[0], colTop[1] - colBase[1]) / 2 + hubR * ppm;
+    //Home-hover target: a disc over the flat mark, centred on the projected home. Radius = the mark's on-ground
+    //half-width (half its diameter), covering the whole logo the user taps for the window total.
+    const decalDiaPx = outerR * ppm;
+    const homeCtr    = camera.project(0, 0, 0);
+    //Highlighted (hover/tap) mark stacks one glow per active filter, in ring order, behind a thin edging. Top
+    //faces the equator (south in the northern hemisphere, north in the southern) so it aligns with the sun run.
+    const decal = buildLogoDecal({
+        diameterPx: decalDiaPx,
+        orientDeg:  camera.southern ? 0 : 180,
+        highlight:  columnHighlight,
+    });
     const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
         guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, 0),
         hits, labels, compass: compass.labels,
-        home: { x: homeX, y: homeY, r: homeR },
+        home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
+        decal,
     };
 }
 
@@ -879,9 +816,9 @@ function projectHistogramRing(
     const halfTan    = (BAR_TANGENT_FRAC * minEdge) / ppm * ringRadiusFrac(ring.slot);
     const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);
 
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < HOURS_PER_DAY; h++)
     {
-        const a = hourRad((h + 0.5) / 24, camera.southern);   //BETWEEN the hour lines
+        const a = hourRad((h + 0.5) / HOURS_PER_DAY, camera.southern);   //BETWEEN the hour lines
         const e = R * Math.sin(a); const n = R * Math.cos(a);
         const total = totalAt(h);
         const base  = camera.project(e, n, 0);
@@ -913,62 +850,6 @@ function projectHistogramRing(
     }
 }
 
-//Central column: a stacked cylinder at the dial origin, one equal band per active filter (its colour), so it
-//reads as a legend of the selected metrics. Hovered, it brightens (roof toward white, white edge) and glows.
-//Returned as one face at the base-centre depth, so the surrounding bars occlude/sit-behind it correctly.
-function centralColumn(camera: SceneCamera, hubR: number, heightM: number, rings: ClockRingInput[], highlight: boolean): ClockFace
-{
-    //CCW winding (cos, sin) to match the bars' footprint, so stackedColumn's back-face cull keeps the OUTWARD
-    //walls (a clockwise ring would invert it and show the inside).
-    const fp: [number, number][] = [];
-    for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
-    {
-        const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
-        fp.push([hubR * Math.cos(a), hubR * Math.sin(a)]);
-    }
-    const frac  = 1 / rings.length;
-    const bands = rings.map((r) => ({
-        frac,
-        wall: lerpHexToward(r.data.color, '#000000', 0.25),
-        roof: lerpHexToward(r.data.color, '#ffffff', highlight ? 0.4 : 0.18),
-    }));
-    const stroke = highlight ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)';
-    let svg = stackedColumn(camera, fp, heightM, bands, stroke);
-    if (highlight) { svg = `<g filter="url(#clock-col-glow)">${svg}</g>`; }
-    return { depth: camera.project(0, 0, 0)[1], svg };
-}
-
-
-//Central trend gauge at the hub: the period's GLOBAL value (P total) as a thin cap, with a sphere marker at
-//the previous period's global total P-1, coloured green/red by improvement. Same language as the hour bars.
-function centralTrendColumn(camera: SceneCamera, hubR: number, totalP: number, totalPrev: number, colH: number, color: string, direction: number, highlight: boolean): ClockFace
-{
-    const ceil = Math.max(totalP, totalPrev) || 1;
-    const z    = colH / ceil;
-    const pH   = totalP * z; const prevH = totalPrev * z;
-    const fp: [number, number][] = [];
-    for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
-    {
-        const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
-        fp.push([hubR * Math.cos(a), hubR * Math.sin(a)]);
-    }
-    const impr    = (totalP - totalPrev) * direction;
-    const markCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
-    let svg = '';
-    if (pH > 0)
-    {
-        const cap = colH * 0.1;
-        svg += floatingSlice(camera, fp, Math.max(0, pH - cap), pH,
-            lerpHexToward(color, '#000000', 0.25), lerpHexToward(color, '#ffffff', highlight ? 0.4 : 0.18),
-            highlight ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)');
-    }
-    const top = camera.project(0, 0, pH);
-    const mk  = camera.project(0, 0, prevH);
-    svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
-    svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="4.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="1"/>`;
-    return { depth: camera.project(0, 0, 0)[1], svg };
-}
-
 //Which way is "better" for a metric, so the trend dial colours the change green/red. +1 = up is good
 //(production), -1 = down is good (consumption, grid use), 0 = neutral (battery, weather, custom).
 export function trendGoodDirection(target: ChartTarget): number
@@ -995,9 +876,7 @@ export function projectTrendFrame(
     cardinals: { n: string; s: string; e: string; w: string },
     dimSlot: number | null,
     dim: number,
-    //Period GLOBAL totals (P and P-1) for the central hub gauge, and whether it is hovered.
-    totalP: number,
-    totalPrev: number,
+    //Whether the centre mark is hovered/tapped (drives its opacity fade).
     columnHighlight: boolean,
     //Per-hour night share for the ground day/night wedges (empty = none drawn).
     nightFrac: number[] = [],
@@ -1012,18 +891,18 @@ export function projectTrendFrame(
 
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
-        camera.project3(labelR * Math.sin(hourRad(h / 24, camera.southern)), labelR * Math.cos(hourRad(h / 24, camera.southern)), 0));
+        camera.project3(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0));
     let depthMin = Infinity; let depthMax = -Infinity;
     for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
     const depthRange = depthMax - depthMin || 1;
     const labels = projLabels.map((p, h) => ({
         x: p.x, y: p.y,
         opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
-        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / 24, camera.southern) + 180}deg)`,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
     }));
 
     let ceiling = 0;
-    for (let h = 0; h < 24; h++) { ceiling = Math.max(ceiling, perHourP[h], perHourPrev[h]); }
+    for (let h = 0; h < HOURS_PER_DAY; h++) { ceiling = Math.max(ceiling, perHourP[h], perHourPrev[h]); }
     const zScale     = ceiling > 0 ? maxHm / ceiling : 0;
     const R          = outerR;   //single outer ring
     const halfRadial = ringSpacingM(outerR) * BAR_RADIAL_FRAC;
@@ -1038,7 +917,7 @@ export function projectTrendFrame(
     const FADE_MIN = 0.6;
     const depths = Array.from({ length: 24 }, (_u, h) =>
     {
-        const a = hourRad((h + 0.5) / 24, camera.southern);
+        const a = hourRad((h + 0.5) / HOURS_PER_DAY, camera.southern);
         return camera.project3(R * Math.sin(a), R * Math.cos(a), 0).depth;
     });
     let dMin = Infinity; let dMax = -Infinity;
@@ -1046,9 +925,9 @@ export function projectTrendFrame(
     const dRange = dMax - dMin || 1;
 
     const faces: ClockFace[] = [];
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < HOURS_PER_DAY; h++)
     {
-        const a = hourRad((h + 0.5) / 24, camera.southern);
+        const a = hourRad((h + 0.5) / HOURS_PER_DAY, camera.southern);
         const e = R * Math.sin(a); const n = R * Math.cos(a);
         const p = Math.max(0, perHourP[h]); const prev = Math.max(0, perHourPrev[h]);
         const pH = p * zScale; const prevH = prev * zScale;
@@ -1086,26 +965,28 @@ export function projectTrendFrame(
         if (op < 1) { svg = `<g opacity="${op.toFixed(3)}">${svg}</g>`; }
         faces.push({ depth: base[1], svg });
     }
-    //Central hub gauge: the period's global total vs the previous period's, same depth pass as the bars.
+    //No central gauge: the flat Helios mark fills the hub (the ground logo can't float, and the hover total does
+    //the readout job the old lollipop did). Just the bars populate the upright pass.
     const hubR = outerR * CLOCK_HUB_R_FRAC;
-    const colH = maxHm * CLOCK_COLUMN_H_FRAC;
-    faces.push(centralTrendColumn(camera, hubR, totalP, totalPrev, colH, color, direction, columnHighlight));
     faces.sort((a, b) => a.depth - b.depth);
 
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
-    //Central-gauge hit target: a disc over the whole projected column body (base to top), like the clock hub.
-    const cBase = camera.project(0, 0, 0);
-    const cTop  = camera.project(0, 0, colH);
+    //Home-hover target + decal, same flat Helios mark as the clock dial. Centred on the projected home; radius =
+    //half its on-ground diameter so the whole mark is the hover/tap target for the period total.
+    const decalDiaPx = outerR * ppm;
+    const homeCtr    = camera.project(0, 0, 0);
+    const decal = buildLogoDecal({
+        diameterPx: decalDiaPx,
+        orientDeg:  camera.southern ? 0 : 180,
+        highlight:  columnHighlight,
+    });
     const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
         guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[serverHour(Date.now())]) * zScale),
         hits, labels, compass: compass.labels,
-        home: {
-            x: (cBase[0] + cTop[0]) / 2,
-            y: (cBase[1] + cTop[1]) / 2,
-            r: Math.hypot(cTop[0] - cBase[0], cTop[1] - cBase[1]) / 2 + hubR * ppm,
-        },
+        home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
+        decal,
     };
 }
 
@@ -1151,8 +1032,8 @@ export function clockLayerPeriod(layer: ClockLayer, data: ClockData): number
 {
     const energy = data.unit === 'energy';
     const hv = hourlyOf(layer.values, energy);
-    let t = 0; for (let h = 0; h < 24; h++) { t += Math.max(0, hv[h]); }
-    return energy ? t : t / 24;
+    let t = 0; for (let h = 0; h < HOURS_PER_DAY; h++) { t += Math.max(0, hv[h]); }
+    return energy ? t : t / HOURS_PER_DAY;
 }
 
 //A metric's window aggregate across all its layers (the grand total a single-layer metric shows).

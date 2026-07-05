@@ -123,20 +123,25 @@ absolutely-positioned chips + SVG leaders at those coordinates. Each chip has a
 leader to the home with an animated **bead** whose direction and speed encode
 the live flow. Clicking a chip points the timeline at that metric.
 
-A fixed **info panel** sits top-right (scene view + live only, shown unless
-disabled via `show-weather`, exempt from the No UI fade): local weather now
-(temperature, condition icon, wind) plus, optionally, the sun's astronomical data
-as icon-labelled rows. Its helpers live in `card/info-panel.ts` (WMO code to
-icon, unit conversion, formatting). The wind-direction arrow is
-not a flat CSS rotation: `engine.projectGroundBearing()` projects a compass
-bearing through the live camera onto the tilted ground, so the arrow tracks the
-true direction as the camera orbits, the same projection path the sun scene uses.
+**Double-tapping a chip** opens a compact **detail panel** top-right
+(`card/detail-panel.ts`), tinted in the active chip's live colour: it aggregates
+that metric over the selected window as icon-only rows (total, peak, per-day
+average; import / export / net for grid; charged / discharged for battery flux;
+min / avg / max for SoC and the custom entity; peak + average irradiance plus the
+astro rows for the sun). Values print in the card's configured unit. The panel is
+bound to the active chip, so a single tap on another chip re-points the chart and
+closes it; a second tap re-opens it for the new metric. Every figure is
+recomputed from the very series the bottom chart draws, so panel and curve always
+agree.
 
 ### Clock, `card/energy-clock.ts`
 
 A 24-hour radial instrument. Each selected metric is binned into 24 hours-of-day
 over the active period and drawn as a ring of bars (one per hour) projected flat
-on the same ground plane, around a central column. The right-hand rail is a
+on the same ground plane, around the flat **Helios mark** at the centre (a
+CSS-3D ground decal, `card/helios-logo.ts`, laid on the tilted plane by the
+renderer under the bars so nearer bars occlude it; it rests at half opacity and
+fades to full on hover/tap, when it shows the window total). The right-hand rail is a
 **multi-select filter**: every active metric adds one **concentric ring** (outer
 = first selected, nesting inward on fixed slots so adding / removing a filter
 never re-spaces the others). Hovering or tapping a bar lights the whole hour
@@ -156,8 +161,9 @@ period** of the same length, and the dial stands the current period as a ring of
 bars with a floating marker + stem pinning the previous period's value at the
 same hour. Bars are coloured good or bad by the metric's desirable direction
 (more production good, more grid import not). An arrow with a drop line marks the
-current hour; the central column reads the **global delta** of the whole period
-versus the one before; the same day / night wedge grounds the dial. Weather-only
+current hour; the same flat Helios mark sits at the centre (hover/tap for the
+window total, so no gauge obstructs the view); the same day / night wedge grounds
+the dial. Weather-only
 metrics (irradiance, cloud) have no period-over-period profile and are excluded
 from the trend selector.
 
@@ -184,14 +190,26 @@ two surfaces agree to the watt-hour. `card/pv.ts`, `card/battery.ts`,
 `card/energy-forecast.ts` reads the dashboard's configured solar-forecast
 provider.
 
+The grid live readout carries two safety layers. `card/grid-guard.ts` audits the
+optional live power sensor against the billing meters (hourly recorder stats: an
+hour of metered export while the "signed net" sensor never went meaningfully
+negative is physically impossible) and, once proven mis-scoped, reroutes the live
+split to the meters, self-clearing if the sensor is later fixed.
+`card/counter-slope.ts` derives near-real-time watts from a cumulative kWh
+counter's own state changes over a short rolling window, so meter-driven chips
+do not wait for the recorder's 5-minute buckets; coarse counters fall back to
+the bucket read. The home chip balance never mixes cadences: if any input is
+bucket-sourced, every term is evaluated over one shared window and the chip is
+prefixed with `≈`.
+
 ### Weather, `engine/weather.ts`, `engine/weather-resolve.ts`
 
 One fetch per home point against Open-Meteo, fusing a global model with the best
 regional model for the location and taking the **per-timestep median** to reject
-single-model outliers. It returns hourly irradiance
-(`shortwave_radiation_instant`), the three cloud layers (collapsed to an
-*effective* cover of `low + 0.6*mid + 0.2*high`), temperature and wind. Cached
-in `localStorage` with a short TTL and exponential back-off on HTTP 429.
+single-model outliers. It returns only what the irradiance pipeline needs: hourly
+irradiance (`shortwave_radiation_instant`) and the three cloud layers (collapsed
+to an *effective* cover of `low + 0.6*mid + 0.2*high`). Cached in `localStorage`
+with a short TTL and exponential back-off on HTTP 429.
 
 ### Irradiance override, `card/irradiance.ts`
 

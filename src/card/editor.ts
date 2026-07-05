@@ -25,6 +25,11 @@ import
     MAX_VALUE_DECIMALS,
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
+import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type EnergyPrefsHost } from './energy-prefs';
+import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from './grid-guard';
+import { batteryLiveIsBucketSourced } from './battery';
+import './editor-custom-entity';
+import type { CustomEntityConfigValue } from './editor-custom-entity';
 
 
 // Render a localised hint with markdown-style `[text](url)` links as real `<a>` anchors via Lit's tagged template
@@ -91,6 +96,7 @@ export class HeliosCardEditor extends LitElement
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
+        unsubscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
         for (const t of this._sliderDebounce.values())
         {
             window.clearTimeout(t);
@@ -124,10 +130,18 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
+    //Energy dashboard wiring snapshot + mis-scope guard, powering the live-data status lines: the editor
+    //states plainly which live chips can exist with the current HA Energy configuration and why.
+    @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
+    @state() _energyDefaultsLoaded = false;
+    _energyPrefsUnsub?: (() => void) | undefined;
+    _gridGuard: GridGuardState = createGridGuard();
+
     public connectedCallback(): void
     {
         super.connectedCallback();
         this._ensureEntityPicker();
+        subscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
     }
 
     // ha-entity-picker ships in HA's lazy-loaded card-editor bundle and may be unregistered in a fresh tab. Force the
@@ -187,6 +201,49 @@ export class HeliosCardEditor extends LitElement
         return pickTranslations(this.hass?.language);
     }
 
+    protected updated(): void
+    {
+        //Guard evaluation for the grid status line; no-op outside its preconditions / between re-arms.
+        if (this.hass) { refreshGridGuard(this as unknown as GridGuardHost); }
+    }
+
+    //One live-data status line: check or alert glyph + the explanation.
+    private _liveStatusLine(ok: boolean, warn: boolean, text: string)
+    {
+        const icon = ok ? 'mdi:check-circle' : (warn ? 'mdi:alert-circle' : 'mdi:information-outline');
+        const cls  = ok ? 'is-ok' : (warn ? 'is-warn' : 'is-info');
+        return html`
+            <div class="live-status ${cls}">
+                <ha-icon icon=${icon}></ha-icon>
+                <span>${text}</span>
+            </div>
+        `;
+    }
+
+    //The measured-only status block: one line per family CONFIGURED in the HA Energy dashboard, stating
+    //whether its live chip can exist and, if not, what to add. Silent until the prefs snapshot lands.
+    private _renderLiveDataStatus(t: Translations)
+    {
+        if (!this._energyDefaultsLoaded) { return nothing; }
+        const d = this._energyDefaults;
+        const solarWired   = d.solarStatEnergyFroms.length > 0;
+        const gridWired    = d.gridStatEnergyFroms.length > 0 || d.gridStatEnergyTos.length > 0;
+        const batteryWired = d.batteryStatEnergyFroms.length > 0 || d.batteryStatEnergyTos.length > 0;
+        if (!solarWired && !gridWired && !batteryWired) { return nothing; }
+        const gridFlagged = this._gridGuard.status === 'flagged';
+        const gridOk      = d.gridStatRates.length > 0 && !gridFlagged;
+        return html`
+            <div class="hint">${t.editor.liveDataIntro ?? 'Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source; curves and totals always come from your meters.'}</div>
+            ${solarWired ? this._liveStatusLine(d.solarStatRates.length > 0, false,
+                d.solarStatRates.length > 0 ? (t.editor.liveSolarOk ?? 'Solar: live power sensor detected.') : (t.editor.liveSolarMissing ?? 'Solar: no live power sensor, the production chip stays hidden. Add one under Settings > Dashboards > Energy > Solar panels.')) : nothing}
+            ${gridWired ? this._liveStatusLine(gridOk, gridFlagged,
+                gridFlagged ? (t.editor.liveGridMiswired ?? 'Grid: the live power sensor contradicts your meters (it seems to measure a single direction). The chips stay hidden; configure a signed sensor or the Two sensors mode.') : (gridOk ? (t.editor.liveGridOk ?? 'Grid: live power sensor detected.') : (t.editor.liveGridMissing ?? 'Grid: no live power sensor, the import/export chips stay hidden. Add one under Settings > Dashboards > Energy > Grid.'))) : nothing}
+            ${batteryWired ? this._liveStatusLine(!batteryLiveIsBucketSourced(d), false,
+                !batteryLiveIsBucketSourced(d) ? (t.editor.liveBatteryOk ?? 'Battery: live power sensors cover every battery.') : (t.editor.liveBatteryMissing ?? 'Battery: live power missing on at least one battery, the power chip stays hidden. Add the power sensor(s) under Settings > Dashboards > Energy > Battery.')) : nothing}
+            <div class="field-help">${t.editor.liveHomeNote ?? 'The home consumption readout appears once every configured family above has its live sensor.'}</div>
+        `;
+    }
+
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
         const next = { ...this._cfg } as Record<string, unknown>;
@@ -197,6 +254,70 @@ export class HeliosCardEditor extends LitElement
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
     }
+
+    //---- Custom entity (measured-only: both sensors required) -------------------------------------------
+    //Migration from the legacy single slot: while the new keys are empty, the old entity prefills the field
+    //matching its device class so the user only adds the missing half; the first edit persists the new keys
+    //and drops the legacy one.
+    private _legacyCustomId(): string
+    {
+        const raw = this._cfg?.['custom-entity'];
+        return typeof raw === 'string' ? raw.trim() : '';
+    }
+
+    private _legacyCustomIsPower(): boolean
+    {
+        const st = this.hass?.states?.[this._legacyCustomId()];
+        const dc = String(st?.attributes?.device_class ?? '');
+        const u  = String(st?.attributes?.unit_of_measurement ?? '').trim().toLowerCase();
+        return dc === 'power' || u === 'w' || u === 'kw' || u === 'mw';
+    }
+
+    private _customLegacyPending(): boolean
+    {
+        const c = this._cfg as Record<string, unknown> | undefined;
+        return this._legacyCustomId() !== ''
+            && !c?.['custom-power-entity']
+            && !c?.['custom-energy-entity'];
+    }
+
+    private _customConfigValue(): CustomEntityConfigValue
+    {
+        const c = (this._cfg ?? {}) as Record<string, unknown>;
+        let power  = typeof c['custom-power-entity']  === 'string' ? String(c['custom-power-entity'])  : '';
+        let energy = typeof c['custom-energy-entity'] === 'string' ? String(c['custom-energy-entity']) : '';
+        if (this._customLegacyPending())
+        {
+            if (this._legacyCustomIsPower()) { power = this._legacyCustomId(); }
+            else                             { energy = this._legacyCustomId(); }
+        }
+        return {
+            power,
+            energy,
+            color: typeof c['custom-entity-color'] === 'string' ? String(c['custom-entity-color']) : 'red',
+            icon:  typeof c['custom-entity-icon']  === 'string' ? String(c['custom-entity-icon'])  : '',
+        };
+    }
+
+    private _onCustomEntityChanged = (e: CustomEvent<{ value: CustomEntityConfigValue }>): void =>
+    {
+        e.stopPropagation();
+        const v    = e.detail.value;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //One write for the four keys; empties clear their key so the YAML stays minimal. The legacy single
+        //slot is dropped on the first edit (its value now lives in the matching new field).
+        const setOrClear = (key: string, val: string): void =>
+        {
+            if (val) { next[key] = val; } else { delete next[key]; }
+        };
+        setOrClear('custom-power-entity',  v.power);
+        setOrClear('custom-energy-entity', v.energy);
+        setOrClear('custom-entity-icon',   v.icon);
+        if (v.color && v.color !== 'red') { next['custom-entity-color'] = v.color; } else { delete next['custom-entity-color']; }
+        delete next['custom-entity'];
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+    };
 
     // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits
     // as-is; anything else is ignored, leaving the previous value.
@@ -322,22 +443,83 @@ export class HeliosCardEditor extends LitElement
         return u === 'W/m²' || u === 'W/m2';
     };
 
-    //Custom-entity picker filter: any power (W/kW/MW) or energy (Wh/kWh/MWh) entity, by device_class or unit.
-    private _customEntityFilter = (entity: any): boolean =>
+    //One segmented on/off toggle field with its hint. Same markup for every boolean config key. `defaultOn` picks
+    //the default when the key is unset (some toggles default on, read as `!== false`). On/off labels default to the
+    //shared generic ones but can be overridden per toggle.
+    private _renderToggle(
+        key: string, label: string, hint: string,
+        onLabel?: string, offLabel?: string, defaultOn = false,
+    ): TemplateResult
     {
-        if (!entity || !entity.attributes)
-        {
-            return false;
-        }
-        const dc = String(entity.attributes.device_class ?? '');
-        if (dc === 'power' || dc === 'energy')
-        {
-            return true;
-        }
-        const u = String(entity.attributes.unit_of_measurement ?? '').trim().toLowerCase();
-        return u === 'w' || u === 'kw' || u === 'mw' || u === 'wh' || u === 'kwh' || u === 'mwh';
-    };
+        const c  = this._cfg as Record<string, unknown>;
+        const on = defaultOn ? c[key] !== false : c[key] === true;
+        const t  = this._t();
+        return html`
+                <div class="field">
+                    <span class="label">${label}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${on ? 'active' : ''}"
+                            data-key=${key} data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${onLabel ?? t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${!on ? 'active' : ''}"
+                            data-key=${key} data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${offLabel ?? t.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${hint}</div>`;
+    }
 
+    //One ui_color picker field (label + ha-selector + help). Same markup for every colour config key.
+    private _renderColorPicker(key: string, label: string, help: string, defaultColor: string): TemplateResult
+    {
+        const c = this._cfg as Record<string, unknown>;
+        return html`
+                <div class="field field-block">
+                    <span class="label">${label}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ ui_color: { default_color: defaultColor } }}
+                            .value=${String(c[key] ?? defaultColor)}
+                            data-key=${key}
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${help}</div>`;
+    }
+
+    //One range-slider field (label + range input + live value). Same markup for every numeric config key; the hint
+    //stays at the call site since some are per-field and some are shared. `suffix` is appended to the live value.
+    private _renderSlider(key: string, label: string, min: number, max: number, step: number, dflt: number, suffix = ''): TemplateResult
+    {
+        const c   = this._cfg as Record<string, unknown>;
+        const raw = c[key] ?? dflt;
+        return html`
+                <label class="field">
+                    <span class="label">${label}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range"
+                            min=${min}
+                            max=${max}
+                            step=${step}
+                            .value=${String(raw)}
+                            data-key=${key}
+                            @input=${this._onNumSliderInput}
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(raw), step)}${suffix}</span>
+                    </div>
+                </label>`;
+    }
+
+    //Custom-entity picker filter: any power (W/kW/MW) or energy (Wh/kWh/MWh) entity, by device_class or unit.
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -390,276 +572,44 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
-                <div class="field">
-                    <span class="label">${t.editor.autoRotate}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
-                            data-key="auto-rotate-enabled" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
-                            data-key="auto-rotate-enabled" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.autoRotateHint}</div>
-                <div class="field">
-                    <span class="label">${t.editor.showWeather ?? 'Show weather panel'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-weather'] !== false) ? 'active' : ''}"
-                            data-key="show-weather" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-weather'] === false) ? 'active' : ''}"
-                            data-key="show-weather" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.showWeatherHint ?? 'Show the top-right panel with the local weather. Scene view only.'}</div>
-                <div class="field">
-                    <span class="label">${t.editor.noUiMode ?? 'No UI mode'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-hide-ui'] === true) ? 'active' : ''}"
-                            data-key="auto-hide-ui" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-hide-ui'] !== true) ? 'active' : ''}"
-                            data-key="auto-hide-ui" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.'}</div>
-                ${(c['show-weather'] !== false) ? html`
-                <div class="field">
-                    <span class="label">${t.editor.showAstro ?? 'Show astronomical data'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-astro'] === true) ? 'active' : ''}"
-                            data-key="show-astro" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-astro'] !== true) ? 'active' : ''}"
-                            data-key="show-astro" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.showAstroHint ?? 'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.'}</div>
-                ` : nothing}
+                ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
+                ${this._renderToggle('auto-hide-ui', t.editor.noUiMode ?? 'No UI mode', t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.')}
 
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.displayRadius ?? 'Display radius'}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_DISPLAY_RADIUS_M}
-                            max=${MAX_DISPLAY_RADIUS_M}
-                            step="10"
-                            .value=${String(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M)}
-                            data-key="display-radius"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M), 10)} m</span>
-                    </div>
-                </label>
+                ${this._renderSlider('display-radius', t.editor.displayRadius ?? 'Display radius', MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
                 <div class="hint">${t.editor.displayRadiusHelp ?? 'Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home.'}</div>
-                <label class="field">
-                    <span class="label">${t.editor.buildingCount ?? 'Building count'}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_BUILDING_COUNT}
-                            max=${MAX_BUILDING_COUNT}
-                            step="5"
-                            .value=${String(c['building-count'] ?? DEFAULT_BUILDING_COUNT)}
-                            data-key="building-count"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['building-count'] ?? DEFAULT_BUILDING_COUNT), 5)}</span>
-                    </div>
-                </label>
+                ${this._renderSlider('building-count', t.editor.buildingCount ?? 'Building count', MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}
                 <div class="hint">${t.editor.buildingCountHelp ?? 'Maximum number of nearby buildings to draw. Lower it to lighten rendering on a slow device.'}</div>
-                <div class="field">
-                    <span class="label">${t.editor.buildingRealSize ?? 'Real building heights'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['building-real-size'] !== false) ? 'active' : ''}"
-                            data-key="building-real-size" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.buildingRealSizeOn ?? 'On'}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['building-real-size'] === false) ? 'active' : ''}"
-                            data-key="building-real-size" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.buildingRealSizeOff ?? 'Off'}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.'}</div>
-                ${c['building-real-size'] === false ? html`
-                    <label class="field">
-                        <span class="label">${t.editor.buildingHeight ?? 'Building height'}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range"
-                                min=${MIN_BUILDING_HEIGHT_M}
-                                max=${MAX_BUILDING_HEIGHT_M}
-                                step="0.5"
-                                .value=${String(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M)}
-                                data-key="building-height"
-                                @input=${this._onNumSliderInput}
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M), 0.5)} m</span>
-                        </div>
-                    </label>
-                ` : nothing}
-                <label class="field">
-                    <span class="label">${t.editor.buildingClusterRadius}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="100" step="1"
-                            .value=${String(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}
-                            data-key="building-cluster-radius"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
-                    </div>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.buildingOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value=${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}
-                            data-key="building-opacity"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
+                ${this._renderToggle('building-real-size', t.editor.buildingRealSize ?? 'Real building heights', t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.', t.editor.buildingRealSizeOn ?? 'On', t.editor.buildingRealSizeOff ?? 'Off', true)}
+                ${c['building-real-size'] === false
+                    ? this._renderSlider('building-height', t.editor.buildingHeight ?? 'Building height', MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
+                    : nothing}
+                ${this._renderSlider('building-cluster-radius', t.editor.buildingClusterRadius, 0, 100, 1, DEFAULT_BUILDING_CLUSTER_RADIUS_M, ' m')}
+                ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
                 <div class="hint">${t.editor.buildingsHint}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.homeColor}</span>
-                    ${this._pickerReady ? html`
-                        <ha-selector
-                            .hass=${this.hass}
-                            .selector=${{ ui_color: { default_color: 'green' } }}
-                            .value=${String(c['home-color'] ?? 'green')}
-                            data-key="home-color"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.homeColorHelp}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.buildingColor}</span>
-                    ${this._pickerReady ? html`
-                        <ha-selector
-                            .hass=${this.hass}
-                            .selector=${{ ui_color: { default_color: 'grey' } }}
-                            .value=${String(c['building-color'] ?? 'grey')}
-                            data-key="building-color"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.buildingColorHelp}</div>
+                ${this._renderColorPicker('home-color', t.editor.homeColor, t.editor.homeColorHelp, 'green')}
+                ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
 
                 </details>
 
                 <details class="advanced-section" data-section="shadows" ?open=${this._openSection === 'shadows'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gradient-vertical"></ha-icon>${t.editor.shadowsSection}</summary>
-                <div class="field">
-                    <span class="label">${t.editor.shadowsEnabled}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['shadows-enabled'] !== false) ? 'active' : ''}"
-                            data-key="shadows-enabled" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.shadowsEnabledOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['shadows-enabled'] === false) ? 'active' : ''}"
-                            data-key="shadows-enabled" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.shadowsEnabledOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.shadowsEnabledHint}</div>
+                ${this._renderToggle('shadows-enabled', t.editor.shadowsEnabled, t.editor.shadowsEnabledHint, t.editor.shadowsEnabledOn, t.editor.shadowsEnabledOff, true)}
 
-                <label class="field">
-                    <span class="label">${t.editor.shadowOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value=${String(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY)}
-                            data-key="shadow-opacity"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
+                ${this._renderSlider('shadow-opacity', t.editor.shadowOpacity, 0, 1, 0.05, DEFAULT_SHADOW_OPACITY)}
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
 
                 </details>
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.displayUpdateFrequency}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}
-                            max=${MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}
-                            step="1"
-                            .value=${String(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR)}
-                            data-key="display-update-frequency-per-hour"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR), 1)} / h</span>
-                    </div>
-                </label>
+                ${this._renderLiveDataStatus(t)}
+                ${this._renderSlider('display-update-frequency-per-hour', t.editor.displayUpdateFrequency, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, 1, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, ' / h')}
                 <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.valueDecimals ?? 'Value decimals'}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_VALUE_DECIMALS}
-                            max=${MAX_VALUE_DECIMALS}
-                            step="1"
-                            .value=${String(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS)}
-                            data-key="value-decimals"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS), 1)}</span>
-                    </div>
-                </label>
+                ${this._renderSlider('value-decimals', t.editor.valueDecimals ?? 'Value decimals', MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}
                 <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
                 <div class="field field-block">
                     <span class="label">${t.editor.powerUnit ?? 'Power unit'}</span>
@@ -704,92 +654,25 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.customEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['custom-entity'] ?? '')}
-                            .includeDomains=${['sensor', 'input_number', 'number']}
-                            .entityFilter=${this._customEntityFilter}
-                            data-key="custom-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.customEntityHelp}</div>
-                ${String(c['custom-entity'] ?? '') !== '' ? html`
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityIcon}</span>
-                        ${this._pickerReady ? html`
-                            <ha-icon-picker
-                                .hass=${this.hass}
-                                .value=${String(c['custom-entity-icon'] ?? '')}
-                                data-key="custom-entity-icon"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-icon-picker>
-                        ` : nothing}
-                    </div>
-                    <div class="field field-block">
-                        <span class="label">${t.editor.customEntityColor}</span>
-                        ${this._pickerReady ? html`
-                            <ha-selector
-                                .hass=${this.hass}
-                                .selector=${{ ui_color: { default_color: 'red' } }}
-                                .value=${String(c['custom-entity-color'] ?? 'red')}
-                                data-key="custom-entity-color"
-                                @value-changed=${this._onEntityValueChanged}
-                            ></ha-selector>
-                        ` : nothing}
-                    </div>
-                    <div class="field-help">${t.editor.customEntityColorHelp}</div>
+                <div class="hint">${t.editor.customEntityIntro ?? 'Custom entity: displayed only when BOTH sensors below are set. The power sensor feeds the live chip and the curve, the energy sensor feeds the energy views. Nothing is estimated.'}</div>
+                ${this._customLegacyPending() ? html`
+                    <div class="hint reset-warning">${t.editor.customLegacyHint ?? 'Your previous custom entity was moved to its matching field below. Add the missing sensor to show the chip again.'}</div>
                 ` : nothing}
-                <div class="field field-block">
-                    <span class="label">${t.editor.homeConsumptionEntity ?? 'Home consumption override'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['home-consumption-entity'] ?? '')}
-                            .includeDomains=${['sensor']}
-                            .includeDeviceClasses=${['power']}
-                            data-key="home-consumption-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.homeConsumptionEntityHelp ?? 'Shows this sensor on the home consumption readout instead of the computed value. Only this readout changes: the animated flows and the history stay on your solar, grid and battery balance. A direct consumption sensor is usually off by a few watts (measurement losses, sensors slightly out of sync), a gap that has no clean place in the flows.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.outdoorTemperatureEntity ?? 'Outdoor temperature'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['outdoor-temperature-entity'] ?? '')}
-                            .includeDomains=${['sensor']}
-                            .includeDeviceClasses=${['temperature']}
-                            data-key="outdoor-temperature-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.outdoorTemperatureEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo temperature. Read in its own unit.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.windSpeedEntity ?? 'Wind speed'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['wind-speed-entity'] ?? '')}
-                            .includeDomains=${['sensor']}
-                            .includeDeviceClasses=${['wind_speed']}
-                            data-key="wind-speed-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.windSpeedEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo wind speed. Read in its own unit.'}</div>
+                <helios-custom-entity-config
+                    .hass=${this.hass}
+                    .pickerReady=${this._pickerReady}
+                    .value=${this._customConfigValue()}
+                    .labels=${{
+                        power:      t.editor.customPowerEntity ?? 'Power sensor (live)',
+                        powerHelp:  t.editor.customPowerEntityHelp ?? 'A real power sensor (W/kW). Feeds the live chip, the scrub and the curve.',
+                        energy:     t.editor.customEnergyEntity ?? 'Energy sensor (totals)',
+                        energyHelp: t.editor.customEnergyEntityHelp ?? 'A cumulative energy meter (Wh/kWh). Feeds the energy views.',
+                        icon:       t.editor.customEntityIcon,
+                        color:      t.editor.customEntityColor,
+                    }}
+                    @value-changed=${this._onCustomEntityChanged}
+                ></helios-custom-entity-config>
+                <div class="field-help">${t.editor.customEntityColorHelp}</div>
                 </details>
 
                 <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>

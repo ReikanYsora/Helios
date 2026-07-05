@@ -46,6 +46,9 @@ export class SceneRenderer
     private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
     private readonly _groundOverlay: SVGSVGElement;
+    //Flat Helios mark laid on the ground plane at the dial centre (clock/trend). A CSS-3D decal so its curves stay
+    //crisp under the tilt; content + hover glow are host-supplied, the pose is synced here each frame.
+    private readonly _groundDecal:  HTMLDivElement;
     private readonly _sceneSvg:     SVGSVGElement;
 
     private _ground?:     Ground;
@@ -95,10 +98,14 @@ export class SceneRenderer
         //with z-index alone.
         this._groundOverlay = document.createElementNS(SVG_NS, 'svg');
         this._groundOverlay.setAttribute('class', 'scene-ground-overlay');
+        this._groundDecal = document.createElement('div');
+        this._groundDecal.className = 'scene-logo-decal';
+        this._groundDecal.style.display = 'none';
         this._sceneSvg = document.createElementNS(SVG_NS, 'svg');
         this._sceneSvg.setAttribute('class', 'scene-svg');
         container.appendChild(this._groundHolder);
         container.appendChild(this._groundOverlay);
+        container.appendChild(this._groundDecal);
         container.appendChild(this._sceneSvg);
 
         //The camera centres on width/2 x height/2, so a draw taken before the container has its final size
@@ -152,6 +159,21 @@ export class SceneRenderer
     public setGroundOverlay(svg: string): void
     {
         this._groundOverlay.innerHTML = svg;
+    }
+
+    //Host-supplied flat mark on the ground at the dial centre. `null`/empty hides it; `active` (hover/tap) toggles
+    //the CSS opacity fade. The pose (tilt/turn about the screen-centred home) is applied every frame in draw().
+    public setGroundDecal(svg: string | null, active = false): void
+    {
+        if (!svg)
+        {
+            this._groundDecal.style.display = 'none';
+            this._groundDecal.innerHTML = '';
+            return;
+        }
+        this._groundDecal.innerHTML = svg;
+        this._groundDecal.classList.toggle('is-active', active);
+        this._groundDecal.style.display = 'block';
     }
 
     public setBuildings(buildings: Building[]): void
@@ -313,6 +335,11 @@ export class SceneRenderer
             this._ground.fade.style.transform = transform;
         }
 
+        //Logo decal: the home sits at the screen centre in clock/trend, so tilt + turn the mark about its own
+        //centre. Hidden decals still get the write (cheap, keeps the pose fresh for the next reveal).
+        this._groundDecal.style.transform =
+            `translate(-50%, -50%) rotateX(${this.camera.tiltDeg}deg) rotateZ(${this.camera.bearingDeg}deg)`;
+
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
         const alt = this._sun.altitude;
         //Home-only (clock dial): draw NO scene geometry. The card paints the dial (bars + central column) into
@@ -340,6 +367,8 @@ export class SceneRenderer
         if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
         if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
         this._groundHolder.remove();
+        this._groundOverlay.remove();
+        this._groundDecal.remove();
         this._sceneSvg.remove();
     }
 }

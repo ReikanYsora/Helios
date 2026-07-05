@@ -40,8 +40,6 @@ export interface HeliosConfig
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.
     'camera-locked'?:          unknown;
-    //Per-layer building radius the editor strips on save (kept in the type so the strip recognises it).
-    'building-radius'?:        unknown;
     //Global display radius (m) around the home within which buildings and shadows render. Clamped [50,500],
     //default 200. Lowering it is the main perf lever on weak hardware.
     'display-radius'?:         unknown;
@@ -68,8 +66,12 @@ export interface HeliosConfig
     //Live irradiance sensor (W/m²) at the home, preferred over the model for the live "now" reading. Past +
     //forecast still come from the model.
     'solar-irradiance-entity'?: unknown;
-    //User-picked power/energy entity surfaced as the "custom" chip (top-left, above grid) and a clock metric.
-    //Empty = no chip. The displayed name follows the entity's friendly name.
+    //Custom entity, measured-only contract: BOTH sensors are required for it to display anywhere. The power
+    //sensor feeds the live chip (instantaneous); the energy meter feeds the past curve, scrub and clock ring
+    //via its recorder change-series, exactly like grid/pv/battery. The legacy single slot below is only read
+    //by the editor to prefill a migration, never at runtime. Empty = no chip. Name follows the friendly name.
+    'custom-power-entity'?:     unknown;
+    'custom-energy-entity'?:    unknown;
     'custom-entity'?:           unknown;
     //MDI icon override for the custom entity (chip + clock medallion/button). Empty falls back to the entity's
     //own icon, then a generic glyph.
@@ -83,37 +85,40 @@ export interface HeliosConfig
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
-    //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW' (unchanged). Energy always stays kWh.
+    //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW'. Energy always stays kWh.
     'power-unit'?:             unknown;
     //Irradiance (solar constant) readout unit: 'W/m²' or 'kW/m²'. Default 'W/m²'.
     'irradiance-unit'?:        unknown;
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
-    //Entity whose live value replaces the home-consumption CHIP readout only (some inverters expose a direct
-    //consumption sensor differing by a few watts from the balance). The flows and history keep the computed
-    //value on purpose: that small gap has no consistent place in the solar/grid/battery flow.
-    'home-consumption-entity'?: unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
-    //Top-right weather panel: when false, hide it (scene view). Independent of "No UI" mode. Default true (shown).
-    'show-weather'?:           unknown;
-    //Top-right info panel: when true, the panel also lists the sun's astronomical data (altitude, azimuth,
-    //sunrise, solar noon, sunset, day length) below the weather. Default false (weather only).
-    'show-astro'?:             unknown;
-    //Entities whose live value replaces the Open-Meteo default on the info panel: outdoor temperature and wind
-    //speed. Empty = use Open-Meteo. Read as-is in the entity's own unit.
-    'outdoor-temperature-entity'?: unknown;
-    'wind-speed-entity'?:      unknown;
 }
 
 
-//Resolved custom-entity id (empty string when unset); the chip/clock gate on emptiness.
+//Custom power sensor id (empty when unset).
+export function customPowerEntityId(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['custom-power-entity'];
+    return typeof raw === 'string' ? raw.trim() : '';
+}
+
+//Custom energy meter id (empty when unset).
+export function customEnergyEntityId(config: HeliosConfig | undefined): string
+{
+    const raw = config?.['custom-energy-entity'];
+    return typeof raw === 'string' ? raw.trim() : '';
+}
+
+//Validity-gated custom id, the single string every consumer gates on: the POWER sensor (the live
+//source), non-empty only when BOTH halves are configured. One incomplete half hides the custom
+//entity everywhere instead of displaying a surface we would have to invent.
 export function customEntityId(config: HeliosConfig | undefined): string
 {
-    const raw = config?.['custom-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
+    const power = customPowerEntityId(config);
+    return power !== '' && customEnergyEntityId(config) !== '' ? power : '';
 }
 
 
@@ -201,50 +206,10 @@ export function batterySign(config: HeliosConfig | undefined): 'default' | 'inve
 }
 
 
-//Resolved home-consumption override entity id (empty when unset). Overrides the chip readout only; the flows and
-//history stay on the computed balance.
-export function homeConsumptionEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['home-consumption-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
-}
-
-
 //"No UI" mode: timeline + controls fade out after an idle delay, back on any input. Default false.
 export function autoHideUi(config: HeliosConfig | undefined): boolean
 {
     return config?.['auto-hide-ui'] === true;
-}
-
-
-//Top-right weather panel: shown unless explicitly disabled. Default true.
-export function showWeather(config: HeliosConfig | undefined): boolean
-{
-    return config?.['show-weather'] !== false;
-}
-
-
-//Info panel: also show the sun's astronomical data below the weather. Default false.
-export function showAstro(config: HeliosConfig | undefined): boolean
-{
-    return config?.['show-astro'] === true;
-}
-
-
-//Resolved outdoor-temperature override entity id (empty when unset). Replaces the Open-Meteo temperature on the
-//info panel; read in the entity's own unit.
-export function outdoorTemperatureEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['outdoor-temperature-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
-}
-
-
-//Resolved wind-speed override entity id (empty when unset). Replaces the Open-Meteo wind speed on the info panel.
-export function windSpeedEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['wind-speed-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
 }
 
 

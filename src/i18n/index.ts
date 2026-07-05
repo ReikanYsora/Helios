@@ -81,7 +81,6 @@ export interface Translations
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
         standard?:   string; //'Standard' (J-2 .. J+2)
         today?:      string; //'Today'
-        now?:        string; //legacy key (kept so existing locales still type-check)
         week?:       string; //'1 week'
         month?:      string; //'1 month'
         year?:       string; //'1 year'
@@ -134,21 +133,9 @@ export interface Translations
         batterySignDefault?:          string;
         batterySignInverted?:         string;
         batterySignHidden?:           string;
-        homeConsumptionEntity?:       string;
-        homeConsumptionEntityHelp?:   string;
-        //Weather-panel show/hide toggle. Optional; fall back to English.
-        showWeather?:                 string;
-        showWeatherHint?:             string;
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
         noUiMode?:                    string;
         noUiModeHint?:                string;
-        //Info panel: astro toggle + outdoor temperature / wind-speed override entities. Optional; fall back to English.
-        showAstro?:                   string;
-        showAstroHint?:               string;
-        outdoorTemperatureEntity?:     string;
-        outdoorTemperatureEntityHelp?: string;
-        windSpeedEntity?:             string;
-        windSpeedEntityHelp?:         string;
         //Global display radius slider (50-500 m). Optional, FR-only.
         displayRadius?:               string;
         displayRadiusHelp?:           string;
@@ -159,7 +146,6 @@ export interface Translations
         buildingRealSizeOff?:         string;
         buildingRealSizeHint?:        string;
         buildingHeight?:              string;
-        buildingHeightHelp?:          string;
         //PV install: install-level knobs with no HA Energy equivalent (e.g. the solar-irradiance override).
         installationSection:      string;
         //Section-top hint: entity wiring (production, grid, battery) lives in HA Energy; this section only
@@ -169,11 +155,26 @@ export interface Translations
         //hours always fall through to the model.
         solarIrradianceEntity:     string;
         solarIrradianceEntityHelp: string;
-        customEntity:              string;
-        customEntityHelp:          string;
+        //Custom entity (measured-only: both sensors required). Optional; fall back to English.
+        customEntityIntro?:        string;
+        customLegacyHint?:         string;
+        customPowerEntity?:        string;
+        customPowerEntityHelp?:    string;
+        customEnergyEntity?:       string;
+        customEnergyEntityHelp?:   string;
         customEntityIcon:          string;
         customEntityColor:         string;
         customEntityColorHelp:     string;
+        //Measured-only status lines (live chips per configured energy family). Optional; fall back to English.
+        liveDataIntro?:            string;
+        liveSolarOk?:              string;
+        liveSolarMissing?:         string;
+        liveGridOk?:               string;
+        liveGridMissing?:          string;
+        liveGridMiswired?:         string;
+        liveBatteryOk?:            string;
+        liveBatteryMissing?:       string;
+        liveHomeNote?:             string;
         //Surrounding buildings: cluster radius, neighbour opacity, base tint.
         buildingsSection:         string;
         homeColor:                string;
@@ -209,13 +210,6 @@ export interface Translations
         //Developer block (X profile + LinkedIn), right after the version row.
         aboutDeveloperLabel:      string;
         aboutDeveloperLinkedIn:   string;
-    };
-
-    //Top-right ambient info panel (weather + optional astronomical data). All optional; the renderer falls back
-    //to inline English, so a locale that omits `panel` still builds.
-    panel?:
-    {
-        wind?:       string; //'Wind'
     };
 }
 

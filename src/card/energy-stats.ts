@@ -8,13 +8,12 @@
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number the card shows the same number.
 
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, COARSE_REGULARITY, HOUR_MS, DAY_MS } from '../constants';
+import { callWSWithTimeout } from './ws-timeout';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
-//re-arming once a minute keeps cumulative-only live chips within ~1 min of the freshest bucket without WS spam.
-//Callers fold floor(now / CHANGE_REFRESH_MS) into their fetch key so the gate re-arms on this boundary. Defined in
-//constants.ts; re-exported here because pv/grid/battery import it from this module.
-export { CHANGE_REFRESH_MS } from '../constants';
+//re-arming once a minute keeps the past curves and scrub within ~1 min of the freshest bucket without WS spam.
+//Callers fold changeRefreshAnchorMs() into their fetch key so the gate re-arms on this boundary.
 
 //"Now" rounded down to the refresh boundary: the single anchor every fetch gate folds into its key (battery/grid also
 //pass it as fetch end). One helper so call sites can't drift and every card shares one cache entry per interval.
@@ -99,7 +98,7 @@ export async function fetchChangeSeries(
     {
         try
         {
-            const result = await hass.callWS({
+            const result = await callWSWithTimeout(hass, {
                 type:          'recorder/statistics_during_period',
                 start_time:    new Date(startMs).toISOString(),
                 end_time:      new Date(endMs).toISOString(),
@@ -155,9 +154,15 @@ export async function fetchChangeSeries(
 
 
 
-//A change bucket whose magnitude exceeds this multiple of the median is a meter reset/rollover artefact, not real
-//flow. Single source of the outlier rule for every change-series consumer (store curves and the clock).
+//A change bucket whose magnitude exceeds this multiple of the reference quantile is a meter reset/rollover
+//artefact, not real flow. Single source of the outlier rule for every change-series consumer (store curves
+//and the clock).
 const OUTLIER_CAP_FACTOR = 20;
+//Reference quantile for the cap. The 90th percentile, NOT the median: a summer production day carries a long
+//twilight tail of tiny non-zero buckets that drags the median far below the midday peak, and a median-based
+//cap then rejects the whole top of a genuine bell (the curve flat-lines at the cap through interpolation).
+//A real reset spike (a lifetime total dumped into one bucket) still exceeds 20x the p90 by orders of magnitude.
+const OUTLIER_CAP_QUANTILE = 0.9;
 
 //kWh magnitude above which a change bucket is rejected as a reset/rollover spike (the whole accumulated total
 //dumped into one bucket). Infinity when there's nothing to compare against.
@@ -165,7 +170,9 @@ export function outlierCapKwh(buckets: ChangeBucket[] | null): number
 {
     if (!buckets) { return Infinity; }
     const mags = buckets.map(b => Math.abs(b.kwh)).filter(k => isFinite(k) && k > 0).sort((a, b) => a - b);
-    return mags.length ? mags[Math.floor(mags.length / 2)] * OUTLIER_CAP_FACTOR : Infinity;
+    if (!mags.length) { return Infinity; }
+    const idx = Math.min(mags.length - 1, Math.floor(mags.length * OUTLIER_CAP_QUANTILE));
+    return mags[idx] * OUTLIER_CAP_FACTOR;
 }
 
 //Coarse-meter smoothing on the binned per-bucket energy (sums/hit). A meter that reports its cumulative energy
@@ -248,13 +255,12 @@ export function changeSeriesToWatts(
 }
 
 
-//Deriving live power from a `change` series must cope with two meter types:
-//  - Fine: counter advances every few seconds, so every 5-min bucket carries energy and the latest bucket alone is
-//    the responsive, correct read.
-//  - Coarse (reports every 15 min): counter only advances on report, so the recorder lands the whole 15-min delta in
-//    one bucket and zeroes the other two; the latest bucket then reads 0 two-thirds of the time and ~3x one-third.
-//Distinguished by density of non-zero buckets in a probe window: dense = fine (read latest direct), sparse = coarse
-//(average the probe window so the lone delta spreads over its real interval). Fine installs are untouched.
+//Scrub-time reads must cope with two meter types:
+//  - Fine: counter advances every few seconds, so every 5-min bucket carries energy and the bucket containing the
+//    instant is the correct read.
+//  - Coarse (reports every 15 min): counter only advances on report, so the recorder lands the whole delta in one
+//    bucket and zeroes the ones between; the probe window average spreads it back over its real interval.
+//Distinguished by density of non-zero buckets in the probe window.
 
 //Average power (W) over buckets overlapping [loMs, hiMs), pro-rating straddlers. Returns kwh/ms/nonZero/total so the
 //caller can both average AND judge meter density.
@@ -283,36 +289,6 @@ function wattsFromBucket(b: ChangeBucket): number
 {
     const dt = b.endMs - b.startMs;
     return dt > 0 ? Math.max(0, (b.kwh * 1000) / (dt / HOUR_MS)) : 0;
-}
-
-
-//Live power for the chip on cumulative-only installs (no stat_rate). Fine: latest completed bucket. Coarse: average
-//of the recent probe window. Null only when no completed bucket exists.
-export function latestWattsFromChangeSeries(
-    buckets: ChangeBucket[] | null,
-    nowMs:   number,
-): number | null
-{
-    if (!buckets || buckets.length === 0) { return null; }
-    //Most recent completed bucket (end <= now, never a half-filled in-progress one).
-    let lastIdx = -1;
-    for (let i = buckets.length - 1; i >= 0; i--)
-    {
-        if (buckets[i].endMs <= nowMs) { lastIdx = i; break; }
-    }
-    if (lastIdx < 0) { return null; }
-    const lastEnd = buckets[lastIdx].endMs;
-
-    const probe = probeChangeWindow(buckets, lastEnd - COARSE_PROBE_MS, lastEnd);
-    if (probe.total === 0) { return wattsFromBucket(buckets[lastIdx]); }
-    const dense = probe.nonZero >= Math.ceil(probe.total * DENSE_FRACTION);
-    if (dense)
-    {
-        //Fine meter: latest bucket is the responsive, correct read (0 immediately on a real dip).
-        return wattsFromBucket(buckets[lastIdx]);
-    }
-    //Coarse meter: spread the sparse delta over the probe span -> true average power.
-    return probe.ms > 0 ? Math.max(0, (probe.kwh * 1000) / (probe.ms / HOUR_MS)) : 0;
 }
 
 
@@ -373,13 +349,37 @@ function periodMs(period: StatPeriod): number
 
 
 //Parse a statistics bucket boundary: modern cores serve epoch ms (number), older ones ISO strings; accept both.
-function parseStatBoundary(raw: unknown): number | null
+export function parseStatBoundary(raw: unknown): number | null
 {
     if (typeof raw === 'number' && Number.isFinite(raw)) { return raw; }
     if (typeof raw === 'string')
     {
         const ms = Date.parse(raw);
         return Number.isNaN(ms) ? null : ms;
+    }
+    return null;
+}
+
+//Looser variant for the raw-stats parsers (battery/irradiance), where the payload has also carried numeric seconds
+//and numeric-string epochs across HA releases: a number under 1e12 is read as seconds (x1000), a numeric string the
+//same, anything else falls back to Date.parse. Kept separate from parseStatBoundary so the strict change-series path
+//never second-guesses a real millisecond value.
+export function parseStatBoundaryLoose(raw: unknown): number | null
+{
+    if (raw === null || raw === undefined) { return null; }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
+    if (typeof raw === 'string')
+    {
+        const asNum = Number(raw);
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
+        const t = new Date(raw).getTime();
+        return isFinite(t) ? t : null;
     }
     return null;
 }

@@ -82,6 +82,26 @@ export const editorStyles = css`
 
     /*  Help-text margins stack with the section's 14 px flex gap: field-to-help 22 px, help-to-next-field
         34 px (1.5x ratio), so the help reads as attached to the field above it. .hint adds italics. */
+
+    /*  Measured-only status lines (one per configured energy family). */
+    .live-status
+    {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-text-color, #212121);
+    }
+    .live-status ha-icon
+    {
+        --mdc-icon-size: 18px;
+        flex: none;
+    }
+    .live-status.is-ok ha-icon   { color: var(--success-color, #4caf50); }
+    .live-status.is-warn ha-icon { color: var(--warning-color, #ff9800); }
+    .live-status.is-info ha-icon { color: var(--secondary-text-color, #727272); }
+
     .field-help,
     .hint
     {

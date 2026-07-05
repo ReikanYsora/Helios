@@ -94,3 +94,4 @@ window.addEventListener('helios-data-cache-reset', () =>
         card.resetDataCache();
     }
 });
+

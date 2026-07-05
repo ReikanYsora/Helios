@@ -20,6 +20,10 @@ export interface EnergyForecastHost
     readonly hass: any;
     //Read for the solar-forecast provider config entry ids (config_entry_solar_forecast).
     readonly _energyDefaults: EnergyDefaults;
+    //Rolling-window span (same seed the store uses), so the detail fetch covers the whole visible range instead of a
+    //fixed 5-day slice that would truncate the curve on wider periods.
+    readonly _periodPastDays: number;
+    readonly _periodFutureDays: number;
     //Merged, time-sorted hourly forecast across every config entry. Empty when no solar forecast is configured (or the
     //call failed): the store then leaves its forecast series all-null so no curve/label renders.
     _haSolarForecast: SolarForecastPoint[];
@@ -94,11 +98,12 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     {
         return null;
     }
-    //Local midnight minus 2 days to plus 3 days, covering the visible J-2..J+2 with margin.
+    //Rolling window from the card's active period: local midnight minus daysPast to plus (daysFuture + 1), so a
+    //widened period still gets its whole forecast curve instead of a truncated fixed slice.
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
-    const startIso = new Date(midnight.getTime() - 2 * DAY_MS).toISOString();
-    const endIso   = new Date(midnight.getTime() + 3 * DAY_MS).toISOString();
+    const startIso = new Date(midnight.getTime() - host._periodPastDays * DAY_MS).toISOString();
+    const endIso   = new Date(midnight.getTime() + (host._periodFutureDays + 1) * DAY_MS).toISOString();
 
     //Fetch every entry in parallel, then sum the answering ones per timestamp. A rejecting entry (not the Helios
     //provider) resolves to null and drops out; an empty-but-valid answer counts as answered but adds nothing.

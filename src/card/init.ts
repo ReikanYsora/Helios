@@ -357,10 +357,16 @@ function wireEngineCallbacks(host: InitHost): void
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;
-            refreshHud(host);
-            //Clock + trend ride the same camera: re-project the dial on every transform so it stays glued to
-            //the rotating basemap.
-            if (host._viewMode === 'clock' || host._viewMode === 'trend') { host.paintClock?.(); }
+            if (host._viewMode === 'clock' || host._viewMode === 'trend')
+            {
+                //Clock + trend ride the same camera: re-project the dial on every transform so it stays glued
+                //to the rotating basemap. The scene HUD is hidden here, so skip its per-frame refresh entirely.
+                host.paintClock?.();
+            }
+            else
+            {
+                refreshHud(host);
+            }
         });
     };
 }

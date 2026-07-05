@@ -7,6 +7,163 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.7.3
+
+**This release changes how Helios reads your data: it now follows the Home
+Assistant energy dashboard at 100%, and never estimates a value.** Everything the
+card shows, live or historical, comes straight from your dashboard: there is
+nothing extra to wire, and no per-card value that can drift from it. Please read
+the first section below, it may change what you see on your card.
+
+### Measured values only (energy dashboard alignment)
+
+Helios used to derive some real-time values from your cumulative meters when no
+live sensor was available. That created confusing differences with the energy
+dashboard, so it is gone. The new rule is simple:
+
+* **Live chips** (the real-time values in the scene) appear **only when a real
+  live power sensor** is configured on the matching source of your energy
+  dashboard (the optional "power" field). No sensor, no chip: nothing is
+  derived from meters anymore.
+* **Curves, scrub, energy clock and totals** come only from your **kWh
+  meters**, through the same recorder data the energy dashboard reads. They
+  match it by construction.
+* **The home consumption readout** is the same live balance the energy
+  dashboard defines (solar + import - export - battery) and appears once every
+  configured family has its live sensor.
+* If a live grid sensor is detected as **mis-wired** (for example an
+  import-only sensor configured as a signed net sensor), Helios hides the
+  affected chips and the editor explains exactly what to fix, instead of
+  displaying values that cannot be trusted.
+* The editor gains a **live-data status panel** telling you, family by family,
+  which live chips can exist with your current configuration and what to add.
+* The **home consumption override** option is removed: the dashboard's balance
+  is the single source of truth (a diverging per-card sensor was exactly the
+  kind of confusion this release ends). The old option is simply ignored.
+
+### Added: detail panels, double-tap any chip
+
+**Double-tap** (or double-click) any chip in the scene to open a compact panel
+top-right, tinted in that chip's own colour. It aggregates the metric over the
+period you are viewing, as icon-only figures in your chosen unit (W or kW):
+
+* **Production / consumption**: total energy, peak power, average per day.
+* **Grid**: total import, total export, net, average import per day.
+* **Battery**: energy charged and energy discharged.
+* **Battery charge (SoC)**: minimum, average and maximum.
+* **Sun**: peak and average irradiance, plus sunrise, solar noon, sunset, highest
+  altitude and day length.
+* **Custom entity**: total, plus minimum, average and maximum.
+
+Every figure is recomputed from the exact series the chart draws, so the panel and
+the curve always agree. Double-tap again to close. Like everything else on the
+card, there is nothing to configure: it reads only what your dashboard already
+provides.
+
+### Removed: the weather panel
+
+The top-right weather + astronomy plate is gone, along with its temperature and
+wind options. It had drifted away from what the card is about, the energy of your
+home, and only ever showed values your dashboard displays better. The weather
+Helios actually needs, cloud cover and irradiance, keeps driving the sun disc, the
+irradiance view and the shadows exactly as before.
+
+### Changed: the clock and trend dials lose their central column
+
+The stacked column at the centre of the clock and trend dials is replaced by the
+flat **Helios logo**, laid on the ground plane. It does the same job, hover or tap
+it for the period total, without standing up into the view. With several filters
+in clock mode, or a busy trend, the old column obstructed the bars, the arc and
+the labels; the logo rests at half opacity and lifts to full when you point at it.
+
+### Changed: custom entity now takes its two sensors
+
+* The custom entity follows the same rule: a **power sensor** (live chip and
+  curve) and an **energy sensor** (energy views), plus the optional colour and
+  icon, in a redesigned editor block. It displays only when both sensors are
+  set. An entity configured with the old single field is pre-moved to the
+  matching new field in the editor; add the missing one and save.
+
+### Changed: cloud coverage merged into the irradiance chip
+
+* The floating cloud chip is gone (it collided with the home cluster on
+  phones). Its weather glyph (clear / partly cloudy / overcast) now lives on
+  the irradiance chip: one compact chip, the icon for the sky and the number
+  for the W/m². Clicking it opens the irradiance view where the three cloud
+  layers are drawn **over the curve** as translucent bands (100% total cover =
+  top of the axis), so the clouds visibly eat the sun. The energy clock drops
+  its cloud filter (an instantaneous coverage has no meaning in a cumulative
+  view).
+
+### Added: dashboard source names on the cards
+
+* The grid and battery rows (tooltips, clock) now display the name you gave
+  the source in the energy dashboard settings, when one is set, instead of the
+  meter entities' names.
+
+### Added: the solar forecast on the irradiance view
+
+* The dashed forecast curve now also rides the irradiance view (next to the
+  cloud layers), as a ghosted silhouette on its own scale: forecast, sun and
+  clouds read together. The production view keeps its true shared-scale
+  forecast.
+
+### Fixed: a stray battery leader with a hidden state-of-charge chip
+
+When a battery reported power but no state of charge, a connector could still be
+drawn to the empty SoC slot. A hidden SoC chip now drops both of the leaders tied
+to it, whatever the power reads.
+
+### Fixed: the custom entity stays visible at zero while scrubbing
+
+A measured 0 is a real value, so the custom chip no longer vanishes when you scrub
+onto a zero reading; it disappears only where the entity has no history at all.
+
+### Fixed: a minus sign on zero values
+
+* A sensor blipping a few negative milliwatts could render as "-0.00 kW" on a
+  chip. Values that round to zero at the displayed precision now render as a
+  true zero, everywhere.
+
+### Fixed: production curve flattening into a plateau
+
+* On days with a deep production bell and a long dawn/dusk tail, the
+  spike-protection filter could reject the real midday peak and bridge it with
+  a flat line. Its threshold now uses the 90th percentile instead of the
+  median: genuine peaks always pass, meter-reset spikes are still rejected.
+
+### Fixed: 3D buildings are back, from a more reliable source
+
+* The buildings were fetched from the OpenStreetMap Overpass API, which had
+  started refusing the card by waves. Helios now reads the same OpenStreetMap
+  building data from **OpenFreeMap vector tiles** (a free, key-less map CDN):
+  the surroundings load reliably again, with their real heights, and the card
+  no longer depends on a service that can lock it out. Still cached locally, so
+  it stays instant and works offline on the next load.
+
+### Changed: the custom entity now reads measured energy
+
+* If you use the optional custom entity, its clock ring, timeline curve and
+  scrub now read the **energy meter** you configured (the measured kWh from the
+  recorder), exactly like grid, solar and battery. The live chip still shows the
+  power sensor's instant value. Both sensors stay required.
+
+### Fixed: correctness and performance
+
+* An off-screen card could keep polling the weather service forever; it now
+  stops cleanly when hidden.
+* A custom entity could re-query the recorder on every state update; it now
+  refreshes at most once a minute.
+* Recorder queries that never answered could freeze a value until the page was
+  reloaded; they now time out and recover on their own.
+* A locale that uses a comma as the decimal separator now reads correctly on
+  every chip, not just the grid.
+* A large batch of internal clean-up (dead code, memory and rendering), with no
+  change to what the card does.
+
+
+---
+
 ## 2026.7.2
 
 A refinement release on top of 2026.7.1: a new ambient info panel, more display

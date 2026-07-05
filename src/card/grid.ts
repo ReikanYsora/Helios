@@ -6,15 +6,19 @@
 //meters, the same metric the HA Energy dashboard consumes. Import and export are SEPARATE meters, so each
 //direction's watts come from its own meter with no sign inference or shared-buffer slope.
 //
-//Live "now" prefers the signed `stat_rate` sensor (entity state), summed across sources and split
-//into import (net >= 0) / export (net < 0), like the HA Energy live tile. Per-source inversion is
-//honoured via `power_config.stat_rate_inverted` (invertedRateEntities[]). With no stat_rate wired,
-//the chip falls back to the average power of the latest completed 5-minute change bucket.
+//Live "now" is measured or absent, never derived: the signed `stat_rate` sensor (entity state) summed
+//across sources and split into import (net >= 0) / export (net < 0), like the HA Energy live tile,
+//with per-source inversion honoured via `power_config.stat_rate_inverted` (invertedRateEntities[]).
+//No sensor wired, or a sensor the grid-guard (grid-guard.ts) proved mis-scoped against the billing
+//meters: the live chips stay EMPTY and the editor explains what to configure; curves and scrub keep
+//reading the meters regardless.
 
 import { pvNormalizeToWatts } from './pv';
-import { formatEntityValue, type PowerUnit } from './format';
+import { formatEntityValue, parseNumericState, type PowerUnit } from './format';
 import type { EnergyDefaults } from './energy-prefs';
-import { fetchChangeSeries, latestWattsFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { refreshGridGuard, type GridGuardState } from './grid-guard';
+import { DAY_MS } from '../constants';
 
 
 export interface GridHost
@@ -43,6 +47,9 @@ export interface GridHost
     _gridExportChangeFetchKey: string;
     _gridImportChangeFetching: boolean;
     _gridExportChangeFetching: boolean;
+
+    //Mis-scope guard state (grid-guard.ts); 'flagged' empties the live chips instead of trusting the split.
+    _gridGuard: GridGuardState;
 }
 
 
@@ -61,20 +68,20 @@ export function refreshGrid(host: GridHost): void
     fetchGridChangeSeries(host, 'import');
     fetchGridChangeSeries(host, 'export');
 
-    //Live chip: prefer the signed power sensor (real-time, summed + split); otherwise fall back to
-    //the latest completed change bucket so a cumulative-only install still shows a "now" value.
+    //Mis-scope audit (no-op between its re-arms / outside its preconditions).
+    refreshGridGuard(host);
+
+    //Live chips are measured or absent: the signed power sensor while the guard trusts it, nothing
+    //otherwise. Curves and scrub keep reading the meters above regardless.
     const statRates = host._energyDefaults?.gridStatRates ?? [];
-    if (statRates.length > 0)
+    if (statRates.length > 0 && host._gridGuard.status !== 'flagged')
     {
         readStatRates(host, statRates);
     }
     else
     {
-        const nowMs = Date.now();
-        const imp   = latestWattsFromChangeSeries(host._gridImportChangeSeries, nowMs);
-        const exp   = latestWattsFromChangeSeries(host._gridExportChangeSeries, nowMs);
-        applyValue(host, 'import', imp !== null ? Math.max(0, imp) : null, imp !== null ? 'W' : '');
-        applyValue(host, 'export', exp !== null ? Math.max(0, exp) : null, exp !== null ? 'W' : '');
+        applyValue(host, 'import', null, '');
+        applyValue(host, 'export', null, '');
     }
 }
 
@@ -97,9 +104,9 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
     today0.setHours(0, 0, 0, 0);
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
-    const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
-    //Rounded end anchor in the key re-issues the fetch once per CHANGE_REFRESH_MS, so a cumulative-only grid
-    //keeps a live chip and fresh past curve.
+    const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
+    //Rounded end anchor in the key re-issues the fetch once per CHANGE_REFRESH_MS, so the past curve and
+    //scrub keep tracking newly committed buckets.
     const endMs   = changeRefreshAnchorMs();
     const sorted  = [...ids].sort();
     const key     = `${sorted.join(',')}|${startMs}|${endMs}`;
@@ -188,23 +195,6 @@ function applyValue(host: GridHost, slot: 'import' | 'export', value: number | n
         if (host._gridExportValue !== clamped) { host._gridExportValue = clamped; }
         if (host._gridExportUnit  !== unit)    { host._gridExportUnit  = unit; }
     }
-}
-
-
-//Parse a state that arrived as string or number. Accepts both '.' and ',' decimal separators (some
-//integrations forward the locale-formatted form). Null for anything non-finite.
-function parseNumericState(raw: unknown): number | null
-{
-    if (typeof raw === 'number')
-    {
-        return Number.isFinite(raw) ? raw : null;
-    }
-    if (typeof raw !== 'string') { return null; }
-    const trimmed = raw.trim();
-    if (trimmed === '') { return null; }
-    const normalised = trimmed.replace(',', '.');
-    const n = parseFloat(normalised);
-    return Number.isFinite(n) ? n : null;
 }
 
 

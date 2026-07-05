@@ -23,13 +23,7 @@ export interface SampleHourly
     cloudLow:    number[];
     cloudMid:    number[];
     cloudHigh:   number[];
-    weatherCode: number[];
     shortwave:   number[];
-    //Ambient readout series for the top-right info panel. Metric units from Open-Meteo (temperature C,
-    //wind km/h, direction deg); the card converts for display. NaN fills a missing hour.
-    temperature: number[];
-    windSpeed:   number[];
-    windDir:     number[];
 }
 export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../constants';
 
@@ -137,11 +131,7 @@ interface CachedPayload
         cloudLow:    number[];
         cloudMid:    number[];
         cloudHigh:   number[];
-        weatherCode: number[];
         shortwave:   number[];
-        temperature: number[];
-        windSpeed:   number[];
-        windDir:     number[];
     };
 }
 
@@ -212,11 +202,7 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudLow:    p.cloudLow    ?? [],
             cloudMid:    p.cloudMid    ?? [],
             cloudHigh:   p.cloudHigh   ?? [],
-            weatherCode: p.weatherCode ?? [],
             shortwave:   p.shortwave   ?? [],
-            temperature: p.temperature ?? [],
-            windSpeed:   p.windSpeed   ?? [],
-            windDir:     p.windDir     ?? [],
         };
     }
     catch
@@ -240,11 +226,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 cloudLow:    data.cloudLow,
                 cloudMid:    data.cloudMid,
                 cloudHigh:   data.cloudHigh,
-                weatherCode: data.weatherCode,
                 shortwave:   data.shortwave,
-                temperature: data.temperature,
-                windSpeed:   data.windSpeed,
-                windDir:     data.windDir,
             }
         };
         window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -259,18 +241,13 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //Variables requested from Open-Meteo. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged
 //over the preceding one), matching the visual time cursor; it powers the live irradiance chip and sun-arc colouring.
 //The split cloud variables keep total cloud_cover for rendering and let us detect the low-layer "fog spike" failure
-//mode. The PV forecast is read natively from Home Assistant, so the irradiance split and ambient series are not requested.
+//mode. Only the irradiance (shortwave) + cloud series are requested; the PV forecast is read natively from Home Assistant.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover',
     'cloud_cover_low',
     'cloud_cover_mid',
     'cloud_cover_high',
-    'weather_code',
-    //Ambient readout for the info panel: dry-bulb temperature (C), wind speed (km/h) and bearing (deg).
-    'temperature_2m',
-    'wind_speed_10m',
-    'wind_direction_10m',
 ];
 
 //Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_<model>);
@@ -305,51 +282,9 @@ function readSeries(row: any, varName: string, models: string[]): (number | null
     return out;
 }
 
-//weather_code is categorical (WMO 0..99), so averaging is meaningless. Pick the first model that has it, by construction
-//the most appropriate for the user's location.
-function readWeatherCode(row: any, models: string[]): number[]
-{
-    const direct = row?.hourly?.weather_code;
-    if (Array.isArray(direct))
-    {
-        return direct.map((v: any) => Number(v) || 0);
-    }
-    for (const m of models)
-    {
-        const arr = row?.hourly?.[`weather_code_${m}`];
-        if (Array.isArray(arr))
-        {
-            return arr.map((v: any) => Number(v) || 0);
-        }
-    }
-    return [];
-}
-
-//Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value); ambient -> NaN (0 is a
-//legitimate temperature/wind value, so a missing hour must read as "no data", not zero).
+//Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value).
 const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
 const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
-const fillAmbient   = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
-
-//Circular series (wind direction, deg): a cross-model median wraps wrong across 0/360, so take the first model
-//that carries it, like weather_code.
-function readFirstModelSeries(row: any, varName: string, models: string[]): number[]
-{
-    const direct = row?.hourly?.[varName];
-    if (Array.isArray(direct))
-    {
-        return direct.map((v: any) => (v == null || Number.isNaN(v)) ? NaN : Number(v));
-    }
-    for (const m of models)
-    {
-        const arr = row?.hourly?.[`${varName}_${m}`];
-        if (Array.isArray(arr))
-        {
-            return arr.map((v: any) => (v == null || Number.isNaN(v)) ? NaN : Number(v));
-        }
-    }
-    return [];
-}
 
 
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
@@ -449,11 +384,7 @@ export async function fetchHomePointData(
                 cloudLow:    lowSeries,
                 cloudMid:    midSeries,
                 cloudHigh:   highSeries,
-                weatherCode: readWeatherCode(row, models),
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
-                temperature: fillAmbient(readSeries(row, 'temperature_2m',       models)),
-                windSpeed:   fillAmbient(readSeries(row, 'wind_speed_10m',        models)),
-                windDir:     readFirstModelSeries(row, 'wind_direction_10m', models),
             };
 
             writeCache(fLat, fLon, precision, data);

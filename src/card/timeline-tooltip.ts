@@ -6,6 +6,7 @@ import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, irradianceUnit, customEntityColor } from '../helios-config';
 import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from './format';
 import { valueAt } from './unifiedStore';
+import { pickTranslations } from '../i18n';
 import { resolveCustomEntityIcon } from './custom-entity';
 import {
     type ChartHost,
@@ -18,7 +19,9 @@ import {
     batteryDischargeName,
 } from './charts';
 import { interpAt, pvValueAtTime } from './series-sample';
+import { wattsAtFromChangeSeries } from './energy-stats';
 import { computeDailyKwhTotals } from './charts-generic';
+import { DAY_MS } from '../constants';
 
 
 //Hover tooltip above the chart-card stack: the hover timestamp + one icon-coded row per series, plus the day's kWh
@@ -56,9 +59,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
     const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
-    const customV    = host._customEntityHistory
-        ? interpAt(host._customEntityHistory.times, host._customEntityHistory.values, atMs)
-        : NaN;
+    const customV    = wattsAtFromChangeSeries(host._customChangeSeries ?? null, atMs) ?? NaN;
     const pv   = pvValueAtTime(host, atMs);
 
     //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling).
@@ -87,19 +88,15 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
     //duplicating the headline row).
-    const perEntityMap     = host._pvHistoryPerEntity;
-    //Source order (not sorted), so row index lines up with solarSourceName + the clock.
+    const perEntityMap     = host._pvChangeSeriesPerEntity;
+    //Source order (not sorted), so row index lines up with solarSourceName + the clock: the per-source
+    //change map is keyed by the solar meters in HA Energy source order.
     const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()) : [];
     const perEntityRows: { id: string; label: string; valueText: string; colorIdx: number }[] = [];
     for (let i = 0; i < perEntityIds.length; i++)
     {
         const id    = perEntityIds[i];
-        const ph    = perEntityMap.get(id);
-        if (!ph)
-        {
-            continue;
-        }
-        const val   = pvValueAtTime(host, atMs, ph);
+        const val   = pvValueAtTime(host, atMs, id);
         if (!isFinite(val.value))
         {
             continue;
@@ -111,6 +108,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     //Row names: the metric name, or the configured entity's HA Energy name for the two-direction grid/battery rows.
     const tgtName        = clockTargetLabel(host, target);
+    //Cloud layer names for the irradiance view's overlay rows (percent unit, separate from the W/m² row).
+    const cloudNames     = pickTranslations(host.hass?.language).clock;
     const gridFromName   = gridImportName(host);
     const gridToName     = gridExportName(host);
     const battChargeName = batteryChargeName(host);
@@ -127,7 +126,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
     //Header granularity follows the window: intraday shows the time, a multi-day span adds the weekday, and a
     //month/year span shows the calendar day (the scrub steps day by day), so you always know when you are.
-    const spanDays  = rangeMs / 86_400_000;
+    const spanDays  = rangeMs / DAY_MS;
     const timeOpts: Intl.DateTimeFormatOptions =
           spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }
         : spanDays <= 14.05 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }
@@ -281,25 +280,25 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                         <span class="tb-hover-tooltip-value">${formatPower(host.hass, Math.abs(customV), dec, powerU)}</span>
                     </div>
                 ` : nothing}
-                ${target === 'cloud' ? html`
+                ${target === 'irradiance' ? html`
                     ${isFinite(cloudHighV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudHighColor}" icon="mdi:format-vertical-align-top"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudHigh}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudHighV)))} %</span>
                         </div>
                     ` : nothing}
                     ${isFinite(cloudMidV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudBase}" icon="mdi:format-vertical-align-center"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudMid}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudMidV)))} %</span>
                         </div>
                     ` : nothing}
                     ${isFinite(cloudLowV) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudLowColor}" icon="mdi:format-vertical-align-bottom"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudLow}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
                         </div>
                     ` : nothing}
