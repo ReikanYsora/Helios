@@ -44,11 +44,13 @@ export function solarSourceName(host: ChartHost, index: number): string
     return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `PV ${index + 1}`;
 }
 
-//Directional energy names from the HA Energy dashboard, so the clock + timeline tooltips never diverge.
-export function gridImportName(host: ChartHost):      string { return statFriendly(host, host._energyDefaults.gridStatEnergyFroms); }
-export function gridExportName(host: ChartHost):      string { return statFriendly(host, host._energyDefaults.gridStatEnergyTos); }
-export function batteryChargeName(host: ChartHost):   string { return statFriendly(host, host._energyDefaults.batteryStatEnergyTos); }
-export function batteryDischargeName(host: ChartHost): string { return statFriendly(host, host._energyDefaults.batteryStatEnergyFroms); }
+//Directional energy names, so the clock + timeline tooltips never diverge: the user-given source name
+//from the dashboard settings when one exists, else the meter's friendly name (the direction stays
+//readable through each row's icon and colour).
+export function gridImportName(host: ChartHost):      string { return host._energyDefaults.gridName    || statFriendly(host, host._energyDefaults.gridStatEnergyFroms); }
+export function gridExportName(host: ChartHost):      string { return host._energyDefaults.gridName    || statFriendly(host, host._energyDefaults.gridStatEnergyTos); }
+export function batteryChargeName(host: ChartHost):   string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyTos); }
+export function batteryDischargeName(host: ChartHost): string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyFroms); }
 
 //Metric name for a tooltip row / rail title. en + fr; other locales fall back to en. Custom takes the entity's own
 //name. Every tooltip name comes from here or from statFriendly.

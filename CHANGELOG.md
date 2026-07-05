@@ -58,6 +58,19 @@ dashboard, so it is gone. The new rule is simple:
   its cloud filter (an instantaneous coverage has no meaning in a cumulative
   view).
 
+### Added: dashboard source names on the cards
+
+* The grid and battery rows (tooltips, clock) now display the name you gave
+  the source in the energy dashboard settings, when one is set, instead of the
+  meter entities' names.
+
+### Added: the solar forecast on the irradiance view
+
+* The dashed forecast curve now also rides the irradiance view (next to the
+  cloud layers), as a ghosted silhouette on its own scale: forecast, sun and
+  clouds read together. The production view keeps its true shared-scale
+  forecast.
+
 ### Fixed: a minus sign on zero values
 
 * A sensor blipping a few negative milliwatts could render as "-0.00 kW" on a

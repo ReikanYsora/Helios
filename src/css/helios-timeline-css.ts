@@ -114,6 +114,13 @@ export const heliosTimelineStyles = css`
         stroke-width: 1;
     }
 
+    /*  Forecast silhouette riding every non-production chart target: same dash, ghosted so the
+        target's own curve keeps the lead (shape reference, own normalised scale). */
+    .hc-chart-forecast-ghost
+    {
+        opacity: 0.45;
+    }
+
     /*  Dotted day separators at midnight boundaries, 0.55 alpha. Flips with the theme via
         --rgb-primary-text-color. */
     .hc-day-sep

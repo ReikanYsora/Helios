@@ -9,6 +9,7 @@ import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { sumChangeForDay } from './energy-stats';
 import type { ChartHost, ChartTarget } from './charts';
 import { interpAt } from './series-sample';
+import { sliceForRange } from './unifiedStore';
 import { renderPvChart } from './charts-pv';
 
 
@@ -277,6 +278,31 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
     }
 
+    //The solar forecast rides the irradiance view (with its cloud overlay) as a ghosted reference: the
+    //three sun-driven curves live together, and the forecast's shape reads against the clouds that will
+    //eat it. Normalised to its own maximum (W against W/m2, sharing the axis would squash one curve);
+    //production keeps its true shared-scale forecast in charts-pv; other targets stay clean.
+    let forecastLine = '';
+    if (target === 'irradiance' && store)
+    {
+        const slice = sliceForRange(store, startMs, endMsAbs);
+        const pts: { t: Date; v: number }[] = [];
+        let fMax = 0;
+        for (let i = 0; i < slice.times.length; i++)
+        {
+            const v = slice.forecast[i];
+            if (v === null || !isFinite(v) || v <= 0) { continue; }
+            pts.push({ t: slice.times[i], v });
+            if (v > fMax) { fMax = v; }
+        }
+        if (pts.length >= 2 && fMax > 0)
+        {
+            const yOfF = (v: number): number =>
+                H - Math.max(0, Math.min(1, v / fMax)) * (H - TOP_HEADROOM_PX);
+            forecastLine = `M ${pts.map(p => `${xOf(p.t.getTime()).toFixed(2)},${yOfF(p.v).toFixed(2)}`).join(' L ')}`;
+        }
+    }
+
     //Day separators from the shared timeline model (bounded, empty on wide spans).
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
 
@@ -305,6 +331,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 <line class="hc-day-sep" x1="${x.toFixed(2)}" y1="0" x2="${x.toFixed(2)}" y2="${H}"></line>
             `)}
             <g class="hc-chart-grow">
+                ${forecastLine ? svg`
+                    <path class="hc-chart-predicted hc-chart-forecast-ghost" d="${forecastLine}" stroke="${ENERGY_COLOR.pv(el)}" fill="none"></path>
+                ` : nothing}
                 ${drawn.map(d => d.area ? svg`
                     <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
                 ` : nothing)}

@@ -35,6 +35,10 @@ export interface EnergyDefaults
     //Solar-forecast provider config entry ids (`config_entry_solar_forecast`). Each is probed via the
     //`helios_forecast/series` websocket for the richer curve, falling back to HA's generic `energy/solar_forecast`.
     solarForecastEntryIds:  string[];
+    //User-given source names from the dashboard settings (first named source per family, '' when none):
+    //displayed instead of the entities' friendly names wherever the family is titled.
+    gridName:               string;
+    batteryName:            string;
 }
 
 
@@ -52,6 +56,8 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     batterySourcesWithoutRate: 0,
     invertedRateEntities:   [],
     solarForecastEntryIds:  [],
+    gridName:               '',
+    batteryName:            '',
 };
 
 
@@ -320,6 +326,8 @@ export function parseEnergyPrefs(prefs: {
         batterySourcesWithoutRate: 0,
         invertedRateEntities:   [],
         solarForecastEntryIds:  [],
+        gridName:               '',
+        batteryName:            '',
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -362,6 +370,10 @@ export function parseEnergyPrefs(prefs: {
         }
         else if (type === 'grid')
         {
+            if (!out.gridName)
+            {
+                out.gridName = pickFirstString(src['name']) ?? '';
+            }
             const imp = pickFirstString(src['stat_energy_from']);
             if (imp)
             {
@@ -391,6 +403,10 @@ export function parseEnergyPrefs(prefs: {
         }
         else if (type === 'battery')
         {
+            if (!out.batteryName)
+            {
+                out.batteryName = pickFirstString(src['name']) ?? '';
+            }
             const discharge = pickFirstString(src['stat_energy_from']);
             if (discharge)
             {
