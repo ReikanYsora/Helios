@@ -10,7 +10,6 @@ export const ko: Translations = {
         rangeLabel: '기간',
         standard: '표준',
         today: '오늘',
-        now:   '지금',
         week:  '주',
         month: '개월',
         year:  '년',
@@ -81,7 +80,6 @@ export const ko: Translations = {
         buildingRealSizeOff:   '꺼짐',
         buildingRealSizeHint:  '켜짐: 실제 OpenStreetMap 높이를 사용합니다(구도를 읽기 쉽게 유지하도록 상한 적용). 꺼짐: 모든 건물에 아래의 고정 높이를 적용합니다.',
         buildingHeight:        '건물 높이',
-        buildingHeightHelp:    '실제 높이가 꺼져 있을 때 모든 건물에 적용되는 고정 높이.',
         buildingClusterRadius: '집 클러스터 반경',
         buildingOpacity:       '주변 불투명도',
         buildingColor:         '건물 색상',
@@ -98,9 +96,6 @@ export const ko: Translations = {
         resetCacheButton:      '데이터 캐시 재설정',
         resetCacheWarning:     '경고: 이 작업은 이 페이지에 열려 있는 모든 Helios 카드에 대해 캐시된 Open-Meteo 날씨와 메모리 내 PV 기록을 지웁니다. 정밀화된 예측은 다시 가져올 때까지 5일치 보정을 잃게 됩니다(HA 서버에 따라 몇 분). Home Assistant 안의 당신의 데이터는 절대 건드리지 않습니다.',
         resetCacheDone:        '캐시를 지웠습니다 ✓',
-        buildingsRefetchButton: '건물 다운로드 강제 실행',
-        buildingsRefetchDone:  '다운로드 재시작됨 ✓',
-        buildingsRefetchHelp:  '캐시를 무시하고 주변 건물을 다시 다운로드합니다. 장면에 기본 집만 표시될 때 유용합니다.',
         aboutSection:          '정보',
         aboutVersionLabel:     '버전',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ko: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       '커피 사주기',
     },
-    panel:
-    {
-        wind:       '바람',
-    }
 };

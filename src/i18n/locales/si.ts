@@ -10,7 +10,6 @@ export const si: Translations = {
         rangeLabel: 'කාල පරාසය',
         standard: 'සම්මත',
         today: 'අද',
-        now:   'දැන්',
         week:  'සති 1',
         month: 'මාස 1',
         year:  'වසර 1',
@@ -81,7 +80,6 @@ export const si: Translations = {
         buildingRealSizeOff:   'අක්‍රියයි',
         buildingRealSizeHint:  'සක්‍රිය: සැබෑ OpenStreetMap උස භාවිත කරන්න (රාමුව කියවිය හැකිව තබා ගැනීමට සීමා කර ඇත). අක්‍රිය: සෑම ගොඩනැගිල්ලකටම පහත දක්වා ඇති එකම ස්ථාවර උස ලබා දෙන්න.',
         buildingHeight:        'ගොඩනැගිලි උස',
-        buildingHeightHelp:    'සැබෑ උස අක්‍රිය විට සෑම ගොඩනැගිල්ලකටම යොදන ස්ථාවර උස.',
         buildingClusterRadius: 'නිවස පොකුරු අරය',
         buildingOpacity:       'අවට පාරාන්ධතාව',
         buildingColor:         'ගොඩනැගිලි වර්ණය',
@@ -98,9 +96,6 @@ export const si: Translations = {
         resetCacheButton:      'දත්ත හැඹිලිය යළි සකසන්න',
         resetCacheWarning:     'අවවාදයයි: මෙය මෙම පිටුවේ විවෘතව ඇති සෑම Helios කාඩ්පතක් සඳහාම හැඹිලිගත Open-Meteo කාලගුණය සහ මතකයේ ඇති PV ඉතිහාසය හිස් කරයි. ශුද්ධ කළ පුරෝකථනය නැවත ලබා ගන්නා තෙක් එහි දින 5ක ක්‍රමාංකනය නැති වේ (ඔබේ HA සේවාදායකය අනුව මිනිත්තු කිහිපයක්). Home Assistant තුළ ඔබේ දත්ත කිසිවිටෙක ස්පර්ශ නොකරයි.',
         resetCacheDone:        'හැඹිලිය හිස් කරන ලදී ✓',
-        buildingsRefetchButton: 'ගොඩනැගිලි බාගැනීම බලකරන්න',
-        buildingsRefetchDone:  'බාගැනීම නැවත ආරම්භ විය ✓',
-        buildingsRefetchHelp:  'කෑෂය නොසලකා අවට ගොඩනැගිලි නැවත බාගනී. දර්ශනයේ සාමාන්‍ය නිවස පමණක් පෙනෙන විට ප්‍රයෝජනවත්.',
         aboutSection:          'පිළිබඳව',
         aboutVersionLabel:     'අනුවාදය',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const si: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'මට කෝපියක් මිලදී දෙන්න',
     },
-    panel:
-    {
-        wind:       'සුළං',
-    }
 };

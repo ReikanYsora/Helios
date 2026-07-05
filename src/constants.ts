@@ -8,6 +8,7 @@
 //=== Time units ===
 export const HOUR_MS = 3_600_000;
 export const DAY_MS  = 86_400_000;
+export const HOURS_PER_DAY = 24;
 
 //=== Math ===
 //Shared degrees to radians factor.
@@ -62,7 +63,6 @@ export const AUTO_ROTATE_INACTIVITY_MS = 5_000;
 export const UI_AUTOHIDE_MS            = 5_000;
 
 //=== Cache TTLs / timeouts / throttles ===
-export const PV_CACHE_TTL_MS        = 15 * 60_000;
 export const BATTERY_CACHE_TTL_MS   = 15 * 60_000;
 export const RADIATION_CACHE_TTL_MS = 15 * 60_000;
 export const HA_DAILY_TOTALS_TTL_MS = 25_000;
@@ -115,10 +115,9 @@ export const GUARD_CONTRADICTION_HOURS = 3;
 export const GUARD_CLEAN_EVALS        = 3;
 
 
-//=== Buildings / Overpass ===
+//=== Buildings / OpenFreeMap ===
 //Fixed prism height (m) used when real heights are off (tall buildings break the 2.5D framing), the cap
-//on nearest footprints kept, the local-mode fallback house half-extents, the cache TTL, the per-mirror
-//retry delay, and the two CORS Overpass mirrors tried in order.
+//on nearest footprints kept, the local-mode fallback house half-extents, and the cache TTL.
 export const FIXED_BUILDING_HEIGHT_M = 6;
 export const DEFAULT_BUILDING_COUNT  = 50;
 export const MIN_BUILDING_COUNT      = 10;
@@ -131,22 +130,16 @@ export const REAL_HEIGHT_FALLBACK_M  = 6;
 export const FALLBACK_HOUSE_HALF_W   = 5;
 export const FALLBACK_HOUSE_HALF_D   = 4;
 export const BUILDING_CACHE_TTL_MS   = 30 * DAY_MS;
-export const OVERPASS_RETRY_DELAY_MS = 1200;
-//European Overpass mirrors, tried in order: openstreetmap.fr first (measured fast and stable, CORS
-//open, worldwide coverage), overpass-api.de second (chronically loaded and rejects some origins
-//with a 406), kumi.systems kept as a last-resort net; the per-mirror watchdog makes a dead mirror
-//cost at most one timeout.
-export const OVERPASS_ENDPOINTS = [
-    'https://overpass.openstreetmap.fr/api/interpreter',
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-];
-//Per-mirror watchdog: fetch has no native timeout, so a hung mirror would otherwise stall the whole
-//cascade for minutes instead of failing over.
-export const OVERPASS_FETCH_TIMEOUT_MS = 10_000;
-//Re-attempt delay after EVERY mirror failed: a transient Overpass outage heals without a page
-//reload (the scene shows the fallback house in the meantime).
-export const OVERPASS_REFETCH_DELAY_MS = 5 * 60_000;
+//OpenFreeMap vector tiles: the buildings source (footprints + real heights via render_height). Free, no key,
+//CORS-open CDN, gzip-served. The TileJSON gives the versioned tile URL template (the planet snapshot rotates).
+export const OFM_TILEJSON_URL     = 'https://tiles.openfreemap.org/planet';
+//Building geometry is complete at the tileset's max zoom (14); a whole radius fits in a handful of tiles.
+export const OFM_TILE_ZOOM        = 14;
+//Per-tile watchdog: fetch has no native timeout, so a hung tile would otherwise stall the whole set.
+export const OFM_FETCH_TIMEOUT_MS = 10_000;
+//Re-attempt delay after a total buildings-fetch outage: it heals without a page reload (the scene shows the
+//fallback house in the meantime).
+export const BUILDINGS_REFETCH_DELAY_MS = 5 * 60_000;
 
 //=== Engine lifecycle ===
 //TTL of the shared module-scope parsed-buildings cache.
@@ -157,7 +150,7 @@ export const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
 export const CACHE_KEY_PREFIX = 'helios-weather-cache:';
 
 //=== Colour-space conversion (CIE D65 / LAB) ===
-//D65 white-point tristimulus values and the LAB piecewise-transfer thresholds, used by the RGB↔LAB
+//D65 white-point tristimulus values and the LAB piecewise-transfer thresholds, used by the RGB<->LAB
 //conversion that drives the per-energy-source colour ramp.
  
 export const Xn = 0.95047;
@@ -193,6 +186,9 @@ export const GROUND_RADIUS       = 3;
 export const GROUND_ZOOM         = 19;
 export const GROUND_FADE_START   = 90;
 export const EARTH_CIRCUMFERENCE_M = 40075016.686;
+//Metres per degree of latitude (mean). Longitude scales this by cos(latitude). Used by every lon/lat<->metres
+//projection (engine chip cluster, sun arc, building footprints) instead of re-deriving the literal each time.
+export const METRES_PER_DEGREE   = 111_320;
 
 //=== Renderer ===
 //SVG namespace for the scene's screen-space overlay.

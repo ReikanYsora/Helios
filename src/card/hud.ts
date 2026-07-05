@@ -40,10 +40,6 @@ export interface LabelLayout
     //Custom-entity chip anchor (top-left, above the grid chip).
     customLabel:       { x: number; y: number };
     home:              { x: number; y: number };
-    //Home roof top (home lat/lon at altitude render_height): leader drops here so it follows the roof under resize/pitch.
-    homeRoof:          { x: number; y: number };
-    //Perspective-projected ground disc around the home; drawn as a polygon, pulses with bead arrival by scaling about `home`.
-    homeAnchorPoints:  string;
 }
 
 //One pair of arc samples as a stroke segment. Fixed sun colour; depth comes from nearness (stroke width) and
@@ -112,9 +108,7 @@ function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
         && pointEq(a.batteryPowerLabel, b.batteryPowerLabel)
         && pointEq(a.gridLabel,         b.gridLabel)
         && pointEq(a.customLabel,       b.customLabel)
-        && pointEq(a.home,              b.home)
-        //homeAnchorPoints is a long SVG points string; direct string equality captures every vertex delta cheaply.
-        && a.homeAnchorPoints === b.homeAnchorPoints;
+        && pointEq(a.home,              b.home);
 }
 
 function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean

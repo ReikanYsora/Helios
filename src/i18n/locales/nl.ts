@@ -10,7 +10,6 @@ export const nl: Translations = {
         rangeLabel: 'Periode',
         standard: 'Standaard',
         today: 'Vandaag',
-        now:   'Nu',
         week:  'week',
         month: 'maand',
         year:  'jaar',
@@ -81,7 +80,6 @@ export const nl: Translations = {
         buildingRealSizeOff:   'Uit',
         buildingRealSizeHint:  'Aan: gebruik de echte OpenStreetMap-hoogtes (begrensd om de kadrering leesbaar te houden). Uit: geef elk gebouw dezelfde vaste hoogte hieronder.',
         buildingHeight:        'Gebouwhoogte',
-        buildingHeightHelp:    'Vaste hoogte die aan elk gebouw wordt toegekend wanneer echte hoogtes uit staan.',
         buildingClusterRadius: 'Clusterstraal huis',
         buildingOpacity:       'Dekking van de omgeving',
         buildingColor:         'Gebouwkleur',
@@ -98,9 +96,6 @@ export const nl: Translations = {
         resetCacheButton:      'Gegevenscache resetten',
         resetCacheWarning:     'Let op: dit wist het in de cache opgeslagen Open-Meteo-weer en de PV-geschiedenis in het geheugen voor ELKE Helios-kaart die op deze pagina open staat. De verfijnde voorspelling verliest zijn 5 dagen kalibratie totdat ze opnieuw zijn opgehaald (een paar minuten afhankelijk van je HA-server). Je gegevens binnen Home Assistant worden nooit aangeraakt.',
         resetCacheDone:        'Cache gewist ✓',
-        buildingsRefetchButton: 'Gebouwendownload forceren',
-        buildingsRefetchDone:  'Download opnieuw gestart ✓',
-        buildingsRefetchHelp:  'Downloadt de omliggende gebouwen opnieuw en negeert de cache. Handig als de scène alleen het generieke huis toont.',
         aboutSection:          'Over',
         aboutVersionLabel:     'Versie',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const nl: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Wind',
-    }
 };

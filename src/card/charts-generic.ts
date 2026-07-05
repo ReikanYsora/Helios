@@ -11,6 +11,7 @@ import type { ChartHost, ChartTarget } from './charts';
 import { interpAt } from './series-sample';
 import { sliceForRange } from './unifiedStore';
 import { renderPvChart } from './charts-pv';
+import { HOUR_MS } from '../constants';
 
 
 //Production routes to its dedicated renderer (forecast + per-source breakdown + native-unit scaling); every
@@ -174,19 +175,21 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else if (target === 'custom')
     {
-        //Custom entity over the window, from the fetched hourly history (values in W). One curve in the configured
-        //custom colour, magnitude only so a signed sensor reads as a single area; axis auto-scales.
-        const hist = host._customEntityHistory;
+        //Custom energy meter over the window, from its recorder `change` series: each bucket's kWh converted to
+        //average watts (kWh * 3600000 / bucket-ms), like the production curve. One curve in the configured custom
+        //colour, magnitude only so a signed meter reads as a single area; axis auto-scales.
+        const buckets = host._customChangeSeries;
         const pts: { t: number; v: number }[] = [];
-        if (hist)
+        if (buckets)
         {
-            for (let i = 0; i < hist.times.length; i++)
+            for (const b of buckets)
             {
-                const tMs = hist.times[i].getTime();
+                const durMs = b.endMs - b.startMs;
+                if (durMs <= 0) { continue; }
+                const tMs = (b.startMs + b.endMs) / 2;
                 if (tMs < startMs || tMs > endMsAbs) { continue; }
-                const v = hist.values[i];
-                if (!isFinite(v)) { continue; }
-                pts.push({ t: tMs, v: Math.abs(v) });
+                if (!isFinite(b.kwh)) { continue; }
+                pts.push({ t: tMs, v: Math.abs((b.kwh * HOUR_MS) / durMs) });
             }
         }
         series = [{ pts, color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') }];
@@ -197,8 +200,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         fixedMax = 1000;
     }
 
-    //Y scale: fixed where set, else the per-series running max (no target stacks its own series anymore:
-    //the cloud bands became an overlay of the irradiance view, stacked in their own percent scale below).
+    //Y scale: fixed where set, else the per-series running max. No target stacks its own series; the cloud bands
+    //are an overlay of the irradiance view, stacked in their own percent scale below.
     let yMax = fixedMax;
     if (yMax <= 0)
     {
@@ -226,8 +229,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //Merged irradiance view: the three cloud-cover bands (low -> mid -> high) overlay the irradiance curve
     //as translucent stacked areas drawn ON TOP of it, so the sky literally covers the sun's curve and the
     //anti-correlation reads at a glance. Their own scale maps 100% cumulated cover to the axis top; the
-    //bands stay areas-only (no stroke) at a lower opacity than the old standalone cloud view, keeping the
-    //irradiance line in the lead.
+    //bands stay areas-only (no stroke) at a low opacity, keeping the irradiance line in the lead.
     const overlays: { area: string; color: string }[] = [];
     if (target === 'irradiance' && host._chartSeries)
     {
@@ -473,7 +475,7 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     if (store)
     {
         const nowMs = Date.now();
-        const stepH = store.stepMs / 3_600_000;   //bucket length in hours
+        const stepH = store.stepMs / HOUR_MS;   //bucket length in hours
         for (let i = 0; i < store.bucketsTotal; i++)
         {
             const mid = store.storeStartMs + (i + 0.5) * store.stepMs;

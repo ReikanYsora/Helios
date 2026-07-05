@@ -10,7 +10,6 @@ export const ka: Translations = {
         rangeLabel: 'დროის დიაპაზონი',
         standard: 'სტანდარტული',
         today: 'დღეს',
-        now:   'ახლა',
         week:  'კვირა',
         month: 'თვე',
         year:  'წელი',
@@ -81,7 +80,6 @@ export const ka: Translations = {
         buildingRealSizeOff:   'გამორთულია',
         buildingRealSizeHint:  'ჩართულია: გამოიყენეთ რეალური OpenStreetMap სიმაღლეები (შეზღუდული, რომ კადრირება იკითხებოდეს). გამორთულია: მიეცით ყველა შენობას ქვემოთ მითითებული ერთი და იგივე ფიქსირებული სიმაღლე.',
         buildingHeight:        'შენობის სიმაღლე',
-        buildingHeightHelp:    'ფიქსირებული სიმაღლე, რომელიც ყოველ შენობას მიეცემა, როდესაც რეალური სიმაღლეები გამორთულია.',
         buildingClusterRadius: 'სახლის კლასტერის რადიუსი',
         buildingOpacity:       'მიმდებარეების გაუმჭვირვალობა',
         buildingColor:         'შენობის ფერი',
@@ -98,9 +96,6 @@ export const ka: Translations = {
         resetCacheButton:      'მონაცემთა ქეშის გადატვირთვა',
         resetCacheWarning:     'გაფრთხილება: ეს ასუფთავებს ქეშირებულ Open-Meteo ამინდს და მეხსიერებაში არსებულ PV ისტორიას ამ გვერდზე გახსნილი ყველა Helios ბარათისთვის. დახვეწილი პროგნოზი დაკარგავს თავის 5 დღის კალიბრაციას, ვიდრე ისინი ხელახლა მოიპოვება (რამდენიმე წუთი თქვენი HA სერვერის მიხედვით). თქვენი მონაცემები Home Assistant-ში არასოდეს იცვლება.',
         resetCacheDone:        'ქეში გასუფთავდა ✓',
-        buildingsRefetchButton: 'შენობების ჩამოტვირთვის იძულება',
-        buildingsRefetchDone:  'ჩამოტვირთვა ხელახლა დაიწყო ✓',
-        buildingsRefetchHelp:  'ხელახლა ტვირთავს მიმდებარე შენობებს ქეშის იგნორირებით. სასარგებლოა, როცა სცენა მხოლოდ ზოგად სახლს აჩვენებს.',
         aboutSection:          'შესახებ',
         aboutVersionLabel:     'ვერსია',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ka: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'მიყიდე ყავა',
     },
-    panel:
-    {
-        wind:       'ქარი',
-    }
 };

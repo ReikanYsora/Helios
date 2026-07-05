@@ -10,7 +10,6 @@ export const he: Translations = {
         rangeLabel: 'טווח זמן',
         standard: 'רגיל',
         today: 'היום',
-        now:   'עכשיו',
         week:  'שבוע אחד',
         month: 'חודש אחד',
         year:  'שנה אחת',
@@ -81,7 +80,6 @@ export const he: Translations = {
         buildingRealSizeOff:   'כבוי',
         buildingRealSizeHint:  'פעיל: השתמש בגבהים אמיתיים מ-OpenStreetMap (מוגבלים כדי לשמור על מסגור קריא). כבוי: תן לכל מבנה את אותו גובה קבוע שלמטה.',
         buildingHeight:        'גובה מבנה',
-        buildingHeightHelp:    'גובה קבוע המוחל על כל מבנה כשגבהים אמיתיים כבויים.',
         buildingClusterRadius: 'רדיוס אשכול הבית',
         buildingOpacity:       'אטימות הסביבה',
         buildingColor:         'צבע מבנה',
@@ -98,9 +96,6 @@ export const he: Translations = {
         resetCacheButton:      'אפס מטמון נתונים',
         resetCacheWarning:     'אזהרה: פעולה זו מנקה את מזג האוויר של Open-Meteo שבמטמון ואת היסטוריית הפוטו-וולטאי שבזיכרון עבור כל כרטיס Helios הפתוח בעמוד זה. התחזית המעודנת תאבד את 5 ימי הכיול שלה עד שהם ייטענו מחדש (כמה דקות בהתאם לשרת ה-HA שלך). הנתונים שלך בתוך Home Assistant לעולם אינם נוגעים.',
         resetCacheDone:        'המטמון נוקה ✓',
-        buildingsRefetchButton: 'אילוץ הורדת מבנים',
-        buildingsRefetchDone:  'ההורדה הופעלה מחדש ✓',
-        buildingsRefetchHelp:  'מוריד מחדש את המבנים שמסביב תוך התעלמות מהמטמון. שימושי כשהסצנה מציגה רק את הבית הגנרי.',
         aboutSection:          'אודות',
         aboutVersionLabel:     'גרסה',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const he: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'קנה לי קפה',
     },
-    panel:
-    {
-        wind:       'רוח',
-    }
 };

@@ -340,6 +340,7 @@ export class SceneRenderer
         if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
         if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
         this._groundHolder.remove();
+        this._groundOverlay.remove();
         this._sceneSvg.remove();
     }
 }

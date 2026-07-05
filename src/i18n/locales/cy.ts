@@ -10,7 +10,6 @@ export const cy: Translations = {
         rangeLabel: 'Ystod amser',
         standard: 'Safonol',
         today: 'Heddiw',
-        now:   'Nawr',
         week:  'wythnos',
         month: 'mis',
         year:  'flwyddyn',
@@ -81,7 +80,6 @@ export const cy: Translations = {
         buildingRealSizeOff:   'I ffwrdd',
         buildingRealSizeHint:  'Ymlaen: defnyddio uchderau go iawn OpenStreetMap (wedi\'u capio i gadw\'r fframio\'n ddarllenadwy). I ffwrdd: rhoi\'r un uchder sefydlog isod i bob adeilad.',
         buildingHeight:        'Uchder adeilad',
-        buildingHeightHelp:    'Uchder sefydlog a gymhwysir i bob adeilad pan fydd uchderau go iawn i ffwrdd.',
         buildingClusterRadius: 'Radiws clwstwr cartref',
         buildingOpacity:       'Afloywder yr amgylchedd',
         buildingColor:         'Lliw adeilad',
@@ -98,9 +96,6 @@ export const cy: Translations = {
         resetCacheButton:      'Ailosod storfa data',
         resetCacheWarning:     'Rhybudd: mae hyn yn clirio\'r tywydd Open-Meteo sydd wedi\'i storio a\'r hanes PV yn y cof ar gyfer POB cerdyn Helios sydd ar agor ar y dudalen hon. Bydd y rhagolwg coeth yn colli ei 5 diwrnod o galibradu nes iddynt gael eu nôl eto (ychydig funudau yn dibynnu ar eich gweinydd HA). Ni chyffyrddir byth â\'ch data y tu mewn i Home Assistant.',
         resetCacheDone:        'Storfa wedi\'i chlirio ✓',
-        buildingsRefetchButton: 'Gorfodi lawrlwytho adeiladau',
-        buildingsRefetchDone:  'Ailgychwynnwyd y lawrlwytho ✓',
-        buildingsRefetchHelp:  'Yn ail-lawrlwytho\'r adeiladau cyfagos gan anwybyddu\'r storfa dros dro. Defnyddiol pan mai dim ond y tŷ generig a ddangosir.',
         aboutSection:          'Ynghylch',
         aboutVersionLabel:     'Fersiwn',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const cy: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Prynwch goffi i mi',
     },
-    panel:
-    {
-        wind:       'Gwynt',
-    }
 };

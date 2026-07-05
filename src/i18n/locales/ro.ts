@@ -10,7 +10,6 @@ export const ro: Translations = {
         rangeLabel: 'Interval de timp',
         standard: 'Standard',
         today: 'Astazi',
-        now:   'Acum',
         week:  'saptamana',
         month: 'luna',
         year:  'an',
@@ -81,7 +80,6 @@ export const ro: Translations = {
         buildingRealSizeOff:   'Oprit',
         buildingRealSizeHint:  'Pornit: foloseste inaltimile reale OpenStreetMap (plafonate pentru a pastra incadrarea lizibila). Oprit: da fiecarei cladiri aceeasi inaltime fixa de mai jos.',
         buildingHeight:        'Inaltimea cladirii',
-        buildingHeightHelp:    'Inaltime fixa aplicata fiecarei cladiri cand inaltimile reale sunt oprite.',
         buildingClusterRadius: 'Raza de grupare a casei',
         buildingOpacity:       'Opacitatea cladirilor din jur',
         buildingColor:         'Culoarea cladirilor',
@@ -98,9 +96,6 @@ export const ro: Translations = {
         resetCacheButton:      'Reseteaza cache-ul de date',
         resetCacheWarning:     'Atentie: aceasta sterge vremea Open-Meteo din cache si istoricul PV din memorie pentru FIECARE card Helios deschis pe aceasta pagina. Prognoza rafinata isi va pierde cele 5 zile de calibrare pana cand sunt preluate din nou (cateva minute, in functie de serverul tau HA). Datele tale din interiorul Home Assistant nu sunt niciodata atinse.',
         resetCacheDone:        'Cache golit ✓',
-        buildingsRefetchButton: 'Forțează descărcarea clădirilor',
-        buildingsRefetchDone:  'Descărcare repornită ✓',
-        buildingsRefetchHelp:  'Descarcă din nou clădirile din jur ignorând memoria cache. Util când scena afișează doar casa generică.',
         aboutSection:          'Despre',
         aboutVersionLabel:     'Versiune',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ro: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Cumpara-mi o cafea',
     },
-    panel:
-    {
-        wind:       'Vant',
-    }
 };

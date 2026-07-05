@@ -10,7 +10,6 @@ export const id: Translations = {
         rangeLabel: 'Rentang waktu',
         standard: 'Standar',
         today: 'Hari ini',
-        now:   'Sekarang',
         week:  'minggu',
         month: 'bulan',
         year:  'tahun',
@@ -81,7 +80,6 @@ export const id: Translations = {
         buildingRealSizeOff:   'Nonaktif',
         buildingRealSizeHint:  'Aktif: gunakan ketinggian OpenStreetMap nyata (dibatasi agar framing tetap terbaca). Nonaktif: beri setiap bangunan ketinggian tetap di bawah ini.',
         buildingHeight:        'Ketinggian bangunan',
-        buildingHeightHelp:    'Ketinggian tetap yang diterapkan ke setiap bangunan saat ketinggian nyata nonaktif.',
         buildingClusterRadius: 'Radius klaster rumah',
         buildingOpacity:       'Opasitas sekitar',
         buildingColor:         'Warna bangunan',
@@ -98,9 +96,6 @@ export const id: Translations = {
         resetCacheButton:      'Setel ulang cache data',
         resetCacheWarning:     'Peringatan: ini menghapus cuaca Open-Meteo yang di-cache dan riwayat PV dalam memori untuk SETIAP kartu Helios yang terbuka di halaman ini. Prakiraan yang disempurnakan akan kehilangan 5 hari kalibrasinya hingga diambil ulang (beberapa menit tergantung server HA Anda). Data Anda di dalam Home Assistant tidak pernah disentuh.',
         resetCacheDone:        'Cache dihapus ✓',
-        buildingsRefetchButton: 'Paksa unduh bangunan',
-        buildingsRefetchDone:  'Unduhan dimulai ulang ✓',
-        buildingsRefetchHelp:  'Mengunduh ulang bangunan di sekitar dengan mengabaikan cache. Berguna saat adegan hanya menampilkan rumah generik.',
         aboutSection:          'Tentang',
         aboutVersionLabel:     'Versi',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const id: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Belikan saya kopi',
     },
-    panel:
-    {
-        wind:       'Angin',
-    }
 };

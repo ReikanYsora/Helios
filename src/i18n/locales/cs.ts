@@ -10,7 +10,6 @@ export const cs: Translations = {
         rangeLabel: 'Časový rozsah',
         standard: 'Standardní',
         today: 'Dnes',
-        now:   'Teď',
         week:  'týden',
         month: 'měsíc',
         year:  'rok',
@@ -81,7 +80,6 @@ export const cs: Translations = {
         buildingRealSizeOff:   'Vypnuto',
         buildingRealSizeHint:  'Zapnuto: použij skutečné výšky z OpenStreetMap (omezené, aby kompozice zůstala čitelná). Vypnuto: dej každé budově stejnou pevnou výšku níže.',
         buildingHeight:        'Výška budovy',
-        buildingHeightHelp:    'Pevná výška použitá na každou budovu, když jsou skutečné výšky vypnuté.',
         buildingClusterRadius: 'Poloměr shlukování domova',
         buildingOpacity:       'Průhlednost okolí',
         buildingColor:         'Barva budov',
@@ -98,9 +96,6 @@ export const cs: Translations = {
         resetCacheButton:      'Resetovat mezipaměť dat',
         resetCacheWarning:     'Upozornění: tohle vymaže počasí Open-Meteo z mezipaměti a historii FV v paměti pro KAŽDOU kartu Helios otevřenou na této stránce. Zpřesněná předpověď ztratí svých 5 dní kalibrace, dokud se znovu nenačtou (pár minut podle tvého HA serveru). Tvých dat uvnitř Home Assistant se to nikdy nedotkne.',
         resetCacheDone:        'Mezipaměť vymazána ✓',
-        buildingsRefetchButton: 'Vynutit stažení budov',
-        buildingsRefetchDone:  'Stahování restartováno ✓',
-        buildingsRefetchHelp:  'Znovu stáhne okolní budovy bez použití mezipaměti. Užitečné, když scéna zobrazuje jen obecný dům.',
         aboutSection:          'O kartě',
         aboutVersionLabel:     'Verze',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const cs: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Kup mi kávu',
     },
-    panel:
-    {
-        wind:       'Vítr',
-    }
 };

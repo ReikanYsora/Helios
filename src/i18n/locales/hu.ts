@@ -10,7 +10,6 @@ export const hu: Translations = {
         rangeLabel: 'Időtartomány',
         standard: 'Normál',
         today: 'Ma',
-        now:   'Most',
         week:  'hét',
         month: 'hónap',
         year:  'év',
@@ -81,7 +80,6 @@ export const hu: Translations = {
         buildingRealSizeOff:   'Ki',
         buildingRealSizeHint:  'Be: valós OpenStreetMap magasságokat használ (korlátozva, hogy a keretezés olvasható maradjon). Ki: minden épületnek ugyanazt a lenti rögzített magasságot adja.',
         buildingHeight:        'Épület magassága',
-        buildingHeightHelp:    'Minden épületre alkalmazott rögzített magasság, amikor a valós magasságok ki vannak kapcsolva.',
         buildingClusterRadius: 'Otthon csoportosítási sugara',
         buildingOpacity:       'Környező átlátszatlanság',
         buildingColor:         'Épületek színe',
@@ -98,9 +96,6 @@ export const hu: Translations = {
         resetCacheButton:      'Adatgyorsítótár visszaállítása',
         resetCacheWarning:     'Figyelem: ez törli a gyorsítótárazott Open-Meteo időjárást és a memóriában lévő PV előzményeket MINDEN ezen az oldalon nyitva lévő Helios kártya esetében. A finomított előrejelzés elveszíti 5 napnyi kalibrációját, amíg újra le nem töltődnek (néhány perc a HA szerveredtől függően). A Home Assistant-en belüli adataidat soha nem érinti.',
         resetCacheDone:        'Gyorsítótár törölve ✓',
-        buildingsRefetchButton: 'Épületletöltés kényszerítése',
-        buildingsRefetchDone:  'Letöltés újraindítva ✓',
-        buildingsRefetchHelp:  'Újratölti a környező épületeket a gyorsítótár megkerülésével. Hasznos, ha a jelenet csak az általános házat mutatja.',
         aboutSection:          'Névjegy',
         aboutVersionLabel:     'Verzió',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const hu: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Vegyél nekem egy kávét',
     },
-    panel:
-    {
-        wind:       'Szél',
-    }
 };

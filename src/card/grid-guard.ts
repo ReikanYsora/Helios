@@ -28,6 +28,8 @@ import {
     GUARD_REFRESH_MS, GUARD_WINDOW_MS, GUARD_MIN_EXPORT_KWH, GUARD_MAX_EXPORT_KWH,
     GUARD_NEGATIVE_BAND_W, GUARD_RELATIVE_BAND, GUARD_CONTRADICTION_HOURS, GUARD_CLEAN_EVALS,
 } from '../constants';
+import { callWSWithTimeout } from './ws-timeout';
+import { parseStatBoundary } from './energy-stats';
 
 
 export type GridGuardStatus = 'unknown' | 'healthy' | 'flagged';
@@ -188,7 +190,7 @@ export function refreshGridGuard(host: GridGuardHost): void
     const rateId   = rates[0];
     const inverted = ed?.invertedRateEntities.includes(rateId) ?? false;
     void Promise.all([
-        host.hass.callWS({
+        callWSWithTimeout(host.hass, {
             type:          'recorder/statistics_during_period',
             start_time:    new Date(startMs).toISOString(),
             end_time:      new Date(endMs).toISOString(),
@@ -197,7 +199,7 @@ export function refreshGridGuard(host: GridGuardHost): void
             types:         ['change'],
             units:         { energy: 'kWh' },
         }),
-        host.hass.callWS({
+        callWSWithTimeout(host.hass, {
             type:          'recorder/statistics_during_period',
             start_time:    new Date(startMs).toISOString(),
             end_time:      new Date(endMs).toISOString(),
@@ -260,7 +262,7 @@ export function buildGuardHours(
     {
         for (const b of exportRes?.[id] ?? [])
         {
-            const startMs = parseGuardBoundary(b?.start);
+            const startMs = parseStatBoundary(b?.start);
             const change  = typeof b?.change === 'number' && Number.isFinite(b.change) ? b.change : null;
             if (startMs === null || change === null) { continue; }
             const h = slot(startMs);
@@ -269,7 +271,7 @@ export function buildGuardHours(
     }
     for (const b of rateRes?.[rateId] ?? [])
     {
-        const startMs = parseGuardBoundary(b?.start);
+        const startMs = parseStatBoundary(b?.start);
         if (startMs === null) { continue; }
         const raw = inverted
             ? (typeof b?.max === 'number' && Number.isFinite(b.max) ? -b.max : null)
@@ -281,13 +283,3 @@ export function buildGuardHours(
 }
 
 
-function parseGuardBoundary(raw: unknown): number | null
-{
-    if (typeof raw === 'number' && Number.isFinite(raw)) { return raw; }
-    if (typeof raw === 'string')
-    {
-        const ms = Date.parse(raw);
-        return Number.isNaN(ms) ? null : ms;
-    }
-    return null;
-}

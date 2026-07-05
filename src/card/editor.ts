@@ -28,7 +28,6 @@ import { pickTranslations, type Translations } from '../i18n';
 import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type EnergyPrefsHost } from './energy-prefs';
 import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from './grid-guard';
 import { batteryLiveIsBucketSourced } from './battery';
-import { lastBuildingsFetchReport } from '../engine/buildings';
 import './editor-custom-entity';
 import type { CustomEntityConfigValue } from './editor-custom-entity';
 
@@ -98,7 +97,6 @@ export class HeliosCardEditor extends LitElement
     {
         super.disconnectedCallback();
         unsubscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
-        window.removeEventListener('helios-buildings-report', this._onBuildingsReport);
         for (const t of this._sliderDebounce.values())
         {
             window.clearTimeout(t);
@@ -110,11 +108,6 @@ export class HeliosCardEditor extends LitElement
         {
             window.clearTimeout(this._resetFeedbackTimer);
             this._resetFeedbackTimer = undefined;
-        }
-        if (this._refetchFeedbackTimer !== undefined)
-        {
-            window.clearTimeout(this._refetchFeedbackTimer);
-            this._refetchFeedbackTimer = undefined;
         }
     }
 
@@ -149,15 +142,7 @@ export class HeliosCardEditor extends LitElement
         super.connectedCallback();
         this._ensureEntityPicker();
         subscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
-        window.addEventListener('helios-buildings-report', this._onBuildingsReport);
     }
-
-    //Repaint the buildings diagnostic block when a fetch attempt completes (the force button, a retry,
-    //or a normal load), so the phone editor shows the outcome without a console.
-    private _onBuildingsReport = (): void =>
-    {
-        this.requestUpdate();
-    };
 
     // ha-entity-picker ships in HA's lazy-loaded card-editor bundle and may be unregistered in a fresh tab. Force the
     // load by creating a transient "entities" card and requesting its config element (the side effect registers the
@@ -458,6 +443,82 @@ export class HeliosCardEditor extends LitElement
         return u === 'W/m²' || u === 'W/m2';
     };
 
+    //One segmented on/off toggle field with its hint. Same markup for every boolean config key. `defaultOn` picks
+    //the default when the key is unset (some toggles default on, read as `!== false`). On/off labels default to the
+    //shared generic ones but can be overridden per toggle.
+    private _renderToggle(
+        key: string, label: string, hint: string,
+        onLabel?: string, offLabel?: string, defaultOn = false,
+    ): TemplateResult
+    {
+        const c  = this._cfg as Record<string, unknown>;
+        const on = defaultOn ? c[key] !== false : c[key] === true;
+        const t  = this._t();
+        return html`
+                <div class="field">
+                    <span class="label">${label}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${on ? 'active' : ''}"
+                            data-key=${key} data-value="true"
+                            @click=${this._onBoolToggleClick}
+                        >${onLabel ?? t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${!on ? 'active' : ''}"
+                            data-key=${key} data-value="false"
+                            @click=${this._onBoolToggleClick}
+                        >${offLabel ?? t.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${hint}</div>`;
+    }
+
+    //One ui_color picker field (label + ha-selector + help). Same markup for every colour config key.
+    private _renderColorPicker(key: string, label: string, help: string, defaultColor: string): TemplateResult
+    {
+        const c = this._cfg as Record<string, unknown>;
+        return html`
+                <div class="field field-block">
+                    <span class="label">${label}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ ui_color: { default_color: defaultColor } }}
+                            .value=${String(c[key] ?? defaultColor)}
+                            data-key=${key}
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${help}</div>`;
+    }
+
+    //One range-slider field (label + range input + live value). Same markup for every numeric config key; the hint
+    //stays at the call site since some are per-field and some are shared. `suffix` is appended to the live value.
+    private _renderSlider(key: string, label: string, min: number, max: number, step: number, dflt: number, suffix = ''): TemplateResult
+    {
+        const c   = this._cfg as Record<string, unknown>;
+        const raw = c[key] ?? dflt;
+        return html`
+                <label class="field">
+                    <span class="label">${label}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range"
+                            min=${min}
+                            max=${max}
+                            step=${step}
+                            .value=${String(raw)}
+                            data-key=${key}
+                            @input=${this._onNumSliderInput}
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(raw), step)}${suffix}</span>
+                    </div>
+                </label>`;
+    }
+
     //Custom-entity picker filter: any power (W/kW/MW) or energy (Wh/kWh/MWh) entity, by device_class or unit.
     protected render(): TemplateResult
     {
@@ -511,257 +572,38 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
-                <div class="field">
-                    <span class="label">${t.editor.autoRotate}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
-                            data-key="auto-rotate-enabled" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
-                            data-key="auto-rotate-enabled" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.autoRotateHint}</div>
-                <div class="field">
-                    <span class="label">${t.editor.showWeather ?? 'Show weather panel'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-weather'] === true) ? 'active' : ''}"
-                            data-key="show-weather" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-weather'] !== true) ? 'active' : ''}"
-                            data-key="show-weather" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.showWeatherHint ?? 'Show the top-right panel with the local weather. Scene view only.'}</div>
-                <div class="field">
-                    <span class="label">${t.editor.noUiMode ?? 'No UI mode'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-hide-ui'] === true) ? 'active' : ''}"
-                            data-key="auto-hide-ui" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-hide-ui'] !== true) ? 'active' : ''}"
-                            data-key="auto-hide-ui" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.'}</div>
-                ${(c['show-weather'] === true) ? html`
-                <div class="field">
-                    <span class="label">${t.editor.showAstro ?? 'Show astronomical data'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-astro'] === true) ? 'active' : ''}"
-                            data-key="show-astro" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['show-astro'] !== true) ? 'active' : ''}"
-                            data-key="show-astro" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.showAstroHint ?? 'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.'}</div>
-                ` : nothing}
+                ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
+                ${this._renderToggle('show-weather', t.editor.showWeather ?? 'Show weather panel', t.editor.showWeatherHint ?? 'Show the top-right panel with the local weather. Scene view only.')}
+                ${this._renderToggle('auto-hide-ui', t.editor.noUiMode ?? 'No UI mode', t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.')}
+                ${(c['show-weather'] === true)
+                    ? this._renderToggle('show-astro', t.editor.showAstro ?? 'Show astronomical data', t.editor.showAstroHint ?? 'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.')
+                    : nothing}
 
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.displayRadius ?? 'Display radius'}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_DISPLAY_RADIUS_M}
-                            max=${MAX_DISPLAY_RADIUS_M}
-                            step="10"
-                            .value=${String(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M)}
-                            data-key="display-radius"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['display-radius'] ?? DEFAULT_DISPLAY_RADIUS_M), 10)} m</span>
-                    </div>
-                </label>
+                ${this._renderSlider('display-radius', t.editor.displayRadius ?? 'Display radius', MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
                 <div class="hint">${t.editor.displayRadiusHelp ?? 'Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home.'}</div>
-                <label class="field">
-                    <span class="label">${t.editor.buildingCount ?? 'Building count'}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_BUILDING_COUNT}
-                            max=${MAX_BUILDING_COUNT}
-                            step="5"
-                            .value=${String(c['building-count'] ?? DEFAULT_BUILDING_COUNT)}
-                            data-key="building-count"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['building-count'] ?? DEFAULT_BUILDING_COUNT), 5)}</span>
-                    </div>
-                </label>
+                ${this._renderSlider('building-count', t.editor.buildingCount ?? 'Building count', MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}
                 <div class="hint">${t.editor.buildingCountHelp ?? 'Maximum number of nearby buildings to draw. Lower it to lighten rendering on a slow device.'}</div>
-                <div class="field">
-                    <span class="label">${t.editor.buildingRealSize ?? 'Real building heights'}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['building-real-size'] !== false) ? 'active' : ''}"
-                            data-key="building-real-size" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.buildingRealSizeOn ?? 'On'}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['building-real-size'] === false) ? 'active' : ''}"
-                            data-key="building-real-size" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.buildingRealSizeOff ?? 'Off'}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.'}</div>
-                ${c['building-real-size'] === false ? html`
-                    <label class="field">
-                        <span class="label">${t.editor.buildingHeight ?? 'Building height'}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range"
-                                min=${MIN_BUILDING_HEIGHT_M}
-                                max=${MAX_BUILDING_HEIGHT_M}
-                                step="0.5"
-                                .value=${String(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M)}
-                                data-key="building-height"
-                                @input=${this._onNumSliderInput}
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['building-height'] ?? FIXED_BUILDING_HEIGHT_M), 0.5)} m</span>
-                        </div>
-                    </label>
-                ` : nothing}
-                <label class="field">
-                    <span class="label">${t.editor.buildingClusterRadius}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="100" step="1"
-                            .value=${String(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}
-                            data-key="building-cluster-radius"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
-                    </div>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.buildingOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value=${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}
-                            data-key="building-opacity"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
+                ${this._renderToggle('building-real-size', t.editor.buildingRealSize ?? 'Real building heights', t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.', t.editor.buildingRealSizeOn ?? 'On', t.editor.buildingRealSizeOff ?? 'Off', true)}
+                ${c['building-real-size'] === false
+                    ? this._renderSlider('building-height', t.editor.buildingHeight ?? 'Building height', MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
+                    : nothing}
+                ${this._renderSlider('building-cluster-radius', t.editor.buildingClusterRadius, 0, 100, 1, DEFAULT_BUILDING_CLUSTER_RADIUS_M, ' m')}
+                ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
                 <div class="hint">${t.editor.buildingsHint}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.homeColor}</span>
-                    ${this._pickerReady ? html`
-                        <ha-selector
-                            .hass=${this.hass}
-                            .selector=${{ ui_color: { default_color: 'green' } }}
-                            .value=${String(c['home-color'] ?? 'green')}
-                            data-key="home-color"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.homeColorHelp}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.buildingColor}</span>
-                    ${this._pickerReady ? html`
-                        <ha-selector
-                            .hass=${this.hass}
-                            .selector=${{ ui_color: { default_color: 'grey' } }}
-                            .value=${String(c['building-color'] ?? 'grey')}
-                            data-key="building-color"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.buildingColorHelp}</div>
-
-                <button
-                    type="button"
-                    class="reset-btn"
-                    @click=${this._onRefetchBuildingsClick}
-                >${this._refetchFeedback ?? t.editor.buildingsRefetchButton}</button>
-                <div class="field-help">${t.editor.buildingsRefetchHelp}</div>
-                ${(() =>
-                {
-                    //Per-mirror outcome of the last download attempt: the phone-readable diagnosis of a
-                    //missing-buildings report (values deliberately raw and untranslated).
-                    const report = lastBuildingsFetchReport();
-                    return report ? html`
-                        <div class="buildings-diag">
-                            ${report.lines.map(line => html`<div>${line}</div>`)}
-                        </div>
-                    ` : nothing;
-                })()}
+                ${this._renderColorPicker('home-color', t.editor.homeColor, t.editor.homeColorHelp, 'green')}
+                ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
 
                 </details>
 
                 <details class="advanced-section" data-section="shadows" ?open=${this._openSection === 'shadows'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gradient-vertical"></ha-icon>${t.editor.shadowsSection}</summary>
-                <div class="field">
-                    <span class="label">${t.editor.shadowsEnabled}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['shadows-enabled'] !== false) ? 'active' : ''}"
-                            data-key="shadows-enabled" data-value="true"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.shadowsEnabledOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['shadows-enabled'] === false) ? 'active' : ''}"
-                            data-key="shadows-enabled" data-value="false"
-                            @click=${this._onBoolToggleClick}
-                        >${t.editor.shadowsEnabledOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.shadowsEnabledHint}</div>
+                ${this._renderToggle('shadows-enabled', t.editor.shadowsEnabled, t.editor.shadowsEnabledHint, t.editor.shadowsEnabledOn, t.editor.shadowsEnabledOff, true)}
 
-                <label class="field">
-                    <span class="label">${t.editor.shadowOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value=${String(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY)}
-                            data-key="shadow-opacity"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
+                ${this._renderSlider('shadow-opacity', t.editor.shadowOpacity, 0, 1, 0.05, DEFAULT_SHADOW_OPACITY)}
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
 
                 </details>
@@ -769,37 +611,9 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
                 ${this._renderLiveDataStatus(t)}
-                <label class="field">
-                    <span class="label">${t.editor.displayUpdateFrequency}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}
-                            max=${MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}
-                            step="1"
-                            .value=${String(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR)}
-                            data-key="display-update-frequency-per-hour"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR), 1)} / h</span>
-                    </div>
-                </label>
+                ${this._renderSlider('display-update-frequency-per-hour', t.editor.displayUpdateFrequency, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, 1, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, ' / h')}
                 <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.valueDecimals ?? 'Value decimals'}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range"
-                            min=${MIN_VALUE_DECIMALS}
-                            max=${MAX_VALUE_DECIMALS}
-                            step="1"
-                            .value=${String(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS)}
-                            data-key="value-decimals"
-                            @input=${this._onNumSliderInput}
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['value-decimals'] ?? DEFAULT_VALUE_DECIMALS), 1)}</span>
-                    </div>
-                </label>
+                ${this._renderSlider('value-decimals', t.editor.valueDecimals ?? 'Value decimals', MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}
                 <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
                 <div class="field field-block">
                     <span class="label">${t.editor.powerUnit ?? 'Power unit'}</span>
@@ -1002,30 +816,6 @@ export class HeliosCardEditor extends LitElement
         this._resetFeedbackTimer = window.setTimeout(() =>
         {
             this._resetFeedback = null;
-        }, HeliosCardEditor.RESET_FEEDBACK_MS);
-    }
-
-
-    // Same bus + confirmation pattern for the buildings force-download button in the buildings section.
-    private _refetchFeedbackTimer?: number;
-    @state() private _refetchFeedback: string | null = null;
-
-    private _onRefetchBuildingsClick(): void
-    {
-        try
-        {
-            window.dispatchEvent(new CustomEvent('helios-buildings-refetch'));
-        }
-        catch (_) { /* CustomEvent unsupported: skip the cross-card refetch broadcast */ }
-        const t = pickTranslations(this.hass?.language);
-        this._refetchFeedback = t.editor.buildingsRefetchDone;
-        if (this._refetchFeedbackTimer !== undefined)
-        {
-            window.clearTimeout(this._refetchFeedbackTimer);
-        }
-        this._refetchFeedbackTimer = window.setTimeout(() =>
-        {
-            this._refetchFeedback = null;
         }, HeliosCardEditor.RESET_FEEDBACK_MS);
     }
 

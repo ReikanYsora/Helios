@@ -10,7 +10,6 @@ export const th: Translations = {
         rangeLabel: 'ช่วงเวลา',
         standard: 'มาตรฐาน',
         today: 'วันนี้',
-        now:   'ตอนนี้',
         week:  'สัปดาห์',
         month: 'เดือน',
         year:  'ปี',
@@ -81,7 +80,6 @@ export const th: Translations = {
         buildingRealSizeOff:   'ปิด',
         buildingRealSizeHint:  'เปิด: ใช้ความสูงจริงจาก OpenStreetMap (จำกัดเพดานเพื่อให้กรอบภาพอ่านได้ง่าย) ปิด: กำหนดความสูงคงที่ด้านล่างให้กับทุกอาคาร',
         buildingHeight:        'ความสูงอาคาร',
-        buildingHeightHelp:    'ความสูงคงที่ที่ใช้กับทุกอาคารเมื่อปิดความสูงจริง',
         buildingClusterRadius: 'รัศมีกลุ่มบ้าน',
         buildingOpacity:       'ความทึบของอาคารโดยรอบ',
         buildingColor:         'สีของอาคาร',
@@ -98,9 +96,6 @@ export const th: Translations = {
         resetCacheButton:      'รีเซ็ตแคชข้อมูล',
         resetCacheWarning:     'คำเตือน: การกระทำนี้จะล้างข้อมูลสภาพอากาศ Open-Meteo ที่แคชไว้และประวัติ PV ในหน่วยความจำของการ์ด Helios ทุกใบที่เปิดอยู่ในหน้านี้ การพยากรณ์ที่ปรับละเอียดจะสูญเสียการปรับเทียบ 5 วันจนกว่าจะถูกดึงมาใหม่ (ไม่กี่นาทีขึ้นอยู่กับเซิร์ฟเวอร์ HA ของคุณ) ข้อมูลของคุณภายใน Home Assistant จะไม่ถูกแตะต้องเลย',
         resetCacheDone:        'ล้างแคชแล้ว ✓',
-        buildingsRefetchButton: 'บังคับดาวน์โหลดอาคาร',
-        buildingsRefetchDone:  'เริ่มดาวน์โหลดใหม่แล้ว ✓',
-        buildingsRefetchHelp:  'ดาวน์โหลดอาคารโดยรอบใหม่โดยไม่ใช้แคช มีประโยชน์เมื่อฉากแสดงเฉพาะบ้านทั่วไป',
         aboutSection:          'เกี่ยวกับ',
         aboutVersionLabel:     'เวอร์ชัน',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const th: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'เลี้ยงกาแฟผมสักแก้ว',
     },
-    panel:
-    {
-        wind:       'ลม',
-    }
 };

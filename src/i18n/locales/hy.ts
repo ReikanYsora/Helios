@@ -10,7 +10,6 @@ export const hy: Translations = {
         rangeLabel: 'Ժամանակահատված',
         standard: 'Ստանդարտ',
         today: 'Այսօր',
-        now:   'Հիմա',
         week:  'շաբաթ',
         month: 'ամիս',
         year:  'տարի',
@@ -81,7 +80,6 @@ export const hy: Translations = {
         buildingRealSizeOff:   'Անջատված',
         buildingRealSizeHint:  'Միացված. օգտագործիր OpenStreetMap-ի իրական բարձրությունները (սահմանափակված՝ կադրը ընթեռնելի պահելու համար): Անջատված. տուր յուրաքանչյուր շենքին ստորև նշված միևնույն ֆիքսված բարձրությունը:',
         buildingHeight:        'Շենքի բարձրություն',
-        buildingHeightHelp:    'Ֆիքսված բարձրություն, որը կիրառվում է յուրաքանչյուր շենքի վրա, երբ իրական բարձրությունները անջատված են:',
         buildingClusterRadius: 'Տան կլաստերի շառավիղ',
         buildingOpacity:       'Շրջակայքի անթափանցություն',
         buildingColor:         'Շենքերի գույն',
@@ -98,9 +96,6 @@ export const hy: Translations = {
         resetCacheButton:      'Վերակայել տվյալների քեշը',
         resetCacheWarning:     'Ուշադրություն. սա մաքրում է քեշավորված Open-Meteo եղանակը և հիշողության մեջ եղած PV պատմությունը այս էջում բացված ՅՈՒՐԱՔԱՆՉՅՈՒՐ Helios քարտի համար: Ճշգրտված կանխատեսումը կկորցնի իր 5 օրվա չափաբերումը, մինչև դրանք նորից բեռնվեն (մի քանի րոպե՝ կախված քո HA սերվերից): Home Assistant-ի ներսում քո տվյալներին երբեք չեն դիպչում:',
         resetCacheDone:        'Քեշը մաքրված է ✓',
-        buildingsRefetchButton: 'Հարկադրել շենքերի ներբեռնումը',
-        buildingsRefetchDone:  'Ներբեռնումը վերսկսվեց ✓',
-        buildingsRefetchHelp:  'Կրկին ներբեռնում է շրջակա շենքերը՝ անտեսելով քեշը։ Օգտակար է, երբ տեսարանում միայն ընդհանուր տունն է։',
         aboutSection:          'Մասին',
         aboutVersionLabel:     'Տարբերակ',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const hy: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Քամի',
-    }
 };

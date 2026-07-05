@@ -19,7 +19,9 @@ import {
     batteryDischargeName,
 } from './charts';
 import { interpAt, pvValueAtTime } from './series-sample';
+import { wattsAtFromChangeSeries } from './energy-stats';
 import { computeDailyKwhTotals } from './charts-generic';
+import { DAY_MS } from '../constants';
 
 
 //Hover tooltip above the chart-card stack: the hover timestamp + one icon-coded row per series, plus the day's kWh
@@ -57,9 +59,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
     const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
-    const customV    = host._customEntityHistory
-        ? interpAt(host._customEntityHistory.times, host._customEntityHistory.values, atMs)
-        : NaN;
+    const customV    = wattsAtFromChangeSeries(host._customChangeSeries ?? null, atMs) ?? NaN;
     const pv   = pvValueAtTime(host, atMs);
 
     //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling).
@@ -126,7 +126,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
     //Header granularity follows the window: intraday shows the time, a multi-day span adds the weekday, and a
     //month/year span shows the calendar day (the scrub steps day by day), so you always know when you are.
-    const spanDays  = rangeMs / 86_400_000;
+    const spanDays  = rangeMs / DAY_MS;
     const timeOpts: Intl.DateTimeFormatOptions =
           spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }
         : spanDays <= 14.05 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }

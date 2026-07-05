@@ -69,7 +69,7 @@ export const heliosCardEnergyClockCss = css`
     {
         position: absolute;
         left: 8px;
-        bottom: calc(var(--tb-band-h, 36px) + 12px);
+        bottom: calc(36px + 12px);
         z-index: 14;
         min-width: 120px;
         max-width: calc(100% - 16px);
@@ -116,13 +116,6 @@ export const heliosCardEnergyClockCss = css`
         margin-left: auto;
         padding-left: 12px;
         font-variant-numeric: tabular-nums;
-    }
-    .clock-tip-total
-    {
-        font-weight: 600;
-        margin-top: 4px;
-        padding-top: 4px;
-        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
 
     /*  Right-hand metric rail: a dynamic list of clickable chips that retargets the clock. Mirrors the

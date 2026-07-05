@@ -10,7 +10,6 @@ export const fa: Translations = {
         rangeLabel: 'بازه‌ی زمانی',
         standard: 'استاندارد',
         today: 'امروز',
-        now:   'اکنون',
         week:  '۱ هفته',
         month: '۱ ماه',
         year:  '۱ سال',
@@ -81,7 +80,6 @@ export const fa: Translations = {
         buildingRealSizeOff:   'خاموش',
         buildingRealSizeHint:  'روشن: از ارتفاع‌های واقعی OpenStreetMap استفاده می‌کند (محدودشده برای خوانا نگه داشتن کادربندی). خاموش: به هر ساختمان همان ارتفاع ثابت زیر را می‌دهد.',
         buildingHeight:        'ارتفاع ساختمان',
-        buildingHeightHelp:    'ارتفاع ثابتی که هنگام خاموش بودن ارتفاع‌های واقعی، به هر ساختمان اعمال می‌شود.',
         buildingClusterRadius: 'شعاع خوشه‌ی خانه',
         buildingOpacity:       'شفافیت اطراف',
         buildingColor:         'رنگ ساختمان',
@@ -98,9 +96,6 @@ export const fa: Translations = {
         resetCacheButton:      'بازنشانی حافظه‌ی نهان داده‌ها',
         resetCacheWarning:     'هشدار: این کار آب‌وهوای ذخیره‌شده‌ی Open-Meteo و تاریخچه‌ی فتوولتائیک در حافظه را برای هر کارت Helios باز روی این صفحه پاک می‌کند. پیش‌بینی پالایش‌شده تا زمانی که دوباره واکشی شوند ۵ روز کالیبراسیون خود را از دست می‌دهد (بسته به سرور HA شما چند دقیقه). داده‌های شما درون Home Assistant هرگز دست نمی‌خورد.',
         resetCacheDone:        'حافظه‌ی نهان پاک شد ✓',
-        buildingsRefetchButton: 'دانلود اجباری ساختمان‌ها',
-        buildingsRefetchDone:  'دانلود دوباره آغاز شد ✓',
-        buildingsRefetchHelp:  'ساختمان‌های اطراف را با نادیده گرفتن حافظه پنهان دوباره دانلود می‌کند. وقتی صحنه فقط خانه عمومی را نشان می‌دهد مفید است.',
         aboutSection:          'درباره',
         aboutVersionLabel:     'نسخه',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const fa: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'یک قهوه برایم بخر',
     },
-    panel:
-    {
-        wind:       'باد',
-    }
 };

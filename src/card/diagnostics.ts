@@ -7,7 +7,6 @@ export interface HeliosDiagnosticsCard
 {
     resetDataCache():    void;
     invalidateLocation(): void;
-    refetchBuildings():  void;
 }
 
 //Registry of every live card, maintained by the card's connected/disconnectedCallback so the location-override
@@ -96,12 +95,3 @@ window.addEventListener('helios-data-cache-reset', () =>
     }
 });
 
-//Same bus for the editor's "force building download" button: every live card drops its buildings
-//caches and hits Overpass again (diagnoses a mirror that failed silently on this network).
-window.addEventListener('helios-buildings-refetch', () =>
-{
-    for (const card of liveCards)
-    {
-        card.refetchBuildings();
-    }
-});

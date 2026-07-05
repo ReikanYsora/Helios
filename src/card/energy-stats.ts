@@ -8,13 +8,12 @@
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number the card shows the same number.
 
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, COARSE_REGULARITY, HOUR_MS, DAY_MS } from '../constants';
+import { callWSWithTimeout } from './ws-timeout';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
 //re-arming once a minute keeps the past curves and scrub within ~1 min of the freshest bucket without WS spam.
-//Callers fold floor(now / CHANGE_REFRESH_MS) into their fetch key so the gate re-arms on this boundary. Defined in
-//constants.ts; re-exported here because pv/grid/battery import it from this module.
-export { CHANGE_REFRESH_MS } from '../constants';
+//Callers fold changeRefreshAnchorMs() into their fetch key so the gate re-arms on this boundary.
 
 //"Now" rounded down to the refresh boundary: the single anchor every fetch gate folds into its key (battery/grid also
 //pass it as fetch end). One helper so call sites can't drift and every card shares one cache entry per interval.
@@ -99,7 +98,7 @@ export async function fetchChangeSeries(
     {
         try
         {
-            const result = await hass.callWS({
+            const result = await callWSWithTimeout(hass, {
                 type:          'recorder/statistics_during_period',
                 start_time:    new Date(startMs).toISOString(),
                 end_time:      new Date(endMs).toISOString(),
@@ -350,13 +349,37 @@ function periodMs(period: StatPeriod): number
 
 
 //Parse a statistics bucket boundary: modern cores serve epoch ms (number), older ones ISO strings; accept both.
-function parseStatBoundary(raw: unknown): number | null
+export function parseStatBoundary(raw: unknown): number | null
 {
     if (typeof raw === 'number' && Number.isFinite(raw)) { return raw; }
     if (typeof raw === 'string')
     {
         const ms = Date.parse(raw);
         return Number.isNaN(ms) ? null : ms;
+    }
+    return null;
+}
+
+//Looser variant for the raw-stats parsers (battery/irradiance), where the payload has also carried numeric seconds
+//and numeric-string epochs across HA releases: a number under 1e12 is read as seconds (x1000), a numeric string the
+//same, anything else falls back to Date.parse. Kept separate from parseStatBoundary so the strict change-series path
+//never second-guesses a real millisecond value.
+export function parseStatBoundaryLoose(raw: unknown): number | null
+{
+    if (raw === null || raw === undefined) { return null; }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
+    if (typeof raw === 'string')
+    {
+        const asNum = Number(raw);
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
+        const t = new Date(raw).getTime();
+        return isFinite(t) ? t : null;
     }
     return null;
 }

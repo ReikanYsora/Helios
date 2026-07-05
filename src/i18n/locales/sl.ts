@@ -10,7 +10,6 @@ export const sl: Translations = {
         rangeLabel: 'Časovni razpon',
         standard: 'Standardni',
         today: 'Danes',
-        now:   'Zdaj',
         week:  'teden',
         month: 'mesec',
         year:  'leto',
@@ -81,7 +80,6 @@ export const sl: Translations = {
         buildingRealSizeOff:   'Izklopljeno',
         buildingRealSizeHint:  'Vklopljeno: uporabi resnične višine iz OpenStreetMap (omejene, da kadriranje ostane berljivo). Izklopljeno: vsaki stavbi daj enako fiksno višino spodaj.',
         buildingHeight:        'Višina stavbe',
-        buildingHeightHelp:    'Fiksna višina, uporabljena za vsako stavbo, ko so resnične višine izklopljene.',
         buildingClusterRadius: 'Polmer združevanja doma',
         buildingOpacity:       'Prosojnost okolice',
         buildingColor:         'Barva stavb',
@@ -98,9 +96,6 @@ export const sl: Translations = {
         resetCacheButton:      'Ponastavi predpomnilnik podatkov',
         resetCacheWarning:     'Opozorilo: to počisti predpomnjeno vreme Open-Meteo in zgodovino PV v pomnilniku za VSAKO kartico Helios, odprto na tej strani. Izboljšana napoved bo izgubila svojih 5 dni umerjanja, dokler ne bodo znova pridobljeni (nekaj minut, odvisno od tvojega strežnika HA). Tvojih podatkov v Home Assistant se to nikoli ne dotakne.',
         resetCacheDone:        'Predpomnilnik počiščen ✓',
-        buildingsRefetchButton: 'Vsili prenos zgradb',
-        buildingsRefetchDone:  'Prenos znova zagnan ✓',
-        buildingsRefetchHelp:  'Znova prenese okoliške zgradbe in pri tem prezre predpomnilnik. Uporabno, ko scena prikazuje le generično hišo.',
         aboutSection:          'O kartici',
         aboutVersionLabel:     'Različica',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const sl: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Plačaj mi kavo',
     },
-    panel:
-    {
-        wind:       'Veter',
-    }
 };

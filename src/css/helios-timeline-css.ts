@@ -13,7 +13,7 @@ export const heliosTimelineStyles = css`
         will-change: transform;
         position: absolute;
         /*  Sits above the period-mode band (which is pinned at bottom: 6px). */
-        bottom: calc(var(--tb-band-h, 36px) + 12px);
+        bottom: calc(36px + 12px);
         /*  Centred via left/right gutters, not translateX(-50%): that transform promotes the bar into a
             compositor layer and rasterises the inner SVG charts at fractional resolution (blur). */
         left: 8px;
@@ -507,14 +507,14 @@ export const heliosTimelineStyles = css`
     /*  Period-mode band: a separate strip below the timeline with its own card frame (same 8 px gutters,
         radius and themed border as the timeline card). Pinned to the bottom; the timeline sits above it
         and stays visible in clock mode. pointer-events: auto, but the band stays transparent to map
-        rotation. --tb-band-h keeps the timeline's bottom offset in sync. */
+        rotation. */
     .tb-band
     {
         position: absolute;
         bottom: 6px;
         left: 8px;
         right: 8px;
-        height: var(--tb-band-h, 36px);
+        height: 36px;
         z-index: 1000;
         box-sizing: border-box;
         display: flex;

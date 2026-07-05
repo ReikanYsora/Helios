@@ -10,7 +10,6 @@ export const et: Translations = {
         rangeLabel: 'Ajavahemik',
         standard: 'Standard',
         today: 'Täna',
-        now:   'Praegu',
         week:  'nädal',
         month: 'kuu',
         year:  'aasta',
@@ -81,7 +80,6 @@ export const et: Translations = {
         buildingRealSizeOff:   'Väljas',
         buildingRealSizeHint:  'Sees: kasuta tegelikke OpenStreetMap kõrgusi (piiratud, et kadreering jääks loetavaks). Väljas: anna igale hoonele sama allpool olev fikseeritud kõrgus.',
         buildingHeight:        'Hoone kõrgus',
-        buildingHeightHelp:    'Igale hoonele rakendatav fikseeritud kõrgus, kui tegelikud kõrgused on väljas.',
         buildingClusterRadius: 'Kodu klastri raadius',
         buildingOpacity:       'Ümbruse läbipaistmatus',
         buildingColor:         'Hoone värv',
@@ -98,9 +96,6 @@ export const et: Translations = {
         resetCacheButton:      'Lähtesta andmete vahemälu',
         resetCacheWarning:     'Hoiatus: see kustutab vahemällu salvestatud Open-Meteo ilma ja mälus oleva päikesetootmise ajaloo KÕIGI sellel lehel avatud Helios-kaartide jaoks. Täpsustatud prognoos kaotab oma 5 päeva kalibreeringu, kuni need uuesti tõmmatakse (paar minutit sõltuvalt sinu HA serverist). Sinu andmeid Home Assistanti sees ei puudutata kunagi.',
         resetCacheDone:        'Vahemälu tühjendatud ✓',
-        buildingsRefetchButton: 'Sunni hoonete allalaadimine',
-        buildingsRefetchDone:  'Allalaadimine taaskäivitatud ✓',
-        buildingsRefetchHelp:  'Laadib ümbritsevad hooned uuesti alla, eirates vahemälu. Kasulik, kui stseen näitab ainult üldist maja.',
         aboutSection:          'Teave',
         aboutVersionLabel:     'Versioon',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const et: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Osta mulle kohv',
     },
-    panel:
-    {
-        wind:       'Tuul',
-    }
 };

@@ -10,7 +10,6 @@ export const es: Translations = {
         rangeLabel: 'Periodo',
         standard: 'Estándar',
         today: 'Hoy',
-        now:   'Ahora',
         week:  'semana',
         month: 'mes',
         year:  'año',
@@ -81,7 +80,6 @@ export const es: Translations = {
         buildingRealSizeOff:   'No',
         buildingRealSizeHint:  'Sí: usa las alturas reales de OpenStreetMap (limitadas para mantener un encuadre legible). No: da a cada edificio la misma altura fija de abajo.',
         buildingHeight:        'Altura de los edificios',
-        buildingHeightHelp:    'Altura fija aplicada a cada edificio cuando las alturas reales están desactivadas.',
         buildingClusterRadius: 'Radio de agrupación de la casa',
         buildingOpacity:       'Opacidad del entorno',
         buildingColor:         'Color de los edificios',
@@ -98,9 +96,6 @@ export const es: Translations = {
         resetCacheButton:      'Restablecer la caché de datos',
         resetCacheWarning:     'Aviso: esto borra el tiempo de Open-Meteo en caché y el historial FV en memoria de TODAS las tarjetas Helios abiertas en esta página. La previsión afinada perderá sus 5 días de calibración hasta que se vuelvan a obtener (unos minutos según tu servidor HA). Tus datos dentro de Home Assistant nunca se tocan.',
         resetCacheDone:        'Caché borrada ✓',
-        buildingsRefetchButton: 'Forzar descarga de edificios',
-        buildingsRefetchDone:  'Descarga reiniciada ✓',
-        buildingsRefetchHelp:  'Vuelve a descargar los edificios cercanos ignorando la caché. Útil cuando la escena solo muestra la casa genérica.',
         aboutSection:          'Acerca de',
         aboutVersionLabel:     'Versión',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const es: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Viento',
-    }
 };

@@ -40,8 +40,6 @@ export interface HeliosConfig
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.
     'camera-locked'?:          unknown;
-    //Per-layer building radius the editor strips on save (kept in the type so the strip recognises it).
-    'building-radius'?:        unknown;
     //Global display radius (m) around the home within which buildings and shadows render. Clamped [50,500],
     //default 200. Lowering it is the main perf lever on weak hardware.
     'display-radius'?:         unknown;
@@ -68,10 +66,10 @@ export interface HeliosConfig
     //Live irradiance sensor (W/m²) at the home, preferred over the model for the live "now" reading. Past +
     //forecast still come from the model.
     'solar-irradiance-entity'?: unknown;
-    //Custom entity, measured-only contract: BOTH sensors are required for it to display anywhere. The
-    //power sensor feeds the live chip + scrub + curve; the energy meter feeds the energy surfaces. The
-    //legacy single slot below is only read by the editor to prefill a migration, never at runtime.
-    //Empty = no chip. The displayed name follows the entity's friendly name.
+    //Custom entity, measured-only contract: BOTH sensors are required for it to display anywhere. The power
+    //sensor feeds the live chip (instantaneous); the energy meter feeds the past curve, scrub and clock ring
+    //via its recorder change-series, exactly like grid/pv/battery. The legacy single slot below is only read
+    //by the editor to prefill a migration, never at runtime. Empty = no chip. Name follows the friendly name.
     'custom-power-entity'?:     unknown;
     'custom-energy-entity'?:    unknown;
     'custom-entity'?:           unknown;
@@ -87,7 +85,7 @@ export interface HeliosConfig
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
-    //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW' (unchanged). Energy always stays kWh.
+    //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW'. Energy always stays kWh.
     'power-unit'?:             unknown;
     //Irradiance (solar constant) readout unit: 'W/m²' or 'kW/m²'. Default 'W/m²'.
     'irradiance-unit'?:        unknown;

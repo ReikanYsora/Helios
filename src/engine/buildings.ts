@@ -1,12 +1,12 @@
-//Buildings for the 2.5D scene: the Building/ScenePalette/HomeAppearance types, the Overpass data fetch, and
+//Buildings for the 2.5D scene: the Building/ScenePalette/HomeAppearance types, the OpenFreeMap data fetch, and
 //the faux-3D building + shadow painters. Pure functions over a SceneCamera + local-metric footprints.
 //
 //Data flow splits into fetch-once-at-max + interpret-on-read so a building-option tweak (radius, count,
-//height, cluster) re-interprets cached raw data in memory instead of re-hitting Overpass.
-//  - fetchRawBuildings(): query the OpenStreetMap Overpass API for every `way["building"]` and multipolygon
-//    `relation["building"]` within the max radius, convert each ring lat/lon to local metres (east/north)
-//    relative to the home, keep the nearest MAX_BUILDING_COUNT complete footprints as option-independent
-//    RawBuilding[]. Cached in localStorage keyed on home location only, so option changes never re-fetch.
+//height, cluster) re-interprets cached raw data in memory instead of re-fetching.
+//  - fetchRawBuildings(): fetch the OpenFreeMap vector tiles covering the max radius, decode their `building`
+//    layer, convert each footprint ring to local metres (east/north) relative to the home, dedupe the buildings
+//    that tile buffers repeat across tile edges, and keep the nearest MAX_BUILDING_COUNT footprints as
+//    option-independent RawBuilding[]. Cached in localStorage keyed on home location only, so options never re-fetch.
 //  - interpretBuildings(): apply the options to cached raw data: filter to radius, slice count, resolve
 //    per-building height, mark the home (containing/nearest the position) plus any building whose centroid
 //    lies within the cluster radius (attached outbuildings join the home set). Empty raw set falls back to a
@@ -18,6 +18,7 @@
 import type { SceneCamera} from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { mixHex, hexByte, tintedRgba, pointsAttr, type Point } from './colors';
+import { fetchOfmBuildingRings, type OfmRing } from './ofm';
 import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
     FIXED_BUILDING_HEIGHT_M,
     MAX_BUILDING_COUNT,
@@ -25,13 +26,9 @@ import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
     FALLBACK_HOUSE_HALF_W,
     FALLBACK_HOUSE_HALF_D,
     BUILDING_CACHE_TTL_MS,
-    OVERPASS_RETRY_DELAY_MS,
-    OVERPASS_ENDPOINTS,
-    OVERPASS_FETCH_TIMEOUT_MS,
     REAL_HEIGHT_CAP_M,
-    REAL_HEIGHT_FALLBACK_M } from '../constants';
-//Re-exported so importers of SHADOW_FADE_DEG from './buildings' keep resolving.
-export { SHADOW_FADE_DEG } from '../constants';
+    REAL_HEIGHT_FALLBACK_M,
+    METRES_PER_DEGREE } from '../constants';
 
 //---------------------------------------------------------------------------------------------------------
 //Types
@@ -78,7 +75,7 @@ export interface HomeAppearance
 }
 
 //---------------------------------------------------------------------------------------------------------
-//Overpass data fetch: self-sourced footprints around the home.
+//OpenFreeMap data fetch: OSM footprints around the home, via vector tiles.
 //---------------------------------------------------------------------------------------------------------
 
 //Option-independent, JSON-serialisable raw building parsed once at the max radius. Nothing here depends on
@@ -89,41 +86,7 @@ export interface RawBuilding
     centerX:    number;         //centroid east
     centerY:    number;         //centroid north
     distanceM:  number;         //distance from the home to the footprint (0 if it contains the home)
-    osmHeightM: number | null;  //raw uncapped OSM height/levels, null when untagged
-}
-
-//One Overpass element: a `way` carries its ring in `.geometry`; a multipolygon `relation` carries its rings
-//in `.members[].geometry` (outer ones kept).
-interface OverpassWay
-{
-    type:     string; //'way' | 'relation'
-    geometry?: { lat: number; lon: number }[];           //ways
-    members?: {
-        role:     string;
-        geometry?: { lat: number; lon: number }[];
-    }[];                                                  //multipolygon relations
-    tags?:    Record<string, string>;
-}
-
-//Building height (m) from OSM `tags`: prefer `height` (leading float, e.g. "12", "12 m"), else
-//`building:levels` x 3 m/level. Null when neither parses to a positive value.
-function osmHeightM(tags: Record<string, string> | undefined): number | null
-{
-    if (!tags)
-    {
-        return null;
-    }
-    const h = parseFloat(tags.height);
-    if (Number.isFinite(h) && h > 0)
-    {
-        return h;
-    }
-    const levels = parseFloat(tags['building:levels']);
-    if (Number.isFinite(levels) && levels > 0)
-    {
-        return levels * 3;
-    }
-    return null;
+    osmHeightM: number | null;  //raw uncapped OSM render height (m), null when untagged
 }
 
 //Ray-casting point-in-polygon (local metres).
@@ -164,37 +127,16 @@ function distanceToHome(polygon: Point[]): number
     return nearest;
 }
 
-//localStorage cache key: rounded home position only, so one entry serves every option set.
+//localStorage cache key: rounded home position only, so one entry serves every option set. The bld3 version tag
+//isolates the current geometry format, so entries written by an older format are never mixed in.
 function cacheKey(lat: number, lng: number): string
 {
-    return `helios-bld2:${lat.toFixed(4)}:${lng.toFixed(4)}`;
-}
-
-//Diagnostic report of the last fetch attempt (per-mirror outcome), surfaced verbatim in the editor's
-//buildings section so a phone user can see WHY buildings are missing without a console. Published on
-//every completed attempt via the window event below; technical values stay untranslated on purpose.
-let _lastFetchReport: { at: number; lines: string[] } | null = null;
-
-export function lastBuildingsFetchReport(): { at: number; lines: string[] } | null
-{
-    return _lastFetchReport;
-}
-
-function publishFetchReport(lines: string[]): void
-{
-    _lastFetchReport = { at: Date.now(), lines };
-    try
-    {
-        window.dispatchEvent(new CustomEvent('helios-buildings-report'));
-    }
-    catch (_)
-    {
-        //CustomEvent unsupported: the report still lands on the next editor render.
-    }
+    return `helios-bld3:${lat.toFixed(4)}:${lng.toFixed(4)}`;
 }
 
 
-//Drop the persisted raw footprints for a location, so the next fetch hits Overpass again. Editor
+
+//Drop the persisted raw footprints for a location, so the next fetch hits OpenFreeMap again. Editor
 //"force building download" support.
 export function clearBuildingsLocationCache(lat: number, lng: number): void
 {
@@ -208,51 +150,55 @@ export function clearBuildingsLocationCache(lat: number, lng: number): void
     }
 }
 
-//Parse Overpass `elements` into option-independent RawBuilding[]: each ring lat/lon to local metres
-//east/north relative to the home, with centroid, distance-to-footprint, and raw OSM height; ranked by
-//distance, nearest MAX_BUILDING_COUNT kept. No height cap, count slice, or home flag (interpret's job).
-export function parseRawBuildings(
-    elements: OverpassWay[],
-    lat:      number,
-    lng:      number
+//Parse OpenFreeMap footprint rings into option-independent RawBuilding[]: each ring's lon/lat to local metres
+//east/north relative to the home, with centroid, distance-to-footprint, and raw render height. Buildings that a
+//tile buffer repeats across adjacent tiles are de-duplicated, and anything outside `radiusM` is dropped (a z14 tile
+//spans ~2.4 km, far past the display radius). Ranked by distance, nearest MAX_BUILDING_COUNT kept. No height cap,
+//count slice, or home flag (interpret's job).
+export function parseOfmBuildings(
+    rings:   OfmRing[],
+    lat:     number,
+    lng:     number,
+    radiusM: number
 ): RawBuilding[]
 {
-    const perLat = 111_320;
-    const perLon = 111_320 * Math.cos(lat * DEG);
+    const perLat = METRES_PER_DEGREE;
+    const perLon = METRES_PER_DEGREE * Math.cos(lat * DEG);
     const buildings: RawBuilding[] = [];
+    //De-dup: a footprint sitting in a tile's buffer is repeated whole in the neighbouring tile, at the same world
+    //coordinates. Key on the rounded centroid + height + vertex count, so identical repeats collapse while two
+    //genuinely distinct buildings (different position, height or outline) stay separate.
+    const seen = new Set<string>();
+    //Coarse centroid pre-filter before the O(vertices) distance/winding work: skip anything whose centroid is well
+    //past the radius, keeping a margin so a large building whose centroid sits outside but whose edge reaches inside
+    //still gets the exact distance test below.
+    const centroidCutoff = radiusM + 250;
 
-    //Collect outer rings: `way` buildings + the outer ring(s) of multipolygon `relation` buildings. Dense
-    //cities map whole blocks as relations, without which the home can be missing. Each ring carries its
-    //element's `tags` so the per-building OSM height can read height/levels.
-    const rings: { geometry: { lat: number; lon: number }[]; tags?: Record<string, string> }[] = [];
-    for (const el of elements)
+    for (const { lonLat, heightM } of rings)
     {
-        if (el.type === 'way' && el.geometry)
+        let cx0 = 0;
+        let cy0 = 0;
+        for (const [lon, la] of lonLat)
         {
-            rings.push({ geometry: el.geometry, tags: el.tags });
+            cx0 += (lon - lng) * perLon;
+            cy0 += (la - lat) * perLat;
         }
-        else if (el.type === 'relation' && el.members)
+        if (Math.hypot(cx0 / lonLat.length, cy0 / lonLat.length) > centroidCutoff)
         {
-            for (const m of el.members)
-            {
-                if (m.geometry && (m.role === 'outer' || !m.role))
-                {
-                    rings.push({ geometry: m.geometry, tags: el.tags });
-                }
-            }
+            continue;
         }
-    }
 
-    for (const { geometry, tags } of rings)
-    {
-        const footprint: Point[] = geometry.map((n) => [
-            (n.lon - lng) * perLon,
-            (n.lat - lat) * perLat,
+        const footprint: Point[] = lonLat.map(([lon, la]) => [
+            (lon - lng) * perLon,
+            (la - lat) * perLat,
         ]);
 
-        //OSM rings are CLOSED (last vertex repeats the first); drop it so the painter doesn't draw a
-        //degenerate wall looping back to the start.
-        if (footprint.length > 1 && footprint[0][0] === footprint[footprint.length - 1][0])
+        //Vector-tile rings are already open, but a source may still repeat the first vertex; drop a closing vertex
+        //that matches on BOTH axes so the painter never draws a degenerate wall looping back to the start.
+        const last = footprint.length - 1;
+        if (footprint.length > 1
+            && footprint[0][0] === footprint[last][0]
+            && footprint[0][1] === footprint[last][1])
         {
             footprint.pop();
         }
@@ -261,8 +207,8 @@ export function parseRawBuildings(
             continue;
         }
 
-        //Force CCW winding so the painter's screen-space back-face cull has a consistent sign (OSM mixes
-        //CW + CCW footprints, which would otherwise flip walls inside-out).
+        //Force CCW winding so the painter's screen-space back-face cull has a consistent sign (tile rings mix
+        //CW + CCW, which would otherwise flip walls inside-out).
         let signedArea = 0;
         for (let i = 0; i < footprint.length; i++)
         {
@@ -281,18 +227,35 @@ export function parseRawBuildings(
             centerX += x;
             centerY += y;
         }
+        centerX /= footprint.length;
+        centerY /= footprint.length;
+
+        const distanceM = distanceToHome(footprint);
+        //Exact radius test on the footprint edge (0 when it contains the home): keeps buildings only partly inside
+        //the radius, like the old query, but drops the rest of the ~2.4 km tile.
+        if (distanceM > radiusM)
+        {
+            continue;
+        }
+
+        const dedupKey = `${centerX.toFixed(1)}|${centerY.toFixed(1)}|${heightM ?? 'n'}|${footprint.length}`;
+        if (seen.has(dedupKey))
+        {
+            continue;
+        }
+        seen.add(dedupKey);
+
         buildings.push({
             footprint,
-            centerX:    centerX / footprint.length,
-            centerY:    centerY / footprint.length,
-            distanceM:  distanceToHome(footprint),
-            osmHeightM: osmHeightM(tags),
+            centerX,
+            centerY,
+            distanceM,
+            osmHeightM: heightM,
         });
     }
 
-    //Keep the nearest MAX_BUILDING_COUNT complete buildings (footprints never clipped: OSM returns full
-    //geometry even for buildings only partly inside the radius). Ranked by distance to the FOOTPRINT (0 when
-    //it contains the home), so a large building wrapping the home is never dropped. Bounds the cached payload.
+    //Keep the nearest MAX_BUILDING_COUNT buildings, ranked by distance to the FOOTPRINT (0 when it contains the
+    //home), so a large building wrapping the home is never dropped. Bounds the cached payload.
     buildings.sort((a, b) => a.distanceM - b.distanceM);
     return buildings.slice(0, MAX_BUILDING_COUNT);
 }
@@ -317,46 +280,11 @@ function fallbackHouse(): Building
     };
 }
 
-//Watchdog fetch for one mirror: fetch has no native timeout, so a hung mirror would stall the whole
-//cascade for minutes instead of failing over. A local controller carries both the caller's abort
-//(location change) and the deadline; the caller tells them apart through the outer signal's state.
-async function fetchWithWatchdog(url: string, signal?: AbortSignal): Promise<Response>
-{
-    const controller = new AbortController();
-    const onAbort = (): void =>
-    {
-        controller.abort();
-    };
-    if (signal?.aborted)
-    {
-        controller.abort();
-    }
-    signal?.addEventListener('abort', onAbort);
-    const timer = setTimeout(() =>
-    {
-        controller.abort();
-    }, OVERPASS_FETCH_TIMEOUT_MS);
-    try
-    {
-        return await fetch(url, {
-            referrerPolicy: 'no-referrer', //don't leak the HA instance URL to Overpass
-            signal:         controller.signal,
-        });
-    }
-    finally
-    {
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', onAbort);
-    }
-}
-
-
 //Fetch the option-independent raw footprints around the home at the max display radius. Serves a fresh
-//localStorage cache (keyed on location only) first, else tries each Overpass mirror in turn. Return
-//contract: an array on success ([] = the area genuinely has no mapped buildings), NULL when every
-//mirror failed (offline, outage), so the caller can schedule a re-attempt instead of treating the
-//outage as a final answer; the cache never holds either empty shape. Aborts propagate as an
-//AbortError the caller swallows.
+//localStorage cache (keyed on location only) first, else fetches the OpenFreeMap tiles covering the radius.
+//Return contract: an array on success ([] = the area genuinely has no mapped buildings), NULL on a total
+//outage (offline, tile server down), so the caller can schedule a re-attempt instead of treating the outage
+//as a final answer; the cache never holds either empty shape. Aborts propagate as an AbortError the caller swallows.
 export async function fetchRawBuildings(
     homeLat: number,
     homeLon: number,
@@ -369,7 +297,7 @@ export async function fetchRawBuildings(
     const radius = Math.round(MAX_DISPLAY_RADIUS_M);
     const key    = cacheKey(lat, lng);
 
-    //Cache hit: reuse the stored raw footprints directly (only real Overpass results, never the fallback).
+    //Cache hit: reuse the stored raw footprints directly (only real results, never the fallback).
     try
     {
         const raw    = localStorage.getItem(key);
@@ -378,7 +306,6 @@ export async function fetchRawBuildings(
             : null;
         if (cached?.buildings?.length && Date.now() - cached.time < BUILDING_CACHE_TTL_MS)
         {
-            publishFetchReport([`cache: ${cached.buildings.length} buildings (${Math.round((Date.now() - cached.time) / 86_400_000)} d old)`]);
             return cached.buildings;
         }
     }
@@ -387,76 +314,30 @@ export async function fetchRawBuildings(
         //Corrupt cache entry: ignore and re-fetch.
     }
 
-    const overpassQuery =
-        `[out:json][timeout:25];(way["building"](around:${radius},${lat},${lng});`
-        + `relation["building"](around:${radius},${lat},${lng}););out geom;`;
-
-    //True once any mirror answered with parseable data, so an all-mirrors outage (null) is
-    //distinguishable from a genuinely building-free area ([]).
-    let anySuccess = false;
-    const report: string[] = [];
-    const mirrorHost = (endpoint: string): string =>
+    //Total outage (no tile answered / TileJSON unreachable): NULL so the engine schedules a retry. The caller's
+    //abort (a rapid location change) propagates out of the fetch as an AbortError the engine swallows.
+    const rings = await fetchOfmBuildingRings(lat, lng, radius, signal);
+    if (rings === null)
     {
-        try { return new URL(endpoint).host; } catch (_) { return endpoint; }
-    };
+        return null;
+    }
 
-    /* eslint-disable no-await-in-loop -- retries are intentionally sequential */
-    for (const endpoint of OVERPASS_ENDPOINTS)
+    const buildings = parseOfmBuildings(rings, lat, lng, radius);
+    if (buildings.length)
     {
         try
         {
-            const response = await fetchWithWatchdog(
-                endpoint + '?data=' + encodeURIComponent(overpassQuery),
-                signal
-            );
-            if (!response.ok)
-            {
-                throw new Error(String(response.status));
-            }
-            const data      = (await response.json()) as { elements?: OverpassWay[] };
-            const buildings = parseRawBuildings(data.elements ?? [], lat, lng);
-            anySuccess = true;
-            if (buildings.length)
-            {
-                report.push(`${mirrorHost(endpoint)}: OK, ${buildings.length} buildings`);
-                publishFetchReport(report);
-                try
-                {
-                    localStorage.setItem(key, JSON.stringify({ time: Date.now(), buildings }));
-                }
-                catch (_)
-                {
-                    //Storage quota: not fatal, the footprints still render this session.
-                }
-                return buildings;
-            }
-            report.push(`${mirrorHost(endpoint)}: OK, 0 buildings in range`);
+            localStorage.setItem(key, JSON.stringify({ time: Date.now(), buildings }));
         }
-        catch (err)
+        catch (_)
         {
-            //Propagate the CALLER's abort so a rapid location change cancels cleanly (the caller
-            //swallows AbortError); a watchdog timeout raises the same error name but must fall
-            //through to the next mirror instead.
-            if ((err as { name?: string })?.name === 'AbortError' && signal?.aborted)
-            {
-                throw err;
-            }
-            const e = err as { name?: string; message?: string };
-            report.push(e?.name === 'AbortError'
-                ? `${mirrorHost(endpoint)}: timeout`
-                : `${mirrorHost(endpoint)}: ${e?.message || e?.name || 'error'}`);
-            //Mirror failed: wait, then try the next endpoint.
-            await new Promise<void>((resolve) =>
-            {
-                setTimeout(resolve, OVERPASS_RETRY_DELAY_MS);
-            });
+            //Storage quota: not fatal, the footprints still render this session.
         }
+        return buildings;
     }
-    /* eslint-enable no-await-in-loop */
 
-    publishFetchReport(report);
-    //Never cached in either case; interpretBuildings() renders the fallback house for both shapes.
-    return anySuccess ? [] : null;
+    //Building-free area: never cached; interpretBuildings() renders the fallback house.
+    return [];
 }
 
 //Options interpretBuildings() applies to cached raw data on read. All cheap and in-memory, no re-fetch.
@@ -476,7 +357,7 @@ export function interpretBuildings(
     opts: InterpretBuildingsOptions
 ): Building[]
 {
-    //No raw data (offline, all mirrors down, or no mapped buildings): the single fallback house.
+    //No raw data (offline, tile fetch failed, or no mapped buildings): the single fallback house.
     if (raw.length === 0)
     {
         return [fallbackHouse()];

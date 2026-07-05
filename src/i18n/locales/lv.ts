@@ -10,7 +10,6 @@ export const lv: Translations = {
         rangeLabel: 'Laika diapazons',
         standard: 'Standarta',
         today: 'Šodien',
-        now:   'Tagad',
         week:  'nedēļa',
         month: 'mēnesis',
         year:  'gads',
@@ -81,7 +80,6 @@ export const lv: Translations = {
         buildingRealSizeOff:   'Izslēgts',
         buildingRealSizeHint:  'Ieslēgts: izmanto reālos OpenStreetMap augstumus (ierobežoti, lai kadrējums paliktu salasāms). Izslēgts: piešķir katrai ēkai to pašu fiksēto augstumu zemāk.',
         buildingHeight:        'Ēkas augstums',
-        buildingHeightHelp:    'Fiksēts augstums, kas tiek piemērots katrai ēkai, kad reālie augstumi ir izslēgti.',
         buildingClusterRadius: 'Mājas klastera rādiuss',
         buildingOpacity:       'Apkārtnes necaurspīdība',
         buildingColor:         'Ēkas krāsa',
@@ -98,9 +96,6 @@ export const lv: Translations = {
         resetCacheButton:      'Atiestatīt datu kešatmiņu',
         resetCacheWarning:     'Brīdinājums: tas notīra kešatmiņā saglabātos Open-Meteo laikapstākļus un atmiņā esošo PV vēsturi KATRAI Helios kartei, kas atvērta šajā lapā. Precizētā prognoze zaudēs savas 5 dienu kalibrēšanas, līdz tās tiks atkārtoti iegūtas (dažas minūtes atkarībā no tava HA servera). Tavi dati Home Assistant iekšienē nekad netiek aiztikti.',
         resetCacheDone:        'Kešatmiņa notīrīta ✓',
-        buildingsRefetchButton: 'Piespiedu ēku lejupielāde',
-        buildingsRefetchDone:  'Lejupielāde restartēta ✓',
-        buildingsRefetchHelp:  'Atkārtoti lejupielādē apkārtējās ēkas, ignorējot kešatmiņu. Noderīgi, ja ainā redzama tikai vispārīgā māja.',
         aboutSection:          'Par',
         aboutVersionLabel:     'Versija',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const lv: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Uzcienā mani ar kafiju',
     },
-    panel:
-    {
-        wind:       'Vējš',
-    }
 };

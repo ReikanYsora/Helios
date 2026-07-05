@@ -77,13 +77,6 @@ dashboard, so it is gone. The new rule is simple:
   chip. Values that round to zero at the displayed precision now render as a
   true zero, everywhere.
 
-### Added: buildings download diagnostic
-
-* The editor's buildings section now shows the outcome of the last download
-  attempt, mirror by mirror (building count, HTTP error or timeout), right
-  under the force-download button, so a missing-buildings problem can be
-  diagnosed from a phone.
-
 ### Fixed: production curve flattening into a plateau
 
 * On days with a deep production bell and a long dawn/dusk tail, the
@@ -91,15 +84,34 @@ dashboard, so it is gone. The new rule is simple:
   a flat line. Its threshold now uses the 90th percentile instead of the
   median: genuine peaks always pass, meter-reset spikes are still rejected.
 
-### Fixed: 3D buildings disappearing (Overpass mirrors)
+### Fixed: 3D buildings are back, from a more reliable source
 
-* The mirror list is refreshed (a fast, stable European mirror now leads) and
-  each mirror gets a **10-second watchdog**: a hung mirror fails over to the
-  next one instead of stalling the load for minutes. When every mirror is
-  down, the card now **retries automatically after a few minutes** instead of
-  showing the fallback house until the page is reloaded. A **"Force building
-  download"** button in the editor's buildings section re-downloads the
-  surroundings on demand, bypassing every cache.
+* The buildings were fetched from the OpenStreetMap Overpass API, which had
+  started refusing the card by waves. Helios now reads the same OpenStreetMap
+  building data from **OpenFreeMap vector tiles** (a free, key-less map CDN):
+  the surroundings load reliably again, with their real heights, and the card
+  no longer depends on a service that can lock it out. Still cached locally, so
+  it stays instant and works offline on the next load.
+
+### Changed: the custom entity now reads measured energy
+
+* If you use the optional custom entity, its clock ring, timeline curve and
+  scrub now read the **energy meter** you configured (the measured kWh from the
+  recorder), exactly like grid, solar and battery. The live chip still shows the
+  power sensor's instant value. Both sensors stay required.
+
+### Fixed: correctness and performance
+
+* An off-screen card could keep polling the weather service forever; it now
+  stops cleanly when hidden.
+* A custom entity could re-query the recorder on every state update; it now
+  refreshes at most once a minute.
+* Recorder queries that never answered could freeze a value until the page was
+  reloaded; they now time out and recover on their own.
+* A locale that uses a comma as the decimal separator now reads correctly on
+  every chip, not just the grid.
+* A large batch of internal clean-up (dead code, memory and rendering), with no
+  change to what the card does.
 
 
 ---

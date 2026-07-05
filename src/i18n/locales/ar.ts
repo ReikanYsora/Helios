@@ -10,7 +10,6 @@ export const ar: Translations = {
         rangeLabel: 'النطاق الزمني',
         standard: 'قياسي',
         today: 'اليوم',
-        now:   'الآن',
         week:  'أسبوع واحد',
         month: 'شهر واحد',
         year:  'سنة واحدة',
@@ -81,7 +80,6 @@ export const ar: Translations = {
         buildingRealSizeOff:   'إيقاف',
         buildingRealSizeHint:  'تشغيل: استخدام الارتفاعات الحقيقية من OpenStreetMap (مع تحديد سقف للحفاظ على وضوح التأطير). إيقاف: إعطاء كل مبنى الارتفاع الثابت نفسه أدناه.',
         buildingHeight:        'ارتفاع المبنى',
-        buildingHeightHelp:    'ارتفاع ثابت يُطبّق على كل مبنى عند إيقاف الارتفاعات الحقيقية.',
         buildingClusterRadius: 'نطاق تجميع المنزل',
         buildingOpacity:       'عتامة المحيط',
         buildingColor:         'لون المبنى',
@@ -98,9 +96,6 @@ export const ar: Translations = {
         resetCacheButton:      'إعادة تعيين ذاكرة البيانات المؤقتة',
         resetCacheWarning:     'تحذير: يؤدي هذا إلى مسح طقس Open-Meteo المخزّن مؤقتًا وسجل الطاقة الكهروضوئية في الذاكرة لكل بطاقة Helios مفتوحة على هذه الصفحة. ستفقد التوقعات المنقّحة أيامها الخمسة من المعايرة حتى يُعاد جلبها (بضع دقائق حسب خادم HA لديك). لا تُمسّ بياناتك داخل Home Assistant أبدًا.',
         resetCacheDone:        'تم مسح الذاكرة المؤقتة ✓',
-        buildingsRefetchButton: 'فرض تنزيل المباني',
-        buildingsRefetchDone:  'أُعيد بدء التنزيل ✓',
-        buildingsRefetchHelp:  'يعيد تنزيل المباني المحيطة متجاهلاً ذاكرة التخزين المؤقت. مفيد عندما لا يعرض المشهد سوى المنزل الافتراضي.',
         aboutSection:          'حول',
         aboutVersionLabel:     'الإصدار',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ar: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'اشترِ لي قهوة',
     },
-    panel:
-    {
-        wind:       'الرياح',
-    }
 };

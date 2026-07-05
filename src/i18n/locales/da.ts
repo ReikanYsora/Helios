@@ -10,7 +10,6 @@ export const da: Translations = {
         rangeLabel: 'Tidsrum',
         standard: 'Standard',
         today: 'I dag',
-        now:   'Nu',
         week:  'uge',
         month: 'måned',
         year:  'år',
@@ -81,7 +80,6 @@ export const da: Translations = {
         buildingRealSizeOff:   'Fra',
         buildingRealSizeHint:  'Til: brug reelle OpenStreetMap-højder (begrænset for at holde rammen læselig). Fra: giv hver bygning den samme faste højde nedenfor.',
         buildingHeight:        'Bygningshøjde',
-        buildingHeightHelp:    'Fast højde anvendt på hver bygning, når reelle højder er slået fra.',
         buildingClusterRadius: 'Hjemmets klyngeradius',
         buildingOpacity:       'Uigennemsigtighed for omgivelser',
         buildingColor:         'Bygningsfarve',
@@ -98,9 +96,6 @@ export const da: Translations = {
         resetCacheButton:      'Nulstil datacache',
         resetCacheWarning:     'Advarsel: dette rydder den cachelagrede Open-Meteo-vejrdata og PV-historikken i hukommelsen for HVERT Helios-kort, der er åbent på denne side. Den forfinede prognose mister sine 5 dages kalibrering, indtil de hentes igen (et par minutter afhængigt af din HA-server). Dine data inde i Home Assistant røres aldrig.',
         resetCacheDone:        'Cache ryddet ✓',
-        buildingsRefetchButton: 'Gennemtving bygningsdownload',
-        buildingsRefetchDone:  'Download genstartet ✓',
-        buildingsRefetchHelp:  'Henter de omkringliggende bygninger igen og ignorerer cachen. Nyttigt når scenen kun viser det generiske hus.',
         aboutSection:          'Om',
         aboutVersionLabel:     'Version',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const da: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Køb mig en kaffe',
     },
-    panel:
-    {
-        wind:       'Vind',
-    }
 };

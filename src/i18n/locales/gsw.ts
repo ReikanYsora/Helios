@@ -10,7 +10,6 @@ export const gsw: Translations = {
         rangeLabel: 'Ziitberiich',
         standard: 'Standard',
         today: 'Hüt',
-        now:   'Jetz',
         week:  'Wuche',
         month: 'Monet',
         year:  'Jahr',
@@ -81,7 +80,6 @@ export const gsw: Translations = {
         buildingRealSizeOff:   'Nei',
         buildingRealSizeHint:  'Ja: bruuch echti OpenStreetMap-Hööchene (begränzt zum d Iirahmig läsbar z ha). Nei: gib jedem Gebäud die gliich fixi Hööchi unde.',
         buildingHeight:        'Gebäudhööchi',
-        buildingHeightHelp:    'Fixi Hööchi wo uf jedes Gebäud aagwändet wird wänn echti Hööchene uus sind.',
         buildingClusterRadius: 'Dehei-Cluster-Radius',
         buildingOpacity:       'Umgäbigs-Deckchraft',
         buildingColor:         'Gebäud-Farb',
@@ -98,9 +96,6 @@ export const gsw: Translations = {
         resetCacheButton:      'Date-Cache zrugsetze',
         resetCacheWarning:     'Achtig: das löscht s gschpeichered Open-Meteo-Wätter und d PV-Gschicht im Schpiicher für ALLI Helios-Charte wo uf dere Siite offe sind. D verfiineret Prognose verliert ihri 5 Tag Kalibrierig bis si wider ghollt wärde (es paar Minute je noch dim HA-Server). Dini Date innerhalb vo Home Assistant wärde nie aagrüert.',
         resetCacheDone:        'Cache glöscht ✓',
-        buildingsRefetchButton: 'Gebäude-Download erzwinge',
-        buildingsRefetchDone:  'Download neu gstartet ✓',
-        buildingsRefetchHelp:  'Ladt d\'Gebäude ums Huus neu abe und ignoriert de Cache. Hilfriich, wenn d\'Szene nur s\'generische Huus zeigt.',
         aboutSection:          'Über',
         aboutVersionLabel:     'Version',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const gsw: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Schpändier mer e Kaffi',
     },
-    panel:
-    {
-        wind:       'Wind',
-    }
 };

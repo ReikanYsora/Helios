@@ -10,7 +10,6 @@ export const lb: Translations = {
         rangeLabel: 'Zäitberäich',
         standard: 'Standard',
         today: 'Haut',
-        now:   'Elo',
         week:  'Woch',
         month: 'Mount',
         year:  'Joer',
@@ -81,7 +80,6 @@ export const lb: Translations = {
         buildingRealSizeOff:   'Nee',
         buildingRealSizeHint:  'Jo: benotz reell OpenStreetMap-Héichten (limitéiert fir de Kader liesbar ze halen). Nee: gëff all Gebai déiselwecht fix Héicht hei drënner.',
         buildingHeight:        'Gebaierhéicht',
-        buildingHeightHelp:    'Fix Héicht déi op all Gebai ugewannt gëtt wann reell Héichten aus sinn.',
         buildingClusterRadius: 'Doheem-Cluster-Radius',
         buildingOpacity:       'Ëmgéigend Decken',
         buildingColor:         'Gebaier-Faarf',
@@ -98,9 +96,6 @@ export const lb: Translations = {
         resetCacheButton:      'Datecache zrécksetzen',
         resetCacheWarning:     'Opgepasst: dat läscht dat gespäichert Open-Meteo-Wieder an d\'PV-Geschicht am Späicher fir ALL Helios-Kaart déi op dëser Säit op ass. Déi verfeinert Prognose verléiert hir 5 Deeg Kalibréierung bis se nei geholl ginn (e puer Minutten ofhängeg vun dengem HA-Server). Deng Donnéeën an Home Assistant ginn ni ugeréiert.',
         resetCacheDone:        'Cache geläscht ✓',
-        buildingsRefetchButton: 'Gebai-Download forcéieren',
-        buildingsRefetchDone:  'Download nei gestart ✓',
-        buildingsRefetchHelp:  'Lued d\'Gebaier ronderëm nei erof an ignoréiert de Cache. Nëtzlech wann d\'Zeen nëmmen dat generescht Haus weist.',
         aboutSection:          'Iwwer',
         aboutVersionLabel:     'Versioun',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const lb: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Bezuel mer e Kaffi',
     },
-    panel:
-    {
-        wind:       'Wand',
-    }
 };

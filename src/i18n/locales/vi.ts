@@ -10,7 +10,6 @@ export const vi: Translations = {
         rangeLabel: 'Khoảng thời gian',
         standard: 'Tiêu chuẩn',
         today: 'Hôm nay',
-        now:   'Bây giờ',
         week:  'tuần',
         month: 'tháng',
         year:  'năm',
@@ -81,7 +80,6 @@ export const vi: Translations = {
         buildingRealSizeOff:   'Tắt',
         buildingRealSizeHint:  'Bật: dùng chiều cao OpenStreetMap thực tế (giới hạn để giữ khung hình dễ đọc). Tắt: gán cho mọi công trình chiều cao cố định bên dưới.',
         buildingHeight:        'Chiều cao công trình',
-        buildingHeightHelp:    'Chiều cao cố định áp dụng cho mọi công trình khi chiều cao thực tế bị tắt.',
         buildingClusterRadius: 'Bán kính cụm nhà',
         buildingOpacity:       'Độ mờ xung quanh',
         buildingColor:         'Màu công trình',
@@ -98,9 +96,6 @@ export const vi: Translations = {
         resetCacheButton:      'Đặt lại bộ nhớ đệm dữ liệu',
         resetCacheWarning:     'Cảnh báo: thao tác này xóa thời tiết Open-Meteo trong bộ nhớ đệm và lịch sử PV trong bộ nhớ của MỌI thẻ Helios đang mở trên trang này. Dự báo tinh chỉnh sẽ mất 5 ngày hiệu chỉnh cho đến khi chúng được nạp lại (vài phút tùy máy chủ HA của bạn). Dữ liệu của bạn bên trong Home Assistant không bao giờ bị động đến.',
         resetCacheDone:        'Đã xóa bộ nhớ đệm ✓',
-        buildingsRefetchButton: 'Buộc tải xuống tòa nhà',
-        buildingsRefetchDone:  'Đã khởi động lại tải xuống ✓',
-        buildingsRefetchHelp:  'Tải lại các tòa nhà xung quanh, bỏ qua bộ nhớ đệm. Hữu ích khi cảnh chỉ hiển thị ngôi nhà chung.',
         aboutSection:          'Giới thiệu',
         aboutVersionLabel:     'Phiên bản',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const vi: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Mời tôi một ly cà phê',
     },
-    panel:
-    {
-        wind:       'Gió',
-    }
 };

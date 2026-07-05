@@ -10,7 +10,6 @@ export const isLocale: Translations = {
         rangeLabel: 'Tímabil',
         standard: 'Staðlað',
         today: 'Í dag',
-        now:   'Núna',
         week:  'vika',
         month: 'mánuður',
         year:  'ár',
@@ -81,7 +80,6 @@ export const isLocale: Translations = {
         buildingRealSizeOff:   'Slökkt',
         buildingRealSizeHint:  'Kveikt: notaðu raunverulegar OpenStreetMap hæðir (takmarkaðar til að halda römmun læsilegri). Slökkt: gefðu hverri byggingu sömu föstu hæð hér að neðan.',
         buildingHeight:        'Hæð byggingar',
-        buildingHeightHelp:    'Föst hæð sem beitt er á hverja byggingu þegar raunverulegar hæðir eru slökktar.',
         buildingClusterRadius: 'Klasaradíus heimilis',
         buildingOpacity:       'Ógagnsæi umhverfis',
         buildingColor:         'Litur byggingar',
@@ -98,9 +96,6 @@ export const isLocale: Translations = {
         resetCacheButton:      'Endurstilla gagnaskyndiminni',
         resetCacheWarning:     'Aðvörun: þetta hreinsar skyndiminnisvistaða Open-Meteo veðrið og PV-ferilinn í minni fyrir HVERT Helios-kort sem opið er á þessari síðu. Fínstillta spáin tapar 5 daga kvörðun sinni þar til þeir eru sóttir aftur (nokkrar mínútur eftir HA-þjóninum þínum). Gögnin þín inni í Home Assistant eru aldrei snert.',
         resetCacheDone:        'Skyndiminni hreinsað ✓',
-        buildingsRefetchButton: 'Þvinga niðurhal bygginga',
-        buildingsRefetchDone:  'Niðurhal endurræst ✓',
-        buildingsRefetchHelp:  'Sækir nærliggjandi byggingar aftur og hunsar skyndiminnið. Gagnlegt þegar sviðsmyndin sýnir aðeins almenna húsið.',
         aboutSection:          'Um',
         aboutVersionLabel:     'Útgáfa',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const isLocale: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Bjóddu mér upp á kaffi',
     },
-    panel:
-    {
-        wind:       'Vindur',
-    }
 };

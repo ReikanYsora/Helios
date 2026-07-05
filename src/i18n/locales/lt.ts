@@ -10,7 +10,6 @@ export const lt: Translations = {
         rangeLabel: 'Laiko intervalas',
         standard: 'Standartinis',
         today: 'Šiandien',
-        now:   'Dabar',
         week:  'savaitė',
         month: 'mėnuo',
         year:  'metai',
@@ -81,7 +80,6 @@ export const lt: Translations = {
         buildingRealSizeOff:   'Išjungta',
         buildingRealSizeHint:  'Įjungta: naudok tikrus OpenStreetMap aukščius (apriboti, kad kadravimas liktų įskaitomas). Išjungta: suteik kiekvienam pastatui tą patį fiksuotą aukštį žemiau.',
         buildingHeight:        'Pastato aukštis',
-        buildingHeightHelp:    'Fiksuotas aukštis, taikomas kiekvienam pastatui, kai tikri aukščiai išjungti.',
         buildingClusterRadius: 'Namų sankaupos spindulys',
         buildingOpacity:       'Aplinkos nepermatomumas',
         buildingColor:         'Pastato spalva',
@@ -98,9 +96,6 @@ export const lt: Translations = {
         resetCacheButton:      'Atstatyti duomenų talpyklą',
         resetCacheWarning:     'Įspėjimas: tai išvalo talpykloje saugomus Open-Meteo orus ir atmintyje esančią PV istoriją KIEKVIENAI šiame puslapyje atidarytai Helios kortelei. Patikslinta prognozė praras savo 5 dienų kalibravimą, kol jie bus gauti iš naujo (kelios minutės, priklausomai nuo tavo HA serverio). Tavo duomenys Home Assistant viduje niekada neliečiami.',
         resetCacheDone:        'Talpykla išvalyta ✓',
-        buildingsRefetchButton: 'Priverstinai atsisiųsti pastatus',
-        buildingsRefetchDone:  'Atsisiuntimas paleistas iš naujo ✓',
-        buildingsRefetchHelp:  'Iš naujo atsisiunčia aplinkinius pastatus ignoruodamas talpyklą. Naudinga, kai scenoje rodomas tik bendrinis namas.',
         aboutSection:          'Apie',
         aboutVersionLabel:     'Versija',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const lt: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Pavaišink mane kava',
     },
-    panel:
-    {
-        wind:       'Vėjas',
-    }
 };

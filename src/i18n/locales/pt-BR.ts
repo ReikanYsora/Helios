@@ -10,7 +10,6 @@ export const ptBR: Translations = {
         rangeLabel: 'Intervalo de tempo',
         standard: 'Padrão',
         today: 'Hoje',
-        now:   'Agora',
         week:  'semana',
         month: 'mês',
         year:  'ano',
@@ -81,7 +80,6 @@ export const ptBR: Translations = {
         buildingRealSizeOff:   'Não',
         buildingRealSizeHint:  'Sim: usa as alturas reais do OpenStreetMap (limitadas para manter o enquadramento legível). Não: aplica a cada edifício a mesma altura fixa abaixo.',
         buildingHeight:        'Altura dos edifícios',
-        buildingHeightHelp:    'Altura fixa aplicada a cada edifício quando as alturas reais estão desativadas.',
         buildingClusterRadius: 'Raio de agrupamento da casa',
         buildingOpacity:       'Opacidade do entorno',
         buildingColor:         'Cor dos edifícios',
@@ -98,9 +96,6 @@ export const ptBR: Translations = {
         resetCacheButton:      'Redefinir cache de dados',
         resetCacheWarning:     'Atenção: isso limpa o clima do Open-Meteo em cache e o histórico fotovoltaico em memória de TODOS os cards Helios abertos nesta página. A previsão refinada vai perder seus 5 dias de calibração até serem obtidos novamente (alguns minutos, dependendo do seu servidor HA). Seus dados dentro do Home Assistant nunca são tocados.',
         resetCacheDone:        'Cache limpo ✓',
-        buildingsRefetchButton: 'Forçar download dos edifícios',
-        buildingsRefetchDone:  'Download reiniciado ✓',
-        buildingsRefetchHelp:  'Baixa novamente os edifícios ao redor ignorando o cache. Útil quando a cena mostra apenas a casa genérica.',
         aboutSection:          'Sobre',
         aboutVersionLabel:     'Versão',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ptBR: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Me pague um café',
     },
-    panel:
-    {
-        wind:       'Vento',
-    }
 };

@@ -10,7 +10,6 @@ export const tr: Translations = {
         rangeLabel: 'Zaman araligi',
         standard: 'Standart',
         today: 'Bugun',
-        now:   'Simdi',
         week:  'hafta',
         month: 'ay',
         year:  'yil',
@@ -81,7 +80,6 @@ export const tr: Translations = {
         buildingRealSizeOff:   'Kapali',
         buildingRealSizeHint:  'Acik: gercek OpenStreetMap yuksekliklerini kullan (cerceveyi okunabilir tutmak icin sinirlandirilmis). Kapali: her binaya asagidaki ayni sabit yuksekligi ver.',
         buildingHeight:        'Bina yuksekligi',
-        buildingHeightHelp:    'Gercek yukseklikler kapaliyken her binaya uygulanan sabit yukseklik.',
         buildingClusterRadius: 'Ev kume yaricapi',
         buildingOpacity:       'Cevre opakligi',
         buildingColor:         'Bina rengi',
@@ -98,9 +96,6 @@ export const tr: Translations = {
         resetCacheButton:      'Veri onbellegini sifirla',
         resetCacheWarning:     'Uyari: bu, bu sayfada acik olan HER Helios karti icin onbellege alinmis Open-Meteo hava durumunu ve bellekteki PV gecmisini temizler. Rafine tahmin, yeniden cekilene kadar 5 gunluk kalibrasyonunu kaybeder (HA sunucuna bagli olarak birkac dakika). Home Assistant icindeki verilerine asla dokunulmaz.',
         resetCacheDone:        'Onbellek temizlendi ✓',
-        buildingsRefetchButton: 'Bina indirmeyi zorla',
-        buildingsRefetchDone:  'İndirme yeniden başlatıldı ✓',
-        buildingsRefetchHelp:  'Önbelleği yok sayarak çevredeki binaları yeniden indirir. Sahne yalnızca genel evi gösterdiğinde kullanışlıdır.',
         aboutSection:          'Hakkinda',
         aboutVersionLabel:     'Surum',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const tr: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Ruzgar',
-    }
 };

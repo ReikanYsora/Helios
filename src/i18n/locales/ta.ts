@@ -10,7 +10,6 @@ export const ta: Translations = {
         rangeLabel: 'நேர வரம்பு',
         standard: 'நிலையானது',
         today: 'இன்று',
-        now:   'இப்போது',
         week:  'வாரம்',
         month: 'மாதம்',
         year:  'ஆண்டு',
@@ -81,7 +80,6 @@ export const ta: Translations = {
         buildingRealSizeOff:   'அணை',
         buildingRealSizeHint:  'இயக்கு: உண்மையான OpenStreetMap உயரங்களைப் பயன்படுத்தவும் (சட்டகத்தைப் படிக்கக்கூடியதாக வைக்க வரம்பிடப்பட்டது). அணை: ஒவ்வொரு கட்டிடத்திற்கும் கீழே உள்ள அதே நிலையான உயரத்தைக் கொடுக்கவும்.',
         buildingHeight:        'கட்டிட உயரம்',
-        buildingHeightHelp:    'உண்மையான உயரங்கள் அணைக்கப்பட்டிருக்கும்போது ஒவ்வொரு கட்டிடத்திற்கும் பயன்படுத்தப்படும் நிலையான உயரம்.',
         buildingClusterRadius: 'வீட்டு கொத்து ஆரம்',
         buildingOpacity:       'சுற்றியுள்ள ஒளிபுகாநிலை',
         buildingColor:         'கட்டிட வண்ணம்',
@@ -98,9 +96,6 @@ export const ta: Translations = {
         resetCacheButton:      'தரவு தேக்ககத்தை மீட்டமை',
         resetCacheWarning:     'எச்சரிக்கை: இது இந்தப் பக்கத்தில் திறந்திருக்கும் ஒவ்வொரு Helios அட்டைக்கும் தேக்கி வைக்கப்பட்ட Open-Meteo வானிலை மற்றும் நினைவகத்தில் உள்ள PV வரலாற்றை அழிக்கிறது. மீண்டும் எடுக்கப்படும் வரை (உங்கள் HA சேவையகத்தைப் பொறுத்து சில நிமிடங்கள்) செம்மைப்படுத்தப்பட்ட முன்னறிவிப்பு அதன் 5 நாட்கள் அளவீட்டை இழக்கும். Home Assistant இல் உள்ள உங்கள் தரவு ஒருபோதும் தொடப்படாது.',
         resetCacheDone:        'தேக்ககம் அழிக்கப்பட்டது ✓',
-        buildingsRefetchButton: 'கட்டிட பதிவிறக்கத்தை கட்டாயமாக்கு',
-        buildingsRefetchDone:  'பதிவிறக்கம் மீண்டும் தொடங்கியது ✓',
-        buildingsRefetchHelp:  'கேஷை புறக்கணித்து சுற்றியுள்ள கட்டிடங்களை மீண்டும் பதிவிறக்குகிறது. காட்சியில் பொது வீடு மட்டும் தெரிந்தால் பயனுள்ளது.',
         aboutSection:          'பற்றி',
         aboutVersionLabel:     'பதிப்பு',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ta: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'எனக்கு ஒரு காபி வாங்கி தாருங்கள்',
     },
-    panel:
-    {
-        wind:       'காற்று',
-    }
 };

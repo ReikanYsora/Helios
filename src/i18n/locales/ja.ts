@@ -10,7 +10,6 @@ export const ja: Translations = {
         rangeLabel: '期間',
         standard: '標準',
         today: '今日',
-        now:   '現在',
         week:  '週間',
         month: 'か月',
         year:  '年',
@@ -81,7 +80,6 @@ export const ja: Translations = {
         buildingRealSizeOff:   'オフ',
         buildingRealSizeHint:  'オン：OpenStreetMap の実際の高さを使います（構図を読みやすく保つため上限あり）。オフ：すべての建物に下記の固定高さを与えます。',
         buildingHeight:        '建物の高さ',
-        buildingHeightHelp:    '実際の高さがオフのときにすべての建物に適用される固定の高さ。',
         buildingClusterRadius: '自宅クラスター半径',
         buildingOpacity:       '周囲の不透明度',
         buildingColor:         '建物の色',
@@ -98,9 +96,6 @@ export const ja: Translations = {
         resetCacheButton:      'データキャッシュをリセット',
         resetCacheWarning:     '警告：これはこのページで開いているすべての Helios カードについて、キャッシュされた Open-Meteo の天気とメモリ内の PV 履歴を消去します。精緻化された予測は、再取得されるまで5日分の校正を失います（HA サーバーによって数分）。Home Assistant 内のあなたのデータには一切触れません。',
         resetCacheDone:        'キャッシュを消去しました ✓',
-        buildingsRefetchButton: '建物のダウンロードを強制',
-        buildingsRefetchDone:  'ダウンロードを再開しました ✓',
-        buildingsRefetchHelp:  'キャッシュを無視して周囲の建物を再ダウンロードします。シーンに汎用の家しか表示されない場合に便利です。',
         aboutSection:          '概要',
         aboutVersionLabel:     'バージョン',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ja: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'コーヒーをおごる',
     },
-    panel:
-    {
-        wind:       '風',
-    }
 };

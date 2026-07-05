@@ -10,7 +10,6 @@ export const ca: Translations = {
         rangeLabel: 'Període',
         standard: 'Estàndard',
         today: 'Avui',
-        now:   'Ara',
         week:  'setmana',
         month: 'mes',
         year:  'any',
@@ -81,7 +80,6 @@ export const ca: Translations = {
         buildingRealSizeOff:   'No',
         buildingRealSizeHint:  'Sí: usa les alçades reals d\'OpenStreetMap (limitades per mantenir un enquadrament llegible). No: dona a cada edifici la mateixa alçada fixa de sota.',
         buildingHeight:        'Alçada dels edificis',
-        buildingHeightHelp:    'Alçada fixa aplicada a cada edifici quan les alçades reals estan desactivades.',
         buildingClusterRadius: 'Radi d\'agrupació de la casa',
         buildingOpacity:       'Opacitat de l\'entorn',
         buildingColor:         'Color dels edificis',
@@ -98,9 +96,6 @@ export const ca: Translations = {
         resetCacheButton:      'Restableix la memòria cau de dades',
         resetCacheWarning:     'Atenció: això esborra el temps d\'Open-Meteo en memòria cau i l\'historial FV en memòria de TOTES les targetes Helios obertes en aquesta pàgina. La previsió afinada perdrà els seus 5 dies de calibratge fins que es tornin a obtenir (uns minuts segons el teu servidor HA). Les teves dades dins de Home Assistant mai es toquen.',
         resetCacheDone:        'Memòria cau esborrada ✓',
-        buildingsRefetchButton: 'Força la baixada d\'edificis',
-        buildingsRefetchDone:  'Baixada reiniciada ✓',
-        buildingsRefetchHelp:  'Torna a baixar els edificis del voltant ignorant la memòria cau. Útil quan l\'escena només mostra la casa genèrica.',
         aboutSection:          'Quant a',
         aboutVersionLabel:     'Versió',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ca: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Vent',
-    }
 };

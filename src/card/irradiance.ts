@@ -10,7 +10,8 @@
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
 import { callWSWithTimeout } from './ws-timeout';
-import { RADIATION_CACHE_TTL_MS } from '../constants';
+import { parseStatBoundaryLoose } from './energy-stats';
+import { RADIATION_CACHE_TTL_MS, HOUR_MS} from '../constants';
 
 
 // Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip.
@@ -46,47 +47,21 @@ export function clearIrradianceModuleCaches(): void
 }
 
 
-// Coerce a `start`/`end` statistics field into a ms epoch. A private copy so this module stays self-contained.
-function parseStatBoundary(raw: unknown): number | null
-{
-    if (raw === null || raw === undefined)
-    {
-        return null;
-    }
-    if (typeof raw === 'number')
-    {
-        return raw > 1e12 ? raw : raw * 1000;
-    }
-    if (typeof raw === 'string')
-    {
-        const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9)
-        {
-            return asNum > 1e12 ? asNum : asNum * 1000;
-        }
-        const d = new Date(raw);
-        const t = d.getTime();
-        return isFinite(t) ? t : null;
-    }
-    return null;
-}
-
-
 // Parse a statistics payload into an IrradianceHistory. Irradiance sensors are `state_class: measurement` reporting instantaneous
 // W/m²; the `mean` column carries the bucket-averaged value, anchored at the bucket midpoint to match the engine's W/m² assumption.
 //
 // We deliberately do NOT fall back to `state`: a few installs surface irradiance as a cumulative MJ/m² counter
 // (`state_class: total_increasing`), so `state` is monotonically increasing. Pushing that would feed the engine values that look
-// like 10000+ W/m² and distort every downstream derivation (calibration ratio, refined forecast, irradiance chip). Buckets with
-// null `mean` are skipped; an empty result degrades to the raw-history fallback (which handles its own unit semantics).
+// like 10000+ W/m² and distort every downstream derivation (irradiance curve + chip). Buckets with null `mean` are
+// skipped; an empty result degrades to the raw-history fallback (which handles its own unit semantics).
 function parseIrradianceStats(arr: any[]): IrradianceHistory
 {
     const times:  Date[]   = [];
     const values: number[] = [];
     for (const item of arr ?? [])
     {
-        const startMs = parseStatBoundary(item?.start);
-        const endMs   = parseStatBoundary(item?.end);
+        const startMs = parseStatBoundaryLoose(item?.start);
+        const endMs   = parseStatBoundaryLoose(item?.end);
         if (startMs === null)
         {
             continue;
@@ -169,7 +144,7 @@ export function refreshIrradiance(host: IrradianceHost): void
     // changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
     // the minute of slop is harmless.
     const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
-    const cap          = new Date(anchorMs - RAW_WINDOW_H * 3_600_000);
+    const cap          = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
     const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
     const fetchKey = `${entity}@${rangeKey}`;

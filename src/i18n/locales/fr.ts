@@ -17,7 +17,6 @@ export const fr: Translations = {
         rangeLabel: 'Période',
         standard: 'Standard',
         today: "Aujourd'hui",
-        now:   'Maintenant',
         week:  'Semaine',
         month: 'Mois',
         year:  'Année',
@@ -105,7 +104,6 @@ export const fr: Translations = {
         buildingRealSizeOff:   'Non',
         buildingRealSizeHint:  'Oui : utilise les hauteurs réelles OpenStreetMap (plafonnées pour garder un cadrage lisible). Non : applique à chaque bâtiment la hauteur fixe ci-dessous.',
         buildingHeight:        'Hauteur des bâtiments',
-        buildingHeightHelp:    'Hauteur fixe appliquée à chaque bâtiment lorsque les hauteurs réelles sont désactivées.',
         buildingClusterRadius: 'Rayon de regroupement maison',
         buildingOpacity:       'Opacité des bâtiments voisins',
         buildingColor:         'Couleur des bâtiments',
@@ -122,9 +120,6 @@ export const fr: Translations = {
         resetCacheButton:      'Réinitialiser le cache des données',
         resetCacheWarning:     'Attention : ce bouton vide la météo Open-Meteo en cache local et l\'historique PV en mémoire pour TOUTES les cartes Helios ouvertes. La prévision affinée perdra ses 5 derniers jours de calibration le temps qu\'ils soient récupérés à nouveau (quelques minutes selon ton serveur HA). Tes données dans Home Assistant ne sont jamais touchées.',
         resetCacheDone:        'Cache vidé ✓',
-        buildingsRefetchButton: 'Forcer le téléchargement des bâtiments',
-        buildingsRefetchDone:  'Téléchargement relancé ✓',
-        buildingsRefetchHelp:  'Retélécharge les bâtiments alentour en ignorant le cache. Utile quand la scène n\'affiche que la maison générique.',
         aboutSection:          'À propos',
         aboutVersionLabel:     'Version',
         aboutRepoCard:         'Helios',
@@ -133,9 +128,4 @@ export const fr: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-
-    panel:
-    {
-        wind:       'Vent',
-    }
 };

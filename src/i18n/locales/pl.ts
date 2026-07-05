@@ -10,7 +10,6 @@ export const pl: Translations = {
         rangeLabel: 'Zakres czasu',
         standard: 'Standardowy',
         today: 'Dzisiaj',
-        now:   'Teraz',
         week:  'tydzień',
         month: 'miesiąc',
         year:  'rok',
@@ -81,7 +80,6 @@ export const pl: Translations = {
         buildingRealSizeOff:   'Wyłączone',
         buildingRealSizeHint:  'Włączone: użyj rzeczywistych wysokości OpenStreetMap (ograniczonych, aby kadr pozostał czytelny). Wyłączone: nadaj każdemu budynkowi tę samą stałą wysokość poniżej.',
         buildingHeight:        'Wysokość budynku',
-        buildingHeightHelp:    'Stała wysokość stosowana do każdego budynku, gdy rzeczywiste wysokości są wyłączone.',
         buildingClusterRadius: 'Promień grupowania domu',
         buildingOpacity:       'Przezroczystość otoczenia',
         buildingColor:         'Kolor budynków',
@@ -98,9 +96,6 @@ export const pl: Translations = {
         resetCacheButton:      'Resetuj pamięć podręczną danych',
         resetCacheWarning:     'Uwaga: to czyści pogodę Open-Meteo z pamięci podręcznej oraz historię PV w pamięci dla KAŻDEJ karty Helios otwartej na tej stronie. Dopracowana prognoza straci swoje 5 dni kalibracji, dopóki nie zostaną pobrane ponownie (kilka minut, zależnie od Twojego serwera HA). Twoje dane wewnątrz Home Assistant nigdy nie są naruszane.',
         resetCacheDone:        'Pamięć podręczna wyczyszczona ✓',
-        buildingsRefetchButton: 'Wymuś pobranie budynków',
-        buildingsRefetchDone:  'Pobieranie uruchomione ponownie ✓',
-        buildingsRefetchHelp:  'Ponownie pobiera okoliczne budynki, pomijając pamięć podręczną. Przydatne, gdy scena pokazuje tylko ogólny dom.',
         aboutSection:          'O karcie',
         aboutVersionLabel:     'Wersja',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const pl: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Postaw mi kawę',
     },
-    panel:
-    {
-        wind:       'Wiatr',
-    }
 };

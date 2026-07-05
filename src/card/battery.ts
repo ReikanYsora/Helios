@@ -3,12 +3,12 @@
 //The user wires their battery on the HA Energy dashboard (per-source lists of `stat_rate`, `stat_energy_from`, `stat_energy_to`,
 //`stat_soc`). Live reads aggregate across every wired bank (sum for power, mean for SoC).
 
-import { formatPowerKw, type PowerUnit } from './format';
+import { formatPowerKw, parseNumericState, type PowerUnit } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
-import { fetchChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
-import { BATTERY_CACHE_TTL_MS } from '../constants';
+import { fetchChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../constants';
 
 
 //Module-level history cache, survives Lit unmount+remount (navigate away and back) like the PV cache. 15-min TTL covers
@@ -17,7 +17,6 @@ import { BATTERY_CACHE_TTL_MS } from '../constants';
 interface BatteryHistoryCacheEntry
 {
     soc:   BatteryHistory;
-    power: BatteryHistory;
     ts:    number;
 }
 
@@ -68,9 +67,9 @@ export function resolveBatteryEntities(defaults: EnergyDefaults): { powerEntity:
 }
 
 
-//True when the live battery power derives from the directional energy meters (bucket cadence) instead of a
-//COMPLETE set of live power sensors. Shared with the card's home formula, which switches to its shared-window
-//balance whenever any contributing family is bucket-sourced.
+//True when the install lacks a COMPLETE set of live battery power sensors (no stat_rate, or at least one source
+//without one). Measured-only: in that case refreshBattery shows NO live battery power at all; only a full rate set
+//yields a live chip value. Past curves + scrub read the directional change series regardless.
 export function batteryLiveIsBucketSourced(defaults: EnergyDefaults): boolean
 {
     return !(defaults.batteryStatRates.length > 0 && defaults.batterySourcesWithoutRate === 0);
@@ -95,7 +94,6 @@ export interface BatteryHost
     _batteryPower:        number | null;
     _batteryPowerUnit:    string;
     _batterySocHistory:   BatteryHistory | null;
-    _batteryPowerHistory: BatteryHistory | null;
     _batteryFetchKey:     string;
     _batteryFetching:     boolean;
     //Recorder `change` series for charge (`stat_energy_to`) and discharge (`stat_energy_from`) meters, 5-min buckets. SEPARATE
@@ -105,11 +103,6 @@ export interface BatteryHost
     _batteryDischargeChangeSeries: ChangeBucket[] | null;
     _batteryChangeFetchKey:        string;
     _batteryChangeFetching:        boolean;
-    //HA Energy daily-total alignment: when battery sources are configured, the refresh loop queries today's net charge/discharge
-    //change here and the readout prefers these over the in-browser integration of `_batteryPowerHistory`. Null when no HA stat
-    //exists or the recorder call hasn't landed (consumer falls back to the local integration either way).
-    _haBatteryChargedKwh?:    number | null;
-    _haBatteryDischargedKwh?: number | null;
 }
 
 
@@ -143,10 +136,6 @@ export function refreshBattery(host: BatteryHost): void
         {
             host._batterySocHistory   = null;
         }
-        if (host._batteryPowerHistory  !== null)
-        {
-            host._batteryPowerHistory = null;
-        }
         host._batteryFetchKey = '';
         return;
     }
@@ -164,8 +153,8 @@ export function refreshBattery(host: BatteryHost): void
         for (const id of socEntities)
         {
             const so = host.hass.states?.[id];
-            const v  = so ? parseFloat(so.state) : NaN;
-            if (isFinite(v))
+            const v  = so ? parseNumericState(so.state) : null;
+            if (v !== null)
             {
                 sum   += v;
                 count += 1;
@@ -191,8 +180,8 @@ export function refreshBattery(host: BatteryHost): void
         for (const id of rateEntities)
         {
             const so = host.hass.states?.[id];
-            const v  = so ? parseFloat(so.state) : NaN;
-            if (!isFinite(v)) { continue; }
+            const v  = so ? parseNumericState(so.state) : null;
+            if (v === null) { continue; }
             const unit  = String(so.attributes?.unit_of_measurement ?? '');
             const watts = pvNormalizeToWatts(v, unit);
             const inverted = host._energyDefaults.invertedRateEntities.includes(id);
@@ -228,9 +217,8 @@ export function refreshBattery(host: BatteryHost): void
         return;
     }
 
-    //SoC stays on the raw/mean statistics path (a measurement, not an energy counter); power history comes from the change series above.
-    const powerEntities = host._energyDefaults.batteryStatRates;
-    if (socEntities.length === 0 && powerEntities.length === 0)
+    //SoC stays on the raw/mean statistics path (a measurement, not an energy counter); past power comes from the change series above.
+    if (socEntities.length === 0)
     {
         return;
     }
@@ -244,14 +232,12 @@ export function refreshBattery(host: BatteryHost): void
     //changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
     //the minute of slop is harmless.
     const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
-    const rawStart     = new Date(anchorMs - RAW_WINDOW_H * 3_600_000);
+    const rawStart     = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
     const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
-    //Fetch key carries every wired entity (sorted) so adding/removing a bank flips the key and invalidates the snapshot.
+    //Fetch key carries every wired SoC entity (sorted) so adding/removing a bank flips the key and invalidates the snapshot.
     const sortedSoc      = [...socEntities].sort();
-    const sortedPower    = [...powerEntities].sort();
-    const sig            = `${sortedSoc.join(',')}|${sortedPower.join(',')}`;
-    const fetchKey       = `${sig}@${rangeKey}`;
+    const fetchKey       = `${sortedSoc.join(',')}@${rangeKey}`;
     if (fetchKey === host._batteryFetchKey)
     {
         return;
@@ -263,10 +249,9 @@ export function refreshBattery(host: BatteryHost): void
     if (cached)
     {
         host._batterySocHistory   = cached.soc;
-        host._batteryPowerHistory = cached.power;
         return;
     }
-    fetchBatteryHistory(host, sortedSoc, sortedPower, ltsStart, rawStart, host._timeRange.end, fetchKey);
+    fetchBatteryHistory(host, sortedSoc, ltsStart, rawStart, host._timeRange.end, fetchKey);
 }
 
 
@@ -284,10 +269,10 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     today0.setHours(0, 0, 0, 0);
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
-    const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
+    const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
     //End anchor rounded to the refresh boundary, folded into the fetch key so the gate re-arms once per CHANGE_REFRESH_MS and the
-    //past curve + scrub keep tracking new buckets (a startMs-only key froze the series until midnight). Rounding also lands every
-    //card on the same energy-stats cache key, so an N-card dashboard hits the recorder once per interval.
+    //past curve + scrub keep tracking new buckets. Rounding also lands every card on the same energy-stats cache key,
+    //so an N-card dashboard hits the recorder once per interval.
     const endMs   = changeRefreshAnchorMs();
     const sortedCharge    = [...chargeIds].sort();
     const sortedDischarge = [...dischargeIds].sort();
@@ -367,8 +352,8 @@ function parseBatteryStats(arr: any[]): BatteryHistory
     const values: number[] = [];
     for (const item of arr ?? [])
     {
-        const startMs = parseStatBoundary(item?.start);
-        const endMs   = parseStatBoundary(item?.end);
+        const startMs = parseStatBoundaryLoose(item?.start);
+        const endMs   = parseStatBoundaryLoose(item?.end);
         if (startMs === null)
         {
             continue;
@@ -400,47 +385,16 @@ function parseBatteryStats(arr: any[]): BatteryHistory
 }
 
 
-//Coerce a `start`/`end` statistics field into a millisecond epoch. Same accept set as the PV stats parser, kept as a private copy so
-//battery.ts stays import-light (avoiding a circular guard through pv.ts).
-function parseStatBoundary(raw: unknown): number | null
-{
-    if (raw === null || raw === undefined)
-    {
-        return null;
-    }
-    if (typeof raw === 'number')
-    {
-        return raw > 1e12 ? raw : raw * 1000;
-    }
-    if (typeof raw === 'string')
-    {
-        const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9)
-        {
-            return asNum > 1e12 ? asNum : asNum * 1000;
-        }
-        const d = new Date(raw);
-        const t = d.getTime();
-        return isFinite(t) ? t : null;
-    }
-    return null;
-}
-
-
 //History fetch for the battery overlay. Tries `recorder/statistics_during_period` first: the only path that scales on a
 //high-frequency feed (5-min buckets, ~576 rows per 2-day window vs ~150-200k raw). When the entity has no LTS tracking (no
 //`state_class`) the stats array is empty and we fall back to raw `history/history_during_period` with `significant_changes_only`
 //for custom/non-measurement entities. SoC + power entities are bundled into one WS roundtrip when both are configured.
 //
-//aggregateBatteryLkcf: last-known-carry-forward aggregator across N banks, plus two hooks: a per-entity `transform` (flip sign
-//on `stat_rate_inverted` wirings before the sum) and a `reducer` (`sum` for power, `mean` for SoC). Walks the union of all
-//timestamps in O(entities * union), sub-ms even at high cadence.
-function aggregateBatteryLkcf(
-    perEntity: BatteryHistory[],
-    reducer:   'sum' | 'mean',
-    transform: (value: number, entityIdx: number) => number,
-): BatteryHistory
+//Multi-bank SoC aggregator: last-known-carry-forward mean across N banks, each value clamped to [0, 100]. Walks the
+//union of all timestamps in O(entities * union), sub-ms even at high cadence. Single-bank collapses to the one series.
+function aggregateBatterySocLkcf(perEntity: BatteryHistory[]): BatteryHistory
 {
+    const clamp = (v: number): number => Math.max(0, Math.min(100, v));
     if (perEntity.length === 0)
     {
         return { times: [], values: [] };
@@ -450,7 +404,7 @@ function aggregateBatteryLkcf(
         const only = perEntity[0];
         return {
             times:  only.times,
-            values: only.values.map((v, _i) => transform(v, 0)),
+            values: only.values.map(clamp),
         };
     }
     const tsSet = new Set<number>();
@@ -479,11 +433,11 @@ function aggregateBatteryLkcf(
             cursors[i] = cursor;
             if (cursor >= 0 && isFinite(series.values[cursor]))
             {
-                sum += transform(series.values[cursor], i);
+                sum += clamp(series.values[cursor]);
                 count++;
             }
         }
-        out.push(count === 0 ? NaN : reducer === 'mean' ? sum / count : sum);
+        out.push(count === 0 ? NaN : sum / count);
     }
     return {
         times:  sortedTs.map(t => new Date(t)),
@@ -495,7 +449,6 @@ function aggregateBatteryLkcf(
 export async function fetchBatteryHistory(
     host:          BatteryHost,
     socEntities:   string[],
-    powerEntities: string[],
     ltsStart:      Date,
     rawStart:      Date,
     end:           Date,
@@ -506,7 +459,7 @@ export async function fetchBatteryHistory(
     {
         return;
     }
-    if (socEntities.length === 0 && powerEntities.length === 0)
+    if (socEntities.length === 0)
     {
         return;
     }
@@ -519,16 +472,10 @@ export async function fetchBatteryHistory(
         if (ltsStart >= fetchEnd && rawStart >= fetchEnd)
         {
             host._batterySocHistory   = { times: [], values: [] };
-            host._batteryPowerHistory = { times: [], values: [] };
             return;
         }
 
-        //Dedupe: wiring the same entity as both SoC and power is degenerate but cheap to handle.
-        const idSet = new Set<string>();
-        for (const id of socEntities)   idSet.add(id);
-        for (const id of powerEntities) idSet.add(id);
-        const ids = Array.from(idSet);
-
+        const ids = [...socEntities];
         const perEntity: Record<string, BatteryHistory> = {};
 
         //LTS arm uses the broader `ltsStart` (usually visible start, often midnight or earlier) so today's charged/discharged kWh
@@ -573,33 +520,22 @@ export async function fetchBatteryHistory(
             }
         }
 
-        //Multi-bank LKCF aggregation: SoC averages across banks, power sums with per-entity sign-flips from `invertedRateEntities`
-        //before the sum so mixed-wiring installs aggregate correctly. Single-bank collapses to the per-entity series unchanged.
-        const invertedSet = new Set(host._energyDefaults.invertedRateEntities);
-        const socSeries   = aggregateBatteryLkcf(
+        //Multi-bank LKCF aggregation: SoC averages across banks, single-bank collapses to the per-entity series unchanged.
+        const socSeries = aggregateBatterySocLkcf(
             socEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
-            'mean',
-            v => Math.max(0, Math.min(100, v)),
         );
-        const powerSeries = aggregateBatteryLkcf(
-            powerEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
-            'sum',
-            (v, idx) => invertedSet.has(powerEntities[idx]) ? -v : v,
-        );
-        host._batterySocHistory   = socSeries;
-        host._batteryPowerHistory = powerSeries;
+        host._batterySocHistory = socSeries;
 
         //Persist for the next mount: cross-mount cache hits short-circuit the WS round-trip on navigate-away-and-back.
         if (cacheKey)
         {
-            _batteryHistoryCache.set(cacheKey, { soc: socSeries, power: powerSeries, ts: Date.now() });
+            _batteryHistoryCache.set(cacheKey, { soc: socSeries, ts: Date.now() });
         }
     }
     catch (_e)
     {
-        //Fetch timed out or failed (LTS unavailable, entity untracked): degrade to empty histories.
-        host._batterySocHistory   = { times: [], values: [] };
-        host._batteryPowerHistory = { times: [], values: [] };
+        //Fetch timed out or failed (LTS unavailable, entity untracked): degrade to empty history.
+        host._batterySocHistory = { times: [], values: [] };
     }
     finally
     {

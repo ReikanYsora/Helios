@@ -222,14 +222,6 @@ export const heliosCardStyles = css`
     }
     .overlay-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .overlay-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
-    /*  Disabled: stays visible to show the lock state but is inert, greyed out with no feedback. */
-    .overlay-btn.is-disabled,
-    .overlay-btn[disabled]
-    {
-        opacity: 0.45;
-        cursor: default;
-        pointer-events: none;
-    }
 
     /*  View mode. Clock fades every layer but the basemap and top-left controls; Scene restores them. The
         basemap holder lives inside #map-container alongside .scene-svg, so the scene SVG is faded by name
@@ -323,11 +315,11 @@ export const heliosCardStyles = css`
     .solar-pct-label.is-chart-active
     {
         box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #ffc107)) 70%, transparent);
+                    0 0 12px color-mix(in srgb, var(--amber-color, #ffc107) 70%, transparent);
     }
 
     /*  Predicted PV chip when scrubbing into the future: the value is modelled, not measured, so the
-        chip dims and a leading "≈" (set by render) signals "estimate". */
+        chip dims and a leading "~" (set by render) signals "estimate". */
     .pv-pct-label.is-predicted
     {
         opacity: 0.55;
@@ -529,24 +521,6 @@ export const heliosCardStyles = css`
         to   { stroke-dashoffset: -10; }
     }
 
-    /*  Cloud chip on the sun-to-home line: a grey pill showing live cover, clickable to re-target the
-        chart to the cloud bands. Same recipe + active glow as the other chips, but the only one with a
-        custom width: it holds just a short percentage, so it sizes to content (about half as wide). */
-    .cloud-chip
-    {
-        z-index: 11;
-        width: auto;
-        pointer-events: auto;
-        cursor: pointer;
-        color: var(--primary-text-color, #212121);
-        border-color: var(--secondary-text-color, #727272);
-    }
-    .cloud-chip.is-chart-active
-    {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--secondary-text-color, #727272) 70%, transparent);
-    }
-    /*  Short cloud-coloured leader joining the irradiance chip to the cloud chip on its right. */
     /*  Sunrise / sunset marker: glyph + local time pinned just outside the arc at the horizon crossing,
         centred on its computed point. Sun-coloured, click-transparent. */
     .sun-cross-marker
@@ -588,7 +562,7 @@ export const heliosCardStyles = css`
         z-index: 13;
         color: var(--primary-text-color, #212121);
         /*  HA amber token so it stays distinct from the PV production chip (orange). */
-        border-color: var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
+        border-color: var(--amber-color, var(--warning-color, #ffc107));
     }
 
 

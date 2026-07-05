@@ -10,7 +10,6 @@ export const fy: Translations = {
         rangeLabel: 'Tiidberik',
         standard: 'Standert',
         today: 'Hjoed',
-        now:   'No',
         week:  'wike',
         month: 'moanne',
         year:  'jier',
@@ -81,7 +80,6 @@ export const fy: Translations = {
         buildingRealSizeOff:   'Út',
         buildingRealSizeHint:  'Oan: brûk echte OpenStreetMap-hichten (begrinze om de kadrearring lêsber te hâlden). Út: jou elk gebou deselde fêste hichte hjirûnder.',
         buildingHeight:        'Gebouhichte',
-        buildingHeightHelp:    'Fêste hichte tapast op elk gebou as echte hichten út binne.',
         buildingClusterRadius: 'Hûs klusterradius',
         buildingOpacity:       'Omkriten ûntrochsichtigens',
         buildingColor:         'Geboukleur',
@@ -98,9 +96,6 @@ export const fy: Translations = {
         resetCacheButton:      'Datacache resette',
         resetCacheWarning:     'Warskôging: dit wisket it cachete Open-Meteo waar en de PV-skiednis yn it ûnthâld foar ELKE Helios-kaart dy\'t op dizze side iepen is. De ferfine foarsizing ferliest syn 5 dagen kalibraasje oant se opnij ophelle wurde (in pear minuten ôfhinklik fan dyn HA-server). Dyn data binnen Home Assistant wurdt noait oanrekke.',
         resetCacheDone:        'Cache wiske ✓',
-        buildingsRefetchButton: 'Twinge gebou-download',
-        buildingsRefetchDone:  'Download opnij starten ✓',
-        buildingsRefetchHelp:  'Downloadt de omlizzende gebouwen opnij en negearret de cache. Handich as de sêne allinnich it generike hûs toant.',
         aboutSection:          'Oer',
         aboutVersionLabel:     'Ferzje',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const fy: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Trakteer my op in kofje',
     },
-    panel:
-    {
-        wind:       'Wyn',
-    }
 };

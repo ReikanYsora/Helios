@@ -10,7 +10,6 @@ export const bn: Translations = {
         rangeLabel: 'সময়সীমা',
         standard: 'মানক',
         today: 'আজ',
-        now:   'এখন',
         week:  'সপ্তাহ',
         month: 'মাস',
         year:  'বছর',
@@ -81,7 +80,6 @@ export const bn: Translations = {
         buildingRealSizeOff:   'বন্ধ',
         buildingRealSizeHint:  'চালু: প্রকৃত OpenStreetMap উচ্চতা ব্যবহার করুন (ফ্রেমিং পঠনযোগ্য রাখতে সীমাবদ্ধ)। বন্ধ: প্রতিটি ভবনকে নিচের একই নির্দিষ্ট উচ্চতা দিন।',
         buildingHeight:        'ভবনের উচ্চতা',
-        buildingHeightHelp:    'প্রকৃত উচ্চতা বন্ধ থাকলে প্রতিটি ভবনে প্রয়োগ করা নির্দিষ্ট উচ্চতা।',
         buildingClusterRadius: 'বাড়ির ক্লাস্টার ব্যাসার্ধ',
         buildingOpacity:       'আশেপাশের অস্বচ্ছতা',
         buildingColor:         'ভবনের রঙ',
@@ -98,9 +96,6 @@ export const bn: Translations = {
         resetCacheButton:      'ডেটা ক্যাশে রিসেট করুন',
         resetCacheWarning:     'সতর্কতা: এটি এই পৃষ্ঠায় খোলা প্রতিটি Helios কার্ডের জন্য ক্যাশে করা Open-Meteo আবহাওয়া এবং ইন-মেমরি PV ইতিহাস পরিষ্কার করে। পরিশোধিত পূর্বাভাস পুনরায় আনা না হওয়া পর্যন্ত তার 5 দিনের ক্যালিব্রেশন হারাবে (আপনার HA সার্ভারের উপর নির্ভর করে কয়েক মিনিট)। Home Assistant-এর ভেতরে আপনার ডেটা কখনও স্পর্শ করা হয় না।',
         resetCacheDone:        'ক্যাশে পরিষ্কার করা হয়েছে ✓',
-        buildingsRefetchButton: 'ভবন ডাউনলোড জোর করুন',
-        buildingsRefetchDone:  'ডাউনলোড পুনরায় শুরু হয়েছে ✓',
-        buildingsRefetchHelp:  'ক্যাশ উপেক্ষা করে আশপাশের ভবনগুলি আবার ডাউনলোড করে। দৃশ্যে শুধু সাধারণ বাড়ি দেখালে দরকারি।',
         aboutSection:          'সম্পর্কে',
         aboutVersionLabel:     'সংস্করণ',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const bn: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'আমাকে একটি কফি কিনে দিন',
     },
-    panel:
-    {
-        wind:       'বাতাস',
-    }
 };

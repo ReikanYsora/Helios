@@ -35,7 +35,7 @@ import
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
-import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS } from './constants';
+import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS, HOURS_PER_DAY} from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -48,7 +48,7 @@ import {
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
 import { nightFractionByHour } from './card/sun-zones';
-import { setServerTimeZone } from './card/tz';
+import { setServerTimeZone } from './card/timezone';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, formatIrradiance, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
@@ -57,8 +57,7 @@ import
     pvRateAtTime,
     pvNormalizeToWatts,
     formatPvValue,
-    resolvePvLiveEntity,
-    clearPvModuleCaches
+    resolvePvLiveEntity
 } from './card/pv';
 import
 {
@@ -92,7 +91,6 @@ import
     type LabelLayout
 } from './card/hud';
 import { nudgeToHomePill } from './card/hud-geometry';
-import { detectLegacyEntityKeys, legacyEntityKeysMessage } from './card/legacy-config';
 import
 {
     tick,
@@ -178,20 +176,6 @@ export class HeliosCard extends LitElement
     //hass.states + historical series from HA's history API for the dedicated chart.
     @state() _pvCurrent: number | null = null;
     @state() _pvUnit        = '';
-    @state() _pvHistory: {
-        times:  Date[];
-        values: number[];
-    } | null = null;
-    //Per-entity histories alongside _pvHistory so the chart can draw one curve per source and the scrub
-    //tooltip can break down by entity. Keyed by entity id; cleared + repopulated in fetchPvHistory.
-    _pvHistoryPerEntity = new Map<string, { times: Date[]; values: number[] }>();
-    //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same shape as _pvHistory
-    //but via recorder/statistics_during_period (~120 rows/5 days, vs potentially millions on the raw path
-    //for a high-frequency sensor). Null while the first fetch is in flight; calibration.ts falls back to
-    //_pvHistory when null/empty.
-    @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
-    _pvCalibStatsFetchKey  = '';
-    _pvCalibStatsFetching  = false;
     //Recorder change series for the solar meter(s): canonical past-production source for the unified
     //store + chip scrub. Reset-corrected, unit-normalised kWh per 5-min bucket, same as the HA Energy
     //dashboard.
@@ -236,21 +220,16 @@ export class HeliosCard extends LitElement
         times:  Date[];
         values: number[];
     } | null = null;
-    //Custom-entity hourly history over the window (values in W), feeding the timeline 'custom' curve + clock
-    //ring. Null until the first fetch / when no entity is configured. _customEntityKey dedupes refetches.
-    @state() _customEntityHistory: {
-        times:  Date[];
-        values: number[];
-    } | null = null;
+    //Custom ENERGY meter recorder `change` series over the window (kWh buckets), feeding the timeline 'custom'
+    //curve, clock ring and scrub, exactly like the pv/grid/battery meters. Null until the first fetch / when no
+    //entity is configured. _customEntityKey dedupes refetches.
+    @state() _customChangeSeries: ChangeBucket[] | null = null;
     _customEntityKey = '';
+    _customEntityFetching = false;
     //Decoupled hourly clock profile (hour-of-day averages), built only in clock mode on a sub-hourly store
     //(month/year). Null otherwise (buildClockData then reads the store). _clockHourlyKey dedupes refetches.
     @state() _clockHourly: ClockHourly | null = null;
     _clockHourlyKey = '';
-    @state() _batteryPowerHistory: {
-        times:  Date[];
-        values: number[];
-    } | null = null;
     _batteryFetchKey  = '';
     _batteryFetching  = false;
     //Recorder change series for battery charge (stat_energy_to) + discharge (stat_energy_from) meters:
@@ -274,14 +253,9 @@ export class HeliosCard extends LitElement
     //energy_preferences_updated event. Chip refresh helpers read their fallback entity from here.
     @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
     _energyPrefsUnsub?: () => void;
-    //HA Energy daily-total cache from refreshHaDailyTotals() against the recorder: PV produced, grid
-    //imported, grid exported, battery charged, battery discharged today. Null when no HA stat is
-    //configured or the recorder call has not landed; consumer chips then collapse silently.
+    //Today's produced kWh from refreshHaDailyTotals() against the recorder, for the timeline tooltip's
+    //today headline. Null when no HA solar stat is configured or the recorder call has not landed.
     @state() _haSolarTodayKwh:        number | null = null;
-    @state() _haGridImportTodayKwh:   number | null = null;
-    @state() _haGridExportTodayKwh:   number | null = null;
-    @state() _haBatteryChargedKwh:    number | null = null;
-    @state() _haBatteryDischargedKwh: number | null = null;
     //Hover state on the home hitbox. Drives a sun-coloured glow halo so the focal building reads as
     //interactive before clicking.
     @state() _homeHover = false;
@@ -438,7 +412,6 @@ export class HeliosCard extends LitElement
         this.config = { ...config };
         //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, so
         //setConfig doesn't seed it.
-        this._warnIfLegacyEntityKeys(config);
         //Re-arm (or stop) the "No UI" idle fade when the option changes.
         this._scheduleUiHide();
     }
@@ -490,7 +463,7 @@ export class HeliosCard extends LitElement
         if (this._viewMode === 'clock')
         {
             //Shrink the current rings out now; they grow back once the new window's data lands (updated()).
-            //Anchor the expected series start (midnight − new past span) so the grow gate can tell a completed
+            //Anchor the expected series start (midnight - new past span) so the grow gate can tell a completed
             //refetch for THIS window from the stale series the store would otherwise rebuild from eagerly.
             const today0 = new Date();
             today0.setHours(0, 0, 0, 0);
@@ -677,44 +650,6 @@ export class HeliosCard extends LitElement
         `;
     }
 
-    //Retired YAML entity keys, now read entirely from the HA Energy dashboard; any still set on the card
-    //config is ignored at runtime. Detected only to fire a one-shot persistent notification pointing the
-    //user at the replacement.
-    private _legacyKeyWarningFired = false;
-
-    //Fire a one-shot HA persistent notification when the card YAML carries any retired entity key. Silent
-    //when none are present, when hass is not yet attached (setConfig can land before the hass setter), or
-    //when the service is RBAC-denied. The flag dedupes across setConfig calls (HA also dedupes by id).
-    private _warnIfLegacyEntityKeys(config: HeliosConfig): void
-    {
-        if (this._legacyKeyWarningFired)
-        {
-            return;
-        }
-        if (!this.hass?.callService)
-        {
-            return;
-        }
-        const detected = detectLegacyEntityKeys(config);
-        if (detected.length === 0)
-        {
-            return;
-        }
-        this._legacyKeyWarningFired = true;
-        try
-        {
-            this.hass.callService('persistent_notification', 'create', {
-                notification_id: 'helios-legacy-entity-config',
-                title:           'Helios card: deprecated entity keys ignored',
-                message:         legacyEntityKeysMessage(detected),
-            });
-        }
-        catch (_)
-        {
-            //Service denied/unavailable; chips still light up from HA Energy resolution and the deprecation
-            //note is also in the CHANGELOG / README.
-        }
-    }
 
     static getConfigElement(): HTMLElement
     {
@@ -765,20 +700,12 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Editor "force building download" button: drop every buildings cache layer and hit Overpass again.
-    public refetchBuildings(): void
-    {
-        this._engine?.forceBuildingsRefetch();
-    }
-
 
     //Wipe all card-side cached production/forecast data and refetch from HA + Open-Meteo. Used by the
     //editor's "reset data cache" button to recover from a stuck calibration or stale weather payload.
     public resetDataCache(): void
     {
         //Drop in-memory PV state so the next refreshPv() refetches from scratch, not the cached fetch key.
-        this._pvHistory                   = null;
-        this._pvCalibStats                = null;
         this._pvChangeSeries              = null;
         this._pvChangeSeriesFetchKey      = '';
         this._pvChangeSeriesPerEntity     = new Map();
@@ -787,14 +714,12 @@ export class HeliosCard extends LitElement
         this._haSolarForecastLoaded       = false;
         this._haSolarForecastFetching     = false;
         this._haSolarForecastFetchedAt    = 0;
-        this._pvCalibStatsFetchKey        = '';
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;
         this._gridImportChangeFetchKey    = '';
         this._gridExportChangeFetchKey    = '';
         this._gridGuard                   = createGridGuard();
         this._batterySocHistory           = null;
-        this._batteryPowerHistory         = null;
         this._batteryFetchKey             = '';
         this._batteryChargeChangeSeries   = null;
         this._batteryDischargeChangeSeries = null;
@@ -808,24 +733,26 @@ export class HeliosCard extends LitElement
         this._unifiedStore                = null;
         //Drop the module-level caches too, else the next refresh rehydrates from the cross-mount cache with
         //the exact stale entry the user just cleared.
-        clearPvModuleCaches();
         clearBatteryModuleCaches();
         clearIrradianceModuleCaches();
         clearEnergyStatsCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot, refetches.
         this._engine?.resetDataCache();
+        //Also drop the buildings caches (localStorage + shared) and re-fetch, so this one button refreshes
+        //everything including the OpenFreeMap footprints.
+        this._engine?.forceBuildingsRefetch();
         this.requestUpdate();
     }
 
 
 
-    //Masonry sizing. 1 unit = 50 px so 15 ≈ 750 px, leaving the basemap ~480 px after the timeline's ~150 px.
+    //Masonry sizing. 1 unit = 50 px so 15 ~ 750 px, leaving the basemap ~480 px after the timeline's ~150 px.
     public getCardSize(): number
     {
         return 15;
     }
 
-    //Sections-view sizing. 1 row ≈ 56 px, 1 col ≈ 30 px (section width 360 px). 12 cols × 8 rows is both the
+    //Sections-view sizing. 1 row ~ 56 px, 1 col ~ 30 px (section width 360 px). 12 cols × 8 rows is both the
     //section editor's ceiling and the card's minimum: the basemap, chip cluster and timeline need the full
     //width and all 8 rows to stay legible.
     public getGridOptions(): {
@@ -1052,9 +979,9 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_unifiedStore')
                 || _changedProperties.has('_chartSeries')
                 || _changedProperties.has('_batterySocHistory')
-                || _changedProperties.has('_customEntityHistory')
+                || _changedProperties.has('_customChangeSeries')
                 || _changedProperties.has('_clockHourly')
-                //An editor save (custom-entity colour, decimals…) changes config-derived clock visuals: rebuild
+                //An editor save (custom-entity colour, decimals...) changes config-derived clock visuals: rebuild
                 //so the cylinders + home pick up the new colour instead of keeping the cached one.
                 || _changedProperties.has('config');
             if (inputsChanged)
@@ -1066,7 +993,7 @@ export class HeliosCard extends LitElement
             //it always reads down-then-up.
             if (this._clockReloadStart)
             {
-                //month/year wait on the hourly profile (nulled up front on a window change, so non-null ⇒ fresh);
+                //month/year wait on the hourly profile (nulled up front on a window change, so non-null -> fresh);
                 //now/week wait on every configured change-series having refetched for the new window: the store
                 //rebuilds eagerly from stale series, so non-null alone would grow the OLD numbers.
                 const ready = clockNeedsHourly(this)
@@ -1406,7 +1333,7 @@ export class HeliosCard extends LitElement
         const powerU   = powerUnit(this.config);
         const irradU   = irradianceUnit(this.config);
         const pvDisplayValue = showPvLabel
-            ? (isPvPredicted ? '≈ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec, powerU)
+            ? (isPvPredicted ? '~ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec, powerU)
             : '';
 
         //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against a 5 kW
@@ -1682,10 +1609,10 @@ export class HeliosCard extends LitElement
         const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
         const customLeaderColor = resolveUiColor(customEntityColor(this.config), '#f44336');
         const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
-        //Value at the active instant (scrub target in the past, else live now), in WATTS: the power
-        //sensor's state live, its recorded per-bucket mean in scrub.
+        //Value at the active instant (scrub target in the past, else live now), in WATTS: the power sensor's
+        //state live, the energy meter's average watts for that bucket in scrub.
         const customScrubMs = (!this._isLiveMode && this._selectedTime !== null) ? this._selectedTime.getTime() : null;
-        const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customEntityHistory, customScrubMs);
+        const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customChangeSeries, customScrubMs);
         const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec, powerU);
         const CUSTOM_BEAD_CAP_W     = 5000;
         const CUSTOM_BEAD_MIN_DUR_S = 1.2;
@@ -1882,7 +1809,7 @@ export class HeliosCard extends LitElement
                 <!--  Period-mode band: a separate strip BELOW the timeline (own card styling, same width,
                       radius and themed border), holding the Now / 1 week / 1 month / 1 year selector. Stays
                       visible in clock mode too so the window can be changed from there.  -->
-                ${hasHomeCoords && (this._viewMode === 'scene' || this._viewMode === 'clock' || this._viewMode === 'trend') ? html`
+                ${hasHomeCoords ? html`
                     <div class="tb-band">
                         ${this._renderPeriodSelector()}
                     </div>
@@ -2036,11 +1963,6 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-
-                <!--  Empty slot kept so the home stack stays vertically anchored for the leaders below.
-                      The PV leader itself (straight dashed line, no L bend since PV and home share the X
-                      anchor, flowing home-ward at a pace proportional to live production) renders below.  -->
-                ${nothing}
 
                 ${showPvLabel ? (() => {
                     //Leader endpoint = the home pill's border on the chip-to-home axis (the shared docking
@@ -2378,7 +2300,7 @@ export class HeliosCard extends LitElement
                             const haloAlphaMax = sunFillRatio * 0.55;
                             return svg`
                                 <defs>
-                                    <radialGradient id="solar-halo-grad">
+                                    <radialGradient id="solar-halo-grad-${this._instanceId}">
                                         <stop offset="0%"   stop-color="${sunColor}" stop-opacity="${haloAlphaMax}"></stop>
                                         <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"></stop>
                                     </radialGradient>
@@ -2387,7 +2309,7 @@ export class HeliosCard extends LitElement
                                     class="solar-sun-halo"
                                     cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
                                     r="${haloR}"
-                                    fill="url(#solar-halo-grad)"
+                                    fill="url(#solar-halo-grad-${this._instanceId})"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"
@@ -2496,7 +2418,7 @@ export class HeliosCard extends LitElement
     }
 
     //Reload grow gate for now/week: true only once every CONFIGURED change-series has refetched for the new
-    //window. Each fetch helper keys its series on `…|${startMs}|…` where startMs is the new window's series
+    //window. Each fetch helper keys its series on `...|${startMs}|...` where startMs is the new window's series
     //start; so a series is fresh when its key carries _clockReloadWindowStartMs and it is no longer in flight.
     //Series with no configured entity contribute nothing to the dial and are skipped. Until all pass, the
     //store may be non-null but is built from STALE series at the new geometry, so the grow must not fire.
@@ -3001,9 +2923,9 @@ export class HeliosCard extends LitElement
         const isE   = ((dP ?? dPrev)?.unit ?? 'energy') === 'energy';
         const vec = (data: ClockData | null): number[] =>
         {
-            const out = new Array<number>(24).fill(0);
+            const out = new Array<number>(HOURS_PER_DAY).fill(0);
             if (!data) { return out; }
-            for (const L of data.layers) { const hv = hourlyOf(L.values, isE); for (let h = 0; h < 24; h++) { out[h] += hv[h]; } }
+            for (const L of data.layers) { const hv = hourlyOf(L.values, isE); for (let h = 0; h < HOURS_PER_DAY; h++) { out[h] += hv[h]; } }
             return out;
         };
         return { pH: vec(dP), prevH: vec(dPrev), isE, data: dP ?? dPrev };
@@ -3047,12 +2969,12 @@ export class HeliosCard extends LitElement
         const cardinals = { n: tc.compassN, s: tc.compassS, e: tc.compassE, w: tc.compassW };
 
         //Trend dial: one ring of bars for P, a reference marker per hour at P-1. Both vectors are the selected
-        //metric's hour-of-day totals, summed across the metric's layers (import+export, per-source PV, …).
+        //metric's hour-of-day totals, summed across the metric's layers (import+export, per-source PV, ...).
         if (this._viewMode === 'trend')
         {
             const target = this._trendTarget;
             const { pH, prevH, isE } = this._trendVectors();
-            const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / 24; };
+            const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / HOURS_PER_DAY; };
             const frame = projectTrendFrame(
                 camera, pH, prevH,
                 clockTargetMeta(this, target).color, trendGoodDirection(target),
@@ -3181,10 +3103,7 @@ export class HeliosCard extends LitElement
         {
             this._clockHoverSlot = hit;   //@state change -> tooltip render + repaint via updated()
         }
-        else if (hit !== null)
-        {
-            this._scheduleClockPaint();   //same slice, cursor moved: just re-clamp the tooltip
-        }
+        //Same slice, cursor moved: nothing to repaint. The tooltip is CSS-anchored, not cursor-tracked.
     };
 
     //True when (x,y) falls within the home prism's central hit disc captured from the last frame.
@@ -3306,10 +3225,10 @@ export class HeliosCard extends LitElement
         {
             return nothing;
         }
-        //The tooltip reads the HOUR the focused slot falls in: the header is the hour band (HH:00 – HH+1:00)
+        //The tooltip reads the HOUR the focused slot falls in: the header is the hour band (HH:00 - HH+1:00)
         //and the rows/total below aggregate that hour, matching the histogram bar.
         const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
-        const head = `${String(hour).padStart(2, '0')}:00 – ${String((hour + 1) % 24).padStart(2, '0')}:00`;
+        const head = `${String(hour).padStart(2, '0')}:00 - ${String((hour + 1) % HOURS_PER_DAY).padStart(2, '0')}:00`;
         return html`
             <div class="clock-tip">
                 <div class="clock-tip-head">${head}</div>
@@ -3354,7 +3273,7 @@ export class HeliosCard extends LitElement
             return nothing;
         }
         const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
-        const head = `${String(hour).padStart(2, '0')}:00 - ${String((hour + 1) % 24).padStart(2, '0')}:00`;
+        const head = `${String(hour).padStart(2, '0')}:00 - ${String((hour + 1) % HOURS_PER_DAY).padStart(2, '0')}:00`;
         const target = this._trendTarget;
         const meta   = clockTargetMeta(this, target);
         //Sum the metric's layers for the focused hour, carrying a ClockData for unit-aware formatting.
@@ -3406,7 +3325,7 @@ export class HeliosCard extends LitElement
             return nothing;
         }
         const { pH, prevH, isE, data } = this._trendVectors();
-        const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / 24; };
+        const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / HOURS_PER_DAY; };
         const tP    = totalOf(pH);
         const tPrev = totalOf(prevH);
         const fmt   = (v: number): string => data ? formatClockValue(this, data, v) : v.toFixed(1);

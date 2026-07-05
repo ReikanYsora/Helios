@@ -1,5 +1,5 @@
-//Unified 5-day data source: the single source of truth for every per-time signal the card draws or hovers. Built
-//ONCE after the underlying fetches land, cached on the host, then sliced/re-sampled by consumers at look-up time.
+//Unified rolling-window data source: the single source of truth for every per-time signal the card draws or hovers.
+//Built ONCE after the underlying fetches land, cached on the host, then sliced/re-sampled by consumers at look-up time.
 //Live numeric chips stay on the direct hass.states path; every other surface that draws or hovers a curve uses this.
 //
 //Cadence: one knob (`display-update-frequency-per-hour`, 1-60, default 4) controls both the storage and render cadence
@@ -7,8 +7,8 @@
 //HA's Energy solar forecast at its native hourly cadence, read into buckets as a stepped hourly curve (each bucket reads
 //the wh of the forecast hour it falls inside).
 //
-//Window: J-2 to J+2 = 5 days x (24 x bucketsPerHour) buckets/series. Origin storeStartMs = local midnight of
-//(today - 2 days), so bucket 0 sits at the J-2 day start.
+//Window: the card's active period, daysPast + today + daysFuture, at (24 x bucketsPerHour) buckets/day. Origin
+//storeStartMs = local midnight of (today - daysPast), so bucket 0 sits at that day's start.
 //
 //Each series is length bucketsTotal; null marks "no real data and no surrounding samples to interpolate between".
 //
@@ -17,14 +17,10 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { ChartSeries } from './charts';
-import type { PvHistory } from './pv';
 import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
 import { forecastWattsAt, type SolarForecastPoint } from './energy-forecast';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import { HOUR_MS, DAY_MS } from '../constants';
-
-//Re-export so graph consumers (e.g. SVG path builders walking bucketsPerHour) can query the cadence directly.
-export { displayUpdateFrequencyPerHour } from '../helios-config';
 
 //Per-build cadence bundle, derived from config once in buildUnifiedStore and threaded through every per-metric builder
 //so bucket arithmetic stays consistent across passes.
@@ -53,14 +49,12 @@ export interface UnifiedDataStore
     dataVersion:  string;
 
     irradiance:   (number | null)[];   //W/m2, weather model interpolated hourly
-    cloud:        (number | null)[];    //%, weather model interpolated hourly
     production:   (number | null)[];    //W, recorder history (no forecast)
     //W, HA Energy solar forecast (energy/solar_forecast), hourly stepped. All-null when no forecast source is configured.
     forecast:     (number | null)[];
     battery:      (number | null)[];    //W signed, history
-    batterySoc:   (number | null)[];    //%, live only (current bucket)
-    gridImport:   (number | null)[];    //W, slope of cumulative kWh meter
-    gridExport:   (number | null)[];    //W, slope of cumulative kWh meter
+    gridImport:   (number | null)[];    //W, average watts per bucket from the recorder change series
+    gridExport:   (number | null)[];    //W, average watts per bucket from the recorder change series
 }
 
 
@@ -77,16 +71,13 @@ export interface UnifiedStoreHost
     readonly _timelineMode:           TimelineMode;
     readonly hass:                    { language?: string; states?: Record<string, { state: string }>; config?: { latitude?: number; longitude?: number } } | undefined;
     readonly _chartSeries:            ChartSeries | null;
-    readonly _pvHistory:              PvHistory | null;
     //Recorder `change` series for the solar meter(s), 5-min buckets. buildProduction converts each bucket's reset-corrected
     //kWh to average watts.
     readonly _pvChangeSeries:         ChangeBucket[] | null;
-    readonly _pvCalibStats:           PvHistory | null;
     //Recorder `change` series for battery charge (stat_energy_to) + discharge (stat_energy_from). buildBattery nets
     //them (charge - discharge) so the sign is structural.
     readonly _batteryChargeChangeSeries:    ChangeBucket[] | null;
     readonly _batteryDischargeChangeSeries: ChangeBucket[] | null;
-    readonly _batterySoc:             number | null;
     //Recorder `change` series for grid import / export meters, 5-min buckets. Same contract as production: each
     //direction's bucket kWh -> average watts.
     readonly _gridImportChangeSeries: ChangeBucket[] | null;
@@ -186,32 +177,6 @@ function buildIrradiance(host: UnifiedStoreHost, storeStartMs: number, storeEndM
 }
 
 
-function buildCloud(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
-{
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const series = host._chartSeries;
-    if (!series || series.times.length === 0) { return out; }
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    for (let i = 0; i < series.times.length; i++)
-    {
-        const t = series.times[i].getTime();
-        if (t < storeStartMs || t >= storeEndMs) { continue; }
-        const v = series.cloud[i];
-        if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
-        const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
-        if (h < 0) { continue; }
-        sums[h]   += Math.max(0, Math.min(100, v));
-        counts[h] += 1;
-    }
-    for (let h = 0; h < p.bucketsTotal; h++)
-    {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
-    }
-    interpolateNullGaps(out);
-    return out;
-}
-
 
 //Production = past actual only, no model fallback. From the recorder `change` metric on the solar meter(s)
 //(_pvChangeSeries), the data the HA Energy dashboard consumes: each 5-min bucket's reset-corrected, unit-normalised
@@ -287,18 +252,6 @@ function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: numbe
 }
 
 
-//Battery SoC: no per-bucket history today, only the live state. Park it on the bucket "now" sits in; rest stay null.
-function buildBatterySoc(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]
-{
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const live = host._batterySoc;
-    if (live === null || live === undefined || !Number.isFinite(live)) { return out; }
-    const h = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
-    if (h >= 0) { out[h] = Math.max(0, Math.min(100, live)); }
-    return out;
-}
-
-
 //Grid import / export: average watts per bucket from the directional meter's recorder `change` series, like production
 //(kWh * 1000 / bucket-hours). Reset-corrected + unit-normalised server-side. Past gaps interpolated, future null.
 function buildGridChange(
@@ -337,15 +290,12 @@ function computeDataVersion(host: UnifiedStoreHost): string
     const todayKey = new Date().toDateString();
     const cadence       = modeBucketsPerHour(host._timelineMode, host.config);
     const seriesLen     = host._chartSeries?.times.length ?? 0;
-    const pvHistLen     = host._pvHistory?.times.length   ?? 0;
-    const pvCalibLen    = host._pvCalibStats?.times.length ?? 0;
     const pvChangeLen   = host._pvChangeSeries?.length ?? 0;
     const battHistLen   = (host._batteryChargeChangeSeries?.length ?? 0) + (host._batteryDischargeChangeSeries?.length ?? 0);
     const gridImpLen = host._gridImportChangeSeries?.length ?? 0;
     const gridExpLen = host._gridExportChangeSeries?.length ?? 0;
-    const socLive = host._batterySoc ?? '';
     const forecastLen = host._haSolarForecast?.length ?? 0;
-    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}|f${forecastLen}`;
+    return `d${todayKey}|c${cadence}|${seriesLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|f${forecastLen}`;
 }
 
 
@@ -367,12 +317,10 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const storeEndMs   = storeStartMs + storeDays * DAY_MS;
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
-    const cloud        = buildCloud(host, storeStartMs, storeEndMs, p);
     //Production reads ONLY real sensor samples and interpolates; forecast reads the HA Energy forecast at store cadence.
     const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
     const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
     const battery      = buildBattery(host, storeStartMs, nowMs, p);
-    const batterySoc   = buildBatterySoc(host, storeStartMs, nowMs, p);
     const gridImport   = buildGridChange(host._gridImportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
     const gridExport   = buildGridChange(host._gridExportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
     return {
@@ -385,11 +333,9 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
         builtAtMs:   nowMs,
         dataVersion: computeDataVersion(host),
         irradiance,
-        cloud,
         production,
         forecast,
         battery,
-        batterySoc,
         gridImport,
         gridExport,
     };
@@ -436,8 +382,6 @@ export interface RangeSlice
     times:      Date[];
     production: (number | null)[];
     forecast:   (number | null)[];
-    cloud:      (number | null)[];
-    irradiance: (number | null)[];
 }
 
 export function sliceForRange(store: UnifiedDataStore, startMs: number, endMs: number): RangeSlice
@@ -446,7 +390,7 @@ export function sliceForRange(store: UnifiedDataStore, startMs: number, endMs: n
     const hi = Math.min(store.storeEndMs,   endMs);
     if (hi <= lo)
     {
-        return { times: [], production: [], forecast: [], cloud: [], irradiance: [] };
+        return { times: [], production: [], forecast: [] };
     }
     const stepMs = store.stepMs;
     const firstBucketIdx = Math.floor((lo - store.storeStartMs) / stepMs);
@@ -454,16 +398,12 @@ export function sliceForRange(store: UnifiedDataStore, startMs: number, endMs: n
     const times:      Date[]            = [];
     const production: (number | null)[] = [];
     const forecast:   (number | null)[] = [];
-    const cloud:      (number | null)[] = [];
-    const irradiance: (number | null)[] = [];
     for (let mid = firstMid; mid < hi; mid += stepMs)
     {
         if (mid < lo) { continue; }
         times.push(new Date(mid));
         production.push(valueAt(store.production, store, mid));
         forecast.push(  valueAt(store.forecast,   store, mid));
-        cloud.push(     valueAt(store.cloud,      store, mid));
-        irradiance.push(valueAt(store.irradiance, store, mid));
     }
-    return { times, production, forecast, cloud, irradiance };
+    return { times, production, forecast };
 }

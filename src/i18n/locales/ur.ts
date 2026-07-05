@@ -10,7 +10,6 @@ export const ur: Translations = {
         rangeLabel: 'وقت کا دورانیہ',
         standard: 'معیاری',
         today: 'آج',
-        now:   'ابھی',
         week:  'ہفتہ',
         month: 'مہینہ',
         year:  'سال',
@@ -81,7 +80,6 @@ export const ur: Translations = {
         buildingRealSizeOff:   'آف',
         buildingRealSizeHint:  'آن: حقیقی OpenStreetMap اونچائیاں استعمال کریں (فریمنگ کو پڑھنے کے قابل رکھنے کے لیے محدود)۔ آف: ہر عمارت کو نیچے دی گئی ایک ہی مقررہ اونچائی دیں۔',
         buildingHeight:        'عمارت کی اونچائی',
-        buildingHeightHelp:    'حقیقی اونچائیاں بند ہونے پر ہر عمارت پر لاگو ہونے والی مقررہ اونچائی۔',
         buildingClusterRadius: 'گھر کے کلسٹر کا دائرہ',
         buildingOpacity:       'ارد گرد کی دھندلاہٹ',
         buildingColor:         'عمارت کا رنگ',
@@ -98,9 +96,6 @@ export const ur: Translations = {
         resetCacheButton:      'ڈیٹا کیش ری سیٹ کریں',
         resetCacheWarning:     'انتباہ: یہ اس صفحے پر کھلے ہر Helios کارڈ کے لیے کیش شدہ Open-Meteo موسم اور میموری میں موجود PV تاریخ کو صاف کر دیتا ہے۔ بہتر کی گئی پیش گوئی اپنی 5 دن کی کیلیبریشن کھو دے گی جب تک کہ انہیں دوبارہ حاصل نہ کیا جائے (آپ کے HA سرور کے لحاظ سے چند منٹ)۔ Home Assistant کے اندر آپ کے ڈیٹا کو کبھی نہیں چھیڑا جاتا۔',
         resetCacheDone:        'کیش صاف ہو گیا ✓',
-        buildingsRefetchButton: 'عمارتوں کا ڈاؤن لوڈ زبردستی کریں',
-        buildingsRefetchDone:  'ڈاؤن لوڈ دوبارہ شروع ہو گیا ✓',
-        buildingsRefetchHelp:  'کیش کو نظر انداز کرتے ہوئے آس پاس کی عمارتیں دوبارہ ڈاؤن لوڈ کرتا ہے۔ جب منظر میں صرف عمومی گھر نظر آئے تو مفید ہے۔',
         aboutSection:          'تعارف',
         aboutVersionLabel:     'ورژن',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ur: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'مجھے ایک کافی پلائیں',
     },
-    panel:
-    {
-        wind:       'ہوا',
-    }
 };

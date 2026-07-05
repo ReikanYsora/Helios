@@ -14,10 +14,11 @@
 //reading the meters regardless.
 
 import { pvNormalizeToWatts } from './pv';
-import { formatEntityValue, type PowerUnit } from './format';
+import { formatEntityValue, parseNumericState, type PowerUnit } from './format';
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { refreshGridGuard, type GridGuardState } from './grid-guard';
+import { DAY_MS } from '../constants';
 
 
 export interface GridHost
@@ -103,7 +104,7 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
     today0.setHours(0, 0, 0, 0);
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
-    const startMs = today0.getTime() - host._periodPastDays * 24 * 3_600_000;
+    const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
     //Rounded end anchor in the key re-issues the fetch once per CHANGE_REFRESH_MS, so the past curve and
     //scrub keep tracking newly committed buckets.
     const endMs   = changeRefreshAnchorMs();
@@ -194,23 +195,6 @@ function applyValue(host: GridHost, slot: 'import' | 'export', value: number | n
         if (host._gridExportValue !== clamped) { host._gridExportValue = clamped; }
         if (host._gridExportUnit  !== unit)    { host._gridExportUnit  = unit; }
     }
-}
-
-
-//Parse a state that arrived as string or number. Accepts both '.' and ',' decimal separators (some
-//integrations forward the locale-formatted form). Null for anything non-finite.
-function parseNumericState(raw: unknown): number | null
-{
-    if (typeof raw === 'number')
-    {
-        return Number.isFinite(raw) ? raw : null;
-    }
-    if (typeof raw !== 'string') { return null; }
-    const trimmed = raw.trim();
-    if (trimmed === '') { return null; }
-    const normalised = trimmed.replace(',', '.');
-    const n = parseFloat(normalised);
-    return Number.isFinite(n) ? n : null;
 }
 
 

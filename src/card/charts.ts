@@ -4,7 +4,6 @@
 
 import { type HeliosConfig, customEntityId } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
-import type { PvHistory } from './pv';
 import type { UnifiedDataStore } from './unifiedStore';
 import type { ChangeBucket } from './energy-stats';
 import { resolveCustomEntityLive } from './custom-entity';
@@ -15,7 +14,6 @@ export interface ChartSeries
 {
     times:        Date[];
     irradiance:   number[];
-    cloud:        number[];
     //Hourly low / mid / high cloud cover (%), overlaid on the timeline's irradiance view (three altitude bands).
     cloudLow:     number[];
     cloudMid:     number[];
@@ -82,24 +80,16 @@ export interface ChartHost
     readonly _energyDefaults: EnergyDefaults;
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
-    readonly _pvHistory:    PvHistory | null;
     //Recorder `change` series (5-min buckets) for the solar meter(s). sumChangeForDay sums exact per-day kWh so
     //totals match HA Energy to the watt-hour, not the gap-interpolated curve.
     readonly _pvChangeSeries: ChangeBucket[] | null;
     //Per-source recorder `change` series keyed by energy meter (`stat_energy_from`), for the Clock/Trend per-source
     //split at exact dashboard energy. Empty on single-source installs (the aggregate already covers it) or pre-fetch.
     readonly _pvChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
-    //Per-entity histories alongside aggregated `_pvHistory` for per-source curves + tooltip breakdown. Single-source
-    //installs carry one entry equal to the aggregate; multi-source carry one per HA Energy source.
-    readonly _pvHistoryPerEntity: Map<string, PvHistory>;
-    //Hourly LTS series feeding the 5-day forecast calibration (same
-    //window, far fewer rows on high-frequency installs). Null while fetching / empty when not LTS-tracked, then
-    //degrades to `_pvHistory`.
-    readonly _pvCalibStats:   PvHistory | null;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
     //Today's produced kWh from the recorder `change` statistic over the `stat_energy_from` arrays. Null when
-    //unconfigured or pre-first-call, then the tooltip falls back to trapezoidal integration over `_pvHistory`.
+    //unconfigured or pre-first-call.
     readonly _haSolarTodayKwh?: number | null;
     //Mutable hover-cursor position as a percent of the visible range (0..100), null when inactive.
     _chartHoverPct:         number | null;
@@ -109,8 +99,8 @@ export interface ChartHost
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
     readonly _batterySocHistory: { times: Date[]; values: number[] } | null;
-    //Custom-entity hourly history (values in W) for the 'custom' target curve. Null when unconfigured.
-    readonly _customEntityHistory?: { times: Date[]; values: number[] } | null;
+    //Custom ENERGY meter recorder `change` series (kWh buckets) for the 'custom' target curve. Null when unconfigured.
+    readonly _customChangeSeries?: ChangeBucket[] | null;
     //Active bottom-chart target. Drives which series renderBottomChart draws; defaults to 'production'.
     readonly _chartTarget?: ChartTarget;
 }
@@ -121,8 +111,7 @@ export interface ChartHost
 export const chartIsDark = (host: ChartHost): boolean => !!host.hass?.themes?.darkMode;
 
 
-//Re-exports keeping every symbol importable from this module, with the render + sampling concerns in sibling files.
-export { interpAt, pvValueAtTime } from './series-sample';
+//Re-exports keeping the render concerns importable from this module, with the implementations in sibling files.
 export {
     renderTimelineNightZones,
     renderTimelineFutureMask,
@@ -133,11 +122,9 @@ export {
     handleChartHoverMove,
     handleChartHoverLeave,
 } from './timeline-tooltip';
-export { renderPvChart } from './charts-pv';
 export {
     renderBottomChart,
     chartAccentColor,
     renderTimelineTicks,
     renderTimelineDayLabels,
-    computeDailyKwhTotals,
 } from './charts-generic';

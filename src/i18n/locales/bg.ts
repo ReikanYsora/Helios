@@ -10,7 +10,6 @@ export const bg: Translations = {
         rangeLabel: 'Период',
         standard: 'Стандарт',
         today: 'Днес',
-        now:   'Сега',
         week:  'седмица',
         month: 'месец',
         year:  'година',
@@ -81,7 +80,6 @@ export const bg: Translations = {
         buildingRealSizeOff:   'Изкл',
         buildingRealSizeHint:  'Вкл: използвай реалните височини от OpenStreetMap (ограничени, за да остане кадрирането четимо). Изкл: дай на всяка сграда една и съща фиксирана височина по-долу.',
         buildingHeight:        'Височина на сградите',
-        buildingHeightHelp:    'Фиксирана височина, прилагана към всяка сграда, когато реалните височини са изключени.',
         buildingClusterRadius: 'Радиус на клъстера на дома',
         buildingOpacity:       'Прозрачност на околните',
         buildingColor:         'Цвят на сградите',
@@ -98,9 +96,6 @@ export const bg: Translations = {
         resetCacheButton:      'Нулирай кеша на данните',
         resetCacheWarning:     'Внимание: това изчиства кешираното време от Open-Meteo и PV историята в паметта за ВСЯКА карта Helios, отворена на тази страница. Прецизираната прогноза ще загуби своите 5 дни калибриране, докато не бъдат извлечени отново (няколко минути в зависимост от твоя HA сървър). Данните ти вътре в Home Assistant никога не се засягат.',
         resetCacheDone:        'Кешът е изчистен ✓',
-        buildingsRefetchButton: 'Принудително изтегляне на сградите',
-        buildingsRefetchDone:  'Изтеглянето е рестартирано ✓',
-        buildingsRefetchHelp:  'Изтегля отново околните сгради, като игнорира кеша. Полезно, когато сцената показва само генеричната къща.',
         aboutSection:          'Относно',
         aboutVersionLabel:     'Версия',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const bg: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Вятър',
-    }
 };

@@ -81,7 +81,6 @@ export interface Translations
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
         standard?:   string; //'Standard' (J-2 .. J+2)
         today?:      string; //'Today'
-        now?:        string; //legacy key (kept so existing locales still type-check)
         week?:       string; //'1 week'
         month?:      string; //'1 month'
         year?:       string; //'1 year'
@@ -157,7 +156,6 @@ export interface Translations
         buildingRealSizeOff?:         string;
         buildingRealSizeHint?:        string;
         buildingHeight?:              string;
-        buildingHeightHelp?:          string;
         //PV install: install-level knobs with no HA Energy equivalent (e.g. the solar-irradiance override).
         installationSection:      string;
         //Section-top hint: entity wiring (production, grid, battery) lives in HA Energy; this section only
@@ -213,11 +211,6 @@ export interface Translations
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
-        //Buildings section: force-download button bypassing every buildings cache (mirror diagnosis),
-        //with its transient confirmation and help line.
-        buildingsRefetchButton:   string;
-        buildingsRefetchDone:     string;
-        buildingsRefetchHelp:     string;
         //About section: version string, source repo, appreciation line + Buy Me A Coffee link.
         aboutSection:             string;
         aboutVersionLabel:        string;
@@ -227,13 +220,6 @@ export interface Translations
         //Developer block (X profile + LinkedIn), right after the version row.
         aboutDeveloperLabel:      string;
         aboutDeveloperLinkedIn:   string;
-    };
-
-    //Top-right ambient info panel (weather + optional astronomical data). All optional; the renderer falls back
-    //to inline English, so a locale that omits `panel` still builds.
-    panel?:
-    {
-        wind?:       string; //'Wind'
     };
 }
 

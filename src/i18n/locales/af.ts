@@ -10,7 +10,6 @@ export const af: Translations = {
         rangeLabel: 'Tydbereik',
         standard: 'Standaard',
         today: 'Vandag',
-        now:   'Nou',
         week:  'week',
         month: 'maand',
         year:  'jaar',
@@ -81,7 +80,6 @@ export const af: Translations = {
         buildingRealSizeOff:   'Af',
         buildingRealSizeHint:  'Aan: gebruik werklike OpenStreetMap-hoogtes (beperk om die raam leesbaar te hou). Af: gee elke gebou dieselfde vaste hoogte hieronder.',
         buildingHeight:        'Gebouhoogte',
-        buildingHeightHelp:    'Vaste hoogte wat op elke gebou toegepas word wanneer werklike hoogtes af is.',
         buildingClusterRadius: 'Huis trosradius',
         buildingOpacity:       'Omgewing-ondeursigtigheid',
         buildingColor:         'Gebou kleur',
@@ -98,9 +96,6 @@ export const af: Translations = {
         resetCacheButton:      'Herstel datakas',
         resetCacheWarning:     'Waarskuwing: dit maak die gekaste Open-Meteo weer en die in-geheue PV-geskiedenis skoon vir ELKE Helios-kaart wat op hierdie bladsy oop is. Die verfynde voorspelling sal sy 5 dae se kalibrasie verloor totdat hulle weer gehaal word (\'n paar minute, afhangend van jou HA-bediener). Jou data binne Home Assistant word nooit geraak nie.',
         resetCacheDone:        'Kas skoongemaak ✓',
-        buildingsRefetchButton: 'Forseer gebou-aflaai',
-        buildingsRefetchDone:  'Aflaai herbegin ✓',
-        buildingsRefetchHelp:  'Laai die omliggende geboue weer af en ignoreer die kas. Nuttig wanneer die toneel net die generiese huis wys.',
         aboutSection:          'Oor',
         aboutVersionLabel:     'Weergawe',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const af: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Koop my \'n koffie',
     },
-    panel:
-    {
-        wind:       'Wind',
-    }
 };

@@ -82,18 +82,6 @@ export const editorStyles = css`
 
     /*  Help-text margins stack with the section's 14 px flex gap: field-to-help 22 px, help-to-next-field
         34 px (1.5x ratio), so the help reads as attached to the field above it. .hint adds italics. */
-    /*  Per-mirror outcome of the last buildings download (raw diagnostic lines). */
-    .buildings-diag
-    {
-        margin: 6px 0 10px;
-        padding: 6px 8px;
-        border-radius: 6px;
-        background: var(--secondary-background-color, #f5f5f5);
-        font-family: var(--ha-font-family-code, monospace);
-        font-size: var(--ha-font-size-xs, 11px);
-        color: var(--secondary-text-color, #727272);
-        overflow-wrap: anywhere;
-    }
 
     /*  Measured-only status lines (one per configured energy family). */
     .live-status

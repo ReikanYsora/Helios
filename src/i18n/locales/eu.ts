@@ -10,7 +10,6 @@ export const eu: Translations = {
         rangeLabel: 'Aldia',
         standard: 'Estandarra',
         today: 'Gaur',
-        now:   'Orain',
         week:  'aste',
         month: 'hilabete',
         year:  'urte',
@@ -81,7 +80,6 @@ export const eu: Translations = {
         buildingRealSizeOff:   'Ez',
         buildingRealSizeHint:  'Bai: erabili OpenStreetMap-en benetako altuerak (mugatuta enkoadraketa irakurgarri mantentzeko). Ez: eman eraikin bakoitzari beheko altuera finko bera.',
         buildingHeight:        'Eraikinen altuera',
-        buildingHeightHelp:    'Benetako altuerak desaktibatuta daudenean eraikin bakoitzari aplikatzen zaion altuera finkoa.',
         buildingClusterRadius: 'Etxearen multzo-erradioa',
         buildingOpacity:       'Inguruaren opakutasuna',
         buildingColor:         'Eraikinen kolorea',
@@ -98,9 +96,6 @@ export const eu: Translations = {
         resetCacheButton:      'Berrezarri datuen cachea',
         resetCacheWarning:     'Kontuz: honek Open-Meteo eguraldia cachean eta PV historiala memorian ezabatzen ditu orri honetan irekita dauden Helios txartel GUZTIENTZAT. Iragarpen findua bere 5 eguneko kalibrazioa galduko du berriz lortu arte (minutu batzuk zure HA zerbitzariaren arabera). Home Assistant barruko zure datuak ez dira inoiz ukitzen.',
         resetCacheDone:        'Cachea ezabatuta ✓',
-        buildingsRefetchButton: 'Behartu eraikinen deskarga',
-        buildingsRefetchDone:  'Deskarga berrabiarazi da ✓',
-        buildingsRefetchHelp:  'Inguruko eraikinak berriro deskargatzen ditu cachea alde batera utzita. Erabilgarria eszenak etxe generikoa baino ez duenean erakusten.',
         aboutSection:          'Honi buruz',
         aboutVersionLabel:     'Bertsioa',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const eu: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Haizea',
-    }
 };

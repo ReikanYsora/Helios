@@ -223,7 +223,7 @@ The rolling window itself is chosen live from the timeline's period selector (**
 * **Multi-model weather**, every fetch fuses a global model (ECMWF IFS) with the most accurate regional model for your location, taking the per-timestep median so a single-model outlier cannot skew the curve. Cached in the browser, with exponential back-off on rate limits.
 * **Energy from the HA Energy dashboard**, the single source of truth for every solar / grid / battery number. Live chips read the configured rate sensors (or differentiate a cumulative meter to watts); the timeline's past curves read the recorder's pre-computed `change` metric, the exact numbers the official Energy dashboard shows, so the two surfaces agree to the watt-hour.
 * **PV forecast**, read natively from the HA Energy dashboard's configured solar-forecast provider and drawn as the dashed prediction the live observation tracks against; scrubbing into the future flips the PV chip to the predicted figure.
-* **Buildings**, fetched once from OpenStreetMap (Overpass), interpreted in the browser (height cap or fixed prism, radius / count / cluster filters) and cached locally, so the scene spins up offline on the next load.
+* **Buildings**, fetched once from OpenStreetMap (via OpenFreeMap vector tiles), interpreted in the browser (height cap or fixed prism, radius / count / cluster filters) and cached locally, so the scene spins up offline on the next load.
 
 Full algorithm + architecture details: see [ARCHITECTURE.md](./ARCHITECTURE.md). Per-release notes: see [CHANGELOG.md](./CHANGELOG.md).
 
@@ -238,7 +238,7 @@ Full algorithm + architecture details: see [ARCHITECTURE.md](./ARCHITECTURE.md).
 | **Basemap** | [CARTO](https://carto.com/basemaps/) raster tiles (light / dark, no key) |
 | **Weather data** | [Open-Meteo API](https://open-meteo.com/) (free, no key, multi-model fusion) |
 | **Energy data** | Home Assistant Energy dashboard (recorder `change` metric + live states) |
-| **Buildings** | OpenStreetMap via [Overpass](https://overpass-api.de/) |
+| **Buildings** | OpenStreetMap via [OpenFreeMap](https://openfreemap.org/) vector tiles |
 | **Solar math** | NOAA-validated |
 | **Build** | Vite |
 
@@ -284,7 +284,7 @@ Source layout:
 | `src/engine/renderer.ts`        | Scene painter: ground tilt + buildings + shadows + night wash (canvas + SVG) |
 | `src/engine/projection.ts`      | 2.5D camera + bearing / pitch / perspective projection |
 | `src/engine/tiles.ts`           | CARTO basemap raster stitching + Web Mercator math |
-| `src/engine/buildings.ts`       | Overpass fetch + interpret (radius / count / height / cluster) |
+| `src/engine/buildings.ts`       | OpenFreeMap fetch + interpret (radius / count / height / cluster) |
 | `src/engine/sun.ts` `sun-arc.ts` | Solar position + Haurwitz / Kasten-Czeplak irradiance + PV math + arc geometry |
 | `src/engine/weather.ts` `weather-resolve.ts` | Open-Meteo multi-model fetch + cache + back-off (cloud, irradiance, temperature, wind) |
 | `src/engine/colors.ts`          | Hex blending + time-of-day tints (night shade, building tint) |
@@ -300,7 +300,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the subsystem-by-subsystem walkthro
 HELIOS depends on several open data services. None require an account or API key.
 
 * **[CARTO](https://carto.com/basemaps/)**, the free raster basemap tiles (light / dark, no labels) the scene is built on.
-* **[OpenStreetMap](https://www.openstreetmap.org/copyright)**, the map data behind the basemap and the building footprints (via [Overpass](https://overpass-api.de/)). © OpenStreetMap contributors.
+* **[OpenStreetMap](https://www.openstreetmap.org/copyright)**, the map data behind the basemap and the building footprints (served as vector tiles by [OpenFreeMap](https://openfreemap.org/)). © OpenStreetMap contributors.
 * **[Open-Meteo](https://open-meteo.com/)**, weather forecasts (cloud cover, irradiance, temperature, wind). Free, no key, multi-model fusion under the hood.
 * **Home Assistant Energy dashboard**, the single source of truth for solar / grid / battery wiring.
 

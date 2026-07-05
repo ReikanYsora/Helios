@@ -10,7 +10,6 @@ export const te: Translations = {
         rangeLabel: 'సమయ పరిధి',
         standard: 'ప్రామాణికం',
         today: 'ఈరోజు',
-        now:   'ఇప్పుడు',
         week:  'వారం',
         month: 'నెల',
         year:  'సంవత్సరం',
@@ -81,7 +80,6 @@ export const te: Translations = {
         buildingRealSizeOff:   'ఆఫ్',
         buildingRealSizeHint:  'ఆన్: నిజమైన OpenStreetMap ఎత్తులను ఉపయోగించండి (ఫ్రేమింగ్ చదవగలిగేలా ఉంచడానికి పరిమితం చేయబడింది). ఆఫ్: ప్రతి భవనానికి దిగువన ఉన్న అదే స్థిర ఎత్తును ఇవ్వండి.',
         buildingHeight:        'భవన ఎత్తు',
-        buildingHeightHelp:    'నిజమైన ఎత్తులు ఆఫ్‌లో ఉన్నప్పుడు ప్రతి భవనానికి వర్తించే స్థిర ఎత్తు.',
         buildingClusterRadius: 'ఇంటి క్లస్టర్ వ్యాసార్థం',
         buildingOpacity:       'చుట్టుపక్కల అపారదర్శకత',
         buildingColor:         'భవన రంగు',
@@ -98,9 +96,6 @@ export const te: Translations = {
         resetCacheButton:      'డేటా కాష్ రీసెట్ చేయి',
         resetCacheWarning:     'హెచ్చరిక: ఇది ఈ పేజీలో తెరిచిన ప్రతి Helios కార్డ్ కోసం కాష్ చేసిన Open-Meteo వాతావరణాన్ని మరియు మెమొరీలోని PV చరిత్రను తొలగిస్తుంది. మెరుగుపరిచిన ఫోర్‌కాస్ట్ తిరిగి తీసుకునే వరకు దాని 5 రోజుల క్రమాంకనాన్ని కోల్పోతుంది (మీ HA సర్వర్‌ను బట్టి కొన్ని నిమిషాలు). Home Assistant లోపల మీ డేటా ఎప్పుడూ తాకబడదు.',
         resetCacheDone:        'కాష్ క్లియర్ చేయబడింది ✓',
-        buildingsRefetchButton: 'భవనాల డౌన్‌లోడ్‌ను బలవంతం చేయండి',
-        buildingsRefetchDone:  'డౌన్‌లోడ్ మళ్లీ ప్రారంభమైంది ✓',
-        buildingsRefetchHelp:  'కాష్‌ను విస్మరించి చుట్టుపక్కల భవనాలను మళ్లీ డౌన్‌లోడ్ చేస్తుంది. దృశ్యంలో సాధారణ ఇల్లు మాత్రమే కనిపిస్తే ఉపయోగకరం.',
         aboutSection:          'గురించి',
         aboutVersionLabel:     'వెర్షన్',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const te: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'నాకు ఒక కాఫీ కొనండి',
     },
-    panel:
-    {
-        wind:       'గాలి',
-    }
 };

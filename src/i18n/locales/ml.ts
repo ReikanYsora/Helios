@@ -10,7 +10,6 @@ export const ml: Translations = {
         rangeLabel: 'സമയ പരിധി',
         standard: 'സ്റ്റാൻഡേർഡ്',
         today: 'ഇന്ന്',
-        now:   'ഇപ്പോൾ',
         week:  'ആഴ്ച',
         month: 'മാസം',
         year:  'വർഷം',
@@ -81,7 +80,6 @@ export const ml: Translations = {
         buildingRealSizeOff:   'ഓഫ്',
         buildingRealSizeHint:  'ഓൺ: യഥാർത്ഥ OpenStreetMap ഉയരങ്ങൾ ഉപയോഗിക്കുക (ഫ്രെയിമിങ് വായിക്കാവുന്നതാക്കാൻ പരിമിതപ്പെടുത്തിയിരിക്കുന്നു). ഓഫ്: ഓരോ കെട്ടിടത്തിനും താഴെയുള്ള ഒരേ നിശ്ചിത ഉയരം നൽകുക.',
         buildingHeight:        'കെട്ടിട ഉയരം',
-        buildingHeightHelp:    'യഥാർത്ഥ ഉയരങ്ങൾ ഓഫ് ആയിരിക്കുമ്പോൾ ഓരോ കെട്ടിടത്തിനും പ്രയോഗിക്കുന്ന നിശ്ചിത ഉയരം.',
         buildingClusterRadius: 'വീട് ക്ലസ്റ്റർ ദൂരപരിധി',
         buildingOpacity:       'ചുറ്റുമുള്ളവയുടെ അതാര്യത',
         buildingColor:         'കെട്ടിട നിറം',
@@ -98,9 +96,6 @@ export const ml: Translations = {
         resetCacheButton:      'ഡാറ്റ കാഷെ പുനഃസജ്ജമാക്കുക',
         resetCacheWarning:     'മുന്നറിയിപ്പ്: ഇത് ഈ പേജിൽ തുറന്നിരിക്കുന്ന ഓരോ Helios കാർഡിനുമുള്ള കാഷെ ചെയ്ത Open-Meteo കാലാവസ്ഥയും മെമ്മറിയിലെ PV ചരിത്രവും മായ്ക്കുന്നു. പരിഷ്കരിച്ച പ്രവചനത്തിന് അവ വീണ്ടും എടുക്കുന്നതുവരെ (നിങ്ങളുടെ HA സെർവറിനെ ആശ്രയിച്ച് കുറച്ച് മിനിറ്റ്) അതിന്റെ 5 ദിവസത്തെ കാലിബ്രേഷൻ നഷ്ടപ്പെടും. Home Assistant-നുള്ളിലെ നിങ്ങളുടെ ഡാറ്റ ഒരിക്കലും സ്പർശിക്കുന്നില്ല.',
         resetCacheDone:        'കാഷെ മായ്ച്ചു ✓',
-        buildingsRefetchButton: 'കെട്ടിട ഡൗൺലോഡ് നിർബന്ധമാക്കുക',
-        buildingsRefetchDone:  'ഡൗൺലോഡ് പുനരാരംഭിച്ചു ✓',
-        buildingsRefetchHelp:  'കാഷെ അവഗണിച്ച് ചുറ്റുമുള്ള കെട്ടിടങ്ങൾ വീണ്ടും ഡൗൺലോഡ് ചെയ്യുന്നു. രംഗത്തിൽ പൊതു വീട് മാത്രം കാണുമ്പോൾ ഉപയോഗപ്രദം.',
         aboutSection:          'കുറിച്ച്',
         aboutVersionLabel:     'പതിപ്പ്',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const ml: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'എനിക്ക് ഒരു കാപ്പി വാങ്ങിത്തരൂ',
     },
-    panel:
-    {
-        wind:       'കാറ്റ്',
-    }
 };

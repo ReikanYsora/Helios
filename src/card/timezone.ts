@@ -7,7 +7,7 @@
 //Correctness + speed: the true wall-clock offset is read from Intl (DST-aware) but cached per UTC hour, so a
 //multi-day bucketization does at most one Intl lookup per distinct hour and plain arithmetic for the rest.
 
-import { HOUR_MS, DAY_MS } from '../constants';
+import { HOUR_MS, DAY_MS, HOURS_PER_DAY} from '../constants';
 
 let _tz: string | undefined;
 let _fmt: Intl.DateTimeFormat | undefined;
@@ -43,7 +43,7 @@ function offsetMs(ms: number): number
         if (p.type === 'year') { y = Number(p.value); }
         else if (p.type === 'month') { mo = Number(p.value); }
         else if (p.type === 'day') { d = Number(p.value); }
-        else if (p.type === 'hour') { h = Number(p.value) % 24; }
+        else if (p.type === 'hour') { h = Number(p.value) % HOURS_PER_DAY; }
         else if (p.type === 'minute') { mi = Number(p.value); }
         else if (p.type === 'second') { s = Number(p.value); }
     }
@@ -68,5 +68,5 @@ export function serverHourFrac(ms: number): number
 //Integer hour-of-day [0, 23] of an instant, in the home zone.
 export function serverHour(ms: number): number
 {
-    return Math.floor(serverHourFrac(ms)) % 24;
+    return Math.floor(serverHourFrac(ms)) % HOURS_PER_DAY;
 }

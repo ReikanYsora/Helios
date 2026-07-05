@@ -10,7 +10,6 @@ export const de: Translations = {
         rangeLabel: 'Zeitraum',
         standard: 'Standard',
         today: 'Heute',
-        now:   'Jetzt',
         week:  'Woche',
         month: 'Monat',
         year:  'Jahr',
@@ -81,7 +80,6 @@ export const de: Translations = {
         buildingRealSizeOff:   'Aus',
         buildingRealSizeHint:  'An: reale OpenStreetMap-Höhen verwenden (begrenzt, damit der Bildausschnitt lesbar bleibt). Aus: jedem Gebäude die gleiche feste Höhe unten geben.',
         buildingHeight:        'Gebäudehöhe',
-        buildingHeightHelp:    'Feste Höhe, die jedem Gebäude zugewiesen wird, wenn reale Höhen aus sind.',
         buildingClusterRadius: 'Cluster-Radius Zuhause',
         buildingOpacity:       'Deckkraft der Umgebung',
         buildingColor:         'Gebäudefarbe',
@@ -98,9 +96,6 @@ export const de: Translations = {
         resetCacheButton:      'Datencache zurücksetzen',
         resetCacheWarning:     'Achtung: dies löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für JEDE auf dieser Seite geöffnete Helios-Karte. Die verfeinerte Prognose verliert ihre 5 Tage Kalibrierung, bis sie erneut abgerufen sind (ein paar Minuten, je nach deinem HA-Server). Deine Daten in Home Assistant werden nie angetastet.',
         resetCacheDone:        'Cache gelöscht ✓',
-        buildingsRefetchButton: 'Gebäude-Download erzwingen',
-        buildingsRefetchDone:  'Download neu gestartet ✓',
-        buildingsRefetchHelp:  'Lädt die umliegenden Gebäude unter Umgehung des Caches neu. Hilfreich, wenn die Szene nur das generische Haus zeigt.',
         aboutSection:          'Über',
         aboutVersionLabel:     'Version',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const de: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Wind',
-    }
 };

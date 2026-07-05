@@ -10,7 +10,6 @@ export const fi: Translations = {
         rangeLabel: 'Aikaväli',
         standard: 'Vakio',
         today: 'Tänään',
-        now:   'Nyt',
         week:  'viikko',
         month: 'kuukausi',
         year:  'vuosi',
@@ -81,7 +80,6 @@ export const fi: Translations = {
         buildingRealSizeOff:   'Pois',
         buildingRealSizeHint:  'Päällä: käytä todellisia OpenStreetMap-korkeuksia (rajoitettu, jotta rajaus pysyy luettavana). Pois: anna jokaiselle rakennukselle sama alla oleva kiinteä korkeus.',
         buildingHeight:        'Rakennuksen korkeus',
-        buildingHeightHelp:    'Jokaiseen rakennukseen sovellettu kiinteä korkeus, kun todelliset korkeudet ovat pois päältä.',
         buildingClusterRadius: 'Kodin klusterisäde',
         buildingOpacity:       'Ympäristön läpinäkymättömyys',
         buildingColor:         'Rakennuksen väri',
@@ -98,9 +96,6 @@ export const fi: Translations = {
         resetCacheButton:      'Nollaa tietovälimuisti',
         resetCacheWarning:     'Varoitus: tämä tyhjentää välimuistissa olevan Open-Meteo-sään ja muistissa olevan aurinkosähköhistorian JOKAISELLE tällä sivulla avoinna olevalle Helios-kortille. Tarkennettu ennuste menettää 5 päivän kalibrointinsa, kunnes ne haetaan uudelleen (muutama minuutti HA-palvelimestasi riippuen). Tietojasi Home Assistantin sisällä ei koskaan kosketa.',
         resetCacheDone:        'Välimuisti tyhjennetty ✓',
-        buildingsRefetchButton: 'Pakota rakennusten lataus',
-        buildingsRefetchDone:  'Lataus käynnistetty uudelleen ✓',
-        buildingsRefetchHelp:  'Lataa ympäröivät rakennukset uudelleen ohittaen välimuistin. Hyödyllinen, kun näkymässä näkyy vain yleinen talo.',
         aboutSection:          'Tietoja',
         aboutVersionLabel:     'Versio',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const fi: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Osta minulle kahvi',
     },
-    panel:
-    {
-        wind:       'Tuuli',
-    }
 };

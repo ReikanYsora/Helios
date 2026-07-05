@@ -19,7 +19,6 @@ export const en: Translations = {
         rangeLabel: 'Time range',
         standard: 'Standard',
         today: 'Today',
-        now:   'Now',
         week:  'Week',
         month: 'Month',
         year:  'Year',
@@ -107,7 +106,6 @@ export const en: Translations = {
         buildingRealSizeOff:   'Off',
         buildingRealSizeHint:  'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.',
         buildingHeight:        'Building height',
-        buildingHeightHelp:    'Fixed height applied to every building when real heights are off.',
         buildingClusterRadius: 'Home cluster radius',
         buildingOpacity:       'Surrounding opacity',
         buildingColor:         'Building colour',
@@ -124,9 +122,6 @@ export const en: Translations = {
         resetCacheButton:      'Reset data cache',
         resetCacheWarning:     'Warning: this clears the cached Open-Meteo weather and the in-memory PV history for EVERY Helios card open on this page. The refined forecast will lose its 5 days of calibration until they\'re re-fetched (a few minutes depending on your HA server). Your data inside Home Assistant is never touched.',
         resetCacheDone:        'Cache cleared ✓',
-        buildingsRefetchButton: 'Force building download',
-        buildingsRefetchDone:  'Download restarted ✓',
-        buildingsRefetchHelp:  'Re-downloads the surrounding buildings, ignoring the cache. Useful when the scene only shows the generic house.',
         aboutSection:          'About',
         aboutVersionLabel:     'Version',
         aboutRepoCard:         'Helios',
@@ -135,9 +130,4 @@ export const en: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-
-    panel:
-    {
-        wind:       'Wind',
-    }
 };

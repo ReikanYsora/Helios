@@ -10,7 +10,6 @@ export const el: Translations = {
         rangeLabel: 'Περίοδος',
         standard: 'Τυπικό',
         today: 'Σήμερα',
-        now:   'Τώρα',
         week:  'εβδομάδα',
         month: 'μήνας',
         year:  'έτος',
@@ -81,7 +80,6 @@ export const el: Translations = {
         buildingRealSizeOff:   'Ανενεργό',
         buildingRealSizeHint:  'Ενεργό: χρησιμοποίησε τα πραγματικά ύψη OpenStreetMap (με όριο ώστε το καδράρισμα να παραμένει ευανάγνωστο). Ανενεργό: δώσε σε κάθε κτήριο το ίδιο σταθερό ύψος παρακάτω.',
         buildingHeight:        'Ύψος κτηρίων',
-        buildingHeightHelp:    'Σταθερό ύψος που εφαρμόζεται σε κάθε κτήριο όταν τα πραγματικά ύψη είναι ανενεργά.',
         buildingClusterRadius: 'Ακτίνα συστάδας σπιτιού',
         buildingOpacity:       'Αδιαφάνεια περιβάλλοντος',
         buildingColor:         'Χρώμα κτηρίων',
@@ -98,9 +96,6 @@ export const el: Translations = {
         resetCacheButton:      'Επαναφορά κρυφής μνήμης δεδομένων',
         resetCacheWarning:     'Προσοχή: αυτό καθαρίζει τον αποθηκευμένο καιρό του Open-Meteo και το ιστορικό PV στη μνήμη για ΚΑΘΕ κάρτα Helios που είναι ανοιχτή σε αυτή τη σελίδα. Η εκλεπτυσμένη πρόβλεψη θα χάσει τις 5 ημέρες βαθμονόμησής της μέχρι να ανακτηθούν ξανά (λίγα λεπτά ανάλογα με τον HA διακομιστή σου). Τα δεδομένα σου μέσα στο Home Assistant δεν αγγίζονται ποτέ.',
         resetCacheDone:        'Η κρυφή μνήμη καθαρίστηκε ✓',
-        buildingsRefetchButton: 'Επιβολή λήψης κτιρίων',
-        buildingsRefetchDone:  'Η λήψη επανεκκινήθηκε ✓',
-        buildingsRefetchHelp:  'Κατεβάζει ξανά τα γύρω κτίρια αγνοώντας την προσωρινή μνήμη. Χρήσιμο όταν η σκηνή δείχνει μόνο το γενικό σπίτι.',
         aboutSection:          'Σχετικά',
         aboutVersionLabel:     'Έκδοση',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const el: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     },
-    panel:
-    {
-        wind:       'Άνεμος',
-    }
 };

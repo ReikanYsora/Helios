@@ -10,7 +10,6 @@ export const zhHans: Translations = {
         rangeLabel: '时间范围',
         standard: '标准',
         today: '今天',
-        now:   '现在',
         week:  '周',
         month: '个月',
         year:  '年',
@@ -81,7 +80,6 @@ export const zhHans: Translations = {
         buildingRealSizeOff:   '关',
         buildingRealSizeHint:  '开：使用真实的 OpenStreetMap 高度（设有上限以保持取景清晰）。关：为每栋建筑赋予下方的固定高度。',
         buildingHeight:        '建筑高度',
-        buildingHeightHelp:    '关闭真实高度时应用于每栋建筑的固定高度。',
         buildingClusterRadius: '家聚类半径',
         buildingOpacity:       '周边不透明度',
         buildingColor:         '建筑颜色',
@@ -98,9 +96,6 @@ export const zhHans: Translations = {
         resetCacheButton:      '重置数据缓存',
         resetCacheWarning:     '警告：这会清除本页面上打开的每张 Helios 卡片缓存的 Open-Meteo 天气和内存中的光伏历史。精细化预测会失去其 5 天的校准，直到重新获取（视你的 HA 服务器而定，需要几分钟）。Home Assistant 内的你的数据绝不会被触及。',
         resetCacheDone:        '缓存已清除 ✓',
-        buildingsRefetchButton: '强制下载建筑物',
-        buildingsRefetchDone:  '下载已重新开始 ✓',
-        buildingsRefetchHelp:  '忽略缓存并重新下载周围的建筑物。当场景中只显示通用房屋时很有用。',
         aboutSection:          '关于',
         aboutVersionLabel:     '版本',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const zhHans: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       '请我喝杯咖啡',
     },
-    panel:
-    {
-        wind:       '风',
-    }
 };

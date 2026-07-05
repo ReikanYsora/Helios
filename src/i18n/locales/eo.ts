@@ -10,7 +10,6 @@ export const eo: Translations = {
         rangeLabel: 'Tempa intervalo',
         standard: 'Norma',
         today: 'Hodiaŭ',
-        now:   'Nun',
         week:  'semajno',
         month: 'monato',
         year:  'jaro',
@@ -81,7 +80,6 @@ export const eo: Translations = {
         buildingRealSizeOff:   'Ne',
         buildingRealSizeHint:  'Jes: uzu realajn OpenStreetMap-altojn (limigitajn por teni la kadron legebla). Ne: donu al cxiu konstruajxo la saman fiksan alton sube.',
         buildingHeight:        'Konstruajxa alto',
-        buildingHeightHelp:    'Fiksa alto aplikata al cxiu konstruajxo kiam realaj altoj estas malsxaltitaj.',
         buildingClusterRadius: 'Hejma grupiga radiuso',
         buildingOpacity:       'Cxirkauxa opakeco',
         buildingColor:         'Konstruajxa koloro',
@@ -98,9 +96,6 @@ export const eo: Translations = {
         resetCacheButton:      'Restarigi datuman kasxmemoron',
         resetCacheWarning:     'Averto: tio forigas la kasxmemoritan Open-Meteo-veteron kaj la enmemoran PV-historion por CXIU Helios-karto malferma sur tiu cxi pagxo. La rafinita prognozo perdos siajn 5 tagojn da kalibrado gxis ili estas reprenitaj (kelkaj minutoj depende de via HA-servilo). Viaj datumoj ene de Home Assistant neniam estas tusxitaj.',
         resetCacheDone:        'Kasxmemoro forigita ✓',
-        buildingsRefetchButton: 'Devigi elŝuton de konstruaĵoj',
-        buildingsRefetchDone:  'Elŝuto rekomencita ✓',
-        buildingsRefetchHelp:  'Reelŝutas la ĉirkaŭajn konstruaĵojn ignorante la kaŝmemoron. Utila kiam la sceno montras nur la ĝeneralan domon.',
         aboutSection:          'Pri',
         aboutVersionLabel:     'Versio',
         aboutRepoCard:         'Helios',
@@ -109,8 +104,4 @@ export const eo: Translations = {
         aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Acxetu al mi kafon',
     },
-    panel:
-    {
-        wind:       'Vento',
-    }
 };
