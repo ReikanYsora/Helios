@@ -316,4 +316,7 @@ I build bridges between data and reality. To me, development is more than a prof
 
 ## License
 
+HELIOS, solar conditions visualisation card for Home Assistant.
+Copyright (C) 2026 Jérôme Crémoux (ReikanYsora).
+
 This project is licensed under the GNU General Public License v3.0, see the [LICENSE](LICENSE) file for details.
