@@ -573,11 +573,7 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
-                ${this._renderToggle('show-weather', t.editor.showWeather ?? 'Show weather panel', t.editor.showWeatherHint ?? 'Show the top-right panel with the local weather. Scene view only.')}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode ?? 'No UI mode', t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.')}
-                ${(c['show-weather'] === true)
-                    ? this._renderToggle('show-astro', t.editor.showAstro ?? 'Show astronomical data', t.editor.showAstroHint ?? 'Add the sun\'s astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather.')
-                    : nothing}
 
                 </details>
 
@@ -677,36 +673,6 @@ export class HeliosCardEditor extends LitElement
                     @value-changed=${this._onCustomEntityChanged}
                 ></helios-custom-entity-config>
                 <div class="field-help">${t.editor.customEntityColorHelp}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.outdoorTemperatureEntity ?? 'Outdoor temperature'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['outdoor-temperature-entity'] ?? '')}
-                            .includeDomains=${['sensor']}
-                            .includeDeviceClasses=${['temperature']}
-                            data-key="outdoor-temperature-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.outdoorTemperatureEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo temperature. Read in its own unit.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.windSpeedEntity ?? 'Wind speed'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass=${this.hass}
-                            .value=${String(c['wind-speed-entity'] ?? '')}
-                            .includeDomains=${['sensor']}
-                            .includeDeviceClasses=${['wind_speed']}
-                            data-key="wind-speed-entity"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-entity-picker>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.windSpeedEntityHelp ?? 'Shows this sensor on the info panel instead of the Open-Meteo wind speed. Read in its own unit.'}</div>
                 </details>
 
                 <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>

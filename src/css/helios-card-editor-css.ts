@@ -87,7 +87,7 @@ export const editorStyles = css`
     .live-status
     {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 8px;
         margin: 6px 0;
         font-size: var(--ha-font-size-s, 13px);
@@ -97,7 +97,6 @@ export const editorStyles = css`
     {
         --mdc-icon-size: 18px;
         flex: none;
-        margin-top: 1px;
     }
     .live-status.is-ok ha-icon   { color: var(--success-color, #4caf50); }
     .live-status.is-warn ha-icon { color: var(--warning-color, #ff9800); }

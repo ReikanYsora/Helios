@@ -7,10 +7,12 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
-## 2026.7.3 (unreleased)
+## 2026.7.3
 
 **This release changes how Helios reads your data: it now follows the Home
-Assistant energy dashboard at 100%, and never estimates a value.** Please read
+Assistant energy dashboard at 100%, and never estimates a value.** Everything the
+card shows, live or historical, comes straight from your dashboard: there is
+nothing extra to wire, and no per-card value that can drift from it. Please read
 the first section below, it may change what you see on your card.
 
 ### Measured values only (energy dashboard alignment)
@@ -38,6 +40,41 @@ dashboard, so it is gone. The new rule is simple:
 * The **home consumption override** option is removed: the dashboard's balance
   is the single source of truth (a diverging per-card sensor was exactly the
   kind of confusion this release ends). The old option is simply ignored.
+
+### Added: detail panels, double-tap any chip
+
+**Double-tap** (or double-click) any chip in the scene to open a compact panel
+top-right, tinted in that chip's own colour. It aggregates the metric over the
+period you are viewing, as icon-only figures in your chosen unit (W or kW):
+
+* **Production / consumption**: total energy, peak power, average per day.
+* **Grid**: total import, total export, net, average import per day.
+* **Battery**: energy charged and energy discharged.
+* **Battery charge (SoC)**: minimum, average and maximum.
+* **Sun**: peak and average irradiance, plus sunrise, solar noon, sunset, highest
+  altitude and day length.
+* **Custom entity**: total, plus minimum, average and maximum.
+
+Every figure is recomputed from the exact series the chart draws, so the panel and
+the curve always agree. Double-tap again to close. Like everything else on the
+card, there is nothing to configure: it reads only what your dashboard already
+provides.
+
+### Removed: the weather panel
+
+The top-right weather + astronomy plate is gone, along with its temperature and
+wind options. It had drifted away from what the card is about, the energy of your
+home, and only ever showed values your dashboard displays better. The weather
+Helios actually needs, cloud cover and irradiance, keeps driving the sun disc, the
+irradiance view and the shadows exactly as before.
+
+### Changed: the clock and trend dials lose their central column
+
+The stacked column at the centre of the clock and trend dials is replaced by the
+flat **Helios logo**, laid on the ground plane. It does the same job, hover or tap
+it for the period total, without standing up into the view. With several filters
+in clock mode, or a busy trend, the old column obstructed the bars, the arc and
+the labels; the logo rests at half opacity and lifts to full when you point at it.
 
 ### Changed: custom entity now takes its two sensors
 
@@ -70,6 +107,17 @@ dashboard, so it is gone. The new rule is simple:
   cloud layers), as a ghosted silhouette on its own scale: forecast, sun and
   clouds read together. The production view keeps its true shared-scale
   forecast.
+
+### Fixed: a stray battery leader with a hidden state-of-charge chip
+
+When a battery reported power but no state of charge, a connector could still be
+drawn to the empty SoC slot. A hidden SoC chip now drops both of the leaders tied
+to it, whatever the power reads.
+
+### Fixed: the custom entity stays visible at zero while scrubbing
+
+A measured 0 is a real value, so the custom chip no longer vanishes when you scrub
+onto a zero reading; it disappears only where the entity has no history at all.
 
 ### Fixed: a minus sign on zero values
 

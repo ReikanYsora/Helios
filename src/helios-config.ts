@@ -95,15 +95,6 @@ export interface HeliosConfig
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
-    //Top-right weather panel: when true, show it (scene view). Independent of "No UI" mode. Default false (hidden).
-    'show-weather'?:           unknown;
-    //Top-right info panel: when true, the panel also lists the sun's astronomical data (altitude, azimuth,
-    //sunrise, solar noon, sunset, day length) below the weather. Default false (weather only).
-    'show-astro'?:             unknown;
-    //Entities whose live value replaces the Open-Meteo default on the info panel: outdoor temperature and wind
-    //speed. Empty = use Open-Meteo. Read as-is in the entity's own unit.
-    'outdoor-temperature-entity'?: unknown;
-    'wind-speed-entity'?:      unknown;
 }
 
 
@@ -219,37 +210,6 @@ export function batterySign(config: HeliosConfig | undefined): 'default' | 'inve
 export function autoHideUi(config: HeliosConfig | undefined): boolean
 {
     return config?.['auto-hide-ui'] === true;
-}
-
-
-//Top-right weather panel: hidden unless explicitly enabled. Default false.
-export function showWeather(config: HeliosConfig | undefined): boolean
-{
-    return config?.['show-weather'] === true;
-}
-
-
-//Info panel: also show the sun's astronomical data below the weather. Default false.
-export function showAstro(config: HeliosConfig | undefined): boolean
-{
-    return config?.['show-astro'] === true;
-}
-
-
-//Resolved outdoor-temperature override entity id (empty when unset). Replaces the Open-Meteo temperature on the
-//info panel; read in the entity's own unit.
-export function outdoorTemperatureEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['outdoor-temperature-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
-}
-
-
-//Resolved wind-speed override entity id (empty when unset). Replaces the Open-Meteo wind speed on the info panel.
-export function windSpeedEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['wind-speed-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
 }
 
 

@@ -133,19 +133,9 @@ export interface Translations
         batterySignDefault?:          string;
         batterySignInverted?:         string;
         batterySignHidden?:           string;
-        //Weather-panel show/hide toggle. Optional; fall back to English.
-        showWeather?:                 string;
-        showWeatherHint?:             string;
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
         noUiMode?:                    string;
         noUiModeHint?:                string;
-        //Info panel: astro toggle + outdoor temperature / wind-speed override entities. Optional; fall back to English.
-        showAstro?:                   string;
-        showAstroHint?:               string;
-        outdoorTemperatureEntity?:     string;
-        outdoorTemperatureEntityHelp?: string;
-        windSpeedEntity?:             string;
-        windSpeedEntityHelp?:         string;
         //Global display radius slider (50-500 m). Optional, FR-only.
         displayRadius?:               string;
         displayRadiusHelp?:           string;

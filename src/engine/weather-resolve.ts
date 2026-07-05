@@ -1,40 +1,8 @@
-//Pure weather-at-time resolution: nearest-hour lookup and weather-code classification over an already
-//fetched hourly forecast. No DOM, map, network, or engine state; the fetch/cache/timer orchestration stays
-//in the engine, and these helpers only read the hourly arrays it hands in.
+//Pure weather-at-time resolution: nearest-hour lookup over an already fetched hourly forecast. No DOM, map,
+//network, or engine state; the fetch/cache/timer orchestration stays in the engine, and these helpers only read
+//the hourly arrays it hands in. Only the cloud + shortwave series the irradiance pipeline needs are resolved.
 
 import type { SampleHourly } from './weather';
-
-export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
-
-//Classify the model weather code (with cloud % as a tiebreaker) into one of the disc-intensity buckets.
-export function weatherCodeToIntensity(code: number, pct: number): CloudIntensity
-{
-    if (code >= 95)
-    {
-        return 'storm';
-    }
-    if (code >= 45 && code <= 48)
-    {
-        return 'fog';
-    }
-    if ((code >= 61 && code <= 67) || (code >= 71 && code <= 77) || code >= 80)
-    {
-        return 'heavy';
-    }
-    if (code >= 51)
-    {
-        return 'moderate';
-    }
-    if (pct < 15)
-    {
-        return 'clear';
-    }
-    if (pct < 50)
-    {
-        return 'light';
-    }
-    return pct < 80 ? 'moderate' : 'heavy';
-}
 
 //Nearest-hour index in `times` for the target instant. Linear scan with an early break once the distance
 //starts growing again (times are sorted ascending). Empty/absent series resolve to 0.
@@ -73,13 +41,6 @@ interface WeatherAtTime
     cloudMid:       number;
     cloudHigh:      number;
     shortwave:      number;
-    cloudIntensity: CloudIntensity;
-    //Ambient readout for the info panel. Raw WMO code (for condition icon/text) plus temperature (C), wind speed
-    //(km/h) and bearing (deg). NaN where the hour had no value.
-    weatherCode:    number;
-    temperature:    number;
-    windSpeed:      number;
-    windDir:        number;
 }
 
 //Resolve weather variables at `t` from an hourly forecast. `home` null (initial/failed/in-flight) returns
@@ -93,11 +54,6 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
         cloudMid:       0,
         cloudHigh:      0,
         shortwave:      -1,
-        cloudIntensity: 'clear',
-        weatherCode:    0,
-        temperature:    NaN,
-        windSpeed:      NaN,
-        windDir:        NaN,
     };
 
     if (!home || !home.times.length)
@@ -111,23 +67,11 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
         return empty;
     }
 
-    const cc   = home.cloudCover[idx]  ?? 0;
-    const cLow = home.cloudLow[idx]    ?? 0;
-    const cMid = home.cloudMid[idx]    ?? 0;
-    const cHi  = home.cloudHigh[idx]   ?? 0;
-    const sw   = home.shortwave[idx]   ?? -1;
-    const wc   = home.weatherCode[idx] ?? 0;
-
     return {
-        cloudCover:     cc,
-        cloudLow:       cLow,
-        cloudMid:       cMid,
-        cloudHigh:      cHi,
-        shortwave:      sw,
-        cloudIntensity: weatherCodeToIntensity(wc, cc),
-        weatherCode:    wc,
-        temperature:    home.temperature?.[idx] ?? NaN,
-        windSpeed:      home.windSpeed?.[idx]   ?? NaN,
-        windDir:        home.windDir?.[idx]     ?? NaN,
+        cloudCover:     home.cloudCover[idx] ?? 0,
+        cloudLow:       home.cloudLow[idx]   ?? 0,
+        cloudMid:       home.cloudMid[idx]   ?? 0,
+        cloudHigh:      home.cloudHigh[idx]  ?? 0,
+        shortwave:      home.shortwave[idx]  ?? -1,
     };
 }

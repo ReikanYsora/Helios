@@ -333,9 +333,6 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 <line class="hc-day-sep" x1="${x.toFixed(2)}" y1="0" x2="${x.toFixed(2)}" y2="${H}"></line>
             `)}
             <g class="hc-chart-grow">
-                ${forecastLine ? svg`
-                    <path class="hc-chart-predicted hc-chart-forecast-ghost" d="${forecastLine}" stroke="${ENERGY_COLOR.pv(el)}" fill="none"></path>
-                ` : nothing}
                 ${drawn.map(d => d.area ? svg`
                     <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
                 ` : nothing)}
@@ -345,6 +342,11 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 ${overlays.map(o => svg`
                     <path d="${o.area}" fill="${o.color}" fill-opacity="0.35"></path>
                 `)}
+                <!--  Forecast silhouette drawn LAST so it reads as a ghosted reference on top of the target's
+                      own fill + the cloud overlay, instead of being buried under them.  -->
+                ${forecastLine ? svg`
+                    <path class="hc-chart-predicted hc-chart-forecast-ghost" d="${forecastLine}" stroke="${ENERGY_COLOR.pv(el)}" fill="none"></path>
+                ` : nothing}
             </g>
             ${showHover ? svg`
                 <line class="hc-hover-guide" x1="${hoverX.toFixed(2)}" y1="0" x2="${hoverX.toFixed(2)}" y2="${H}"></line>

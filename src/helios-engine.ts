@@ -3,10 +3,7 @@ import type { Building, RawBuilding } from './engine/buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './engine/buildings';
-import {
-    type CloudIntensity,
-    resolveWeatherAtTime,
-} from './engine/weather-resolve';
+import { resolveWeatherAtTime } from './engine/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './engine/hud-layout';
 import { sunSpherePoint, daylightRamp } from './engine/sun-arc';
 import {
@@ -79,7 +76,6 @@ export interface WeatherData
     cloudLow:       number;        //%, low-level clouds (<= 3 km)
     cloudMid:       number;        //%, mid-level clouds (3 to 8 km)
     cloudHigh:      number;        //%, high-level clouds (>= 8 km)
-    cloudIntensity: CloudIntensity;
     timeRange:      { start: Date; end: Date } | null;
     isLiveTime:     boolean;
     pvPower:        number;        //primary value, normalised 0..100 (~ GHI/10 W/m²)
@@ -411,6 +407,10 @@ export class HeliosEngine
     {
         this._renderer?.setGroundOverlay(svg);
     }
+    public setGroundDecal(svg: string | null, active = false): void
+    {
+        this._renderer?.setGroundDecal(svg, active);
+    }
     //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
     //sun-arc-scale memo key keeps a stable value.
     public getCameraZoom():    number { return 18; }
@@ -504,6 +504,10 @@ export class HeliosEngine
     //option change with no re-fetch.
     private _buildingsData:   Building[] | null    = null;
     private _buildingsRaw:    RawBuilding[] | null = null;
+    //True once a fetch for the current location has settled (data, empty, or outage). Before that, the scene shows
+    //no buildings at all rather than the fallback house: the fallback is for a genuine "no data" outcome, not the
+    //brief loading window before OpenFreeMap answers.
+    private _buildingsFetchDone            = false;
     private _buildingsLocKey               = '';
     //One-shot prism-rise guard (plays once the first time footprints land).
     private _grown = false;
@@ -818,22 +822,9 @@ export class HeliosEngine
         cloudMid:       number;
         cloudHigh:      number;
         shortwave:      number;
-        cloudIntensity: CloudIntensity;
     }
     {
         return resolveWeatherAtTime(this._homeHourlyData, t);
-    }
-
-    //Ambient readout (WMO code, temperature C, wind km/h + bearing deg) at `t` for the top-right info panel.
-    //Null until the first Open-Meteo payload lands so the card hides the rows instead of showing NaN.
-    public getAmbientReadout(t: Date): { weatherCode: number; temperature: number; windSpeed: number; windDir: number } | null
-    {
-        if (!this._homeHourlyData)
-        {
-            return null;
-        }
-        const w = resolveWeatherAtTime(this._homeHourlyData, t);
-        return { weatherCode: w.weatherCode, temperature: w.temperature, windSpeed: w.windSpeed, windDir: w.windDir };
     }
 
     //Public wrapper for _getTimeRange so the card's 30 s tick can re-fetch the window after midnight rollover.
@@ -924,7 +915,6 @@ export class HeliosEngine
             cloudLow:         w.cloudLow,
             cloudMid:         w.cloudMid,
             cloudHigh:        w.cloudHigh,
-            cloudIntensity:   w.cloudIntensity,
             timeRange:        this._getTimeRange(),
             isLiveTime:       this._selectedTime === null,
             pvPower,
@@ -1003,8 +993,9 @@ export class HeliosEngine
         const sharedRaw = sharedBuildingsCacheGet(locKey);
         if (sharedRaw)
         {
-            this._buildingsRaw    = sharedRaw;
-            this._buildingsLocKey = locKey;
+            this._buildingsRaw       = sharedRaw;
+            this._buildingsFetchDone = true;
+            this._buildingsLocKey    = locKey;
             this._applyBuildings();
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
@@ -1026,15 +1017,18 @@ export class HeliosEngine
                 return;
             }
             //Null = the tile fetch failed entirely. The location stays UNCLAIMED (no raw, no shared cache) so a
-            //later pass re-fetches, and a timed re-attempt heals a transient tile-fetch outage without a
-            //page reload; the fallback house stays on screen in the meantime.
+            //later pass re-fetches. Mark the fetch settled and interpret, so the fallback house now shows (a
+            //genuine outage) until a re-attempt heals it, instead of an empty scene.
             if (result === null)
             {
+                this._buildingsFetchDone = true;
                 this._scheduleBuildingsRetry();
+                this._applyBuildings();
                 return;
             }
-            this._buildingsRaw    = result;
-            this._buildingsLocKey = locKey;
+            this._buildingsRaw       = result;
+            this._buildingsFetchDone = true;
+            this._buildingsLocKey    = locKey;
             _sharedBuildingsCache.set(locKey, { data: result, ts: Date.now() });
             this._applyBuildings();
             //Buildings just arrived; bypass the "sun hardly moved" guard so the next call repaints a full
@@ -1055,8 +1049,9 @@ export class HeliosEngine
     {
         clearBuildingsLocationCache(this.homeLat, this.homeLon);
         _sharedBuildingsCache.delete(this._buildingsLocationKey());
-        this._buildingsRaw    = null;
-        this._buildingsLocKey = '';
+        this._buildingsRaw       = null;
+        this._buildingsFetchDone = false;
+        this._buildingsLocKey    = '';
         this._clearBuildingsRetry();
         this._ensureBuildings();
     }
@@ -1097,6 +1092,15 @@ export class HeliosEngine
         {
             return;
         }
+        //Loading window: no fetch has settled yet, so draw NO buildings rather than the fallback house. Once a
+        //fetch resolves (data, empty, or outage) the normal interpret runs and the fallback appears only if there
+        //genuinely is no data.
+        if (this._buildingsRaw === null && !this._buildingsFetchDone)
+        {
+            this._buildingsData = [];
+            this._pushRenderableSources();
+            return;
+        }
         this._buildingsData = interpretBuildings(this._buildingsRaw ?? [], {
             radiusM:        this._buildingRadiusMeters(),
             count:          buildingCount(this.cfg),
@@ -1107,8 +1111,8 @@ export class HeliosEngine
         this._pushRenderableSources();
     }
 
-    //Hand the interpreted footprints to the renderer. interpretBuildings always returns at least the
-    //fallback house, so `buildings` is empty only before the first interpret pass.
+    //Hand the interpreted footprints to the renderer. `buildings` is empty during the loading window (no fetch
+    //settled yet) and otherwise carries at least the fallback house.
     private _pushRenderableSources(): void
     {
         if (!this._renderer)
@@ -1215,7 +1219,6 @@ export class HeliosEngine
                 cloudLow:         0,
                 cloudMid:         0,
                 cloudHigh:        0,
-                cloudIntensity:   'clear',
                 timeRange:        this._getTimeRange(),
                 isLiveTime:       this._selectedTime === null,
                 pvPower:          0,
@@ -1515,32 +1518,6 @@ export class HeliosEngine
         const east  = (lon - this.homeLon) * perLon;
         const north = (lat - this.homeLat) * perLat;
         return this._renderer.camera.project3(east, north, altitudeM);
-    }
-
-    //Screen-space rotation (deg, CSS clockwise) that points an up-pointing arrow icon along a real-world compass
-    //bearing (deg CW from North) projected onto the tilted ground. Because it routes through the live camera, the
-    //angle tracks camera orbit + pitch, so a panel arrow stays aligned with the true direction as the scene turns.
-    //Null until the renderer is ready or when the projected vector is degenerate (bearing edge-on to the camera).
-    public projectGroundBearing(bearingDeg: number): number | null
-    {
-        if (!this._renderer || !Number.isFinite(bearingDeg))
-        {
-            return null;
-        }
-        const rad = bearingDeg * Math.PI / 180;
-        //Any positive radius works: only the projected direction (not the length) is used.
-        const east  = Math.sin(rad) * 10;
-        const north = Math.cos(rad) * 10;
-        const origin = this._renderer.camera.project3(0, 0, 0);
-        const tip    = this._renderer.camera.project3(east, north, 0);
-        const dx = tip.x - origin.x;
-        const dy = tip.y - origin.y;
-        if (dx === 0 && dy === 0)
-        {
-            return null;
-        }
-        //mdi:navigation points up (screen -Y) at 0deg; rotate "up" onto (dx, dy).
-        return Math.atan2(dx, -dy) * 180 / Math.PI;
     }
 
     //Screen-space layout of the solar arc, the sun's current position, and the incidence ray. Null until
@@ -1981,6 +1958,7 @@ export class HeliosEngine
         //Drop heavy instance state.
         this._buildingsData     = null;
         this._buildingsRaw      = null;
+        this._buildingsFetchDone = false;
         this._buildingsLocKey   = '';
         this._homeHourlyData    = null;
         this._dragRotateHandlers    = undefined;

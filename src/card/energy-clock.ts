@@ -13,6 +13,7 @@ import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrrad
 import type { UnifiedDataStore } from './unifiedStore';
 import { customEntityId, customEntityColor, valueDecimals, powerUnit, irradianceUnit } from '../helios-config';
 import { resolveCustomEntityIcon } from './custom-entity';
+import { buildLogoDecal } from './helios-logo';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import type { EnergyDefaults } from './energy-prefs';
@@ -42,10 +43,6 @@ const BAR_TANGENT_FRAC = 0.018;
 const BAR_RADIAL_FRAC  = 0.45;
 const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
 const LABEL_MIN_OPACITY = 0.15; //farthest-back hour label opacity (nearest is opaque)
-//Central column filling the hub: a stacked cylinder (one band per active filter) replacing the home prism at
-//the dial centre. Height is a fraction of the tallest bar; the polygon count fakes a smooth cylinder.
-const CLOCK_COLUMN_H_FRAC = 0.5;
-const CLOCK_COLUMN_SIDES  = 24;
 //Clock-face guide: faint centre ring + 24 spokes reaching toward (but stopping short of) the hour labels.
 const CLOCK_HUB_R_FRAC      = 0.12;
 const CLOCK_SPOKE_OUTER_FRAC = 1.10;
@@ -117,6 +114,9 @@ export interface ClockFrame
     compass: { x: number; y: number; transform: string; label: string }[];
     //Home prism's projected centre + screen-px hit radius (the inner empty disc), for the home-hover total.
     home: { x: number; y: number; r: number };
+    //Ground-laid Helios mark that replaces the old central column: inner SVG + whether it is hover/tap-active
+    //(drives the opacity fade). The engine tilts it onto the ground plane under the upright bars.
+    decal: { svg: string; active: boolean };
 }
 
 
@@ -767,41 +767,36 @@ export function projectClockFrame(
         const ceiling = unitCeil?.get(ring.data.unit) ?? unitMax.get(ring.data.unit) ?? 0;
         projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits);
     });
-    //Central column: one stacked band per active filter (its colour), drawn in the same depth pass so the
-    //nearer bars occlude it and the farther bars sit behind. Grows with the bars (max ring heightScale).
+    //The central column is gone: a flat Helios mark now fills the hub (drawn by the engine on the ground plane,
+    //UNDER these bars, so the nearer bars occlude it). The bars alone populate the upright depth pass.
     const hubR = outerR * CLOCK_HUB_R_FRAC;
-    const grow = rings.length ? rings.reduce((m, r) => Math.max(m, r.heightScale), 0) : 0;
-    const colH = maxHm * CLOCK_COLUMN_H_FRAC * grow;
-    if (rings.length)
-    {
-        faces.push(centralColumn(camera, hubR, colH, rings, columnHighlight));
-    }
     faces.sort((a, b) => a.depth - b.depth);
 
-    //One glow filter per ring, tinted to its metric colour, for the focused slice / bar; plus the central
-    //column's own glow (first filter colour) used when it is hovered.
+    //One glow filter per ring, tinted to its metric colour, for the focused slice / bar. Bars carry their own
+    //highlight, so the guide stays static (no focused spoke).
     let defs = '<defs>';
     rings.forEach((r, i) => { defs += `<filter id="clock-glow-${i}" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${r.data.color}" flood-opacity="0.95"/></filter>`; });
-    defs += `<filter id="clock-col-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${rings[0]?.data.color ?? '#ffffff'}" flood-opacity="0.95"/></filter>`;
     defs += '</defs>';
 
-    //defs (per-ring glow filters) stay with the cylinders that use them. Bars carry their own highlight, so
-    //the guide stays static (no focused spoke).
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
-    //Central-column hit target: a disc over the WHOLE projected column body, not just its base. The cylinder
-    //rises above its base on screen (height + tilt), so a base-only disc would miss every tap on the body.
-    //Centre it between the projected base and top, radius covering that span plus the hub width.
-    const colBase = camera.project(0, 0, 0);
-    const colTop  = camera.project(0, 0, colH);
-    const homeX = (colBase[0] + colTop[0]) / 2;
-    const homeY = (colBase[1] + colTop[1]) / 2;
-    const homeR = Math.hypot(colTop[0] - colBase[0], colTop[1] - colBase[1]) / 2 + hubR * ppm;
+    //Home-hover target: a disc over the flat mark, centred on the projected home. Radius = the mark's on-ground
+    //half-width (half its diameter), covering the whole logo the user taps for the window total.
+    const decalDiaPx = outerR * ppm;
+    const homeCtr    = camera.project(0, 0, 0);
+    //Highlighted (hover/tap) mark stacks one glow per active filter, in ring order, behind a thin edging. Top
+    //faces the equator (south in the northern hemisphere, north in the southern) so it aligns with the sun run.
+    const decal = buildLogoDecal({
+        diameterPx: decalDiaPx,
+        orientDeg:  camera.southern ? 0 : 180,
+        highlight:  columnHighlight,
+    });
     const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
         guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: defs + faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, 0),
         hits, labels, compass: compass.labels,
-        home: { x: homeX, y: homeY, r: homeR },
+        home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
+        decal,
     };
 }
 
@@ -855,62 +850,6 @@ function projectHistogramRing(
     }
 }
 
-//Central column: a stacked cylinder at the dial origin, one equal band per active filter (its colour), so it
-//reads as a legend of the selected metrics. Hovered, it brightens (roof toward white, white edge) and glows.
-//Returned as one face at the base-centre depth, so the surrounding bars occlude/sit-behind it correctly.
-function centralColumn(camera: SceneCamera, hubR: number, heightM: number, rings: ClockRingInput[], highlight: boolean): ClockFace
-{
-    //CCW winding (cos, sin) to match the bars' footprint, so stackedColumn's back-face cull keeps the OUTWARD
-    //walls (a clockwise ring would invert it and show the inside).
-    const fp: [number, number][] = [];
-    for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
-    {
-        const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
-        fp.push([hubR * Math.cos(a), hubR * Math.sin(a)]);
-    }
-    const frac  = 1 / rings.length;
-    const bands = rings.map((r) => ({
-        frac,
-        wall: lerpHexToward(r.data.color, '#000000', 0.25),
-        roof: lerpHexToward(r.data.color, '#ffffff', highlight ? 0.4 : 0.18),
-    }));
-    const stroke = highlight ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)';
-    let svg = stackedColumn(camera, fp, heightM, bands, stroke);
-    if (highlight) { svg = `<g filter="url(#clock-col-glow)">${svg}</g>`; }
-    return { depth: camera.project(0, 0, 0)[1], svg };
-}
-
-
-//Central trend gauge at the hub: the period's GLOBAL value (P total) as a thin cap, with a sphere marker at
-//the previous period's global total P-1, coloured green/red by improvement. Same language as the hour bars.
-function centralTrendColumn(camera: SceneCamera, hubR: number, totalP: number, totalPrev: number, colH: number, color: string, direction: number, highlight: boolean): ClockFace
-{
-    const ceil = Math.max(totalP, totalPrev) || 1;
-    const z    = colH / ceil;
-    const pH   = totalP * z; const prevH = totalPrev * z;
-    const fp: [number, number][] = [];
-    for (let i = 0; i < CLOCK_COLUMN_SIDES; i++)
-    {
-        const a = (i / CLOCK_COLUMN_SIDES) * 2 * Math.PI;
-        fp.push([hubR * Math.cos(a), hubR * Math.sin(a)]);
-    }
-    const impr    = (totalP - totalPrev) * direction;
-    const markCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
-    let svg = '';
-    if (pH > 0)
-    {
-        const cap = colH * 0.1;
-        svg += floatingSlice(camera, fp, Math.max(0, pH - cap), pH,
-            lerpHexToward(color, '#000000', 0.25), lerpHexToward(color, '#ffffff', highlight ? 0.4 : 0.18),
-            highlight ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)');
-    }
-    const top = camera.project(0, 0, pH);
-    const mk  = camera.project(0, 0, prevH);
-    svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
-    svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="4.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="1"/>`;
-    return { depth: camera.project(0, 0, 0)[1], svg };
-}
-
 //Which way is "better" for a metric, so the trend dial colours the change green/red. +1 = up is good
 //(production), -1 = down is good (consumption, grid use), 0 = neutral (battery, weather, custom).
 export function trendGoodDirection(target: ChartTarget): number
@@ -937,9 +876,7 @@ export function projectTrendFrame(
     cardinals: { n: string; s: string; e: string; w: string },
     dimSlot: number | null,
     dim: number,
-    //Period GLOBAL totals (P and P-1) for the central hub gauge, and whether it is hovered.
-    totalP: number,
-    totalPrev: number,
+    //Whether the centre mark is hovered/tapped (drives its opacity fade).
     columnHighlight: boolean,
     //Per-hour night share for the ground day/night wedges (empty = none drawn).
     nightFrac: number[] = [],
@@ -1028,26 +965,28 @@ export function projectTrendFrame(
         if (op < 1) { svg = `<g opacity="${op.toFixed(3)}">${svg}</g>`; }
         faces.push({ depth: base[1], svg });
     }
-    //Central hub gauge: the period's global total vs the previous period's, same depth pass as the bars.
+    //No central gauge: the flat Helios mark fills the hub (the ground logo can't float, and the hover total does
+    //the readout job the old lollipop did). Just the bars populate the upright pass.
     const hubR = outerR * CLOCK_HUB_R_FRAC;
-    const colH = maxHm * CLOCK_COLUMN_H_FRAC;
-    faces.push(centralTrendColumn(camera, hubR, totalP, totalPrev, colH, color, direction, columnHighlight));
     faces.sort((a, b) => a.depth - b.depth);
 
     const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
-    //Central-gauge hit target: a disc over the whole projected column body (base to top), like the clock hub.
-    const cBase = camera.project(0, 0, 0);
-    const cTop  = camera.project(0, 0, colH);
+    //Home-hover target + decal, same flat Helios mark as the clock dial. Centred on the projected home; radius =
+    //half its on-ground diameter so the whole mark is the hover/tap target for the period total.
+    const decalDiaPx = outerR * ppm;
+    const homeCtr    = camera.project(0, 0, 0);
+    const decal = buildLogoDecal({
+        diameterPx: decalDiaPx,
+        orientDeg:  camera.southern ? 0 : 180,
+        highlight:  columnHighlight,
+    });
     const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
     return {
         guideSvg: night + clockGuide(camera, outerR) + compass.svg,
         svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[serverHour(Date.now())]) * zScale),
         hits, labels, compass: compass.labels,
-        home: {
-            x: (cBase[0] + cTop[0]) / 2,
-            y: (cBase[1] + cTop[1]) / 2,
-            r: Math.hypot(cTop[0] - cBase[0], cTop[1] - cBase[1]) / 2 + hubR * ppm,
-        },
+        home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
+        decal,
     };
 }
 

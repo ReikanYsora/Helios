@@ -11,27 +11,11 @@ import
     irradianceUnit,
     batterySign,
     autoHideUi,
-    showWeather,
-    showAstro,
-    outdoorTemperatureEntityId,
-    windSpeedEntityId,
     customEntityId,
     customEntityColor,
     homeColor,
     cacheId,
 } from './helios-config';
-import { getSunPosition } from './engine/sun';
-import
-{
-    wmoConditionKey,
-    conditionIcon,
-    formatTempC,
-    formatWindKmh,
-    readEntityValue,
-    formatClock,
-    formatDayLength,
-    type PanelValue,
-} from './card/info-panel';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
@@ -82,6 +66,7 @@ import
     handleChartHoverMove,
     handleChartHoverLeave
 } from './card/charts';
+import { renderDetailPanel } from './card/detail-panel';
 import
 {
     buildArcSegments,
@@ -265,6 +250,12 @@ export class HeliosCard extends LitElement
     //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
     //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
     @state() _chartTarget: ChartTarget = 'production';
+    //Detail panel (scene mode): double-tapping the active chip opens a compact top-right readout aggregating the
+    //selected metric over the window. Bound to the active chip, not a target, so switching chips while open just
+    //re-points it. Toggled by the second tap; the two fields debounce the double-tap on both mouse and touch.
+    @state() _infoPanelOpen = false;
+    private _lastChipTapMs = 0;
+    private _lastChipTapTarget = '';
     //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap and paints the
     //hourly cylinder ring; 'trend' paints one ring comparing the period to the previous one. Scene is the default.
     @state() _viewMode: 'scene' | 'clock' | 'trend' = 'scene';
@@ -512,7 +503,28 @@ export class HeliosCard extends LitElement
     private _onChartTargetClick = (e: Event): void =>
     {
         const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
-        if (target) { this._setChartTarget(target); }
+        if (!target) { return; }
+        //First tap always (re)points the chart. A second tap on the SAME chip within the window toggles the
+        //detail panel; the reset afterwards stops a third rapid tap from immediately re-toggling.
+        const now = Date.now();
+        const isDouble = target === this._lastChipTapTarget && now - this._lastChipTapMs < 350;
+        //Read BEFORE re-pointing: a single tap that lands on a different chip closes any open panel, so the panel
+        //only ever opens on an explicit double-tap and never rides along when the user just switches metric.
+        const switching = target !== this._chartTarget;
+        this._setChartTarget(target);
+        if (isDouble)
+        {
+            this._infoPanelOpen = !this._infoPanelOpen;
+            this._lastChipTapMs = 0;
+            this._lastChipTapTarget = '';
+            return;
+        }
+        if (switching)
+        {
+            this._infoPanelOpen = false;
+        }
+        this._lastChipTapMs = now;
+        this._lastChipTapTarget = target;
     };
 
     //Last target the home prism was painted for, so updated() can tell a chip CHANGE (play the squash/grow)
@@ -535,87 +547,6 @@ export class HeliosCard extends LitElement
         const play  = animate && this._lastHomeTarget !== undefined;
         this._lastHomeTarget = this._chartTarget;
         this._engine.setHomeAppearance(color, bands, play);
-    }
-
-    //Top-right ambient info panel: local weather now (condition, temperature, wind), plus the sun's astronomical
-    //data when 'show-astro' is on. Rendered only in scene view + live (the caller gates on that). Returns nothing
-    //when neither the weather payload nor the astro data is available yet, so the frame never shows empty.
-    private _renderInfoPanel(): TemplateResult | typeof nothing
-    {
-        const coords = getHomeCoords(this.config, this.hass);
-        if (!coords) { return nothing; }
-
-        //Weather: Open-Meteo at "now", each field overridable by a user-picked HA entity (read in its own unit).
-        const amb   = this._engine?.getAmbientReadout(this._now) ?? null;
-        const night = (this._sunScene?.sun.altitude ?? 1) <= 0;
-
-        const tempOverride = readEntityValue(this.hass, outdoorTemperatureEntityId(this.config));
-        const windOverride = readEntityValue(this.hass, windSpeedEntityId(this.config));
-        const temp: PanelValue | null = tempOverride ?? (amb ? formatTempC(this.hass, amb.temperature) : null);
-        const wind: PanelValue | null = windOverride ?? (amb ? formatWindKmh(this.hass, amb.windSpeed) : null);
-
-        //The sky condition reads from the icon alone: its text label ("Partly cloudy") is long enough to force the
-        //panel wide or wrap, so only the icon is shown.
-        const condIcon = amb ? conditionIcon(wmoConditionKey(amb.weatherCode), night) : '';
-        const windDir = amb && Number.isFinite(amb.windDir) ? amb.windDir : null;
-        //Arrow points DOWNWIND (where the wind blows to = FROM-bearing + 180), projected onto the tilted ground so
-        //it stays aligned with the true direction as the camera orbits. Falls back to a flat rotation if the
-        //renderer can't project yet.
-        const windArrowRot = windDir !== null
-            ? (this._engine?.projectGroundBearing(windDir + 180) ?? (windDir + 180))
-            : null;
-        const hasWeather = temp !== null || wind !== null || condIcon !== '';
-
-        //Astro (optional): current altitude/azimuth from the ephemeris, sunrise/noon/sunset from the projected arc.
-        const astroOn = showAstro(this.config);
-        const sunPos  = astroOn ? getSunPosition(this._now, coords.lat, coords.lon) : null;
-        const sunrise = this._sunScene?.sunrise?.time ?? null;
-        const sunset  = this._sunScene?.sunset?.time  ?? null;
-        const solarNoon = (sunrise && sunset) ? new Date((sunrise.getTime() + sunset.getTime()) / 2) : null;
-        const dayLength = formatDayLength(sunrise, sunset);
-
-        //Icon-only rows to keep the panel compact: each astro field reads from its icon alone.
-        const astroRows: { icon: string; value: string }[] = [];
-        if (astroOn && sunPos)
-        {
-            astroRows.push({ icon: 'mdi:sun-angle',           value: `${Math.round(sunPos.altitude)}°` });
-            astroRows.push({ icon: 'mdi:sun-compass',         value: `${Math.round(sunPos.azimuth)}°` });
-            if (sunrise)   { astroRows.push({ icon: 'mdi:weather-sunset-up',   value: formatClock(this.hass, sunrise) }); }
-            if (solarNoon) { astroRows.push({ icon: 'mdi:weather-sunny',       value: formatClock(this.hass, solarNoon) }); }
-            if (sunset)    { astroRows.push({ icon: 'mdi:weather-sunset-down', value: formatClock(this.hass, sunset) }); }
-            if (dayLength) { astroRows.push({ icon: 'mdi:timer-sand',          value: dayLength }); }
-        }
-
-        if (!hasWeather && astroRows.length === 0) { return nothing; }
-
-        return html`
-            <div class="info-panel">
-                ${hasWeather ? html`
-                    <div class="ip-weather">
-                        ${condIcon ? html`<ha-icon class="ip-cond-icon" icon=${condIcon}></ha-icon>` : nothing}
-                        <div class="ip-primary">
-                            ${temp ? html`<div class="ip-temp">${temp.value}<span class="ip-unit">${temp.unit}</span></div>` : nothing}
-                        </div>
-                    </div>
-                    ${wind ? html`
-                        <div class="ip-secondary">
-                            <div class="ip-line">
-                                <ha-icon class="ip-wind-icon" icon="mdi:weather-windy"></ha-icon>
-                                <span>${wind.value} ${wind.unit}</span>
-                                ${windArrowRot !== null ? html`<ha-icon class="ip-wind-dir" icon="mdi:navigation" style="transform:rotate(${Math.round(windArrowRot)}deg)"></ha-icon>` : nothing}
-                            </div>
-                        </div>
-                    ` : nothing}
-                ` : nothing}
-                ${astroRows.length > 0 ? html`
-                    <div class="ip-astro">
-                        ${astroRows.map((r) => html`
-                            <div class="ip-astro-row"><ha-icon class="ip-astro-icon" icon=${r.icon}></ha-icon><span class="ip-astro-val">${r.value}</span></div>
-                        `)}
-                    </div>
-                ` : nothing}
-            </div>
-        `;
     }
 
 
@@ -1535,13 +1466,14 @@ export class HeliosCard extends LitElement
         const powerChipY = layout?.batteryPowerLabel.y ?? 0;
         //SoC -> Power chip: same battery, so the SoC leader docks on the Power chip, not the home. Straight
         //vertical hairline between their facing edges (SoC below Power). No flow, it's a level.
-        //SoC -> Power hairline: only when BOTH battery chips show, else it would point at an empty slot.
-        const socLeaderPath = (layout && showPowerChip)
+        //SoC -> Power hairline: only when BOTH battery chips show, else it would point at an empty slot. Both
+        //endpoints sit on a chip, so a hidden SoC chip must drop it (showPowerChip alone is not enough).
+        const socLeaderPath = (layout && showSocChip && showPowerChip)
             ? `M ${socChipX.toFixed(1)},${(socChipY - BATTERY_HALF_HEIGHT_PX).toFixed(1)} L ${powerChipX.toFixed(1)},${(powerChipY + BATTERY_HALF_HEIGHT_PX).toFixed(1)}`
             : '';
-        //SoC -> home: the battery->home discharge flow (rounded L + bead), only while discharging. It
-        //leaves the SoC chip (lower, nearest the home) so the Power chip stays a clean top node PV feeds.
-        const dischargeLeaderPath = (layout && batteryDischarging)
+        //SoC -> home: the battery->home discharge flow (rounded L + bead), only while discharging. It leaves the
+        //SoC chip, so a hidden SoC chip drops it too however the power reads (no lead may outlive its chip).
+        const dischargeLeaderPath = (layout && showSocChip && batteryDischarging)
             ? buildLPathToHome(socChipX, socChipY, 22)
             : '';
         //SoC-only installs (no Power chip): a static connector docks the lone SoC chip to the home hub like
@@ -1729,16 +1661,28 @@ export class HeliosCard extends LitElement
         //camera-locked swaps the grab cursor for the default arrow when the camera is pinned (pan + rotate
         //disabled, so the open-hand cursor would be misleading). Re-evaluated every render.
         const cameraLocked = this._isCameraLocked();
+        //Detail panel shows only in scene mode; its accent (from the active chip) drives both the panel border and
+        //the little "i" badge on the open chip, so it lives as a card-level class + CSS var.
+        const infoOpen = this._infoPanelOpen && this._viewMode === 'scene';
+        //Detail-panel accent = the ACTIVE chip's live colour. The directional chips (grid, battery) flip their
+        //tint with the instantaneous flow, so reuse those same leader colours rather than chartAccentColor (which
+        //is the window-dominant direction); the non-directional targets already agree with chartAccentColor.
+        const activeChipColor =
+            this._chartTarget === 'grid' ? gridLeaderColor
+            : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? batteryLeaderColor
+            : chartAccentColor(this);
         const cardClasses = [
             cardThemeClass,
             cameraLocked      ? 'camera-locked'  : '',
             this.preview      ? 'helios-edit'    : '',
             this._viewMode === 'clock' ? 'mode-clock' : '',
             this._viewMode === 'trend' ? 'mode-trend' : '',
+            infoOpen          ? 'info-open'      : '',
         ].filter(Boolean).join(' ');
+        const cardStyle = infoOpen ? `--detail-accent:${activeChipColor}` : '';
 
         return html`
-            <ha-card class=${cardClasses}>
+            <ha-card class=${cardClasses} style=${cardStyle}>
 
                 <div
                     id="map-container"
@@ -1747,13 +1691,6 @@ export class HeliosCard extends LitElement
                     @pointerdown=${this._onClockTapStart}
                     @pointerup=${this._onClockTapEnd}
                 ></div>
-
-                <!--  Ambient info panel (top-right): local weather now, plus the sun's astronomical data when the
-                      "show astro" option is on. Scene view + live only (hidden in clock/trend and past scrub); it
-                      is exempt from the No UI fade on purpose, as ambient info suited to a wall display.  -->
-                ${hasHomeCoords && showWeather(this.config) && this._viewMode === 'scene' && this._isLiveMode && this._selectedTime === null
-                    ? this._renderInfoPanel()
-                    : nothing}
 
                 ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'trend') ? html`
                     <div class="clock-overlay">
@@ -2110,10 +2047,10 @@ export class HeliosCard extends LitElement
 
                 <!--  Custom-entity chip (top-left, above grid). Red leader to the home; bead flows home ->
                       chip on a positive value, chip -> home on a negative one. Shown only when the entity is
-                      configured AND has a real value at the active instant; scrubbing into a gap (no history,
-                      or a flat 0 before the entity existed) drops the chip + leader instead of an empty pill.  -->
-                ${hasHomeCoords && layout !== null && customLive !== null && customW !== null
-                  && (customScrubMs === null || customW !== 0) ? html`
+                      configured AND has a value at the active instant; scrubbing into a gap with no history at all
+                      (null, before the entity existed) drops the chip + leader. A measured 0 is a real value and
+                      keeps the chip, so the custom entity stays visible while scrubbing even when it reads zero.  -->
+                ${hasHomeCoords && layout !== null && customLive !== null && customW !== null ? html`
                     <svg class="custom-leader-svg">
                         <path class="custom-leader-line" style="stroke:${customLeaderColor}" d=${customLeaderPath} />
                         ${customBeadDur !== null ? (customPositive ? svg`
@@ -2385,6 +2322,10 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
+                <!--  Per-chip detail panel: double-tapping the active chip aggregates its metric over the window
+                      in a compact top-right readout (icons only, values in the card's unit). Scene mode only.  -->
+                ${infoOpen && hasHomeCoords ? renderDetailPanel(this) : nothing}
+
             </ha-card>
         `;
     }
@@ -2514,9 +2455,10 @@ export class HeliosCard extends LitElement
             this._scheduleClockPaint();
             return;
         }
-        //Leaving to scene: restore the full scene + the chart-driven home colour, clear the ground guide overlay.
+        //Leaving to scene: restore the full scene + the chart-driven home colour, clear the ground guide + logo.
         this._engine?.setHomeOnly(false);
         this._engine?.setGroundOverlay('');
+        this._engine?.setGroundDecal(null);
         this._updateHomeAppearance(false);
         if (this._clockTargets.length > 0)
         {
@@ -2973,13 +2915,12 @@ export class HeliosCard extends LitElement
         if (this._viewMode === 'trend')
         {
             const target = this._trendTarget;
-            const { pH, prevH, isE } = this._trendVectors();
-            const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / HOURS_PER_DAY; };
+            const { pH, prevH } = this._trendVectors();
             const frame = projectTrendFrame(
                 camera, pH, prevH,
                 clockTargetMeta(this, target).color, trendGoodDirection(target),
                 cardinals, this._clockDimSlot, this._clockDim,
-                totalOf(pH), totalOf(prevH), this._clockHomeHover, this._nightFrac ?? [],
+                this._clockHomeHover, this._nightFrac ?? [],
             );
             this._applyClockFrame(frame);
             return;
@@ -3042,6 +2983,7 @@ export class HeliosCard extends LitElement
     {
         if (this._clockSvg) { this._clockSvg.innerHTML = frame.svg; }
         this._engine?.setGroundOverlay(frame.guideSvg);
+        this._engine?.setGroundDecal(frame.decal.svg, frame.decal.active);
         this._clockHits = frame.hits;
         this._clockHome = frame.home;
 

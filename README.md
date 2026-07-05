@@ -34,16 +34,16 @@ Helios has **three view modes**, switched from the round buttons in the top-left
 * **Day / night ground**, the ground darkens where the sun is below the horizon, so dawn and dusk read at a glance.
 * **Hover glow + auto-rotation**, a soft halo signals the home is interactive; an opt-in idle orbit slowly turns the scene counter to the sun's motion and pauses the moment you touch the card.
 * **Timeline**, the active period as a re-targetable chart below the scene: production (with dashed forecast and per-string breakdown), consumption, grid, battery, battery SoC, irradiance (with the cloud layers overlaid) or your custom entity. Click or drag to scrub; the whole scene snaps to the selected instant.
-* **Weather + astronomy panel**, a small plate in the top-right corner showing the local temperature and wind, with the sky condition as an icon (from Open-Meteo, or your own temperature / wind sensors). An optional toggle adds the sun's altitude, azimuth, sunrise, solar noon, sunset and day length, each shown as an icon to keep it compact. You can show or hide the whole panel; when shown, the wind-direction arrow is projected onto the tilted ground so it keeps pointing the true way as you orbit the camera, and it stays visible in No UI mode.
-* **No UI mode** *(optional)*, fades the timeline and the on-card controls after a few seconds of inactivity and brings them back on any tap or move; the weather panel stays. Built for kiosks and wall displays.
+* **Detail panels**, double-tap (or double-click) any chip to open a compact readout top-right, tinted in that chip's colour: it aggregates the metric over the selected window as icon-only figures, all in your chosen unit. Production / consumption show total, peak and per-day average; grid shows import, export and net; battery shows energy charged and discharged; battery SoC and the custom entity show min / average / max; the sun shows peak and average irradiance plus the astronomy (sunrise, solar noon, sunset, max altitude, day length). Double-tap again to close.
+* **No UI mode** *(optional)*, fades the timeline and the on-card controls after a few seconds of inactivity and brings them back on any tap or move. Built for kiosks and wall displays.
 
 ### Clock mode, the 24-hour dial
 
-A radial instrument that bins each metric into **24 hours of the day** and stands a ring of cylinders around a central column, one bar per hour. The right-hand rail toggles metrics as **filters**: each active metric adds its own **concentric ring** (production, consumption, battery SoC, battery, grid, irradiance, custom). Hover or tap a slice to light up that hour across every ring and read each metric's value in the tooltip. A soft **day / night wedge** on the ground shows when the sun is up over the period, and an N / S compass keeps the dial legible as it rotates with the scene.
+A radial instrument that bins each metric into **24 hours of the day** and stands a ring of cylinders around the flat **Helios mark** at the centre, one bar per hour. The right-hand rail toggles metrics as **filters**: each active metric adds its own **concentric ring** (production, consumption, battery SoC, battery, grid, irradiance, custom). Hover or tap a slice to light up that hour across every ring and read each metric's value in the tooltip; hover or tap the centre mark for the period total. A soft **day / night wedge** on the ground shows when the sun is up over the period, and an N / S compass keeps the dial legible as it rotates with the scene.
 
 ### Trend mode, the period-over-period comparison
 
-A radial comparison of one metric, hour by hour: the **current period** stands as a ring of bars while a floating marker and stem pin the **same hour in the previous comparable period**, so you read instantly whether each hour is up or down. Bars are coloured good or bad depending on the metric (more production is good, more grid import is not). An arrow with a drop line marks the current hour, the central column reads the **global delta** of the whole period versus the one before, and the same day / night wedge grounds the dial.
+A radial comparison of one metric, hour by hour: the **current period** stands as a ring of bars while a floating marker and stem pin the **same hour in the previous comparable period**, so you read instantly whether each hour is up or down. Bars are coloured good or bad depending on the metric (more production is good, more grid import is not). An arrow with a drop line marks the current hour, the flat **Helios mark** sits at the centre (hover or tap it for the period total), and the same day / night wedge grounds the dial.
 
 ### Multilingual
 
@@ -164,9 +164,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `auto-hide-ui` | boolean | `false` | No UI mode: fade the timeline and the on-card controls after a few seconds of inactivity, bringing them back on any tap or move. The weather panel stays visible. For kiosks and wall displays. |
-| `show-weather` | boolean | `false` | Show the top-right weather panel (scene view). Set to `true` to show it. Independent of No UI mode. |
-| `show-astro` | boolean | `false` | Add the sun's astronomical data (altitude, azimuth, sunrise, solar noon, sunset, day length) to the top-right info panel, below the weather. Only applies when `show-weather` is on. |
+| `auto-hide-ui` | boolean | `false` | No UI mode: fade the timeline and the on-card controls after a few seconds of inactivity, bringing them back on any tap or move. For kiosks and wall displays. |
 
 ### Buildings + shadows
 
@@ -199,8 +197,6 @@ The rolling window itself is chosen live from the timeline's period selector (**
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `solar-irradiance-entity` | entity_id | none | Optional physical irradiance sensor (W/m²). When set, its live state + recorder history feed the sun chip number, the irradiance chart and the sun-arc colouring for past + present; forecast hours still come from Open-Meteo. |
-| `outdoor-temperature-entity` | entity_id | none | Optional sensor shown on the info panel instead of the Open-Meteo temperature. Read in its own unit. |
-| `wind-speed-entity` | entity_id | none | Optional sensor shown on the info panel instead of the Open-Meteo wind speed. Read in its own unit. |
 | `custom-power-entity` | entity_id | none | Custom entity, live half: a real power sensor (W/kW) feeding the extra chip top-left, its scrub and its curve. The custom entity displays only when BOTH halves are set. |
 | `custom-energy-entity` | entity_id | none | Custom entity, energy half: a cumulative energy meter (Wh/kWh) feeding the energy views. |
 | `custom-entity-icon` | MDI icon | entity icon | Optional icon override for the custom-entity chip; falls back to the entity's own icon, then a generic glyph. |
@@ -275,18 +271,19 @@ Source layout:
 | `src/card/charts.ts` `charts-pv.ts` `charts-generic.ts` | Timeline SVG charts + scrub cursors + day labels + tooltip |
 | `src/card/timeline.ts` `timeline-model.ts` `timeline-modes.ts` | Scrub handlers, tick granularity, the five rolling-window periods |
 | `src/card/timeline-night.ts` `timeline-tooltip.ts` | Timeline night-zone shading + hover tooltip |
-| `src/card/energy-clock.ts` `clock-hourly.ts` | Clock + trend dials: hour-of-day rings, central column, projection |
+| `src/card/energy-clock.ts` `clock-hourly.ts` | Clock + trend dials: hour-of-day rings, centre Helios mark, projection |
+| `src/card/helios-logo.ts`       | Flat Helios mark laid on the dial centre (path + hover-fade decal) |
 | `src/card/trend.ts`             | Period-over-period (current vs previous) hour-of-day profiles |
 | `src/card/sun-zones.ts`         | Per-hour day / night fraction for the dial ground wedge |
 | `src/card/hud.ts` `hud-geometry.ts` | Scene HUD projection (sun arc, chips, leaders) refreshed each frame |
 | `src/card/format.ts`            | Locale-aware number / value formatting + energy colour tokens |
-| `src/card/info-panel.ts`        | Weather + astronomy info panel helpers (WMO condition to icon, unit conversion, formatting) |
+| `src/card/detail-panel.ts`      | Per-chip detail panel: window aggregates (total / peak / avg, astro) as icon rows |
 | `src/engine/renderer.ts`        | Scene painter: ground tilt + buildings + shadows + night wash (canvas + SVG) |
 | `src/engine/projection.ts`      | 2.5D camera + bearing / pitch / perspective projection |
 | `src/engine/tiles.ts`           | CARTO basemap raster stitching + Web Mercator math |
 | `src/engine/buildings.ts`       | OpenFreeMap fetch + interpret (radius / count / height / cluster) |
 | `src/engine/sun.ts` `sun-arc.ts` | Solar position + Haurwitz / Kasten-Czeplak irradiance + PV math + arc geometry |
-| `src/engine/weather.ts` `weather-resolve.ts` | Open-Meteo multi-model fetch + cache + back-off (cloud, irradiance, temperature, wind) |
+| `src/engine/weather.ts` `weather-resolve.ts` | Open-Meteo multi-model fetch + cache + back-off (cloud, irradiance) |
 | `src/engine/colors.ts`          | Hex blending + time-of-day tints (night shade, building tint) |
 | `src/css/`                      | Card + editor + clock + timeline style literals |
 | `src/i18n/`                     | Strict-typed translations (63 languages) |
@@ -301,7 +298,7 @@ HELIOS depends on several open data services. None require an account or API key
 
 * **[CARTO](https://carto.com/basemaps/)**, the free raster basemap tiles (light / dark, no labels) the scene is built on.
 * **[OpenStreetMap](https://www.openstreetmap.org/copyright)**, the map data behind the basemap and the building footprints (served as vector tiles by [OpenFreeMap](https://openfreemap.org/)). © OpenStreetMap contributors.
-* **[Open-Meteo](https://open-meteo.com/)**, weather forecasts (cloud cover, irradiance, temperature, wind). Free, no key, multi-model fusion under the hood.
+* **[Open-Meteo](https://open-meteo.com/)**, weather forecasts (cloud cover, irradiance). Free, no key, multi-model fusion under the hood.
 * **Home Assistant Energy dashboard**, the single source of truth for solar / grid / battery wiring.
 
 A heartfelt thank you to every user who tried Helios, filed an issue, suggested an idea or simply shared a screenshot. Your feedback is what shaped the direction the card has taken.
