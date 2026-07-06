@@ -8,6 +8,7 @@ import { pvNormalizeToWatts } from './pv';
 import { callWS } from '../data/ha-gateway';
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { sumLiveWatts, minuteAnchorMs, type KeyedFetch } from '../data/source-fetch';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../constants';
 
 
@@ -101,8 +102,7 @@ export interface BatteryHost
     //keeps charging from reading as 0 W. Null until first fetch.
     _batteryChargeChangeSeries:    ChangeBucket[] | null;
     _batteryDischargeChangeSeries: ChangeBucket[] | null;
-    _batteryChangeFetchKey:        string;
-    _batteryChangeFetching:        boolean;
+    _batteryChangeFetch:           KeyedFetch;
 }
 
 
@@ -175,22 +175,10 @@ export function refreshBattery(host: BatteryHost): void
     const rateEntities = host._energyDefaults.batteryStatRates;
     if (!batteryLiveIsBucketSourced(host._energyDefaults))
     {
-        let sum = 0;
-        let anyValid = false;
-        for (const id of rateEntities)
+        const { watts, any } = sumLiveWatts(host.hass, rateEntities, host._energyDefaults.invertedRateEntities);
+        if (any)
         {
-            const so = host.hass.states?.[id];
-            const v  = so ? parseNumericState(so.state) : null;
-            if (v === null) { continue; }
-            const unit  = String(so.attributes?.unit_of_measurement ?? '');
-            const watts = pvNormalizeToWatts(v, unit);
-            const inverted = host._energyDefaults.invertedRateEntities.includes(id);
-            sum += inverted ? -watts : watts;
-            anyValid = true;
-        }
-        if (anyValid)
-        {
-            nextPower = sum;
+            nextPower = watts;
             nextUnit  = 'W';
         }
     }
@@ -231,7 +219,7 @@ export function refreshBattery(host: BatteryHost): void
     //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders; an unquantised Date.now()
     //changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
     //the minute of slop is harmless.
-    const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
+    const anchorMs     = minuteAnchorMs();
     const rawStart     = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
     const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
@@ -263,7 +251,6 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     const chargeIds    = host._energyDefaults.batteryStatEnergyTos;
     const dischargeIds = host._energyDefaults.batteryStatEnergyFroms;
     if (chargeIds.length === 0 && dischargeIds.length === 0) { return; }
-    if (host._batteryChangeFetching) { return; }
 
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
@@ -277,21 +264,16 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     const sortedCharge    = [...chargeIds].sort();
     const sortedDischarge = [...dischargeIds].sort();
     const key = `${sortedCharge.join(',')}|${sortedDischarge.join(',')}|${startMs}|${endMs}`;
-    if (key === host._batteryChangeFetchKey) { return; }
-    host._batteryChangeFetchKey = key;
-    host._batteryChangeFetching = true;
-    void Promise.all([
-        sortedCharge.length    > 0 ? fetchChangeSeries(host.hass, sortedCharge,    startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
-        sortedDischarge.length > 0 ? fetchChangeSeries(host.hass, sortedDischarge, startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
-    ]).then(([charge, discharge]) =>
-    {
-        if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
-        if (discharge !== null) { host._batteryDischargeChangeSeries = discharge; }
-        host.requestUpdate();
-    }).finally(() =>
-    {
-        host._batteryChangeFetching = false;
-    });
+    host._batteryChangeFetch.run(key, () =>
+        Promise.all([
+            sortedCharge.length    > 0 ? fetchChangeSeries(host.hass, sortedCharge,    startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
+            sortedDischarge.length > 0 ? fetchChangeSeries(host.hass, sortedDischarge, startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
+        ]).then(([charge, discharge]) =>
+        {
+            if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
+            if (discharge !== null) { host._batteryDischargeChangeSeries = discharge; }
+            host.requestUpdate();
+        }));
 }
 
 

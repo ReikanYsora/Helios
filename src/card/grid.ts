@@ -13,11 +13,11 @@
 //meters: the live chips stay EMPTY and the editor explains what to configure; curves and scrub keep
 //reading the meters regardless.
 
-import { pvNormalizeToWatts } from './pv';
-import { formatEntityValue, parseNumericState, type PowerUnit } from './format';
+import { formatEntityValue, type PowerUnit } from './format';
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { refreshGridGuard, type GridGuardState } from './grid-guard';
+import { sumLiveWatts, type KeyedFetch } from '../data/source-fetch';
 import { DAY_MS } from '../constants';
 
 
@@ -43,10 +43,8 @@ export interface GridHost
     //Consumer converts to average watts (kWh * 1000 / bucket-hours). Null until first fetch lands.
     _gridImportChangeSeries: ChangeBucket[] | null;
     _gridExportChangeSeries: ChangeBucket[] | null;
-    _gridImportChangeFetchKey: string;
-    _gridExportChangeFetchKey: string;
-    _gridImportChangeFetching: boolean;
-    _gridExportChangeFetching: boolean;
+    _gridImportFetch: KeyedFetch;
+    _gridExportFetch: KeyedFetch;
 
     //Mis-scope guard state (grid-guard.ts); 'flagged' empties the live chips instead of trusting the split.
     _gridGuard: GridGuardState;
@@ -97,9 +95,6 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
         : (ed?.gridStatEnergyTos   ?? []);
     if (ids.length === 0) { return; }
 
-    const fetching = slot === 'import' ? host._gridImportChangeFetching : host._gridExportChangeFetching;
-    if (fetching) { return; }
-
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
@@ -111,26 +106,18 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
     const sorted  = [...ids].sort();
     const key     = `${sorted.join(',')}|${startMs}|${endMs}`;
 
-    const prevKey = slot === 'import' ? host._gridImportChangeFetchKey : host._gridExportChangeFetchKey;
-    if (key === prevKey) { return; }
-
-    if (slot === 'import') { host._gridImportChangeFetchKey = key; host._gridImportChangeFetching = true; }
-    else                   { host._gridExportChangeFetchKey = key; host._gridExportChangeFetching = true; }
-    void fetchChangeSeries(host.hass, sorted, startMs, endMs, host._storeFetchPeriod)
-        .then((series) =>
-        {
-            if (series !== null)
+    const gate = slot === 'import' ? host._gridImportFetch : host._gridExportFetch;
+    gate.run(key, () =>
+        fetchChangeSeries(host.hass, sorted, startMs, endMs, host._storeFetchPeriod)
+            .then((series) =>
             {
-                if (slot === 'import') { host._gridImportChangeSeries = series; }
-                else                   { host._gridExportChangeSeries = series; }
-            }
-            host.requestUpdate();
-        })
-        .finally(() =>
-        {
-            if (slot === 'import') { host._gridImportChangeFetching = false; }
-            else                   { host._gridExportChangeFetching = false; }
-        });
+                if (series !== null)
+                {
+                    if (slot === 'import') { host._gridImportChangeSeries = series; }
+                    else                   { host._gridExportChangeSeries = series; }
+                }
+                host.requestUpdate();
+            }));
 }
 
 
@@ -139,29 +126,11 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 //as-is, SI-prefix-normalised.
 function readStatRates(host: GridHost, rates: string[]): void
 {
-    let signedWatts = 0;
-    let sawAny      = false;
-    for (const entity of rates)
-    {
-        const stateObj = host.hass.states?.[entity];
-        if (!stateObj) { continue; }
-        const raw = stateObj.state;
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable')
-        {
-            continue;
-        }
-        const num = parseNumericState(raw);
-        if (num === null) { continue; }
-        const unit  = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        const watts = pvNormalizeToWatts(num, unit);
-        //`power_config.stat_rate_inverted` flips the sign for one source in a multi-source wiring; apply at read
-        //time so the split below sees the canonical "positive = import" convention.
-        const inverted = host._energyDefaults?.invertedRateEntities.includes(entity) ?? false;
-        signedWatts += inverted ? -watts : watts;
-        sawAny = true;
-    }
-    if (!sawAny) { return; }
-    applyCombinedSplit(host, signedWatts);
+    //`power_config.stat_rate_inverted` flips the sign for one source in a multi-source wiring; sumLiveWatts
+    //applies it at read time so the split below sees the canonical "positive = import" convention.
+    const { watts, any } = sumLiveWatts(host.hass, rates, host._energyDefaults?.invertedRateEntities);
+    if (!any) { return; }
+    applyCombinedSplit(host, watts);
 }
 
 

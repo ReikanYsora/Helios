@@ -94,6 +94,7 @@ import {
 } from './card/energy-prefs';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod, type ChangeBucket } from './card/energy-stats';
 import { clearDurable } from './core/data/durable-cache';
+import { KeyedFetch } from './data/source-fetch';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
 import
@@ -166,11 +167,9 @@ export class HeliosCard extends LitElement
     //store + chip scrub. Reset-corrected, unit-normalised kWh per 5-min bucket, same as the HA Energy
     //dashboard.
     @state() _pvChangeSeries: ChangeBucket[] | null = null;
-    _pvChangeSeriesFetchKey  = '';
-    _pvChangeSeriesFetching  = false;
+    _pvChangeFetch = new KeyedFetch();
     @state() _pvChangeSeriesPerEntity = new Map<string, ChangeBucket[]>();
-    _pvChangePerEntityFetchKey  = '';
-    _pvChangePerEntityFetching  = false;
+    _pvPerEntityFetch = new KeyedFetch();
     //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries.
     //The unified store reads this into its forecast series. Empty when no forecast source is configured.
     @state() _haSolarForecast: SolarForecastPoint[] = [];
@@ -193,10 +192,8 @@ export class HeliosCard extends LitElement
     //unified store + scrub. Reset-corrected kWh per 5-min bucket, same as the HA Energy dashboard.
     @state() _gridImportChangeSeries: ChangeBucket[] | null = null;
     @state() _gridExportChangeSeries: ChangeBucket[] | null = null;
-    _gridImportChangeFetchKey = '';
-    _gridExportChangeFetchKey = '';
-    _gridImportChangeFetching = false;
-    _gridExportChangeFetching = false;
+    _gridImportFetch = new KeyedFetch();
+    _gridExportFetch = new KeyedFetch();
     //Mis-scope guard for the live grid sensor (grid-guard.ts). Plain field: transitions are pushed through
     //requestUpdate() by the guard itself, so no @state on the mutable object.
     _gridGuard: GridGuardState = createGridGuard();
@@ -223,8 +220,7 @@ export class HeliosCard extends LitElement
     //structural sign so charging is never lost (#216).
     @state() _batteryChargeChangeSeries:    ChangeBucket[] | null = null;
     @state() _batteryDischargeChangeSeries: ChangeBucket[] | null = null;
-    _batteryChangeFetchKey = '';
-    _batteryChangeFetching = false;
+    _batteryChangeFetch = new KeyedFetch();
     //Irradiance entity history, populated when solar-irradiance-entity is configured. Recorder
     //samples over the timeline range, merged with the live state, pushed to the engine via
     //setSolarRadiationSamples. Plain field (no @state): render never reads it, the engine owns lookup.
@@ -642,23 +638,23 @@ export class HeliosCard extends LitElement
     {
         //Drop in-memory PV state so the next refreshPv() refetches from scratch, not the cached fetch key.
         this._pvChangeSeries              = null;
-        this._pvChangeSeriesFetchKey      = '';
+        this._pvChangeFetch.reset();
         this._pvChangeSeriesPerEntity     = new Map();
-        this._pvChangePerEntityFetchKey   = '';
+        this._pvPerEntityFetch.reset();
         this._haSolarForecast             = [];
         this._haSolarForecastLoaded       = false;
         this._haSolarForecastFetching     = false;
         this._haSolarForecastFetchedAt    = 0;
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;
-        this._gridImportChangeFetchKey    = '';
-        this._gridExportChangeFetchKey    = '';
+        this._gridImportFetch.reset();
+        this._gridExportFetch.reset();
         this._gridGuard                   = createGridGuard();
         this._batterySocHistory           = null;
         this._batteryFetchKey             = '';
         this._batteryChargeChangeSeries   = null;
         this._batteryDischargeChangeSeries = null;
-        this._batteryChangeFetchKey       = '';
+        this._batteryChangeFetch.reset();
         this._irradianceHistory           = null;
         this._irradianceFetchKey          = '';
         //Drop the derived clock + unified store so the next paint rebuilds them from the refetched series rather
@@ -2377,11 +2373,11 @@ export class HeliosCard extends LitElement
             key:      string,
             fetching: boolean,
         ): boolean => ids.length === 0 || (!fetching && key.includes(anchor));
-        return fresh(d.solarStatEnergyFroms,   this._pvChangeSeriesFetchKey,     this._pvChangeSeriesFetching)
-            && fresh(d.gridStatEnergyFroms,    this._gridImportChangeFetchKey,   this._gridImportChangeFetching)
-            && fresh(d.gridStatEnergyTos,      this._gridExportChangeFetchKey,   this._gridExportChangeFetching)
+        return fresh(d.solarStatEnergyFroms,   this._pvChangeFetch.key,   this._pvChangeFetch.fetching)
+            && fresh(d.gridStatEnergyFroms,    this._gridImportFetch.key, this._gridImportFetch.fetching)
+            && fresh(d.gridStatEnergyTos,      this._gridExportFetch.key, this._gridExportFetch.fetching)
             && fresh([...d.batteryStatEnergyTos, ...d.batteryStatEnergyFroms],
-                     this._batteryChangeFetchKey, this._batteryChangeFetching);
+                     this._batteryChangeFetch.key, this._batteryChangeFetch.fetching);
     }
 
     //Reset timeline scrub state so the absolutely-positioned tooltip disappears next render.

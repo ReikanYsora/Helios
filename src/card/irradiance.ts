@@ -10,6 +10,7 @@
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
 import { callWS } from '../data/ha-gateway';
+import { minuteAnchorMs } from '../data/source-fetch';
 import { parseStatBoundaryLoose } from './energy-stats';
 import { RADIATION_CACHE_TTL_MS, HOUR_MS} from '../constants';
 
@@ -143,7 +144,7 @@ export function refreshIrradiance(host: IrradianceHost): void
     // Quantise the now-anchor to the minute so the dedupe key below stays stable between renders; an unquantised Date.now()
     // changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
     // the minute of slop is harmless.
-    const anchorMs     = Math.floor(Date.now() / 60_000) * 60_000;
+    const anchorMs     = minuteAnchorMs();
     const cap          = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
     const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;

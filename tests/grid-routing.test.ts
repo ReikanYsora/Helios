@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { refreshGrid, type GridHost } from '../src/card/grid';
 import { createGridGuard } from '../src/card/grid-guard';
+import { KeyedFetch } from '../src/data/source-fetch';
 import { EMPTY_ENERGY_DEFAULTS, type EnergyDefaults } from '../src/card/energy-prefs';
 
 function makeHost(defaults: Partial<EnergyDefaults>, states: Record<string, any>): GridHost
@@ -21,10 +22,8 @@ function makeHost(defaults: Partial<EnergyDefaults>, states: Record<string, any>
         _gridExportUnit:  '',
         _gridImportChangeSeries: null,
         _gridExportChangeSeries: null,
-        _gridImportChangeFetchKey: '',
-        _gridExportChangeFetchKey: '',
-        _gridImportChangeFetching: false,
-        _gridExportChangeFetching: false,
+        _gridImportFetch: new KeyedFetch(),
+        _gridExportFetch: new KeyedFetch(),
         _gridGuard: createGridGuard(),
     };
 }

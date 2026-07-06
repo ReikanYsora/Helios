@@ -5,8 +5,9 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { EnergyDefaults } from './energy-prefs';
-import { pvNormalizeToWatts, formatEntityValue, parseNumericState, type PowerUnit } from './format';
+import { formatEntityValue, parseNumericState, type PowerUnit } from './format';
 import { fetchChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { sumLiveWatts, type KeyedFetch } from '../data/source-fetch';
 import { DAY_MS } from '../constants';
 //Re-export so battery/grid/charts/helios-card can import pvNormalizeToWatts from './pv'.
 export { pvNormalizeToWatts } from './format';
@@ -52,15 +53,13 @@ export interface PvHost
     //store (timeline graphs) and chip scrub: the recorder returns reset-corrected, unit-normalised kWh per bucket, the same
     //metric the HA Energy dashboard consumes, so plotted production matches it without client-side differentiation. Null pre-fetch.
     _pvChangeSeries:         ChangeBucket[] | null;
-    _pvChangeSeriesFetchKey: string;
-    _pvChangeSeriesFetching: boolean;
+    _pvChangeFetch:          KeyedFetch;
     //Per-source recorder `change` series, keyed by the source's energy meter (`stat_energy_from`). Same reset-corrected,
     //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the Clock/Trend dial
     //shows each string with the exact dashboard energy (and recorded night production from non-solar sources fed in as PV),
     //instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
     _pvChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
-    _pvChangePerEntityFetchKey:  string;
-    _pvChangePerEntityFetching:  boolean;
+    _pvPerEntityFetch:           KeyedFetch;
 }
 
 
@@ -166,7 +165,7 @@ export function refreshPv(host: PvHost): void
     //(`stat_energy_from`), like the HA Energy dashboard: reset-corrected, unit-normalised kWh per 5-min bucket, divided by bucket
     //duration for average watts. No client-side differentiation, so coarse-reporting or daily-reset meters work natively.
     const changeIds = meters;
-    if (changeIds.length > 0 && !host._pvChangeSeriesFetching)
+    if (changeIds.length > 0)
     {
         //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
         //wide window (e.g. 7 d) come back empty.
@@ -175,49 +174,36 @@ export function refreshPv(host: PvHost): void
         //The refresh anchor re-arms the gate once per CHANGE_REFRESH_MS. fetchEnd alone only moves on time-range shifts (weather
         //refresh, midnight rollover), too coarse to keep the past curve tracking freshly committed buckets.
         const changeKey    = `${sortedChange.join(',')}|${seriesStart.getTime()}|${fetchEnd.getTime()}|${changeRefreshAnchorMs()}`;
-        if (changeKey !== host._pvChangeSeriesFetchKey)
-        {
-            host._pvChangeSeriesFetchKey = changeKey;
-            host._pvChangeSeriesFetching = true;
-            void fetchChangeSeries(host.hass, sortedChange, seriesStart.getTime(), fetchEnd.getTime(), host._storeFetchPeriod)
+        host._pvChangeFetch.run(changeKey, () =>
+            fetchChangeSeries(host.hass, sortedChange, seriesStart.getTime(), fetchEnd.getTime(), host._storeFetchPeriod)
                 .then((series) =>
                 {
                     if (series !== null) { host._pvChangeSeries = series; }
                     host.requestUpdate();
-                })
-                .finally(() =>
-                {
-                    host._pvChangeSeriesFetching = false;
-                });
-        }
+                }));
 
         //Per-source change series (one fetch per solar meter), so the Clock/Trend dial can split production by source
         //with the exact recorder energy instead of the lagging hourly LTS. Only worth it with 2+ sources; a single
         //source already reads the aggregate. Gated on the same key so it re-arms with the aggregate fetch.
-        if (changeIds.length >= 2 && !host._pvChangePerEntityFetching && changeKey !== host._pvChangePerEntityFetchKey)
+        if (changeIds.length >= 2)
         {
-            host._pvChangePerEntityFetchKey = changeKey;
-            host._pvChangePerEntityFetching = true;
             const startMs = seriesStart.getTime();
             const endMs   = fetchEnd.getTime();
             const period  = host._storeFetchPeriod;
-            void Promise.all(changeIds.map((meter) =>
-                fetchChangeSeries(host.hass, [meter], startMs, endMs, period)
-                    .then((series) => ({ meter, series }))))
-                .then((results) =>
-                {
-                    const next = new Map<string, ChangeBucket[]>();
-                    for (const { meter, series } of results)
+            host._pvPerEntityFetch.run(changeKey, () =>
+                Promise.all(changeIds.map((meter) =>
+                    fetchChangeSeries(host.hass, [meter], startMs, endMs, period)
+                        .then((series) => ({ meter, series }))))
+                    .then((results) =>
                     {
-                        if (series !== null) { next.set(meter, series); }
-                    }
-                    if (next.size > 0) { host._pvChangeSeriesPerEntity = next; }
-                    host.requestUpdate();
-                })
-                .finally(() =>
-                {
-                    host._pvChangePerEntityFetching = false;
-                });
+                        const next = new Map<string, ChangeBucket[]>();
+                        for (const { meter, series } of results)
+                        {
+                            if (series !== null) { next.set(meter, series); }
+                        }
+                        if (next.size > 0) { host._pvChangeSeriesPerEntity = next; }
+                        host.requestUpdate();
+                    }));
         }
     }
 }
@@ -252,19 +238,9 @@ export function currentPvRate(host: PvHost): PvRate | null
 {
     const rates = host._energyDefaults.solarStatRates;
     if (rates.length === 0) { return null; }
-    let sumW = 0;
-    let any  = false;
-    for (const id of rates)
-    {
-        const so = host.hass?.states?.[id];
-        if (!so) { continue; }
-        const v = parseNumericState(so.state);
-        if (v === null) { continue; }
-        sumW += pvNormalizeToWatts(v, String(so.attributes?.unit_of_measurement ?? ''));
-        any   = true;
-    }
+    const { watts, any } = sumLiveWatts(host.hass, rates);
     if (!any) { return null; }
-    return { value: Math.max(0, sumW), unit: 'W' };
+    return { value: Math.max(0, watts), unit: 'W' };
 }
 
 
