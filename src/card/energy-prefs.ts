@@ -1,9 +1,10 @@
 //HA Energy dashboard preferences subscription. All sensors resolve from the dashboard's global settings (no per-card
 //entity slots). Subscribed once per card; HA's `energy_preferences_updated` event triggers a fresh fetch.
 
-import { HA_DAILY_TOTALS_TTL_MS } from '../constants';
+import { HA_DAILY_TOTALS_TTL_MS, DAY_MS } from '../constants';
 import { callWS } from '../data/ha-gateway';
 import { RequestCache } from '../data/request-cache';
+import { loadLastGood, saveLastGood } from '../core/data/last-good';
 
 
 export interface EnergyDefaults
@@ -176,6 +177,8 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
     const now = new Date();
     //Date stamp in the key so the cached value doesn't outlive its window at midnight rollover.
     const cacheKey = `${midnight.getFullYear()}-${midnight.getMonth()}-${midnight.getDate()}|${[...statisticIds].sort().join('|')}`;
+    //The date-stamped key also persists the last-good total, so a reload or failure keeps today's figure.
+    const lastGoodKey = `dt:${cacheKey}`;
     return _haDailyTotalsCache.get(cacheKey, async () =>
     {
         try
@@ -212,13 +215,15 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
                     anyHit = true;
                 }
             }
-            return anyHit ? total : null;
+            if (!anyHit) { return null; }
+            saveLastGood(lastGoodKey, total);
+            return total;
         }
         catch (_)
         {
-            //Statistic missing, recorder under load, or RBAC denied: caller keeps the last good value so the chip
-            //stays readable.
-            return null;
+            //Statistic missing, recorder under load, or RBAC denied: fall back to the persisted last-good so the
+            //chip keeps today's figure instead of blanking.
+            return loadLastGood<number>(lastGoodKey, DAY_MS);
         }
     });
 }
