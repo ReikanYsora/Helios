@@ -220,27 +220,60 @@ export class HeliosCardEditor extends LitElement
         `;
     }
 
-    //The measured-only status block: one line per family CONFIGURED in the HA Energy dashboard, stating
-    //whether its live chip can exist and, if not, what to add. Silent until the prefs snapshot lands.
+    //Live-data status, pinned at the top of the editor (outside every section) so setup gaps surface at once.
+    //One line per energy family whether or not it is configured in the HA Energy dashboard: a configured
+    //family reports whether its live chip can exist (and what to add if not), a family that is not set up says
+    //so, so the list reads as the full path to every chip. The home line closes it, since home consumption is
+    //derived from the families above. Silent until the prefs snapshot lands.
     private _renderLiveDataStatus(t: Translations)
     {
         if (!this._energyDefaultsLoaded) { return nothing; }
         const d = this._energyDefaults;
+
         const solarWired   = d.solarStatEnergyFroms.length > 0;
         const gridWired    = d.gridStatEnergyFroms.length > 0 || d.gridStatEnergyTos.length > 0;
         const batteryWired = d.batteryStatEnergyFroms.length > 0 || d.batteryStatEnergyTos.length > 0;
-        if (!solarWired && !gridWired && !batteryWired) { return nothing; }
-        const gridFlagged = this._gridGuard.status === 'flagged';
-        const gridOk      = d.gridStatRates.length > 0 && !gridFlagged;
+
+        const gridFlagged  = this._gridGuard.status === 'flagged';
+        const solarLive    = d.solarStatRates.length > 0;
+        const gridLive     = d.gridStatRates.length > 0 && !gridFlagged;
+        const batteryLive  = !batteryLiveIsBucketSourced(d);
+
+        //Home consumption is derived: it needs every family the user DID configure to expose its live sensor.
+        const homeReady = (solarWired || gridWired || batteryWired)
+            && (!solarWired   || solarLive)
+            && (!gridWired    || gridLive)
+            && (!batteryWired || batteryLive);
+
         return html`
-            <div class="hint">${t.editor.liveDataIntro ?? 'Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source; curves and totals always come from your meters.'}</div>
-            ${solarWired ? this._liveStatusLine(d.solarStatRates.length > 0, false,
-                d.solarStatRates.length > 0 ? (t.editor.liveSolarOk ?? 'Solar: live power sensor detected.') : (t.editor.liveSolarMissing ?? 'Solar: no live power sensor, the production chip stays hidden. Add one under Settings > Dashboards > Energy > Solar panels.')) : nothing}
-            ${gridWired ? this._liveStatusLine(gridOk, gridFlagged,
-                gridFlagged ? (t.editor.liveGridMiswired ?? 'Grid: the live power sensor contradicts your meters (it seems to measure a single direction). The chips stay hidden; configure a signed sensor or the Two sensors mode.') : (gridOk ? (t.editor.liveGridOk ?? 'Grid: live power sensor detected.') : (t.editor.liveGridMissing ?? 'Grid: no live power sensor, the import/export chips stay hidden. Add one under Settings > Dashboards > Energy > Grid.'))) : nothing}
-            ${batteryWired ? this._liveStatusLine(!batteryLiveIsBucketSourced(d), false,
-                !batteryLiveIsBucketSourced(d) ? (t.editor.liveBatteryOk ?? 'Battery: live power sensors cover every battery.') : (t.editor.liveBatteryMissing ?? 'Battery: live power missing on at least one battery, the power chip stays hidden. Add the power sensor(s) under Settings > Dashboards > Energy > Battery.')) : nothing}
-            <div class="field-help">${t.editor.liveHomeNote ?? 'The home consumption readout appears once every configured family above has its live sensor.'}</div>
+            <div class="live-data-panel">
+                <div class="section-title"><ha-icon class="section-icon" icon="mdi:flash"></ha-icon>${t.editor.liveDataTitle ?? 'Check your configuration'}</div>
+                <div class="hint">${t.editor.liveDataIntro ?? 'Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source; curves and totals always come from your meters.'}</div>
+
+                ${solarWired
+                    ? this._liveStatusLine(solarLive, false, solarLive
+                        ? (t.editor.liveSolarOk ?? 'Solar: live power sensor detected.')
+                        : (t.editor.liveSolarMissing ?? 'Solar: no live power sensor, the production chip stays hidden. Add one under Settings > Dashboards > Energy > Solar panels.'))
+                    : this._liveStatusLine(false, false, t.editor.liveSolarAbsent ?? 'Solar: not set up in your Energy dashboard. Add solar panels there to get the production chip.')}
+
+                ${gridWired
+                    ? this._liveStatusLine(gridLive, gridFlagged, gridFlagged
+                        ? (t.editor.liveGridMiswired ?? 'Grid: the live power sensor contradicts your meters (it seems to measure a single direction). The chips stay hidden; configure a signed sensor or the Two sensors mode.')
+                        : (gridLive
+                            ? (t.editor.liveGridOk ?? 'Grid: live power sensor detected.')
+                            : (t.editor.liveGridMissing ?? 'Grid: no live power sensor, the import/export chips stay hidden. Add one under Settings > Dashboards > Energy > Grid.')))
+                    : this._liveStatusLine(false, false, t.editor.liveGridAbsent ?? 'Grid: not set up in your Energy dashboard. Add the grid there to get the import and export chips.')}
+
+                ${batteryWired
+                    ? this._liveStatusLine(batteryLive, false, batteryLive
+                        ? (t.editor.liveBatteryOk ?? 'Battery: live power sensors cover every battery.')
+                        : (t.editor.liveBatteryMissing ?? 'Battery: live power missing on at least one battery, the power chip stays hidden. Add the power sensor(s) under Settings > Dashboards > Energy > Battery.'))
+                    : this._liveStatusLine(false, false, t.editor.liveBatteryAbsent ?? 'Battery: not set up in your Energy dashboard. Add a battery there to get the charge and discharge chip.')}
+
+                ${this._liveStatusLine(homeReady, false, homeReady
+                    ? (t.editor.liveHomeOk ?? 'Home consumption: shown, derived from the live families above.')
+                    : (t.editor.liveHomeNote ?? 'Home consumption: appears once every configured family above has its live sensor.'))}
+            </div>
         `;
     }
 
@@ -538,6 +571,8 @@ export class HeliosCardEditor extends LitElement
         return html`
             <div class="editor">
 
+                ${this._renderLiveDataStatus(t)}
+
                 <details class="advanced-section" data-section="location" ?open=${this._openSection === 'location'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map-marker"></ha-icon>${t.editor.locationSection}</summary>
                 <label class="field">
@@ -606,7 +641,6 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
-                ${this._renderLiveDataStatus(t)}
                 ${this._renderSlider('display-update-frequency-per-hour', t.editor.displayUpdateFrequency, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, 1, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, ' / h')}
                 <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
                 ${this._renderSlider('value-decimals', t.editor.valueDecimals ?? 'Value decimals', MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}

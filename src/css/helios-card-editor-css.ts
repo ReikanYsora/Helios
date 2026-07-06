@@ -102,6 +102,18 @@ export const editorStyles = css`
     .live-status.is-warn ha-icon { color: var(--warning-color, #ff9800); }
     .live-status.is-info ha-icon { color: var(--secondary-text-color, #727272); }
 
+    /*  Always-visible live-data status, pinned above the collapsible sections (its own title, no <details>).
+        Its title matches the collapsible sections' flex row so the icon centres on the text (a bare
+        .section-title block would baseline-align the icon and sit it too high). */
+    .live-data-panel { margin-bottom: 4px; }
+    .live-data-panel > .section-title
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 0;
+    }
+
     .field-help,
     .hint
     {

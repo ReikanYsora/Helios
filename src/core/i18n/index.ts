@@ -165,15 +165,20 @@ export interface Translations
         customEntityIcon:          string;
         customEntityColor:         string;
         customEntityColorHelp:     string;
-        //Measured-only status lines (live chips per configured energy family). Optional; fall back to English.
+        //Measured-only status lines (live chip readiness per energy family, configured or not). Optional; fall back to English.
+        liveDataTitle?:            string;
         liveDataIntro?:            string;
         liveSolarOk?:              string;
         liveSolarMissing?:         string;
+        liveSolarAbsent?:          string;
         liveGridOk?:               string;
         liveGridMissing?:          string;
         liveGridMiswired?:         string;
+        liveGridAbsent?:           string;
         liveBatteryOk?:            string;
         liveBatteryMissing?:       string;
+        liveBatteryAbsent?:        string;
+        liveHomeOk?:               string;
         liveHomeNote?:             string;
         //Surrounding buildings: cluster radius, neighbour opacity, base tint.
         buildingsSection:         string;
