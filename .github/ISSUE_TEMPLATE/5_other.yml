@@ -1,7 +1,8 @@
 name: Something else
 description: A bug that really isn't about data, buildings/map, or performance
-title: ""
-labels: []
+title: "[Other] "
+assignees: ["ReikanYsora"]
+projects: ["ReikanYsora/7"]
 body:
   - type: markdown
     attributes:

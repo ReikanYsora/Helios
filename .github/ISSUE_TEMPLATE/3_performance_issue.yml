@@ -2,6 +2,8 @@ name: Slowness or lag
 description: Helios is slow, the map stutters, or the card is heavy on your device
 title: "[Performance] "
 labels: ["Performance issue"]
+assignees: ["ReikanYsora"]
+projects: ["ReikanYsora/7"]
 body:
   - type: markdown
     attributes:

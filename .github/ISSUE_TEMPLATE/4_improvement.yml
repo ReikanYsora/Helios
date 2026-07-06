@@ -2,6 +2,8 @@ name: Improvement or new feature
 description: Suggest something new or better for Helios
 title: "[Improvement] "
 labels: ["enhancement"]
+assignees: ["ReikanYsora"]
+projects: ["ReikanYsora/7"]
 body:
   - type: markdown
     attributes:
