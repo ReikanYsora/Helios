@@ -9,6 +9,7 @@ import { HOUR_MS, HOURS_PER_DAY} from '../constants';
 import { type ChartTarget, type ChartHost, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from './charts';
 import { changeSeriesToWatts } from './energy-stats';
+import { consumptionLoad } from '../core/energy/consumption';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, cssHex, uiColorVar } from './format';
 import type { UnifiedDataStore } from './unifiedStore';
 import { customEntityId, customEntityColor, valueDecimals, powerUnit, irradianceUnit } from '../helios-config';
@@ -456,7 +457,7 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
             const p = store.production[i]; const gi = store.gridImport[i];
             const ge = store.gridExport[i]; const b = store.battery[i];
             if (p === null && gi === null && ge === null && b === null) { continue; }
-            cons[i] = Math.max(0, (p ?? 0) + (gi ?? 0) - (ge ?? 0) - (b ?? 0));
+            cons[i] = consumptionLoad(p ?? 0, gi ?? 0, ge ?? 0, b ?? 0);
         }
         specs = [{ series: cons, color: ENERGY_COLOR.consumption(el), icon: 'mdi:home-lightning-bolt', label: clockTargetLabel(host, target) }];
     }

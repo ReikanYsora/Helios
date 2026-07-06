@@ -5,6 +5,7 @@ import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import { ENERGY_COLOR, lerpHexToward, cssHex, uiColorVar } from './format';
 import { customEntityColor } from '../helios-config';
+import { consumptionLoad } from '../core/energy/consumption';
 import { buildTimelineModel, formatTimelineLabel } from './timeline-model';
 import { sumChangeForDay } from './energy-stats';
 import type { ChartHost, ChartTarget } from './charts';
@@ -128,7 +129,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             if (p === null && gi === null && ge === null && b === null) { continue; }
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
             if (tMs < startMs || tMs > endMsAbs) { continue; }
-            const v = Math.max(0, (p ?? 0) + (gi ?? 0) - (ge ?? 0) - (b ?? 0));
+            const v = consumptionLoad(p ?? 0, gi ?? 0, ge ?? 0, b ?? 0);
             cons.push({ t: tMs, v });
         }
         series = [{ pts: cons, color: ENERGY_COLOR.consumption(el) }];

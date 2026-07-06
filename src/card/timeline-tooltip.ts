@@ -4,6 +4,7 @@
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, irradianceUnit, customEntityColor } from '../helios-config';
+import { consumptionLoad } from '../core/energy/consumption';
 import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from './format';
 import { valueAt } from './unifiedStore';
 import { pickTranslations } from '../i18n';
@@ -73,9 +74,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //0. Same formula as the consumption chart series. Hidden when no flow has any reading.
     const prodW          = store ? (valueAt(store.production, store, atMs) ?? NaN) : NaN;
     const hasConsumption = isFinite(prodW) || isFinite(gridImpW) || isFinite(gridExpW) || isFinite(battW);
-    const consumptionW   = Math.max(0,
-        (isFinite(prodW) ? prodW : 0) + (isFinite(gridImpW) ? gridImpW : 0)
-        - (isFinite(gridExpW) ? gridExpW : 0) - (isFinite(battW) ? battW : 0));
+    const consumptionW   = consumptionLoad(
+        isFinite(prodW) ? prodW : 0, isFinite(gridImpW) ? gridImpW : 0,
+        isFinite(gridExpW) ? gridExpW : 0, isFinite(battW) ? battW : 0);
     const battSocV = host._batterySocHistory
         ? interpAt(host._batterySocHistory.times, host._batterySocHistory.values, atMs)
         : NaN;

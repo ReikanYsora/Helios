@@ -8,6 +8,7 @@ import { fetchChangeSeries, outlierCapKwh, type ChangeBucket } from './energy-st
 import { callWSWithTimeout } from './ws-timeout';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import { customEntityId, customEnergyEntityId, type HeliosConfig } from '../helios-config';
+import { consumptionLoad } from '../core/energy/consumption';
 import type { EnergyDefaults } from './energy-prefs';
 import { serverHour } from './timezone';
 import { HOUR_MS, HOURS_PER_DAY} from '../constants';
@@ -139,7 +140,7 @@ export async function fetchHourlyProfile(
     const batteryCharge    = binChangeByHour(bChg);
     const batteryDischarge = binChangeByHour(bDis);
     //Consumption from the same identity the timeline uses: production + import - export - net battery, clamped.
-    const consumption = pvTotal.map((p, h) => Math.max(0, p + gridImport[h] - gridExport[h] - (batteryCharge[h] - batteryDischarge[h])));
+    const consumption = pvTotal.map((p, h) => consumptionLoad(p, gridImport[h], gridExport[h], batteryCharge[h] - batteryDischarge[h]));
 
     return { pv, gridImport, gridExport, batteryCharge, batteryDischarge, consumption, soc, custom };
 }
