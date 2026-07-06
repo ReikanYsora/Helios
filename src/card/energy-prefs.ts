@@ -45,6 +45,21 @@ export interface EnergyDefaults
 }
 
 
+//The union of every source's recorder energy meter (`change`) ids: solar, grid import/export, battery
+//charge/discharge. Sources fetch this union in one call so RequestCache collapses them to a single recorder
+//round-trip, then each merges its own ids.
+export function unionChangeMeters(d: EnergyDefaults): string[]
+{
+    return [
+        ...d.solarStatEnergyFroms,
+        ...d.gridStatEnergyFroms,
+        ...d.gridStatEnergyTos,
+        ...d.batteryStatEnergyTos,
+        ...d.batteryStatEnergyFroms,
+    ];
+}
+
+
 export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
 {
     solarStatRates:         [],

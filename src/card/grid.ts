@@ -14,8 +14,8 @@
 //reading the meters regardless.
 
 import { formatEntityValue, type PowerUnit } from './format';
-import type { EnergyDefaults } from './energy-prefs';
-import { fetchChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
+import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { refreshGridGuard, type GridGuardState } from './grid-guard';
 import { sumLiveWatts, type KeyedFetch } from '../data/source-fetch';
 import { DAY_MS } from '../constants';
@@ -90,9 +90,8 @@ export function refreshGrid(host: GridHost): void
 function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 {
     const ed = host._energyDefaults;
-    const ids = slot === 'import'
-        ? (ed?.gridStatEnergyFroms ?? [])
-        : (ed?.gridStatEnergyTos   ?? []);
+    if (!ed) { return; }
+    const ids = slot === 'import' ? ed.gridStatEnergyFroms : ed.gridStatEnergyTos;
     if (ids.length === 0) { return; }
 
     const today0 = new Date();
@@ -100,17 +99,20 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
     const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
-    //Rounded end anchor in the key re-issues the fetch once per CHANGE_REFRESH_MS, so the past curve and
-    //scrub keep tracking newly committed buckets.
+    //Rounded end anchor so the past curve tracks newly committed buckets. One call for the union of every
+    //source's meters; RequestCache collapses pv/grid/battery to a single recorder round-trip, then each
+    //merges its own ids.
     const endMs   = changeRefreshAnchorMs();
-    const sorted  = [...ids].sort();
-    const key     = `${sorted.join(',')}|${startMs}|${endMs}`;
+    const sortedUnion = [...unionChangeMeters(ed)].sort();
+    const key = `${sortedUnion.join(',')}|${startMs}|${endMs}`;
 
     const gate = slot === 'import' ? host._gridImportFetch : host._gridExportFetch;
     gate.run(key, () =>
-        fetchChangeSeries(host.hass, sorted, startMs, endMs, host._storeFetchPeriod)
-            .then((series) =>
+        fetchChangeById(host.hass, sortedUnion, startMs, endMs, host._storeFetchPeriod)
+            .then((byId) =>
             {
+                if (byId === null) { return; }
+                const series = mergeChangeSeries(byId, ids);
                 if (series !== null)
                 {
                     if (slot === 'import') { host._gridImportChangeSeries = series; }

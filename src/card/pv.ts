@@ -4,9 +4,9 @@
 //Lit reactivity, so calling refreshPv(this) from a lifecycle hook re-renders.
 
 import type { HeliosConfig } from '../helios-config';
-import type { EnergyDefaults } from './energy-prefs';
+import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { formatEntityValue, parseNumericState, type PowerUnit } from './format';
-import { fetchChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../data/source-fetch';
 import { DAY_MS } from '../constants';
 //Re-export so battery/grid/charts/helios-card can import pvNormalizeToWatts from './pv'.
@@ -59,7 +59,6 @@ export interface PvHost
     //shows each string with the exact dashboard energy (and recorded night production from non-solar sources fed in as PV),
     //instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
     _pvChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
-    _pvPerEntityFetch:           KeyedFetch;
 }
 
 
@@ -157,7 +156,6 @@ export function refreshPv(host: PvHost): void
     {
         return;
     }
-    const fetchEnd = host._timeRange.end;
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
 
@@ -169,42 +167,34 @@ export function refreshPv(host: PvHost): void
     {
         //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
         //wide window (e.g. 7 d) come back empty.
-        const seriesStart = new Date(today0.getTime() - host._periodPastDays * DAY_MS);
-        const sortedChange = [...changeIds].sort();
-        //The refresh anchor re-arms the gate once per CHANGE_REFRESH_MS. fetchEnd alone only moves on time-range shifts (weather
-        //refresh, midnight rollover), too coarse to keep the past curve tracking freshly committed buckets.
-        const changeKey    = `${sortedChange.join(',')}|${seriesStart.getTime()}|${fetchEnd.getTime()}|${changeRefreshAnchorMs()}`;
-        host._pvChangeFetch.run(changeKey, () =>
-            fetchChangeSeries(host.hass, sortedChange, seriesStart.getTime(), fetchEnd.getTime(), host._storeFetchPeriod)
-                .then((series) =>
+        const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
+        //End anchored to the refresh boundary (the recorder holds nothing beyond now, so the forecast horizon
+        //is irrelevant): one call fetches the union of every source's meters, and RequestCache collapses pv/
+        //grid/battery to a single recorder round-trip. Each source then merges its own ids from the result.
+        const endMs = changeRefreshAnchorMs();
+        const sortedUnion = [...unionChangeMeters(host._energyDefaults)].sort();
+        const key = `${sortedUnion.join(',')}|${startMs}|${endMs}`;
+        host._pvChangeFetch.run(key, () =>
+            fetchChangeById(host.hass, sortedUnion, startMs, endMs, host._storeFetchPeriod)
+                .then((byId) =>
                 {
-                    if (series !== null) { host._pvChangeSeries = series; }
-                    host.requestUpdate();
-                }));
-
-        //Per-source change series (one fetch per solar meter), so the Clock/Trend dial can split production by source
-        //with the exact recorder energy instead of the lagging hourly LTS. Only worth it with 2+ sources; a single
-        //source already reads the aggregate. Gated on the same key so it re-arms with the aggregate fetch.
-        if (changeIds.length >= 2)
-        {
-            const startMs = seriesStart.getTime();
-            const endMs   = fetchEnd.getTime();
-            const period  = host._storeFetchPeriod;
-            host._pvPerEntityFetch.run(changeKey, () =>
-                Promise.all(changeIds.map((meter) =>
-                    fetchChangeSeries(host.hass, [meter], startMs, endMs, period)
-                        .then((series) => ({ meter, series }))))
-                    .then((results) =>
+                    if (byId === null) { return; }
+                    const agg = mergeChangeSeries(byId, changeIds);
+                    if (agg !== null) { host._pvChangeSeries = agg; }
+                    //Per-source series (the Clock/Trend dial splits production by meter): read each meter's own
+                    //buckets from the same per-id result, no extra call. Only meaningful with 2+ sources.
+                    if (changeIds.length >= 2)
                     {
                         const next = new Map<string, ChangeBucket[]>();
-                        for (const { meter, series } of results)
+                        for (const meter of changeIds)
                         {
-                            if (series !== null) { next.set(meter, series); }
+                            const b = byId[meter];
+                            if (b) { next.set(meter, b); }
                         }
                         if (next.size > 0) { host._pvChangeSeriesPerEntity = next; }
-                        host.requestUpdate();
-                    }));
-        }
+                    }
+                    host.requestUpdate();
+                }));
     }
 }
 

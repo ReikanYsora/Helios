@@ -6,8 +6,8 @@
 import { formatPowerKw, parseNumericState, type PowerUnit } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWS } from '../data/ha-gateway';
-import type { EnergyDefaults } from './energy-prefs';
-import { fetchChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
+import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, minuteAnchorMs, type KeyedFetch } from '../data/source-fetch';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../constants';
 
@@ -257,23 +257,23 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
     const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
-    //End anchor rounded to the refresh boundary, folded into the fetch key so the gate re-arms once per CHANGE_REFRESH_MS and the
-    //past curve + scrub keep tracking new buckets. Rounding also lands every card on the same energy-stats cache key,
-    //so an N-card dashboard hits the recorder once per interval.
+    //Rounded end anchor so the past curve + scrub keep tracking new buckets. One call for the union of every
+    //source's meters; RequestCache collapses pv/grid/battery to a single recorder round-trip. Charge and
+    //discharge are merged separately so the net power keeps a structural sign.
     const endMs   = changeRefreshAnchorMs();
-    const sortedCharge    = [...chargeIds].sort();
-    const sortedDischarge = [...dischargeIds].sort();
-    const key = `${sortedCharge.join(',')}|${sortedDischarge.join(',')}|${startMs}|${endMs}`;
+    const sortedUnion = [...unionChangeMeters(host._energyDefaults)].sort();
+    const key = `${sortedUnion.join(',')}|${startMs}|${endMs}`;
     host._batteryChangeFetch.run(key, () =>
-        Promise.all([
-            sortedCharge.length    > 0 ? fetchChangeSeries(host.hass, sortedCharge,    startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
-            sortedDischarge.length > 0 ? fetchChangeSeries(host.hass, sortedDischarge, startMs, endMs, host._storeFetchPeriod) : Promise.resolve(null),
-        ]).then(([charge, discharge]) =>
-        {
-            if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
-            if (discharge !== null) { host._batteryDischargeChangeSeries = discharge; }
-            host.requestUpdate();
-        }));
+        fetchChangeById(host.hass, sortedUnion, startMs, endMs, host._storeFetchPeriod)
+            .then((byId) =>
+            {
+                if (byId === null) { return; }
+                const charge    = chargeIds.length    > 0 ? mergeChangeSeries(byId, chargeIds)    : null;
+                const discharge = dischargeIds.length > 0 ? mergeChangeSeries(byId, dischargeIds) : null;
+                if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
+                if (discharge !== null) { host._batteryDischargeChangeSeries = discharge; }
+                host.requestUpdate();
+            }));
 }
 
 

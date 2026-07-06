@@ -44,7 +44,7 @@ export type StatPeriod = '5minute' | 'hour' | 'day';
 //rounded end anchor guarantees nobody is served data older than one interval. Inflight dedups races. The TTL prune
 //matters here: re-arm retires a key every CHANGE_REFRESH_MS, so without eviction the map would gain a parsed-bucket
 //entry per series per minute for the page's lifetime.
-const _cache = new RequestCache<ChangeBucket[] | null>(CHANGE_REFRESH_MS - 5_000);
+const _cache = new RequestCache<Record<string, ChangeBucket[]> | null>(CHANGE_REFRESH_MS - 5_000);
 
 export function clearEnergyStatsCache(): void
 {
@@ -52,25 +52,27 @@ export function clearEnergyStatsCache(): void
 }
 
 
-//Fetch the summed `change` series for a set of statistic ids over [startMs, endMs] at the given period. Per-source
-//buckets are summed into one series aligned on bucket start, so multi-source installs land as one combined curve.
-//Null on empty ids, no hass, or rejection so callers fall back to their previous series.
-export async function fetchChangeSeries(
+//Fetch the recorder `change` buckets for a set of statistic ids over [startMs, endMs] at the given period,
+//returned PER ID (not summed) in one WS call. Sources request the same union of ids + window, so RequestCache
+//collapses their calls to a single recorder round-trip; each source then merges its own ids. Null on empty
+//ids, no hass, or rejection (falling back to the durable copy) so callers keep their previous series.
+export async function fetchChangeById(
     hass:         any,
     statisticIds: string[],
     startMs:      number,
     endMs:        number,
     period:       StatPeriod = '5minute',
-): Promise<ChangeBucket[] | null>
+): Promise<Record<string, ChangeBucket[]> | null>
 {
     if (statisticIds.length === 0) { return null; }
     if (!hass?.callWS)             { return null; }
     if (endMs <= startMs)          { return null; }
 
-    const cacheKey = `${period}|${startMs}|${endMs}|${[...statisticIds].sort().join('|')}`;
-    //Stable key for the durable copy (no minute anchor): a reload restores the last series for this
-    //view (period + window span + ids) instead of blanking, then a fresh fetch replaces it.
-    const durableKey = `cs:${period}|${Math.round((endMs - startMs) / HOUR_MS)}|${[...statisticIds].sort().join('|')}`;
+    const sorted     = [...statisticIds].sort();
+    const cacheKey   = `${period}|${startMs}|${endMs}|${sorted.join('|')}`;
+    //Stable key for the durable copy (no minute anchor): a reload restores the last buckets for this view
+    //(period + window span + ids) instead of blanking, then a fresh fetch replaces it.
+    const durableKey = `cbid:${period}|${Math.round((endMs - startMs) / HOUR_MS)}|${sorted.join('|')}`;
     return _cache.get(cacheKey, async () =>
     {
         try
@@ -85,14 +87,14 @@ export async function fetchChangeSeries(
                 units:         { energy: 'kWh' },
             }) as Record<string, { start?: unknown; end?: unknown; change?: number | null }[]>;
 
-            //Merge per-source buckets into one series keyed on bucket start. Same-period sources share bucket starts
-            //so the merge is a clean per-bucket sum; misaligned sources accumulate into the nearest start key.
-            const merged = new Map<number, ChangeBucket>();
+            //Parse each id's buckets independently (no cross-id sum): callers merge only the ids they need.
+            const byId: Record<string, ChangeBucket[]> = {};
             let anyHit = false;
             for (const id of statisticIds)
             {
                 const buckets = result?.[id];
                 if (!Array.isArray(buckets)) { continue; }
+                const parsed: ChangeBucket[] = [];
                 for (const b of buckets)
                 {
                     const startBoundary = parseStatBoundary(b?.start);
@@ -100,30 +102,61 @@ export async function fetchChangeSeries(
                     const kwh = typeof b?.change === 'number' ? b.change : null;
                     if (kwh === null || !Number.isFinite(kwh)) { continue; }
                     const endBoundary = parseStatBoundary(b?.end) ?? (startBoundary + periodMs(period));
-                    const existing = merged.get(startBoundary);
-                    if (existing)
-                    {
-                        existing.kwh += kwh;
-                    }
-                    else
-                    {
-                        merged.set(startBoundary, { startMs: startBoundary, endMs: endBoundary, kwh });
-                    }
+                    parsed.push({ startMs: startBoundary, endMs: endBoundary, kwh });
                     anyHit = true;
                 }
+                if (parsed.length > 0) { byId[id] = parsed; }
             }
             if (!anyHit) { return null; }
-            const series = [...merged.values()].sort((a, b) => a.startMs - b.startMs);
-            saveDurable(durableKey, series);
-            return series;
+            saveDurable(durableKey, byId);
+            return byId;
         }
         catch (_)
         {
-            //A rejected fetch (timeout, recorder stall, HA restart) falls back to the durable copy so
-            //the curve survives instead of blanking; a fresh fetch replaces it on the next refresh.
-            return loadDurable<ChangeBucket[]>(durableKey, DAY_MS);
+            //A rejected fetch (timeout, recorder stall, HA restart) falls back to the durable copy so the
+            //curves survive instead of blanking; a fresh fetch replaces it on the next refresh.
+            return loadDurable<Record<string, ChangeBucket[]>>(durableKey, DAY_MS);
         }
     });
+}
+
+
+//Merge the given ids' buckets (from fetchChangeById) into one series keyed on bucket start. Same-period ids
+//share bucket starts so the merge is a clean per-bucket sum; misaligned ids accumulate into the nearest start
+//key. Null when none of the ids carry a bucket, so the caller keeps its previous series.
+export function mergeChangeSeries(byId: Record<string, ChangeBucket[]>, ids: string[]): ChangeBucket[] | null
+{
+    const merged = new Map<number, ChangeBucket>();
+    let anyHit = false;
+    for (const id of ids)
+    {
+        const buckets = byId[id];
+        if (!buckets) { continue; }
+        for (const b of buckets)
+        {
+            const existing = merged.get(b.startMs);
+            if (existing) { existing.kwh += b.kwh; }
+            else          { merged.set(b.startMs, { startMs: b.startMs, endMs: b.endMs, kwh: b.kwh }); }
+            anyHit = true;
+        }
+    }
+    if (!anyHit) { return null; }
+    return [...merged.values()].sort((a, b) => a.startMs - b.startMs);
+}
+
+
+//Fetch the summed `change` series for a set of statistic ids: one WS call via fetchChangeById, then merge.
+//Null on empty ids, no hass, or rejection so callers fall back to their previous series.
+export async function fetchChangeSeries(
+    hass:         any,
+    statisticIds: string[],
+    startMs:      number,
+    endMs:        number,
+    period:       StatPeriod = '5minute',
+): Promise<ChangeBucket[] | null>
+{
+    const byId = await fetchChangeById(hass, statisticIds, startMs, endMs, period);
+    return byId === null ? null : mergeChangeSeries(byId, statisticIds);
 }
 
 
