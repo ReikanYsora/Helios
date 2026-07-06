@@ -517,6 +517,9 @@ export class HeliosCard extends LitElement
             this._infoPanelOpen = !this._infoPanelOpen;
             this._lastChipTapMs = 0;
             this._lastChipTapTarget = '';
+            //Opening the panel on a coarse (month/year) window needs the clock's hourly profile, which the scene
+            //does not otherwise fetch: kick it now so the totals match the clock instead of showing empty.
+            void refreshClockHourly(this);
             return;
         }
         if (switching)

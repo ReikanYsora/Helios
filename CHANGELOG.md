@@ -12,6 +12,8 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 A quick corrective release. Apologies: 2026.7.3 shipped a detail-panel bug, and I
 wanted it fixed fast.
 
+Moral of the story: never let a developer finish "just one more feature" at 2 a.m. :)
+
 ### Fixed: detail panel totals now match the energy clock on every period
 
 The per-chip detail panel (double-tap a chip) computed its totals from the card's
@@ -27,6 +29,12 @@ watt-hours-labelled-as-kWh error is folded into this fix.)
 Selecting a chip in the scene (including by double-tapping it) once more drives
 which metric the clock and trend dials show when you switch to them, instead of
 keeping the previously shown one.
+
+### Fixed: the solar forecast is clearly visible on the irradiance view
+
+The dashed solar forecast on the irradiance timeline was ghosted and hard to read
+under the cloud-cover bands. It now uses the exact same styling as the production
+timeline's forecast (theme-aware shade, full opacity, same dash).
 
 ---
 
