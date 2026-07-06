@@ -3,6 +3,7 @@
 
 import { HA_DAILY_TOTALS_TTL_MS } from '../constants';
 import { callWS } from '../data/ha-gateway';
+import { RequestCache } from '../data/request-cache';
 
 
 export interface EnergyDefaults
@@ -155,12 +156,7 @@ export interface HaDailyTotalsHost
 //Module-level cache for the recorder day-totals fetch, keyed by `${localDate}|${sortedStatisticIds}` so cards on one
 //dashboard share a round-trip. TTL undershoots the 30s tick so the value survives a refresh window; `inflight`
 //dedupes concurrent calls. Process-scoped (cleared on reload).
-interface HaDailyTotalsCacheEntry {
-    ts:        number;
-    result:    number | null;
-    inflight?: Promise<number | null>;
-}
-const _haDailyTotalsCache = new Map<string, HaDailyTotalsCacheEntry>();
+const _haDailyTotalsCache = new RequestCache<number | null>(HA_DAILY_TOTALS_TTL_MS);
 
 
 //Sum the `change` field of `recorder/statistics_during_period` over today (local midnight to now) across all
@@ -180,20 +176,7 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
     const now = new Date();
     //Date stamp in the key so the cached value doesn't outlive its window at midnight rollover.
     const cacheKey = `${midnight.getFullYear()}-${midnight.getMonth()}-${midnight.getDate()}|${[...statisticIds].sort().join('|')}`;
-    const nowMs    = now.getTime();
-    const cached   = _haDailyTotalsCache.get(cacheKey);
-    if (cached)
-    {
-        if (cached.inflight)
-        {
-            return cached.inflight;
-        }
-        if (nowMs - cached.ts < HA_DAILY_TOTALS_TTL_MS)
-        {
-            return cached.result;
-        }
-    }
-    const inflight: Promise<number | null> = (async () =>
+    return _haDailyTotalsCache.get(cacheKey, async () =>
     {
         try
         {
@@ -237,11 +220,7 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
             //stays readable.
             return null;
         }
-    })();
-    _haDailyTotalsCache.set(cacheKey, { ts: nowMs, result: null, inflight });
-    const settled = await inflight;
-    _haDailyTotalsCache.set(cacheKey, { ts: Date.now(), result: settled });
-    return settled;
+    });
 }
 
 
