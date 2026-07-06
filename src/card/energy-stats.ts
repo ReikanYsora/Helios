@@ -8,7 +8,7 @@
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number the card shows the same number.
 
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, COARSE_REGULARITY, HOUR_MS, DAY_MS } from '../constants';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWS } from '../data/ha-gateway';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
@@ -98,7 +98,7 @@ export async function fetchChangeSeries(
     {
         try
         {
-            const result = await callWSWithTimeout(hass, {
+            const result = await callWS(hass, {
                 type:          'recorder/statistics_during_period',
                 start_time:    new Date(startMs).toISOString(),
                 end_time:      new Date(endMs).toISOString(),

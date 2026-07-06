@@ -5,7 +5,7 @@
 
 import { formatPowerKw, parseNumericState, type PowerUnit } from './format';
 import { pvNormalizeToWatts } from './pv';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWS } from '../data/ha-gateway';
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../constants';
@@ -481,7 +481,7 @@ export async function fetchBatteryHistory(
         //LTS arm uses the broader `ltsStart` (usually visible start, often midnight or earlier) so today's charged/discharged kWh
         //integrate across the full day. The raw fallback below uses the narrower `rawStart` so a non-LTS entity doesn't pull a
         //multi-day raw scan on a high-frequency BMS.
-        const statsResult: any = await callWSWithTimeout<any>(host.hass, {
+        const statsResult: any = await callWS<any>(host.hass, {
             type:           'recorder/statistics_during_period',
             start_time:     ltsStart.toISOString(),
             end_time:       fetchEnd.toISOString(),
@@ -505,7 +505,7 @@ export async function fetchBatteryHistory(
         {
             //No entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
             //`significant_changes_only` for server-side dedup; raw arm capped at `rawStart` (6 h) so a high-frequency feed doesn't drag the recorder.
-            const rawResult: any = await callWSWithTimeout<any>(host.hass, {
+            const rawResult: any = await callWS<any>(host.hass, {
                 type:                     'history/history_during_period',
                 start_time:               rawStart.toISOString(),
                 end_time:                 fetchEnd.toISOString(),

@@ -28,7 +28,7 @@ import {
     GUARD_REFRESH_MS, GUARD_WINDOW_MS, GUARD_MIN_EXPORT_KWH, GUARD_MAX_EXPORT_KWH,
     GUARD_NEGATIVE_BAND_W, GUARD_RELATIVE_BAND, GUARD_CONTRADICTION_HOURS, GUARD_CLEAN_EVALS,
 } from '../constants';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWS } from '../data/ha-gateway';
 import { parseStatBoundary } from './energy-stats';
 
 
@@ -190,7 +190,7 @@ export function refreshGridGuard(host: GridGuardHost): void
     const rateId   = rates[0];
     const inverted = ed?.invertedRateEntities.includes(rateId) ?? false;
     void Promise.all([
-        callWSWithTimeout(host.hass, {
+        callWS(host.hass, {
             type:          'recorder/statistics_during_period',
             start_time:    new Date(startMs).toISOString(),
             end_time:      new Date(endMs).toISOString(),
@@ -199,7 +199,7 @@ export function refreshGridGuard(host: GridGuardHost): void
             types:         ['change'],
             units:         { energy: 'kWh' },
         }),
-        callWSWithTimeout(host.hass, {
+        callWS(host.hass, {
             type:          'recorder/statistics_during_period',
             start_time:    new Date(startMs).toISOString(),
             end_time:      new Date(endMs).toISOString(),

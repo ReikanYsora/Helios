@@ -2,7 +2,7 @@
 //entity slots). Subscribed once per card; HA's `energy_preferences_updated` event triggers a fresh fetch.
 
 import { HA_DAILY_TOTALS_TTL_MS } from '../constants';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWS } from '../data/ha-gateway';
 
 
 export interface EnergyDefaults
@@ -84,7 +84,7 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
     }
     try
     {
-        const prefs = await callWSWithTimeout(host.hass, { type: 'energy/get_prefs' }) as {
+        const prefs = await callWS(host.hass, { type: 'energy/get_prefs' }) as {
             energy_sources?: Record<string, unknown>[];
         };
         const next = parseEnergyPrefs(prefs);
@@ -197,7 +197,7 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
     {
         try
         {
-            const result = await callWSWithTimeout(host.hass, {
+            const result = await callWS(host.hass, {
                 type:          'recorder/statistics_during_period',
                 start_time:    midnight.toISOString(),
                 end_time:      now.toISOString(),

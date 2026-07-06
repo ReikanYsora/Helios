@@ -9,7 +9,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWS } from '../data/ha-gateway';
 import { parseStatBoundaryLoose } from './energy-stats';
 import { RADIATION_CACHE_TTL_MS, HOUR_MS} from '../constants';
 
@@ -255,7 +255,7 @@ export async function fetchIrradianceHistory(
         // so the stats path scales to high-frequency feeds at near-zero cost. Falls back to raw history for non-LTS custom sensors,
         // at the cost of recorder bandwidth on the slim window.
         let history: IrradianceHistory = { times: [], values: [] };
-        const statsResult: any = await callWSWithTimeout<any>(host.hass, {
+        const statsResult: any = await callWS<any>(host.hass, {
             type:           'recorder/statistics_during_period',
             start_time:     start.toISOString(),
             end_time:       fetchEnd.toISOString(),
@@ -272,7 +272,7 @@ export async function fetchIrradianceHistory(
         }
         else
         {
-            const rawResult: any = await callWSWithTimeout<any>(host.hass, {
+            const rawResult: any = await callWS<any>(host.hass, {
                 type:                     'history/history_during_period',
                 start_time:               start.toISOString(),
                 end_time:                 fetchEnd.toISOString(),

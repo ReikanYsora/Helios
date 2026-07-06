@@ -5,7 +5,7 @@
 //case.
 
 import { fetchChangeSeries, outlierCapKwh, type ChangeBucket } from './energy-stats';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWS } from '../data/ha-gateway';
 import { modeBucketsPerHour, type TimelineMode } from './timeline-modes';
 import { customEntityId, customEnergyEntityId, type HeliosConfig } from '../helios-config';
 import { consumptionLoad } from '../core/energy/consumption';
@@ -80,7 +80,7 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
     if (!ids.length) { return sum; }
     try
     {
-        const res: any = await callWSWithTimeout<any>(hass, {
+        const res: any = await callWS<any>(hass, {
             type:          'recorder/statistics_during_period',
             start_time:    new Date(startMs).toISOString(),
             end_time:      new Date(endMs).toISOString(),
