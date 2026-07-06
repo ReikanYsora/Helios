@@ -1,0 +1,90 @@
+name: Wrong or missing values
+description: Helios shows different numbers than your Home Assistant Energy dashboard, or shows nothing
+title: "[Data] "
+labels: ["Data issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## How Helios reads your data
+
+        Helios shows **only what your Home Assistant Energy dashboard already knows**, and it never estimates a value:
+
+        - **Live chips** (the real-time numbers in the scene) appear **only when a real live power sensor** is set on the matching source in your Energy dashboard (the optional "power" field). No power sensor, no live chip: nothing is derived from your meters.
+        - **Curves, clock, trend and totals** come only from your **kWh meters**, through the same recorder data the Energy dashboard reads, so they match it by construction.
+        - **Home consumption** is the dashboard's own balance (solar + import - export - battery).
+
+        So when a value looks wrong, it almost always comes from the **dashboard configuration**, not from Helios inventing something. The checklist below catches most of these before we even start :)
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I'm on the latest version of Helios.
+          required: true
+        - label: My solar / grid / battery sources are configured in the Home Assistant Energy dashboard.
+          required: true
+        - label: For the LIVE values, I've set the optional **power** sensor on each source (not only the kWh energy sensor).
+          required: true
+        - label: I searched the existing issues and didn't find the same one.
+          required: true
+
+  - type: dropdown
+    id: helios-version
+    attributes:
+      label: Helios version
+      description: HACS > Helios shows the installed version.
+      options:
+        # versions:start
+        - 2026.7.4 (latest)
+        - 2026.7.3
+        - 2026.7.2
+        - 2026.7.1
+        - An older version
+        - A beta / prerelease
+        - I don't know
+        # versions:end
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What's wrong?
+      description: Which value is off? What does Helios show, and what does the Energy dashboard show at the same moment?
+      placeholder: |
+        e.g. Helios shows 1,894 kW of battery power, but the Energy dashboard shows 1.9 kW at the same time.
+    validations:
+      required: true
+
+  - type: textarea
+    id: entities
+    attributes:
+      label: "Editor > Entities status (screenshot)"
+      description: |
+        Open the card **Editor** and scroll to **Entities**. It lists, per family (solar / grid / battery / custom), which live sensors Helios detects, with green checkmarks. Please paste a **screenshot of that panel** here. It tells us instantly what is and isn't wired.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dashboard
+    attributes:
+      label: What's in your Energy dashboard?
+      description: The solar / grid / battery sources you configured, and which of them have a live power sensor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Card YAML config
+      description: Paste your card YAML (nothing sensitive in there).
+      render: yaml
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console errors
+      description: Press F12 to open the browser console, reload the dashboard, and paste any red errors here.
+      render: shell

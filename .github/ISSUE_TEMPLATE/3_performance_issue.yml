@@ -1,0 +1,90 @@
+name: Slowness or lag
+description: Helios is slow, the map stutters, or the card is heavy on your device
+title: "[Performance] "
+labels: ["Performance issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before anything
+
+        Performance depends a lot on **the device showing the card** and on **how many buildings** are drawn. A wall tablet or an older phone will struggle where a laptop flies.
+
+        Two quick things that fix most cases, in the **Editor**:
+        - Lower the **building count** and/or the **display radius**.
+        - Turn **shadows** off.
+
+        If it's still slow after that, the details below let me profile it properly. The more precise the device info, the better :)
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I'm on the latest version of Helios.
+          required: true
+        - label: I lowered the building count / display radius (and turned shadows off), and it is still slow.
+          required: true
+
+  - type: dropdown
+    id: helios-version
+    attributes:
+      label: Helios version
+      description: HACS > Helios shows the installed version.
+      options:
+        # versions:start
+        - 2026.7.4 (latest)
+        - 2026.7.3
+        - 2026.7.2
+        - 2026.7.1
+        - An older version
+        - A beta / prerelease
+        - I don't know
+        # versions:end
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device showing the card
+      description: The exact model if you can, this matters most.
+      placeholder: e.g. iPad 9th gen (2021), Pixel 6, a Lenovo wall tablet, or a desktop PC + GPU
+    validations:
+      required: true
+
+  - type: input
+    id: os-browser
+    attributes:
+      label: OS + browser (or HA app)
+      placeholder: e.g. iPadOS 17 + Safari, or the HA Companion app on Android 14
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where is it slow?
+      multiple: true
+      options:
+        - Rotating / panning the map
+        - Scrubbing the timeline
+        - Switching to clock or trend mode
+        - Opening the editor
+        - Everywhere / the whole card
+    validations:
+      required: true
+
+  - type: input
+    id: buildings
+    attributes:
+      label: Building count and display radius
+      description: The values set in the Editor (Buildings section).
+      placeholder: e.g. 100 buildings, 500 m radius
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console (optional)
+      description: Any warnings or errors from the browser console (F12).
+      render: shell

@@ -1,0 +1,75 @@
+name: Building or map not shown correctly
+description: A building is missing, has the wrong shape or height, or the basemap looks off
+title: "[Map] "
+labels: ["Map issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## How the buildings work
+
+        Helios draws the surrounding buildings from **OpenStreetMap** data (served as vector tiles by OpenFreeMap). It doesn't invent shapes: **if a building isn't in OpenStreetMap, Helios can't show it**, and if a footprint or height is wrong in OSM, Helios shows it wrong too.
+
+        The good news: OpenStreetMap is **community-edited**, so it can be fixed, and often by you :)
+
+        1. Open [openstreetmap.org](https://www.openstreetmap.org) and find your home.
+        2. Is your building drawn there, with the right footprint?
+           - **Yes** -> it's a Helios rendering issue, please describe it below.
+           - **No or wrong** -> anyone (including you) can add or fix it on OSM. It is **not instant**: once edited, it takes a while to reach the tiles Helios reads. After that, clear the card cache (Editor > Reset) and it will appear.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I checked my address on openstreetmap.org.
+          required: true
+        - label: My building IS present on OpenStreetMap with a correct footprint. (If it isn't, I understand I need to add it there and wait for it to propagate, and this is not a Helios bug.)
+          required: true
+        - label: I'm on the latest version of Helios.
+          required: true
+
+  - type: dropdown
+    id: helios-version
+    attributes:
+      label: Helios version
+      description: HACS > Helios shows the installed version.
+      options:
+        # versions:start
+        - 2026.7.4 (latest)
+        - 2026.7.3
+        - 2026.7.2
+        - 2026.7.1
+        - An older version
+        - A beta / prerelease
+        - I don't know
+        # versions:end
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What's wrong?
+      options:
+        - My building is missing
+        - The footprint / shape is wrong
+        - The height looks wrong
+        - The basemap (streets / map) looks off
+        - Something else about the map
+    validations:
+      required: true
+
+  - type: textarea
+    id: describe
+    attributes:
+      label: Describe it
+      description: What you see versus what you expect. A screenshot helps a lot.
+    validations:
+      required: true
+
+  - type: input
+    id: osm
+    attributes:
+      label: OpenStreetMap link (optional)
+      description: If you're comfortable sharing it, a link to your area on openstreetmap.org lets me check the source data. Skip it if you'd rather not.

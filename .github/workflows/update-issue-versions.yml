@@ -1,0 +1,74 @@
+name: Update issue-form version dropdowns
+
+# Keeps the "Helios version" dropdown in the issue forms in sync with the published releases, so reporters
+# always pick from real versions without anyone editing the templates by hand. Regenerates the options between
+# the `# versions:start` / `# versions:end` markers in every template.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Regenerate version options
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Newest-first list of the last 6 STABLE tags (prereleases and drafts excluded).
+          stables="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 100 \
+            --json tagName,isPrerelease -q '.[] | select(.isPrerelease==false) | .tagName' | head -6)"
+
+          {
+            first=1
+            while IFS= read -r tag; do
+              [ -z "$tag" ] && continue
+              if [ "$first" = 1 ]; then
+                printf '        - %s (latest)\n' "$tag"; first=0
+              else
+                printf '        - %s\n' "$tag"
+              fi
+            done <<< "$stables"
+            printf '        - An older version\n'
+            printf '        - A beta / prerelease\n'
+            printf "        - I don't know\n"
+          } > /tmp/options.txt
+
+          python3 - <<'PY'
+          import glob
+          opts = open('/tmp/options.txt').read().splitlines()
+          for path in glob.glob('.github/ISSUE_TEMPLATE/*.yml'):
+              lines = open(path).read().splitlines()
+              if not any('# versions:start' in l for l in lines):
+                  continue
+              out, skip = [], False
+              for l in lines:
+                  if '# versions:start' in l:
+                      out.append(l); out.extend(opts); skip = True; continue
+                  if '# versions:end' in l:
+                      skip = False; out.append(l); continue
+                  if not skip:
+                      out.append(l)
+              open(path, 'w').write('\n'.join(out) + '\n')
+          PY
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/ISSUE_TEMPLATE; then
+            echo "Version dropdowns already up to date."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/ISSUE_TEMPLATE
+          git commit -m "Sync issue-form version dropdowns with the latest release"
+          git push

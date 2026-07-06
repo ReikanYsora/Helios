@@ -1,0 +1,73 @@
+name: Something else
+description: A bug that really isn't about data, buildings/map, or performance
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use this **only** if your issue is not one of these (they each have their own, better form):
+
+        - **Wrong or missing values** -> use "Wrong or missing values"
+        - **Buildings / the map** -> use "Building or map not shown correctly"
+        - **Slowness / lag** -> use "Slowness or lag"
+
+        Everything below is still required, so I can actually act on it. If it fits one of the forms above, please go back and pick that one, it gets a much faster answer :)
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: This is not a data, map, or performance issue (those have their own forms above).
+          required: true
+        - label: I'm on the latest version of Helios.
+          required: true
+        - label: I searched the existing issues.
+          required: true
+
+  - type: dropdown
+    id: helios-version
+    attributes:
+      label: Helios version
+      description: HACS > Helios shows the installed version.
+      options:
+        # versions:start
+        - 2026.7.4 (latest)
+        - 2026.7.3
+        - 2026.7.2
+        - 2026.7.1
+        - An older version
+        - A beta / prerelease
+        - I don't know
+        # versions:end
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, what you did and what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the dashboard
+        2. ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console errors
+      description: Press F12 to open the browser console, reload the dashboard, and paste any red errors here.
+      render: shell
+    validations:
+      required: true
