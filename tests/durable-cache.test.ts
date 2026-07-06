@@ -1,8 +1,8 @@
-//Last-good localStorage persistence: round-trip, version + age invalidation, key isolation on clear, and
-//graceful failure when storage is unavailable (the card must never throw over a missing/full localStorage).
+//Durable cache (localStorage persistence): round-trip, version + age invalidation, key isolation on clear,
+//and graceful failure when storage is unavailable (the card must never throw over a missing/full storage).
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { loadLastGood, saveLastGood, clearLastGood } from '../src/core/data/last-good';
+import { loadDurable, saveDurable, clearDurable } from '../src/core/data/durable-cache';
 
 //Minimal in-memory localStorage stand-in installed on globalThis.window.
 function installMockStorage(): void
@@ -18,7 +18,7 @@ function installMockStorage(): void
     (globalThis as unknown as { window: unknown }).window = { localStorage: mock };
 }
 
-describe('last-good persistence', () =>
+describe('durable cache', () =>
 {
     beforeEach(() =>
     {
@@ -33,45 +33,45 @@ describe('last-good persistence', () =>
 
     it('round-trips a payload within its age window', () =>
     {
-        saveLastGood('k', { a: 1, series: [1, 2, 3] });
-        expect(loadLastGood('k', 60_000)).toEqual({ a: 1, series: [1, 2, 3] });
+        saveDurable('k', { a: 1, series: [1, 2, 3] });
+        expect(loadDurable('k', 60_000)).toEqual({ a: 1, series: [1, 2, 3] });
     });
 
     it('returns null past maxAgeMs', () =>
     {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(1_000_000));
-        saveLastGood('k', 42);
+        saveDurable('k', 42);
         vi.setSystemTime(new Date(1_061_000));
-        expect(loadLastGood('k', 60_000)).toBeNull();
+        expect(loadDurable('k', 60_000)).toBeNull();
     });
 
     it('a missing key returns null', () =>
     {
-        expect(loadLastGood('nope', 60_000)).toBeNull();
+        expect(loadDurable('nope', 60_000)).toBeNull();
     });
 
     it('a malformed payload returns null instead of throwing', () =>
     {
-        window.localStorage.setItem('helios:last-good:bad', '{not json');
-        expect(loadLastGood('bad', 60_000)).toBeNull();
+        window.localStorage.setItem('helios:durable:bad', '{not json');
+        expect(loadDurable('bad', 60_000)).toBeNull();
     });
 
-    it('clear removes only helios last-good keys', () =>
+    it('clear removes only helios durable keys', () =>
     {
-        saveLastGood('a', 1);
-        saveLastGood('b', 2);
+        saveDurable('a', 1);
+        saveDurable('b', 2);
         window.localStorage.setItem('unrelated', 'x');
-        expect(clearLastGood()).toBe(2);
-        expect(loadLastGood('a', 60_000)).toBeNull();
+        expect(clearDurable()).toBe(2);
+        expect(loadDurable('a', 60_000)).toBeNull();
         expect(window.localStorage.getItem('unrelated')).toBe('x');
     });
 
     it('never throws when storage is unavailable', () =>
     {
         delete (globalThis as unknown as { window?: unknown }).window;
-        expect(() => saveLastGood('k', 1)).not.toThrow();
-        expect(loadLastGood('k', 60_000)).toBeNull();
-        expect(clearLastGood()).toBe(0);
+        expect(() => saveDurable('k', 1)).not.toThrow();
+        expect(loadDurable('k', 60_000)).toBeNull();
+        expect(clearDurable()).toBe(0);
     });
 });

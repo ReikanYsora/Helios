@@ -1,9 +1,10 @@
-//Last-good persistence for the data layer: a versioned, age-capped localStorage stash so a browser reload
-//or a Home Assistant restart shows the last successfully-fetched data instantly instead of a blank card,
-//then refreshes. Every access is best-effort: storage unavailable / full / malformed just yields null (and
-//the caller does a fresh fetch), never a throw.
+//Durable cache for the data layer: a versioned, age-capped localStorage stash so a browser reload or a
+//Home Assistant restart shows the last successfully-fetched data instantly instead of a blank card, then
+//refreshes. It is the durable counterpart to RequestCache (which is ephemeral, per session). Every access
+//is best-effort: storage unavailable / full / malformed just yields null (and the caller does a fresh
+//fetch), never a throw.
 
-const PREFIX = 'helios:last-good:';
+const PREFIX = 'helios:durable:';
 //Bump to invalidate every stored payload at once when a persisted shape changes.
 const VERSION = 1;
 
@@ -15,8 +16,8 @@ interface Envelope<T>
 }
 
 
-//Read the last-good payload for a key if present, current-version, and within maxAgeMs. Null otherwise.
-export function loadLastGood<T>(key: string, maxAgeMs: number): T | null
+//Read the durable payload for a key if present, current-version, and within maxAgeMs. Null otherwise.
+export function loadDurable<T>(key: string, maxAgeMs: number): T | null
 {
     try
     {
@@ -43,8 +44,8 @@ export function loadLastGood<T>(key: string, maxAgeMs: number): T | null
 }
 
 
-//Persist a last-good payload under a key. Best-effort: quota / permission errors are swallowed.
-export function saveLastGood<T>(key: string, data: T): void
+//Persist a payload under a key. Best-effort: quota / permission errors are swallowed.
+export function saveDurable<T>(key: string, data: T): void
 {
     try
     {
@@ -58,8 +59,8 @@ export function saveLastGood<T>(key: string, data: T): void
 }
 
 
-//Drop every last-good payload (called from the card's reset hook). Returns the count removed.
-export function clearLastGood(): number
+//Drop every durable payload (called from the card's reset hook). Returns the count removed.
+export function clearDurable(): number
 {
     let cleared = 0;
     try
