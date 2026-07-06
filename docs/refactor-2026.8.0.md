@@ -79,7 +79,10 @@ render modules, `updated()` becomes controller wiring.
 ### Pillar 3, shared render kit (`core/`)
 
 - **One prism painter** used by both buildings and clock columns (one cull, one
-  depth-sort).
+  depth-sort). Deferred: the two current painters use different cull (screen-space
+  shoelace vs world-space dot) and depth-sort (cameraZ vs screenY), so unifying
+  them cannot be byte-identical; done deliberately in a later pass with visual
+  validation on the dev Docker, not as a socle step.
 - **One color module** (merge `engine/colors.ts` and the color half of
   `card/format.ts`); one hex-blend; `Point` / `pointsAttr` promoted out of the
   color file.
@@ -134,12 +137,30 @@ before the previous one is validated.
 - Add `SourceBase` and fold the pv/grid/battery/irradiance common shape onto it.
 - Output stays byte-identical where possible. Ship.
 
-**Pass 1, data layer.**
-- Consolidate all fetching into `EnergyStore` on top of gateway + cache.
-- Add in-flight cancellation on window/mode switch.
-- Fold weather ingress into the same discipline.
-- Evaluate and (if validated) adopt `subscribeEntities` for the live-chip
-  entities, so reactivity keys on relevant entities, not every `hass` push.
+**Pass 1, data layer as a WebSocket robustness layer.**
+The WebSocket stays: it is HA's only viable transport. Live `hass.states` rides
+HA's own robust connection (not ours), and recorder/statistics are WS-only;
+`callService` does not return this data and REST `history` is heavier and being
+deprecated. So the work is not a new transport, it is making our USE of the WS
+solid. The data layer is the pain centre (a failed fetch blanks the card, and we
+pull large volumes), so this pass is scoped around robustness:
+- **Cut volume**: one multi-id `statistics_during_period` call per period instead
+  of one per source; strict granularity per window (5minute only for now/short,
+  hour for day/week, day for month/year); shared cache so re-renders never refetch.
+- **Graceful degradation**: always keep the last-good series in memory AND persist
+  it to localStorage, so a reload or a HA core restart shows the last-good instantly
+  then refreshes, never a blank card. Distinct states: loading / stale / not
+  configured / error.
+- **Real cancellation** (`AbortSignal`): a superseded window's fetch is dropped,
+  never overwrites.
+- **Backoff + retry** on the card side, reusing the weather layer's pattern.
+- **Live chips via `subscribeEntities`**: instantaneous values come over HA's robust
+  push, so a stalled recorder never blanks the live chips; only historical curves
+  depend on the heavy fetches.
+- Consolidate all of the above into `EnergyStore` on top of gateway + cache; fold
+  weather ingress into the same discipline.
+- Secondary, to investigate: reuse HA's shared energy-data collection in the energy
+  dashboard context (less duplication; access non-trivial for a custom card).
 - Ship.
 
 **Pass 2, controllers.**
