@@ -9,6 +9,7 @@
 
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, COARSE_REGULARITY, HOUR_MS, DAY_MS } from '../constants';
 import { callWS } from '../data/ha-gateway';
+import { RequestCache } from '../data/request-cache';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
@@ -39,29 +40,10 @@ export type StatPeriod = '5minute' | 'hour' | 'day';
 
 //Module-level cache shared across every card so an N-card dashboard hits the recorder once per (window | period |
 //statIds) tuple. TTL undershoots CHANGE_REFRESH_MS so all cards within one re-arm interval share one hit, and the
-//rounded end anchor guarantees nobody is served data older than one interval. Inflight dedups races.
-interface CacheEntry
-{
-    ts:        number;
-    result:    ChangeBucket[] | null;
-    inflight?: Promise<ChangeBucket[] | null>;
-}
-const TTL_MS = CHANGE_REFRESH_MS - 5_000;
-const _cache = new Map<string, CacheEntry>();
-
-//Drop settled entries past TTL. Re-arm retires a key every CHANGE_REFRESH_MS, so without eviction the map gains an
-//entry (with its parsed bucket array) per series per minute for the page's lifetime: hundreds of MB/day on an
-//always-on dashboard. Called every fetch; the map holds only a few live entries so the sweep is cheap.
-function pruneExpired(cache: Map<string, { ts: number; inflight?: unknown }>, nowMs: number): void
-{
-    for (const [key, e] of cache)
-    {
-        if (!e.inflight && nowMs - e.ts > TTL_MS)
-        {
-            cache.delete(key);
-        }
-    }
-}
+//rounded end anchor guarantees nobody is served data older than one interval. Inflight dedups races. The TTL prune
+//matters here: re-arm retires a key every CHANGE_REFRESH_MS, so without eviction the map would gain a parsed-bucket
+//entry per series per minute for the page's lifetime.
+const _cache = new RequestCache<ChangeBucket[] | null>(CHANGE_REFRESH_MS - 5_000);
 
 export function clearEnergyStatsCache(): void
 {
@@ -85,16 +67,7 @@ export async function fetchChangeSeries(
     if (endMs <= startMs)          { return null; }
 
     const cacheKey = `${period}|${startMs}|${endMs}|${[...statisticIds].sort().join('|')}`;
-    const nowMs    = Date.now();
-    pruneExpired(_cache, nowMs);
-    const cached   = _cache.get(cacheKey);
-    if (cached)
-    {
-        if (cached.inflight)                    { return cached.inflight; }
-        if (nowMs - cached.ts < TTL_MS)         { return cached.result; }
-    }
-
-    const inflight: Promise<ChangeBucket[] | null> = (async () =>
+    return _cache.get(cacheKey, async () =>
     {
         try
         {
@@ -143,12 +116,7 @@ export async function fetchChangeSeries(
             //Missing statistic, recorder under load, RBAC denied: keep the caller on its previous series.
             return null;
         }
-    })();
-
-    _cache.set(cacheKey, { ts: nowMs, result: null, inflight });
-    const settled = await inflight;
-    _cache.set(cacheKey, { ts: Date.now(), result: settled });
-    return settled;
+    });
 }
 
 
