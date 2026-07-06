@@ -8,7 +8,7 @@ import { clusterScaleRamp, steppedArcScale } from './hud-layout';
 import { sunSpherePoint, daylightRamp } from './sun-arc';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
-    SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, PV_CHIP_OFFSET_PX,
+    SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG, PV_CHIP_OFFSET_PX,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
     SUN_COLOR_HEX, BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS} from '../core/config/constants';
 import
@@ -1709,16 +1709,18 @@ export class HeliosEngine
                 continue;
             }
 
-            const prevBelow = prev.belowHorizon;
-            const currBelow = curr.belowHorizon;
+            //Rise/set at the standard apparent-altitude threshold (refraction + semi-diameter), not the
+            //geometric-centre 0° used for the arc's above/below render split, so the times match HA's sun.
+            const prevBelow = prev.altitudeDeg < SUNRISE_SUNSET_ALTITUDE_DEG;
+            const currBelow = curr.altitudeDeg < SUNRISE_SUNSET_ALTITUDE_DEG;
             if (prevBelow === currBelow)
             {
                 continue;
             }
 
-            //Lerp on altitudeM (+ above horizon, - below): t=0 at prev, t=1 at curr, altitudeM=0 at crossing.
-            const aPrev = prev.altitudeM;
-            const aCurr = curr.altitudeM;
+            //Lerp on (altitudeDeg - threshold): t=0 at prev, t=1 at curr, crossing where apparent altitude = threshold.
+            const aPrev = prev.altitudeDeg - SUNRISE_SUNSET_ALTITUDE_DEG;
+            const aCurr = curr.altitudeDeg - SUNRISE_SUNSET_ALTITUDE_DEG;
             const span  = aCurr - aPrev;
             const t     = (Math.abs(span) < 1e-6) ? 0.5 : (-aPrev / span);
             const tClamped = Math.max(0, Math.min(1, t));

@@ -52,6 +52,10 @@ export const CAMERA_PITCH_REST_DEG = 50;
 export const SUN_ARC_RADIUS_M      = 40;    //base celestial radius (m); scaled on-screen by the card
 export const SUN_ARC_SAMPLES       = 96;    //points along the day's arc (15-min cadence)
 export const SUN_ARC_NIGHT_OPACITY = 0.25;  //below-horizon segment opacity
+//Standard sunrise/sunset convention (HA, NOAA, suncalc): the apparent upper limb meets the horizon when the
+//sun's geometric centre sits 0.833° below it (0.567° atmospheric refraction + 0.267° solar semi-diameter).
+//The arc + detail-panel mark rise/set at this altitude, not the geometric-centre 0° crossing.
+export const SUNRISE_SUNSET_ALTITUDE_DEG = -0.833;
 
 
 export const PV_CHIP_OFFSET_PX     = 70;    //PV chip lift above the home cluster
