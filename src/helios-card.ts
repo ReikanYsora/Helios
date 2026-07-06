@@ -2422,8 +2422,10 @@ export class HeliosCard extends LitElement
         this._clockHomeHover = false;
         if (mode === 'clock')
         {
-            //Entering clock with no saved filters: seed from the current chip so a ring shows immediately.
-            if (this._clockTargets.length === 0)
+            //Entering clock: the scene's selected chip drives the dial. If it is not already among the active
+            //filters, reset to it (so selecting a chip in the scene always carries into clock); when it IS one of
+            //them, keep the multi-filter set the user built inside the dial.
+            if (!this._clockTargets.includes(this._chartTarget))
             {
                 this._clockTargets = [this._chartTarget];
             }
@@ -2444,7 +2446,9 @@ export class HeliosCard extends LitElement
         }
         if (mode === 'trend')
         {
-            //Weather metrics have no P / P-1 profile; if one was restored, fall back to consumption.
+            //The scene's selected chip drives the trend dial too (single-metric, like scene). Weather metrics have
+            //no P / P-1 profile, so an irradiance selection falls back to consumption.
+            if (this._chartTarget !== 'irradiance') { this._trendTarget = this._chartTarget; }
             if (this._trendTarget === 'irradiance') { this._trendTarget = 'consumption'; }
             //Dial draws no scene geometry; the overlay paints the comparison dial. Fetch the two profiles.
             this._engine?.setHomeOnly(true);
