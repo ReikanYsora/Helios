@@ -304,12 +304,13 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             forecastLine = `M ${pts.map(p => `${xOf(p.t.getTime()).toFixed(2)},${yOfF(p.v).toFixed(2)}`).join(' L ')}`;
         }
     }
-    //Same look as the production forecast (charts-pv): the theme-aware "predicted" shade, full opacity, same dash,
-    //so the dashed forecast reads identically on the irradiance view instead of a fainter ghost.
+    //Forecast dash on the irradiance view. It rides the near-identical shape of the amber irradiance area, so a
+    //plain predicted shade blends in: push the contrast harder (toward white on dark, black on light) than the
+    //production line so the dashed silhouette clearly separates from the fill under it.
     const isDarkTheme  = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
     const forecastColor = isDarkTheme
-        ? lerpHexToward(ENERGY_COLOR.pv(el), '#ffffff', 0.55)
-        : lerpHexToward(ENERGY_COLOR.pv(el), '#000000', 0.35);
+        ? lerpHexToward(ENERGY_COLOR.pv(el), '#ffffff', 0.75)
+        : lerpHexToward(ENERGY_COLOR.pv(el), '#000000', 0.55);
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
@@ -351,7 +352,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 <!--  Forecast silhouette drawn LAST so it reads as a ghosted reference on top of the target's
                       own fill + the cloud overlay, instead of being buried under them.  -->
                 ${forecastLine ? svg`
-                    <path class="hc-chart-line hc-chart-predicted" d="${forecastLine}" stroke="${forecastColor}" fill="none"></path>
+                    <path class="hc-chart-line hc-chart-predicted" d="${forecastLine}" stroke="${forecastColor}" stroke-width="2" fill="none"></path>
                 ` : nothing}
             </g>
             ${showHover ? svg`
