@@ -10,6 +10,7 @@
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, COARSE_REGULARITY, HOUR_MS, DAY_MS } from '../constants';
 import { callWS } from '../data/ha-gateway';
 import { RequestCache } from '../data/request-cache';
+import { loadLastGood, saveLastGood } from '../core/data/last-good';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
@@ -67,6 +68,9 @@ export async function fetchChangeSeries(
     if (endMs <= startMs)          { return null; }
 
     const cacheKey = `${period}|${startMs}|${endMs}|${[...statisticIds].sort().join('|')}`;
+    //Stable key for the persisted last-good (no minute anchor): a reload restores the last series for this
+    //view (period + window span + ids) instead of blanking, then a fresh fetch replaces it.
+    const lastGoodKey = `cs:${period}|${Math.round((endMs - startMs) / HOUR_MS)}|${[...statisticIds].sort().join('|')}`;
     return _cache.get(cacheKey, async () =>
     {
         try
@@ -109,12 +113,15 @@ export async function fetchChangeSeries(
                 }
             }
             if (!anyHit) { return null; }
-            return [...merged.values()].sort((a, b) => a.startMs - b.startMs);
+            const series = [...merged.values()].sort((a, b) => a.startMs - b.startMs);
+            saveLastGood(lastGoodKey, series);
+            return series;
         }
         catch (_)
         {
-            //Missing statistic, recorder under load, RBAC denied: keep the caller on its previous series.
-            return null;
+            //A rejected fetch (timeout, recorder stall, HA restart) falls back to the persisted last-good so
+            //the curve survives instead of blanking; a fresh fetch replaces it on the next refresh.
+            return loadLastGood<ChangeBucket[]>(lastGoodKey, DAY_MS);
         }
     });
 }

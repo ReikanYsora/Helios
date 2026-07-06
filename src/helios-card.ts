@@ -93,6 +93,7 @@ import {
     type EnergyDefaults,
 } from './card/energy-prefs';
 import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod, type ChangeBucket } from './card/energy-stats';
+import { clearLastGood } from './core/data/last-good';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
 import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
 import
@@ -670,6 +671,7 @@ export class HeliosCard extends LitElement
         clearBatteryModuleCaches();
         clearIrradianceModuleCaches();
         clearEnergyStatsCache();
+        clearLastGood();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot, refetches.
         this._engine?.resetDataCache();
         //Also drop the buildings caches (localStorage + shared) and re-fetch, so this one button refreshes
