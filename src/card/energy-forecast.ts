@@ -4,6 +4,7 @@
 
 import type { EnergyDefaults } from './energy-prefs';
 import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../constants';
+import { callWS } from '../data/ha-gateway';
 
 
 //One forecast point. `w` holds the AVERAGE WATTS across the point's bucket: the fetch layer normalises each
@@ -67,7 +68,7 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
         else
         {
             //HA returns { [configEntryId]: { wh_hours: { [iso]: number } } }; an unconfigured install returns {}.
-            const raw = await host.hass.callWS({ type: 'energy/solar_forecast' }) as Record<string, { wh_hours?: Record<string, number> }>;
+            const raw = await callWS(host.hass, { type: 'energy/solar_forecast' }) as Record<string, { wh_hours?: Record<string, number> }>;
             host._haSolarForecast = mergeSolarForecast(raw);
         }
         host._haSolarForecastLoaded = true;
@@ -108,7 +109,7 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     //Fetch every entry in parallel, then sum the answering ones per timestamp. A rejecting entry (not the Helios
     //provider) resolves to null and drops out; an empty-but-valid answer counts as answered but adds nothing.
     const results = await Promise.all(candidates.map((entryId) =>
-        host.hass.callWS({
+        callWS<{ points?: { t: string; pv_w: number }[] }>(host.hass, {
             type:     'helios_forecast/series',
             entry_id: entryId,
             start:    startIso,
