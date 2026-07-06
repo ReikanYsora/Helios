@@ -179,7 +179,7 @@ export class HeliosCard extends LitElement
     _batteryFetching  = false;
     //Recorder change series for battery charge (stat_energy_to) + discharge (stat_energy_from) meters:
     //canonical past-power source for the unified store + scrub. Net (charge - discharge) gives a
-    //structural sign so charging is never lost (#216).
+    //structural sign so charging is never lost.
     @state() _batteryChargeChangeSeries:    ChangeBucket[] | null = null;
     @state() _batteryDischargeChangeSeries: ChangeBucket[] | null = null;
     _batteryChangeFetch = new KeyedFetch();

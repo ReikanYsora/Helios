@@ -64,7 +64,7 @@ export const UI_AUTOHIDE_MS            = 5_000;
 
 //=== Cache TTLs / timeouts / throttles ===
 export const BATTERY_CACHE_TTL_MS   = 15 * 60_000;
-export const RADIATION_CACHE_TTL_MS = 15 * 60_000;
+export const IRRADIANCE_CACHE_TTL_MS = 15 * 60_000;
 export const HA_DAILY_TOTALS_TTL_MS = 25_000;
 export const FORECAST_THROTTLE_MS   = 5 * 60_000;
 export const WS_DEFAULT_TIMEOUT_MS  = 30_000;

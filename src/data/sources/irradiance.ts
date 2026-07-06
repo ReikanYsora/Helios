@@ -14,12 +14,12 @@ import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { minuteAnchorMs } from '../source-fetch';
 import { parseStatBoundaryLoose } from './energy-stats';
-import { RADIATION_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
+import { IRRADIANCE_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
 
 
 // Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip;
 // in-flight de-dup collapses concurrent mounts to one WS hit.
-const _irradianceCache = new RequestCache<IrradianceHistory | null>(RADIATION_CACHE_TTL_MS);
+const _irradianceCache = new RequestCache<IrradianceHistory | null>(IRRADIANCE_CACHE_TTL_MS);
 
 
 // Wipe the module cache. Called from the card's `resetDataCache()` hook.

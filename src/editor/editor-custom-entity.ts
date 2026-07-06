@@ -2,7 +2,7 @@
 //meter (energy surfaces), an optional colour and an optional icon. Measured-only contract: the card
 //displays the custom entity only when BOTH sensors are set, so the two pickers sit together with their
 //own hints. Labels are injected by the host (translation-agnostic), and the value travels as one object,
-//so the 2026.8 multi-entity editor can stack N of these rows without touching this file.
+//so a future multi-entity editor can stack N of these rows without touching this file.
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
