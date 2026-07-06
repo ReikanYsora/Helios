@@ -10,41 +10,22 @@
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
 import { callWS } from '../data/ha-gateway';
+import { RequestCache } from '../data/request-cache';
+import { saveDurableSeries, loadDurableSeries } from '../core/data/durable-cache';
 import { minuteAnchorMs } from '../data/source-fetch';
 import { parseStatBoundaryLoose } from './energy-stats';
-import { RADIATION_CACHE_TTL_MS, HOUR_MS} from '../constants';
+import { RADIATION_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../constants';
 
 
-// Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip.
-
-interface IrradianceHistoryCacheEntry
-{
-    history: IrradianceHistory;
-    ts:      number;
-}
-
-const _irradianceHistoryCache = new Map<string, IrradianceHistoryCacheEntry>();
-
-function irradianceHistoryCacheGet(key: string): IrradianceHistoryCacheEntry | null
-{
-    const e = _irradianceHistoryCache.get(key);
-    if (!e)
-    {
-        return null;
-    }
-    if (Date.now() - e.ts > RADIATION_CACHE_TTL_MS)
-    {
-        _irradianceHistoryCache.delete(key);
-        return null;
-    }
-    return e;
-}
+// Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip;
+// in-flight de-dup collapses concurrent mounts to one WS hit.
+const _irradianceCache = new RequestCache<IrradianceHistory | null>(RADIATION_CACHE_TTL_MS);
 
 
 // Wipe the module cache. Called from the card's `resetDataCache()` hook.
 export function clearIrradianceModuleCaches(): void
 {
-    _irradianceHistoryCache.clear();
+    _irradianceCache.clear();
 }
 
 
@@ -155,15 +136,14 @@ export function refreshIrradiance(host: IrradianceHost): void
     }
     host._irradianceFetchKey = fetchKey;
 
-    // Cache hit short-circuits the WS round-trip on navigation. Invalidates on TTL (15 min) or any entity/range change.
-    const cached = irradianceHistoryCacheGet(fetchKey);
-    if (cached)
-    {
-        host._irradianceHistory = cached.history;
-        pushIrradianceToEngine(host);
-        return;
-    }
-    fetchIrradianceHistory(host, entity, fetchStart, host._timeRange.end, fetchKey);
+    // Cache short-circuits the WS round-trip on navigation (fresh within TTL, in-flight de-duped). On a failed fetch the
+    // pure fetcher restores the last-good durable series instead of blanking; the engine owns the series, so it is pushed
+    // in the `.then` rather than by the fetcher.
+    const durableKey = `irr:${entity}`;
+    host._irradianceFetching = true;
+    void _irradianceCache.get(fetchKey, () => fetchIrradiance(host.hass, entity, fetchStart, host._timeRange!.end, durableKey))
+        .then(h => { host._irradianceHistory = h ?? { times: [], values: [] }; pushIrradianceToEngine(host); })
+        .finally(() => { host._irradianceFetching = false; });
 }
 
 
@@ -228,35 +208,36 @@ export function pushIrradianceToEngine(host: IrradianceHost): void
 
 // Fetch the irradiance history: defensive parsing across HA's compaction / minimal_response variants. W/m² values are taken
 // as-is; the sensor is expected to expose irradiance in the unit the engine consumes, no normalisation.
-export async function fetchIrradianceHistory(
-    host:     IrradianceHost,
-    entityId: string,
-    start:    Date,
-    end:      Date,
-    cacheKey = '',
-): Promise<void>
+// Pure irradiance history fetcher: no host mutation, no fetching flag, no module cache write, and it does NOT push to the
+// engine (the caller does that in the `.then`, since the engine owns the merged series). Returns the fresh series on
+// success, the last-good durable copy on a failed fetch (so the curve survives an HA restart / timeout), or an empty
+// series for an empty window.
+export async function fetchIrradiance(
+    hass:       any,
+    entityId:   string,
+    start:      Date,
+    end:        Date,
+    durableKey: string,
+): Promise<IrradianceHistory | null>
 {
-    if (!host.hass?.callWS)
+    if (!hass?.callWS)
     {
-        return;
+        return null;
     }
-    host._irradianceFetching = true;
     try
     {
         const now = new Date();
         const fetchEnd = end > now ? now : end;
         if (start >= fetchEnd)
         {
-            host._irradianceHistory = { times: [], values: [] };
-            pushIrradianceToEngine(host);
-            return;
+            return { times: [], values: [] };
         }
 
         // Try statistics first. HA-convention irradiance sensors expose `state_class: measurement` and land in LTS automatically,
         // so the stats path scales to high-frequency feeds at near-zero cost. Falls back to raw history for non-LTS custom sensors,
         // at the cost of recorder bandwidth on the slim window.
         let history: IrradianceHistory = { times: [], values: [] };
-        const statsResult: any = await callWS<any>(host.hass, {
+        const statsResult: any = await callWS<any>(hass, {
             type:           'recorder/statistics_during_period',
             start_time:     start.toISOString(),
             end_time:       fetchEnd.toISOString(),
@@ -273,7 +254,7 @@ export async function fetchIrradianceHistory(
         }
         else
         {
-            const rawResult: any = await callWS<any>(host.hass, {
+            const rawResult: any = await callWS<any>(hass, {
                 type:                     'history/history_during_period',
                 start_time:               start.toISOString(),
                 end_time:                 fetchEnd.toISOString(),
@@ -285,22 +266,15 @@ export async function fetchIrradianceHistory(
             history = parseRawIrradianceHistory((rawResult && rawResult[entityId]) ?? []);
         }
 
-        host._irradianceHistory = history;
-        pushIrradianceToEngine(host);
-        if (cacheKey)
-        {
-            _irradianceHistoryCache.set(cacheKey, { history, ts: Date.now() });
-        }
+        // Persist the last-good series so a failed fetch on the next load restores it instead of blanking.
+        saveDurableSeries(durableKey, history);
+        return history;
     }
     catch (_e)
     {
-        //Fetch timed out or failed: clear the history so the engine falls back to Open-Meteo for the past window.
-        host._irradianceHistory = { times: [], values: [] };
-        pushIrradianceToEngine(host);
-    }
-    finally
-    {
-        host._irradianceFetching = false;
+        // Fetch timed out or failed (HA restart, recorder stall): restore the last-good durable series so the engine keeps
+        // real past irradiance rather than blanking back to Open-Meteo.
+        return loadDurableSeries(durableKey, DAY_MS);
     }
 }
 

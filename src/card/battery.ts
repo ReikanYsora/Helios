@@ -6,6 +6,8 @@
 import { formatPowerKw, parseNumericState, type PowerUnit } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWS } from '../data/ha-gateway';
+import { RequestCache } from '../data/request-cache';
+import { saveDurableSeries, loadDurableSeries } from '../core/data/durable-cache';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, minuteAnchorMs, type KeyedFetch } from '../data/source-fetch';
@@ -13,36 +15,14 @@ import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../constants';
 
 
 //Module-level history cache, survives Lit unmount+remount (navigate away and back) like the PV cache. 15-min TTL covers
-//nav-around-the-dashboard without serving stale data forever.
-
-interface BatteryHistoryCacheEntry
-{
-    soc:   BatteryHistory;
-    ts:    number;
-}
-
-const _batteryHistoryCache = new Map<string, BatteryHistoryCacheEntry>();
-
-function batteryHistoryCacheGet(key: string): BatteryHistoryCacheEntry | null
-{
-    const e = _batteryHistoryCache.get(key);
-    if (!e)
-    {
-        return null;
-    }
-    if (Date.now() - e.ts > BATTERY_CACHE_TTL_MS)
-    {
-        _batteryHistoryCache.delete(key);
-        return null;
-    }
-    return e;
-}
+//nav-around-the-dashboard without serving stale data forever, and in-flight de-dup collapses concurrent mounts to one WS hit.
+const _batteryCache = new RequestCache<BatteryHistory | null>(BATTERY_CACHE_TTL_MS);
 
 
 //Wipe the module-level cache. Called from the card's `resetDataCache()` so the editor's "reset" drops the cross-mount memo.
 export function clearBatteryModuleCaches(): void
 {
-    _batteryHistoryCache.clear();
+    _batteryCache.clear();
 }
 
 
@@ -107,7 +87,7 @@ export interface BatteryHost
 
 
 //Live + history refresh, called every lifecycle cycle. Reads SoC and power from hass.states for the resolved entities and
-//dispatches a history fetch when the (entities, range) tuple changes; history fields land in fetchBatteryHistory.
+//dispatches a history fetch when the (entities, range) tuple changes; history fields land in fetchBatterySoc.
 export function refreshBattery(host: BatteryHost): void
 {
     if (!host.hass)
@@ -213,7 +193,7 @@ export function refreshBattery(host: BatteryHost): void
     //Two-tier window. LTS arm uses `visibleStart` (full visible timeline) so today's charged/discharged kWh integrate across the
     //full day; LTS is near-free on the recorder. Raw arm uses `rawStart`, capped at 6 h, firing only when LTS is empty (custom
     //sensor without `state_class`) since a wider raw window on a high-frequency battery feed would drag the recorder. Both anchors
-    //are off `Date.now()` so the inner clamp in fetchBatteryHistory never tips into the future.
+    //are off `Date.now()` so the inner clamp in fetchBatterySoc never tips into the future.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
     //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders; an unquantised Date.now()
@@ -232,14 +212,13 @@ export function refreshBattery(host: BatteryHost): void
     }
     host._batteryFetchKey = fetchKey;
 
-    //Cache hit short-circuits the WS round-trip on navigate-away-and-back. Invalidates on TTL (15 min) or any (entities/range) change.
-    const cached = batteryHistoryCacheGet(fetchKey);
-    if (cached)
-    {
-        host._batterySocHistory   = cached.soc;
-        return;
-    }
-    fetchBatteryHistory(host, sortedSoc, ltsStart, rawStart, host._timeRange.end, fetchKey);
+    //Cache short-circuits the WS round-trip on navigate-away-and-back (fresh within TTL, in-flight de-duped). On a failed
+    //fetch the pure fetcher restores the last-good durable series instead of blanking; @state assignment triggers render.
+    const durableKey = `bsoc:${host._storeFetchPeriod}|${sortedSoc.join(',')}`;
+    host._batteryFetching = true;
+    void _batteryCache.get(fetchKey, () => fetchBatterySoc(host.hass, sortedSoc, ltsStart, rawStart, host._timeRange!.end, host._storeFetchPeriod, durableKey))
+        .then(soc => { host._batterySocHistory = soc ?? { times: [], values: [] }; })
+        .finally(() => { host._batteryFetching = false; });
 }
 
 
@@ -428,24 +407,27 @@ function aggregateBatterySocLkcf(perEntity: BatteryHistory[]): BatteryHistory
 }
 
 
-export async function fetchBatteryHistory(
-    host:          BatteryHost,
-    socEntities:   string[],
-    ltsStart:      Date,
-    rawStart:      Date,
-    end:           Date,
-    cacheKey = '',
-): Promise<void>
+//Pure SoC history fetcher: no host mutation, no fetching flag, no module cache write. The caller runs it through the
+//RequestCache and lands the result on `@state`. Returns the fresh SoC series on success, the last-good durable copy on a
+//failed fetch (so the curve survives an HA restart / timeout instead of blanking), or an empty series for an empty window.
+export async function fetchBatterySoc(
+    hass:       any,
+    ids:        string[],
+    ltsStart:   Date,
+    rawStart:   Date,
+    end:        Date,
+    period:     StatPeriod,
+    durableKey: string,
+): Promise<BatteryHistory | null>
 {
-    if (!host.hass?.callWS)
+    if (!hass?.callWS)
     {
-        return;
+        return null;
     }
-    if (socEntities.length === 0)
+    if (ids.length === 0)
     {
-        return;
+        return null;
     }
-    host._batteryFetching = true;
     try
     {
         //History only exists up to "now"; clamp the fetch end so we don't waste a roundtrip on empty future buckets.
@@ -453,22 +435,20 @@ export async function fetchBatteryHistory(
         const fetchEnd = end > now ? now : end;
         if (ltsStart >= fetchEnd && rawStart >= fetchEnd)
         {
-            host._batterySocHistory   = { times: [], values: [] };
-            return;
+            return { times: [], values: [] };
         }
 
-        const ids = [...socEntities];
         const perEntity: Record<string, BatteryHistory> = {};
 
         //LTS arm uses the broader `ltsStart` (usually visible start, often midnight or earlier) so today's charged/discharged kWh
         //integrate across the full day. The raw fallback below uses the narrower `rawStart` so a non-LTS entity doesn't pull a
         //multi-day raw scan on a high-frequency BMS.
-        const statsResult: any = await callWS<any>(host.hass, {
+        const statsResult: any = await callWS<any>(hass, {
             type:           'recorder/statistics_during_period',
             start_time:     ltsStart.toISOString(),
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  ids,
-            period:         host._storeFetchPeriod,
+            period,
             //Both fields: a cumulative-kWh-as-power wiring has `mean: null` per bucket, so asking for `state` too lets the parser
             //cover both wirings in one round-trip.
             types:          ['mean', 'state'],
@@ -487,7 +467,7 @@ export async function fetchBatteryHistory(
         {
             //No entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
             //`significant_changes_only` for server-side dedup; raw arm capped at `rawStart` (6 h) so a high-frequency feed doesn't drag the recorder.
-            const rawResult: any = await callWS<any>(host.hass, {
+            const rawResult: any = await callWS<any>(hass, {
                 type:                     'history/history_during_period',
                 start_time:               rawStart.toISOString(),
                 end_time:                 fetchEnd.toISOString(),
@@ -504,24 +484,17 @@ export async function fetchBatteryHistory(
 
         //Multi-bank LKCF aggregation: SoC averages across banks, single-bank collapses to the per-entity series unchanged.
         const socSeries = aggregateBatterySocLkcf(
-            socEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
+            ids.map(id => perEntity[id] ?? { times: [], values: [] }),
         );
-        host._batterySocHistory = socSeries;
-
-        //Persist for the next mount: cross-mount cache hits short-circuit the WS round-trip on navigate-away-and-back.
-        if (cacheKey)
-        {
-            _batteryHistoryCache.set(cacheKey, { soc: socSeries, ts: Date.now() });
-        }
+        //Persist the last-good series so a failed fetch on the next load restores it instead of blanking.
+        saveDurableSeries(durableKey, socSeries);
+        return socSeries;
     }
     catch (_e)
     {
-        //Fetch timed out or failed (LTS unavailable, entity untracked): degrade to empty history.
-        host._batterySocHistory = { times: [], values: [] };
-    }
-    finally
-    {
-        host._batteryFetching = false;
+        //Fetch timed out or failed (LTS unavailable, entity untracked, HA restart): restore the last-good durable series
+        //so the curve survives, rather than blanking to empty.
+        return loadDurableSeries(durableKey, DAY_MS);
     }
 }
 

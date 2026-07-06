@@ -91,3 +91,23 @@ export function clearDurable(): number
     }
     return cleared;
 }
+
+
+//A time series ({ times: Date[]; values: number[] }). JSON can't round-trip Date (it stringifies them), so
+//store the times as epoch ms and rehydrate to Date on load: a restored series is then drop-in usable.
+export interface DurableSeries
+{
+    times:  Date[];
+    values: number[];
+}
+
+export function saveDurableSeries(key: string, series: DurableSeries): void
+{
+    saveDurable(key, { t: series.times.map(d => d.getTime()), v: series.values });
+}
+
+export function loadDurableSeries(key: string, maxAgeMs: number): DurableSeries | null
+{
+    const raw = loadDurable<{ t: number[]; v: number[] }>(key, maxAgeMs);
+    return raw ? { times: raw.t.map(ms => new Date(ms)), values: raw.v } : null;
+}
