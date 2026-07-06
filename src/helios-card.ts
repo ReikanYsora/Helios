@@ -2,36 +2,36 @@ import type { PropertyValues, TemplateResult} from 'lit';
 import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state, query, queryAll } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
-import type { HeliosEngine } from './helios-engine';
+import type { HeliosEngine } from './scene/helios-engine';
 import
 {
     type HeliosConfig,
     autoHideUi,
     homeColor,
     cacheId,
-} from './helios-config';
-import { refreshCustomEntity } from './card/custom-entity';
-import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
-import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
-import { DAY_MS, UI_AUTOHIDE_MS} from './constants';
-import { pickTranslations } from './i18n';
+} from './core/config/helios-config';
+import { refreshCustomEntity } from './data/sources/custom-entity';
+import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './clock/clock-hourly';
+import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './timeline/timeline-modes';
+import { DAY_MS, UI_AUTOHIDE_MS} from './core/config/constants';
+import { pickTranslations } from './core/i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
 import {
     type ClockData,
     availableClockTargets, clockTargetMeta, clockTargetLabel, CLOCK_GROW_MS,
-} from './card/energy-clock';
-import { refreshTrendProfiles } from './card/trend';
-import { setServerTimeZone } from './card/timezone';
-import { isDarkFromCss, cssHex, uiColorVar } from './card/format';
-import { refreshPv } from './card/pv';
+} from './clock/energy-clock';
+import { refreshTrendProfiles } from './clock/trend';
+import { setServerTimeZone } from './core/time/timezone';
+import { isDarkFromCss, cssHex, uiColorVar } from './core/format/format';
+import { refreshPv } from './data/sources/pv';
 import
 {
     refreshBattery,
     clearBatteryModuleCaches
-} from './card/battery';
-import { refreshIrradiance, clearIrradianceModuleCaches } from './card/irradiance';
+} from './data/sources/battery';
+import { refreshIrradiance, clearIrradianceModuleCaches } from './data/sources/irradiance';
 import
 {
     renderBottomChart,
@@ -45,30 +45,30 @@ import
     renderTimelineHoverTooltip,
     handleChartHoverMove,
     handleChartHoverLeave
-} from './card/charts';
-import { renderDetailPanel } from './card/detail-panel';
-import type { ArcSegment, SunScene, LabelLayout } from './card/hud';
+} from './charts/charts';
+import { renderDetailPanel } from './hud/detail-panel';
+import type { ArcSegment, SunScene, LabelLayout } from './hud/hud';
 import
 {
     tick,
     onTimelinePointerDown,
     onTimelinePointerMove,
     onTimelinePointerUp
-} from './card/timeline';
-import { refreshGrid } from './card/grid';
-import { createGridGuard, type GridGuardState } from './card/grid-guard';
+} from './timeline/timeline';
+import { refreshGrid } from './data/sources/grid';
+import { createGridGuard, type GridGuardState } from './data/sources/grid-guard';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
     refreshHaDailyTotals,
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
-} from './card/energy-prefs';
-import { clearEnergyStatsCache, type StatPeriod, type ChangeBucket } from './card/energy-stats';
-import { clearDurable } from './core/data/durable-cache';
+} from './data/sources/energy-prefs';
+import { clearEnergyStatsCache, type StatPeriod, type ChangeBucket } from './data/sources/energy-stats';
+import { clearDurable } from './data/durable-cache';
 import { KeyedFetch } from './data/source-fetch';
-import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
-import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
+import { fetchHaSolarForecast, type SolarForecastPoint } from './data/energy-forecast';
+import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost, type UnifiedDataStore } from './data/unifiedStore';
 import
 {
     computeConfigSig,
@@ -77,14 +77,14 @@ import
     initVisibilityObserver
 } from './card/init';
 //Side-effect import: registers <helios-card-editor> as a custom element.
-import './card/editor';
+import './editor/editor';
 //Side-effect import: writes the Helios entry into window.customCards for the HA card picker.
 import './card/registry';
 //Side-effect import: install banner, location-override debug helpers and the page-wide data-cache reset
 //bus. liveCards is the shared registry each card adds/removes itself from.
 import { liveCards } from './card/diagnostics';
-import { ClockController } from './card/clock-controller';
-import { SceneHudController } from './card/scene-hud-controller';
+import { ClockController } from './clock/clock-controller';
+import { SceneHudController } from './hud/scene-hud-controller';
 
 
 //Live cards grouped by their (auto-generated) cache id, in connection order. A pasted card carries a copy of

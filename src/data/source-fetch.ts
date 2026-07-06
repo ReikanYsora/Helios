@@ -2,7 +2,7 @@
 //gate, the live-power aggregation, and the minute anchor. Each source keeps its own divergent window/key
 //logic and its series data on the host; only these genuinely-shared pieces live here.
 
-import { parseNumericState, pvNormalizeToWatts } from '../card/format';
+import { parseNumericState, pvNormalizeToWatts } from '../core/format/format';
 
 
 //Gate for a keyed, de-duplicated fetch: runs its task at most once per distinct key, and never while a run

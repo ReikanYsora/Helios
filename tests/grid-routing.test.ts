@@ -3,10 +3,10 @@
 //from the meters. Curves and scrub read the meters through their own series, not through these values.
 
 import { describe, it, expect } from 'vitest';
-import { refreshGrid, type GridHost } from '../src/card/grid';
-import { createGridGuard } from '../src/card/grid-guard';
+import { refreshGrid, type GridHost } from '../src/data/sources/grid';
+import { createGridGuard } from '../src/data/sources/grid-guard';
 import { KeyedFetch } from '../src/data/source-fetch';
-import { EMPTY_ENERGY_DEFAULTS, type EnergyDefaults } from '../src/card/energy-prefs';
+import { EMPTY_ENERGY_DEFAULTS, type EnergyDefaults } from '../src/data/sources/energy-prefs';
 
 function makeHost(defaults: Partial<EnergyDefaults>, states: Record<string, any>): GridHost
 {

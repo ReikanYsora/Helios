@@ -6,7 +6,7 @@
 //The timeout does not abort the server-side query (HA's WS has no cancel); it stops us waiting and frees
 //the slot. No retry: a rejected fetch is re-issued by the caller's fetch-key gate on the next refresh.
 
-import { WS_DEFAULT_TIMEOUT_MS as DEFAULT_TIMEOUT_MS, WS_MAX_CONCURRENT_FETCHES as MAX_CONCURRENT_FETCHES } from '../constants';
+import { WS_DEFAULT_TIMEOUT_MS as DEFAULT_TIMEOUT_MS, WS_MAX_CONCURRENT_FETCHES as MAX_CONCURRENT_FETCHES } from '../core/config/constants';
 
 
 //Minimal shape of hass the gateway needs. Widened toward the full HomeAssistant type as the data layer

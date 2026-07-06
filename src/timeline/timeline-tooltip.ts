@@ -1,0 +1,341 @@
+//Hover tooltip + pointer handlers for the timeline chart stack: the per-target readout rows, the day kWh / forecast
+//line, and the magnet-snap live chip. Pure templates over the structural ChartHost.
+
+import type { TemplateResult } from 'lit';
+import { html, nothing } from 'lit';
+import { valueDecimals, powerUnit, irradianceUnit, customEntityColor } from '../core/config/helios-config';
+import { consumptionLoad } from '../core/energy/consumption';
+import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from '../core/format/format';
+import { valueAt } from '../data/unifiedStore';
+import { pickTranslations } from '../core/i18n';
+import { resolveCustomEntityIcon } from '../data/sources/custom-entity';
+import {
+    type ChartHost,
+    chartIsDark,
+    clockTargetLabel,
+    solarSourceName,
+    gridImportName,
+    gridExportName,
+    batteryChargeName,
+    batteryDischargeName,
+} from '../charts/charts';
+import { interpAt, pvValueAtTime } from '../data/series-sample';
+import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
+import { computeDailyKwhTotals } from '../charts/charts-generic';
+import { DAY_MS } from '../core/config/constants';
+
+
+//Hover tooltip above the chart-card stack: the hover timestamp + one icon-coded row per series, plus the day's kWh
+//production (past) or forecast (future). A magnet-snap tab surfaces when the scrub enters the band around the live
+//cursor (snap logic in applyTimelinePointer, timeline.ts). The PV row is skipped when unavailable.
+export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | typeof nothing
+{
+    const range    = host._timeRange;
+    const series   = host._chartSeries;
+    //Tooltip stays available when _chartSeries is null (Open-Meteo unreachable): PV + per-entity rows read from the
+    //recorder fine, irradiance + cloud cells fall back to NaN handled below.
+    if (!range)
+    {
+        return nothing;
+    }
+
+    const startMs = range.start.getTime();
+    const rangeMs = range.end.getTime() - startMs;
+    if (rangeMs <= 0)
+    {
+        return nothing;
+    }
+
+    //Shows only while the pointer is over the chart (or dragging the scrub). On gesture end _chartHoverPct goes null
+    //and the tooltip disappears, leaving just the scrub line.
+    const hoverPct = host._chartHoverPct;
+    if (hoverPct === null || hoverPct < 0 || hoverPct > 100)
+    {
+        return nothing;
+    }
+    const pct  = hoverPct;
+    const atMs = startMs + (pct / 100) * rangeMs;
+
+    const irrV = series ? interpAt(series.times, series.irradiance, atMs) : NaN;
+    const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
+    const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
+    const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
+    const customV    = wattsAtFromChangeSeries(host._customChangeSeries ?? null, atMs) ?? NaN;
+    const pv   = pvValueAtTime(host, atMs);
+
+    //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling).
+    //Grid/battery read from the store at the cursor instant (watts; kw() formats to kW; null becomes NaN).
+    const target   = host._chartTarget ?? 'production';
+    const store    = host._unifiedStore;
+    const gridImpW = store ? (valueAt(store.gridImport, store, atMs) ?? NaN) : NaN;
+    const gridExpW = store ? (valueAt(store.gridExport, store, atMs) ?? NaN) : NaN;
+    const battW    = store ? (valueAt(store.battery,    store, atMs) ?? NaN) : NaN;
+    //Home consumption (load) at the hovered instant: production + import - export - net battery (charge+), clamped at
+    //0. Same formula as the consumption chart series. Hidden when no flow has any reading.
+    const prodW          = store ? (valueAt(store.production, store, atMs) ?? NaN) : NaN;
+    const hasConsumption = isFinite(prodW) || isFinite(gridImpW) || isFinite(gridExpW) || isFinite(battW);
+    const consumptionW   = consumptionLoad(
+        isFinite(prodW) ? prodW : 0, isFinite(gridImpW) ? gridImpW : 0,
+        isFinite(gridExpW) ? gridExpW : 0, isFinite(battW) ? battW : 0);
+    const battSocV = host._batterySocHistory
+        ? interpAt(host._batterySocHistory.times, host._batterySocHistory.values, atMs)
+        : NaN;
+    //User decimals apply to every kW/kWh readout; raw watts stay integers.
+    const dec = valueDecimals(host.config);
+    const powerU = powerUnit(host.config);
+    const irradU = irradianceUnit(host.config);
+    const kw = (w: number): string => formatPower(host.hass, w, dec, powerU);
+
+    //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
+    //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
+    //duplicating the headline row).
+    const perEntityMap     = host._pvChangeSeriesPerEntity;
+    //Source order (not sorted), so row index lines up with solarSourceName + the clock: the per-source
+    //change map is keyed by the solar meters in HA Energy source order.
+    const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()) : [];
+    const perEntityRows: { id: string; label: string; valueText: string; colorIdx: number }[] = [];
+    for (let i = 0; i < perEntityIds.length; i++)
+    {
+        const id    = perEntityIds[i];
+        const val   = pvValueAtTime(host, atMs, id);
+        if (!isFinite(val.value))
+        {
+            continue;
+        }
+        const valueText   = formatPower(host.hass, pvNormalizeToWatts(val.value, val.unit), dec, powerU);
+        perEntityRows.push({ id, label: solarSourceName(host, i), valueText, colorIdx: i });
+    }
+    const hasPv = isFinite(pv.value);
+
+    //Row names: the metric name, or the configured entity's HA Energy name for the two-direction grid/battery rows.
+    const tgtName        = clockTargetLabel(host, target);
+    //Cloud layer names for the irradiance view's overlay rows (percent unit, separate from the W/m² row).
+    const cloudNames     = pickTranslations(host.hass?.language).clock;
+    const gridFromName   = gridImportName(host);
+    const gridToName     = gridExportName(host);
+    const battChargeName = batteryChargeName(host);
+    const battDisName    = batteryDischargeName(host);
+    //Each row's icon takes the colour of the series it represents (matching the chart curves) so the readout is
+    //scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the three stacked
+    //band shades in renderTargetChart.
+    const el             = host as unknown as Element;
+    const cloudBase      = ENERGY_COLOR.cloud(el);
+    const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
+    const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
+
+    const atDate     = new Date(atMs);
+    const haLanguage = (host.hass?.language as string | undefined) || undefined;
+    //Header granularity follows the window: intraday shows the time, a multi-day span adds the weekday, and a
+    //month/year span shows the calendar day (the scrub steps day by day), so you always know when you are.
+    const spanDays  = rangeMs / DAY_MS;
+    const timeOpts: Intl.DateTimeFormatOptions =
+          spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }
+        : spanDays <= 14.05 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }
+        :                     { weekday: 'short', day: 'numeric', month: 'short' };
+    const timeLabel  = new Intl.DateTimeFormat(haLanguage, timeOpts).format(atDate);
+
+    //Day total split observed/forecast by cursor-vs-"now" (not the day boundary), so later-today hours show the
+    //full-day forecast and earlier hours the production so far. Today's past prefers recorder-backed
+    //`_haSolarTodayKwh`, else local trapezoidal integration; future uses `computeDailyKwhTotals`.
+    const dayKey = new Date(atDate);
+    dayKey.setHours(0, 0, 0, 0);
+    const todayKey = new Date();
+    todayKey.setHours(0, 0, 0, 0);
+    const isToday        = dayKey.getTime() === todayKey.getTime();
+    const isFutureCursor = atMs > Date.now();
+    const dayTotals      = computeDailyKwhTotals(host);
+    let dayKwh: number | undefined = dayTotals.get(dayKey.getTime());
+    if (isToday && !isFutureCursor && typeof host._haSolarTodayKwh === 'number' && isFinite(host._haSolarTodayKwh))
+    {
+        dayKwh = host._haSolarTodayKwh;
+    }
+    //Past cursor shows only instantaneous power (the day total lives in the clock); a future cursor adds the forecast
+    //day total, which has no other home in the UI.
+    const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
+        ? formatEnergyKwh(host.hass, dayKwh, dec, powerU)
+        : '';
+
+    //Magnet-snap detection: when the scrub lands in a narrow band around the live cursor, applyTimelinePointer
+    //(timeline.ts) auto-releases to live mode and a restore tab surfaces. The 8 px scrub check maps to ~1.2 % at
+    //typical chart widths.
+    const MAGNET_PCT   = 1.2;
+    const nowMsRef     = Date.now();
+    const inMagnetZone = nowMsRef >= startMs && nowMsRef <= startMs + rangeMs
+        && Math.abs(pct - ((nowMsRef - startMs) / rangeMs) * 100) <= MAGNET_PCT;
+
+
+    const haLang   = (host.hass?.language as string | undefined) || '';
+    //Short inline label for the magnet-snap tab; the title + aria-label carry the long phrase for screen readers.
+    const liveLabel = 'Live';
+    const liveText  = haLang.toLowerCase().startsWith('fr')
+        ? 'Retour au live'
+        : 'Back to live';
+
+    //Horizontal anchor: a continuous translateX(-${pct}%) slide, so its left edge sits at 0 % and right edge at
+    //100 % as the scrub sweeps. Never goes off-screen, no jump-to-edge magnet.
+    return html`
+        <div
+            class="tb-hover-tooltip-tail ${inMagnetZone ? 'is-magnet-snap' : ''}"
+            style="left:${pct.toFixed(2)}%"
+        ></div>
+        <div
+            class="tb-hover-tooltip-wrapper"
+            style="left:${pct.toFixed(2)}%; transform: translateX(-${pct.toFixed(2)}%)"
+        >
+            <div class="tb-hover-tooltip">
+                <div class="tb-hover-tooltip-time">
+                    <ha-icon class="tb-hover-tooltip-time-icon" icon="mdi:clock-outline"></ha-icon>
+                    <span class="tb-hover-tooltip-time-label">${timeLabel}</span>
+                    <span
+                        class="tb-hover-tooltip-live-chip ${inMagnetZone ? 'is-visible' : ''}"
+                        title=${liveText}
+                        aria-label=${liveText}
+                        aria-hidden=${inMagnetZone ? 'false' : 'true'}
+                    >
+                        <ha-icon class="tb-hover-tooltip-live-chip-dot" icon="mdi:circle-medium"></ha-icon>
+                        <span class="tb-hover-tooltip-live-chip-label">${liveLabel}</span>
+                    </span>
+                    <span class="tb-hover-tooltip-exact">${formatHaDateTime(host.hass, atDate)}</span>
+                </div>
+                ${target === 'production' ? html`
+                    ${showForecast && dayKwhText ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:crystal-ball"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-value">${dayKwhText}</span>
+                        </div>
+                    ` : nothing}
+                    ${hasPv ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:solar-power"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <span class="tb-hover-tooltip-value">${formatPower(host.hass, pvNormalizeToWatts(pv.value, pv.unit), dec, powerU)}</span>
+                        </div>
+                    ` : nothing}
+                    ${perEntityRows.map(prow => html`
+                        <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                            <span class="tb-hover-tooltip-dot" style="background:${energySolarColor(host as unknown as Element, chartIsDark(host), prow.colorIdx)}"></span>
+                            <span class="tb-hover-tooltip-sublabel">${prow.label}</span>
+                            <span class="tb-hover-tooltip-value">${prow.valueText}</span>
+                        </div>
+                    `)}
+                ` : nothing}
+                ${target === 'consumption' && hasConsumption ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.consumption(el)}" icon="mdi:home-lightning-bolt"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${kw(consumptionW)}</span>
+                    </div>
+                ` : nothing}
+                ${target === 'grid' ? html`
+                    ${isFinite(gridImpW) && gridImpW >= 1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridImport(el)}" icon="mdi:transmission-tower-export"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${gridFromName}</span>
+                            <span class="tb-hover-tooltip-value">${kw(gridImpW)}</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(gridExpW) && gridExpW >= 1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridExport(el)}" icon="mdi:transmission-tower-import"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${gridToName}</span>
+                            <span class="tb-hover-tooltip-value">${kw(gridExpW)}</span>
+                        </div>
+                    ` : nothing}
+                ` : nothing}
+                ${target === 'battery' ? html`
+                    ${isFinite(battW) && battW >= 1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryIn(el)}" icon="mdi:battery-arrow-up"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${battChargeName}</span>
+                            <span class="tb-hover-tooltip-value">${kw(battW)}</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(battW) && battW <= -1 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery-arrow-down"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${battDisName}</span>
+                            <span class="tb-hover-tooltip-value">${kw(-battW)}</span>
+                        </div>
+                    ` : nothing}
+                ` : nothing}
+                ${target === 'battery-soc' && isFinite(battSocV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, battSocV)))} %</span>
+                    </div>
+                ` : nothing}
+                ${target === 'irradiance' && isFinite(irrV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.sun(el)}" icon="mdi:white-balance-sunny"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${formatIrradiance(host.hass, irrV, dec, irradU)}</span>
+                    </div>
+                ` : nothing}
+                ${target === 'custom' && isFinite(customV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336')}" icon=${resolveCustomEntityIcon(host.hass, host.config)}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${formatPower(host.hass, Math.abs(customV), dec, powerU)}</span>
+                    </div>
+                ` : nothing}
+                ${target === 'irradiance' ? html`
+                    ${isFinite(cloudHighV) ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudHighColor}" icon="mdi:format-vertical-align-top"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudHigh}</span>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudHighV)))} %</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(cloudMidV) ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudBase}" icon="mdi:format-vertical-align-center"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudMid}</span>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudMidV)))} %</span>
+                        </div>
+                    ` : nothing}
+                    ${isFinite(cloudLowV) ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${cloudLowColor}" icon="mdi:format-vertical-align-bottom"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${cloudNames.cloudLow}</span>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
+                        </div>
+                    ` : nothing}
+                ` : nothing}
+            </div>
+        </div>
+    `;
+}
+
+
+//Hover-cursor pointer handlers, attached per chart card (its bounding rect drives the fractional X). A press
+//(e.buttons !== 0) clears the hover so a scrub drag leaves no stale dot; the scrub itself lives on the time-bar
+//pointerdown and captures the pointer until release.
+export function handleChartHoverMove(host: ChartHost, e: PointerEvent): void
+{
+    if (e.buttons !== 0)
+    {
+        host._chartHoverPct = null;
+        return;
+    }
+    const card = e.currentTarget as HTMLElement | null;
+    if (!card)
+    {
+        return;
+    }
+    const rect = card.getBoundingClientRect();
+    if (rect.width <= 0)
+    {
+        return;
+    }
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    host._chartHoverPct = frac * 100;
+}
+
+
+export function handleChartHoverLeave(host: ChartHost): void
+{
+    host._chartHoverPct = null;
+}

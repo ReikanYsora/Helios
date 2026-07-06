@@ -3,10 +3,10 @@
 //
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
-import type { HeliosConfig } from '../helios-config';
-import { HeliosEngine } from '../helios-engine';
-import { refreshHud, setAnimationsPaused, type HudHost } from './hud';
-import type { ChartSeries } from './charts';
+import type { HeliosConfig } from '../core/config/helios-config';
+import { HeliosEngine } from '../scene/helios-engine';
+import { refreshHud, setAnimationsPaused, type HudHost } from '../hud/hud';
+import type { ChartSeries } from '../charts/charts';
 
 
 //Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine in place.

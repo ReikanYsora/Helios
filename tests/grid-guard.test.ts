@@ -3,7 +3,7 @@
 //integration noise, statistics artefacts) and the zero-regression cases (healthy signed sensors never flag).
 
 import { describe, it, expect } from 'vitest';
-import { evaluateGuardHours, nextGuardState, buildGuardHours, createGridGuard, type GuardHour } from '../src/card/grid-guard';
+import { evaluateGuardHours, nextGuardState, buildGuardHours, createGridGuard, type GuardHour } from '../src/data/sources/grid-guard';
 
 const H = (exportKwh: number | null, minW: number | null): GuardHour => ({ exportKwh, minW });
 

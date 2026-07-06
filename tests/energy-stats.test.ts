@@ -2,7 +2,7 @@
 //fine/coarse scrub read. Live chips no longer derive from these series (measured sensors only).
 
 import { describe, it, expect } from 'vitest';
-import { wattsAtFromChangeSeries, outlierCapKwh, type ChangeBucket } from '../src/card/energy-stats';
+import { wattsAtFromChangeSeries, outlierCapKwh, type ChangeBucket } from '../src/data/sources/energy-stats';
 
 const T0 = Date.UTC(2026, 6, 3, 12, 0, 0);
 const MIN5 = 5 * 60_000;

@@ -1,6 +1,6 @@
 import { css, unsafeCSS } from 'lit';
-import { GROUND_FADE_START } from '../engine/tiles';
-import { CUSTOM_ENTITY_COLOR } from '../constants';
+import { GROUND_FADE_START } from '../scene/tiles';
+import { CUSTOM_ENTITY_COLOR } from '../core/config/constants';
 
 //Visual styles for HeliosCard, grouped by feature (layout, overlays, solar arc, home cluster).
 export const heliosCardStyles = css`

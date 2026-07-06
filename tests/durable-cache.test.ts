@@ -2,7 +2,7 @@
 //and graceful failure when storage is unavailable (the card must never throw over a missing/full storage).
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { loadDurable, saveDurable, clearDurable } from '../src/core/data/durable-cache';
+import { loadDurable, saveDurable, clearDurable } from '../src/data/durable-cache';
 
 //Minimal in-memory localStorage stand-in installed on globalThis.window.
 function installMockStorage(): void
