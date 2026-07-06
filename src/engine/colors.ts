@@ -1,21 +1,7 @@
-//Colour math for the 2.5D scene renderer: hex channel mixing + the time-of-day tints (night shade,
-//building altitude tint, sun-arc colour). Pure.
+//Time-of-day scene tints (night shade, building altitude tint, sun-arc colour) over the shared hex
+//primitives. Pure.
 
-export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-export const hexByte = (hex: string, i: number): number => parseInt(hex.slice(i, i + 2), 16);
-
-//Blend two #rrggbb colours per channel (t: 0 = hexA, 1 = hexB). Runs per shape per frame, kept cheap.
-export function mixHex(hexA: string, hexB: string, t: number): string
-{
-    let out = '#';
-    for (let i = 1; i < 7; i += 2)
-    {
-        const a = hexByte(hexA, i);
-        out += Math.round(a + (hexByte(hexB, i) - a) * t).toString(16).padStart(2, '0');
-    }
-    return out;
-}
+import { lerp, hexByte, mixHex } from '../core/render-kit/hex';
 
 //Full-frame night/twilight wash by sun altitude (deg): astronomical night -> deep navy, twilight -> blue,
 //dawn/dusk -> warm amber, daylight -> transparent.

@@ -2,6 +2,7 @@
 //dependency-free so any card-side module can pull them in without dragging Lit or engine symbols along.
 
 import { Xn, Yn, Zn, LAB_T0, LAB_T1, LAB_T2, LAB_T3, SUN_COLOR_HEX } from '../constants';
+import { mixHex } from '../core/render-kit/hex';
 
 
 //Format a number with the user's locale (decimal mark, grouping). Falls back to locale-independent
@@ -261,18 +262,7 @@ export function darkenHex(hex: string, factor: number): string
 //disc uses it to derive light (low) and dark (high) band shades from one configured cloud colour.
 export function lerpHexToward(a: string, b: string, t: number): string
 {
-    const u = Math.max(0, Math.min(1, t));
-    const ar = parseInt(a.slice(1, 3), 16);
-    const ag = parseInt(a.slice(3, 5), 16);
-    const ab = parseInt(a.slice(5, 7), 16);
-    const br = parseInt(b.slice(1, 3), 16);
-    const bg = parseInt(b.slice(3, 5), 16);
-    const bb = parseInt(b.slice(5, 7), 16);
-    const r = Math.round(ar + (br - ar) * u);
-    const g = Math.round(ag + (bg - ag) * u);
-    const bl = Math.round(ab + (bb - ab) * u);
-    const h = (n: number) => n.toString(16).padStart(2, '0');
-    return `#${h(r)}${h(g)}${h(bl)}`;
+    return mixHex(a, b, Math.max(0, Math.min(1, t)));
 }
 
 
