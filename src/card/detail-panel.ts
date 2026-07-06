@@ -1,25 +1,21 @@
 //Per-chip detail panel (scene mode): double-tapping a chip opens a compact, vertical readout top-right that
-//aggregates the active metric over the selected window. Icons only, values in the card's configured unit. The
-//aggregates mirror the bottom-chart series builders in charts-generic so panel and curve always agree.
+//aggregates the active metric over the selected window. Every energy figure is computed with the SAME method the
+//energy clock uses for its period total (buildClockData -> clockLayerPeriod / clockPeriodTotal), so the panel and
+//the clock/dashboard always agree, on every period (day .. year), not just the rolling store window.
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { formatPower, formatEnergyKwh, formatIrradiance } from './format';
+import { formatEnergyKwh, formatIrradiance } from './format';
 import { powerUnit, valueDecimals, irradianceUnit } from '../helios-config';
-import type { ChartHost, ChartTarget } from './charts';
-import type { ChangeBucket } from './energy-stats';
+import { buildClockData, clockLayerPeriod, clockPeriodTotal, hourlyOf, type ClockHost, type ClockData } from './energy-clock';
+import type { ChartTarget } from './charts';
 import type { SunScene } from './hud';
-import { HOUR_MS, DAY_MS } from '../constants';
+import { DAY_MS } from '../constants';
 
-//Extra host reads beyond ChartHost: the directional change series and the sun scene the panel needs for grid /
-//battery totals and the astro rows.
-export interface DetailHost extends ChartHost
+//The panel reads exactly what the clock reads (ClockHost) plus the sun scene for the astro rows.
+export interface DetailHost extends ClockHost
 {
-    readonly _gridImportChangeSeries:      ChangeBucket[] | null;
-    readonly _gridExportChangeSeries:      ChangeBucket[] | null;
-    readonly _batteryChargeChangeSeries:   ChangeBucket[] | null;
-    readonly _batteryDischargeChangeSeries: ChangeBucket[] | null;
-    readonly _sunScene:                    SunScene | null;
+    readonly _sunScene: SunScene | null;
 }
 
 interface DetailMetric
@@ -28,43 +24,19 @@ interface DetailMetric
     value: string;
 }
 
-//Sum a recorder change series (kWh) over the window, bucket centre inside [startMs, endMs].
-function sumChangeKwh(buckets: ChangeBucket[] | null, startMs: number, endMs: number): number
+//Number of whole days the window spans, for the per-day averages. At least 1 so a same-day window never divides
+//by zero.
+function windowDays(startMs: number, endMs: number): number
 {
-    if (!buckets)
-    {
-        return 0;
-    }
-    let s = 0;
-    for (const b of buckets)
-    {
-        const tMs = (b.startMs + b.endMs) / 2;
-        if (tMs < startMs || tMs > endMs) { continue; }
-        if (isFinite(b.kwh)) { s += b.kwh; }
-    }
-    return s;
+    return Math.max(1, Math.round((endMs - startMs) / DAY_MS));
 }
 
-interface WattAgg
-{
-    peak:  number;
-    min:   number;
-    avg:   number;
-    count: number;
-}
-
-//Peak / min / mean over a store watt-array inside the window. Bucket centre matches charts-generic so the panel
-//reads the exact samples the curve draws. `map` folds signed series (e.g. battery) to a single flow.
-function aggWatts(
-    store:  NonNullable<ChartHost['_unifiedStore']>,
-    arr:    readonly (number | null)[],
-    startMs: number,
-    endMs:  number,
-    map?:   (v: number) => number,
-): WattAgg
+//Min / mean / max over a store watt-array inside the window, for the weather metric (irradiance is not a clock
+//ring, so it keeps its own aggregation over the store's own window).
+function aggWatts(store: NonNullable<ClockHost['_unifiedStore']>, arr: readonly (number | null)[], startMs: number, endMs: number):
+    { peak: number; avg: number; count: number }
 {
     let peak = 0;
-    let min  = Infinity;
     let sum  = 0;
     let count = 0;
     for (let i = 0; i < arr.length; i++)
@@ -73,38 +45,34 @@ function aggWatts(
         if (raw === null || !isFinite(raw)) { continue; }
         const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
         if (tMs < startMs || tMs > endMs) { continue; }
-        const v = map ? map(raw) : raw;
-        if (v > peak) { peak = v; }
-        if (v < min)  { min = v; }
+        if (raw > peak) { peak = raw; }
+        sum += raw;
+        count++;
+    }
+    return { peak, avg: count ? sum / count : 0, count };
+}
+
+//Min / mean / max over a percent ClockData layer's 24 hour-of-day values (state of charge). Empty when there is
+//no history in the window.
+function socStats(data: ClockData): { min: number; avg: number; max: number } | null
+{
+    const layer = data.layers[0];
+    if (!layer) { return null; }
+    const hv = hourlyOf(layer.values, false);
+    let min = Infinity;
+    let max = 0;
+    let sum = 0;
+    let count = 0;
+    for (const v of hv)
+    {
+        if (!isFinite(v)) { continue; }
+        if (v < min) { min = v; }
+        if (v > max) { max = v; }
         sum += v;
         count++;
     }
-    return { peak, min: count ? min : 0, avg: count ? sum / count : 0, count };
-}
-
-//Derived home-consumption per bucket (same formula as the consumption curve): production + import - export - net
-//battery, clamped at 0. Buckets with no measured source are skipped so a gap stays a gap. Returns the window peak
-//watts and total kWh (no meter to sum, so it is integrated from the derived watts).
-function consumptionAgg(store: NonNullable<ChartHost['_unifiedStore']>, startMs: number, endMs: number):
-    { peak: number; totalKwh: number }
-{
-    let peak = 0;
-    let kwh  = 0;
-    for (let i = 0; i < store.production.length; i++)
-    {
-        const p  = store.production[i];
-        const gi = store.gridImport[i];
-        const ge = store.gridExport[i];
-        const b  = store.battery[i];
-        if (p === null && gi === null && ge === null && b === null) { continue; }
-        const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-        if (tMs < startMs || tMs > endMs) { continue; }
-        const v = Math.max(0, (p ?? 0) + (gi ?? 0) - (ge ?? 0) - (b ?? 0));
-        if (v > peak) { peak = v; }
-        //watts * (bucket hours) = watt-hours; /1000 to kWh (no meter to sum, so it is integrated from the watts).
-        kwh += (v * store.stepMs) / HOUR_MS / 1000;
-    }
-    return { peak, totalKwh: kwh };
+    if (!count) { return null; }
+    return { min, avg: sum / count, max };
 }
 
 //Local clock (HH:MM) in the user's language. Day length as Hh MM with a padded minute.
@@ -122,117 +90,38 @@ function formatDayLength(ms: number): string
     return `${h}h${String(m).padStart(2, '0')}`;
 }
 
-//Build the metric rows for the active target. Returns [] when there is nothing to aggregate (no store / no data),
-//so the caller can drop the panel entirely.
+//Build the metric rows for the active target. Returns [] when there is nothing to aggregate yet (no window, or
+//the clock data has not resolved), so the caller can drop the panel entirely.
 function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 {
-    const store = host._unifiedStore;
     const range = host._timeRange;
-    if (!store || !range)
-    {
-        return [];
-    }
+    if (!range) { return []; }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
-    const rangeMs = endMs - startMs;
-    if (rangeMs <= 0)
-    {
-        return [];
-    }
+    if (endMs <= startMs) { return []; }
+
     const hass = host.hass;
     const dec  = valueDecimals(host.config);
     const pu   = powerUnit(host.config);
     const iu   = irradianceUnit(host.config);
-    const days = Math.max(1, Math.round(rangeMs / DAY_MS));
-    const power  = (w: number): string => formatPower(hass, w, dec, pu);
+    const days = windowDays(startMs, endMs);
     const energy = (kwh: number): string => formatEnergyKwh(hass, kwh, dec, pu);
 
-    if (target === 'production')
-    {
-        const a   = aggWatts(store, store.production, startMs, endMs);
-        const tot = sumChangeKwh(host._pvChangeSeries, startMs, endMs);
-        return [
-            { icon: 'mdi:sigma',         value: energy(tot) },
-            { icon: 'mdi:trending-up',   value: power(a.peak) },
-            { icon: 'mdi:calendar-today', value: energy(tot / days) },
-        ];
-    }
-
-    if (target === 'consumption')
-    {
-        const a = consumptionAgg(store, startMs, endMs);
-        return [
-            { icon: 'mdi:sigma',          value: energy(a.totalKwh) },
-            { icon: 'mdi:trending-up',    value: power(a.peak) },
-            { icon: 'mdi:calendar-today', value: energy(a.totalKwh / days) },
-        ];
-    }
-
-    if (target === 'grid')
-    {
-        const imp = sumChangeKwh(host._gridImportChangeSeries, startMs, endMs);
-        const exp = sumChangeKwh(host._gridExportChangeSeries, startMs, endMs);
-        const net = imp - exp;
-        const netStr = `${net < 0 ? '-' : ''}${energy(Math.abs(net))}`;
-        return [
-            { icon: 'mdi:transmission-tower-import', value: energy(imp) },
-            { icon: 'mdi:transmission-tower-export', value: energy(exp) },
-            { icon: 'mdi:scale-balance',             value: netStr },
-            { icon: 'mdi:calendar-today',            value: energy(imp / days) },
-        ];
-    }
-
-    if (target === 'battery')
-    {
-        const charged    = sumChangeKwh(host._batteryChargeChangeSeries, startMs, endMs);
-        const discharged = sumChangeKwh(host._batteryDischargeChangeSeries, startMs, endMs);
-        return [
-            { icon: 'mdi:battery-arrow-down', value: energy(charged) },
-            { icon: 'mdi:battery-arrow-up',   value: energy(discharged) },
-        ];
-    }
-
-    if (target === 'battery-soc')
-    {
-        const hist = host._batterySocHistory;
-        let min = Infinity;
-        let max = 0;
-        let sum = 0;
-        let count = 0;
-        if (hist)
-        {
-            for (let i = 0; i < hist.times.length; i++)
-            {
-                const tMs = hist.times[i].getTime();
-                if (tMs < startMs || tMs > endMs) { continue; }
-                const v = hist.values[i];
-                if (v === undefined || !isFinite(v)) { continue; }
-                if (v < min) { min = v; }
-                if (v > max) { max = v; }
-                sum += v;
-                count++;
-            }
-        }
-        if (!count)
-        {
-            return [];
-        }
-        const pct = (v: number): string => `${Math.round(v)} %`;
-        return [
-            { icon: 'mdi:arrow-down',           value: pct(min) },
-            { icon: 'mdi:approximately-equal',  value: pct(sum / count) },
-            { icon: 'mdi:arrow-up',             value: pct(max) },
-        ];
-    }
-
+    //Irradiance is weather, not a clock ring: aggregate the store's own W/m2 series + read the astro from the sun
+    //scene. Everything else routes through buildClockData so it matches the clock's period total exactly.
     if (target === 'irradiance')
     {
-        const a    = aggWatts(store, store.irradiance, startMs, endMs);
-        const irr  = (w: number): string => formatIrradiance(hass, w, dec, iu);
-        const rows: DetailMetric[] = [
-            { icon: 'mdi:trending-up',          value: irr(a.peak) },
-            { icon: 'mdi:approximately-equal',  value: irr(a.avg) },
-        ];
+        const store = host._unifiedStore;
+        const irr   = (w: number): string => formatIrradiance(hass, w, dec, iu);
+        const rows: DetailMetric[] = [];
+        if (store)
+        {
+            const a = aggWatts(store, store.irradiance, startMs, endMs);
+            rows.push(
+                { icon: 'mdi:trending-up',         value: irr(a.peak) },
+                { icon: 'mdi:approximately-equal', value: irr(a.avg) },
+            );
+        }
         const scene = host._sunScene;
         if (scene && scene.sunrise && scene.sunset)
         {
@@ -252,44 +141,60 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         return rows;
     }
 
-    //custom: totals from the change series, watts from kWh/bucket -> average watts, like the custom curve.
-    const tot = sumChangeKwh(host._customChangeSeries ?? null, startMs, endMs);
-    let peak = 0;
-    let min  = Infinity;
-    let sum  = 0;
-    let count = 0;
-    const buckets = host._customChangeSeries;
-    if (buckets)
+    const data = buildClockData(host, target);
+
+    if (target === 'battery-soc')
     {
-        for (const b of buckets)
-        {
-            const durMs = b.endMs - b.startMs;
-            if (durMs <= 0) { continue; }
-            const tMs = (b.startMs + b.endMs) / 2;
-            if (tMs < startMs || tMs > endMs) { continue; }
-            if (!isFinite(b.kwh)) { continue; }
-            const w = Math.abs((b.kwh * HOUR_MS) / durMs);
-            if (w > peak) { peak = w; }
-            if (w < min)  { min = w; }
-            sum += w;
-            count++;
-        }
+        const s = socStats(data);
+        if (!s) { return []; }
+        const pct = (v: number): string => `${Math.round(v)} %`;
+        return [
+            { icon: 'mdi:arrow-down',          value: pct(s.min) },
+            { icon: 'mdi:approximately-equal', value: pct(s.avg) },
+            { icon: 'mdi:arrow-up',            value: pct(s.max) },
+        ];
     }
-    if (!count)
+
+    //Every remaining target is an energy metric. No layers yet (pre-fetch, or month/year before the hourly
+    //profile lands) -> nothing to show.
+    if (!data.layers.length) { return []; }
+
+    if (target === 'grid')
     {
-        return [{ icon: 'mdi:sigma', value: energy(tot) }];
+        //Layer order from buildClockData: [import, export].
+        const imp = clockLayerPeriod(data.layers[0], data);
+        const exp = data.layers[1] ? clockLayerPeriod(data.layers[1], data) : 0;
+        const net = imp - exp;
+        const netStr = `${net < 0 ? '-' : ''}${energy(Math.abs(net))}`;
+        return [
+            { icon: 'mdi:transmission-tower-import', value: energy(imp) },
+            { icon: 'mdi:transmission-tower-export', value: energy(exp) },
+            { icon: 'mdi:scale-balance',             value: netStr },
+            { icon: 'mdi:calendar-today',            value: energy(imp / days) },
+        ];
     }
+
+    if (target === 'battery')
+    {
+        //Layer order from buildClockData: [discharge, charge].
+        const discharged = clockLayerPeriod(data.layers[0], data);
+        const charged    = data.layers[1] ? clockLayerPeriod(data.layers[1], data) : 0;
+        return [
+            { icon: 'mdi:battery-arrow-down', value: energy(charged) },
+            { icon: 'mdi:battery-arrow-up',   value: energy(discharged) },
+        ];
+    }
+
+    //production, consumption, custom: one grand total (all layers) + its per-day average.
+    const total = clockPeriodTotal(data);
     return [
-        { icon: 'mdi:sigma',               value: energy(tot) },
-        { icon: 'mdi:arrow-down',          value: power(min) },
-        { icon: 'mdi:approximately-equal', value: power(sum / count) },
-        { icon: 'mdi:arrow-up',            value: power(peak) },
+        { icon: 'mdi:sigma',          value: energy(total) },
+        { icon: 'mdi:calendar-today', value: energy(total / days) },
     ];
 }
 
-//Render the detail panel for the active chip, or nothing when there is no data. The accent (--detail-accent)
-//is inherited from the card so the border + badge tint always match the chip's live colour, including the
-//instantaneous flip of the directional grid / battery chips.
+//Render the detail panel for the active chip, or nothing when there is no data. The accent (--detail-accent) is
+//inherited from the card so the border + badge tint always match the chip's live colour.
 export function renderDetailPanel(host: DetailHost): TemplateResult | typeof nothing
 {
     const target = host._chartTarget ?? 'production';

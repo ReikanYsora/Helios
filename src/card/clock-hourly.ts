@@ -36,15 +36,20 @@ export interface ClockHourlyHost
     _energyDefaults: EnergyDefaults;
     _timelineMode:   TimelineMode;
     _viewMode?:      'scene' | 'clock' | 'trend';
+    //Detail panel open (scene mode): it aggregates period totals with the clock's method, so on a coarse window it
+    //needs the same hourly profile even outside clock mode.
+    _infoPanelOpen?: boolean;
     _clockHourly:    ClockHourly | null;
     _clockHourlyKey: string;
     requestUpdate(): void;
 }
 
-//True when the clock needs its own hourly source: clock mode AND a store coarser than hourly (month/year).
+//True when the hourly source is needed: a store coarser than hourly (month/year) AND either the clock dial is up
+//or the scene detail panel is open (both aggregate period totals from this profile).
 export function clockNeedsHourly(host: ClockHourlyHost): boolean
 {
-    return host._viewMode === 'clock' && modeBucketsPerHour(host._timelineMode, host.config) < 1;
+    if (modeBucketsPerHour(host._timelineMode, host.config) >= 1) { return false; }
+    return host._viewMode === 'clock' || host._infoPanelOpen === true;
 }
 
 //Bin a recorder change-series into 24 hour-of-day energy totals (kWh), summed over the window. Single-direction

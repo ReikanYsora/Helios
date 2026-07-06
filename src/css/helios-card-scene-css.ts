@@ -413,11 +413,14 @@ export const heliosCardStyles = css`
         border-radius: 50%;
         background: var(--detail-accent, var(--primary-color, #03a9f4));
         color: var(--text-on-primary-color, #ffffff);
+        /*  Flex-centre the glyph: line-height centring left the thin "i" visually off in the disc. */
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-size: 10px;
         font-weight: 700;
         font-style: normal;
-        line-height: 14px;
-        text-align: center;
+        line-height: 1;
         pointer-events: none;
     }
 
