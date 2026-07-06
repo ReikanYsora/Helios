@@ -1,7 +1,7 @@
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
+import { HOUR_MS, HOURS_PER_DAY, CLOCK_GROW_MS } from '../core/config/constants';
 import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
 import { formatHaHour } from '../core/format/format';
@@ -15,7 +15,7 @@ import
     type ClockData, type ClockHit, type ClockRingInput, type ClockFrame,
     buildClockData, buildClockDataHourly, hourlyOf, clockTargetMeta, clockTargetLabel,
     projectClockFrame, projectTrendFrame, trendGoodDirection, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
-    clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
+    clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './energy-clock';
 
 

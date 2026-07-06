@@ -205,3 +205,6 @@ export const MAX_SHADOW_M    = 50;
 export const GROWTH_RISE_MS  = 500;
 export const HOME_SQUASH_MS  = 220;
 export const HOME_GROW_MS    = 300;
+//Clock/trend dial: grow/shrink + slot-slide duration (a ring rises when added, falls + fades when removed,
+//slides between slots when the stack recompacts).
+export const CLOCK_GROW_MS   = 320;

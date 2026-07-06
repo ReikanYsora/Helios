@@ -20,7 +20,7 @@ import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { tintedRgba } from '../core/render-kit/colors';
 import { mixHex, hexByte } from '../core/render-kit/hex';
 import { pointsAttr, type Point } from '../core/render-kit/geometry';
-import { fetchOfmBuildingRings, type OfmRing } from './ofm';
+import { fetchOfmBuildingRings, type OfmRing } from './openfreemap';
 import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
     FIXED_BUILDING_HEIGHT_M,
     MAX_BUILDING_COUNT,

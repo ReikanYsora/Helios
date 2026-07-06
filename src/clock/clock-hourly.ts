@@ -8,7 +8,7 @@ import { fetchChangeSeries, outlierCapKwh, type ChangeBucket } from '../data/sou
 import { callWS } from '../data/ha-gateway';
 import { modeBucketsPerHour, type TimelineMode } from '../timeline/timeline-modes';
 import { customEntityId, customEnergyEntityId, type HeliosConfig } from '../core/config/helios-config';
-import { consumptionLoad } from '../core/energy/consumption';
+import { consumptionLoad } from '../core/energy';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import { serverHour } from '../core/time/timezone';
 import { HOUR_MS, HOURS_PER_DAY} from '../core/config/constants';

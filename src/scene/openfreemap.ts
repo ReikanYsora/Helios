@@ -6,7 +6,7 @@
 //through the standard slippy-map inverse. The planet snapshot rotates, so the versioned tile URL template is read
 //once from the TileJSON and cached.
 
-import { decodeVectorTile } from './mvt';
+import { decodeVectorTile } from './vector-tile';
 import { DEG, METRES_PER_DEGREE, OFM_TILEJSON_URL, OFM_TILE_ZOOM, OFM_FETCH_TIMEOUT_MS, BUILDING_CACHE_TTL_MS } from '../core/config/constants';
 
 //One footprint ring from a tile: vertices in [lon, lat], plus the OSM render height (m) or null when untagged.

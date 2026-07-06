@@ -4,7 +4,7 @@
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, irradianceUnit, customEntityColor } from '../core/config/helios-config';
-import { consumptionLoad } from '../core/energy/consumption';
+import { consumptionLoad } from '../core/energy';
 import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from '../core/format/format';
 import { valueAt } from '../data/unifiedStore';
 import { pickTranslations } from '../core/i18n';

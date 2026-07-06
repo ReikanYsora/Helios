@@ -116,7 +116,7 @@ export {
     renderTimelineNightZones,
     renderTimelineFutureMask,
     solarBands,
-} from '../timeline/timeline-night';
+} from '../timeline/timeline-overlays';
 export {
     renderTimelineHoverTooltip,
     handleChartHoverMove,

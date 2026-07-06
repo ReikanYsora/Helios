@@ -13,14 +13,14 @@ import
 import { refreshCustomEntity } from './data/sources/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './clock/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './timeline/timeline-modes';
-import { DAY_MS, UI_AUTOHIDE_MS} from './core/config/constants';
+import { DAY_MS, UI_AUTOHIDE_MS, CLOCK_GROW_MS } from './core/config/constants';
 import { pickTranslations } from './core/i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
 import {
     type ClockData,
-    availableClockTargets, clockTargetMeta, clockTargetLabel, CLOCK_GROW_MS,
+    availableClockTargets, clockTargetMeta, clockTargetLabel,
 } from './clock/energy-clock';
 import { refreshTrendProfiles } from './clock/trend';
 import { setServerTimeZone } from './core/time/timezone';

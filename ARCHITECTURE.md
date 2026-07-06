@@ -104,10 +104,10 @@ lock-step. Colour math (night shade, building tint, day / night blends) lives in
 `core/render-kit/hex.ts`; the shared 2D point type + SVG-points formatter live in
 `core/render-kit/geometry.ts`.
 
-### Buildings, `scene/buildings.ts`, `scene/ofm.ts`, `scene/mvt.ts`
+### Buildings, `scene/buildings.ts`, `scene/openfreemap.ts`, `scene/vector-tile.ts`
 
 Footprints are fetched once from **OpenStreetMap, served as OpenFreeMap vector
-tiles** covering a radius around the home (`scene/ofm.ts` fetches, `scene/mvt.ts`
+tiles** covering a radius around the home (`scene/openfreemap.ts` fetches, `scene/vector-tile.ts`
 decodes the Mapbox Vector Tile `building` layer), parsed to local-metre polygons
 with a height (real OSM height / `building:levels`, or a fixed prism), and cached
 in `localStorage`. Interpretation (radius filter, nearest-N count, real-vs-fixed
@@ -271,7 +271,7 @@ the series-set: production (with dashed forecast and a per-string stacked
 breakdown, in `charts/charts-pv.ts`), consumption, grid, battery, battery SoC,
 irradiance, cloud or the custom entity (the generic single-series path lives in
 `charts/charts-generic.ts`). It draws day separators, night-zone hatching
-(`timeline/timeline-night.ts`), a future mask, the live + the scrub cursors, and a
+(`timeline/timeline-overlays.ts`), a future mask, the live + the scrub cursors, and a
 hover tooltip (`timeline/timeline-tooltip.ts`) whose icons take each series'
 colour.
 
@@ -303,7 +303,7 @@ citizen and a stalled fetch never blanks the card:
   cache collapses them to one recorder round-trip; each source then merges only its
   own ids (`mergeChangeSeries`). The home-consumption identity (`production +
   import - export - net battery`, clamped) lives once in
-  `core/energy/consumption.ts`.
+  `core/energy.ts`.
 
 ---
 

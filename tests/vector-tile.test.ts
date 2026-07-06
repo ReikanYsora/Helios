@@ -7,7 +7,7 @@ import { gunzipSync } from 'zlib';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { describe, it, expect } from 'vitest';
-import { decodeVectorTile } from '../src/scene/mvt';
+import { decodeVectorTile } from '../src/scene/vector-tile';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const tile = new Uint8Array(gunzipSync(readFileSync(join(here, 'fixtures', 'ofm-tile-z14.pbf'))));

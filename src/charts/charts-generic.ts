@@ -5,7 +5,7 @@ import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import { ENERGY_COLOR, lerpHexToward, cssHex, uiColorVar } from '../core/format/format';
 import { customEntityColor } from '../core/config/helios-config';
-import { consumptionLoad } from '../core/energy/consumption';
+import { consumptionLoad } from '../core/energy';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay } from '../data/sources/energy-stats';
 import type { ChartHost, ChartTarget } from './charts';

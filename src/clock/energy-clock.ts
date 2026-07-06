@@ -5,11 +5,11 @@
 //by hour-of-day, no extra fetch.
 
 import type { SceneCamera } from '../scene/projection';
-import { HOUR_MS, HOURS_PER_DAY} from '../core/config/constants';
+import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
 import { type ChartTarget, type ChartHost, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from '../charts/charts';
 import { changeSeriesToWatts } from '../data/sources/energy-stats';
-import { consumptionLoad } from '../core/energy/consumption';
+import { consumptionLoad } from '../core/energy';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, cssHex, uiColorVar } from '../core/format/format';
 import type { UnifiedDataStore } from '../data/unifiedStore';
 import { customEntityId, customEntityColor, valueDecimals, powerUnit, irradianceUnit } from '../core/config/helios-config';
@@ -54,9 +54,6 @@ const CLOCK_COMPASS_BASE_FRAC   = 1.30;
 const CLOCK_COMPASS_TIP_FRAC    = 1.42;
 const CLOCK_COMPASS_HALF_W_FRAC = 0.05;
 const CLOCK_COMPASS_LABEL_FRAC  = 1.50;
-//Grow/shrink + slot-slide duration: a ring rises (ease-out) when added, falls + fades when removed, slides
-//between slots when the stack recompacts.
-export const CLOCK_GROW_MS = 320;
 //Shared ease-out for every clock transition (grow, shrink, slide, dim). p clamped to 0..1.
 export function easeOutCubic(p: number): number
 {
