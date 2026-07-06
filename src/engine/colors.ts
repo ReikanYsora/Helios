@@ -1,15 +1,5 @@
 //Colour math for the 2.5D scene renderer: hex channel mixing + the time-of-day tints (night shade,
-//building altitude tint, sun-arc colour). Plus the shared 2D point type + its SVG-points formatter, a leaf
-//utility kept here so colour/geometry painters can depend on it without a circular import. Pure.
-
-//A 2D point in whatever space the caller is using ([x, y] or [east, north] metres).
-export type Point = [number, number];
-
-//Format a point list as an SVG points attribute (1-decimal px).
-export function pointsAttr(points: Point[]): string
-{
-    return points.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-}
+//building altitude tint, sun-arc colour). Pure.
 
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
