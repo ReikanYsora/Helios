@@ -19,21 +19,18 @@ import
 import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
-import { DAY_MS, HOUR_MS, UI_AUTOHIDE_MS, HOURS_PER_DAY} from './constants';
+import { DAY_MS, UI_AUTOHIDE_MS} from './constants';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
 import {
-    type ClockData, type ClockHit, type ClockRingInput, type ClockFrame,
-    availableClockTargets, buildClockData, buildClockDataHourly, hourlyOf, clockTargetMeta, clockTargetLabel,
-    projectClockFrame, projectTrendFrame, trendGoodDirection, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
-    clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_GROW_MS, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
+    type ClockData,
+    availableClockTargets, clockTargetMeta, clockTargetLabel, CLOCK_GROW_MS,
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
-import { nightFractionByHour } from './card/sun-zones';
 import { setServerTimeZone } from './card/timezone';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatHaHour, formatIrradiance, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
 import
 {
     refreshPv,
@@ -111,6 +108,7 @@ import './card/registry';
 //Side-effect import: install banner, location-override debug helpers and the page-wide data-cache reset
 //bus. liveCards is the shared registry each card adds/removes itself from.
 import { liveCards } from './card/diagnostics';
+import { ClockController } from './card/clock-controller';
 
 
 //Live cards grouped by their (auto-generated) cache id, in connection order. A pasted card carries a copy of
@@ -151,6 +149,11 @@ export class HeliosCard extends LitElement
     //Set by HA on the editor's live-preview card. HA rebuilds that card on every keystroke, so intro
     //animations (prism rise, timeline curve grow) are suppressed while it is true.
     @property({ attribute: false }) public preview = false;
+
+    //Clock / trend dial subsystem (view-mode switching, the filter toggle, the grow/slide/exit + dim animation
+    //engine, dial data build, paint/hit-test, the four dial tooltips). Owns its own scratch/animation state; the
+    //reactive @state it drives stays on the card and is reached through the controller's host back-reference.
+    readonly _clock = new ClockController(this);
 
     @state() _engine?:        HeliosEngine;
     @state() _now             = new Date();
@@ -265,66 +268,21 @@ export class HeliosCard extends LitElement
     @state() _trendPrev: ClockHourly | null = null;
     _trendKey = '';
     //Per-hour night share for the dial's ground day/night wedges, recomputed when the home or window changes.
-    @state() private _nightFrac: number[] | null = null;
-    private _nightFracKey = '';
+    @state() _nightFrac: number[] | null = null;
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
     //Persisted; the timeline (hidden in clock mode) follows the first when scene mode resumes.
     @state() _clockTargets: ChartTarget[] = [];
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
-    @state() private _clockData: ClockData[] = [];
-    //Per-unit displayed ceiling, eased toward the target so the remaining bars rescale smoothly when a filter is
-    //toggled (toggling one of two same-unit metrics otherwise snaps the survivor to a new axis). Each entry eases
-    //from `from` to `to` over CLOCK_GROW_MS; `start === 0` means at rest (snapped to `to`). The ease is requested
-    //only by a filter toggle (via _clockCeilEase); entry, data loading and period changes snap.
-    private _clockCeilAnim = new Map<string, { from: number; to: number; start: number }>();
-    //Set by a filter toggle to ask paintClock to EASE the next ceiling change instead of snapping it; consumed on
-    //the first paint that applies it.
-    private _clockCeilEase = false;
+    //Reactive so the dial repaints on a rebuild; the ClockController mutates it through its host reference.
+    @state() _clockData: ClockData[] = [];
     //Hovered slot; resolves to its hour and lights every ring's area for that hour + drives the tooltip. null = off.
-    @state() private _clockHoverSlot: number | null = null;
+    @state() _clockHoverSlot: number | null = null;
     //Home prism hovered/tapped: brightens it + shows the window-total tooltip (does NOT dim the cylinders).
-    @state() private _clockHomeHover = false;
-    //Home prism's screen centre + hit radius from the last frame, for the home hover/tap test.
-    private _clockHome: { x: number; y: number; r: number } | null = null;
-    //Screen-space hit segments (each slot's axis), refreshed every paint for the hover test.
-    private _clockHits: ClockHit[] = [];
-    private _clockHoverX = 0;
-    private _clockHoverY = 0;
-    //Touch: a tapped tooltip is sticky (hover doesn't fire on touch), cleared by tapping empty space or
-    //another cylinder. _clockTapStart* anchor the move-threshold that tells a tap from a drag-rotate.
-    private _clockTapSticky = false;
-    private _clockTapStartX = 0;
-    private _clockTapStartY = 0;
-    //Per-ring animation, keyed by metric so rapid toggles never desync (no held rebuild, no shared index):
-    //  _clockGrowStart: when a ring's grow begins (0..1 height rise); absent = at rest. A start in the FUTURE
-    //                   holds the ring at 0 until then (the reload's shrink/hold/grow uses that). See
-    //                   _clockRingHeight for the resolved per-frame height, _clockSlotNow for the slide.
-    //  _clockExiting:   removed rings fading + shrinking out, independent of the live list so a toggle never
-    //                   blocks the rebuild; each carries the slot it held so survivors slide over it.
-    //  _clockSlotFrom + _clockSlideStart: captured source slot per ring + when the recompaction slide began,
-    //                   re-snapshotted from CURRENT animated positions on every toggle so nothing teleports.
-    //  _clockAnimSeq:   gates the single shared animation rAF loop.
-    private _clockGrowStart = new Map<ChartTarget, number>();
-    private _clockExiting: { data: ClockData; slot: number; start: number; h0: number }[] = [];
-    private _clockSlotFrom = new Map<ChartTarget, number>();
-    private _clockSlideStart = 0;
-    private _clockAnimSeq = 0;
-    //Period-change reload: every ring shrinks to 0 and holds there while the new window's data is fetched,
-    //then grows back up once it lands, so the dial never pops abruptly from old data to new. 0 = idle.
-    //_clockReloadWindowStartMs is the new window's series-start anchor, captured when the reload begins: the
-    //grow only fires once the relevant change-series fetch keys carry THIS start (the now/week store rebuilds
-    //eagerly from stale series at the new geometry, so non-null alone never proves the data is fresh).
-    private _clockReloadStart = 0;
-    private _clockReloadWindowStartMs = 0;
-    //Slice-focus dim: _clockDim ramps 0..1 (others fade toward 0.5) while _clockDimSlot is focused; it
-    //persists through the fade-out so the dimmed bars + the focused spoke ramp back smoothly.
-    private _clockDim = 0;
-    private _clockDimSlot: number | null = null;
-    private _clockDimSeq  = 0;
-    @query('ha-card') private _haCard?: HTMLElement;
-    @query('.clock-svg') private _clockSvg?: SVGSVGElement;
-    @queryAll('.clock-hour-label') private _clockLabels!: NodeListOf<HTMLElement>;
-    @queryAll('.clock-compass-label') private _clockCompassLabels!: NodeListOf<HTMLElement>;
+    @state() _clockHomeHover = false;
+    @query('ha-card') _haCard?: HTMLElement;
+    @query('.clock-svg') _clockSvg?: SVGSVGElement;
+    @queryAll('.clock-hour-label') _clockLabels!: NodeListOf<HTMLElement>;
+    @queryAll('.clock-compass-label') _clockCompassLabels!: NodeListOf<HTMLElement>;
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -446,7 +404,7 @@ export class HeliosCard extends LitElement
             }
         }
         this._applyPeriod();
-        this._persistUiState();
+        this.persistUiState();
         if (this._viewMode === 'clock')
         {
             //Shrink the current rings out now; they grow back once the new window's data lands (updated()).
@@ -454,11 +412,11 @@ export class HeliosCard extends LitElement
             //refetch for THIS window from the stale series the store would otherwise rebuild from eagerly.
             const today0 = new Date();
             today0.setHours(0, 0, 0, 0);
-            this._clockReloadStart = Date.now();
-            this._clockReloadWindowStartMs = today0.getTime() - this._periodPastDays * DAY_MS;
-            this._clockGrowStart.clear();
+            this._clock._clockReloadStart = Date.now();
+            this._clock._clockReloadWindowStartMs = today0.getTime() - this._periodPastDays * DAY_MS;
+            this._clock._clockGrowStart.clear();
             void refreshClockHourly(this);
-            this._clockAnimate();
+            this._clock.clockAnimate();
         }
         if (this._viewMode === 'trend')
         {
@@ -486,12 +444,12 @@ export class HeliosCard extends LitElement
     get _weatherAvailable(): boolean { return TIMELINE_MODES[this._timelineMode].weather; }
 
     //Chip -> bottom-chart re-targeting. Points the chart at the clicked metric; no-op when already there.
-    private _setChartTarget = (target: ChartTarget): void =>
+    setChartTarget = (target: ChartTarget): void =>
     {
         if (this._chartTarget !== target)
         {
             this._chartTarget = target;
-            this._persistUiState();
+            this.persistUiState();
         }
     };
 
@@ -507,7 +465,7 @@ export class HeliosCard extends LitElement
         //Read BEFORE re-pointing: a single tap that lands on a different chip closes any open panel, so the panel
         //only ever opens on an explicit double-tap and never rides along when the user just switches metric.
         const switching = target !== this._chartTarget;
-        this._setChartTarget(target);
+        this.setChartTarget(target);
         if (isDouble)
         {
             this._infoPanelOpen = !this._infoPanelOpen;
@@ -533,7 +491,7 @@ export class HeliosCard extends LitElement
     //Push the home prism's appearance for the active chip to the renderer (via the engine): the chip's
     //accent colour, plus the per-PV-string production histogram when the solar chip is active (a single
     //producing string falls back to a solid block). `animate` plays the squash/grow on a chip change.
-    private _updateHomeAppearance(animate: boolean): void
+    updateHomeAppearance(animate: boolean): void
     {
         if (!this._engine)
         {
@@ -753,7 +711,7 @@ export class HeliosCard extends LitElement
             //non-empty entity list; totals move by watt-hours, so 30 s tracks the dashboard tile cheaply.
             refreshHaDailyTotals(this);
             //Keep the dial's "current hour" arrow in step with the clock even on an idle, camera-locked card.
-            if (this._viewMode === 'clock' || this._viewMode === 'trend') { this._scheduleClockPaint(); }
+            if (this._viewMode === 'clock' || this._viewMode === 'trend') { this._clock.scheduleClockPaint(); }
         }, 30_000);
         initVisibilityObserver(this);
         if (typeof document !== 'undefined')
@@ -799,11 +757,11 @@ export class HeliosCard extends LitElement
         //view mode + selected chip.
         if (this._engine) { this._engine.cacheKey = this.effectiveCacheId(); }
         this._engine?.persistCameraPose();
-        this._persistUiState();
+        this.persistUiState();
         this._unregisterCacheId();
         //Stop any in-flight clock grow / slide / exit / dim animation so a removed card doesn't keep an rAF alive.
-        this._clockAnimSeq++;
-        this._clockDimSeq++;
+        this._clock._clockAnimSeq++;
+        this._clock._clockDimSeq++;
         //HA's edit-mode wrapping fires disconnect + reconnect in the same tick. Defer the engine teardown so a
         //quick reconnect (cancelled in connectedCallback) keeps the live engine; only a real removal lets it fire.
         if (this._engine !== undefined && this._engineTeardownTimer === undefined)
@@ -885,7 +843,7 @@ export class HeliosCard extends LitElement
                 //Without this the prism keeps the engine's default colour while the chip shows another mode.
                 || _changedProperties.has('_engine')))
         {
-            this._updateHomeAppearance(_changedProperties.has('_chartTarget'));
+            this.updateHomeAppearance(_changedProperties.has('_chartTarget'));
         }
 
         //Dial day/night wedges: recompute the per-hour night share when the home or window changes (keyed, so
@@ -896,7 +854,7 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('hass')
                 || _changedProperties.has('config')))
         {
-            this._refreshNightFrac();
+            this._clock.refreshNightFrac();
         }
 
         //Energy-clock: while in clock mode, rebuild the metric areas when the metric set, the window or the
@@ -916,25 +874,25 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('config');
             if (inputsChanged)
             {
-                this._rebuildClockData();
+                this._clock.rebuildClockData();
             }
             //Reload grow: once the new window's data source is ready (the store for now/week, the hourly
             //profile for month/year), grow the shrunk rings back up, scheduled for the end of the shrink so
             //it always reads down-then-up.
-            if (this._clockReloadStart)
+            if (this._clock._clockReloadStart)
             {
                 //month/year wait on the hourly profile (nulled up front on a window change, so non-null -> fresh);
                 //now/week wait on every configured change-series having refetched for the new window: the store
                 //rebuilds eagerly from stale series, so non-null alone would grow the OLD numbers.
                 const ready = clockNeedsHourly(this)
                     ? this._clockHourly !== null
-                    : this._unifiedStore !== null && this._clockWindowFetched();
+                    : this._unifiedStore !== null && this._clock.clockWindowFetched();
                 if (ready)
                 {
-                    const growStart = Math.max(Date.now(), this._clockReloadStart + CLOCK_GROW_MS);
-                    this._clockTargets.forEach(t => this._clockGrowStart.set(t, growStart));
-                    this._clockReloadStart = 0;
-                    this._clockAnimate();
+                    const growStart = Math.max(Date.now(), this._clock._clockReloadStart + CLOCK_GROW_MS);
+                    this._clockTargets.forEach(t => this._clock._clockGrowStart.set(t, growStart));
+                    this._clock._clockReloadStart = 0;
+                    this._clock.clockAnimate();
                 }
             }
             //Clock dial draws no scene geometry: keep the engine in home-only so it shows just the basemap under
@@ -952,23 +910,23 @@ export class HeliosCard extends LitElement
             if (_changedProperties.has('_engine') && this._engine)
             {
                 const now = Date.now();
-                this._clockGrowStart.clear();
-                this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
-                this._clockAnimate();
+                this._clock._clockGrowStart.clear();
+                this._clockTargets.forEach(t => this._clock._clockGrowStart.set(t, now));
+                this._clock.clockAnimate();
             }
             if (_changedProperties.has('_clockHoverSlot'))
             {
-                this._startClockDim();
+                this._clock.startClockDim();
             }
             //Central-column hover toggles its highlight: repaint so it brightens/glows (its colour comes from the
             //projected frame, not the engine prism).
             if (_changedProperties.has('_clockHomeHover'))
             {
-                this._scheduleClockPaint();
+                this._clock.scheduleClockPaint();
             }
             if (_changedProperties.has('_clockData') || _changedProperties.has('_nightFrac'))
             {
-                this._scheduleClockPaint();
+                this._clock.scheduleClockPaint();
             }
         }
 
@@ -992,8 +950,8 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_clockHomeHover')
                 || _changedProperties.has('_nightFrac'))
             {
-                if (_changedProperties.has('_clockHoverSlot')) { this._startClockDim(); }
-                this._scheduleClockPaint();
+                if (_changedProperties.has('_clockHoverSlot')) { this._clock.startClockDim(); }
+                this._clock.scheduleClockPaint();
             }
         }
 
@@ -1685,27 +1643,27 @@ export class HeliosCard extends LitElement
 
                 <div
                     id="map-container"
-                    @pointermove=${this._onClockHover}
-                    @pointerleave=${this._onClockHoverEnd}
-                    @pointerdown=${this._onClockTapStart}
-                    @pointerup=${this._onClockTapEnd}
+                    @pointermove=${this._clock.onClockHover}
+                    @pointerleave=${this._clock.onClockHoverEnd}
+                    @pointerdown=${this._clock.onClockTapStart}
+                    @pointerup=${this._clock.onClockTapEnd}
                 ></div>
 
                 ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'trend') ? html`
                     <div class="clock-overlay">
                         <svg class="clock-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         ${Array.from({ length: 24 }, (_unused, h) => html`
-                            <div class="clock-hour-label">${this._formatClockHour(h)}</div>
+                            <div class="clock-hour-label">${this._clock.formatClockHour(h)}</div>
                         `)}
-                        ${this._compassLabels().map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
+                        ${this._clock.compassLabels().map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
                         ${this._clockHoverSlot !== null
                             ? (this._viewMode === 'trend'
-                                ? this._renderTrendTooltip(this._clockHoverSlot)
-                                : this._renderClockTooltip(this._clockHoverSlot))
+                                ? this._clock.renderTrendTooltip(this._clockHoverSlot)
+                                : this._clock.renderClockTooltip(this._clockHoverSlot))
                             : (this._clockHomeHover
                                 ? (this._viewMode === 'trend'
-                                    ? this._renderTrendHomeTooltip()
-                                    : this._renderClockHomeTooltip())
+                                    ? this._clock.renderTrendHomeTooltip()
+                                    : this._clock.renderClockHomeTooltip())
                                 : nothing)}
                     </div>
                 ` : nothing}
@@ -1768,7 +1726,7 @@ export class HeliosCard extends LitElement
                                 aria-pressed=${sceneOn ? 'true' : 'false'}
                                 aria-label="Scene"
                                 data-view="scene"
-                                @click=${this._onViewModeClick}
+                                @click=${this._clock.onViewModeClick}
                             >
                                 <ha-icon icon="mdi:weather-sunny"></ha-icon>
                             </button>
@@ -1778,7 +1736,7 @@ export class HeliosCard extends LitElement
                                 aria-pressed=${clockOn ? 'true' : 'false'}
                                 aria-label="Clock"
                                 data-view="clock"
-                                @click=${this._onViewModeClick}
+                                @click=${this._clock.onViewModeClick}
                             >
                                 <ha-icon icon="mdi:chart-bar"></ha-icon>
                             </button>
@@ -1788,7 +1746,7 @@ export class HeliosCard extends LitElement
                                 aria-pressed=${trendOn ? 'true' : 'false'}
                                 aria-label="Trend"
                                 data-view="trend"
-                                @click=${this._onViewModeClick}
+                                @click=${this._clock.onViewModeClick}
                             >
                                 <ha-icon icon="mdi:delta"></ha-icon>
                             </button>
@@ -1825,7 +1783,7 @@ export class HeliosCard extends LitElement
                                         title=${lbl}
                                         aria-label=${lbl}
                                         data-target=${t}
-                                        @click=${this._onClockTargetToggleClick}
+                                        @click=${this._clock.onClockTargetToggleClick}
                                     >
                                         <ha-icon icon=${meta.icon}></ha-icon>
                                     </button>
@@ -1857,7 +1815,7 @@ export class HeliosCard extends LitElement
                                         title=${lbl}
                                         aria-label=${lbl}
                                         data-target=${t}
-                                        @click=${this._onTrendTargetClick}
+                                        @click=${this._clock.onTrendTargetClick}
                                     >
                                         <ha-icon icon=${meta.icon}></ha-icon>
                                     </button>
@@ -2357,27 +2315,6 @@ export class HeliosCard extends LitElement
         this._unifiedStore = buildUnifiedStore(host);
     }
 
-    //Reload grow gate for now/week: true only once every CONFIGURED change-series has refetched for the new
-    //window. Each fetch helper keys its series on `...|${startMs}|...` where startMs is the new window's series
-    //start; so a series is fresh when its key carries _clockReloadWindowStartMs and it is no longer in flight.
-    //Series with no configured entity contribute nothing to the dial and are skipped. Until all pass, the
-    //store may be non-null but is built from STALE series at the new geometry, so the grow must not fire.
-    private _clockWindowFetched(): boolean
-    {
-        const anchor = `|${this._clockReloadWindowStartMs}|`;
-        const d = this._energyDefaults;
-        const fresh = (
-            ids:      readonly string[],
-            key:      string,
-            fetching: boolean,
-        ): boolean => ids.length === 0 || (!fetching && key.includes(anchor));
-        return fresh(d.solarStatEnergyFroms,   this._pvChangeFetch.key,   this._pvChangeFetch.fetching)
-            && fresh(d.gridStatEnergyFroms,    this._gridImportFetch.key, this._gridImportFetch.fetching)
-            && fresh(d.gridStatEnergyTos,      this._gridExportFetch.key, this._gridExportFetch.fetching)
-            && fresh([...d.batteryStatEnergyTos, ...d.batteryStatEnergyFroms],
-                     this._batteryChangeFetch.key, this._batteryChangeFetch.fetching);
-    }
-
     //Reset timeline scrub state so the absolutely-positioned tooltip disappears next render.
     private _exitScrubMode = (): void =>
     {
@@ -2400,205 +2337,6 @@ export class HeliosCard extends LitElement
         }
         return false;
     }
-    //Switch between scene (3D view) and clock (hourly ring dial) modes. Resets clock animation state so the
-    //dial enters/leaves cleanly, seeds/restores the filter set and home prism, persists, and kicks the
-    //decoupled hourly fetch (clock only). No-op when already in the requested mode.
-    private _setViewMode(mode: 'scene' | 'clock' | 'trend'): void
-    {
-        if (this._viewMode === mode)
-        {
-            return;
-        }
-        //Reset any clock animation state so the dial enters/leaves cleanly. Ceiling eases reset too, so entry
-        //snaps to the target scale instead of easing from a stale one.
-        this._clockAnimSeq++;
-        this._clockExiting = [];
-        this._clockSlotFrom.clear();
-        this._clockSlideStart = 0;
-        this._clockCeilAnim.clear();
-        this._clockCeilEase = false;
-        this._clockHoverSlot = null;
-        this._clockHomeHover = false;
-        if (mode === 'clock')
-        {
-            //Entering clock: the scene's selected chip drives the dial. If it is not already among the active
-            //filters, reset to it (so selecting a chip in the scene always carries into clock); when it IS one of
-            //them, keep the multi-filter set the user built inside the dial.
-            if (!this._clockTargets.includes(this._chartTarget))
-            {
-                this._clockTargets = [this._chartTarget];
-            }
-            this._rebuildClockData();
-            //Reveal every ring with a grow when the dial first appears.
-            const now = Date.now();
-            this._clockGrowStart.clear();
-            this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
-            //Dial draws no scene geometry: the engine keeps only the basemap, the overlay paints the dial.
-            this._engine?.setHomeOnly(true);
-            this._viewMode = mode;
-            this._persistUiState();
-            //Long window: kick the decoupled hourly fetch now (the gated refresh chain won't, since nothing
-            //it watches changed). No-op / clears itself when not needed.
-            void refreshClockHourly(this);
-            this._clockAnimate();
-            return;
-        }
-        if (mode === 'trend')
-        {
-            //The scene's selected chip drives the trend dial too (single-metric, like scene). Weather metrics have
-            //no P / P-1 profile, so an irradiance selection falls back to consumption.
-            if (this._chartTarget !== 'irradiance') { this._trendTarget = this._chartTarget; }
-            if (this._trendTarget === 'irradiance') { this._trendTarget = 'consumption'; }
-            //Dial draws no scene geometry; the overlay paints the comparison dial. Fetch the two profiles.
-            this._engine?.setHomeOnly(true);
-            this._viewMode = mode;
-            this._persistUiState();
-            void refreshClockHourly(this);   //clears the clock profile (it keys off _viewMode)
-            void refreshTrendProfiles(this); //P + P-1
-            this._scheduleClockPaint();
-            return;
-        }
-        //Leaving to scene: restore the full scene + the chart-driven home colour, clear the ground guide + logo.
-        this._engine?.setHomeOnly(false);
-        this._engine?.setGroundOverlay('');
-        this._engine?.setGroundDecal(null);
-        this._updateHomeAppearance(false);
-        if (this._clockTargets.length > 0)
-        {
-            //Back to scene: the timeline (hidden in dial modes) re-applies the FIRST selected filter.
-            this._setChartTarget(this._clockTargets[0]);
-        }
-        this._viewMode = mode;
-        this._persistUiState();
-        //Now that we've left the dial, let both profiles clear themselves (they key off _viewMode).
-        void refreshClockHourly(this);
-        void refreshTrendProfiles(this);
-    }
-
-    //Rail button delegate: the clicked element carries its mode in data-view.
-    private _onViewModeClick = (e: Event): void =>
-    {
-        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | 'trend' | undefined;
-        if (view) { this._setViewMode(view); }
-    };
-
-    //Trend metric selector (single choice): pick the metric, refetch is implicit (data is metric-independent;
-    //only the displayed vector changes), repaint.
-    private _onTrendTargetClick = (e: Event): void =>
-    {
-        const t = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
-        if (t && t !== this._trendTarget) { this._trendTarget = t; this._scheduleClockPaint(); }
-    };
-
-    //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own concentric
-    //ring of hour bars; the first stays the timeline's target for when scene mode resumes. Order is preserved
-    //(append on add). Adding grows the new ring in; removing shrinks + fades it while the survivors slide to
-    //recompact and their shared-unit ceiling eases to the new scale.
-    private _toggleClockTarget = (target: ChartTarget): void =>
-    {
-        const i = this._clockTargets.indexOf(target);
-        const adding = i < 0;
-        //Snapshot every ring's CURRENT animated slot first, so the recompaction slides from where it is now
-        //(robust to toggling again mid-animation) rather than teleporting.
-        this._captureClockSlots();
-        const now = Date.now();
-        if (adding)
-        {
-            //Re-adding a metric that's still exiting: cancel its exit so we don't briefly draw it twice.
-            this._clockExiting = this._clockExiting.filter(e => e.data.target !== target);
-            this._clockTargets = [...this._clockTargets, target];
-            this._clockGrowStart.set(target, now);
-        }
-        else
-        {
-            //Hand the removed ring to the independent exit list at its current slot + height, so an in-progress
-            //grow shrinks from where it is (no jump to full) while survivors slide over it.
-            const data = this._clockData[i];
-            const gs   = this._clockGrowStart.get(target);
-            const h0   = gs ? easeOutCubic((now - gs) / CLOCK_GROW_MS) : 1;
-            if (data) { this._clockExiting.push({ data, slot: this._clockSlotFrom.get(target) ?? i, start: now, h0 }); }
-            this._clockGrowStart.delete(target);
-            this._clockTargets = this._clockTargets.filter(t => t !== target);
-        }
-        this._rebuildClockData();
-        if (this._clockTargets.length > 0)
-        {
-            this._setChartTarget(this._clockTargets[0]);
-        }
-        this._persistUiState();
-        //A toggle rescales the shared-unit survivors: ask paintClock to ease the ceiling change rather than snap.
-        this._clockCeilEase = true;
-        this._clockAnimate();
-    };
-
-    //Metric-rail button delegate: the clicked element carries its metric in data-target.
-    private _onClockTargetToggleClick = (e: Event): void =>
-    {
-        const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
-        if (target) { this._toggleClockTarget(target); }
-    };
-
-    //Snapshot each present ring's current animated slot into _clockSlotFrom and (re)anchor the slide clock, so
-    //the next recompaction eases from the live positions instead of the integer indices.
-    private _captureClockSlots(): void
-    {
-        const now    = Date.now();
-        const slideP = this._clockSlideStart ? (now - this._clockSlideStart) / CLOCK_GROW_MS : 1;
-        const eased  = easeOutCubic(slideP);
-        const snap   = new Map<ChartTarget, number>();
-        this._clockData.forEach((data, i) =>
-        {
-            const from = this._clockSlotFrom.get(data.target) ?? i;
-            snap.set(data.target, from + (i - from) * eased);
-        });
-        this._clockSlotFrom  = snap;
-        this._clockSlideStart = now;
-    }
-
-    //Slice-focus dim fade: ramp _clockDim toward 1 while an hour is focused (others fade to 0.5), back to 0
-    //when the hover/tap ends. _clockDimSlot is kept through the fade-out so the dimmed bars + the focused
-    //spoke ramp back smoothly. Instant in preview / reduced motion.
-    private _startClockDim(): void
-    {
-        if (this._clockHoverSlot !== null)
-        {
-            this._clockDimSlot = this._clockHoverSlot;
-        }
-        const target = this._clockHoverSlot !== null ? 1 : 0;
-        if (this.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
-        {
-            this._clockDim = target;
-            if (target === 0) { this._clockDimSlot = null; }
-            this._scheduleClockPaint();
-            return;
-        }
-        const id    = ++this._clockDimSeq;
-        const from  = this._clockDim;
-        const start = performance.now();
-        const DUR   = 150;
-        const animateDim = (now: number): void =>
-        {
-            if (id !== this._clockDimSeq || (this._viewMode !== 'clock' && this._viewMode !== 'trend'))
-            {
-                return;
-            }
-            const t = Math.min(1, (now - start) / DUR);
-            this._clockDim = from + (target - from) * easeOutCubic(t);
-            this.paintClock();
-            if (t < 1)
-            {
-                requestAnimationFrame(animateDim);
-            }
-            else
-            {
-                this._clockDim = target;
-                if (target === 0) { this._clockDimSlot = null; }
-                this.paintClock();
-            }
-        };
-        requestAnimationFrame(animateDim);
-    }
-
     //Per-home localStorage key for the card's UI state (view mode + selected chip). Mirrors the engine's
     //camera-pose key scheme so each home restores its own view. Null before coords resolve.
     private _uiStateRestored = false;
@@ -2739,7 +2477,7 @@ export class HeliosCard extends LitElement
         }
     }
 
-    private _persistUiState(): void
+    persistUiState(): void
     {
         const key = this._uiStateStorageKey();
         if (!key)
@@ -2762,585 +2500,9 @@ export class HeliosCard extends LitElement
         }
     }
 
-    //Rebuild one ClockData per active filter (outer -> inner), immediately and unconditionally. Animation is
-    //carried separately (per-ring grow start, the exit list, the slide clock), so a data-only rebuild never
-    //disturbs an in-flight animation and a toggle is never blocked.
-    private _rebuildClockData(): void
-    {
-        this._clockData = this._clockTargets.map(t => buildClockData(this, t));
-    }
-
-    //Current animated slot of a present ring: eased lerp from its captured source slot to its live index.
-    private _clockSlotNow(index: number, target: ChartTarget): number
-    {
-        const from   = this._clockSlotFrom.get(target) ?? index;
-        const slideP = this._clockSlideStart ? (Date.now() - this._clockSlideStart) / CLOCK_GROW_MS : 1;
-        return from + (index - from) * easeOutCubic(slideP);
-    }
-
-    //A present ring's 0..1 height for this frame, by explicit phase:
-    //  GROW:   a grow start exists. While it's scheduled in the future (the reload hold), it sits at 0;
-    //          from the start onward it eases up to full.
-    //  SHRINK: no grow start but a reload is in progress: ease down from full to 0, then hold there.
-    //  REST:   neither: full height.
-    private _clockRingHeight(target: ChartTarget, now: number): number
-    {
-        const gs = this._clockGrowStart.get(target);
-        if (gs !== undefined) { return now >= gs ? easeOutCubic((now - gs) / CLOCK_GROW_MS) : 0; }
-        if (this._clockReloadStart) { return 1 - easeOutCubic((now - this._clockReloadStart) / CLOCK_GROW_MS); }
-        return 1;
-    }
-
-    //True while any grow, slide or exit is still playing (so the shared rAF loop keeps repainting).
-    private _clockAnimActive(): boolean
-    {
-        const now = Date.now();
-        if (this._clockExiting.length > 0) { return true; }
-        //Stay active through the whole reload (shrink + hold) until the data lands and the grow is scheduled.
-        if (this._clockReloadStart) { return true; }
-        if (this._clockSlideStart && now - this._clockSlideStart < CLOCK_GROW_MS) { return true; }
-        //A future grow start (reload hold) keeps it active until that grow finishes.
-        for (const t of this._clockGrowStart.values()) { if (now - t < CLOCK_GROW_MS) { return true; } }
-        //A ceiling rescale ease still running.
-        for (const a of this._clockCeilAnim.values()) { if (a.start && now - a.start < CLOCK_GROW_MS) { return true; } }
-        return false;
-    }
-
-    //Drive the shared clock animation: one rAF loop that prunes finished state then repaints, until idle.
-    //Instant in preview / reduced motion (settle immediately).
-    private _clockAnimate(): void
-    {
-        const settle = (): void =>
-        {
-            const now = Date.now();
-            this._clockExiting = this._clockExiting.filter(e => now - e.start < CLOCK_GROW_MS);
-            for (const [t, s] of this._clockGrowStart) { if (now - s >= CLOCK_GROW_MS) { this._clockGrowStart.delete(t); } }
-            //Settle finished ceiling eases to rest (start 0) so they stop driving the loop but keep their value.
-            for (const [, a] of this._clockCeilAnim) { if (a.start && now - a.start >= CLOCK_GROW_MS) { a.from = a.to; a.start = 0; } }
-            if (this._clockSlideStart && now - this._clockSlideStart >= CLOCK_GROW_MS)
-            {
-                this._clockSlideStart = 0;
-                this._clockSlotFrom.clear();
-            }
-            //Reload safety: if the new data never lands (fetch failure / no data), grow back after 12 s so the
-            //dial is never stuck shrunk.
-            if (this._clockReloadStart && now - this._clockReloadStart > 12_000)
-            {
-                this._clockTargets.forEach(t => this._clockGrowStart.set(t, now));
-                this._clockReloadStart = 0;
-            }
-        };
-        if (this.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
-        {
-            this._clockExiting = [];
-            this._clockGrowStart.clear();
-            this._clockSlideStart = 0;
-            this._clockReloadStart = 0;
-            this._clockSlotFrom.clear();
-            this._clockCeilAnim.clear();
-            this._clockCeilEase = false;
-            this.paintClock();
-            return;
-        }
-        const id = ++this._clockAnimSeq;
-        const animateClock = (): void =>
-        {
-            if (id !== this._clockAnimSeq || this._viewMode !== 'clock') { return; }
-            settle();
-            this.paintClock();
-            if (this._clockAnimActive()) { requestAnimationFrame(animateClock); }
-        };
-        requestAnimationFrame(animateClock);
-    }
-
-    private _scheduleClockPaint(): void
-    {
-        requestAnimationFrame(() => this.paintClock());
-    }
-
-    //Trend hour-of-day vectors for the selected metric: P and P-1 totals per hour (summed across the metric's
-    //layers), the energy flag (sum vs average), and a ClockData for unit-aware value formatting.
-    private _trendVectors(): { pH: number[]; prevH: number[]; isE: boolean; data: ClockData | null }
-    {
-        const target = this._trendTarget;
-        const dP    = this._trendP    ? buildClockDataHourly(this, target, this._trendP)    : null;
-        const dPrev = this._trendPrev ? buildClockDataHourly(this, target, this._trendPrev) : null;
-        const isE   = ((dP ?? dPrev)?.unit ?? 'energy') === 'energy';
-        const vec = (data: ClockData | null): number[] =>
-        {
-            const out = new Array<number>(HOURS_PER_DAY).fill(0);
-            if (!data) { return out; }
-            for (const L of data.layers) { const hv = hourlyOf(L.values, isE); for (let h = 0; h < HOURS_PER_DAY; h++) { out[h] += hv[h]; } }
-            return out;
-        };
-        return { pH: vec(dP), prevH: vec(dPrev), isE, data: dP ?? dPrev };
-    }
-
-    //Recompute the per-hour night share for the ground wedges when the home or the window (rounded to the hour)
-    //changes. Cheap + keyed, so idle frames never recompute.
-    private _refreshNightFrac(): void
-    {
-        const coords = getHomeCoords(this.config, this.hass);
-        if (!coords || !this._timeRange)
-        {
-            if (this._nightFrac !== null) { this._nightFrac = null; }
-            this._nightFracKey = '';
-            return;
-        }
-        const startMs = this._timeRange.start.getTime();
-        const endMs   = Math.min(Date.now(), this._timeRange.end.getTime());
-        const key = `${coords.lat.toFixed(3)}|${coords.lon.toFixed(3)}|${Math.floor(startMs / HOUR_MS)}|${Math.floor(endMs / HOUR_MS)}`;
-        if (key === this._nightFracKey) { return; }
-        this._nightFracKey = key;
-        this._nightFrac = nightFractionByHour(coords.lat, coords.lon, startMs, endMs);
-    }
-
-    //Project the rings for one frame and write them onto the overlay DOM: the bar SVG, the ground-laid hour
-    //labels, and the clamped tooltip. Called every transform frame (init.ts) and during the grow/slide/exit
-    //animation. Public so the engine's per-frame callback can reach it.
-    public paintClock(): void
-    {
-        if (this._viewMode !== 'clock' && this._viewMode !== 'trend')
-        {
-            return;
-        }
-        const svgEl  = this._clockSvg;
-        const camera = this._engine?._renderer?.camera;
-        if (!svgEl || !camera || !camera.hasViewport)
-        {
-            return;
-        }
-        const tc = pickTranslations(this.hass?.language).clock;
-        const cardinals = { n: tc.compassN, s: tc.compassS, e: tc.compassE, w: tc.compassW };
-
-        //Trend dial: one ring of bars for P, a reference marker per hour at P-1. Both vectors are the selected
-        //metric's hour-of-day totals, summed across the metric's layers (import+export, per-source PV, ...).
-        if (this._viewMode === 'trend')
-        {
-            const target = this._trendTarget;
-            const { pH, prevH } = this._trendVectors();
-            const frame = projectTrendFrame(
-                camera, pH, prevH,
-                clockTargetMeta(this, target).color, trendGoodDirection(target),
-                cardinals, this._clockDimSlot, this._clockDim,
-                this._clockHomeHover, this._nightFrac ?? [],
-            );
-            this._applyClockFrame(frame);
-            return;
-        }
-        //Resolve each ring's live animation scalars: present rings slide to their index + grow in; exiting
-        //rings shrink + fade out at their captured slot. An empty list still paints the clock face (guide +
-        //spokes + labels). projectClockFrame is pure geometry from here.
-        const now = Date.now();
-        const rings: ClockRingInput[] = this._clockData.map((data, i) =>
-            ({ data, slot: this._clockSlotNow(i, data.target), heightScale: this._clockRingHeight(data.target, now), opacity: 1 }));
-        for (const e of this._clockExiting)
-        {
-            const p = easeOutCubic((now - e.start) / CLOCK_GROW_MS);
-            rings.push({ data: e.data, slot: e.slot, heightScale: e.h0 * (1 - p), opacity: 1 - p });
-        }
-        //Per-unit ceiling for this frame. A toggle (via _clockCeilEase) eases the survivors from their current
-        //displayed ceiling to the new target; everything else (entry, data load, period change) snaps. An ease
-        //already in flight is left to run, so it never gets re-snapped on the next frame.
-        const targetCeil = clockUnitCeilings(this._clockData);
-        const ease       = this._clockCeilEase;
-        this._clockCeilEase = false;
-        const dispCeil = new Map<string, number>();
-        const ceilAt = (a: { from: number; to: number; start: number }): number =>
-            a.start === 0 ? a.to : a.from + (a.to - a.from) * easeOutCubic((now - a.start) / CLOCK_GROW_MS);
-        for (const u of [...this._clockCeilAnim.keys()]) { if (!targetCeil.has(u)) { this._clockCeilAnim.delete(u); } }
-        for (const [u, to] of targetCeil)
-        {
-            const prev = this._clockCeilAnim.get(u);
-            if (!prev)
-            {
-                this._clockCeilAnim.set(u, { from: to, to, start: 0 });            //first sight: rest at target
-            }
-            else if (prev.to !== to)
-            {
-                //Target moved. Ease only a TOGGLE that LOWERS the ceiling (a filter removed: the survivors rescale
-                //up smoothly). A rising ceiling snaps: easing the denominator up from a smaller value divides the
-                //bar heights by too little for the first frames and flings them off the top (e.g. adding a metric
-                //while the only ring was all-zero, like PV at night). The added ring still grows in via its own
-                //heightScale, so the snap is invisible.
-                const from = ceilAt(prev);
-                this._clockCeilAnim.set(u, ease && to < from ? { from, to, start: now } : { from: to, to, start: 0 });
-            }
-            dispCeil.set(u, ceilAt(this._clockCeilAnim.get(u)!));
-        }
-        const frame = projectClockFrame(
-            camera, rings,
-            this._clockDimSlot, this._clockDim,
-            cardinals,
-            dispCeil,
-            this._clockHomeHover,
-            this._nightFrac ?? [],
-        );
-        this._applyClockFrame(frame);
-    }
-
-    //Write a projected dial frame onto the overlay DOM: cylinders/bars into .clock-svg, the flat guide into the
-    //engine's ground overlay, the hit axes + centre hit, and the ground-laid hour + compass labels. Shared by
-    //the clock and trend dials.
-    private _applyClockFrame(frame: ClockFrame): void
-    {
-        if (this._clockSvg) { this._clockSvg.innerHTML = frame.svg; }
-        this._engine?.setGroundOverlay(frame.guideSvg);
-        this._engine?.setGroundDecal(frame.decal.svg, frame.decal.active);
-        this._clockHits = frame.hits;
-        this._clockHome = frame.home;
-
-        this._clockLabels?.forEach((node, h) =>
-        {
-            const lay = frame.labels[h];
-            if (!lay) { return; }
-            node.style.left      = `${lay.x.toFixed(1)}px`;
-            node.style.top       = `${lay.y.toFixed(1)}px`;
-            node.style.opacity   = lay.opacity.toFixed(3);
-            node.style.transform = lay.transform;
-        });
-        //Compass letters: positioned like the hours but at full opacity (no depth fade).
-        this._clockCompassLabels?.forEach((node, i) =>
-        {
-            const c = frame.compass[i];
-            if (!c) { return; }
-            node.style.left      = `${c.x.toFixed(1)}px`;
-            node.style.top       = `${c.y.toFixed(1)}px`;
-            node.style.transform = c.transform;
-        });
-    }
-
-    //Mouse hover hit-test against the cylinder axes; updates the glow highlight + tooltip. Cleared during a
-    //drag (buttons pressed). Touch has no hover, so it's handled by tap below (_onClockTapStart/End).
-    private _onClockHover = (e: PointerEvent): void =>
-    {
-        if ((this._viewMode !== 'clock' && this._viewMode !== 'trend') || e.pointerType !== 'mouse')
-        {
-            return;
-        }
-        if (e.buttons !== 0)
-        {
-            if (this._clockHoverSlot !== null)
-            {
-                this._clockHoverSlot = null;
-                this._clockTapSticky = false;
-            }
-            return;
-        }
-        const card = this._haCard;
-        if (!card)
-        {
-            return;
-        }
-        const rect = card.getBoundingClientRect();
-        this._clockHoverX = e.clientX - rect.left;
-        this._clockHoverY = e.clientY - rect.top;
-        const hit = clockHitTest(this._clockHits, this._clockHoverX, this._clockHoverY);
-        this._clockTapSticky = false;
-        //The home owns only the central disc, and only when no cylinder is under the cursor: it brightens the
-        //prism + shows the window total, and never dims the cylinders.
-        const homeHit = hit === null && this._clockHomeHit(this._clockHoverX, this._clockHoverY);
-        if (homeHit !== this._clockHomeHover)
-        {
-            this._clockHomeHover = homeHit;
-        }
-        if (hit !== this._clockHoverSlot)
-        {
-            this._clockHoverSlot = hit;   //@state change -> tooltip render + repaint via updated()
-        }
-        //Same slice, cursor moved: nothing to repaint. The tooltip is CSS-anchored, not cursor-tracked.
-    };
-
-    //True when (x,y) falls within the home prism's central hit disc captured from the last frame.
-    private _clockHomeHit(x: number, y: number): boolean
-    {
-        const h = this._clockHome;
-        return !!h && Math.hypot(x - h.x, y - h.y) <= h.r;
-    }
-
-    private _onClockHoverEnd = (e: PointerEvent): void =>
-    {
-        //Touch fires pointerleave on finger-up, right after the tap toggled the home/slot: ignore it so a tap
-        //isn't cancelled the instant it lands. Touch state is sticky and managed by _onClockTapEnd.
-        if (e.pointerType !== 'mouse')
-        {
-            return;
-        }
-        if (this._clockHomeHover)
-        {
-            this._clockHomeHover = false;
-        }
-        //Leaving the surface only dismisses a mouse hover; a tapped (sticky) tooltip stays until tapped away.
-        if (this._clockHoverSlot === null || this._clockTapSticky)
-        {
-            return;
-        }
-        this._clockHoverSlot = null;
-    };
-
-    //Touch: remember where the gesture began so a tap can be told from a drag-rotate on release.
-    private _onClockTapStart = (e: PointerEvent): void =>
-    {
-        if ((this._viewMode !== 'clock' && this._viewMode !== 'trend') || e.pointerType === 'mouse')
-        {
-            return;
-        }
-        const card = this._haCard;
-        if (!card)
-        {
-            return;
-        }
-        const rect = card.getBoundingClientRect();
-        this._clockTapStartX = e.clientX - rect.left;
-        this._clockTapStartY = e.clientY - rect.top;
-    };
-
-    //Touch release: if the finger barely moved it's a tap, hit-test and toggle a sticky tooltip on the
-    //tapped cylinder (or dismiss when tapping empty space). A real drag (moved past the threshold) rotated
-    //the camera and is ignored here.
-    private _onClockTapEnd = (e: PointerEvent): void =>
-    {
-        if ((this._viewMode !== 'clock' && this._viewMode !== 'trend') || e.pointerType === 'mouse')
-        {
-            return;
-        }
-        const card = this._haCard;
-        if (!card)
-        {
-            return;
-        }
-        const rect = card.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        if (Math.hypot(x - this._clockTapStartX, y - this._clockTapStartY) > 10)
-        {
-            return;   //drag-rotate, not a tap
-        }
-        this._clockHoverX = x;
-        this._clockHoverY = y;
-        const hit = clockHitTest(this._clockHits, x, y);
-        if (hit !== null)
-        {
-            this._clockTapSticky = true;
-            this._clockHoverSlot = hit;
-            this._clockHomeHover = false;
-        }
-        else if (this._clockHomeHit(x, y))
-        {
-            //Tap the home: toggle its window-total tooltip (re-tap or tap elsewhere dismisses).
-            this._clockHomeHover = !this._clockHomeHover;
-            this._clockHoverSlot = null;
-            this._clockTapSticky = this._clockHomeHover;
-        }
-        else
-        {
-            this._clockTapSticky = false;
-            this._clockHoverSlot = null;
-            this._clockHomeHover = false;
-        }
-    };
-
-    //Hour label for a ground-laid tick, formatted like the rest of the HA dashboard (12/24h from the user's
-    //time_format setting). The Date is local so the hour shown is the one meant.
-    private _formatClockHour(h: number): string
-    {
-        return formatHaHour(this.hass, new Date(2000, 0, 1, h));
-    }
-
-    //Localised compass letters in the SAME order projectClockFrame/clockCompass emit them (N, E, S, W), so each
-    //div lines up with frame.compass[i] when _paintClock positions them. North is the red needle.
-    private _compassLabels(): { l: string; c: string }[]
-    {
-        const tc   = pickTranslations(this.hass?.language).clock;
-        const text = 'var(--primary-text-color, #212121)';
-        return [
-            { l: tc.compassN, c: 'var(--red-color, #f44336)' },
-            { l: tc.compassE, c: text },
-            { l: tc.compassS, c: text },
-            { l: tc.compassW, c: text },
-        ];
-    }
-
-
-    //Hover tooltip for an hour slice: a time-band header, then one row per active filter (its coloured icon
-    //+ its total value at that hour). Position is set inline then clamped in paintClock.
-    private _renderClockTooltip(slot: number): TemplateResult | typeof nothing
-    {
-        if (this._clockData.length === 0)
-        {
-            return nothing;
-        }
-        //The tooltip reads the HOUR the focused slot falls in: the header is the hour band (HH:00 - HH+1:00)
-        //and the rows/total below aggregate that hour, matching the histogram bar.
-        const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
-        const head = `${String(hour).padStart(2, '0')}:00 - ${String((hour + 1) % HOURS_PER_DAY).padStart(2, '0')}:00`;
-        return html`
-            <div class="clock-tip">
-                <div class="clock-tip-head">${head}</div>
-                ${this._clockData.map(data => {
-                    const meta = clockTargetMeta(this, data.target);
-                    //Multi-entity metrics (PV per source, grid import/export, battery charge/discharge) break
-                    //down to one row per contributing layer; each row carries the layer's name (the entity's HA
-                    //Energy name, or the metric name) between its glyph and value. Single-layer metrics keep one
-                    //total row tagged with the metric name.
-                    if (data.layers.length > 1) {
-                        const rows = data.layers
-                            .map(l => ({ l, v: clockLayerValue(l, data, slot) }))
-                            .filter(r => r.v > 0);
-                        if (rows.length > 0) {
-                            return html`${rows.map(({ l, v }) => html`
-                                <div class="clock-tip-row">
-                                    <ha-icon icon=${l.icon} style="color:${l.color}"></ha-icon>
-                                    <span class="clock-tip-name">${l.label}</span>
-                                    <span class="clock-tip-val">${formatClockValue(this, data, v)}</span>
-                                </div>
-                            `)}`;
-                        }
-                    }
-                    return html`
-                        <div class="clock-tip-row">
-                            <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
-                            <span class="clock-tip-name">${clockTargetLabel(this, data.target)}</span>
-                            <span class="clock-tip-val">${formatClockValue(this, data, clockTotal(data, slot))}</span>
-                        </div>
-                    `;
-                })}
-            </div>
-        `;
-    }
-
-    //Trend tooltip for the focused hour: the current period's value, the previous period's value, and their
-    //signed delta coloured green/red by whether the change is an improvement for this metric.
-    private _renderTrendTooltip(slot: number): TemplateResult | typeof nothing
-    {
-        if (!this._trendP && !this._trendPrev)
-        {
-            return nothing;
-        }
-        const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
-        const head = `${String(hour).padStart(2, '0')}:00 - ${String((hour + 1) % HOURS_PER_DAY).padStart(2, '0')}:00`;
-        const target = this._trendTarget;
-        const meta   = clockTargetMeta(this, target);
-        //Sum the metric's layers for the focused hour, carrying a ClockData for unit-aware formatting.
-        const sumHour = (prof: ClockHourly | null): { v: number; data: ClockData | null } =>
-        {
-            if (!prof) { return { v: 0, data: null }; }
-            const data = buildClockDataHourly(this, target, prof);
-            const isE  = data.unit === 'energy';
-            let v = 0;
-            for (const L of data.layers) { v += hourlyOf(L.values, isE)[hour]; }
-            return { v, data };
-        };
-        const p    = sumHour(this._trendP);
-        const prev = sumHour(this._trendPrev);
-        const dataFmt = p.data ?? prev.data;
-        const fmt = (val: number): string => dataFmt ? formatClockValue(this, dataFmt, val) : val.toFixed(1);
-        const delta = p.v - prev.v;
-        const dir   = trendGoodDirection(target);
-        const deltaColor = dir === 0
-            ? 'var(--primary-text-color, #212121)'
-            : (delta * dir >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
-        return html`
-            <div class="clock-tip">
-                <div class="clock-tip-head">${head}</div>
-                <div class="clock-tip-row">
-                    <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
-                    <span class="clock-tip-name">${clockTargetLabel(this, target)}</span>
-                    <span class="clock-tip-val">${fmt(p.v)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:history" style="color:var(--secondary-text-color)"></ha-icon>
-                    <span class="clock-tip-name">P-1</span>
-                    <span class="clock-tip-val">${fmt(prev.v)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:delta" style="color:${deltaColor}"></ha-icon>
-                    <span class="clock-tip-name"></span>
-                    <span class="clock-tip-val" style="color:${deltaColor}">${delta >= 0 ? '+' : '-'}${fmt(Math.abs(delta))}</span>
-                </div>
-            </div>
-        `;
-    }
-
-    //Central-gauge tooltip (trend): the period GLOBAL total P, the previous period P-1, and the signed delta.
-    private _renderTrendHomeTooltip(): TemplateResult | typeof nothing
-    {
-        if (!this._trendP && !this._trendPrev)
-        {
-            return nothing;
-        }
-        const { pH, prevH, isE, data } = this._trendVectors();
-        const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / HOURS_PER_DAY; };
-        const tP    = totalOf(pH);
-        const tPrev = totalOf(prevH);
-        const fmt   = (v: number): string => data ? formatClockValue(this, data, v) : v.toFixed(1);
-        const delta = tP - tPrev;
-        const dir   = trendGoodDirection(this._trendTarget);
-        const deltaColor = dir === 0
-            ? 'var(--primary-text-color, #212121)'
-            : (delta * dir >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
-        const meta = clockTargetMeta(this, this._trendTarget);
-        return html`
-            <div class="clock-tip">
-                <div class="clock-tip-head">${clockTargetLabel(this, this._trendTarget)}</div>
-                <div class="clock-tip-row">
-                    <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
-                    <span class="clock-tip-name"></span>
-                    <span class="clock-tip-val">${fmt(tP)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:history" style="color:var(--secondary-text-color)"></ha-icon>
-                    <span class="clock-tip-name">P-1</span>
-                    <span class="clock-tip-val">${fmt(tPrev)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:delta" style="color:${deltaColor}"></ha-icon>
-                    <span class="clock-tip-name"></span>
-                    <span class="clock-tip-val" style="color:${deltaColor}">${delta >= 0 ? '+' : '-'}${fmt(Math.abs(delta))}</span>
-                </div>
-            </div>
-        `;
-    }
-
-    //Home-hover tooltip: the window aggregate (energy summed, other units averaged) for every active filter,
-    //the same rows as the hour tooltip but totalled over the whole selected period instead of one hour.
-    private _renderClockHomeTooltip(): TemplateResult | typeof nothing
-    {
-        if (this._clockData.length === 0)
-        {
-            return nothing;
-        }
-        const tc = pickTranslations(this.hass?.language).clock;
-        return html`
-            <div class="clock-tip">
-                <div class="clock-tip-head">${tc.total}</div>
-                ${this._clockData.map(data => {
-                    const meta = clockTargetMeta(this, data.target);
-                    if (data.layers.length > 1) {
-                        const rows = data.layers
-                            .map(l => ({ l, v: clockLayerPeriod(l, data) }))
-                            .filter(r => r.v > 0);
-                        if (rows.length > 0) {
-                            return html`${rows.map(({ l, v }) => html`
-                                <div class="clock-tip-row">
-                                    <ha-icon icon=${l.icon} style="color:${l.color}"></ha-icon>
-                                    <span class="clock-tip-name">${l.label}</span>
-                                    <span class="clock-tip-val">${formatClockValue(this, data, v)}</span>
-                                </div>
-                            `)}`;
-                        }
-                    }
-                    return html`
-                        <div class="clock-tip-row">
-                            <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
-                            <span class="clock-tip-name">${clockTargetLabel(this, data.target)}</span>
-                            <span class="clock-tip-val">${formatClockValue(this, data, clockPeriodTotal(data))}</span>
-                        </div>
-                    `;
-                })}
-            </div>
-        `;
-    }
+    //Thin bridge to the ClockController's paint entry point, kept so init.ts's per-frame `host.paintClock?.()`
+    //callback reaches the extracted dial subsystem.
+    public paintClock(): void { this._clock.paintClock(); }
 
     //Lock-button click: flip the engine's lock state. The engine persists bearing, pitch and lock flag to
     //localStorage (HA's lovelace doesn't persist config-changed from a live card), so the next reload restores.
