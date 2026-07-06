@@ -1,22 +1,16 @@
 import type { PropertyValues, TemplateResult} from 'lit';
-import { LitElement, html, svg, nothing } from 'lit';
+import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state, query, queryAll } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import type { HeliosEngine } from './helios-engine';
 import
 {
     type HeliosConfig,
-    valueDecimals,
-    powerUnit,
-    irradianceUnit,
-    batterySign,
     autoHideUi,
-    customEntityId,
-    customEntityColor,
     homeColor,
     cacheId,
 } from './helios-config';
-import { resolveCustomEntityLive, resolveCustomEntityIcon, refreshCustomEntity, customChipWatts } from './card/custom-entity';
+import { refreshCustomEntity } from './card/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './card/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './card/timeline-modes';
 import { DAY_MS, UI_AUTOHIDE_MS} from './constants';
@@ -30,22 +24,11 @@ import {
 } from './card/energy-clock';
 import { refreshTrendProfiles } from './card/trend';
 import { setServerTimeZone } from './card/timezone';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, resolveUiColor, isDarkFromCss, cssHex, uiColorVar } from './card/format';
-import
-{
-    refreshPv,
-    currentPvRate,
-    pvRateAtTime,
-    pvNormalizeToWatts,
-    formatPvValue,
-    resolvePvLiveEntity
-} from './card/pv';
+import { isDarkFromCss, cssHex, uiColorVar } from './card/format';
+import { refreshPv } from './card/pv';
 import
 {
     refreshBattery,
-    batterySampleAtTime,
-    formatBatteryPower,
-    resolveBatteryEntities,
     clearBatteryModuleCaches
 } from './card/battery';
 import { refreshIrradiance, clearIrradianceModuleCaches } from './card/irradiance';
@@ -64,15 +47,7 @@ import
     handleChartHoverLeave
 } from './card/charts';
 import { renderDetailPanel } from './card/detail-panel';
-import
-{
-    buildArcSegments,
-    flowDuration,
-    type ArcSegment,
-    type SunScene,
-    type LabelLayout
-} from './card/hud';
-import { nudgeToHomePill } from './card/hud-geometry';
+import type { ArcSegment, SunScene, LabelLayout } from './card/hud';
 import
 {
     tick,
@@ -80,7 +55,7 @@ import
     onTimelinePointerMove,
     onTimelinePointerUp
 } from './card/timeline';
-import { refreshGrid, formatGridValue } from './card/grid';
+import { refreshGrid } from './card/grid';
 import { createGridGuard, type GridGuardState } from './card/grid-guard';
 import {
     subscribeEnergyPrefs,
@@ -89,11 +64,11 @@ import {
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
-import { clearEnergyStatsCache, wattsAtFromChangeSeries, type StatPeriod, type ChangeBucket } from './card/energy-stats';
+import { clearEnergyStatsCache, type StatPeriod, type ChangeBucket } from './card/energy-stats';
 import { clearDurable } from './core/data/durable-cache';
 import { KeyedFetch } from './data/source-fetch';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './card/energy-forecast';
-import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
+import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost, type UnifiedDataStore } from './card/unifiedStore';
 import
 {
     computeConfigSig,
@@ -109,6 +84,7 @@ import './card/registry';
 //bus. liveCards is the shared registry each card adds/removes itself from.
 import { liveCards } from './card/diagnostics';
 import { ClockController } from './card/clock-controller';
+import { SceneHudController } from './card/scene-hud-controller';
 
 
 //Live cards grouped by their (auto-generated) cache id, in connection order. A pasted card carries a copy of
@@ -123,27 +99,6 @@ const _cacheIdRegistry = new Map<string, HeliosCard[]>();
 @customElement('helios-card')
 export class HeliosCard extends LitElement
 {
-    //Depth-modulation bounds for the solar overlay: each pair is the FAR (back of the loop) and NEAR
-    //(front) end, lerped per-element by the engine's nearness factor in [0..1].
-    private static readonly OUTLINE_FAR  = 1.5;
-    private static readonly OUTLINE_NEAR = 5.0;
-    private static readonly SEGMENT_FAR  = 1.0;
-    private static readonly SEGMENT_NEAR = 4.0;
-    //Sun-disc radii in px. The inner irradiance fill needs ~9 px diameter at apex to read as an annulus, not a dot.
-    private static readonly SUN_R_FAR    = 10.0;
-    private static readonly SUN_R_NEAR   = 20.0;
-    private static readonly SUN_RIM_WIDTH = 1.5;
-    //Home pill is a horizontal stadium (like the other chips), not a circle. Half-extents of its outline;
-    //leaders dock against this stadium so they all meet the same focal energy node.
-    private static readonly HOME_PILL_HALF_WIDTH_PX  = 38;
-    private static readonly HOME_PILL_HALF_HEIGHT_PX = 14;
-    //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
-    private static readonly SUN_FILL_OPACITY_BG = 0.20;
-
-    //Below-horizon segments are dots whose diameter IS the stroke width, scaled down vs daytime so the
-    //night portion of the loop reads as a quieter trace without competing with the lit half.
-    private static readonly NIGHT_STROKE_FACTOR = 0.5;
-
     @property({ attribute: false }) public hass!: any;
     @property({ attribute: false }) config!: HeliosConfig;
     //Set by HA on the editor's live-preview card. HA rebuilds that card on every keystroke, so intro
@@ -154,6 +109,11 @@ export class HeliosCard extends LitElement
     //engine, dial data build, paint/hit-test, the four dial tooltips). Owns its own scratch/animation state; the
     //reactive @state it drives stays on the card and is reached through the controller's host back-reference.
     readonly _clock = new ClockController(this);
+
+    //Scene HUD subsystem (the home-anchored energy chip cluster, its animated leader paths, the solar arc
+    //depth passes and the sun disc/ray geometry). Reads the card's scrub/live + layout + sun @state through
+    //its host back-reference and returns the HUD template fragment for render().
+    readonly _hud = new SceneHudController(this);
 
     @state() _engine?:        HeliosEngine;
     @state() _now             = new Date();
@@ -340,9 +300,9 @@ export class HeliosCard extends LitElement
     //Arc-segment scratch buffers. The sun arc is split by altitude each render (below-horizon BEHIND the
     //chip cluster, above-horizon in FRONT). Reused in place (length reset to 0 per render) instead of
     //allocating fresh arrays via filter().
-    private _arcBackBuf:      ArcSegment[] = [];
-    private _arcFrontBuf:     ArcSegment[] = [];
-    private _arcFrontNearBuf: ArcSegment[] = [];
+    _arcBackBuf:      ArcSegment[] = [];
+    _arcFrontBuf:     ArcSegment[] = [];
+    _arcFrontNearBuf: ArcSegment[] = [];
 
 
 
@@ -454,7 +414,7 @@ export class HeliosCard extends LitElement
     };
 
     //Chip click delegate: the clicked element carries its metric in data-target.
-    private _onChartTargetClick = (e: Event): void =>
+    onChartTargetClick = (e: Event): void =>
     {
         const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
         if (!target) { return; }
@@ -1113,50 +1073,6 @@ export class HeliosCard extends LitElement
     }
 
 
-    private _nudgeToHomePill(
-        chipX: number, chipY: number,
-        homeX: number, homeY: number,
-    ): { x: number; y: number }
-    {
-        return nudgeToHomePill(
-            chipX, chipY, homeX, homeY,
-            HeliosCard.HOME_PILL_HALF_WIDTH_PX,
-            HeliosCard.HOME_PILL_HALF_HEIGHT_PX,
-        );
-    }
-
-
-    //One sunrise/sunset marker: a glyph + local time pinned just OUTSIDE the arc at the horizon crossing
-    //(offset radially out from the home so it clears the arc line). Null crossing (polar day/night) -> nothing.
-    private _renderSunCrossing(
-        cross:   { x: number; y: number; time: Date } | null,
-        home:    { x: number; y: number },
-        icon:    string,
-        color:   string
-    ): TemplateResult | typeof nothing
-    {
-        if (!cross)
-        {
-            return nothing;
-        }
-        const dx   = cross.x - home.x;
-        const dy   = cross.y - home.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        const lx   = cross.x + (dx / dist) * 22;
-        const ly   = cross.y + (dy / dist) * 22;
-        const t    = formatHaTime(this.hass, cross.time);
-        return html`
-            <div
-                class="sun-cross-marker"
-                style="left:${lx.toFixed(1)}px; top:${ly.toFixed(1)}px; --sun-cross-color:${color}"
-            >
-                <ha-icon icon=${icon}></ha-icon>
-                <span>${t}</span>
-            </div>
-        `;
-    }
-
-
     //Render
 
     protected render(): TemplateResult
@@ -1166,448 +1082,11 @@ export class HeliosCard extends LitElement
         const hasHomeCoords = getHomeCoords(this.config, this.hass) !== null;
 
 
-        //Always-visible cloud-cover % label above the home, with an SVG leader to the on-ground 100% ring.
-        //Both anchors come pre-projected from engine.projectHomeLabelLayout(). Suppressed until both the
-        //layout (map ready) and a cloud-cover value (data ready) exist.
-        const layout         = this._labelLayout;
-
-        //PV production chip above the home, tied to it by an animated leader. Only renders when the HA
-        //Energy dashboard exposes a solar source and the live read is a finite number.
-        const pvEntityId   = resolvePvLiveEntity(this._energyDefaults);
-        //ENERGY_COLOR.pv resolves the HA Energy solar token; inline SVG attrs that need a literal hex
-        //(not a CSS var) read it directly so colours stay in sync with the CSS rules using the same token.
-        const pvColor      = ENERGY_COLOR.pv(this);
-        //Past scrub: the chip reflects actual production at that instant (like the cloud/irradiance chips).
-        //Future scrub has no PV data yet, so we hide the chip rather than show a stale/fake number.
-        const pvScrubbing  = !this._isLiveMode && this._selectedTime !== null;
-        const pvScrubFuture = pvScrubbing
-            && this._selectedTime!.getTime() > Date.now() + 60_000;
-
-        //The chip shows measured instantaneous production at the active instant: the power sensors' summed
-        //state live, the meters' recorder change series at a scrubbed instant. No sensor, no chip.
-        const pvRate = (pvEntityId !== '' && layout !== null)
-            ? (pvScrubbing
-                ? pvRateAtTime(this, this._selectedTime!)
-                : (this._pvCurrent !== null ? currentPvRate(this) : null))
-            : null;
-
-        //Predicted PV at a future scrub instant, from the unified store's corrected forecast (the exact
-        //series the dotted timeline curve draws), so the chip never disagrees with its line. Null (hidden)
-        //when the store isn't built or the instant has no forecast.
-        let pvPredictedRate: { value: number; unit: string } | null = null;
-        if (pvScrubFuture && pvEntityId !== '' && layout !== null && this._unifiedStore)
-        {
-            const w = valueAt(this._unifiedStore.forecast, this._unifiedStore, this._selectedTime!.getTime());
-            if (w !== null && w > 0)
-            {
-                pvPredictedRate = { value: w, unit: 'W' };
-            }
-        }
-
-        const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
-        const pvActiveRate  = isPvPredicted ? pvPredictedRate : pvRate;
-
-        const showPvLabel = hasHomeCoords
-            && layout !== null
-            && pvEntityId !== ''
-            && pvActiveRate !== null
-            && (!pvScrubFuture || isPvPredicted)
-            //Scrub to an era with no production (no panels yet, or a flat 0) hides the chip AND its leader
-            //together, so a stale 0 never leaves the leader dangling to the home.
-            && (!pvScrubbing || pvActiveRate.value > 0);
-
-        //User-configured decimal precision, applied to every chip readout (kW/kWh).
-        const valueDec = valueDecimals(this.config);
-        const powerU   = powerUnit(this.config);
-        const irradU   = irradianceUnit(this.config);
-        const pvDisplayValue = showPvLabel
-            ? (isPvPredicted ? '~ ' : '') + formatPvValue(this.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec, powerU)
-            : '';
-
-        //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against a 5 kW
-        //reference. Idle (no flow/arrow) when current production is <= 0.
-        const pvWattsNow = (pvRate !== null)
-            ? pvNormalizeToWatts(pvRate.value, pvRate.unit)
-            : 0;
-        //PV leader flow saturates at a fixed 5 kW reference.
-        const pvPeakRefW  = 5000;
-        const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
-        const pvIdle         = !(pvWattsNow > 0);
-        //Battery overlay: two chips flanking the PV chip (SoC % left, signed Power right), each wired to it
-        //by a static dotted hairline; the power sign is the only charging-vs-discharging encoding. Scrub
-        //mirrors PV: live reads hass.states, past-scrub reads the WS history series, future-scrub hides both.
-        //Chip eligibility from the HA Energy defaults: a stat_soc source lights the SoC chip; a power
-        //source (stat_rate, or stat_energy_from/to without a power_config block) lights the Power chip.
-        //They render independently, so a SoC-only install still paints the vessel.
-        const batteryEntities    = resolveBatteryEntities(this._energyDefaults);
-        const hasAnyBankSoc      = batteryEntities.socEntity   !== null;
-        const hasAnyBankPower    = batteryEntities.powerEntity !== null;
-        const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
-        const batteryScrubFuture = batteryScrubbing
-            && this._selectedTime!.getTime() > Date.now() + 60_000;
-
-        //Grid IN/OUT past-scrub: average watts at the scrub instant from the recorder change series, so the
-        //chip shows what flowed then. Skip in future scrub (no data) and live mode (live values already set).
-        const gridScrubTimeMs = batteryScrubbing && !batteryScrubFuture
-            ? this._selectedTime!.getTime()
-            : null;
-        const rawImport = gridScrubTimeMs !== null
-            ? wattsAtFromChangeSeries(this._gridImportChangeSeries, gridScrubTimeMs)
-            : this._gridImportValue;
-        const rawExport = gridScrubTimeMs !== null
-            ? wattsAtFromChangeSeries(this._gridExportChangeSeries, gridScrubTimeMs)
-            : this._gridExportValue;
-        const gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
-        const gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
-        const gridImportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridImportUnit;
-        const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridExportUnit;
-
-        //Active SoC/power values for this render: historical samples in scrub mode, live state otherwise.
-        const activeBatterySoc: number | null = batteryScrubbing
-            ? batterySampleAtTime(this._batterySocHistory, this._selectedTime!)
-            : this._batterySoc;
-        //Battery power scrub: net the charge/discharge change series (charge - discharge) for a structural
-        //sign. Live mode reads the live signed value.
-        let activeBatteryPower: number | null;
-        if (batteryScrubbing)
-        {
-            const tMs = this._selectedTime!.getTime();
-            const chargeW    = wattsAtFromChangeSeries(this._batteryChargeChangeSeries, tMs);
-            const dischargeW = wattsAtFromChangeSeries(this._batteryDischargeChangeSeries, tMs);
-            activeBatteryPower = (chargeW === null && dischargeW === null)
-                ? null
-                : Math.max(0, chargeW ?? 0) - Math.max(0, dischargeW ?? 0);
-        }
-        else
-        {
-            activeBatteryPower = this._batteryPower;
-        }
-        //Power unit is watts on both paths (change series resolves to W, live read normalises to W), so the
-        //chip formats consistently regardless of mode.
-        const activeBatteryUnit = batteryScrubbing ? 'W' : this._batteryPowerUnit;
-
-        const showSocChip = (hasHomeCoords && layout !== null)
-            && !batteryScrubFuture
-            && hasAnyBankSoc
-            && activeBatterySoc !== null;
-        const showPowerChip = (hasHomeCoords && layout !== null)
-            && !batteryScrubFuture
-            && hasAnyBankPower
-            && activeBatteryPower !== null;
-
-        const batterySocText = showSocChip
-            ? `${Math.round(activeBatterySoc!)} %`
-            : '';
-        //Chip uses the HA energy dashboard sign convention (discharge positive, charge negative).
-        //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
-        //coherent with the dashboard. Colour + leader direction below keep the physical sign.
-        const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit, valueDec, powerU, batterySign(this.config))
-            : '';
-
-        //Home consumption chip:
-        //  used_total = from_grid + solar + from_battery - to_grid - to_battery
-        //over the card's scrub-aware per-family values, so the chip follows the scrub.
-        //Families contribute only when they have a reading; nothing wired -> chip hides. Clamped at zero
-        //(a small negative is meter skew).
-        const usagePvW = (!pvScrubFuture && pvActiveRate !== null)
-            ? pvNormalizeToWatts(pvActiveRate.value, pvActiveRate.unit)
-            : null;
-        const usageGridW = (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null)
-            ? (gridImportDisplayWatts ?? 0) - (gridExportDisplayWatts ?? 0)
-            : null;
-        //activeBatteryPower is charge-positive, so it SUBTRACTS: charging is consumption that never reaches
-        //the home, discharging (negative) adds supply.
-        const usageBatteryW = showPowerChip ? activeBatteryPower! : null;
-        //Live balance is measured or absent: in live mode, every CONFIGURED family must have a real live
-        //reading (a wired family with no live power sensor would silently unbalance the sum, so the chip
-        //hides and the editor explains). Scrub mode keeps the bucket-domain balance: all terms share the
-        //meters' cadence there, the same bookkeeping the HA Energy dashboard does.
-        const d = this._energyDefaults;
-        const homeLiveComplete = batteryScrubbing || (
-            (d.solarStatEnergyFroms.length === 0 || usagePvW !== null)
-            && ((d.gridStatEnergyFroms.length === 0 && d.gridStatEnergyTos.length === 0) || usageGridW !== null)
-            && ((d.batteryStatEnergyFroms.length === 0 && d.batteryStatEnergyTos.length === 0) || usageBatteryW !== null));
-        const homeUsageWatts = !homeLiveComplete
-            ? null
-            : ((usagePvW === null && usageGridW === null && usageBatteryW === null)
-                ? null
-                : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0)));
-        const showHomeUsageChip = hasHomeCoords
-            && layout !== null
-            && !batteryScrubFuture
-            && homeUsageWatts !== null;
-        const homeUsageText = showHomeUsageChip
-            ? formatGridValue(this.hass, homeUsageWatts, 'W', valueDec, powerU)
-            : '';
-
-        //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader
-        //arrow: charging flows PV -> Power (into the battery) at a speed proportional to |P| saturating at
-        //~5 kW. The dual-tone leader colour tracks the physical direction, independent of the chip's HA-sign
-        //flip above.
-        const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
-        const batteryDischarging = showPowerChip && (activeBatteryPower! < 0);
-        const batteryLeaderColor = batteryCharging
-            ? 'var(--energy-battery-in-color, #f06292)'
-            : 'var(--energy-battery-out-color, #4db6ac)';
-        const batteryWattsForFlow = showPowerChip
-            ? Math.abs(pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
-            : 0;
-        //Idle: power within sensor-noise margin of zero (±5 W). The leader is still drawn (keeps the
-        //spatial relationship) but the dash flow is frozen and the arrow hidden, since any motion would
-        //be misleading.
-        const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
-        const batteryFlowDuration = flowDuration(batteryWattsForFlow, 5000);
-
-        //PV_HALF_HEIGHT_PX places the top of a leader's vertical leg flush against PV's bottom edge so the
-        //line emerges from the chip, not inside it.
-        const PV_HALF_HEIGHT_PX    = 11;
-        //Half-width of the PV chip, used by the solar-ray target snap. Sized to the narrowest realistic
-        //text ("0 W") so the snap lands at-or-before the chip border even on short text and the ray never
-        //draws over the chip body.
-        const PV_HALF_WIDTH_PX  = 28;
-        //Build a rounded L from a chip to the home pill: horizontal leg toward the home's vertical axis,
-        //fillet, vertical leg to the pill border. chipX/chipY is the chip centre; the leader starts at the
-        //chip edge nudged by chipNudgePx toward the home.
-        const buildLPathToHome = (chipX: number, chipY: number, chipNudgePx: number): string =>
-        {
-            if (!layout)
-            {
-                return '';
-            }
-            const homeX = layout.home.x;
-            const homeY = layout.home.y;
-            //Chip-side start: nudge horizontally toward home.
-            const dirH = homeX > chipX ? 1 : -1;
-            const dirV = homeY > chipY ? 1 : -1;
-            const sx = chipX + dirH * chipNudgePx;
-            const sy = chipY;
-            //Land the vertical leg ~13 px off centre so two leaders on the same row don't collide on the
-            //pill's axis. That x sits over the stadium's flat edge, so the leg docks at the half-height.
-            const HOME_PILL_QUARTER_X = 13;
-            const ex = homeX - dirH * HOME_PILL_QUARTER_X;
-            const ey = homeY - dirV * HeliosCard.HOME_PILL_HALF_HEIGHT_PX;
-            //Fillet radius, clamped to fit inside both legs of the L.
-            const FILLET_R = 12;
-            const r = Math.min(FILLET_R, Math.abs(ex - sx) / 2, Math.abs(ey - sy) / 2);
-            const preX  = ex - dirH * r;
-            const postY = sy + dirV * r;
-            return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${preX.toFixed(1)},${sy.toFixed(1)} Q ${ex.toFixed(1)},${sy.toFixed(1)} ${ex.toFixed(1)},${postY.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
-        };
-        //Rounded L between two arbitrary points. verticalFirst=true draws the vertical leg first, then the
-        //horizontal into the end (used PV -> Power, dropping down then right). Same fillet as buildLPathToHome.
-        const buildLPath = (
-            sx: number, sy: number, ex: number, ey: number, verticalFirst: boolean
-        ): string =>
-        {
-            const FILLET_R = 12;
-            const dirH = ex > sx ? 1 : -1;
-            const dirV = ey > sy ? 1 : -1;
-            const r = Math.min(FILLET_R, Math.abs(ex - sx) / 2, Math.abs(ey - sy) / 2);
-            if (verticalFirst)
-            {
-                const preY  = ey - dirV * r;
-                const postX = sx + dirH * r;
-                return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${sx.toFixed(1)},${preY.toFixed(1)} Q ${sx.toFixed(1)},${ey.toFixed(1)} ${postX.toFixed(1)},${ey.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
-            }
-            const preX  = ex - dirH * r;
-            const postY = sy + dirV * r;
-            return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${preX.toFixed(1)},${sy.toFixed(1)} Q ${ex.toFixed(1)},${sy.toFixed(1)} ${ex.toFixed(1)},${postY.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
-        };
-
-        //Battery chip stack: Power (kW) on top, State-of-charge (%) below, sharing the same x.
-        const BATTERY_HALF_HEIGHT_PX = 14;
-        const socChipX   = layout?.batterySocLabel.x   ?? 0;
-        const socChipY   = layout?.batterySocLabel.y   ?? 0;
-        const powerChipX = layout?.batteryPowerLabel.x ?? 0;
-        const powerChipY = layout?.batteryPowerLabel.y ?? 0;
-        //SoC -> Power chip: same battery, so the SoC leader docks on the Power chip, not the home. Straight
-        //vertical hairline between their facing edges (SoC below Power). No flow, it's a level.
-        //SoC -> Power hairline: only when BOTH battery chips show, else it would point at an empty slot. Both
-        //endpoints sit on a chip, so a hidden SoC chip must drop it (showPowerChip alone is not enough).
-        const socLeaderPath = (layout && showSocChip && showPowerChip)
-            ? `M ${socChipX.toFixed(1)},${(socChipY - BATTERY_HALF_HEIGHT_PX).toFixed(1)} L ${powerChipX.toFixed(1)},${(powerChipY + BATTERY_HALF_HEIGHT_PX).toFixed(1)}`
-            : '';
-        //SoC -> home: the battery->home discharge flow (rounded L + bead), only while discharging. It leaves the
-        //SoC chip, so a hidden SoC chip drops it too however the power reads (no lead may outlive its chip).
-        const dischargeLeaderPath = (layout && showSocChip && batteryDischarging)
-            ? buildLPathToHome(socChipX, socChipY, 22)
-            : '';
-        //SoC-only installs (no Power chip): a static connector docks the lone SoC chip to the home hub like
-        //every other chip, instead of leaving it floating. Skipped while discharging (that leader docks it).
-        const socHomeLeaderPath = (layout && showSocChip && !showPowerChip && !batteryDischarging)
-            ? buildLPathToHome(socChipX, socChipY, 22)
-            : '';
-        //PV -> Power chip, only while charging: an inverted L dropping from the PV chip then right into the
-        //Power chip's left edge, PV-coloured bead toward the battery. Removed the instant it discharges.
-        //Its drop starts halfway between the PV->home leg (chip centre) and the chip's right edge so the two
-        //leaders leaving the PV chip don't overlap at their root.
-        const PV_TO_BATTERY_NUDGE_X = 30;
-        const pvToBatteryPath = (layout && batteryCharging && showPvLabel)
-            ? buildLPath(
-                layout.pvLabel.x + PV_HALF_WIDTH_PX / 2,
-                layout.pvLabel.y + PV_HALF_HEIGHT_PX,
-                powerChipX - PV_TO_BATTERY_NUDGE_X,
-                powerChipY,
-                true
-            )
-            : '';
-        const gridLeaderPath       = buildLPathToHome(layout?.gridLabel.x         ?? 0, layout?.gridLabel.y         ?? 0, 22);
-
-        //Grid bead cadence: frequency (= 1/dur) is proportional to live power so bead speed tracks the chip
-        //value linearly, via dur = MIN_DUR * CAP / watts (MIN_DUR at cap, 2x at half, 4x at a quarter),
-        //clamped to MAX_DUR_S. Below ~5 W the chip is idle (recorder noise) and the bead is dropped. Caps
-        //are round residential thresholds: 5 kW import, 1 kW export.
-        const GRID_BEAD_IMPORT_CAP_W = 5000;
-        const GRID_BEAD_EXPORT_CAP_W = 1000;
-        const GRID_BEAD_MIN_DUR_S = 1.2;
-        const GRID_BEAD_MAX_DUR_S = 8.0;
-        const GRID_BEAD_IDLE_W    = 5;
-        //Scrub-aware like the chip values above, so the bead's cadence always matches the instant the
-        //chip displays (never today's live pace on yesterday's scrub).
-        const importWattsAbs = gridImportDisplayWatts !== null
-            ? Math.abs(pvNormalizeToWatts(gridImportDisplayWatts, gridImportDisplayUnit))
-            : 0;
-        const exportWattsAbs = gridExportDisplayWatts !== null
-            ? Math.abs(pvNormalizeToWatts(gridExportDisplayWatts, gridExportDisplayUnit))
-            : 0;
-        const proportionalBeadDur = (watts: number, capW: number): number =>
-        {
-            const w = Math.max(watts, 1);
-            return Math.min(GRID_BEAD_MAX_DUR_S, Math.max(GRID_BEAD_MIN_DUR_S, GRID_BEAD_MIN_DUR_S * capW / w));
-        };
-        const gridImportBeadDur = importWattsAbs < GRID_BEAD_IDLE_W ? null
-            : proportionalBeadDur(importWattsAbs, GRID_BEAD_IMPORT_CAP_W);
-        const gridExportBeadDur = exportWattsAbs < GRID_BEAD_IDLE_W ? null
-            : proportionalBeadDur(exportWattsAbs, GRID_BEAD_EXPORT_CAP_W);
-        //Single grid chip shows the ACTIVE flow only: the larger display value wins and drives colour,
-        //value, icon and bead direction. Scrub-aware watts feed the choice so it tracks the timeline. Ties
-        //(including idle 0/0) fall to import, a neutral consumption-blue resting state.
-        const gridImporting    = (gridImportDisplayWatts ?? 0) >= (gridExportDisplayWatts ?? 0);
-        const gridLeaderColor  = gridImporting
-            ? 'var(--energy-grid-consumption-color, #488fc2)'
-            : 'var(--energy-grid-return-color, #8353d1)';
-        //Bead cadence from the active side; null (no bead) when it's below the idle threshold, so an idle
-        //grid shows the chip + a static leader with no misleading motion.
-        const gridBeadDur      = gridImporting ? gridImportBeadDur : gridExportBeadDur;
-
-        //Custom user-picked entity chip: red pill top-left (above grid) with a leader to the home and a
-        //sign-driven bead. Positive value flows home -> chip (reversed traversal), negative flows chip ->
-        //home (default). Cadence scales with the value's magnitude; below the idle floor the bead is dropped.
-        const customLive        = resolveCustomEntityLive(this.hass, customEntityId(this.config));
-        const customIcon        = resolveCustomEntityIcon(this.hass, this.config);
-        const customLeaderColor = resolveUiColor(customEntityColor(this.config), '#f44336');
-        const customLeaderPath  = buildLPathToHome(layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
-        //Value at the active instant (scrub target in the past, else live now), in WATTS: the power sensor's
-        //state live, the energy meter's average watts for that bucket in scrub.
-        const customScrubMs = (!this._isLiveMode && this._selectedTime !== null) ? this._selectedTime.getTime() : null;
-        const customW       = customChipWatts(this.hass, customEntityId(this.config), this._customChangeSeries, customScrubMs);
-        const customDisplay = customW === null ? '' : formatPvValue(this.hass, customW, 'W', valueDec, powerU);
-        const CUSTOM_BEAD_CAP_W     = 5000;
-        const CUSTOM_BEAD_MIN_DUR_S = 1.2;
-        const CUSTOM_BEAD_MAX_DUR_S = 8.0;
-        const CUSTOM_BEAD_IDLE_W    = 5;
-        const customMagW   = customW === null ? 0 : Math.abs(customW);
-        const customBeadDur = (customW === null || customMagW < CUSTOM_BEAD_IDLE_W)
-            ? null
-            : Math.min(CUSTOM_BEAD_MAX_DUR_S, Math.max(CUSTOM_BEAD_MIN_DUR_S,
-                CUSTOM_BEAD_MIN_DUR_S * CUSTOM_BEAD_CAP_W / Math.max(customMagW, 1)));
-        const customPositive = customW === null ? true : customW >= 0;
-
-        //Solar-arc overlay: sun trajectory, current position and incidence ray to the home, all
-        //pre-projected to screen space via projectSunScene(). Hidden until the engine is ready.
-        const sunScene  = this._sunScene;
-        const showSun   = hasHomeCoords && sunScene !== null && sunScene.arc.length >= 2;
-
-        //Fixed colour design system. The sun colour paints the arc, the disc rim and the irradiance fill.
-        //The on-ground cloud disc is painted engine-side, so no cloud hex is needed here.
-        const sunColor      = ENERGY_COLOR.sun(this);
-        const sunRimColor   = darkenHex(sunColor, 0.20);
-        const arcSegments   = showSun ? buildArcSegments(sunScene!.arc, sunColor) : [];
-        //Z-order split: below-horizon (dotted) segments render BEHIND the home chip cluster, above-horizon
-        //in front so the live sun dominates. Single-pass split into reused scratch buffers (no filter()
-        //allocations per cycle).
-        const arcSegmentsBack     = this._arcBackBuf;
-        const arcSegmentsFrontFar  = this._arcFrontBuf;
-        const arcSegmentsFrontNear = this._arcFrontNearBuf;
-        arcSegmentsBack.length      = 0;
-        arcSegmentsFrontFar.length  = 0;
-        arcSegmentsFrontNear.length = 0;
-        //Above-horizon segments get a 2nd split by camera nearness: the half closest to the eye renders
-        //ABOVE the home chips (over leaders + pill), the half arching away renders BEHIND. Threshold is the
-        //nearness midpoint.
-        for (const s of arcSegments)
-        {
-            if (s.belowHorizon)
-            {
-                arcSegmentsBack.push(s);
-            }
-            else if (s.nearness >= 0.50)
-            {
-                arcSegmentsFrontNear.push(s);
-            }
-            else
-            {
-                arcSegmentsFrontFar.push(s);
-            }
-        }
-
-        //The incidence ray only renders when the sun is above the horizon (a ray from below ground would be
-        //visually nonsensical).
-        const showRay = showSun && sunScene!.sun.altitude > 0;
-
-        //Live irradiance for the W/m² label above the sun disc, also driving the inner-disc fill ratio: at
-        //STC (1000 W/m²) the fill reaches the rim, at zero it vanishes. The sqrt mapping linearises AREA
-        //perception (area ∝ r²) so a 50% reading covers half the rim's area, not its radius.
-        const sunWm2          = sunScene?.sun.irradiance ?? 0;
-        const sunIrradText    = formatIrradiance(this.hass, sunWm2, valueDec, irradU);
-        const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
-        //The W/m² readout + cloud chip are weather; hidden in modes without it (month/year). The sun
-        //disc/arc (pure geometry) stays.
-        const showSunLabel    = showSun && sunScene!.sun.altitude > 0 && this._weatherAvailable;
-        //Solar-ray dash-flow duration, same scale as the PV leader so both streams pulse coherently;
-        //saturates at 1000 W/m². The ray spans the whole card, so its saturated pace is a touch slower than
-        //the PV leader (0.8 s) to stay readable at peak irradiance.
-        const sunFlowDuration = flowDuration(sunWm2, 1000, 0.8);
-
-        //Solar-ray target: anchor the ray to the nearest point of the PV chip outline so a sun below the chip
-        //doesn't draw the ray through the chip body.
-        let sunRayTargetX = sunScene?.home.x ?? 0;
-        let sunRayTargetY = sunScene?.home.y ?? 0;
-        //Anchor the ray to the nearest point of the PV chip's stadium outline (centred at pvLabel, straight
-        //middle + two end-caps of radius PV_HALF_HEIGHT_PX) so it glides along the outline as the sun arcs.
-        //Only when the chip is actually shown: scrubbing into the future hides it, so the ray falls back to the
-        //home instead of pointing at the vanished chip's slot.
-        if (layout && sunScene && showPvLabel)
-        {
-            const cx = layout.pvLabel.x;
-            const cy = layout.pvLabel.y;
-            const halfW = PV_HALF_WIDTH_PX;
-            const halfH = PV_HALF_HEIGHT_PX;
-            const ex = sunScene.sun.x - cx;
-            const ey = sunScene.sun.y - cy;
-            //Width of the rectangular middle (between the end-cap semicircles).
-            const straightHalfW = Math.max(0, halfW - halfH);
-
-            if (Math.abs(ex) <= straightHalfW)
-            {
-                //Sun over the straight middle: nearest point is on the top/bottom edge under the sun.
-                sunRayTargetX = sunScene.sun.x;
-                sunRayTargetY = cy + (ey >= 0 ? 1 : -1) * halfH;
-            }
-            else
-            {
-                //Sun off to a rounded end: nearest point is on the matching end-cap arc, along the line
-                //from the end-cap centre to the sun.
-                const cornerX = cx + (ex >= 0 ? 1 : -1) * straightHalfW;
-                const cornerY = cy;
-                const dx = sunScene.sun.x - cornerX;
-                const dy = sunScene.sun.y - cornerY;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                sunRayTargetX = cornerX + halfH * dx / dist;
-                sunRayTargetY = cornerY + halfH * dy / dist;
-            }
-        }
+        //Scene HUD: the home-anchored energy chip cluster (PV / battery / grid / custom / home consumption),
+        //their animated leaders, the solar arc depth passes and the sun disc/ray geometry. It resolves its own
+        //chip/leader/sun model from the card's scrub/live + layout + sun @state and returns the HUD fragment,
+        //also exposing the two directional leader colours (read back for the detail-panel accent below).
+        const hud = this._hud.render();
 
         //Detect the active HA theme. Authoritative: hass.themes.darkMode (HA flips it on every theme swap).
         //A getComputedStyle luminance probe is the fallback for older HA builds that lack it.
@@ -1625,8 +1104,8 @@ export class HeliosCard extends LitElement
         //tint with the instantaneous flow, so reuse those same leader colours rather than chartAccentColor (which
         //is the window-dominant direction); the non-directional targets already agree with chartAccentColor.
         const activeChipColor =
-            this._chartTarget === 'grid' ? gridLeaderColor
-            : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? batteryLeaderColor
+            this._chartTarget === 'grid' ? this._hud._gridLeaderColor
+            : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? this._hud._batteryLeaderColor
             : chartAccentColor(this);
         const cardClasses = [
             cardThemeClass,
@@ -1825,459 +1304,7 @@ export class HeliosCard extends LitElement
                     `;
                 })() : nothing}
 
-                <!--  Solar arc, BACK pass: only the dotted below-horizon segments (the sun's path under the
-                      celestial sphere), so the home + chips read in front of the night half of the loop.
-                      Above-horizon segments, ray, disc and W/m² readout are in the FRONT pass below.  -->
-                ${showSun && arcSegmentsBack.length > 0 ? html`
-                    <svg
-                        class="solar-svg solar-svg-back"
-                        style="--solar-daylight:${sunScene!.daylight}"
-                    >
-                        ${arcSegmentsBack.map(s => svg`
-                            <line
-                                class="solar-arc-outline solar-arc-night"
-                                x1="${s.x1}" y1="${s.y1}"
-                                x2="${s.x2}" y2="${s.y2}"
-                                stroke-width="${(HeliosCard.OUTLINE_FAR
-                                    + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s.nearness)
-                                    * HeliosCard.NIGHT_STROKE_FACTOR}"
-                            ></line>
-                        `)}
-                        ${arcSegmentsBack.map(s => svg`
-                            <line
-                                class="solar-arc-segment solar-arc-night"
-                                x1="${s.x1}" y1="${s.y1}"
-                                x2="${s.x2}" y2="${s.y2}"
-                                stroke="${s.color}"
-                                stroke-width="${(HeliosCard.SEGMENT_FAR
-                                    + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s.nearness)
-                                    * HeliosCard.NIGHT_STROKE_FACTOR}"
-                            ></line>
-                        `)}
-                    </svg>
-                ` : nothing}
-
-
-                ${showPvLabel ? (() => {
-                    //Leader endpoint = the home pill's border on the chip-to-home axis (the shared docking
-                    //point for every chip leader).
-                    const pvX1 = layout!.pvLabel.x;
-                    const pvY1 = layout!.pvLabel.y + PV_HALF_HEIGHT_PX;
-                    const pvHomeEnd = this._nudgeToHomePill(
-                        pvX1, pvY1,
-                        layout!.home.x, layout!.home.y,
-                    );
-                    return html`
-                    <svg class="pv-home-leader-svg">
-                        <line
-                            class="pv-home-leader-line"
-                            style="--pv-leader-color:${pvColor}"
-                            x1=${pvX1}
-                            y1=${pvY1}
-                            x2=${pvHomeEnd.x}
-                            y2=${pvHomeEnd.y}
-                        ></line>
-                        ${!pvIdle ? svg`
-                            <!--  Filled disc riding the leader from the PV chip to the home, speed
-                                  proportional to live production. No rotate="auto": a disc has no orientation.  -->
-                            <circle
-                                class="pv-home-leader-bead"
-                                r="3"
-                                fill="${pvColor}"
-                            >
-                                <animateMotion
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    path="M ${pvX1},${pvY1} L ${pvHomeEnd.x},${pvHomeEnd.y}"
-                                ></animateMotion>
-                            </circle>
-                        ` : nothing}
-                    </svg>`;
-                })() : nothing}
-
-                ${showPvLabel ? html`
-                    <div
-                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${this._chartTarget === 'production' ? 'is-chart-active' : ''}"
-                        style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
-                        role="button"
-                        tabindex="0"
-                        data-target="production"
-                        @click=${this._onChartTargetClick}
-                    >
-                        <ha-icon icon="mdi:solar-power"></ha-icon>
-                        <span>${pvDisplayValue}</span>
-                    </div>
-                ` : nothing}
-
-                ${(showSocChip || showPowerChip) ? html`
-                    <svg class="battery-leader-svg">
-                        <!--  SoC -> Power chip: solid vertical hairline between the two stacked chips. No
-                              animation, SoC is a level, not a flow.  -->
-                        ${socLeaderPath ? svg`
-                            <path
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${socLeaderPath}"
-                            ></path>
-                        ` : nothing}
-                        <!--  SoC -> home static connector when the SoC chip is the only battery chip. -->
-                        ${socHomeLeaderPath ? svg`
-                            <path
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${socHomeLeaderPath}"
-                            ></path>
-                        ` : nothing}
-                        <!--  SoC -> home discharge flow: solid rounded-L + bead toward the home, drawn only
-                              while the battery is discharging to feed the house.  -->
-                        ${dischargeLeaderPath ? svg`
-                            <path
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${dischargeLeaderPath}"
-                            ></path>
-                            ${!batteryIdle ? svg`
-                                <circle
-                                    class="battery-leader-bead"
-                                    r="3"
-                                    style="fill:${batteryLeaderColor}"
-                                >
-                                    <animateMotion
-                                        dur="${batteryFlowDuration}s"
-                                        repeatCount="indefinite"
-                                        path="${dischargeLeaderPath}"
-                                    ></animateMotion>
-                                </circle>
-                            ` : nothing}
-                        ` : nothing}
-                        <!--  PV -> Power chip, only while charging: an inverted L (down then right) in the PV
-                              colour, bead flowing toward the battery so the user sees PV feeding it.  -->
-                        ${pvToBatteryPath ? svg`
-                            <path
-                                class="pv-home-leader-line"
-                                style="--pv-leader-color:${pvColor}"
-                                fill="none"
-                                d="${pvToBatteryPath}"
-                            ></path>
-                            ${!batteryIdle ? svg`
-                                <circle
-                                    class="pv-home-leader-bead"
-                                    r="3"
-                                    fill="${pvColor}"
-                                >
-                                    <animateMotion
-                                        dur="${batteryFlowDuration}s"
-                                        repeatCount="indefinite"
-                                        path="${pvToBatteryPath}"
-                                    ></animateMotion>
-                                </circle>
-                            ` : nothing}
-                        ` : nothing}
-                    </svg>
-                    ${showSocChip ? html`
-                        <div
-                            class="battery-pct-label ${this._chartTarget === 'battery-soc' ? 'is-chart-active' : ''}"
-                            style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
-                            role="button"
-                            tabindex="0"
-                            data-target="battery-soc"
-                            @click=${this._onChartTargetClick}
-                        >
-                            <ha-icon icon="mdi:battery"></ha-icon>
-                            <span>${batterySocText}</span>
-                        </div>
-                    ` : nothing}
-                    ${showPowerChip ? html`
-                        <div
-                            class="battery-pct-label ${this._chartTarget === 'battery' ? 'is-chart-active' : ''}"
-                            style="left:${layout!.batteryPowerLabel.x}px; top:${layout!.batteryPowerLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
-                            role="button"
-                            tabindex="0"
-                            data-target="battery"
-                            @click=${this._onChartTargetClick}
-                        >
-                            <ha-icon icon="mdi:lightning-bolt"></ha-icon>
-                            <span>${batteryPowerText}</span>
-                        </div>
-                    ` : nothing}
-                ` : nothing}
-
-                <!--  Custom-entity chip (top-left, above grid). Red leader to the home; bead flows home ->
-                      chip on a positive value, chip -> home on a negative one. Shown only when the entity is
-                      configured AND has a value at the active instant; scrubbing into a gap with no history at all
-                      (null, before the entity existed) drops the chip + leader. A measured 0 is a real value and
-                      keeps the chip, so the custom entity stays visible while scrubbing even when it reads zero.  -->
-                ${hasHomeCoords && layout !== null && customLive !== null && customW !== null ? html`
-                    <svg class="custom-leader-svg">
-                        <path class="custom-leader-line" style="stroke:${customLeaderColor}" d=${customLeaderPath} />
-                        ${customBeadDur !== null ? (customPositive ? svg`
-                            <circle class="custom-leader-bead" r="3" style="fill:${customLeaderColor}">
-                                <animateMotion dur="${customBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               keyPoints="1;0" keyTimes="0;1" path="${customLeaderPath}" />
-                            </circle>
-                        ` : svg`
-                            <circle class="custom-leader-bead" r="3" style="fill:${customLeaderColor}">
-                                <animateMotion dur="${customBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               path="${customLeaderPath}" />
-                            </circle>
-                        `) : nothing}
-                    </svg>
-                    <div
-                        class="custom-label ${this._chartTarget === 'custom' ? 'is-chart-active' : ''}"
-                        style="left:${layout!.customLabel.x}px; top:${layout!.customLabel.y}px; --custom-leader-color:${customLeaderColor}"
-                        title=${customLive!.name}
-                        role="button"
-                        tabindex="0"
-                        data-target="custom"
-                        @click=${this._onChartTargetClick}
-                    >
-                        <ha-icon icon=${customIcon}></ha-icon>
-                        <span>${customDisplay}</span>
-                    </div>
-                ` : nothing}
-
-                <!--  Grid chip on the LEFT of the home: one pill showing the ACTIVE flow only. Importing reads
-                      consumption blue with a grid -> home bead; exporting flips to return purple with a
-                      home -> grid bead. The dominant side wins when both are live.  -->
-                ${hasHomeCoords && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
-                    <svg class="grid-leader-svg">
-                        <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d=${gridLeaderPath} />
-                        <!--  Single bead on the active flow. Import
-                              flows grid -> home (default traversal),
-                              export flows home -> grid (keyPoints 1;0
-                              reverses it). Dropped when the active side
-                              is idle, no misleading motion.           -->
-                        ${gridBeadDur !== null ? (gridImporting ? svg`
-                            <circle class="grid-leader-bead" r="3" style="fill:${gridLeaderColor}">
-                                <animateMotion dur="${gridBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               path="${gridLeaderPath}" />
-                            </circle>
-                        ` : svg`
-                            <circle class="grid-leader-bead" r="3" style="fill:${gridLeaderColor}">
-                                <animateMotion dur="${gridBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               keyPoints="1;0" keyTimes="0;1"
-                                               path="${gridLeaderPath}" />
-                            </circle>
-                        `) : nothing}
-                    </svg>
-                    <div
-                        class="grid-label ${this._chartTarget === 'grid' ? 'is-chart-active' : ''}"
-                        style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
-                        role="button"
-                        tabindex="0"
-                        data-target="grid"
-                        @click=${this._onChartTargetClick}
-                    >
-                        <ha-icon icon=${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}></ha-icon>
-                        <span>${formatGridValue(this.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
-                    </div>
-                ` : nothing}
-
-                <!--  Solar arc, FAR-FRONT pass: above-horizon segments with nearness below the 0.5 midpoint
-                      (arched away from the eye but still ahead of the sky dome's back wall). These render
-                      BEHIND the home-anchored chips so the "back half" of the arc doesn't cross a chip.  -->
-                ${showSun && arcSegmentsFrontFar.length > 0 ? html`
-                    <svg
-                        class="solar-svg solar-svg-front-far"
-                        style="--solar-daylight:${sunScene!.daylight}"
-                    >
-                        ${arcSegmentsFrontFar.map(s => svg`
-                            <line
-                                class="solar-arc-outline"
-                                x1="${s.x1}" y1="${s.y1}"
-                                x2="${s.x2}" y2="${s.y2}"
-                                stroke-width="${HeliosCard.OUTLINE_FAR
-                                    + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s.nearness}"
-                            ></line>
-                        `)}
-                        ${arcSegmentsFrontFar.map(s => svg`
-                            <line
-                                class="solar-arc-segment"
-                                x1="${s.x1}" y1="${s.y1}"
-                                x2="${s.x2}" y2="${s.y2}"
-                                stroke="${s.color}"
-                                stroke-width="${HeliosCard.SEGMENT_FAR
-                                    + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s.nearness}"
-                            ></line>
-                        `)}
-                    </svg>
-                ` : nothing}
-
-                <!--  Solar arc, NEAR-FRONT pass: above-horizon segments with nearness at or above 0.5 (closer
-                      to the camera than the home). These render IN FRONT of the home chips + leaders so the
-                      live arc reads on top of the HUD on its near side, keeping the sun visually dominant.  -->
-                ${showSun && arcSegmentsFrontNear.length > 0 ? html`
-                    <svg
-                        class="solar-svg solar-svg-front-near"
-                        style="--solar-daylight:${sunScene!.daylight}"
-                    >
-                        ${arcSegmentsFrontNear.map(s => svg`
-                            <line
-                                class="solar-arc-outline"
-                                x1="${s.x1}" y1="${s.y1}"
-                                x2="${s.x2}" y2="${s.y2}"
-                                stroke-width="${HeliosCard.OUTLINE_FAR
-                                    + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s.nearness}"
-                            ></line>
-                        `)}
-                        ${arcSegmentsFrontNear.map(s => svg`
-                            <line
-                                class="solar-arc-segment"
-                                x1="${s.x1}" y1="${s.y1}"
-                                x2="${s.x2}" y2="${s.y2}"
-                                stroke="${s.color}"
-                                stroke-width="${HeliosCard.SEGMENT_FAR
-                                    + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s.nearness}"
-                            ></line>
-                        `)}
-                    </svg>
-                ` : nothing}
-
-                <!--  Ray + bead in their own SVG below the chip family (z 7 < pv-pct-label z 8) so the PV
-                      chip occludes the ray endpoint at its border. The sun disc stays in the depth-split SVG
-                      below (in front of / behind the home cluster by camera bearing), so the ray never rides
-                      over the production chip.  -->
-                ${showSun && showRay ? html`
-                    <svg class="solar-svg solar-ray-svg"
-                         style="--solar-daylight:${sunScene!.daylight}">
-                        <line
-                            class="solar-ray"
-                            style="--sun-flow-duration:${sunFlowDuration}s"
-                            x1=${sunScene!.sun.x}  y1=${sunScene!.sun.y}
-                            x2=${sunRayTargetX}    y2=${sunRayTargetY}
-                            stroke=${sunColor}
-                        ></line>
-                        <!--  Bead rides an absolute-coordinate path with cx / cy at the default 0 origin.
-                              Single-attribute updates keep the SMIL animation continuous during rotation.  -->
-                        <circle
-                            class="solar-ray-bead"
-                            r="3"
-                            fill=${sunColor}
-                        >
-                            <animateMotion
-                                dur="${sunFlowDuration}s"
-                                repeatCount="indefinite"
-                                path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
-                            ></animateMotion>
-                        </circle>
-                    </svg>
-                ` : nothing}
-
-                ${showSun ? html`
-                    <svg
-                        class="solar-svg solar-svg-sun ${sunScene!.sun.nearness >= 0.50 ? 'solar-svg-sun-near' : 'solar-svg-sun-far'}"
-                        style="--solar-daylight:${sunScene!.daylight}"
-                    >
-                        ${(() => {
-                            //Sun disc, four layers back-to-front:
-                            //  0. Halo, radial-gradient glow whose radius (3× disc) and opacity scale with
-                            //     irradiance, feathering into the basemap with no hard edge.
-                            //  1. Background fill (SUN_FILL_OPACITY_BG) so the empty disc reads as tinted glass.
-                            //  2. Inner fill, radius = sunFillRatio × outer; conveys irradiance (sub-px radii
-                            //     vanish, the correct visual for "no sun").
-                            //  3. Outer rim (darkened sun colour) for a clear edge against the basemap.
-                            //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc
-                            //ratio holds across canvas sizes (1.0 at standard Lovelace grid sizes).
-                            const sunArcScale = this._engine?.getSunArcScale() ?? 1;
-                            //Cap the disc radius (px): the arc fills a fixed fraction of the frame at any
-                            //zoom, but sunArcScale grows as the ground zoom drops (lower px/m), which would
-                            //otherwise balloon the disc. 22 px keeps it a sun, not a spotlight.
-                            const r = Math.min(
-                                (HeliosCard.SUN_R_FAR
-                                    + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene!.sun.nearness)
-                                    * sunArcScale,
-                                22);
-                            const rInner = r * sunFillRatio;
-                            //Halo proportional to live irradiance, saturating at 1000 W/m². Same sqrt mapping
-                            //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.
-                            const haloR        = r * 3;
-                            const haloAlphaMax = sunFillRatio * 0.55;
-                            return svg`
-                                <defs>
-                                    <radialGradient id="solar-halo-grad-${this._instanceId}">
-                                        <stop offset="0%"   stop-color="${sunColor}" stop-opacity="${haloAlphaMax}"></stop>
-                                        <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"></stop>
-                                    </radialGradient>
-                                </defs>
-                                <circle
-                                    class="solar-sun-halo"
-                                    cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
-                                    r="${haloR}"
-                                    fill="url(#solar-halo-grad-${this._instanceId})"
-                                ></circle>
-                                <circle
-                                    class="solar-sun-bg"
-                                    cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
-                                    r="${r}"
-                                    fill="${sunColor}"
-                                    fill-opacity="${HeliosCard.SUN_FILL_OPACITY_BG}"
-                                ></circle>
-                                <circle
-                                    class="solar-sun-fill"
-                                    cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
-                                    r="${rInner}"
-                                    fill="${sunColor}"
-                                    stroke="${sunRimColor}"
-                                    stroke-width="0.5"
-                                ></circle>
-                                <circle
-                                    class="solar-sun-rim"
-                                    cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
-                                    r="${r}"
-                                    fill="none"
-                                    stroke="${sunColor}"
-                                    stroke-width="${HeliosCard.SUN_RIM_WIDTH}"
-                                ></circle>
-                            `;
-                        })()}
-                    </svg>
-                ` : nothing}
-
-                <!--  Weather chip, pinned above the sun disc: the cloud-cover glyph (clear / partly / overcast)
-                      next to the live irradiance value. One chip carries both stories, the icon for the sky
-                      condition and the number for the W/m²; clicking it targets the timeline's irradiance
-                      view, where the cloud layers overlay the curve.  -->
-                ${showSunLabel ? html`
-                    <div
-                        class="solar-pct-label ${this._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
-                        style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px"
-                        role="button"
-                        tabindex="0"
-                        data-target="irradiance"
-                        @click=${this._onChartTargetClick}
-                    >
-                        <ha-icon icon=${this._cloudCover >= 0 ? cloudCoverIcon(this._cloudCover) : 'mdi:white-balance-sunny'}></ha-icon>
-                        <span>${sunIrradText}</span>
-                    </div>
-                ` : nothing}
-
-                <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
-                      each horizon crossing.  -->
-                ${showSun && sunScene ? html`
-                    ${this._renderSunCrossing(sunScene.sunrise, sunScene.home, 'mdi:weather-sunset-up',   sunColor)}
-                    ${this._renderSunCrossing(sunScene.sunset,  sunScene.home, 'mdi:weather-sunset-down', sunColor)}
-                ` : nothing}
-
-
-
-                <!--  Home pill: the hub the chip cluster orbits, at the projected home centre with no
-                      drop-leader so every chip leader docks straight against its border. Two stacked lines:
-                      the home glyph on top, the live home consumption below.  -->
-                ${hasHomeCoords && layout !== null ? html`
-                    <div
-                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this._homeHover ? 'is-hovered' : ''} ${this._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
-                        style="left:${layout!.home.x}px; top:${layout!.home.y}px"
-                        role="button"
-                        tabindex="0"
-                        data-target="consumption"
-                        @click=${this._onChartTargetClick}
-                        @mouseenter=${this._onHomeEnter}
-                        @mouseleave=${this._onHomeLeave}
-                    >
-                        <ha-icon icon="mdi:home"></ha-icon>
-                        ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}
-                    </div>
-                ` : nothing}
+                ${hud}
 
                 <!--  Per-chip detail panel: double-tapping the active chip aggregates its metric over the window
                       in a compact top-right readout (icons only, values in the card's unit). Scene mode only.  -->
@@ -2293,11 +1320,11 @@ export class HeliosCard extends LitElement
 
     //Hover handlers on the home hitbox. Toggle the sun-coloured glow halo so the focal building reads as
     //interactive. Cleared on exit so the glow can't stick if the cursor leaves mid-fade.
-    private _onHomeEnter = (): void =>
+    onHomeEnter = (): void =>
     {
         this._homeHover = true;
     };
-    private _onHomeLeave = (): void =>
+    onHomeLeave = (): void =>
     {
         this._homeHover = false;
     };
