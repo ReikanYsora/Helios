@@ -108,6 +108,14 @@ the labels; the logo rests at half opacity and lifts to full when you point at i
   clouds read together. The production view keeps its true shared-scale
   forecast.
 
+### Fixed: the consumption detail panel read 1000x too high
+
+The home (consumption) chip has no meter, so its detail panel integrates power
+into energy; that integration returned watt-hours but labelled them kWh, inflating
+the total and per-day average by 1000. It now matches the energy clock and the
+dashboard. Grid, battery and custom panels were never affected (they sum the
+recorder's kWh directly).
+
 ### Fixed: a stray battery leader with a hidden state-of-charge chip
 
 When a battery reported power but no state of charge, a connector could still be

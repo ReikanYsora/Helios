@@ -101,7 +101,8 @@ function consumptionAgg(store: NonNullable<ChartHost['_unifiedStore']>, startMs:
         if (tMs < startMs || tMs > endMs) { continue; }
         const v = Math.max(0, (p ?? 0) + (gi ?? 0) - (ge ?? 0) - (b ?? 0));
         if (v > peak) { peak = v; }
-        kwh += (v * store.stepMs) / HOUR_MS;
+        //watts * (bucket hours) = watt-hours; /1000 to kWh (no meter to sum, so it is integrated from the watts).
+        kwh += (v * store.stepMs) / HOUR_MS / 1000;
     }
     return { peak, totalKwh: kwh };
 }
