@@ -34,7 +34,6 @@ export type ClockHost = ChartHost & {
 
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
-const DAY_RING_R_FRAC = 0.40;   //day mode zooms the dial in (bigger than the scene ring) while the hour labels still fit
 const DAY_RUN_PCT     = 0.08;   //a slot counts as a real production/consumption run above this % of the day's peak
 const DAY_MIDNIGHT_GAP_PX = 10;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
@@ -725,36 +724,48 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
 
 //A member ring drawn IN FULL: a faint full-day ring at very low opacity (so the ring exists everywhere, even where
 //there was no activity), plus solid rounded-cap arcs at 0.9 over the RUNS where `values` exceeds DAY_RUN_PCT of the
-//day's peak. Each run is one arc (its round caps mark start + end); a hole breaks it so the next run gets a fresh
-//cap. What matters is WHEN there was activity, not how much, so no opacity shading of the runs.
-function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number): string
+//day's peak. Short off-holes are bridged and a minimum arc length is enforced, so a device that flicks on/off does
+//not shatter into little dots. When `hovered`, the ring gets crisp full-opacity edge outlines to highlight it.
+function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number, hovered: boolean): string
 {
     const STEPS = 288;
-    const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    //Faint full ring over the whole day WITH the midnight gap (so it aligns with this member's value arcs): the
-    //ring is always drawn, just dim where there's no data.
-    const full: string[] = [];
-    for (let k = 0; k <= STEPS; k++) { full.push(pAt(gapF + (1 - 2 * gapF) * k / STEPS)); }
-    let s = `<polyline points="${full.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.1" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const ppm = camera.pxPerMetre || 1;
+    const pAtR = (r: number, f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const ringAt = (r: number, f0: number, f1: number, op: number, w: number): string =>
+    {
+        const steps = Math.max(2, Math.round((f1 - f0) * STEPS));
+        const seg: string[] = [];
+        for (let k = 0; k <= steps; k++) { seg.push(pAtR(r, f0 + (f1 - f0) * k / steps)); }
+        return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${w.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    };
+    //Faint full ring over the whole day WITH the midnight gap (so it aligns with this member's value arcs).
+    let s = ringAt(rm, gapF, 1 - gapF, hovered ? 0.24 : 0.1, widthPx);
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
+    const minLenF = rm * ppm > 0 ? (widthPx * 1.4) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc: ~1.4x its width
     let i = 0;
     while (i < slots)
     {
         if ((values[i] ?? 0) <= thr) { i++; continue; }
-        let j = i;
-        while (j < slots && (values[j] ?? 0) > thr) { j++; }
-        const f0 = Math.max(gapF, i / slots);
-        const f1 = Math.min(1 - gapF, j / slots);
-        if (f1 > f0)
-        {
-            const steps = Math.max(2, Math.round((f1 - f0) * STEPS));
-            const seg: string[] = [];
-            for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
-            s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.9" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-        }
-        i = j;
+        //Extend the run through holes of up to one slot, so a cycling device (fridge...) reads as continuous.
+        let end = i + 1;
+        let j = i + 1;
+        let hole = 0;
+        while (j < slots && hole <= 1) { if ((values[j] ?? 0) > thr) { end = j + 1; hole = 0; } else { hole++; } j++; }
+        let f0 = i / slots;
+        let f1 = end / slots;
+        if (f1 - f0 < minLenF) { const c = (f0 + f1) / 2; f0 = c - minLenF / 2; f1 = c + minLenF / 2; }   //no dots
+        f0 = Math.max(gapF, f0);
+        f1 = Math.min(1 - gapF, f1);
+        if (f1 > f0) { s += ringAt(rm, f0, f1, 0.9, widthPx); }
+        i = end;
+    }
+    //Hover: crisp full-opacity outlines at the ring's inner + outer edges.
+    if (hovered)
+    {
+        const half = (widthPx / 2) / ppm;
+        s += ringAt(rm + half, gapF, 1 - gapF, 1, 1.6) + ringAt(rm - half, gapF, 1 - gapF, 1, 1.6);
     }
     return s;
 }
@@ -784,8 +795,9 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     members.forEach((m, i) =>
     {
         const mMid = outerRm - (i + 0.5) * sub;
-        let arcs = dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW));
-        if (m.device >= 0 && m.device === hoverIndex) { arcs = `<g style="filter:drop-shadow(0 0 5px ${m.color})">${arcs}</g>`; }
+        const hov  = m.device >= 0 && m.device === hoverIndex;
+        let arcs = dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW), hov);
+        if (hov) { arcs = `<g style="filter:drop-shadow(0 0 5px ${m.color})">${arcs}</g>`; }
         svg += arcs;
         if (m.device >= 0) { hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) }); }
     });
@@ -1135,8 +1147,7 @@ export function projectDayRingFrame(
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
     const ppm     = camera.pxPerMetre || 1;
-    //Day mode zooms the dial in (bigger fraction than the scene ring); the hour labels still fit the frame.
-    const outerR  = (DAY_RING_R_FRAC * minEdge) / ppm;
+    const outerR  = (RING_R_FRAC * minEdge) / ppm;   //same dial size as the other modes (no day-mode zoom)
     const hubR    = outerR * CLOCK_HUB_R_FRAC;
     //The ground hour-disc edge (where the guide spokes end). The rings sit flush to it, no wasted gap outside.
     const discR   = outerR * CLOCK_SPOKE_OUTER_FRAC;
