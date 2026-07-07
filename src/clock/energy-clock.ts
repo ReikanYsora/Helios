@@ -1089,10 +1089,12 @@ export function projectDayRingFrame(
     const projLabels = Array.from({ length: 24 }, (_, h) =>
         camera.project3(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0));
     //Top-down view: every hour label is equally near the camera, so no distance fade (full opacity throughout).
+    //Labels on the upper half of the dial (above the east-west axis) would sit upside-down with the radial
+    //orientation, so they get an extra 180deg to read right-side-up.
     const labels = projLabels.map((p, h) => ({
         x: p.x, y: p.y,
         opacity: 1,
-        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180 + (p.y < camera.centreY ? 180 : 0)}deg)`,
     }));
 
     const homeCtr = camera.project(0, 0, 0);
