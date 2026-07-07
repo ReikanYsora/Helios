@@ -688,6 +688,7 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.'}</div>
+                ${this._renderToggle('battery-soc-per-bank', t.editor.batterySocPerBank ?? 'Battery SoC per bank', t.editor.batterySocPerBankHint ?? 'With several battery sources wired, the live SoC chip lists every bank ("100 · 82 %", Energy dashboard order) instead of the average. Scrubbing keeps the average.')}
                 <div class="hint">${t.editor.customEntityIntro ?? 'Custom entity: displayed only when BOTH sensors below are set. The power sensor feeds the live chip and the curve, the energy sensor feeds the energy views. Nothing is estimated.'}</div>
                 ${this._customLegacyPending() ? html`
                     <div class="hint reset-warning">${t.editor.customLegacyHint ?? 'Your previous custom entity was moved to its matching field below. Add the missing sensor to show the chip again.'}</div>

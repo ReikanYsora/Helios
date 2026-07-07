@@ -133,6 +133,8 @@ export interface Translations
         batterySignDefault?:          string;
         batterySignInverted?:         string;
         batterySignHidden?:           string;
+        batterySocPerBank?:           string;
+        batterySocPerBankHint?:       string;
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
         noUiMode?:                    string;
         noUiModeHint?:                string;

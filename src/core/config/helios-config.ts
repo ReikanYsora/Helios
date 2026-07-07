@@ -92,6 +92,10 @@ export interface HeliosConfig
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
+    //Battery SoC chip layout for multi-bank installs: when true and several battery sources are wired,
+    //the live chip lists every bank ("100 · 82 %", Energy-dashboard source order) instead of the mean.
+    //Scrub keeps the mean (SoC history is stored aggregated). Default false.
+    'battery-soc-per-bank'?:   unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
@@ -203,6 +207,13 @@ export function batterySign(config: HeliosConfig | undefined): 'default' | 'inve
 {
     const raw = config?.['battery-sign'];
     return raw === 'inverted' || raw === 'hidden' ? raw : 'default';
+}
+
+
+//Resolved per-bank battery SoC chip flag. Default false, so existing cards keep the aggregated mean.
+export function batterySocPerBank(config: HeliosConfig | undefined): boolean
+{
+    return config?.['battery-soc-per-bank'] === true;
 }
 
 
