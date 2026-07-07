@@ -411,23 +411,34 @@ export function parseEnergyPrefs(prefs: {
             {
                 out.batteryStatSocs.push(soc);
             }
-            //A battery source may also carry a top-level `stat_rate` (net-power statistic). Deliberately skipped: the
-            //directional pair below already nets to the same value, so reading both would double-count.
+            //Battery live power: prefer the `power_config` rate slots; a source with none falls back to its
+            //top-level `stat_rate` (the common HA battery config, a net-power sensor). Only a source with NEITHER
+            //is truly bucket-sourced, where live power must be netted from the directional energy meters instead.
             const batteryRates = collectPowerConfigRates(src['power_config'], 'battery');
-            for (const slot of batteryRates)
+            if (batteryRates.length > 0)
             {
-                out.batteryStatRates.push(slot.entity);
-                if (slot.inverted)
+                for (const slot of batteryRates)
                 {
-                    out.invertedRateEntities.push(slot.entity);
+                    out.batteryStatRates.push(slot.entity);
+                    if (slot.inverted)
+                    {
+                        out.invertedRateEntities.push(slot.entity);
+                    }
                 }
             }
-            //A source with no power_config rate contributes its live power only through the directional energy meters,
-            //so note it: the consumer nets the energy meters (covering every bank) rather than summing a partial set of
-            //power sensors that would omit this one.
-            if (batteryRates.length === 0)
+            else
             {
-                out.batterySourcesWithoutRate += 1;
+                const topRate = pickFirstString(src['stat_rate']);
+                if (topRate)
+                {
+                    //HA's battery stat_rate is discharge-positive; flip it to the card's charge-positive convention.
+                    out.batteryStatRates.push(topRate);
+                    out.invertedRateEntities.push(topRate);
+                }
+                else
+                {
+                    out.batterySourcesWithoutRate += 1;
+                }
             }
         }
     }

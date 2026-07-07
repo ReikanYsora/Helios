@@ -19,8 +19,10 @@ describe('parseEnergyPrefs battery', () =>
         expect(d.batteryStatEnergyFroms).toEqual(['sensor.batt_out']);
         expect(d.batteryStatEnergyTos).toEqual(['sensor.batt_in']);
         expect(d.batteryStatSocs).toEqual(['sensor.batt_soc']);
-        //Top-level battery stat_rate is deliberately skipped (the directional pair nets the same value), so the
-        //source has no power_config rate and counts as a bucket-sourced bank.
-        expect(d.batterySourcesWithoutRate).toBe(1);
+        //No power_config, so the top-level stat_rate is the battery's live power (flipped: HA is discharge-positive).
+        //That makes the source rate-sourced, not bucket-sourced, so the live chip + config-check read it as wired.
+        expect(d.batteryStatRates).toEqual(['sensor.batt_p']);
+        expect(d.invertedRateEntities).toContain('sensor.batt_p');
+        expect(d.batterySourcesWithoutRate).toBe(0);
     });
 });
