@@ -16,21 +16,23 @@ export interface DayRingHost
     requestUpdate(): void;
 }
 
-//Fraction of each hour's home load that came from local solar instead of the grid: (consumption - gridImport) /
-//consumption, clamped 0..1. 0 when the hour drew fully from the grid (or carried no load); 1 when the sun covered
-//it entirely. Hours with no data (future, or no load) read 0.
-export function computeSelfSufficiency(profile: ClockHourly | null): number[]
+//Per-hour ring shares: the fraction of each hour's ring cell to fill with solar (gold) and with grid import (import
+//colour). solar = self-consumed solar / load, grid = grid import / load; they sum to ~1 under load. Both 0 for an
+//hour with no load (future or idle), so its cell stays empty. Together they show where the hour's energy came from.
+export function computeRingShares(profile: ClockHourly | null): { solar: number[]; grid: number[] }
 {
-    const out = new Array<number>(HOURS_PER_DAY).fill(0);
-    if (!profile) { return out; }
+    const solar = new Array<number>(HOURS_PER_DAY).fill(0);
+    const grid  = new Array<number>(HOURS_PER_DAY).fill(0);
+    if (!profile) { return { solar, grid }; }
     for (let h = 0; h < HOURS_PER_DAY; h++)
     {
         const load = profile.consumption[h] ?? 0;
         if (load <= 0) { continue; }
-        const fromSun = load - (profile.gridImport[h] ?? 0);
-        out[h] = Math.max(0, Math.min(1, fromSun / load));
+        const imp = Math.max(0, Math.min(load, profile.gridImport[h] ?? 0));
+        grid[h]  = imp / load;
+        solar[h] = Math.max(0, 1 - grid[h]);
     }
-    return out;
+    return { solar, grid };
 }
 
 //Fetch today's hour-of-day profile into the host, keyed so an unchanged window (within the hour) never refetches.

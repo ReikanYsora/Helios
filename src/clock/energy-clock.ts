@@ -686,24 +686,34 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
     return s;
 }
 
-//Self-sufficiency ground ring: one flat pizza-slice per hour from the hub to the outer radius. A faint grey floor
-//makes the ring a full disc; over it, gold rises with that hour's solar share (`values[h]` 0..1), so the day reads
-//at a glance as "on the sun" (bright gold) vs "on the grid" (bare grey), no numbers.
-function dayRingSectors(camera: SceneCamera, innerR: number, outerR: number, values: number[]): string
+//Solar-day RING (annulus, not a disc): 24 equal cells in a band from innerR to outerR. Each cell fills from the
+//inner edge outward, first the solar share (gold) then the grid-import share (import colour), so both the sun and
+//the grid you drew read at a glance. A faint floor keeps the full ring visible; hours with no load stay empty.
+function dayRingBands(camera: SceneCamera, innerR: number, outerR: number, solar: number[], grid: number[], importColor: string): string
 {
-    const SEG = 4;
+    const SEG  = 4;
+    const band = outerR - innerR;
+    //One annular cell (r0..r1 between the hour angles a0..a1) as a flat polygon on the ground.
+    const cell = (r0: number, r1: number, a0: number, a1: number, fill: string, op: number): string =>
+    {
+        const pts: string[] = [];
+        for (let k = 0; k <= SEG; k++) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(r1 * Math.sin(a), r1 * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(r0 * Math.sin(a), r0 * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        return `<polygon points="${pts.join(' ')}" fill="${fill}" opacity="${op.toFixed(3)}"/>`;
+    };
     let s = '';
     for (let h = 0; h < HOURS_PER_DAY; h++)
     {
-        const v  = Math.max(0, Math.min(1, values[h] ?? 0));
         const a0 = hourRad(h / HOURS_PER_DAY, camera.southern);
         const a1 = hourRad((h + 1) / HOURS_PER_DAY, camera.southern);
-        const pts: string[] = [];
-        for (let k = 0; k <= SEG; k++) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(outerR * Math.sin(a), outerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
-        for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
-        const poly = `points="${pts.join(' ')}"`;
-        s += `<polygon ${poly} fill="#3a3f4a" opacity="0.18"/>`;
-        if (v > 0.02) { s += `<polygon ${poly} fill="${SUN_COLOR_HEX}" opacity="${(0.15 + 0.7 * v).toFixed(3)}"/>`; }
+        s += cell(innerR, outerR, a0, a1, '#3a3f4a', 0.16);   //faint floor: the ring is always a full annulus
+        const sv = Math.max(0, Math.min(1, solar[h] ?? 0));
+        const gv = Math.max(0, Math.min(1, grid[h] ?? 0));
+        if (sv + gv <= 0.001) { continue; }
+        const splitR = innerR + band * sv;
+        const endR   = innerR + band * Math.min(1, sv + gv);
+        if (sv > 0.001) { s += cell(innerR, splitR, a0, a1, SUN_COLOR_HEX, 0.9); }
+        if (gv > 0.001) { s += cell(splitR, endR, a0, a1, importColor, 0.85); }
     }
     return s;
 }
@@ -1011,14 +1021,14 @@ export function projectTrendFrame(
 }
 
 
-//Slot nearest the cursor (within HOVER_PX of its axis); null when off every ring. The card maps the slot to
-//its hour, so hovering lights that whole hour across rings.
-//Project the DAY ring: a flat 24-hour ground dial for today, each hour tinted gold by its solar self-sufficiency
-//(`values[h]` 0..1). No bars, the story is the colour not the height. Reuses the clock's hour labels, hub guide,
-//compass, now-arrow and hub decal. Pure geometry; the card resolves `values`.
+//Project the DAY ring: a flat 24-hour ground annulus for today. Each hour's cell is split gold (solar share) then
+//import-colour (grid share), so both where the sun covered you and where you drew from the grid read at a glance.
+//No bars: the story is the colour, not the height. Reuses the clock's labels, guide, compass, now-arrow and decal.
 export function projectDayRingFrame(
     camera: SceneCamera,
-    values: number[],
+    solar: number[],
+    grid: number[],
+    importColor: string,
     cardinals: { n: string; s: string; e: string; w: string },
     //Whether the hub mark is hovered/tapped (drives its opacity fade), mirroring the other dials.
     columnHighlight = false,
@@ -1030,7 +1040,8 @@ export function projectDayRingFrame(
     const maxHm   = (MAX_HEIGHT_FRAC * minEdge) / ppm;
     const tilt    = camera.tiltDeg;
     const bearing = camera.bearingDeg;
-    const hubR    = outerR * CLOCK_HUB_R_FRAC;
+    //Ring band: a thick annulus (inner edge at 62% of the dial), so the 24 cells read as a ring, not a filled disc.
+    const innerR  = outerR * 0.62;
 
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
@@ -1050,7 +1061,7 @@ export function projectDayRingFrame(
     const decal      = buildLogoDecal({ diameterPx: decalDiaPx, orientDeg: camera.southern ? 0 : 180, highlight: columnHighlight });
 
     return {
-        guideSvg: dayRingSectors(camera, hubR, outerR, values) + clockGuide(camera, outerR) + compass.svg,
+        guideSvg: dayRingBands(camera, innerR, outerR, solar, grid, importColor) + clockGuide(camera, outerR) + compass.svg,
         svg: currentHourArrow(camera, outerR, maxHm, 0),
         hits: [], labels, compass: compass.labels,
         home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },

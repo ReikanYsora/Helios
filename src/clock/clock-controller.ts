@@ -4,11 +4,11 @@ import type { HeliosCard } from '../helios-card';
 import { HOUR_MS, HOURS_PER_DAY, CLOCK_GROW_MS } from '../core/config/constants';
 import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
-import { formatHaHour } from '../core/format/format';
+import { formatHaHour, ENERGY_COLOR } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
 import type { ClockHourly } from './clock-hourly';
 import { refreshTrendProfiles } from './trend';
-import { refreshDayRing, computeSelfSufficiency } from './day-ring';
+import { refreshDayRing, computeRingShares } from './day-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
@@ -475,12 +475,13 @@ export class ClockController
             this._applyClockFrame(frame);
             return;
         }
-        //Day dial: the flat 24-hour ground ring for today, each hour tinted gold by its solar self-sufficiency.
+        //Day dial: the flat 24-hour ground ring for today, each hour split gold (solar) then import-colour (grid).
         //No bars, no rail, no tooltip: just the base ground ring.
         if (this.host._viewMode === 'day')
         {
-            const values = computeSelfSufficiency(this.host._dayRingProfile);
-            const frame  = projectDayRingFrame(camera, values, cardinals, this.host._clockHomeHover);
+            const shares      = computeRingShares(this.host._dayRingProfile);
+            const importColor = ENERGY_COLOR.gridImport(this.host as unknown as Element);
+            const frame       = projectDayRingFrame(camera, shares.solar, shares.grid, importColor, cardinals, this.host._clockHomeHover);
             this._applyClockFrame(frame);
             return;
         }
