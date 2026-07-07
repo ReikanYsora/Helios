@@ -759,29 +759,46 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     //no scattered run pills from tiny noisy readings.
     if (total < DAY_MIN_RUN_KWH) { return s; }
     const thr = maxV * DAY_RUN_PCT;
-    const minLenF = rm * ppm > 0 ? (widthPx * 4.5) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc is a clear elongated dash, never a disk
-    let runs = '';
+    const minLenF = rm * ppm > 0 ? (widthPx * 4.5) / (2 * Math.PI * rm * ppm) : 0;   //shortest run reads as a dash
+    //Collect the runs as [start, end) slot intervals: bridge <=1-slot holes and drop negligible-energy blips.
+    const runsRaw: [number, number][] = [];
     let i = 0;
     while (i < slots)
     {
         if ((values[i] ?? 0) <= thr) { i++; continue; }
-        //Extend the run through holes of up to one slot, so a cycling device (fridge...) reads as continuous.
         let end = i + 1;
         let j = i + 1;
         let hole = 0;
         while (j < slots && hole <= 1) { if ((values[j] ?? 0) > thr) { end = j + 1; hole = 0; } else { hole++; } j++; }
-        //Skip a run whose own energy is negligible: without this, min-length would inflate a sensor-noise blip into
-        //a visible pill on the ring even when the device essentially did nothing.
         let runKwh = 0;
         for (let k = i; k < end; k++) { runKwh += Math.max(0, values[k] ?? 0); }
-        if (runKwh < DAY_MIN_RUN_KWH) { i = end; continue; }
-        let f0 = i / slots;
-        let f1 = end / slots;
-        if (f1 - f0 < minLenF) { const c = (f0 + f1) / 2; f0 = c - minLenF / 2; f1 = c + minLenF / 2; }   //no dots
-        f0 = Math.max(gapF, f0);
-        f1 = Math.min(1 - gapF, f1);
-        if (f1 > f0) { runs += arc(f0, f1, 0.9, 'round'); }
+        if (runKwh >= DAY_MIN_RUN_KWH) { runsRaw.push([i, end]); }
         i = end;
+    }
+    //Merge runs whose gap is small enough that their rounded caps would overlap (a brief data dropout must not
+    //split a run into two overlapping pieces): closer than ~2 cap-widths -> one run.
+    const capSlots = Math.max(1, Math.ceil(2 * (widthPx / 2) / (2 * Math.PI * rm * ppm) * slots));
+    const merged: [number, number][] = [];
+    for (const iv of runsRaw)
+    {
+        const last = merged[merged.length - 1];
+        if (last && iv[0] - last[1] <= capSlots) { last[1] = iv[1]; }
+        else { merged.push([iv[0], iv[1]]); }
+    }
+    //Draw each run as per-slot cells whose OPACITY carries the consumption at that moment (high vs low zones), so a
+    //run is not a flat solid block. Cells abut (butt caps) so they never double-expose.
+    let runs = '';
+    for (const [a, b] of merged)
+    {
+        const spanF = Math.max(minLenF, (b - a) / slots);
+        const mid   = (a + b) / (2 * slots);
+        const start = Math.max(gapF, Math.min(1 - gapF - spanF, mid - spanF / 2));
+        const cellW = spanF / (b - a);
+        for (let sl = a; sl < b; sl++)
+        {
+            const op = 0.22 + 0.68 * Math.min(1, Math.max(0, values[sl] ?? 0) / maxV);
+            runs += arc(start + (sl - a) * cellW, start + (sl - a + 1) * cellW, op, 'butt');
+        }
     }
     return s + runs;
 }
