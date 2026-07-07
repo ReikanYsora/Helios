@@ -482,8 +482,9 @@ export class ClockController
             const el          = this.host as unknown as Element;
             const dr          = this.host._dayRing;
             const importColor = ENERGY_COLOR.gridImport(el);
+            const batteryColor = ENERGY_COLOR.batteryOut(el);
             const rings       = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), values: dev.values, segments: dev.segments }));
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.grid ?? [], importColor, rings, cardinals, this.host._clockHomeHover);
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals, this.host._clockHomeHover);
             this._applyClockFrame(frame);
             return;
         }

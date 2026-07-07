@@ -689,7 +689,7 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
 //Solar-day RING (annulus, not a disc): 24 equal cells in a band from innerR to outerR. Each cell fills from the
 //inner edge outward, first the solar share (gold) then the grid-import share (import colour), so both the sun and
 //the grid you drew read at a glance. A faint floor keeps the full ring visible; hours with no load stay empty.
-function dayRingBands(camera: SceneCamera, innerR: number, outerR: number, solar: number[], grid: number[], importColor: string): string
+function dayRingBands(camera: SceneCamera, innerR: number, outerR: number, solar: number[], battery: number[], grid: number[], batteryColor: string, importColor: string): string
 {
     const SEG  = 4;
     const band = outerR - innerR;
@@ -701,7 +701,8 @@ function dayRingBands(camera: SceneCamera, innerR: number, outerR: number, solar
         for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(r0 * Math.sin(a), r0 * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
         return `<polygon points="${pts.join(' ')}" fill="${fill}" opacity="${op.toFixed(3)}"/>`;
     };
-    //Cell count follows the data resolution (24 * display-frequency): a finer cadence draws a finer ring.
+    //Cell count follows the data resolution (24 * display-frequency): a finer cadence draws a finer ring. Each cell
+    //stacks radially inward-out by source: solar (gold), battery discharge, grid import.
     const slots = Math.max(1, solar.length);
     let s = '';
     for (let i = 0; i < slots; i++)
@@ -710,12 +711,15 @@ function dayRingBands(camera: SceneCamera, innerR: number, outerR: number, solar
         const a1 = hourRad((i + 1) / slots, camera.southern);
         s += cell(innerR, outerR, a0, a1, '#3a3f4a', 0.16);   //faint floor: the ring is always a full annulus
         const sv = Math.max(0, Math.min(1, solar[i] ?? 0));
+        const bv = Math.max(0, Math.min(1, battery[i] ?? 0));
         const gv = Math.max(0, Math.min(1, grid[i] ?? 0));
-        if (sv + gv <= 0.001) { continue; }
-        const splitR = innerR + band * sv;
-        const endR   = innerR + band * Math.min(1, sv + gv);
-        if (sv > 0.001) { s += cell(innerR, splitR, a0, a1, SUN_COLOR_HEX, 0.9); }
-        if (gv > 0.001) { s += cell(splitR, endR, a0, a1, importColor, 0.85); }
+        if (sv + bv + gv <= 0.001) { continue; }
+        const r1 = innerR + band * sv;
+        const r2 = innerR + band * Math.min(1, sv + bv);
+        const r3 = innerR + band * Math.min(1, sv + bv + gv);
+        if (sv > 0.001) { s += cell(innerR, r1, a0, a1, SUN_COLOR_HEX, 0.9); }
+        if (bv > 0.001) { s += cell(r1, r2, a0, a1, batteryColor, 0.88); }
+        if (gv > 0.001) { s += cell(r2, r3, a0, a1, importColor, 0.85); }
     }
     return s;
 }
@@ -1044,18 +1048,21 @@ function dayDeviceRings(camera: SceneCamera, innerR: number, outerR: number, rin
 {
     const n = rings.length;
     if (!n || slots <= 0) { return ''; }
-    const h    = maxHm * 0.10;
+    //All rings float at ONE small fixed height above the base ring (this mode is viewed top-down, so a per-ring
+    //height would not read anyway).
+    const h    = maxHm * 0.06;
     const band = (outerR - innerR) / n;
     const pad  = band * 0.22;
-    const proj = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), h); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const proj = (r: number, a: number, ph: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), ph); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
     let out = '';
     rings.forEach((ring, i) =>
     {
         let peak = 0;
         for (const v of ring.values) { if (v > peak) { peak = v; } }
         if (peak <= 0) { return; }
-        const r0 = innerR + i * band + pad * 0.5;         //inner edge = 0 W
-        const r1 = innerR + (i + 1) * band - pad * 0.5;   //outer edge = the device's peak slot
+        const r0   = innerR + i * band + pad * 0.5;        //inner edge = 0 W
+        const r1   = innerR + (i + 1) * band - pad * 0.5;  //outer edge = the device's peak slot
+        const edge = lerpHexToward(ring.color, '#000000', 0.45);
         let body = '';
         for (const seg of ring.segments)
         {
@@ -1064,14 +1071,14 @@ function dayDeviceRings(camera: SceneCamera, innerR: number, outerR: number, rin
             for (let s = seg.start; s < seg.end; s++)
             {
                 const rO = r0 + (r1 - r0) * Math.max(0, Math.min(1, ring.values[s] / peak));
-                pts.push(proj(rO, hourRad(s / slots, camera.southern)));
-                pts.push(proj(rO, hourRad((s + 1) / slots, camera.southern)));
+                pts.push(proj(rO, hourRad(s / slots, camera.southern), h));
+                pts.push(proj(rO, hourRad((s + 1) / slots, camera.southern), h));
             }
             //Inner edge back at r0, closing the gauge.
-            for (let s = seg.end; s >= seg.start; s--) { pts.push(proj(r0, hourRad(s / slots, camera.southern))); }
-            body += `<polygon points="${pts.join(' ')}" fill="${ring.color}" stroke="rgba(0,0,0,0.35)" stroke-width="0.4"/>`;
+            for (let s = seg.end; s >= seg.start; s--) { pts.push(proj(r0, hourRad(s / slots, camera.southern), h)); }
+            body += `<polygon points="${pts.join(' ')}" fill="${ring.color}" stroke="${edge}" stroke-width="1"/>`;
         }
-        out += `<g opacity="0.72">${body}</g>`;
+        out += `<g opacity="0.74">${body}</g>`;
     });
     return out;
 }
@@ -1079,8 +1086,10 @@ function dayDeviceRings(camera: SceneCamera, innerR: number, outerR: number, rin
 export function projectDayRingFrame(
     camera: SceneCamera,
     solar: number[],
+    battery: number[],
     grid: number[],
     importColor: string,
+    batteryColor: string,
     rings: DayDeviceRing[],
     cardinals: { n: string; s: string; e: string; w: string },
     //Whether the hub mark is hovered/tapped (drives its opacity fade), mirroring the other dials.
@@ -1114,8 +1123,8 @@ export function projectDayRingFrame(
     const decal      = buildLogoDecal({ diameterPx: decalDiaPx, orientDeg: camera.southern ? 0 : 180, highlight: columnHighlight });
 
     return {
-        guideSvg: dayRingBands(camera, innerR, outerR, solar, grid, importColor) + clockGuide(camera, outerR) + compass.svg,
-        svg: dayDeviceRings(camera, innerR, outerR, rings, solar.length, maxHm) + currentHourArrow(camera, outerR, maxHm, 0),
+        guideSvg: dayRingBands(camera, innerR, outerR, solar, battery, grid, batteryColor, importColor) + clockGuide(camera, outerR) + compass.svg,
+        svg: dayDeviceRings(camera, innerR, outerR, rings, solar.length, maxHm),
         hits: [], labels, compass: compass.labels,
         home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
         decal,

@@ -14,6 +14,7 @@ import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
 export interface DayRingData
 {
     solar:   number[];
+    battery: number[];
     grid:    number[];
     devices: DeviceRun[];
 }
@@ -105,20 +106,24 @@ function binSlots(buckets: ChangeBucket[] | null, slots: number): number[]
 
 //Per-slot solar + grid-import shares of the ring cell, from the slot's energy sums. Pure (testable): solar =
 //self-consumed solar / load, grid = grid import / load; both 0 for a slot with no load (future or idle).
-export function ringShares(pv: number[], imp: number[], exp: number[], battNet: number[]): { solar: number[]; grid: number[] }
+export function ringShares(pv: number[], imp: number[], exp: number[], charge: number[], discharge: number[]): { solar: number[]; battery: number[]; grid: number[] }
 {
     const n = pv.length;
-    const solar = new Array<number>(n).fill(0);
-    const grid  = new Array<number>(n).fill(0);
+    const solar   = new Array<number>(n).fill(0);
+    const battery = new Array<number>(n).fill(0);
+    const grid    = new Array<number>(n).fill(0);
     for (let s = 0; s < n; s++)
     {
-        const load = consumptionLoad(pv[s] ?? 0, imp[s] ?? 0, exp[s] ?? 0, battNet[s] ?? 0);
+        const load = consumptionLoad(pv[s] ?? 0, imp[s] ?? 0, exp[s] ?? 0, (charge[s] ?? 0) - (discharge[s] ?? 0));
         if (load <= 0) { continue; }
-        const gridShare = Math.max(0, Math.min(1, (imp[s] ?? 0) / load));
-        grid[s]  = gridShare;
-        solar[s] = Math.max(0, 1 - gridShare);
+        //Three sources cover the slot's load: grid import, battery discharge, and (the rest) local solar.
+        const g = Math.max(0, Math.min(1, (imp[s] ?? 0) / load));
+        const b = Math.max(0, Math.min(1 - g, (discharge[s] ?? 0) / load));
+        grid[s]    = g;
+        battery[s] = b;
+        solar[s]   = Math.max(0, 1 - g - b);
     }
-    return { solar, grid };
+    return { solar, battery, grid };
 }
 
 //Slots-per-day + the recorder period that resolves them: hourly at freq 1, else 5-minute (binned down to slots).
@@ -167,7 +172,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const exp = binSlots(expB, slots);
     const bc  = binSlots(bChgB, slots);
     const bd  = binSlots(bDisB, slots);
-    const shares = ringShares(pv, imp, exp, bc.map((c, s) => c - bd[s]));
+    const shares = ringShares(pv, imp, exp, bc, bd);
     const devices: DeviceRun[] = [];
     for (const dev of d.devices)
     {
@@ -175,6 +180,6 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
         const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, dev.name || dev.statConsumption);
         if (run) { devices.push(run); }
     }
-    host._dayRing = { solar: shares.solar, grid: shares.grid, devices };
+    host._dayRing = { solar: shares.solar, battery: shares.battery, grid: shares.grid, devices };
     host.requestUpdate();
 }

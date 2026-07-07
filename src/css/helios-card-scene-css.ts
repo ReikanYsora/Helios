@@ -267,6 +267,14 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
+    /*  Day (rings) mode is daily-only, so the timeline and the period selector have no purpose: hide the band
+        (clock/trend keep it to pick the week/month/year window). */
+    ha-card.mode-day > .tb-band
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+
     /*  Top-left rail hosting the mode toggles + camera-lock. pointer-events off on the rail; the buttons
         opt back in so they don't steal map interactions. */
     .overlay-top-left
