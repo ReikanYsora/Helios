@@ -16,6 +16,7 @@ export const fr: Translations = {
     {
         rangeLabel: 'Période',
         standard: 'Standard',
+        yesterday: 'Hier',
         today: "Aujourd'hui",
         week:  'Semaine',
         month: 'Mois',

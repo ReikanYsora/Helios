@@ -18,6 +18,7 @@ export const en: Translations = {
     {
         rangeLabel: 'Time range',
         standard: 'Standard',
+        yesterday: 'Yesterday',
         today: 'Today',
         week:  'Week',
         month: 'Month',

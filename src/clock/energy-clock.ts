@@ -1153,23 +1153,20 @@ export function projectDayRingFrame(
     const hubR    = outerR * CLOCK_HUB_R_FRAC;
     //The ground hour-disc edge (where the guide spokes end). The rings sit flush to it, no wasted gap outside.
     const discR   = outerR * CLOCK_SPOKE_OUTER_FRAC;
-    const dotRm   = discR * 1.04;   //hour tick dots sit just off the outer production ring
-    const labelRm = discR * 1.19;   //upright hour numbers clearly outside the dots (not touching them)
-    //Real-clock hours: a small primary-text dot at the exact hour position + the value written UPRIGHT just outside
-    //it (no radial rotation), placed by its own screen position -- like a real clock face.
+    const tilt    = camera.tiltDeg;
+    const bearing = camera.bearingDeg;
+    //Hour labels exactly like the clock/histogram mode: laid flat just outside the ring, radial, no dots. Keeps room
+    //for the period band below and stays visually consistent with the other modes.
+    const labelR = outerR * LABEL_R_MULT;
     const labels = Array.from({ length: 24 }, (_, h) =>
     {
-        const a = hourRad(h / HOURS_PER_DAY, camera.southern);
-        const p = camera.project(labelRm * Math.sin(a), labelRm * Math.cos(a), 0);
-        return { x: p[0], y: p[1], opacity: 1, transform: 'translate(-50%, -50%)' };
+        const p = camera.project(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0);
+        return {
+            x: p[0], y: p[1], opacity: 1,
+            transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
+        };
     });
-    let guideSvg = '';
-    for (let h = 0; h < 24; h++)
-    {
-        const a = hourRad(h / HOURS_PER_DAY, camera.southern);
-        const p = camera.project(dotRm * Math.sin(a), dotRm * Math.cos(a), 0);
-        guideSvg += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.6" fill="var(--primary-text-color)"/>`;
-    }
+    const guideSvg = '';
 
     const homeCtr = camera.project(0, 0, 0);
     const decal   = { svg: '', active: false };   //no central logo in day mode

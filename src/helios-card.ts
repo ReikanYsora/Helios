@@ -233,6 +233,8 @@ export class HeliosCard extends LitElement
     _dayRingKey = '';
     //Day mode Real/Optimised toggle: when true, shiftable device rings replay inside the day's solar window.
     @state() _dayOptimized = false;
+    //Day mode period: which single day the rings show (its own selector, so it doesn't touch the timeline window).
+    @state() _dayPeriod: 'today' | 'yesterday' = 'today';
     //Day-mode hover: the hovered device-ring index (null = none) drives the opaque/dim repaint + the tooltip; the
     //cursor position places the tooltip; the hit targets are captured from the last paint. Driven manually via
     //scheduleClockPaint + requestUpdate, so not @state.
@@ -485,6 +487,27 @@ export class HeliosCard extends LitElement
     private _renderPeriodSelector(): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
+        //Day mode: a restricted Yesterday / Today selector (a single-day ring has no week/month/year), bound to its
+        //own _dayPeriod state instead of the timeline window.
+        if (this._viewMode === 'day')
+        {
+            const dayLabels: Record<'yesterday' | 'today', string> = {
+                yesterday: t.period?.yesterday ?? 'Yesterday',
+                today:     t.period?.today     ?? 'Today',
+            };
+            return html`
+                <div class="tb-period-selector" role="group" aria-label=${t.period?.rangeLabel ?? 'Time range'} @pointerdown=${this._stopPropagation}>
+                    ${(['yesterday', 'today'] as const).map(m => html`
+                        <button
+                            type="button"
+                            class="tb-period-seg ${this._dayPeriod === m ? 'is-on' : ''}"
+                            data-dayperiod=${m}
+                            @click=${this._onDayPeriodClick}
+                        >${dayLabels[m]}</button>
+                    `)}
+                </div>
+            `;
+        }
         const labels: Record<TimelineMode, string> = {
             standard: t.period?.standard ?? 'Standard',
             today:    t.period?.today    ?? 'Today',
@@ -936,6 +959,7 @@ export class HeliosCard extends LitElement
         if (this._viewMode === 'day')
         {
             if (_changedProperties.has('_viewMode')
+                || _changedProperties.has('_dayPeriod')
                 || _changedProperties.has('_timeRange')
                 || _changedProperties.has('_energyDefaults')
                 || _changedProperties.has('config')
@@ -1618,6 +1642,12 @@ export class HeliosCard extends LitElement
     //Day mode Real/Optimised toggle handlers (kept out of render so the assignment isn't in the template).
     private _onDayReal      = (): void => { this._dayOptimized = false; };
     private _onDayOptimised = (): void => { this._dayOptimized = true; };
+    //Day mode Yesterday/Today selector.
+    private _onDayPeriodClick = (e: Event): void =>
+    {
+        const m = (e.currentTarget as HTMLElement)?.dataset.dayperiod;
+        if (m === 'yesterday' || m === 'today') { this._dayPeriod = m; }
+    };
 
     static styles = [heliosCardStyles, heliosTimelineStyles, heliosCardEnergyClockCss];
 }

@@ -7,7 +7,7 @@ import { consumptionLoad } from '../core/energy';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../core/config/helios-config';
 import { serverHourFrac } from '../core/time/timezone';
-import { HOURS_PER_DAY } from '../core/config/constants';
+import { HOURS_PER_DAY, DAY_MS } from '../core/config/constants';
 
 //Quantum the window end snaps to (HA's finest statistics cadence). Snapping to 5 min instead of the whole hour
 //shows the current period live, while keeping the fetch key stable within each 5-min window (no refetch loop).
@@ -135,6 +135,7 @@ export interface DayRingHost
     config:          HeliosConfig | undefined;
     _energyDefaults: EnergyDefaults;
     _viewMode?:      'scene' | 'clock' | 'trend' | 'day';
+    _dayPeriod?:     'today' | 'yesterday';
     _dayRing:        DayRingData | null;
     _dayRingKey:     string;
     requestUpdate(): void;
@@ -222,8 +223,11 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const { slots, period } = daySlotting(host.config);
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
-    const startMs = midnight.getTime();
-    const endMs = Math.floor(Date.now() / LIVE_QUANTUM_MS) * LIVE_QUANTUM_MS;
+    const todayMidnight = midnight.getTime();
+    //Yesterday shows the whole previous day (a complete ring); Today runs from local midnight to the live 5-min edge.
+    const yesterday = host._dayPeriod === 'yesterday';
+    const startMs = yesterday ? todayMidnight - DAY_MS : todayMidnight;
+    const endMs   = yesterday ? todayMidnight : Math.floor(Date.now() / LIVE_QUANTUM_MS) * LIVE_QUANTUM_MS;
     if (startMs >= endMs) { return; }
 
     const key = `${startMs}|${endMs}|${slots}|${period}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}`;

@@ -80,6 +80,7 @@ export interface Translations
     {
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
         standard?:   string; //'Standard' (J-2 .. J+2)
+        yesterday?:  string; //'Yesterday' (day-rings mode only)
         today?:      string; //'Today'
         week?:       string; //'1 week'
         month?:      string; //'1 month'

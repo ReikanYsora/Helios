@@ -267,13 +267,8 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Day (rings) mode is daily-only, so the timeline and the period selector have no purpose: hide the band
-        (clock/trend keep it to pick the week/month/year window). */
-    ha-card.mode-day > .tb-band
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
+    /*  Day (rings) mode keeps the period band, but it holds only a Yesterday / Today selector (rendered by the
+        card); the week/month/year modes don't apply to a single-day ring. */
 
     /*  Day mode hides the compass letters (the top-down ring has no need for N/S/E/W). */
     ha-card.mode-day .clock-compass-label
