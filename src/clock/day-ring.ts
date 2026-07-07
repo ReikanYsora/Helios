@@ -216,6 +216,8 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
         if (run.dailyKwh > 0) { run.solarPct = sol / run.dailyKwh; run.gridPct = gr / run.dailyKwh; }
         devices.push(run);
     }
+    //Order the device rings by daily total, biggest just inside the source rings down to the smallest at the hub.
+    devices.sort((a, b) => b.dailyKwh - a.dailyKwh);
     host._dayRing = { solar: shares.solar, battery: shares.battery, grid: shares.grid, devices };
     host.requestUpdate();
 }
