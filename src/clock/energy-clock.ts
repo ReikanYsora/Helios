@@ -34,6 +34,7 @@ export type ClockHost = ChartHost & {
 
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
+const DAY_RING_R_FRAC = 0.40;   //day mode zooms the dial in (bigger than the scene ring) while the hour labels still fit
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
 const CLOCK_MAX_FILTERS = 8;
@@ -689,24 +690,20 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
     return s;
 }
 
-//One full-annulus day ring, flat on the ground (top-down): a continuous dark track so the whole ring is always a
-//complete circle over the basemap, plus one colour cell per slot whose OPACITY carries the slot's value. No radial
-//gauge and nothing stacked above anything else, so every ring stays independently legible; the dark track also
-//backs the anti-aliasing seams between cells, so they read as the theme background rather than bright gaps.
-function dayOpacityRing(camera: SceneCamera, rInner: number, rOuter: number, color: string, ops: number[], slots: number): string
+//One annular band, flat on the ground (top-down): a continuous dark track so the band is always a complete circle
+//over the basemap, plus one colour cell per slot whose OPACITY carries the slot's value. No radial gauge and
+//nothing stacked, so every band stays legible; the dark track also backs the anti-aliasing seams between cells so
+//they read as the theme background, not bright gaps. Edge outlines are drawn separately (see dayEdge), so bands can
+//be glued together (production sub-bands) with a single outline around the whole group.
+function dayOpacityBand(camera: SceneCamera, rInner: number, rOuter: number, color: string, ops: number[], slots: number): string
 {
     const SEG = 4;
     const pt  = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    //Continuous dark track: one polygon (outer arc out, inner arc back) so an empty stretch reads as a solid dark
-    //ring, not the basemap showing through.
     const trackN = Math.max(24, slots);
-    const outerEdge: string[] = [];
-    const innerEdge: string[] = [];
-    for (let k = 0; k <= trackN; k++) { outerEdge.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
-    for (let k = 0; k <= trackN; k++) { innerEdge.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
-    const track = [...outerEdge, ...[...innerEdge].reverse()];
+    const track: string[] = [];
+    for (let k = 0; k <= trackN; k++) { track.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
+    for (let k = trackN; k >= 0; k--) { track.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
     let s = `<polygon points="${track.join(' ')}" fill="#000000" opacity="0.34"/>`;
-    //Colour cells: fixed hue, per-slot opacity = the value. Near-zero slots are skipped (the dark track shows).
     for (let i = 0; i < slots; i++)
     {
         const op = ops[i] ?? 0;
@@ -718,11 +715,23 @@ function dayOpacityRing(camera: SceneCamera, rInner: number, rOuter: number, col
         for (let k = SEG; k >= 0; k--) { pts.push(pt(rInner, a0 + (a1 - a0) * k / SEG)); }
         s += `<polygon points="${pts.join(' ')}" fill="${color}" opacity="${Math.min(1, op).toFixed(3)}"/>`;
     }
-    //Inner + outer edge outlines in the ring's OWN colour (not a uniform white, which read as a target), drawn on
-    //top so each ring stays a crisp band.
-    s += `<polyline points="${outerEdge.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
-    s += `<polyline points="${innerEdge.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
     return s;
+}
+
+//One edge outline (a projected ring polyline at radius r) in the given colour.
+function dayEdge(camera: SceneCamera, r: number, color: string, slots: number): string
+{
+    const n = Math.max(24, slots);
+    const pts: string[] = [];
+    for (let k = 0; k <= n; k++) { const a = hourRad(k / n, camera.southern); const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
+}
+
+//A full device ring: the band plus inner + outer edge outlines in its own colour (not a uniform white, which read
+//as a target).
+function dayOpacityRing(camera: SceneCamera, rInner: number, rOuter: number, color: string, ops: number[], slots: number): string
+{
+    return dayOpacityBand(camera, rInner, rOuter, color, ops, slots) + dayEdge(camera, rOuter, color, slots) + dayEdge(camera, rInner, color, slots);
 }
 
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
@@ -1066,8 +1075,11 @@ export function projectDayRingFrame(
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
     const ppm     = camera.pxPerMetre || 1;
-    const outerR  = (RING_R_FRAC * minEdge) / ppm;
+    //Day mode zooms the dial in (bigger fraction than the scene ring); the hour labels still fit the frame.
+    const outerR  = (DAY_RING_R_FRAC * minEdge) / ppm;
     const hubR    = outerR * CLOCK_HUB_R_FRAC;
+    //The ground hour-disc edge (where the guide spokes end). The rings sit flush to it, no wasted gap outside.
+    const discR   = outerR * CLOCK_SPOKE_OUTER_FRAC;
     const tilt    = camera.tiltDeg;
     const bearing = camera.bearingDeg;
 
@@ -1085,9 +1097,6 @@ export function projectDayRingFrame(
     //No central logo in day mode: the rings fill the whole face down to the hub circle.
     const decal   = { svg: '', active: false };
 
-    //Every ring is a full annulus of equal width, packed from the rim inward: the three energy SOURCES first
-    //(solar, then grid, then battery) and then the device rings (already sorted by daily total). Each ring carries
-    //its per-slot value by OPACITY, not radius, so nothing sits above anything else and each stays legible.
     const slots = Math.max(1, solar.length);
     //Value -> opacity: a high floor so even a light slot reads (an empty slot stays at the dark track). Sources use
     //their share (0..1); a device uses its slot energy over its own peak.
@@ -1100,16 +1109,20 @@ export function projectDayRingFrame(
         if (peak <= 0) { return values.map(() => 0); }
         return values.map(v => opFor(v / peak));
     };
-    //Sources first (only those actually configured), then the device rings (already sorted by daily total). A blank
-    //ring-width band separates the two groups, so production reads apart from consumption.
+    //Configured sources only, outermost-first (solar, grid, battery). They are MERGED into a single production ring:
+    //stuck-together sub-bands with no gap or edge between them, one outline around the whole block.
     const sources: { color: string; ops: number[] }[] = [];
     if (hasSolar)   { sources.push({ color: SUN_COLOR_HEX, ops: solar.map(opFor) }); }
     if (hasGrid)    { sources.push({ color: importColor,   ops: grid.map(opFor) }); }
     if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
-    const gapUnit = (sources.length > 0 && rings.length > 0) ? 1 : 0;
-    const units   = Math.max(1, sources.length + gapUnit + rings.length);
-    const band    = (outerR - hubR) / units;
-    const gap     = band * 0.42;   //padding carved between adjacent rings
+
+    //Radial budget from the hub out to the hour-disc edge: one ring for the merged production block, a blank band
+    //to set it apart, then one ring per device (already sorted by daily total).
+    const prodUnit = sources.length > 0 ? 1 : 0;
+    const gapUnit  = (prodUnit > 0 && rings.length > 0) ? 1 : 0;
+    const units    = Math.max(1, prodUnit + gapUnit + rings.length);
+    const band     = (discR - hubR) / units;
+    const gap      = band * 0.42;   //padding carved between adjacent rings
 
     const circle = (r: number): [number, number][] =>
     {
@@ -1117,23 +1130,32 @@ export function projectDayRingFrame(
         for (let k = 0; k < 48; k++) { c.push(camera.project(r * Math.sin(hourRad(k / 48, camera.southern)), r * Math.cos(hourRad(k / 48, camera.southern)), 0)); }
         return c;
     };
-    //Each ring spans one band, flush to the rim on the outside and to the hub on the inside, `gap` carved between
-    //neighbours. `u` is the band position (0 = rim); the gap band between the two groups is simply skipped.
-    const drawn: { color: string; ops: number[]; device: number; u: number }[] = [
-        ...sources.map((sc, i) => ({ ...sc, device: -1, u: i })),
-        ...rings.map((rg, k) => ({ color: rg.color, ops: devOps(rg.values), device: k, u: sources.length + gapUnit + k })),
-    ];
     let ringSvg = '';
     const dayHits: DayRingHit[] = [];
-    drawn.forEach(layer =>
+
+    //Merged production block at the rim (flush to discR). Sub-bands glued (no gap/edge between); a single outer
+    //outline in the outermost source's colour and a single inner outline in the innermost source's colour.
+    if (prodUnit > 0)
     {
-        const rOuter = outerR - layer.u * band - (layer.u === 0 ? 0 : gap / 2);
-        const rInner = outerR - (layer.u + 1) * band + (layer.u === units - 1 ? 0 : gap / 2);
-        let one = dayOpacityRing(camera, rInner, rOuter, layer.color, layer.ops, slots);
-        if (layer.device >= 0 && layer.device === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${layer.color})">${one}</g>`; }
+        const rOut = discR;
+        const rIn  = discR - band + (gapUnit > 0 ? gap / 2 : 0);
+        const sub  = (rOut - rIn) / sources.length;
+        sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, rOut - (i + 1) * sub, rOut - i * sub, sc.color, sc.ops, slots); });
+        ringSvg += dayEdge(camera, rOut, sources[0].color, slots);
+        ringSvg += dayEdge(camera, rIn, sources[sources.length - 1].color, slots);
+    }
+
+    //Device rings, each a full ring flush to the hub on the innermost, `gap` carved between neighbours.
+    rings.forEach((rg, k) =>
+    {
+        const u      = prodUnit + gapUnit + k;
+        const rOuter = discR - u * band - (u === 0 ? 0 : gap / 2);
+        const rInner = discR - (u + 1) * band + (u === units - 1 ? 0 : gap / 2);
+        let one = dayOpacityRing(camera, rInner, rOuter, rg.color, devOps(rg.values), slots);
+        if (k === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${rg.color})">${one}</g>`; }
         ringSvg += one;
-        //Device rings are hoverable; hit order matches the rings array, i.e. host._dayRing.devices.
-        if (layer.device >= 0) { dayHits.push({ outer: circle(rOuter), inner: circle(rInner) }); }
+        //Hit order matches the rings array, i.e. host._dayRing.devices.
+        dayHits.push({ outer: circle(rOuter), inner: circle(rInner) });
     });
 
     return {
