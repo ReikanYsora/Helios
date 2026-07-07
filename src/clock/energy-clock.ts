@@ -37,6 +37,7 @@ const RING_R_FRAC     = 0.34;   //outermost ring radius
 const DAY_RING_R_FRAC = 0.40;   //day mode zooms the dial in (bigger than the scene ring) while the hour labels still fit
 const DAY_RAIL_FRAC   = 0.32;   //inner fraction of a day consumption ring taken by its solid identity rail
 const DAY_GRID_HEX    = '#6d84a6';   //cold slate for grid-drawn hours, a sharp contrast with the sun gold
+const DAY_RUN_PCT     = 0.08;   //a slot counts as a real production/consumption run above this % of the day's peak
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
 const CLOCK_MAX_FILTERS = 8;
@@ -784,9 +785,9 @@ function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, devi
 
 //TEST: an Apple-watch-style production ring. Valid only top-down (day mode is pitch 0): a thick round-capped BLACK
 //track running the whole day with a small gap at midnight (its two round caps are the "half circles"), and inside
-//it, padded, a smooth gold GAUGE whose opacity follows the production ratio at each moment. No per-hour cells --
-//fine sub-sampled segments read as one continuous ring. `outerRm`/`thickM` are the band's outer radius + thickness
-//in metres; `ratio[s]` is the 0..1 production ratio per slot.
+//it, padded, solid gold arcs over the RUNS where production was real. What matters is WHEN there was production,
+//not how much, so no opacity shading -- each run is one rounded-cap arc (its caps mark the start + end of the run).
+//`outerRm`/`thickM` are the band's outer radius + thickness in metres; `ratio[s]` is the per-slot production value.
 function dayProductionSolarRing(camera: SceneCamera, outerRm: number, thickM: number, ratio: number[], slots: number): string
 {
     const midRm  = outerRm - thickM / 2;
@@ -799,16 +800,27 @@ function dayProductionSolarRing(camera: SceneCamera, outerRm: number, thickM: nu
     const STEPS = 288;
     for (let k = 0; k <= STEPS; k++) { track.push(pAt(gapF + (1 - 2 * gapF) * k / STEPS)); }
     let s = `<polyline points="${track.join(' ')}" fill="none" stroke="#000000" stroke-opacity="1" stroke-width="${trackW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-    //Gauge: per-slot arc segments (sub-sampled so they curve), gold, opacity = the slot's production ratio.
-    for (let i = 0; i < slots; i++)
+    //Gauge: solid gold arcs over the RUNS where production is above a small % of the day's peak. Each run is one
+    //rounded-cap arc (caps = start + end of production); a hole ends the arc and the next run starts a fresh one.
+    let maxV = 0;
+    for (const v of ratio) { if (v > maxV) { maxV = v; } }
+    const thr = maxV * DAY_RUN_PCT;
+    let i = 0;
+    while (i < slots)
     {
-        const op = Math.max(0, Math.min(1, ratio[i] ?? 0));
-        const f0 = i / slots;
-        const f1 = (i + 1) / slots;
-        if (op <= 0.01 || f1 <= gapF || f0 >= 1 - gapF) { continue; }
-        const seg: string[] = [];
-        for (let k = 0; k <= 6; k++) { seg.push(pAt(Math.max(gapF, Math.min(1 - gapF, f0 + (f1 - f0) * k / 6)))); }
-        s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${SUN_COLOR_HEX}" stroke-opacity="${op.toFixed(3)}" stroke-width="${gaugeW.toFixed(1)}" stroke-linecap="butt"/>`;
+        if ((ratio[i] ?? 0) <= thr) { i++; continue; }
+        let j = i;
+        while (j < slots && (ratio[j] ?? 0) > thr) { j++; }
+        const f0 = Math.max(gapF, i / slots);
+        const f1 = Math.min(1 - gapF, j / slots);
+        if (f1 > f0)
+        {
+            const steps = Math.max(2, Math.round((f1 - f0) * STEPS));
+            const seg: string[] = [];
+            for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
+            s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${SUN_COLOR_HEX}" stroke-opacity="0.9" stroke-width="${gaugeW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        }
+        i = j;
     }
     return s;
 }
