@@ -93,6 +93,42 @@ export function detectDeviceRuns(kwh: number[], index: number, name: string): De
     return { index, name, values: kwh, segments, continuous: false, dailyKwh: total, solarPct: 0, gridPct: 0 };
 }
 
+//Optimisation replay: for a SHIFTABLE device (not always-on), move its whole run duration into the day's best solar
+//window, so the ring shows when it COULD have run on the sun. Continuous / always-on devices are left as-is (you
+//can't shift a fridge). Returns a per-slot values array (peak where the shifted run sits, 0 elsewhere).
+const OPT_RUN_PCT  = 0.08;
+const OPT_SOLAR_ON = 0.12;
+export function optimizeDeviceValues(solar: number[], values: number[], continuous: boolean, slots: number): number[]
+{
+    if (continuous) { return values; }
+    let peak = 0;
+    for (const v of values) { if (v > peak) { peak = v; } }
+    if (peak <= 0) { return values; }
+    const thr = peak * OPT_RUN_PCT;
+    let dur = 0;
+    for (const v of values) { if (v > thr) { dur++; } }
+    if (dur <= 0) { return values; }
+    //Largest contiguous block of sunny slots.
+    let bestStart = 0;
+    let bestLen = 0;
+    let i = 0;
+    while (i < slots)
+    {
+        if ((solar[i] ?? 0) > OPT_SOLAR_ON)
+        {
+            let j = i;
+            while (j < slots && (solar[j] ?? 0) > OPT_SOLAR_ON) { j++; }
+            if (j - i > bestLen) { bestLen = j - i; bestStart = i; }
+            i = j;
+        }
+        else { i++; }
+    }
+    if (bestLen <= 0) { return values; }   //no sun today -> nothing to optimise
+    const out = new Array<number>(slots).fill(0);
+    for (let k = 0; k < dur && bestStart + k < slots; k++) { out[bestStart + k] = peak; }
+    return out;
+}
+
 export interface DayRingHost
 {
     hass:            any;

@@ -231,6 +231,8 @@ export class HeliosCard extends LitElement
     //Day mode: today's per-slot solar + grid-import shares for the ground ring (24 * display-frequency slots), with its key.
     @state() _dayRing: DayRingData | null = null;
     _dayRingKey = '';
+    //Day mode Real/Optimised toggle: when true, shiftable device rings replay inside the day's solar window.
+    @state() _dayOptimized = false;
     //Day-mode hover: the hovered device-ring index (null = none) drives the opaque/dim repaint + the tooltip; the
     //cursor position places the tooltip; the hit targets are captured from the last paint. Driven manually via
     //scheduleClockPaint + requestUpdate, so not @state.
@@ -943,6 +945,7 @@ export class HeliosCard extends LitElement
             }
             if (_changedProperties.has('_engine')) { this._engine?.setHomeOnly(true); this._engine?.enterDayView(); }
             if (_changedProperties.has('_dayRing')
+                || _changedProperties.has('_dayOptimized')
                 || _changedProperties.has('_clockHomeHover')
                 || _changedProperties.has('_nightFrac'))
             {
@@ -1343,6 +1346,36 @@ export class HeliosCard extends LitElement
                     `;
                 })() : nothing}
 
+                <!--  Day mode: horizontal Real/Optimised segmented toggle, top-right. Left = the day as it
+                      happened, right = the shiftable devices replayed inside the solar window.  -->
+                ${hasHomeCoords && this._viewMode === 'day' ? (() => {
+                    const opt = this._dayOptimized;
+                    return html`
+                        <div class="overlay-top-right day-toggle" role="group" aria-label="Real or optimised day">
+                            <button
+                                type="button"
+                                class="day-seg ${!opt ? 'active' : ''}"
+                                aria-pressed=${!opt ? 'true' : 'false'}
+                                title="Real"
+                                aria-label="Real day"
+                                @click=${this._onDayReal}
+                            >
+                                <ha-icon icon="mdi:clock-outline"></ha-icon>
+                            </button>
+                            <button
+                                type="button"
+                                class="day-seg ${opt ? 'active' : ''}"
+                                aria-pressed=${opt ? 'true' : 'false'}
+                                title="Optimised"
+                                aria-label="Optimised day"
+                                @click=${this._onDayOptimised}
+                            >
+                                <ha-icon icon="mdi:auto-fix"></ha-icon>
+                            </button>
+                        </div>
+                    `;
+                })() : nothing}
+
                 ${hud}
 
                 <!--  Per-chip detail panel: double-tapping the active chip aggregates its metric over the window
@@ -1581,6 +1614,10 @@ export class HeliosCard extends LitElement
         this._engine.setCameraLocked(!this._engine.isCameraLocked());
         this.requestUpdate();
     };
+
+    //Day mode Real/Optimised toggle handlers (kept out of render so the assignment isn't in the template).
+    private _onDayReal      = (): void => { this._dayOptimized = false; };
+    private _onDayOptimised = (): void => { this._dayOptimized = true; };
 
     static styles = [heliosCardStyles, heliosTimelineStyles, heliosCardEnergyClockCss];
 }

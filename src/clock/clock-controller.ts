@@ -8,7 +8,7 @@ import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/f
 import { refreshClockHourly } from './clock-hourly';
 import type { ClockHourly } from './clock-hourly';
 import { refreshTrendProfiles } from './trend';
-import { refreshDayRing } from './day-ring';
+import { refreshDayRing, optimizeDeviceValues } from './day-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
@@ -500,7 +500,14 @@ export class ClockController
             const dr          = this.host._dayRing;
             const importColor = ENERGY_COLOR.gridImport(el);
             const batteryColor = ENERGY_COLOR.batteryOut(el);
-            const rings       = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), values: dev.values, segments: dev.segments, dailyKwh: dev.dailyKwh }));
+            //Optimised mode replays each shiftable device inside the day's solar window (see optimizeDeviceValues).
+            const opt         = this.host._dayOptimized === true;
+            const rings       = (dr?.devices ?? []).map(dev => ({
+                color:    deviceColorByIndex(el, dev.index),
+                values:   opt ? optimizeDeviceValues(dr?.solar ?? [], dev.values, dev.continuous, dev.values.length) : dev.values,
+                segments: dev.segments,
+                dailyKwh: dev.dailyKwh,
+            }));
             const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals, this.host._dayHover ?? -1, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false);
             this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
