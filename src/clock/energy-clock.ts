@@ -1044,41 +1044,44 @@ export interface DayDeviceRing
 //ring's width. Within its sub-band each device is a radial gauge: the inner edge is 0, the outer edge extends with
 //that slot's energy, capped at the device's peak slot. A run over a grey (grid) base sector is the "drawn off the
 //sun" signal.
-function dayDeviceRings(camera: SceneCamera, innerR: number, outerR: number, rings: DayDeviceRing[], slots: number, maxHm: number): string
+function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRing[], slots: number, maxHm: number): string
 {
     const n = rings.length;
     if (!n || slots <= 0) { return ''; }
-    //All rings float at ONE small fixed height above the base ring (this mode is viewed top-down, so a per-ring
-    //height would not read anyway).
-    const h    = maxHm * 0.06;
-    const band = (outerR - innerR) / n;
-    const pad  = band * 0.22;
-    const proj = (r: number, a: number, ph: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), ph); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    //Float at one small fixed height (this mode is viewed top-down). The rings sit just outside the central logo
+    //(0.55R) out to the rim, so they read thicker than when squeezed into the base ring's band. Equal sub-band each
+    //with a slim padding; no edging (adjacent rings read by colour + gap).
+    const h        = maxHm * 0.06;
+    const devInner = outerR * 0.55;
+    const band     = (outerR - devInner) / n;
+    const pad      = band * 0.12;
+    const proj = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), h); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
     let out = '';
     rings.forEach((ring, i) =>
     {
         let peak = 0;
         for (const v of ring.values) { if (v > peak) { peak = v; } }
         if (peak <= 0) { return; }
-        const r0   = innerR + i * band + pad * 0.5;        //inner edge = 0 W
-        const r1   = innerR + (i + 1) * band - pad * 0.5;  //outer edge = the device's peak slot
-        const edge = lerpHexToward(ring.color, '#000000', 0.45);
+        const r0 = devInner + i * band + pad * 0.5;        //inner edge = 0 W
+        const r1 = devInner + (i + 1) * band - pad * 0.5;  //outer edge = the device's peak slot
         let body = '';
         for (const seg of ring.segments)
         {
             const pts: string[] = [];
-            //Outer edge: one radial step per slot, scaled by that slot's energy.
+            //Outer edge: one radial step per slot. A floor thickness (0.4) keeps a low-power slot readable, then it
+            //scales up with the magnitude to the sub-band edge.
             for (let s = seg.start; s < seg.end; s++)
             {
-                const rO = r0 + (r1 - r0) * Math.max(0, Math.min(1, ring.values[s] / peak));
-                pts.push(proj(rO, hourRad(s / slots, camera.southern), h));
-                pts.push(proj(rO, hourRad((s + 1) / slots, camera.southern), h));
+                const v  = Math.max(0, Math.min(1, ring.values[s] / peak));
+                const rO = v > 0 ? r0 + (r1 - r0) * (0.4 + 0.6 * v) : r0;
+                pts.push(proj(rO, hourRad(s / slots, camera.southern)));
+                pts.push(proj(rO, hourRad((s + 1) / slots, camera.southern)));
             }
             //Inner edge back at r0, closing the gauge.
-            for (let s = seg.end; s >= seg.start; s--) { pts.push(proj(r0, hourRad(s / slots, camera.southern), h)); }
-            body += `<polygon points="${pts.join(' ')}" fill="${ring.color}" stroke="${edge}" stroke-width="1"/>`;
+            for (let s = seg.end; s >= seg.start; s--) { pts.push(proj(r0, hourRad(s / slots, camera.southern))); }
+            body += `<polygon points="${pts.join(' ')}" fill="${ring.color}"/>`;
         }
-        out += `<g opacity="0.74">${body}</g>`;
+        out += `<g opacity="0.8">${body}</g>`;
     });
     return out;
 }
@@ -1091,7 +1094,7 @@ export function projectDayRingFrame(
     importColor: string,
     batteryColor: string,
     rings: DayDeviceRing[],
-    cardinals: { n: string; s: string; e: string; w: string },
+    _cardinals: { n: string; s: string; e: string; w: string },
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1115,16 +1118,16 @@ export function projectDayRingFrame(
         transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
     }));
 
-    const compass    = clockCompass(camera, outerR, bearing, tilt, cardinals);
     const decalDiaPx = outerR * ppm;
     const homeCtr    = camera.project(0, 0, 0);
     //Day mode keeps the central Helios mark at full opacity (no hover fade).
     const decal      = buildLogoDecal({ diameterPx: decalDiaPx, orientDeg: camera.southern ? 0 : 180, highlight: true });
 
     return {
-        guideSvg: dayRingBands(camera, innerR, outerR, solar, battery, grid, batteryColor, importColor) + clockGuide(camera, outerR) + compass.svg,
-        svg: dayDeviceRings(camera, innerR, outerR, rings, solar.length, maxHm),
-        hits: [], labels, compass: compass.labels,
+        //No compass in day mode (cardinals hidden): just the tinted base ring + the hour guide.
+        guideSvg: dayRingBands(camera, innerR, outerR, solar, battery, grid, batteryColor, importColor) + clockGuide(camera, outerR),
+        svg: dayDeviceRings(camera, outerR, rings, solar.length, maxHm),
+        hits: [], labels, compass: [],
         home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
         decal,
     };

@@ -275,6 +275,12 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
+    /*  Day mode hides the compass letters (the top-down ring has no need for N/S/E/W). */
+    ha-card.mode-day .clock-compass-label
+    {
+        display: none;
+    }
+
     /*  Top-left rail hosting the mode toggles + camera-lock. pointer-events off on the rail; the buttons
         opt back in so they don't steal map interactions. */
     .overlay-top-left

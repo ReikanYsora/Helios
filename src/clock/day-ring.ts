@@ -137,6 +137,28 @@ function daySlotting(config: HeliosConfig | undefined): { slots: number; period:
     return { slots: HOURS_PER_DAY * freq, period: freq <= 1 ? 'hour' : '5minute' };
 }
 
+//Fill short INTERIOR data holes (a slot with no source share, flanked by data on both sides) by carrying the
+//previous slot, so a single missing recorder bucket doesn't slice a wedge through the ring. Trailing holes (the
+//not-yet-lived part of the day) are left empty. Safe because a lived slot always has baseline load (always-on
+//devices), so a zero-share slot inside the day is a data gap, not a genuine idle moment.
+function bridgeShareGaps(solar: number[], battery: number[], grid: number[], maxGap: number): void
+{
+    const n = solar.length;
+    const has = (i: number): boolean => (solar[i] + battery[i] + grid[i]) > 1e-6;
+    let i = 0;
+    while (i < n)
+    {
+        if (has(i)) { i++; continue; }
+        let j = i;
+        while (j < n && !has(j)) { j++; }
+        if (i > 0 && j < n && (j - i) <= maxGap)
+        {
+            for (let k = i; k < j; k++) { solar[k] = solar[i - 1]; battery[k] = battery[i - 1]; grid[k] = grid[i - 1]; }
+        }
+        i = j;
+    }
+}
+
 //Fetch today's per-slot shares into the host, keyed so an unchanged window/cadence (within the hour) never
 //refetches. Cleared out of day mode. Window = local midnight to the last whole hour.
 export async function refreshDayRing(host: DayRingHost): Promise<void>
@@ -176,6 +198,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const bc  = binSlots(bChgB, slots);
     const bd  = binSlots(bDisB, slots);
     const shares = ringShares(pv, imp, exp, bc, bd);
+    bridgeShareGaps(shares.solar, shares.battery, shares.grid, 3);
     const devices: DeviceRun[] = [];
     for (const dev of d.devices)
     {
