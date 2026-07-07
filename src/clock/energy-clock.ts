@@ -1081,7 +1081,7 @@ export function projectDayRingFrame(
     const slots = Math.max(1, solar.length);
     const total = 3 + rings.length;
     const band  = (outerR - hubR) / total;
-    const pad   = band * 0.14;
+    const pad   = band * 0.32;
     //A device ring's opacity is its slot energy over the device's own peak; a floor keeps a light run readable.
     const devOps = (values: number[]): number[] =>
     {
