@@ -739,9 +739,10 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
         return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
     };
-    //Faint full ring, round caps sharing the value arcs' gapF, so their rounded ends line up cleanly at the
-    //midnight slot (dayGapF keeps the two ends a constant px apart, so they never overlap into a disc).
-    const s = arc(gapF, 1 - gapF, 0.1, 'round');
+    //Faint full ring (the member's track), round caps sharing the value arcs' gapF so the ends line up at the
+    //midnight slot. Kept faint so idle time reads as empty, but visible enough that a run reads as a LIT part of a
+    //ring, not a floating pill; on hover the whole track lights up so you see the complete ring the runs belong to.
+    const s = arc(gapF, 1 - gapF, hovered ? 0.38 : 0.14, 'round');
     let maxV  = 0;
     let total = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } total += Math.max(0, v); }
@@ -760,6 +761,11 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         let j = i + 1;
         let hole = 0;
         while (j < slots && hole <= 1) { if ((values[j] ?? 0) > thr) { end = j + 1; hole = 0; } else { hole++; } j++; }
+        //Skip a run whose own energy is negligible: without this, min-length would inflate a sensor-noise blip into
+        //a visible pill on the ring even when the device essentially did nothing.
+        let runKwh = 0;
+        for (let k = i; k < end; k++) { runKwh += Math.max(0, values[k] ?? 0); }
+        if (runKwh < DAY_MIN_RUN_KWH) { i = end; continue; }
         let f0 = i / slots;
         let f1 = end / slots;
         if (f1 - f0 < minLenF) { const c = (f0 + f1) / 2; f0 = c - minLenF / 2; f1 = c + minLenF / 2; }   //no dots

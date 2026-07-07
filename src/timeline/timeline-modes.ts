@@ -40,8 +40,9 @@ function daysInPrevYear(): number
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
     //Standard: J-2 .. J+2 (past, today, forecast) - the at-a-glance default. today/week/month/year all END today.
     standard:  { pastDays: 2,                           futureDays: 2, weather: true,  maxBucketsPerHour: 12   },
-    //Yesterday: a one-day-back window. The day-rings mode reads it as exactly the previous calendar day.
-    yesterday: { pastDays: 1,                           futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
+    //Yesterday: EXACTLY the previous day. futureDays -1 ends the window at today's midnight (start + storeDays =
+    //past 1 + 1 - 1 = 1 day), so the timeline shows only J-1, not J-1..today.
+    yesterday: { pastDays: 1,                           futureDays: -1, weather: true, maxBucketsPerHour: 12   },
     today:     { pastDays: 0,                           futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     week:     { pastDays: 6,                            futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     month:    { pastDays: () => daysInPrevMonth() - 1,  futureDays: 0, weather: false, maxBucketsPerHour: 1    },
