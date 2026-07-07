@@ -727,11 +727,42 @@ function dayEdge(camera: SceneCamera, r: number, color: string, slots: number): 
     return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
 }
 
-//A full device ring: the band plus inner + outer edge outlines in its own colour (not a uniform white, which read
-//as a target).
-function dayOpacityRing(camera: SceneCamera, rInner: number, rOuter: number, color: string, ops: number[], slots: number): string
+//A device ring, recoloured by WHERE the energy came from at each hour (not by the device). A faint device-colour
+//track keeps the ring identifiable and lets the scene breathe (no black); each active slot is painted in two
+//layered fills whose opacities split the slot's brightness between SUN (self-powered: solar + battery, gold) and
+//GRID (import colour). So the dial reads sun-vs-grid at a glance; device identity stays on the track, edges and
+//tooltip. `values` is the device's per-slot energy; `coverage[s]` is the self-sufficiency share of that slot.
+function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, deviceColor: string, values: number[], coverage: number[], gridColor: string, slots: number): string
 {
-    return dayOpacityBand(camera, rInner, rOuter, color, ops, slots) + dayEdge(camera, rOuter, color, slots) + dayEdge(camera, rInner, color, slots);
+    const SEG = 4;
+    const pt  = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const trackN = Math.max(24, slots);
+    const track: string[] = [];
+    for (let k = 0; k <= trackN; k++) { track.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
+    for (let k = trackN; k >= 0; k--) { track.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
+    let s = `<polygon points="${track.join(' ')}" fill="${deviceColor}" opacity="0.16"/>`;
+    let peak = 0;
+    for (const v of values) { if (v > peak) { peak = v; } }
+    if (peak > 0)
+    {
+        for (let i = 0; i < slots; i++)
+        {
+            const iv = Math.max(0, (values[i] ?? 0) / peak);
+            if (iv <= 0.02) { continue; }
+            const op  = 0.35 + 0.65 * Math.min(1, iv);   //slot brightness = how hard the device drew
+            const cov = Math.max(0, Math.min(1, coverage[i] ?? 0));
+            const a0  = hourRad(i / slots, camera.southern);
+            const a1  = hourRad((i + 1) / slots, camera.southern);
+            const pts: string[] = [];
+            for (let k = 0; k <= SEG; k++) { pts.push(pt(rOuter, a0 + (a1 - a0) * k / SEG)); }
+            for (let k = SEG; k >= 0; k--) { pts.push(pt(rInner, a0 + (a1 - a0) * k / SEG)); }
+            const poly = pts.join(' ');
+            //Two layered fills: the gold share (ran on the sun) over the grid share (drawn from the grid).
+            s += `<polygon points="${poly}" fill="${gridColor}" opacity="${(op * (1 - cov)).toFixed(3)}"/>`;
+            s += `<polygon points="${poly}" fill="${SUN_COLOR_HEX}" opacity="${(op * cov).toFixed(3)}"/>`;
+        }
+    }
+    return s + dayEdge(camera, rOuter, deviceColor, slots) + dayEdge(camera, rInner, deviceColor, slots);
 }
 
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
@@ -1102,17 +1133,12 @@ export function projectDayRingFrame(
     const decal   = { svg: '', active: false };
 
     const slots = Math.max(1, solar.length);
-    //Value -> opacity: a high floor so even a light slot reads (an empty slot stays at the dark track). Sources use
-    //their share (0..1); a device uses its slot energy over its own peak.
-    const FLOOR  = 0.4;
-    const opFor  = (v: number): number => (v > 0.02 ? FLOOR + (1 - FLOOR) * Math.min(1, v) : 0);
-    const devOps = (values: number[]): number[] =>
-    {
-        let peak = 0;
-        for (const v of values) { if (v > peak) { peak = v; } }
-        if (peak <= 0) { return values.map(() => 0); }
-        return values.map(v => opFor(v / peak));
-    };
+    //Source share (0..1) -> opacity for the production block: a floor so even a small share still reads.
+    const FLOOR = 0.4;
+    const opFor = (v: number): number => (v > 0.02 ? FLOOR + (1 - FLOOR) * Math.min(1, v) : 0);
+    //Self-sufficiency share per slot (solar + battery): how much of that hour's home load ran on your own energy.
+    //It is what recolours every device ring gold-vs-grid.
+    const coverage = solar.map((sv, s) => Math.max(0, Math.min(1, (sv ?? 0) + (battery[s] ?? 0))));
     //Configured sources only, outermost-first (solar, grid, battery). They are MERGED into a single production ring:
     //stuck-together sub-bands with no gap or edge between them, one outline around the whole block.
     const sources: { color: string; ops: number[] }[] = [];
@@ -1121,8 +1147,7 @@ export function projectDayRingFrame(
     if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
 
     //Radial budget from the hub out to the hour-disc edge: the merged production block is exactly as wide as the
-    //number of sources it holds (N ring-widths); the rest is the consumption zone, where each device ring's WIDTH
-    //scales with its share of the monitored consumption (bigger consumer = thicker ring).
+    //number of sources it holds (N ring-widths); the rest is the consumption zone, one equal-width ring per device.
     const prodUnit = sources.length;
     const nDev     = rings.length;
     const band     = (discR - hubR) / Math.max(1, prodUnit + nDev);
@@ -1148,23 +1173,18 @@ export function projectDayRingFrame(
         ringSvg += dayEdge(camera, prodInner, sources[sources.length - 1].color, slots);
     }
 
-    //Consumption rings fill [hub, prodInner - groupGap]. Fixed gaps between them, so only the ring bodies scale:
-    //each device gets a share of the drawable height equal to its share of the day's monitored consumption.
-    const zoneTop  = prodInner - (prodUnit > 0 && nDev > 0 ? groupGap : 0);
-    const totalKwh = rings.reduce((s, r) => s + Math.max(0, r.dailyKwh), 0);
-    const drawH    = Math.max(0, (zoneTop - hubR) - Math.max(0, nDev - 1) * gap);
-    let rCursor    = zoneTop;
+    //Consumption rings fill [hub, prodInner - groupGap]: one equal-width ring per device, `gap` carved between.
+    const zoneTop = prodInner - (prodUnit > 0 && nDev > 0 ? groupGap : 0);
+    const dband   = (zoneTop - hubR) / Math.max(1, nDev);
     rings.forEach((rg, k) =>
     {
-        const share  = totalKwh > 0 ? Math.max(0, rg.dailyKwh) / totalKwh : 1 / Math.max(1, nDev);
-        const rOuter = rCursor;
-        const rInner = k === nDev - 1 ? hubR : rCursor - drawH * share;   //snap the last ring to the hub (float-safe)
-        let one = dayOpacityRing(camera, rInner, rOuter, rg.color, devOps(rg.values), slots);
+        const rOuter = zoneTop - k * dband - (k === 0 ? 0 : gap / 2);
+        const rInner = k === nDev - 1 ? hubR : zoneTop - (k + 1) * dband + gap / 2;
+        let one = dayDeviceRing(camera, rInner, rOuter, rg.color, rg.values, coverage, importColor, slots);
         if (k === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${rg.color})">${one}</g>`; }
         ringSvg += one;
         //Hit order matches the rings array, i.e. host._dayRing.devices.
         dayHits.push({ outer: circle(rOuter), inner: circle(rInner) });
-        rCursor = rInner - gap;
     });
 
     return {
