@@ -192,7 +192,7 @@ export interface InitHost extends HudHost
     effectiveCacheId?: (() => string) | undefined;
 
     //Energy-clock mode: when active, each transform frame also re-projects the hour cylinders.
-    _viewMode?: 'scene' | 'clock' | 'trend';
+    _viewMode?: 'scene' | 'clock' | 'trend' | 'day';
     paintClock?: (() => void) | undefined;
 }
 
@@ -301,7 +301,7 @@ export function initEngineNow(host: InitHost): void
         //loads straight into week/month/year frames the right span from the first paint.
         host._engine.setPeriodDays(host._periodPastDays, host._periodFutureDays);
         //Restored straight into a dial mode: keep the engine basemap-only (the overlay paints the dial).
-        if (host._viewMode === 'clock' || host._viewMode === 'trend') { host._engine.setHomeOnly(true); }
+        if (host._viewMode === 'clock' || host._viewMode === 'trend' || host._viewMode === 'day') { host._engine.setHomeOnly(true); }
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
         //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).
         if (!host._timeRange)
@@ -357,7 +357,7 @@ function wireEngineCallbacks(host: InitHost): void
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;
-            if (host._viewMode === 'clock' || host._viewMode === 'trend')
+            if (host._viewMode === 'clock' || host._viewMode === 'trend' || host._viewMode === 'day')
             {
                 //Clock + trend ride the same camera: re-project the dial on every transform so it stays glued
                 //to the rotating basemap. The scene HUD is hidden here, so skip its per-frame refresh entirely.

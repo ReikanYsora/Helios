@@ -5,7 +5,7 @@
 //by hour-of-day, no extra fetch.
 
 import type { SceneCamera } from '../scene/projection';
-import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
+import { HOUR_MS, HOURS_PER_DAY, SUN_COLOR_HEX } from '../core/config/constants';
 import { type ChartTarget, type ChartHost, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from '../charts/charts';
 import { changeSeriesToWatts } from '../data/sources/energy-stats';
@@ -686,6 +686,28 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
     return s;
 }
 
+//Self-sufficiency ground ring: one flat pizza-slice per hour from the hub to the outer radius. A faint grey floor
+//makes the ring a full disc; over it, gold rises with that hour's solar share (`values[h]` 0..1), so the day reads
+//at a glance as "on the sun" (bright gold) vs "on the grid" (bare grey), no numbers.
+function dayRingSectors(camera: SceneCamera, innerR: number, outerR: number, values: number[]): string
+{
+    const SEG = 4;
+    let s = '';
+    for (let h = 0; h < HOURS_PER_DAY; h++)
+    {
+        const v  = Math.max(0, Math.min(1, values[h] ?? 0));
+        const a0 = hourRad(h / HOURS_PER_DAY, camera.southern);
+        const a1 = hourRad((h + 1) / HOURS_PER_DAY, camera.southern);
+        const pts: string[] = [];
+        for (let k = 0; k <= SEG; k++) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(outerR * Math.sin(a), outerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        const poly = `points="${pts.join(' ')}"`;
+        s += `<polygon ${poly} fill="#3a3f4a" opacity="0.18"/>`;
+        if (v > 0.02) { s += `<polygon ${poly} fill="${SUN_COLOR_HEX}" opacity="${(0.15 + 0.7 * v).toFixed(3)}"/>`; }
+    }
+    return s;
+}
+
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
 //no body below, so a marker placed lower stays visible.
 function floatingSlice(camera: SceneCamera, fp: [number, number][], loH: number, hiH: number, wall: string, roof: string, stroke: string): string
@@ -991,6 +1013,52 @@ export function projectTrendFrame(
 
 //Slot nearest the cursor (within HOVER_PX of its axis); null when off every ring. The card maps the slot to
 //its hour, so hovering lights that whole hour across rings.
+//Project the DAY ring: a flat 24-hour ground dial for today, each hour tinted gold by its solar self-sufficiency
+//(`values[h]` 0..1). No bars, the story is the colour not the height. Reuses the clock's hour labels, hub guide,
+//compass, now-arrow and hub decal. Pure geometry; the card resolves `values`.
+export function projectDayRingFrame(
+    camera: SceneCamera,
+    values: number[],
+    cardinals: { n: string; s: string; e: string; w: string },
+    //Whether the hub mark is hovered/tapped (drives its opacity fade), mirroring the other dials.
+    columnHighlight = false,
+): ClockFrame
+{
+    const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
+    const ppm     = camera.pxPerMetre || 1;
+    const outerR  = (RING_R_FRAC * minEdge) / ppm;
+    const maxHm   = (MAX_HEIGHT_FRAC * minEdge) / ppm;
+    const tilt    = camera.tiltDeg;
+    const bearing = camera.bearingDeg;
+    const hubR    = outerR * CLOCK_HUB_R_FRAC;
+
+    const labelR = outerR * LABEL_R_MULT;
+    const projLabels = Array.from({ length: 24 }, (_, h) =>
+        camera.project3(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0));
+    let depthMin = Infinity; let depthMax = -Infinity;
+    for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
+    const depthRange = depthMax - depthMin || 1;
+    const labels = projLabels.map((p, h) => ({
+        x: p.x, y: p.y,
+        opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
+        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
+    }));
+
+    const compass    = clockCompass(camera, outerR, bearing, tilt, cardinals);
+    const decalDiaPx = outerR * ppm;
+    const homeCtr    = camera.project(0, 0, 0);
+    const decal      = buildLogoDecal({ diameterPx: decalDiaPx, orientDeg: camera.southern ? 0 : 180, highlight: columnHighlight });
+
+    return {
+        guideSvg: dayRingSectors(camera, hubR, outerR, values) + clockGuide(camera, outerR) + compass.svg,
+        svg: currentHourArrow(camera, outerR, maxHm, 0),
+        hits: [], labels, compass: compass.labels,
+        home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
+        decal,
+    };
+}
+
+
 export function clockHitTest(hits: ClockHit[], x: number, y: number): number | null
 {
     let best: number | null = null;

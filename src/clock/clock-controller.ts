@@ -8,13 +8,14 @@ import { formatHaHour } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
 import type { ClockHourly } from './clock-hourly';
 import { refreshTrendProfiles } from './trend';
+import { refreshDayRing, computeSelfSufficiency } from './day-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
 {
     type ClockData, type ClockHit, type ClockRingInput, type ClockFrame,
     buildClockData, buildClockDataHourly, hourlyOf, clockTargetMeta, clockTargetLabel,
-    projectClockFrame, projectTrendFrame, trendGoodDirection, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
+    projectClockFrame, projectTrendFrame, projectDayRingFrame, trendGoodDirection, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
     clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './energy-clock';
 
@@ -100,7 +101,7 @@ export class ClockController
     //Switch between scene (3D view) and clock (hourly ring dial) modes. Resets clock animation state so the
     //dial enters/leaves cleanly, seeds/restores the filter set and home prism, persists, and kicks the
     //decoupled hourly fetch (clock only). No-op when already in the requested mode.
-    public setViewMode(mode: 'scene' | 'clock' | 'trend'): void
+    public setViewMode(mode: 'scene' | 'clock' | 'trend' | 'day'): void
     {
         if (this.host._viewMode === mode)
         {
@@ -155,6 +156,18 @@ export class ClockController
             this.scheduleClockPaint();
             return;
         }
+        if (mode === 'day')
+        {
+            //Day mode draws no scene geometry; the overlay paints today's self-sufficiency ground ring. Fetch
+            //today's hourly profile.
+            this.host._engine?.setHomeOnly(true);
+            this.host._viewMode = mode;
+            this.host.persistUiState();
+            void refreshClockHourly(this.host);   //clears the clock profile (it keys off _viewMode)
+            void refreshDayRing(this.host);
+            this.scheduleClockPaint();
+            return;
+        }
         //Leaving to scene: restore the full scene + the chart-driven home colour, clear the ground guide + logo.
         this.host._engine?.setHomeOnly(false);
         this.host._engine?.setGroundOverlay('');
@@ -175,7 +188,7 @@ export class ClockController
     //Rail button delegate: the clicked element carries its mode in data-view.
     public onViewModeClick = (e: Event): void =>
     {
-        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | 'trend' | undefined;
+        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | 'trend' | 'day' | undefined;
         if (view) { this.setViewMode(view); }
     };
 
@@ -434,7 +447,7 @@ export class ClockController
     //animation. Public so the engine's per-frame callback can reach it.
     public paintClock(): void
     {
-        if (this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend')
+        if (this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend' && this.host._viewMode !== 'day')
         {
             return;
         }
@@ -459,6 +472,15 @@ export class ClockController
                 cardinals, this._clockDimSlot, this._clockDim,
                 this.host._clockHomeHover, this.host._nightFrac ?? [],
             );
+            this._applyClockFrame(frame);
+            return;
+        }
+        //Day dial: the flat 24-hour ground ring for today, each hour tinted gold by its solar self-sufficiency.
+        //No bars, no rail, no tooltip: just the base ground ring.
+        if (this.host._viewMode === 'day')
+        {
+            const values = computeSelfSufficiency(this.host._dayRingProfile);
+            const frame  = projectDayRingFrame(camera, values, cardinals, this.host._clockHomeHover);
             this._applyClockFrame(frame);
             return;
         }

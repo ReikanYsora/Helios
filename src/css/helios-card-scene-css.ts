@@ -260,7 +260,8 @@ export const heliosCardStyles = css`
     /*  Clock + trend modes hide the scene HUD (chips/leaders/timeline); only the basemap, the dial overlay,
         the rails and the period band remain. */
     ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band),
-    ha-card.mode-trend > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band)
+    ha-card.mode-trend > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band),
+    ha-card.mode-day > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band)
     {
         opacity: 0;
         pointer-events: none;

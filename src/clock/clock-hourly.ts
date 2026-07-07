@@ -36,7 +36,7 @@ export interface ClockHourlyHost
     _timeRange:      { start: Date; end: Date } | null;
     _energyDefaults: EnergyDefaults;
     _timelineMode:   TimelineMode;
-    _viewMode?:      'scene' | 'clock' | 'trend';
+    _viewMode?:      'scene' | 'clock' | 'trend' | 'day';
     //Detail panel open (scene mode): it aggregates period totals with the clock's method, so on a coarse window it
     //needs the same hourly profile even outside clock mode.
     _infoPanelOpen?: boolean;

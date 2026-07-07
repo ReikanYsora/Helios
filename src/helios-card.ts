@@ -23,6 +23,7 @@ import {
     availableClockTargets, clockTargetMeta, clockTargetLabel,
 } from './clock/energy-clock';
 import { refreshTrendProfiles } from './clock/trend';
+import { refreshDayRing } from './clock/day-ring';
 import { setServerTimeZone } from './core/time/timezone';
 import { isDarkFromCss, cssHex, uiColorVar } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
@@ -217,7 +218,7 @@ export class HeliosCard extends LitElement
     private _lastChipTapTarget = '';
     //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap and paints the
     //hourly cylinder ring; 'trend' paints one ring comparing the period to the previous one. Scene is the default.
-    @state() _viewMode: 'scene' | 'clock' | 'trend' = 'scene';
+    @state() _viewMode: 'scene' | 'clock' | 'trend' | 'day' = 'scene';
     //"No UI" mode: true once the idle timer fires, hiding (fading) the timeline + controls; any input clears it.
     @state() private _uiHidden = false;
     private _uiHideTimer: number | undefined;
@@ -227,6 +228,9 @@ export class HeliosCard extends LitElement
     @state() _trendP:    ClockHourly | null = null;
     @state() _trendPrev: ClockHourly | null = null;
     _trendKey = '';
+    //Day mode: today's hour-of-day profile, reduced to the 24-slot self-sufficiency ground ring, with its key.
+    @state() _dayRingProfile: ClockHourly | null = null;
+    _dayRingKey = '';
     //Per-hour night share for the dial's ground day/night wedges, recomputed when the home or window changes.
     @state() _nightFrac: number[] | null = null;
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
@@ -671,7 +675,7 @@ export class HeliosCard extends LitElement
             //non-empty entity list; totals move by watt-hours, so 30 s tracks the dashboard tile cheaply.
             refreshHaDailyTotals(this);
             //Keep the dial's "current hour" arrow in step with the clock even on an idle, camera-locked card.
-            if (this._viewMode === 'clock' || this._viewMode === 'trend') { this._clock.scheduleClockPaint(); }
+            if (this._viewMode === 'clock' || this._viewMode === 'trend' || this._viewMode === 'day') { this._clock.scheduleClockPaint(); }
         }, 30_000);
         initVisibilityObserver(this);
         if (typeof document !== 'undefined')
@@ -808,7 +812,7 @@ export class HeliosCard extends LitElement
 
         //Dial day/night wedges: recompute the per-hour night share when the home or window changes (keyed, so
         //this is cheap). A new _nightFrac repaints via the dial branches below.
-        if ((this._viewMode === 'clock' || this._viewMode === 'trend')
+        if ((this._viewMode === 'clock' || this._viewMode === 'trend' || this._viewMode === 'day')
             && (_changedProperties.has('_viewMode')
                 || _changedProperties.has('_timeRange')
                 || _changedProperties.has('hass')
@@ -911,6 +915,27 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_nightFrac'))
             {
                 if (_changedProperties.has('_clockHoverSlot')) { this._clock.startClockDim(); }
+                this._clock.scheduleClockPaint();
+            }
+        }
+
+        //Day dial: refetch today's hourly profile when the window/data/config changes or the engine respawns;
+        //repaint when the profile, the home hover or the night share land. No rail, no hover tooltip here.
+        if (this._viewMode === 'day')
+        {
+            if (_changedProperties.has('_viewMode')
+                || _changedProperties.has('_timeRange')
+                || _changedProperties.has('_energyDefaults')
+                || _changedProperties.has('config')
+                || _changedProperties.has('_engine'))
+            {
+                void refreshDayRing(this);
+            }
+            if (_changedProperties.has('_engine')) { this._engine?.setHomeOnly(true); }
+            if (_changedProperties.has('_dayRingProfile')
+                || _changedProperties.has('_clockHomeHover')
+                || _changedProperties.has('_nightFrac'))
+            {
                 this._clock.scheduleClockPaint();
             }
         }
@@ -1113,6 +1138,7 @@ export class HeliosCard extends LitElement
             this.preview      ? 'helios-edit'    : '',
             this._viewMode === 'clock' ? 'mode-clock' : '',
             this._viewMode === 'trend' ? 'mode-trend' : '',
+            this._viewMode === 'day' ? 'mode-day' : '',
             infoOpen          ? 'info-open'      : '',
         ].filter(Boolean).join(' ');
         const cardStyle = infoOpen ? `--detail-accent:${activeChipColor}` : '';
@@ -1128,7 +1154,7 @@ export class HeliosCard extends LitElement
                     @pointerup=${this._clock.onClockTapEnd}
                 ></div>
 
-                ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'trend') ? html`
+                ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'trend' || this._viewMode === 'day') ? html`
                     <div class="clock-overlay">
                         <svg class="clock-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         ${Array.from({ length: 24 }, (_unused, h) => html`
@@ -1196,7 +1222,7 @@ export class HeliosCard extends LitElement
                     const lockIcon      = railCameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
                     const sceneOn       = this._viewMode === 'scene';
                     const clockOn       = this._viewMode === 'clock';
-                    const trendOn       = this._viewMode === 'trend';
+                    const dayOn         = this._viewMode === 'day';
                     return html`
                         <div class="overlay-top-left">
                             <button
@@ -1221,13 +1247,13 @@ export class HeliosCard extends LitElement
                             </button>
                             <button
                                 type="button"
-                                class="overlay-btn ${trendOn ? 'is-on' : ''}"
-                                aria-pressed=${trendOn ? 'true' : 'false'}
-                                aria-label="Trend"
-                                data-view="trend"
+                                class="overlay-btn ${dayOn ? 'is-on' : ''}"
+                                aria-pressed=${dayOn ? 'true' : 'false'}
+                                aria-label="Solar day"
+                                data-view="day"
                                 @click=${this._clock.onViewModeClick}
                             >
-                                <ha-icon icon="mdi:delta"></ha-icon>
+                                <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
                             </button>
                             <button
                                 type="button"
@@ -1458,7 +1484,7 @@ export class HeliosCard extends LitElement
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object')
             {
-                if (parsed.viewMode === 'scene' || parsed.viewMode === 'clock' || parsed.viewMode === 'trend')
+                if (parsed.viewMode === 'scene' || parsed.viewMode === 'clock' || parsed.viewMode === 'trend' || parsed.viewMode === 'day')
                 {
                     this._viewMode = parsed.viewMode;
                 }

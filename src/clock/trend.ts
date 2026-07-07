@@ -13,7 +13,7 @@ export interface TrendHost
     config:          HeliosConfig | undefined;
     _energyDefaults: EnergyDefaults;
     _timeRange:      { start: Date; end: Date } | null;
-    _viewMode?:      'scene' | 'clock' | 'trend';
+    _viewMode?:      'scene' | 'clock' | 'trend' | 'day';
     _trendP:         ClockHourly | null;
     _trendPrev:      ClockHourly | null;
     _trendKey:       string;
