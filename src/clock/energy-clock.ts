@@ -1117,13 +1117,12 @@ export function projectDayRingFrame(
     if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
 
     //Radial budget from the hub out to the hour-disc edge: the merged production block is exactly as wide as the
-    //number of sources it holds (N classic ring-widths), then a blank band to set it apart, then one ring per
-    //device (already sorted by daily total).
+    //number of sources it holds (N classic ring-widths), then one ring per device (already sorted by daily total).
     const prodUnit = sources.length;
-    const gapUnit  = (prodUnit > 0 && rings.length > 0) ? 1 : 0;
-    const units    = Math.max(1, prodUnit + gapUnit + rings.length);
+    const units    = Math.max(1, prodUnit + rings.length);
     const band     = (discR - hubR) / units;
-    const gap      = band * 0.42;   //padding carved between adjacent rings
+    const gap      = band * 0.16;   //small padding between consumption rings
+    const groupGap = band * 0.5;    //separation between the production block and the first consumption ring
 
     const circle = (r: number): [number, number][] =>
     {
@@ -1139,7 +1138,7 @@ export function projectDayRingFrame(
     if (prodUnit > 0)
     {
         const rOut = discR;
-        const rIn  = discR - sources.length * band + (gapUnit > 0 ? gap / 2 : 0);
+        const rIn  = discR - sources.length * band + (rings.length > 0 ? groupGap / 2 : 0);
         const sub  = (rOut - rIn) / sources.length;
         sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, rOut - (i + 1) * sub, rOut - i * sub, sc.color, sc.ops, slots); });
         ringSvg += dayEdge(camera, rOut, sources[0].color, slots);
@@ -1149,8 +1148,8 @@ export function projectDayRingFrame(
     //Device rings, each a full ring flush to the hub on the innermost, `gap` carved between neighbours.
     rings.forEach((rg, k) =>
     {
-        const u      = prodUnit + gapUnit + k;
-        const rOuter = discR - u * band - (u === 0 ? 0 : gap / 2);
+        const u      = prodUnit + k;
+        const rOuter = discR - u * band - (u === 0 ? 0 : (k === 0 ? groupGap / 2 : gap / 2));
         const rInner = discR - (u + 1) * band + (u === units - 1 ? 0 : gap / 2);
         let one = dayOpacityRing(camera, rInner, rOuter, rg.color, devOps(rg.values), slots);
         if (k === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${rg.color})">${one}</g>`; }
