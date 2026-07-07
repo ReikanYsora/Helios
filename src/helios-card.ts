@@ -19,7 +19,7 @@ import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { heliosCardEnergyClockCss } from './css/helios-card-energy-clock-css';
 import {
-    type ClockData,
+    type ClockData, type DayRingHit,
     availableClockTargets, clockTargetMeta, clockTargetLabel,
 } from './clock/energy-clock';
 import { refreshTrendProfiles } from './clock/trend';
@@ -231,6 +231,13 @@ export class HeliosCard extends LitElement
     //Day mode: today's per-slot solar + grid-import shares for the ground ring (24 * display-frequency slots), with its key.
     @state() _dayRing: DayRingData | null = null;
     _dayRingKey = '';
+    //Day-mode hover: the hovered device-ring index (null = none) drives the opaque/dim repaint + the tooltip; the
+    //cursor position places the tooltip; the hit targets are captured from the last paint. Driven manually via
+    //scheduleClockPaint + requestUpdate, so not @state.
+    _dayHover: number | null = null;
+    _dayHitPolys: DayRingHit[] = [];
+    _dayHoverX = 0;
+    _dayHoverY = 0;
     //Per-hour night share for the dial's ground day/night wedges, recomputed when the home or window changes.
     @state() _nightFrac: number[] | null = null;
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
@@ -1173,6 +1180,9 @@ export class HeliosCard extends LitElement
                                     ? this._clock.renderTrendHomeTooltip()
                                     : this._clock.renderClockHomeTooltip())
                                 : nothing)}
+                        ${this._viewMode === 'day' && this._dayHover !== null
+                            ? this._clock.renderDayTooltip(this._dayHover)
+                            : nothing}
                     </div>
                 ` : nothing}
 

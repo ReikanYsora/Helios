@@ -34,6 +34,10 @@ export interface DeviceRun
     values:     number[];
     segments:   { start: number; end: number }[];
     continuous: boolean;
+    //Tooltip figures: the day's total and the share of it that fell on solar-covered vs grid-covered slots.
+    dailyKwh:   number;
+    solarPct:   number;
+    gridPct:    number;
 }
 
 //Below this daily total (kWh) a device gets no ring (noise cut). Run tunables: a slot counts as "on" above this
@@ -58,7 +62,7 @@ export function detectDeviceRuns(kwh: number[], index: number, name: string): De
     for (const b of on) { if (b) { onCount++; } }
     if (onCount >= slots * RUN_CONTINUOUS_FRAC)
     {
-        return { index, name, values: kwh, segments: [{ start: 0, end: slots }], continuous: true };
+        return { index, name, values: kwh, segments: [{ start: 0, end: slots }], continuous: true, dailyKwh: total, solarPct: 0, gridPct: 0 };
     }
     const segments: { start: number; end: number }[] = [];
     let i = 0;
@@ -77,7 +81,7 @@ export function detectDeviceRuns(kwh: number[], index: number, name: string): De
         segments.push({ start: i, end });
         i = end;
     }
-    return { index, name, values: kwh, segments, continuous: false };
+    return { index, name, values: kwh, segments, continuous: false, dailyKwh: total, solarPct: 0, gridPct: 0 };
 }
 
 export interface DayRingHost
@@ -204,7 +208,13 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     {
         if (!dev.statConsumption) { continue; }
         const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, dev.name || dev.statConsumption);
-        if (run) { devices.push(run); }
+        if (!run) { continue; }
+        //Attribute the device's own energy to the solar / grid share of each slot it ran, for the tooltip.
+        let sol = 0;
+        let gr  = 0;
+        for (let s = 0; s < slots; s++) { const v = Math.max(0, run.values[s]); sol += v * shares.solar[s]; gr += v * shares.grid[s]; }
+        if (run.dailyKwh > 0) { run.solarPct = sol / run.dailyKwh; run.gridPct = gr / run.dailyKwh; }
+        devices.push(run);
     }
     host._dayRing = { solar: shares.solar, battery: shares.battery, grid: shares.grid, devices };
     host.requestUpdate();

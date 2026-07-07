@@ -115,6 +115,9 @@ export interface ClockFrame
     //Ground-laid Helios mark that replaces the old central column: inner SVG + whether it is hover/tap-active
     //(drives the opacity fade). The engine tilts it onto the ground plane under the upright bars.
     decal: { svg: string; active: boolean };
+    //Day mode only: one screen-space hover target per device ring (aligned with the device list). Undefined for
+    //the clock/trend dials.
+    dayHits?: DayRingHit[];
 }
 
 
@@ -1039,15 +1042,23 @@ export interface DayDeviceRing
     segments: { start: number; end: number }[];
 }
 
+//Screen-space hover target for one device ring: on the band = inside the outer circle AND outside the inner one.
+export interface DayRingHit
+{
+    outer: [number, number][];
+    inner: [number, number][];
+}
+
 //Device rings over the base ring. Every device shares ONE float height and is packed CONCENTRICALLY inside the
 //base ring's radial band (an equal sub-band each, with padding, inward-out), so they never spill past the solar
 //ring's width. Within its sub-band each device is a radial gauge: the inner edge is 0, the outer edge extends with
 //that slot's energy, capped at the device's peak slot. A run over a grey (grid) base sector is the "drawn off the
 //sun" signal.
-function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRing[], slots: number, maxHm: number): string
+function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRing[], slots: number, maxHm: number, hoverIndex: number): { svg: string; hits: DayRingHit[] }
 {
     const n = rings.length;
-    if (!n || slots <= 0) { return ''; }
+    const hits: DayRingHit[] = [];
+    if (!n || slots <= 0) { return { svg: '', hits }; }
     //Float at one small fixed height (this mode is viewed top-down). The rings sit just outside the central logo
     //(0.55R) out to the rim, so they read thicker than when squeezed into the base ring's band. Equal sub-band each
     //with a slim padding; no edging (adjacent rings read by colour + gap).
@@ -1055,15 +1066,27 @@ function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRin
     const devInner = outerR * 0.55;
     const band     = (outerR - devInner) / n;
     const pad      = band * 0.12;
-    const proj = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), h); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const proj   = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), h); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const projXY = (r: number, a: number): [number, number] => camera.project(r * Math.sin(a), r * Math.cos(a), h);
     let out = '';
     rings.forEach((ring, i) =>
     {
         let peak = 0;
         for (const v of ring.values) { if (v > peak) { peak = v; } }
-        if (peak <= 0) { return; }
         const r0 = devInner + i * band + pad * 0.5;        //inner edge = 0 W
         const r1 = devInner + (i + 1) * band - pad * 0.5;  //outer edge = the device's peak slot
+        //Hit band: the full sub-band ring (independent of run gaps), so hovering anywhere on the device's radius
+        //selects it. Aligned with the rings array, i.e. host._dayRing.devices.
+        const circle = (r: number): [number, number][] =>
+        {
+            const c: [number, number][] = [];
+            for (let k = 0; k < 48; k++) { c.push(projXY(r, hourRad(k / 48, camera.southern))); }
+            return c;
+        };
+        hits.push({ outer: circle(r1), inner: circle(r0) });
+        if (peak <= 0) { return; }
+        //Hovered ring goes opaque, the others dim; no hover = the resting opacity.
+        const op = hoverIndex < 0 ? 0.8 : (i === hoverIndex ? 0.98 : 0.22);
         let body = '';
         for (const seg of ring.segments)
         {
@@ -1081,9 +1104,9 @@ function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRin
             for (let s = seg.end; s >= seg.start; s--) { pts.push(proj(r0, hourRad(s / slots, camera.southern))); }
             body += `<polygon points="${pts.join(' ')}" fill="${ring.color}"/>`;
         }
-        out += `<g opacity="0.8">${body}</g>`;
+        out += `<g opacity="${op.toFixed(2)}">${body}</g>`;
     });
-    return out;
+    return { svg: out, hits };
 }
 
 export function projectDayRingFrame(
@@ -1095,6 +1118,8 @@ export function projectDayRingFrame(
     batteryColor: string,
     rings: DayDeviceRing[],
     _cardinals: { n: string; s: string; e: string; w: string },
+    //Index of the hovered device ring (-1 = none): it goes opaque, the others dim.
+    hoverIndex = -1,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1123,13 +1148,15 @@ export function projectDayRingFrame(
     //Day mode keeps the central Helios mark at full opacity (no hover fade).
     const decal      = buildLogoDecal({ diameterPx: decalDiaPx, orientDeg: camera.southern ? 0 : 180, highlight: true });
 
+    const deviceRings = dayDeviceRings(camera, outerR, rings, solar.length, maxHm, hoverIndex);
     return {
         //No compass in day mode (cardinals hidden): just the tinted base ring + the hour guide.
         guideSvg: dayRingBands(camera, innerR, outerR, solar, battery, grid, batteryColor, importColor) + clockGuide(camera, outerR),
-        svg: dayDeviceRings(camera, outerR, rings, solar.length, maxHm),
+        svg: deviceRings.svg,
         hits: [], labels, compass: [],
         home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
         decal,
+        dayHits: deviceRings.hits,
     };
 }
 

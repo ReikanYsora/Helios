@@ -25,6 +25,20 @@ import
 //and the four dial tooltips. Extracted from HeliosCard; the reactive @state it drives (_clockData,
 //_clockTargets, _trendP/_trendPrev, _clockHoverSlot, _clockHomeHover, _nightFrac, the query refs, ...) stays on
 //the card and is reached through `this.host` so Lit reactivity and the energy-clock/trend helpers keep working.
+
+//Even-odd ray-cast: is the screen point inside the projected polygon (a device ring's outer/inner circle)?
+function pointInPoly(poly: [number, number][], x: number, y: number): boolean
+{
+    let inside = false;
+    for (let a = 0, b = poly.length - 1; a < poly.length; b = a++)
+    {
+        const xa = poly[a][0]; const ya = poly[a][1];
+        const xb = poly[b][0]; const yb = poly[b][1];
+        if (((ya > y) !== (yb > y)) && (x < (xb - xa) * (y - ya) / (yb - ya) + xa)) { inside = !inside; }
+    }
+    return inside;
+}
+
 export class ClockController
 {
     public constructor(private readonly host: HeliosCard) {}
@@ -487,7 +501,8 @@ export class ClockController
             const importColor = ENERGY_COLOR.gridImport(el);
             const batteryColor = ENERGY_COLOR.batteryOut(el);
             const rings       = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), values: dev.values, segments: dev.segments }));
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals);
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals, this.host._dayHover ?? -1);
+            this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
             return;
         }
@@ -577,6 +592,11 @@ export class ClockController
     //drag (buttons pressed). Touch has no hover, so it's handled by tap below (onClockTapStart/End).
     public onClockHover = (e: PointerEvent): void =>
     {
+        if (this.host._viewMode === 'day')
+        {
+            this._dayHoverMove(e);
+            return;
+        }
         if ((this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend') || e.pointerType !== 'mouse')
         {
             return;
@@ -621,8 +641,64 @@ export class ClockController
         return !!h && Math.hypot(x - h.x, y - h.y) <= h.r;
     }
 
+    //Day mode: point-in-band hover over the concentric device rings. Sets the hovered ring index (opacity repaint)
+    //and the cursor position (tooltip), re-rendering only when it changes or while a ring stays hovered.
+    private _dayHoverMove(e: PointerEvent): void
+    {
+        if (e.pointerType !== 'mouse') { return; }
+        const card = this.host._haCard;
+        if (!card) { return; }
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        let idx: number | null = null;
+        const polys = this.host._dayHitPolys;
+        for (let i = 0; i < polys.length; i++)
+        {
+            if (pointInPoly(polys[i].outer, x, y) && !pointInPoly(polys[i].inner, x, y)) { idx = i; break; }
+        }
+        this.host._dayHoverX = x;
+        this.host._dayHoverY = y;
+        if (idx !== this.host._dayHover)
+        {
+            this.host._dayHover = idx;
+            this.scheduleClockPaint();
+            this.host.requestUpdate();
+        }
+        else if (idx !== null)
+        {
+            this.host.requestUpdate();
+        }
+    }
+
+    //Day-mode hover tooltip: the device's name, its total for the day, and the solar / grid split of that total,
+    //placed at the cursor.
+    public renderDayTooltip(index: number): TemplateResult | typeof nothing
+    {
+        const dev = this.host._dayRing?.devices[index];
+        if (!dev) { return nothing; }
+        const gridColor = ENERGY_COLOR.gridImport(this.host as unknown as Element);
+        const x = (this.host._dayHoverX + 14).toFixed(0);
+        const y = this.host._dayHoverY.toFixed(0);
+        return html`
+            <div class="clock-tip" style="left:${x}px; top:${y}px">
+                <div class="clock-tip-head">${dev.name}</div>
+                <div style="display:flex;gap:10px;align-items:center;white-space:nowrap;margin-top:3px">
+                    <span>${dev.dailyKwh.toFixed(2)} kWh</span>
+                    <span style="color:#ffc107;display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:white-balance-sunny" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.solarPct * 100)}%</span>
+                    <span style="color:${gridColor};display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:transmission-tower" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.gridPct * 100)}%</span>
+                </div>
+            </div>
+        `;
+    }
+
     public onClockHoverEnd = (e: PointerEvent): void =>
     {
+        if (this.host._viewMode === 'day')
+        {
+            if (this.host._dayHover !== null) { this.host._dayHover = null; this.scheduleClockPaint(); this.host.requestUpdate(); }
+            return;
+        }
         //Touch fires pointerleave on finger-up, right after the tap toggled the home/slot: ignore it so a tap
         //isn't cancelled the instant it lands. Touch state is sticky and managed by onClockTapEnd.
         if (e.pointerType !== 'mouse')
