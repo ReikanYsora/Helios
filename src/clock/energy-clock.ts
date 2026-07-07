@@ -705,7 +705,7 @@ function dayOpacityBand(camera: SceneCamera, rInner: number, rOuter: number, col
     const track: string[] = [];
     for (let k = 0; k <= trackN; k++) { track.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
     for (let k = trackN; k >= 0; k--) { track.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
-    let s = `<polygon points="${track.join(' ')}" fill="#000000" opacity="1"/>`;
+    let s = `<polygon points="${track.join(' ')}" fill="#9aa4b8" opacity="0.1"/>`;
     for (let i = 0; i < slots; i++)
     {
         const op = ops[i] ?? 0;
