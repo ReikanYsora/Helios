@@ -23,7 +23,7 @@ import {
     availableClockTargets, clockTargetMeta, clockTargetLabel,
 } from './clock/energy-clock';
 import { refreshTrendProfiles } from './clock/trend';
-import { refreshDayRing } from './clock/day-ring';
+import { refreshDayRing, type DayRingData } from './clock/day-ring';
 import { setServerTimeZone } from './core/time/timezone';
 import { isDarkFromCss, cssHex, uiColorVar } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
@@ -228,8 +228,8 @@ export class HeliosCard extends LitElement
     @state() _trendP:    ClockHourly | null = null;
     @state() _trendPrev: ClockHourly | null = null;
     _trendKey = '';
-    //Day mode: today's hour-of-day profile, reduced to the 24-slot self-sufficiency ground ring, with its key.
-    @state() _dayRingProfile: ClockHourly | null = null;
+    //Day mode: today's per-slot solar + grid-import shares for the ground ring (24 * display-frequency slots), with its key.
+    @state() _dayRing: DayRingData | null = null;
     _dayRingKey = '';
     //Per-hour night share for the dial's ground day/night wedges, recomputed when the home or window changes.
     @state() _nightFrac: number[] | null = null;
@@ -932,7 +932,7 @@ export class HeliosCard extends LitElement
                 void refreshDayRing(this);
             }
             if (_changedProperties.has('_engine')) { this._engine?.setHomeOnly(true); }
-            if (_changedProperties.has('_dayRingProfile')
+            if (_changedProperties.has('_dayRing')
                 || _changedProperties.has('_clockHomeHover')
                 || _changedProperties.has('_nightFrac'))
             {

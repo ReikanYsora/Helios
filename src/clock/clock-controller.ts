@@ -8,7 +8,7 @@ import { formatHaHour, ENERGY_COLOR } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
 import type { ClockHourly } from './clock-hourly';
 import { refreshTrendProfiles } from './trend';
-import { refreshDayRing, computeRingShares } from './day-ring';
+import { refreshDayRing } from './day-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
@@ -479,9 +479,9 @@ export class ClockController
         //No bars, no rail, no tooltip: just the base ground ring.
         if (this.host._viewMode === 'day')
         {
-            const shares      = computeRingShares(this.host._dayRingProfile);
+            const dr          = this.host._dayRing;
             const importColor = ENERGY_COLOR.gridImport(this.host as unknown as Element);
-            const frame       = projectDayRingFrame(camera, shares.solar, shares.grid, importColor, cardinals, this.host._clockHomeHover);
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.grid ?? [], importColor, cardinals, this.host._clockHomeHover);
             this._applyClockFrame(frame);
             return;
         }

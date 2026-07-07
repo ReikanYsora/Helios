@@ -701,14 +701,16 @@ function dayRingBands(camera: SceneCamera, innerR: number, outerR: number, solar
         for (let k = SEG; k >= 0; k--) { const a = a0 + (a1 - a0) * k / SEG; const p = camera.project(r0 * Math.sin(a), r0 * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
         return `<polygon points="${pts.join(' ')}" fill="${fill}" opacity="${op.toFixed(3)}"/>`;
     };
+    //Cell count follows the data resolution (24 * display-frequency): a finer cadence draws a finer ring.
+    const slots = Math.max(1, solar.length);
     let s = '';
-    for (let h = 0; h < HOURS_PER_DAY; h++)
+    for (let i = 0; i < slots; i++)
     {
-        const a0 = hourRad(h / HOURS_PER_DAY, camera.southern);
-        const a1 = hourRad((h + 1) / HOURS_PER_DAY, camera.southern);
+        const a0 = hourRad(i / slots, camera.southern);
+        const a1 = hourRad((i + 1) / slots, camera.southern);
         s += cell(innerR, outerR, a0, a1, '#3a3f4a', 0.16);   //faint floor: the ring is always a full annulus
-        const sv = Math.max(0, Math.min(1, solar[h] ?? 0));
-        const gv = Math.max(0, Math.min(1, grid[h] ?? 0));
+        const sv = Math.max(0, Math.min(1, solar[i] ?? 0));
+        const gv = Math.max(0, Math.min(1, grid[i] ?? 0));
         if (sv + gv <= 0.001) { continue; }
         const splitR = innerR + band * sv;
         const endR   = innerR + band * Math.min(1, sv + gv);
