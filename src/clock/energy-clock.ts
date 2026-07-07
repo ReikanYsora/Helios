@@ -738,9 +738,11 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
         return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
     };
-    //Faint full ring (butt caps so its two ends never overlap into a double-opacity disc at midnight); the run arcs
-    //on top keep round caps (the "half circles" marking a run's start + end).
-    const s = arc(gapF, 1 - gapF, 0.1, 'butt');
+    //Faint full ring, butt caps (round caps would leave a little half-disc at the gap on an idle ring). `gapF` was
+    //corrected for a round cap's overhang; a butt end has none, so pull it back out by that overhang so the flat end
+    //lands exactly where the round value-arc tips do (no fond stopping short of its values at the gap).
+    const capF = rm * ppm > 0 ? (widthPx / 2) / (rm * ppm) / (2 * Math.PI) : 0;
+    const s = arc(gapF - capF, 1 - (gapF - capF), 0.1, 'butt');
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
@@ -763,8 +765,14 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         if (f1 > f0) { runs += arc(f0, f1, 0.9, 'round'); }
         i = end;
     }
-    //Hover highlights the PORTIONS (the run arcs), with the same coloured glow the scene chips use.
-    return s + (hovered ? `<g style="filter:drop-shadow(0 0 7px ${color})">${runs}</g>` : runs);
+    //Hover highlights the PORTIONS (the run arcs) with a coloured glow -- an SVG feDropShadow (a CSS filter on an
+    //inline <g> does not take in this overlay), matching the scene's home-glow recipe.
+    if (hovered && runs)
+    {
+        const fid = `dgl-${Math.round(rm * 100)}`;
+        return `${s}<defs><filter id="${fid}" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="3.2" flood-color="${color}" flood-opacity="1"/></filter></defs><g filter="url(#${fid})">${runs}</g>`;
+    }
+    return s + runs;
 }
 
 //A whole GROUP (all producers, or all consumers) as ONE zone: a single black band (rounded-rectangle ends, a
