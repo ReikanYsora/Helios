@@ -730,20 +730,22 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
 {
     const STEPS = 288;
     const ppm = camera.pxPerMetre || 1;
-    const pAtR = (r: number, f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    const ringAt = (r: number, f0: number, f1: number, op: number, w: number): string =>
+    const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const arc = (f0: number, f1: number, op: number, cap: string): string =>
     {
         const steps = Math.max(2, Math.round((f1 - f0) * STEPS));
         const seg: string[] = [];
-        for (let k = 0; k <= steps; k++) { seg.push(pAtR(r, f0 + (f1 - f0) * k / steps)); }
-        return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${w.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
+        return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
     };
-    //Faint full ring over the whole day WITH the midnight gap (so it aligns with this member's value arcs).
-    let s = ringAt(rm, gapF, 1 - gapF, hovered ? 0.24 : 0.1, widthPx);
+    //Faint full ring (butt caps so its two ends never overlap into a double-opacity disc at midnight); the run arcs
+    //on top keep round caps (the "half circles" marking a run's start + end).
+    const s = arc(gapF, 1 - gapF, 0.1, 'butt');
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
     const minLenF = rm * ppm > 0 ? (widthPx * 1.4) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc: ~1.4x its width
+    let runs = '';
     let i = 0;
     while (i < slots)
     {
@@ -758,16 +760,11 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         if (f1 - f0 < minLenF) { const c = (f0 + f1) / 2; f0 = c - minLenF / 2; f1 = c + minLenF / 2; }   //no dots
         f0 = Math.max(gapF, f0);
         f1 = Math.min(1 - gapF, f1);
-        if (f1 > f0) { s += ringAt(rm, f0, f1, 0.9, widthPx); }
+        if (f1 > f0) { runs += arc(f0, f1, 0.9, 'round'); }
         i = end;
     }
-    //Hover: crisp full-opacity outlines at the ring's inner + outer edges.
-    if (hovered)
-    {
-        const half = (widthPx / 2) / ppm;
-        s += ringAt(rm + half, gapF, 1 - gapF, 1, 1.6) + ringAt(rm - half, gapF, 1 - gapF, 1, 1.6);
-    }
-    return s;
+    //Hover highlights the PORTIONS (the run arcs), with the same coloured glow the scene chips use.
+    return s + (hovered ? `<g style="filter:drop-shadow(0 0 7px ${color})">${runs}</g>` : runs);
 }
 
 //A whole GROUP (all producers, or all consumers) as ONE zone: a single black band (rounded-rectangle ends, a
@@ -795,10 +792,7 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     members.forEach((m, i) =>
     {
         const mMid = outerRm - (i + 0.5) * sub;
-        const hov  = m.hid === hoverIndex;
-        let arcs = dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW), hov);
-        if (hov) { arcs = `<g style="filter:drop-shadow(0 0 5px ${m.color})">${arcs}</g>`; }
-        svg += arcs;
+        svg += dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW), m.hid === hoverIndex);
         hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) });
     });
     return { svg, hits };
@@ -1151,8 +1145,8 @@ export function projectDayRingFrame(
     const hubR    = outerR * CLOCK_HUB_R_FRAC;
     //The ground hour-disc edge (where the guide spokes end). The rings sit flush to it, no wasted gap outside.
     const discR   = outerR * CLOCK_SPOKE_OUTER_FRAC;
-    const dotRm   = discR * 1.07;   //hour tick dots sit clear of the outer production ring
-    const labelRm = discR * 1.16;   //upright hour numbers just outside the dots
+    const dotRm   = discR * 1.04;   //hour tick dots sit just off the outer production ring
+    const labelRm = discR * 1.19;   //upright hour numbers clearly outside the dots (not touching them)
     //Real-clock hours: a small primary-text dot at the exact hour position + the value written UPRIGHT just outside
     //it (no radial rotation), placed by its own screen position -- like a real clock face.
     const labels = Array.from({ length: 24 }, (_, h) =>
