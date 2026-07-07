@@ -1047,6 +1047,8 @@ export interface DayDeviceRing
     color:    string;
     values:   number[];
     segments: { start: number; end: number }[];
+    //Day total (kWh): the ring's WIDTH scales with this device's share of the monitored consumption.
+    dailyKwh: number;
 }
 
 //Screen-space hover target for one device ring: on the band = inside the outer circle AND outside the inner one.
@@ -1117,11 +1119,12 @@ export function projectDayRingFrame(
     if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
 
     //Radial budget from the hub out to the hour-disc edge: the merged production block is exactly as wide as the
-    //number of sources it holds (N classic ring-widths), then one ring per device (already sorted by daily total).
+    //number of sources it holds (N ring-widths); the rest is the consumption zone, where each device ring's WIDTH
+    //scales with its share of the monitored consumption (bigger consumer = thicker ring).
     const prodUnit = sources.length;
-    const units    = Math.max(1, prodUnit + rings.length);
-    const band     = (discR - hubR) / units;
-    const gap      = band * 0.16;   //small padding between consumption rings
+    const nDev     = rings.length;
+    const band     = (discR - hubR) / Math.max(1, prodUnit + nDev);
+    const gap      = band * 0.4;    //padding between consumption rings
     const groupGap = band * 0.5;    //separation between the production block and the first consumption ring
 
     const circle = (r: number): [number, number][] =>
@@ -1133,29 +1136,33 @@ export function projectDayRingFrame(
     let ringSvg = '';
     const dayHits: DayRingHit[] = [];
 
-    //Merged production block at the rim (flush to discR). Sub-bands glued (no gap/edge between); a single outer
-    //outline in the outermost source's colour and a single inner outline in the innermost source's colour.
+    //Merged production block at the rim (flush to discR): glued sub-bands (each one ring-width, no gap/edge
+    //between), one outer outline in the outermost source's colour and one inner outline in the innermost source's.
+    const prodInner = discR - prodUnit * band;
     if (prodUnit > 0)
     {
-        const rOut = discR;
-        const rIn  = discR - sources.length * band + (rings.length > 0 ? groupGap / 2 : 0);
-        const sub  = (rOut - rIn) / sources.length;
-        sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, rOut - (i + 1) * sub, rOut - i * sub, sc.color, sc.ops, slots); });
-        ringSvg += dayEdge(camera, rOut, sources[0].color, slots);
-        ringSvg += dayEdge(camera, rIn, sources[sources.length - 1].color, slots);
+        sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, discR - (i + 1) * band, discR - i * band, sc.color, sc.ops, slots); });
+        ringSvg += dayEdge(camera, discR, sources[0].color, slots);
+        ringSvg += dayEdge(camera, prodInner, sources[sources.length - 1].color, slots);
     }
 
-    //Device rings, each a full ring flush to the hub on the innermost, `gap` carved between neighbours.
+    //Consumption rings fill [hub, prodInner - groupGap]. Fixed gaps between them, so only the ring bodies scale:
+    //each device gets a share of the drawable height equal to its share of the day's monitored consumption.
+    const zoneTop  = prodInner - (prodUnit > 0 && nDev > 0 ? groupGap : 0);
+    const totalKwh = rings.reduce((s, r) => s + Math.max(0, r.dailyKwh), 0);
+    const drawH    = Math.max(0, (zoneTop - hubR) - Math.max(0, nDev - 1) * gap);
+    let rCursor    = zoneTop;
     rings.forEach((rg, k) =>
     {
-        const u      = prodUnit + k;
-        const rOuter = discR - u * band - (u === 0 ? 0 : (k === 0 ? groupGap / 2 : gap / 2));
-        const rInner = discR - (u + 1) * band + (u === units - 1 ? 0 : gap / 2);
+        const share  = totalKwh > 0 ? Math.max(0, rg.dailyKwh) / totalKwh : 1 / Math.max(1, nDev);
+        const rOuter = rCursor;
+        const rInner = k === nDev - 1 ? hubR : rCursor - drawH * share;   //snap the last ring to the hub (float-safe)
         let one = dayOpacityRing(camera, rInner, rOuter, rg.color, devOps(rg.values), slots);
         if (k === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${rg.color})">${one}</g>`; }
         ringSvg += one;
         //Hit order matches the rings array, i.e. host._dayRing.devices.
         dayHits.push({ outer: circle(rOuter), inner: circle(rInner) });
+        rCursor = rInner - gap;
     });
 
     return {

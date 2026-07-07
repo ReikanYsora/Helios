@@ -500,7 +500,7 @@ export class ClockController
             const dr          = this.host._dayRing;
             const importColor = ENERGY_COLOR.gridImport(el);
             const batteryColor = ENERGY_COLOR.batteryOut(el);
-            const rings       = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), values: dev.values, segments: dev.segments }));
+            const rings       = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), values: dev.values, segments: dev.segments, dailyKwh: dev.dailyKwh }));
             const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals, this.host._dayHover ?? -1, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false);
             this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
