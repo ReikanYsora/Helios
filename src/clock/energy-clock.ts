@@ -712,29 +712,37 @@ function dayGapF(camera: SceneCamera, rm: number, capWidthPx: number): number
 //A black day track for a whole group: a FILLED annular sector [outerRm-thickM, outerRm] over the day, with a flat
 //radial end at each side of the midnight gap. The ends are quarter-circle / line / quarter-circle (rounded corners
 //via a round line-join) rather than a full semicircle, so a thick group band doesn't bulge into the gap.
-function dayTrack(camera: SceneCamera, outerRm: number, thickM: number, gapF: number): string
+function dayTrack(camera: SceneCamera, outerRm: number, thickM: number): string
 {
     const innerRm = outerRm - thickM;
     const STEPS = 288;
     const pAt = (rm: number, f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    //Per-edge gap so the outer + inner ends sit the SAME px from midnight -> the two radial ends are parallel (a
+    //straight constant-width slot, "border-radius on a rectangle bent into a ring"), not a widening wedge.
+    const gO = dayGapF(camera, outerRm, 0);
+    const gI = dayGapF(camera, innerRm, 0);
     const pts: string[] = [];
-    for (let k = 0; k <= STEPS; k++) { pts.push(pAt(outerRm, gapF + (1 - 2 * gapF) * k / STEPS)); }
-    for (let k = STEPS; k >= 0; k--) { pts.push(pAt(innerRm, gapF + (1 - 2 * gapF) * k / STEPS)); }
-    const cr = Math.max(1.5, Math.min(thickM * (camera.pxPerMetre || 1) * 0.22, 7));   //corner radius
+    for (let k = 0; k <= STEPS; k++) { pts.push(pAt(outerRm, gO + (1 - 2 * gO) * k / STEPS)); }
+    for (let k = STEPS; k >= 0; k--) { pts.push(pAt(innerRm, gI + (1 - 2 * gI) * k / STEPS)); }
+    const cr = Math.max(1.5, Math.min(thickM * (camera.pxPerMetre || 1) * 0.22, 8));   //rounded-corner radius
     return `<polygon points="${pts.join(' ')}" fill="#000000" stroke="#000000" stroke-width="${(2 * cr).toFixed(1)}" stroke-linejoin="round" stroke-linecap="round"/>`;
 }
 
-//Solid rounded-cap arcs at ground radius `rm` over the RUNS where `values` exceeds DAY_RUN_PCT of the day's peak,
-//in `color`. Each run is one arc (its round caps mark start + end); a hole breaks it so the next run gets a fresh
-//cap. What matters is WHEN there was activity, not how much, so no opacity shading.
+//A member ring drawn IN FULL: a faint full-day ring at very low opacity (so the ring exists everywhere, even where
+//there was no activity), plus solid rounded-cap arcs at 0.9 over the RUNS where `values` exceeds DAY_RUN_PCT of the
+//day's peak. Each run is one arc (its round caps mark start + end); a hole breaks it so the next run gets a fresh
+//cap. What matters is WHEN there was activity, not how much, so no opacity shading of the runs.
 function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number): string
 {
     const STEPS = 288;
     const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    //Faint full ring (the whole day, with the midnight gap): the ring is always drawn, dim where there's no data.
+    const full: string[] = [];
+    for (let k = 0; k <= STEPS; k++) { full.push(pAt(gapF + (1 - 2 * gapF) * k / STEPS)); }
+    let s = `<polyline points="${full.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.1" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
-    let s = '';
     let i = 0;
     while (i < slots)
     {
@@ -755,37 +763,32 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     return s;
 }
 
-//A whole GROUP (all producers, or all consumers) as one "big ring": a single thick black track spanning the group,
-//with each member's run arcs drawn as a thin line at its own sub-radius inside it. Grouping like this drops the
-//per-ring tracks + gaps, so the two groups need only a small separation. Members carry `device` (>=0 for a device,
-//-1 for a source) for hit-testing + hover glow. `outerRm`/`thickM` are the group band's outer radius + thickness.
+//A whole GROUP (all producers, or all consumers) as ONE zone: a single black band (rounded-rectangle ends, a
+//constant-width midnight slot) spanning the group, with each member drawn inside as a full faint ring + its bright
+//run arcs at its own sub-radius. One zone per group + a clear separation reads as "producers" vs "consumers",
+//without the striped look of many stuck-together ring backgrounds. Members carry `device` (>=0 for a device, -1 for
+//a source) for hit-testing + hover glow. `outerRm`/`thickM` are the group band's outer radius + thickness.
 function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; values: number[]; device: number }[], slots: number, hoverIndex: number): { svg: string; hits: DayRingHit[] }
 {
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
     const sub    = thickM / n;
-    const track  = sub * 0.72;                       //each member has its OWN thin track; the rest is the gap
-    const trackW = track * ppm;
-    const gaugeW = Math.max(1, trackW * 0.62);       //thin arc line inside the member track
+    const gaugeW = Math.max(1, sub * ppm * 0.5);     //thin member ring inside the group band
     const circle = (r: number): [number, number][] =>
     {
         const c: [number, number][] = [];
         for (let k = 0; k < 48; k++) { c.push(camera.project(r * Math.sin(hourRad(k / 48, camera.southern)), r * Math.cos(hourRad(k / 48, camera.southern)), 0)); }
         return c;
     };
-    //Each member is its own thin flat-ended track packed tightly in the group (NOT one solid fill over the whole
-    //band, which would black out the disc); tight packing + only a small inter-group gap is what "groups" them.
-    let svg = '';
+    let svg = dayTrack(camera, outerRm, thickM);   //the group's zone band
     const hits: DayRingHit[] = [];
     members.forEach((m, i) =>
     {
-        const mOuter = outerRm - i * sub;
-        const mMid   = mOuter - track / 2;
-        svg += dayTrack(camera, mOuter, track, dayGapF(camera, mMid, 0));
+        const mMid = outerRm - (i + 0.5) * sub;
         let arcs = dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW));
         if (m.device >= 0 && m.device === hoverIndex) { arcs = `<g style="filter:drop-shadow(0 0 5px ${m.color})">${arcs}</g>`; }
         svg += arcs;
-        if (m.device >= 0) { hits.push({ outer: circle(mOuter), inner: circle(mOuter - track) }); }
+        if (m.device >= 0) { hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) }); }
     });
     return { svg, hits };
 }
