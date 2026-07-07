@@ -1116,9 +1116,10 @@ export function projectDayRingFrame(
     if (hasGrid)    { sources.push({ color: importColor,   ops: grid.map(opFor) }); }
     if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
 
-    //Radial budget from the hub out to the hour-disc edge: one ring for the merged production block, a blank band
-    //to set it apart, then one ring per device (already sorted by daily total).
-    const prodUnit = sources.length > 0 ? 1 : 0;
+    //Radial budget from the hub out to the hour-disc edge: the merged production block is exactly as wide as the
+    //number of sources it holds (N classic ring-widths), then a blank band to set it apart, then one ring per
+    //device (already sorted by daily total).
+    const prodUnit = sources.length;
     const gapUnit  = (prodUnit > 0 && rings.length > 0) ? 1 : 0;
     const units    = Math.max(1, prodUnit + gapUnit + rings.length);
     const band     = (discR - hubR) / units;
@@ -1138,7 +1139,7 @@ export function projectDayRingFrame(
     if (prodUnit > 0)
     {
         const rOut = discR;
-        const rIn  = discR - band + (gapUnit > 0 ? gap / 2 : 0);
+        const rIn  = discR - sources.length * band + (gapUnit > 0 ? gap / 2 : 0);
         const sub  = (rOut - rIn) / sources.length;
         sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, rOut - (i + 1) * sub, rOut - i * sub, sc.color, sc.ops, slots); });
         ringSvg += dayEdge(camera, rOut, sources[0].color, slots);
