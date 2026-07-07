@@ -384,8 +384,8 @@ export class HeliosEngine
     private _dayViewSaved?: { bearing: number; pitch: number };
     private _cameraAnimRaf?: number;
 
-    //Enter the day view: save the current pose once, lock rotation, animate near-straight-down and equator-up
-    //(south up in the northern hemisphere, north up in the southern).
+    //Enter the day view: save the current pose once, lock rotation, animate straight-down (top-down, so the rings
+    //stay perfectly concentric) and equator-up (south up in the northern hemisphere, north up in the southern).
     public enterDayView(): void
     {
         if (!this._renderer)
@@ -397,7 +397,7 @@ export class HeliosEngine
             this._dayViewSaved = { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
         }
         this._dayView = true;
-        this._animateCameraTo(this.homeLat >= 0 ? 180 : 0, 5);
+        this._animateCameraTo(this.homeLat >= 0 ? 180 : 0, 0);
     }
 
     //Leave the day view: unlock and animate back to the saved pose.

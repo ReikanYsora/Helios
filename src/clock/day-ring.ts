@@ -21,6 +21,11 @@ export interface DayRingData
     battery: number[];
     grid:    number[];
     devices: DeviceRun[];
+    //Each source ring is drawn only when that source is actually configured (panels / grid / battery), not just
+    //when it happened to produce today.
+    hasSolar:   boolean;
+    hasGrid:    boolean;
+    hasBattery: boolean;
 }
 
 //One device's run(s) over the day: contiguous on-slots as arcs (episodic) or the whole day (continuous). `index`
@@ -218,6 +223,9 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     }
     //Order the device rings by daily total, biggest just inside the source rings down to the smallest at the hub.
     devices.sort((a, b) => b.dailyKwh - a.dailyKwh);
-    host._dayRing = { solar: shares.solar, battery: shares.battery, grid: shares.grid, devices };
+    const hasSolar   = d.solarStatEnergyFroms.length > 0;
+    const hasGrid    = d.gridStatEnergyFroms.length > 0 || d.gridStatEnergyTos.length > 0;
+    const hasBattery = d.batteryStatEnergyFroms.length > 0 || d.batteryStatEnergyTos.length > 0;
+    host._dayRing = { solar: shares.solar, battery: shares.battery, grid: shares.grid, devices, hasSolar, hasGrid, hasBattery };
     host.requestUpdate();
 }

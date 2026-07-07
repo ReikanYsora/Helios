@@ -175,7 +175,9 @@ export const LAB_T3 = 0.008856452;
 //MAX = nearly horizontal. Default pose faces the sun's side so it sits at the top of the frame at noon.
 //NEAR_PLANE is the near-plane margin as a fraction of PERSPECTIVE (clamps/culls points at the camera);
 //PERSPECTIVE is the projection + CSS depth in px shared by the ground transform and project3.
-export const PITCH_MIN      = 5;
+//0 lets the day view sit perfectly top-down (concentric rings, no parallax); interactive drag stays floored at
+//CAMERA_PITCH_MIN_DEG, so the scene view is unaffected.
+export const PITCH_MIN      = 0;
 export const PITCH_MAX      = 65;
 export const DEFAULT_BEARING = 180;
 export const DEFAULT_TILT    = 50;

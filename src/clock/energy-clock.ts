@@ -718,9 +718,10 @@ function dayOpacityRing(camera: SceneCamera, rInner: number, rOuter: number, col
         for (let k = SEG; k >= 0; k--) { pts.push(pt(rInner, a0 + (a1 - a0) * k / SEG)); }
         s += `<polygon points="${pts.join(' ')}" fill="${color}" opacity="${Math.min(1, op).toFixed(3)}"/>`;
     }
-    //Inner + outer edge outlines in the primary text colour, drawn on top so each ring reads as a crisp band.
-    s += `<polyline points="${outerEdge.join(' ')}" fill="none" stroke="var(--primary-text-color)" stroke-width="1" stroke-opacity="0.55"/>`;
-    s += `<polyline points="${innerEdge.join(' ')}" fill="none" stroke="var(--primary-text-color)" stroke-width="1" stroke-opacity="0.55"/>`;
+    //Inner + outer edge outlines in the ring's OWN colour (not a uniform white, which read as a target), drawn on
+    //top so each ring stays a crisp band.
+    s += `<polyline points="${outerEdge.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
+    s += `<polyline points="${innerEdge.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
     return s;
 }
 
@@ -1057,6 +1058,10 @@ export function projectDayRingFrame(
     _cardinals: { n: string; s: string; e: string; w: string },
     //Index of the hovered device ring (-1 = none): it gets a small glow in its own colour.
     hoverIndex = -1,
+    //Each source ring is drawn only when that source is configured on the dashboard.
+    hasSolar = true,
+    hasGrid = true,
+    hasBattery = true,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1084,35 +1089,46 @@ export function projectDayRingFrame(
     //(solar, then grid, then battery) and then the device rings (already sorted by daily total). Each ring carries
     //its per-slot value by OPACITY, not radius, so nothing sits above anything else and each stays legible.
     const slots = Math.max(1, solar.length);
-    const total = 3 + rings.length;
-    const band  = (outerR - hubR) / total;
-    const pad   = band * 0.32;
-    //A device ring's opacity is its slot energy over the device's own peak; a floor keeps a light run readable.
+    //Value -> opacity: a high floor so even a light slot reads (an empty slot stays at the dark track). Sources use
+    //their share (0..1); a device uses its slot energy over its own peak.
+    const FLOOR  = 0.4;
+    const opFor  = (v: number): number => (v > 0.02 ? FLOOR + (1 - FLOOR) * Math.min(1, v) : 0);
     const devOps = (values: number[]): number[] =>
     {
         let peak = 0;
         for (const v of values) { if (v > peak) { peak = v; } }
         if (peak <= 0) { return values.map(() => 0); }
-        return values.map(v => (v > 0 ? 0.22 + 0.78 * Math.min(1, v / peak) : 0));
+        return values.map(v => opFor(v / peak));
     };
-    const layers: { color: string; ops: number[]; device: number }[] = [
-        { color: SUN_COLOR_HEX, ops: solar,   device: -1 },
-        { color: importColor,   ops: grid,    device: -1 },
-        { color: batteryColor,  ops: battery, device: -1 },
-        ...rings.map((rg, k) => ({ color: rg.color, ops: devOps(rg.values), device: k })),
-    ];
+    //Sources first (only those actually configured), then the device rings (already sorted by daily total). A blank
+    //ring-width band separates the two groups, so production reads apart from consumption.
+    const sources: { color: string; ops: number[] }[] = [];
+    if (hasSolar)   { sources.push({ color: SUN_COLOR_HEX, ops: solar.map(opFor) }); }
+    if (hasGrid)    { sources.push({ color: importColor,   ops: grid.map(opFor) }); }
+    if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
+    const gapUnit = (sources.length > 0 && rings.length > 0) ? 1 : 0;
+    const units   = Math.max(1, sources.length + gapUnit + rings.length);
+    const band    = (outerR - hubR) / units;
+    const gap     = band * 0.42;   //padding carved between adjacent rings
+
     const circle = (r: number): [number, number][] =>
     {
         const c: [number, number][] = [];
         for (let k = 0; k < 48; k++) { c.push(camera.project(r * Math.sin(hourRad(k / 48, camera.southern)), r * Math.cos(hourRad(k / 48, camera.southern)), 0)); }
         return c;
     };
+    //Each ring spans one band, flush to the rim on the outside and to the hub on the inside, `gap` carved between
+    //neighbours. `u` is the band position (0 = rim); the gap band between the two groups is simply skipped.
+    const drawn: { color: string; ops: number[]; device: number; u: number }[] = [
+        ...sources.map((sc, i) => ({ ...sc, device: -1, u: i })),
+        ...rings.map((rg, k) => ({ color: rg.color, ops: devOps(rg.values), device: k, u: sources.length + gapUnit + k })),
+    ];
     let ringSvg = '';
     const dayHits: DayRingHit[] = [];
-    layers.forEach((layer, j) =>
+    drawn.forEach(layer =>
     {
-        const rOuter = outerR - j * band - pad * 0.5;
-        const rInner = outerR - (j + 1) * band + pad * 0.5;
+        const rOuter = outerR - layer.u * band - (layer.u === 0 ? 0 : gap / 2);
+        const rInner = outerR - (layer.u + 1) * band + (layer.u === units - 1 ? 0 : gap / 2);
         let one = dayOpacityRing(camera, rInner, rOuter, layer.color, layer.ops, slots);
         if (layer.device >= 0 && layer.device === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${layer.color})">${one}</g>`; }
         ringSvg += one;
