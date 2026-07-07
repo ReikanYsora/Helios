@@ -101,20 +101,27 @@ export function detectDeviceRuns(kwh: number[], index: number, name: string): De
 //run-length window with the most REMAINING sun and that sun is spent, so later devices flow into the next-best slot.
 //A device the sun can't cover (nothing left) stays where it really ran. Returns per-slot values aligned to `devices`.
 const OPT_RUN_PCT = 0.08;
+//Meal/cooking loads are bound to meal times (you don't run the oven at 10am to shift it onto the sun), so the
+//optimiser treats them as FIXED like an always-on load. Matched loosely by name (EN + FR), best-effort.
+const TIME_BOUND = /oven|four|stove|cuisin|cook(top|er|ing)?|hob|hotplate|plaque|po[eê]le|grill|micro.?onde|microwave|kettle|bouilloire|toaster|grille.?pain|cuisson|hotte|range\b/i;
+function isFixedLoad(d: DeviceRun): boolean
+{
+    return d.continuous || TIME_BOUND.test(d.name);
+}
 export function optimizeDevices(pv: number[], devices: DeviceRun[]): number[][]
 {
     const slots    = pv.length;
     const residual = pv.map(v => Math.max(0, v));   //solar still available to schedule into
     const out: number[][] = devices.map(() => new Array<number>(slots).fill(0));
-    //Fixed loads (always-on) keep their real profile and consume their part of the sun up front.
+    //Fixed loads (always-on OR meal-time-bound) keep their real profile and consume their part of the sun up front.
     devices.forEach((d, i) =>
     {
-        if (!d.continuous) { return; }
+        if (!isFixedLoad(d)) { return; }
         out[i] = d.values.slice();
         for (let s = 0; s < slots; s++) { residual[s] = Math.max(0, residual[s] - Math.max(0, d.values[s])); }
     });
     //Shiftable loads, biggest first, each placed in the best-sun window of its own run length.
-    const shiftable = devices.map((d, i) => ({ d, i })).filter(x => !x.d.continuous && x.d.dailyKwh > 0).sort((a, b) => b.d.dailyKwh - a.d.dailyKwh);
+    const shiftable = devices.map((d, i) => ({ d, i })).filter(x => !isFixedLoad(x.d) && x.d.dailyKwh > 0).sort((a, b) => b.d.dailyKwh - a.d.dailyKwh);
     for (const { d, i } of shiftable)
     {
         let peak = 0;

@@ -744,7 +744,7 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
-    const minLenF = rm * ppm > 0 ? (widthPx * 1.4) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc: ~1.4x its width
+    const minLenF = rm * ppm > 0 ? (widthPx * 2.6) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc reads as a dash, not a dot
     let runs = '';
     let i = 0;
     while (i < slots)
