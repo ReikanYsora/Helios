@@ -36,7 +36,7 @@ export type ClockHost = ChartHost & {
 const RING_R_FRAC     = 0.34;   //outermost ring radius
 const DAY_RING_R_FRAC = 0.40;   //day mode zooms the dial in (bigger than the scene ring) while the hour labels still fit
 const DAY_RUN_PCT     = 0.08;   //a slot counts as a real production/consumption run above this % of the day's peak
-const DAY_MIDNIGHT_GAP_F = 0.012;   //target visual half-gap at midnight (fraction of the day), aligned across rings
+const DAY_MIDNIGHT_GAP_PX = 10;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
 const CLOCK_MAX_FILTERS = 8;
@@ -699,13 +699,14 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
 //start + end), and a hole ends the arc so the next run restarts with a fresh cap. Used for every ring: the energy
 //sources (solar / grid / battery) and each device. `outerRm`/`thickM` are the band's outer radius + thickness in
 //metres; `values[s]` is the per-slot magnitude.
-//Midnight-gap arc-endpoint fraction, corrected so a round cap of stroke width `widthPx` at ground radius `rm`
-//(metres) lands its VISUAL edge on the fixed DAY_MIDNIGHT_GAP_F radial -- so every ring's gap aligns regardless of
-//radius or thickness (the round cap extends ~half the stroke width past the endpoint, i.e. an angle capPx/2 / rPx).
-function dayGapF(camera: SceneCamera, rm: number, widthPx: number): number
+//Midnight-gap arc-endpoint fraction giving a CONSTANT-px visual gap at every radius (a straight slot, not a wedge):
+//half the target gap plus half the round-cap overhang (`capWidthPx`, 0 for a flat end), converted from px to a
+//fraction of the full circle at ground radius `rm`.
+function dayGapF(camera: SceneCamera, rm: number, capWidthPx: number): number
 {
     const rPx = rm * (camera.pxPerMetre || 1);
-    return DAY_MIDNIGHT_GAP_F + (rPx > 0 ? (widthPx / 2) / rPx / (2 * Math.PI) : 0);
+    if (rPx <= 0) { return 0; }
+    return (DAY_MIDNIGHT_GAP_PX / 2 + capWidthPx / 2) / rPx / (2 * Math.PI);
 }
 
 //A black day track for a whole group: a FILLED annular sector [outerRm-thickM, outerRm] over the day, with a flat
@@ -763,23 +764,28 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
     const sub    = thickM / n;
-    const gaugeW = Math.max(1, sub * ppm * 0.62);   //thin arc line per member, padded within its sub-band
+    const track  = sub * 0.72;                       //each member has its OWN thin track; the rest is the gap
+    const trackW = track * ppm;
+    const gaugeW = Math.max(1, trackW * 0.62);       //thin arc line inside the member track
     const circle = (r: number): [number, number][] =>
     {
         const c: [number, number][] = [];
         for (let k = 0; k < 48; k++) { c.push(camera.project(r * Math.sin(hourRad(k / 48, camera.southern)), r * Math.cos(hourRad(k / 48, camera.southern)), 0)); }
         return c;
     };
-    //Flat-ended group track (the corners are rounded in dayTrack); its gap sits on the fixed midnight radial.
-    let svg = dayTrack(camera, outerRm, thickM, DAY_MIDNIGHT_GAP_F);
+    //Each member is its own thin flat-ended track packed tightly in the group (NOT one solid fill over the whole
+    //band, which would black out the disc); tight packing + only a small inter-group gap is what "groups" them.
+    let svg = '';
     const hits: DayRingHit[] = [];
     members.forEach((m, i) =>
     {
-        const subMid = outerRm - (i + 0.5) * sub;
-        let arcs = dayRunArcs(camera, subMid, gaugeW, m.color, m.values, slots, dayGapF(camera, subMid, gaugeW));
+        const mOuter = outerRm - i * sub;
+        const mMid   = mOuter - track / 2;
+        svg += dayTrack(camera, mOuter, track, dayGapF(camera, mMid, 0));
+        let arcs = dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW));
         if (m.device >= 0 && m.device === hoverIndex) { arcs = `<g style="filter:drop-shadow(0 0 5px ${m.color})">${arcs}</g>`; }
         svg += arcs;
-        if (m.device >= 0) { hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) }); }
+        if (m.device >= 0) { hits.push({ outer: circle(mOuter), inner: circle(mOuter - track) }); }
     });
     return { svg, hits };
 }
@@ -1166,7 +1172,9 @@ export function projectDayRingFrame(
 
     const nP = producers.length;
     const nC = consumers.length;
-    const groupGap = (nP > 0 && nC > 0) ? (discR - hubR) * 0.04 : 0;
+    //A clear gap (~one member band) sets the producers apart from the consumers.
+    const rawSub   = (discR - hubR) / Math.max(1, nP + nC);
+    const groupGap = (nP > 0 && nC > 0) ? rawSub : 0;
     const sub      = (discR - hubR - groupGap) / Math.max(1, nP + nC);
 
     let ringSvg = '';
