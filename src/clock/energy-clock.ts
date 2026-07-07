@@ -1026,39 +1026,52 @@ export function projectTrendFrame(
 //Project the DAY ring: a flat 24-hour ground annulus for today. Each hour's cell is split gold (solar share) then
 //import-colour (grid share), so both where the sun covered you and where you drew from the grid read at a glance.
 //No bars: the story is the colour, not the height. Reuses the clock's labels, guide, compass, now-arrow and decal.
-//A device's floating crepe: its dashboard colour + the day-slot segments it ran (or the whole ring if continuous).
-export interface DayCrepe
+//One device's ring for the day dial: its dashboard colour, per-slot energy (the radial magnitude) and the slot
+//segments it ran.
+export interface DayDeviceRing
 {
-    color:      string;
-    segments:   { start: number; end: number }[];
-    continuous: boolean;
+    color:    string;
+    values:   number[];
+    segments: { start: number; end: number }[];
 }
 
-//Floating device crepes over the base ring: each device is a translucent flat annular band at its own height
-//layer, covering the slot span(s) it ran. Read against the gold/import ring below, a run over a grey (grid) sector
-//is the "you drew this off the sun" signal. Stacked bottom-to-top; the top-down view later separates them.
-function dayDeviceCrepes(camera: SceneCamera, innerR: number, outerR: number, crepes: DayCrepe[], slots: number, maxHm: number): string
+//Device rings over the base ring. Every device shares ONE float height and is packed CONCENTRICALLY inside the
+//base ring's radial band (an equal sub-band each, with padding, inward-out), so they never spill past the solar
+//ring's width. Within its sub-band each device is a radial gauge: the inner edge is 0, the outer edge extends with
+//that slot's energy, capped at the device's peak slot. A run over a grey (grid) base sector is the "drawn off the
+//sun" signal.
+function dayDeviceRings(camera: SceneCamera, innerR: number, outerR: number, rings: DayDeviceRing[], slots: number, maxHm: number): string
 {
-    if (!crepes.length || slots <= 0) { return ''; }
-    const baseH = maxHm * 0.14;
-    const stepH = maxHm * 0.11;
-    //One flat annular sector at height `h` over the fraction [fa, fb] of the dial.
-    const sector = (fa: number, fb: number, h: number, fill: string): string =>
-    {
-        const span = Math.max(1e-4, fb - fa);
-        const n = Math.max(2, Math.round(span * 96));
-        const pts: string[] = [];
-        for (let k = 0; k <= n; k++) { const a = hourRad(fa + span * k / n, camera.southern); const p = camera.project(outerR * Math.sin(a), outerR * Math.cos(a), h); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
-        for (let k = n; k >= 0; k--) { const a = hourRad(fa + span * k / n, camera.southern); const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), h); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
-        return `<polygon points="${pts.join(' ')}" fill="${fill}" stroke="rgba(0,0,0,0.35)" stroke-width="0.5"/>`;
-    };
+    const n = rings.length;
+    if (!n || slots <= 0) { return ''; }
+    const h    = maxHm * 0.10;
+    const band = (outerR - innerR) / n;
+    const pad  = band * 0.22;
+    const proj = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), h); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
     let out = '';
-    crepes.forEach((c, i) =>
+    rings.forEach((ring, i) =>
     {
-        const h = baseH + i * stepH;
-        let slab = '';
-        for (const seg of c.segments) { slab += sector(seg.start / slots, seg.end / slots, h, c.color); }
-        out += `<g opacity="0.6">${slab}</g>`;
+        let peak = 0;
+        for (const v of ring.values) { if (v > peak) { peak = v; } }
+        if (peak <= 0) { return; }
+        const r0 = innerR + i * band + pad * 0.5;         //inner edge = 0 W
+        const r1 = innerR + (i + 1) * band - pad * 0.5;   //outer edge = the device's peak slot
+        let body = '';
+        for (const seg of ring.segments)
+        {
+            const pts: string[] = [];
+            //Outer edge: one radial step per slot, scaled by that slot's energy.
+            for (let s = seg.start; s < seg.end; s++)
+            {
+                const rO = r0 + (r1 - r0) * Math.max(0, Math.min(1, ring.values[s] / peak));
+                pts.push(proj(rO, hourRad(s / slots, camera.southern)));
+                pts.push(proj(rO, hourRad((s + 1) / slots, camera.southern)));
+            }
+            //Inner edge back at r0, closing the gauge.
+            for (let s = seg.end; s >= seg.start; s--) { pts.push(proj(r0, hourRad(s / slots, camera.southern))); }
+            body += `<polygon points="${pts.join(' ')}" fill="${ring.color}" stroke="rgba(0,0,0,0.35)" stroke-width="0.4"/>`;
+        }
+        out += `<g opacity="0.72">${body}</g>`;
     });
     return out;
 }
@@ -1068,7 +1081,7 @@ export function projectDayRingFrame(
     solar: number[],
     grid: number[],
     importColor: string,
-    crepes: DayCrepe[],
+    rings: DayDeviceRing[],
     cardinals: { n: string; s: string; e: string; w: string },
     //Whether the hub mark is hovered/tapped (drives its opacity fade), mirroring the other dials.
     columnHighlight = false,
@@ -1102,7 +1115,7 @@ export function projectDayRingFrame(
 
     return {
         guideSvg: dayRingBands(camera, innerR, outerR, solar, grid, importColor) + clockGuide(camera, outerR) + compass.svg,
-        svg: dayDeviceCrepes(camera, innerR, outerR, crepes, solar.length, maxHm) + currentHourArrow(camera, outerR, maxHm, 0),
+        svg: dayDeviceRings(camera, innerR, outerR, rings, solar.length, maxHm) + currentHourArrow(camera, outerR, maxHm, 0),
         hits: [], labels, compass: compass.labels,
         home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
         decal,

@@ -1249,11 +1249,11 @@ export class HeliosCard extends LitElement
                                 type="button"
                                 class="overlay-btn ${dayOn ? 'is-on' : ''}"
                                 aria-pressed=${dayOn ? 'true' : 'false'}
-                                aria-label="Solar day"
+                                aria-label="Daily rings"
                                 data-view="day"
                                 @click=${this._clock.onViewModeClick}
                             >
-                                <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
+                                <ha-icon icon="mdi:chart-donut"></ha-icon>
                             </button>
                             <button
                                 type="button"

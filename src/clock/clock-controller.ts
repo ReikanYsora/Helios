@@ -482,8 +482,8 @@ export class ClockController
             const el          = this.host as unknown as Element;
             const dr          = this.host._dayRing;
             const importColor = ENERGY_COLOR.gridImport(el);
-            const crepes      = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), segments: dev.segments, continuous: dev.continuous }));
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.grid ?? [], importColor, crepes, cardinals, this.host._clockHomeHover);
+            const rings       = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), values: dev.values, segments: dev.segments }));
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.grid ?? [], importColor, rings, cardinals, this.host._clockHomeHover);
             this._applyClockFrame(frame);
             return;
         }

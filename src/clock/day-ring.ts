@@ -10,7 +10,7 @@ import { serverHourFrac } from '../core/time/timezone';
 import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
 
 //Per-slot ring shares (solar gold + grid-import colour, summing to ~1 under load) plus the day's qualifying device
-//runs, drawn as floating crepes over the ring.
+//runs, drawn as concentric device rings over the base ring.
 export interface DayRingData
 {
     solar:   number[];
@@ -19,16 +19,19 @@ export interface DayRingData
 }
 
 //One device's run(s) over the day: contiguous on-slots as arcs (episodic) or the whole day (continuous). `index`
-//is the dashboard position, so the crepe reuses HA's per-index device colour.
+//is the dashboard position, so the ring reuses HA's per-index device colour.
 export interface DeviceRun
 {
     index:      number;
     name:       string;
+    //Per-slot energy (kWh). The ring's radial extent scales each slot by values[slot] / peak-slot, so the outer
+    //edge shows how hard the device drew at that moment (inner edge = 0).
+    values:     number[];
     segments:   { start: number; end: number }[];
     continuous: boolean;
 }
 
-//Below this daily total (kWh) a device gets no crepe (noise cut). Run tunables: a slot counts as "on" above this
+//Below this daily total (kWh) a device gets no ring (noise cut). Run tunables: a slot counts as "on" above this
 //fraction of the device's peak slot; a device on for at least CONTINUOUS_FRAC of slots reads as a full ring; short
 //gaps up to BRIDGE_SLOTS are bridged so sparse data does not shred a cycle into fragments.
 const DEVICE_THRESHOLD_KWH = 0.1;
@@ -50,7 +53,7 @@ export function detectDeviceRuns(kwh: number[], index: number, name: string): De
     for (const b of on) { if (b) { onCount++; } }
     if (onCount >= slots * RUN_CONTINUOUS_FRAC)
     {
-        return { index, name, segments: [{ start: 0, end: slots }], continuous: true };
+        return { index, name, values: kwh, segments: [{ start: 0, end: slots }], continuous: true };
     }
     const segments: { start: number; end: number }[] = [];
     let i = 0;
@@ -69,7 +72,7 @@ export function detectDeviceRuns(kwh: number[], index: number, name: string): De
         segments.push({ start: i, end });
         i = end;
     }
-    return { index, name, segments, continuous: false };
+    return { index, name, values: kwh, segments, continuous: false };
 }
 
 export interface DayRingHost
