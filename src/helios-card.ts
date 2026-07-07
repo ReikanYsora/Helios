@@ -233,8 +233,6 @@ export class HeliosCard extends LitElement
     _dayRingKey = '';
     //Day mode Real/Optimised toggle: when true, shiftable device rings replay inside the day's solar window.
     @state() _dayOptimized = false;
-    //Day mode period: which single day the rings show (its own selector, so it doesn't touch the timeline window).
-    @state() _dayPeriod: 'today' | 'yesterday' = 'today';
     //Day-mode hover: the hovered device-ring index (null = none) drives the opaque/dim repaint + the tooltip; the
     //cursor position places the tooltip; the hit targets are captured from the last paint. Driven manually via
     //scheduleClockPaint + requestUpdate, so not @state.
@@ -482,39 +480,21 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Timeline mode selector: Standard / Today / Week / Month / Year. The active mode is highlighted.
+    //Timeline mode selector: Standard / Yesterday / Today / Week / Month / Year. The active mode is highlighted. In
+    //day (rings) mode only Yesterday + Today make sense, so the other modes are shown but disabled (greyed).
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
-        //Day mode: a restricted Yesterday / Today selector (a single-day ring has no week/month/year), bound to its
-        //own _dayPeriod state instead of the timeline window.
-        if (this._viewMode === 'day')
-        {
-            const dayLabels: Record<'yesterday' | 'today', string> = {
-                yesterday: t.period?.yesterday ?? 'Yesterday',
-                today:     t.period?.today     ?? 'Today',
-            };
-            return html`
-                <div class="tb-period-selector" role="group" aria-label=${t.period?.rangeLabel ?? 'Time range'} @pointerdown=${this._stopPropagation}>
-                    ${(['yesterday', 'today'] as const).map(m => html`
-                        <button
-                            type="button"
-                            class="tb-period-seg ${this._dayPeriod === m ? 'is-on' : ''}"
-                            data-dayperiod=${m}
-                            @click=${this._onDayPeriodClick}
-                        >${dayLabels[m]}</button>
-                    `)}
-                </div>
-            `;
-        }
         const labels: Record<TimelineMode, string> = {
-            standard: t.period?.standard ?? 'Standard',
-            today:    t.period?.today    ?? 'Today',
-            week:     t.period?.week     ?? 'Week',
-            month:    t.period?.month    ?? 'Month',
-            year:     t.period?.year     ?? 'Year',
+            standard:  t.period?.standard  ?? 'Standard',
+            yesterday: t.period?.yesterday ?? 'Yesterday',
+            today:     t.period?.today     ?? 'Today',
+            week:      t.period?.week      ?? 'Week',
+            month:     t.period?.month     ?? 'Month',
+            year:      t.period?.year      ?? 'Year',
         };
+        const dayOnly = this._viewMode === 'day';
         return html`
             <div
                 class="tb-period-selector"
@@ -522,14 +502,18 @@ export class HeliosCard extends LitElement
                 aria-label=${t.period?.rangeLabel ?? 'Time range'}
                 @pointerdown=${this._stopPropagation}
             >
-                ${TIMELINE_MODE_ORDER.map(m => html`
-                    <button
-                        type="button"
-                        class="tb-period-seg ${this._timelineMode === m ? 'is-on' : ''}"
-                        data-mode=${m}
-                        @click=${this._onTimelineModeClick}
-                    >${labels[m]}</button>
-                `)}
+                ${TIMELINE_MODE_ORDER.map(m => {
+                    const disabled = dayOnly && m !== 'yesterday' && m !== 'today';
+                    return html`
+                        <button
+                            type="button"
+                            class="tb-period-seg ${this._timelineMode === m ? 'is-on' : ''} ${disabled ? 'is-disabled' : ''}"
+                            data-mode=${m}
+                            ?disabled=${disabled}
+                            @click=${this._onTimelineModeClick}
+                        >${labels[m]}</button>
+                    `;
+                })}
             </div>
         `;
     }
@@ -958,8 +942,13 @@ export class HeliosCard extends LitElement
         //repaint when the profile, the home hover or the night share land. No rail, no hover tooltip here.
         if (this._viewMode === 'day')
         {
+            //Entering day mode from a period that has no daily ring (week/month/year/standard) snaps to Today.
+            if (_changedProperties.has('_viewMode') && this._timelineMode !== 'yesterday' && this._timelineMode !== 'today')
+            {
+                this._setTimelineMode('today');
+            }
             if (_changedProperties.has('_viewMode')
-                || _changedProperties.has('_dayPeriod')
+                || _changedProperties.has('_timelineMode')
                 || _changedProperties.has('_timeRange')
                 || _changedProperties.has('_energyDefaults')
                 || _changedProperties.has('config')
@@ -1642,12 +1631,6 @@ export class HeliosCard extends LitElement
     //Day mode Real/Optimised toggle handlers (kept out of render so the assignment isn't in the template).
     private _onDayReal      = (): void => { this._dayOptimized = false; };
     private _onDayOptimised = (): void => { this._dayOptimized = true; };
-    //Day mode Yesterday/Today selector.
-    private _onDayPeriodClick = (e: Event): void =>
-    {
-        const m = (e.currentTarget as HTMLElement)?.dataset.dayperiod;
-        if (m === 'yesterday' || m === 'today') { this._dayPeriod = m; }
-    };
 
     static styles = [heliosCardStyles, heliosTimelineStyles, heliosCardEnergyClockCss];
 }

@@ -738,11 +738,9 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
         return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
     };
-    //Faint full ring, butt caps (round caps would leave a little half-disc at the gap on an idle ring). `gapF` was
-    //corrected for a round cap's overhang; a butt end has none, so pull it back out by that overhang so the flat end
-    //lands exactly where the round value-arc tips do (no fond stopping short of its values at the gap).
-    const capF = rm * ppm > 0 ? (widthPx / 2) / (rm * ppm) / (2 * Math.PI) : 0;
-    const s = arc(gapF - capF, 1 - (gapF - capF), 0.1, 'butt');
+    //Faint full ring, round caps sharing the value arcs' gapF, so their rounded ends line up cleanly at the
+    //midnight slot (dayGapF keeps the two ends a constant px apart, so they never overlap into a disc).
+    const s = arc(gapF, 1 - gapF, 0.1, 'round');
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;

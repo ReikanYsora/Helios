@@ -7,7 +7,7 @@ import type { StatPeriod } from '../data/sources/energy-stats';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../core/config/helios-config';
 import { DAY_MS } from '../core/config/constants';
 
-export type TimelineMode = 'standard' | 'today' | 'week' | 'month' | 'year';
+export type TimelineMode = 'standard' | 'yesterday' | 'today' | 'week' | 'month' | 'year';
 
 export interface TimelineModeSpec
 {
@@ -22,7 +22,7 @@ export interface TimelineModeSpec
 }
 
 //Order shown in the selector, left -> right.
-export const TIMELINE_MODE_ORDER: TimelineMode[] = ['standard', 'today', 'week', 'month', 'year'];
+export const TIMELINE_MODE_ORDER: TimelineMode[] = ['standard', 'yesterday', 'today', 'week', 'month', 'year'];
 
 //Day count of the calendar month / year BEFORE the current one, so the month/year windows match the previous
 //period's real length and end on today.
@@ -39,8 +39,10 @@ function daysInPrevYear(): number
 
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
     //Standard: J-2 .. J+2 (past, today, forecast) - the at-a-glance default. today/week/month/year all END today.
-    standard: { pastDays: 2,                            futureDays: 2, weather: true,  maxBucketsPerHour: 12   },
-    today:    { pastDays: 0,                            futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
+    standard:  { pastDays: 2,                           futureDays: 2, weather: true,  maxBucketsPerHour: 12   },
+    //Yesterday: a one-day-back window. The day-rings mode reads it as exactly the previous calendar day.
+    yesterday: { pastDays: 1,                           futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
+    today:     { pastDays: 0,                           futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     week:     { pastDays: 6,                            futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     month:    { pastDays: () => daysInPrevMonth() - 1,  futureDays: 0, weather: false, maxBucketsPerHour: 1    },
     year:     { pastDays: () => daysInPrevYear() - 1,   futureDays: 0, weather: false, maxBucketsPerHour: 1 / 24 },

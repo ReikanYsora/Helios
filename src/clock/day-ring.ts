@@ -30,6 +30,8 @@ export interface DayRingData
     solarKwh:   number;
     gridKwh:    number;
     batteryKwh: number;
+    //Per-slot solar production (kWh) -- the available sun the optimiser schedules shiftable devices into.
+    pv:         number[];
 }
 
 //One device's run(s) over the day: contiguous on-slots as arcs (episodic) or the whole day (continuous). `index`
@@ -93,39 +95,45 @@ export function detectDeviceRuns(kwh: number[], index: number, name: string): De
     return { index, name, values: kwh, segments, continuous: false, dailyKwh: total, solarPct: 0, gridPct: 0 };
 }
 
-//Optimisation replay: for a SHIFTABLE device (not always-on), move its whole run duration into the day's best solar
-//window, so the ring shows when it COULD have run on the sun. Continuous / always-on devices are left as-is (you
-//can't shift a fridge). Returns a per-slot values array (peak where the shifted run sits, 0 elsewhere).
-const OPT_RUN_PCT  = 0.08;
-const OPT_SOLAR_ON = 0.12;
-export function optimizeDeviceValues(solar: number[], values: number[], continuous: boolean, slots: number): number[]
+//Optimisation replay: reschedule the SHIFTABLE devices (not always-on) into the day's real solar production, so
+//they don't just pile up at one moment -- you can only run so many appliances on the sun you actually made. Greedy:
+//continuous devices are fixed and eat their share of the sun first; then, biggest device first, each is slid to the
+//run-length window with the most REMAINING sun and that sun is spent, so later devices flow into the next-best slot.
+//A device the sun can't cover (nothing left) stays where it really ran. Returns per-slot values aligned to `devices`.
+const OPT_RUN_PCT = 0.08;
+export function optimizeDevices(pv: number[], devices: DeviceRun[]): number[][]
 {
-    if (continuous) { return values; }
-    let peak = 0;
-    for (const v of values) { if (v > peak) { peak = v; } }
-    if (peak <= 0) { return values; }
-    const thr = peak * OPT_RUN_PCT;
-    let dur = 0;
-    for (const v of values) { if (v > thr) { dur++; } }
-    if (dur <= 0) { return values; }
-    //Largest contiguous block of sunny slots.
-    let bestStart = 0;
-    let bestLen = 0;
-    let i = 0;
-    while (i < slots)
+    const slots    = pv.length;
+    const residual = pv.map(v => Math.max(0, v));   //solar still available to schedule into
+    const out: number[][] = devices.map(() => new Array<number>(slots).fill(0));
+    //Fixed loads (always-on) keep their real profile and consume their part of the sun up front.
+    devices.forEach((d, i) =>
     {
-        if ((solar[i] ?? 0) > OPT_SOLAR_ON)
+        if (!d.continuous) { return; }
+        out[i] = d.values.slice();
+        for (let s = 0; s < slots; s++) { residual[s] = Math.max(0, residual[s] - Math.max(0, d.values[s])); }
+    });
+    //Shiftable loads, biggest first, each placed in the best-sun window of its own run length.
+    const shiftable = devices.map((d, i) => ({ d, i })).filter(x => !x.d.continuous && x.d.dailyKwh > 0).sort((a, b) => b.d.dailyKwh - a.d.dailyKwh);
+    for (const { d, i } of shiftable)
+    {
+        let peak = 0;
+        for (const v of d.values) { if (v > peak) { peak = v; } }
+        let dur = 0;
+        for (const v of d.values) { if (v > peak * OPT_RUN_PCT) { dur++; } }
+        if (dur <= 0 || dur > slots) { out[i] = d.values.slice(); continue; }
+        const draw = d.dailyKwh / dur;   //average draw while running
+        let bestStart = 0;
+        let bestScore = -1;
+        for (let s = 0; s + dur <= slots; s++)
         {
-            let j = i;
-            while (j < slots && (solar[j] ?? 0) > OPT_SOLAR_ON) { j++; }
-            if (j - i > bestLen) { bestLen = j - i; bestStart = i; }
-            i = j;
+            let score = 0;
+            for (let k = s; k < s + dur; k++) { score += Math.min(residual[k], draw); }
+            if (score > bestScore) { bestScore = score; bestStart = s; }
         }
-        else { i++; }
+        if (bestScore <= 1e-6) { out[i] = d.values.slice(); continue; }   //no sun to move it into -> leave it real
+        for (let k = bestStart; k < bestStart + dur; k++) { out[i][k] = draw; residual[k] = Math.max(0, residual[k] - draw); }
     }
-    if (bestLen <= 0) { return values; }   //no sun today -> nothing to optimise
-    const out = new Array<number>(slots).fill(0);
-    for (let k = 0; k < dur && bestStart + k < slots; k++) { out[bestStart + k] = peak; }
     return out;
 }
 
@@ -135,7 +143,7 @@ export interface DayRingHost
     config:          HeliosConfig | undefined;
     _energyDefaults: EnergyDefaults;
     _viewMode?:      'scene' | 'clock' | 'trend' | 'day';
-    _dayPeriod?:     'today' | 'yesterday';
+    _timelineMode?:  string;   //'yesterday' shows the previous day; anything else = today (live)
     _dayRing:        DayRingData | null;
     _dayRingKey:     string;
     requestUpdate(): void;
@@ -225,7 +233,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     midnight.setHours(0, 0, 0, 0);
     const todayMidnight = midnight.getTime();
     //Yesterday shows the whole previous day (a complete ring); Today runs from local midnight to the live 5-min edge.
-    const yesterday = host._dayPeriod === 'yesterday';
+    const yesterday = host._timelineMode === 'yesterday';
     const startMs = yesterday ? todayMidnight - DAY_MS : todayMidnight;
     const endMs   = yesterday ? todayMidnight : Math.floor(Date.now() / LIVE_QUANTUM_MS) * LIVE_QUANTUM_MS;
     if (startMs >= endMs) { return; }
@@ -257,8 +265,16 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     {
         if (!dev.statConsumption) { continue; }
         const name = dev.name || host.hass?.states?.[dev.statConsumption]?.attributes?.friendly_name || dev.statConsumption;
-        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, name);
-        if (!run) { continue; }
+        const kwh  = binSlots(deviceById?.[dev.statConsumption] ?? null, slots);
+        //EVERY configured device gets a ring, so its slot is reserved even on a day with no data yet (it draws as an
+        //empty faint ring). Below the noise floor detectDeviceRuns returns null, so fall back to an empty run.
+        let run = detectDeviceRuns(kwh, dev.index, name);
+        if (!run)
+        {
+            let total = 0;
+            for (const v of kwh) { total += Math.max(0, v); }
+            run = { index: dev.index, name, values: kwh, segments: [], continuous: false, dailyKwh: total, solarPct: 0, gridPct: 0 };
+        }
         //Attribute the device's own energy to the solar / grid share of each slot it ran, for the tooltip.
         let sol = 0;
         let gr  = 0;
@@ -274,7 +290,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const sum = (a: number[]): number => a.reduce((t, v) => t + Math.max(0, v), 0);
     host._dayRing = {
         solar: shares.solar, battery: shares.battery, grid: shares.grid, devices, hasSolar, hasGrid, hasBattery,
-        solarKwh: sum(pv), gridKwh: sum(imp), batteryKwh: sum(bd),
+        solarKwh: sum(pv), gridKwh: sum(imp), batteryKwh: sum(bd), pv,
     };
     host.requestUpdate();
 }

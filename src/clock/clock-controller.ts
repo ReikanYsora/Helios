@@ -8,7 +8,7 @@ import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/f
 import { refreshClockHourly } from './clock-hourly';
 import type { ClockHourly } from './clock-hourly';
 import { refreshTrendProfiles } from './trend';
-import { refreshDayRing, optimizeDeviceValues } from './day-ring';
+import { refreshDayRing, optimizeDevices } from './day-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
@@ -500,11 +500,12 @@ export class ClockController
             const dr          = this.host._dayRing;
             const importColor = ENERGY_COLOR.gridImport(el);
             const batteryColor = ENERGY_COLOR.batteryOut(el);
-            //Optimised mode replays each shiftable device inside the day's solar window (see optimizeDeviceValues).
-            const opt         = this.host._dayOptimized === true;
-            const rings       = (dr?.devices ?? []).map(dev => ({
+            //Optimised mode reschedules the shiftable devices into the real solar production (see optimizeDevices).
+            const devs        = dr?.devices ?? [];
+            const optValues   = this.host._dayOptimized === true ? optimizeDevices(dr?.pv ?? [], devs) : null;
+            const rings       = devs.map((dev, i) => ({
                 color:    deviceColorByIndex(el, dev.index),
-                values:   opt ? optimizeDeviceValues(dr?.solar ?? [], dev.values, dev.continuous, dev.values.length) : dev.values,
+                values:   optValues ? optValues[i] : dev.values,
                 segments: dev.segments,
                 dailyKwh: dev.dailyKwh,
             }));
