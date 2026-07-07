@@ -26,6 +26,10 @@ export interface DayRingData
     hasSolar:   boolean;
     hasGrid:    boolean;
     hasBattery: boolean;
+    //Day totals (kWh) for the source-ring tooltips: solar produced, grid imported, battery discharged.
+    solarKwh:   number;
+    gridKwh:    number;
+    batteryKwh: number;
 }
 
 //One device's run(s) over the day: contiguous on-slots as arcs (episodic) or the whole day (continuous). `index`
@@ -212,7 +216,8 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     for (const dev of d.devices)
     {
         if (!dev.statConsumption) { continue; }
-        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, dev.name || dev.statConsumption);
+        const name = dev.name || host.hass?.states?.[dev.statConsumption]?.attributes?.friendly_name || dev.statConsumption;
+        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, name);
         if (!run) { continue; }
         //Attribute the device's own energy to the solar / grid share of each slot it ran, for the tooltip.
         let sol = 0;
@@ -226,6 +231,10 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const hasSolar   = d.solarStatEnergyFroms.length > 0;
     const hasGrid    = d.gridStatEnergyFroms.length > 0 || d.gridStatEnergyTos.length > 0;
     const hasBattery = d.batteryStatEnergyFroms.length > 0 || d.batteryStatEnergyTos.length > 0;
-    host._dayRing = { solar: shares.solar, battery: shares.battery, grid: shares.grid, devices, hasSolar, hasGrid, hasBattery };
+    const sum = (a: number[]): number => a.reduce((t, v) => t + Math.max(0, v), 0);
+    host._dayRing = {
+        solar: shares.solar, battery: shares.battery, grid: shares.grid, devices, hasSolar, hasGrid, hasBattery,
+        solarKwh: sum(pv), gridKwh: sum(imp), batteryKwh: sum(bd),
+    };
     host.requestUpdate();
 }

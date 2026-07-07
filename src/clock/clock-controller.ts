@@ -671,25 +671,44 @@ export class ClockController
         }
     }
 
-    //Day-mode hover tooltip: the device's name, its total for the day, and the solar / grid split of that total,
-    //placed at the cursor.
+    //Day-mode hover tooltip, placed at the cursor. The hover id runs producers first (solar, grid, battery -- name +
+    //day total) then devices (name, day total, and the solar / grid split of that total).
     public renderDayTooltip(index: number): TemplateResult | typeof nothing
     {
-        const dev = this.host._dayRing?.devices[index];
-        if (!dev) { return nothing; }
-        const gridColor = ENERGY_COLOR.gridImport(this.host as unknown as Element);
+        const dr = this.host._dayRing;
+        if (!dr) { return nothing; }
+        const el = this.host as unknown as Element;
+        const gridColor = ENERGY_COLOR.gridImport(el);
+        const batteryColor = ENERGY_COLOR.batteryOut(el);
         const x = (this.host._dayHoverX + 14).toFixed(0);
         const y = this.host._dayHoverY.toFixed(0);
-        return html`
-            <div class="clock-tip" style="left:${x}px; top:${y}px">
-                <div class="clock-tip-head">${dev.name}</div>
-                <div style="display:flex;gap:10px;align-items:center;white-space:nowrap;margin-top:3px">
-                    <span>${dev.dailyKwh.toFixed(2)} kWh</span>
-                    <span style="color:#ffc107;display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:white-balance-sunny" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.solarPct * 100)}%</span>
-                    <span style="color:${gridColor};display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:transmission-tower" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.gridPct * 100)}%</span>
-                </div>
-            </div>
-        `;
+        //Bottom:auto so the cursor `top` wins (the .clock-tip default anchors bottom, which would stretch the box).
+        const wrap = (inner: TemplateResult): TemplateResult => html`
+            <div class="clock-tip" style="left:${x}px; top:${y}px; bottom:auto">${inner}</div>`;
+        //Producer rings, in the same order as their hover ids.
+        const producers: { name: string; icon: string; color: string; kwh: number }[] = [];
+        if (dr.hasSolar)   { producers.push({ name: 'Solar', icon: 'mdi:white-balance-sunny', color: '#ffc107', kwh: dr.solarKwh }); }
+        if (dr.hasGrid)    { producers.push({ name: 'Grid', icon: 'mdi:transmission-tower', color: gridColor, kwh: dr.gridKwh }); }
+        if (dr.hasBattery) { producers.push({ name: 'Battery', icon: 'mdi:battery', color: batteryColor, kwh: dr.batteryKwh }); }
+        if (index < producers.length)
+        {
+            const p = producers[index];
+            return wrap(html`
+                <div class="clock-tip-head">${p.name}</div>
+                <div style="display:flex;gap:6px;align-items:center;white-space:nowrap;margin-top:3px">
+                    <ha-icon icon=${p.icon} style="--mdc-icon-size:14px;color:${p.color}"></ha-icon>
+                    <span>${p.kwh.toFixed(2)} kWh</span>
+                </div>`);
+        }
+        const dev = dr.devices[index - producers.length];
+        if (!dev) { return nothing; }
+        return wrap(html`
+            <div class="clock-tip-head">${dev.name}</div>
+            <div style="display:flex;gap:10px;align-items:center;white-space:nowrap;margin-top:3px">
+                <span>${dev.dailyKwh.toFixed(2)} kWh</span>
+                <span style="color:#ffc107;display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:white-balance-sunny" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.solarPct * 100)}%</span>
+                <span style="color:${gridColor};display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:transmission-tower" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.gridPct * 100)}%</span>
+            </div>`);
     }
 
     public onClockHoverEnd = (e: PointerEvent): void =>
