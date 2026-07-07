@@ -709,23 +709,18 @@ function dayGapF(camera: SceneCamera, rm: number, capWidthPx: number): number
     return (DAY_MIDNIGHT_GAP_PX / 2 + capWidthPx / 2) / rPx / (2 * Math.PI);
 }
 
-//A black day track for a whole group: a FILLED annular sector [outerRm-thickM, outerRm] over the day, with a flat
-//radial end at each side of the midnight gap. The ends are quarter-circle / line / quarter-circle (rounded corners
-//via a round line-join) rather than a full semicircle, so a thick group band doesn't bulge into the gap.
-function dayTrack(camera: SceneCamera, outerRm: number, thickM: number): string
+//A full DONUT (annulus) on the ground: outer + inner sampled circles as one even-odd path, so the centre is a hole.
+//Backgrounds are plain donuts (no start/end -> no overlapping midnight caps); only the value arcs have caps.
+function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: string, opacity: number): string
 {
-    const innerRm = outerRm - thickM;
-    const STEPS = 288;
-    const pAt = (rm: number, f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    //Per-edge gap so the outer + inner ends sit the SAME px from midnight -> the two radial ends are parallel (a
-    //straight constant-width slot, "border-radius on a rectangle bent into a ring"), not a widening wedge.
-    const gO = dayGapF(camera, outerRm, 0);
-    const gI = dayGapF(camera, innerRm, 0);
-    const pts: string[] = [];
-    for (let k = 0; k <= STEPS; k++) { pts.push(pAt(outerRm, gO + (1 - 2 * gO) * k / STEPS)); }
-    for (let k = STEPS; k >= 0; k--) { pts.push(pAt(innerRm, gI + (1 - 2 * gI) * k / STEPS)); }
-    const cr = Math.max(1.5, Math.min(thickM * (camera.pxPerMetre || 1) * 0.22, 8));   //rounded-corner radius
-    return `<polygon points="${pts.join(' ')}" fill="#000000" stroke="#000000" stroke-width="${(2 * cr).toFixed(1)}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const STEPS = 120;
+    const ring = (rm: number): string =>
+    {
+        let d = '';
+        for (let k = 0; k < STEPS; k++) { const a = 2 * Math.PI * k / STEPS; const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); d += `${k ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`; }
+        return d + 'Z';
+    };
+    return `<path d="${ring(outerRm)}${ring(innerRm)}" fill="${fill}" fill-opacity="${opacity}" fill-rule="evenodd"/>`;
 }
 
 //A member ring drawn IN FULL: a faint full-day ring at very low opacity (so the ring exists everywhere, even where
@@ -736,10 +731,10 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
 {
     const STEPS = 288;
     const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    //Faint full ring (the whole day, with the midnight gap): the ring is always drawn, dim where there's no data.
+    //Faint full ring as a plain closed circle (no start/end): the ring is always drawn, dim where there's no data.
     const full: string[] = [];
-    for (let k = 0; k <= STEPS; k++) { full.push(pAt(gapF + (1 - 2 * gapF) * k / STEPS)); }
-    let s = `<polyline points="${full.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.1" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    for (let k = 0; k <= STEPS; k++) { full.push(pAt(k / STEPS)); }
+    let s = `<polyline points="${full.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.1" stroke-width="${widthPx.toFixed(1)}" stroke-linejoin="round"/>`;
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
@@ -780,7 +775,10 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
         for (let k = 0; k < 48; k++) { c.push(camera.project(r * Math.sin(hourRad(k / 48, camera.southern)), r * Math.cos(hourRad(k / 48, camera.southern)), 0)); }
         return c;
     };
-    let svg = dayTrack(camera, outerRm, thickM);   //the group's zone band
+    //The zone donut hugs the member rings with just a small breathing margin (no big black border outside/inside).
+    const halfW  = (gaugeW / ppm) / 2;
+    const margin = sub * 0.14;
+    let svg = dayDonut(camera, outerRm - 0.5 * sub + halfW + margin, outerRm - (n - 0.5) * sub - halfW - margin, '#000000', 1);
     const hits: DayRingHit[] = [];
     members.forEach((m, i) =>
     {
