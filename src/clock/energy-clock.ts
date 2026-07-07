@@ -35,6 +35,8 @@ export type ClockHost = ChartHost & {
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
 const DAY_RING_R_FRAC = 0.40;   //day mode zooms the dial in (bigger than the scene ring) while the hour labels still fit
+const DAY_RAIL_FRAC   = 0.32;   //inner fraction of a day consumption ring taken by its solid identity rail
+const DAY_GRID_HEX    = '#6d84a6';   //cold slate for grid-drawn hours, a sharp contrast with the sun gold
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
 const CLOCK_MAX_FILTERS = 8;
@@ -727,20 +729,28 @@ function dayEdge(camera: SceneCamera, r: number, color: string, slots: number): 
     return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
 }
 
-//A device ring, recoloured by WHERE the energy came from at each hour (not by the device). A faint device-colour
-//track keeps the ring identifiable and lets the scene breathe (no black); each active slot is painted in two
-//layered fills whose opacities split the slot's brightness between SUN (self-powered: solar + battery, gold) and
-//GRID (import colour). So the dial reads sun-vs-grid at a glance; device identity stays on the track, edges and
-//tooltip. `values` is the device's per-slot energy; `coverage[s]` is the self-sufficiency share of that slot.
-function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, deviceColor: string, values: number[], coverage: number[], gridColor: string, slots: number): string
+//A device ring in two radially-separate zones, so device identity and the sun story never mix:
+//  - a thick SOLID inner rail in the device's own colour (the identity: always visible, full opacity),
+//  - the SUN-vs-GRID fragments hooked onto it toward the outer edge -- each active slot split into two layered
+//    fills whose opacities carry the slot's brightness between SUN (self-powered: solar + battery, gold) and GRID
+//    (drawn from the grid, a sharp cold slate). No outer edge; the gap to the next ring separates them.
+//`values` is the device's per-slot energy; `coverage[s]` is the self-sufficiency share (solar + battery) of the slot.
+function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, deviceColor: string, values: number[], coverage: number[], slots: number): string
 {
     const SEG = 4;
     const pt  = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const rRail  = rInner + (rOuter - rInner) * DAY_RAIL_FRAC;   //fragments live in [rRail, rOuter]
     const trackN = Math.max(24, slots);
+    //Solid identity rail (full annulus, [rInner, rRail]).
+    const rail: string[] = [];
+    for (let k = 0; k <= trackN; k++) { rail.push(pt(rRail, hourRad(k / trackN, camera.southern))); }
+    for (let k = trackN; k >= 0; k--) { rail.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
+    //Faint neutral track behind the fragment zone ([rRail, rOuter]) so idle hours read without going black.
     const track: string[] = [];
     for (let k = 0; k <= trackN; k++) { track.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
-    for (let k = trackN; k >= 0; k--) { track.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
-    let s = `<polygon points="${track.join(' ')}" fill="${deviceColor}" opacity="0.16"/>`;
+    for (let k = trackN; k >= 0; k--) { track.push(pt(rRail, hourRad(k / trackN, camera.southern))); }
+    let s = `<polygon points="${track.join(' ')}" fill="#9aa4b8" opacity="0.1"/>`
+          + `<polygon points="${rail.join(' ')}" fill="${deviceColor}" opacity="1"/>`;
     let peak = 0;
     for (const v of values) { if (v > peak) { peak = v; } }
     if (peak > 0)
@@ -755,14 +765,14 @@ function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, devi
             const a1  = hourRad((i + 1) / slots, camera.southern);
             const pts: string[] = [];
             for (let k = 0; k <= SEG; k++) { pts.push(pt(rOuter, a0 + (a1 - a0) * k / SEG)); }
-            for (let k = SEG; k >= 0; k--) { pts.push(pt(rInner, a0 + (a1 - a0) * k / SEG)); }
+            for (let k = SEG; k >= 0; k--) { pts.push(pt(rRail, a0 + (a1 - a0) * k / SEG)); }
             const poly = pts.join(' ');
-            //Two layered fills: the gold share (ran on the sun) over the grid share (drawn from the grid).
-            s += `<polygon points="${poly}" fill="${gridColor}" opacity="${(op * (1 - cov)).toFixed(3)}"/>`;
+            //Two layered fills: the gold share (ran on the sun) over the cold-grid share (drawn from the grid).
+            s += `<polygon points="${poly}" fill="${DAY_GRID_HEX}" opacity="${(op * (1 - cov)).toFixed(3)}"/>`;
             s += `<polygon points="${poly}" fill="${SUN_COLOR_HEX}" opacity="${(op * cov).toFixed(3)}"/>`;
         }
     }
-    return s + dayEdge(camera, rOuter, deviceColor, slots) + dayEdge(camera, rInner, deviceColor, slots);
+    return s;
 }
 
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
@@ -1180,7 +1190,7 @@ export function projectDayRingFrame(
     {
         const rOuter = zoneTop - k * dband - (k === 0 ? 0 : gap / 2);
         const rInner = k === nDev - 1 ? hubR : zoneTop - (k + 1) * dband + gap / 2;
-        let one = dayDeviceRing(camera, rInner, rOuter, rg.color, rg.values, coverage, importColor, slots);
+        let one = dayDeviceRing(camera, rInner, rOuter, rg.color, rg.values, coverage, slots);
         if (k === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${rg.color})">${one}</g>`; }
         ringSvg += one;
         //Hit order matches the rings array, i.e. host._dayRing.devices.
