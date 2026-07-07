@@ -720,13 +720,19 @@ function dayOpacityBand(camera: SceneCamera, rInner: number, rOuter: number, col
     return s;
 }
 
-//One edge outline (a projected ring polyline at radius r) in the given colour.
-function dayEdge(camera: SceneCamera, r: number, color: string, slots: number): string
+//One ground ring stroke at radius r (a projected polyline), with tunable width + opacity.
+function dayStroke(camera: SceneCamera, r: number, color: string, width: number, opacity: number, slots: number): string
 {
     const n = Math.max(24, slots);
     const pts: string[] = [];
     for (let k = 0; k <= n; k++) { const a = hourRad(k / n, camera.southern); const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
-    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.85"/>`;
+    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="${width}" stroke-opacity="${opacity}"/>`;
+}
+
+//One edge outline in the given colour (thin, mostly opaque).
+function dayEdge(camera: SceneCamera, r: number, color: string, slots: number): string
+{
+    return dayStroke(camera, r, color, 1, 0.85, slots);
 }
 
 //A device ring in two radially-separate zones, so device identity and the sun story never mix:
@@ -772,7 +778,8 @@ function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, devi
             s += `<polygon points="${poly}" fill="${SUN_COLOR_HEX}" opacity="${(op * cov).toFixed(3)}"/>`;
         }
     }
-    return s;
+    //A hair-thin light bevel where the rail meets the fragments: pops the identity colour and adds relief.
+    return s + dayStroke(camera, rRail, '#ffffff', 1, 0.3, slots);
 }
 
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
@@ -1196,6 +1203,12 @@ export function projectDayRingFrame(
         //Hit order matches the rings array, i.e. host._dayRing.devices.
         dayHits.push({ outer: circle(rOuter), inner: circle(rInner) });
     });
+
+    //Shadow grooves in the gaps: a dark slate line at each gap centre so every ring reads as a distinct disc
+    //stacked on the next (Apple-watch-style separation), without reintroducing heavy black.
+    const GROOVE = '#0b0e13';
+    for (let k = 0; k < nDev - 1; k++) { ringSvg += dayStroke(camera, zoneTop - (k + 1) * dband, GROOVE, 2.5, 0.6, slots); }
+    if (prodUnit > 0 && nDev > 0) { ringSvg += dayStroke(camera, prodInner - groupGap / 2, GROOVE, 2.5, 0.6, slots); }
 
     return {
         //No compass in day mode (cardinals hidden): the rings + the under-dial hub guide.
