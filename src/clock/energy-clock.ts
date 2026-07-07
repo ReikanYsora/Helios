@@ -1060,12 +1060,13 @@ function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRin
     const hits: DayRingHit[] = [];
     if (!n || slots <= 0) { return { svg: '', hits }; }
     //Float at one small fixed height (this mode is viewed top-down). The rings sit just outside the central logo
-    //(0.55R) out to the rim, so they read thicker than when squeezed into the base ring's band. Equal sub-band each
-    //with a slim padding; no edging (adjacent rings read by colour + gap).
+    //(0.55R) out to the rim. Only a hair of padding (so each ring reads as wide as possible) plus a dark edge
+    //stroke to separate neighbours.
     const h        = maxHm * 0.06;
     const devInner = outerR * 0.55;
     const band     = (outerR - devInner) / n;
-    const pad      = band * 0.12;
+    const pad      = band * 0.05;
+    const edge     = 'rgba(0,0,0,0.45)';
     const proj   = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), h); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
     const projXY = (r: number, a: number): [number, number] => camera.project(r * Math.sin(a), r * Math.cos(a), h);
     let out = '';
@@ -1085,8 +1086,8 @@ function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRin
         };
         hits.push({ outer: circle(r1), inner: circle(r0) });
         if (peak <= 0) { return; }
-        //Hovered ring goes opaque, the others dim; no hover = the resting opacity.
-        const op = hoverIndex < 0 ? 0.8 : (i === hoverIndex ? 0.98 : 0.22);
+        //All rings keep their resting opacity; the hovered one is picked out by a small glow in its own colour
+        //(dimming everything else read as too faint).
         let body = '';
         for (const seg of ring.segments)
         {
@@ -1102,9 +1103,10 @@ function dayDeviceRings(camera: SceneCamera, outerR: number, rings: DayDeviceRin
             }
             //Inner edge back at r0, closing the gauge.
             for (let s = seg.end; s >= seg.start; s--) { pts.push(proj(r0, hourRad(s / slots, camera.southern))); }
-            body += `<polygon points="${pts.join(' ')}" fill="${ring.color}"/>`;
+            body += `<polygon points="${pts.join(' ')}" fill="${ring.color}" stroke="${edge}" stroke-width="1.2"/>`;
         }
-        out += `<g opacity="${op.toFixed(2)}">${body}</g>`;
+        const glow = i === hoverIndex ? ` style="filter:drop-shadow(0 0 4px ${ring.color})"` : '';
+        out += `<g opacity="0.85"${glow}>${body}</g>`;
     });
     return { svg: out, hits };
 }
@@ -1134,12 +1136,10 @@ export function projectDayRingFrame(
     const labelR = outerR * LABEL_R_MULT;
     const projLabels = Array.from({ length: 24 }, (_, h) =>
         camera.project3(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0));
-    let depthMin = Infinity; let depthMax = -Infinity;
-    for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
-    const depthRange = depthMax - depthMin || 1;
+    //Top-down view: every hour label is equally near the camera, so no distance fade (full opacity throughout).
     const labels = projLabels.map((p, h) => ({
         x: p.x, y: p.y,
-        opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
+        opacity: 1,
         transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
     }));
 
