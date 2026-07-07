@@ -437,6 +437,15 @@ export function energySolarColor(host: Element | null | undefined, dark: boolean
     return out;
 }
 
+//Colour HA gives an individual device by its position in the Energy dashboard's device list: the theme's
+//`--graph-color-{index+1}`, falling back to `--color-{(index % 54)+1}`, then grey. Lets the day-ring device
+//crepes match the colours the user already sees on the dashboard's devices graph.
+export function deviceColorByIndex(host: Element | null | undefined, index: number): string
+{
+    return cssHex(host, `--graph-color-${index + 1}`, cssHex(host, `--color-${(index % 54) + 1}`, '#8a8a8a'));
+}
+
+
 //The card's semantic colours, resolved from the HA Energy palette tokens (the same ones HA's own energy
 //cards use) with the palette defaults as fallbacks. Pass the card element as host.
 export const ENERGY_COLOR = {

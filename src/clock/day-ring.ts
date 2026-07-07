@@ -2,18 +2,74 @@
 //solar vs the grid). The slot count follows the card's display-update-frequency-per-hour setting (24 * freq), so a
 //finer cadence draws a finer ring; the change-series is fetched at the matching recorder period.
 
-import { fetchChangeSeries, outlierCapKwh, type ChangeBucket } from '../data/sources/energy-stats';
+import { fetchChangeSeries, fetchChangeById, outlierCapKwh, type ChangeBucket } from '../data/sources/energy-stats';
 import { consumptionLoad } from '../core/energy';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../core/config/helios-config';
 import { serverHourFrac } from '../core/time/timezone';
 import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
 
-//Per-slot ring shares: solar (gold) + grid import (import colour), summing to ~1 under load, both 0 when empty.
+//Per-slot ring shares (solar gold + grid-import colour, summing to ~1 under load) plus the day's qualifying device
+//runs, drawn as floating crepes over the ring.
 export interface DayRingData
 {
-    solar: number[];
-    grid:  number[];
+    solar:   number[];
+    grid:    number[];
+    devices: DeviceRun[];
+}
+
+//One device's run(s) over the day: contiguous on-slots as arcs (episodic) or the whole day (continuous). `index`
+//is the dashboard position, so the crepe reuses HA's per-index device colour.
+export interface DeviceRun
+{
+    index:      number;
+    name:       string;
+    segments:   { start: number; end: number }[];
+    continuous: boolean;
+}
+
+//Below this daily total (kWh) a device gets no crepe (noise cut). Run tunables: a slot counts as "on" above this
+//fraction of the device's peak slot; a device on for at least CONTINUOUS_FRAC of slots reads as a full ring; short
+//gaps up to BRIDGE_SLOTS are bridged so sparse data does not shred a cycle into fragments.
+const DEVICE_THRESHOLD_KWH = 0.1;
+const RUN_ACTIVE_FRAC     = 0.15;
+const RUN_CONTINUOUS_FRAC = 0.8;
+const RUN_BRIDGE_SLOTS    = 2;
+
+//Detect a device's run(s) from its per-slot energy (kWh). Null when the daily total is below the noise threshold.
+export function detectDeviceRuns(kwh: number[], index: number, name: string): DeviceRun | null
+{
+    let total = 0;
+    let peak  = 0;
+    for (const v of kwh) { const x = Math.max(0, v); total += x; if (x > peak) { peak = x; } }
+    if (total < DEVICE_THRESHOLD_KWH || peak <= 0) { return null; }
+    const slots = kwh.length;
+    const onCut = peak * RUN_ACTIVE_FRAC;
+    const on    = kwh.map(v => v > onCut);
+    let onCount = 0;
+    for (const b of on) { if (b) { onCount++; } }
+    if (onCount >= slots * RUN_CONTINUOUS_FRAC)
+    {
+        return { index, name, segments: [{ start: 0, end: slots }], continuous: true };
+    }
+    const segments: { start: number; end: number }[] = [];
+    let i = 0;
+    while (i < slots)
+    {
+        if (!on[i]) { i++; continue; }
+        let end = i + 1;
+        let j   = i + 1;
+        let gap = 0;
+        while (j < slots && gap <= RUN_BRIDGE_SLOTS)
+        {
+            if (on[j]) { end = j + 1; gap = 0; }
+            else { gap++; }
+            j++;
+        }
+        segments.push({ start: i, end });
+        i = end;
+    }
+    return { index, name, segments, continuous: false };
 }
 
 export interface DayRingHost
@@ -46,7 +102,7 @@ function binSlots(buckets: ChangeBucket[] | null, slots: number): number[]
 
 //Per-slot solar + grid-import shares of the ring cell, from the slot's energy sums. Pure (testable): solar =
 //self-consumed solar / load, grid = grid import / load; both 0 for a slot with no load (future or idle).
-export function ringShares(pv: number[], imp: number[], exp: number[], battNet: number[]): DayRingData
+export function ringShares(pv: number[], imp: number[], exp: number[], battNet: number[]): { solar: number[]; grid: number[] }
 {
     const n = pv.length;
     const solar = new Array<number>(n).fill(0);
@@ -94,9 +150,12 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
 
     const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
         ids.length ? fetchChangeSeries(host.hass, [...ids].sort(), startMs, endMs, period) : Promise.resolve(null);
-    const [solarB, impB, expB, bChgB, bDisB] = await Promise.all([
+    //Every device meter in one recorder call (per-id), then binned + run-detected each.
+    const deviceIds = d.devices.map(dev => dev.statConsumption).filter(Boolean);
+    const [solarB, impB, expB, bChgB, bDisB, deviceById] = await Promise.all([
         chg(d.solarStatEnergyFroms), chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
         chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
+        deviceIds.length ? fetchChangeById(host.hass, deviceIds, startMs, endMs, period) : Promise.resolve(null),
     ]);
     //Ignore a resolution whose window/cadence moved on while it was in flight.
     if (host._dayRingKey !== key) { return; }
@@ -105,6 +164,14 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const exp = binSlots(expB, slots);
     const bc  = binSlots(bChgB, slots);
     const bd  = binSlots(bDisB, slots);
-    host._dayRing = ringShares(pv, imp, exp, bc.map((c, s) => c - bd[s]));
+    const shares = ringShares(pv, imp, exp, bc.map((c, s) => c - bd[s]));
+    const devices: DeviceRun[] = [];
+    for (const dev of d.devices)
+    {
+        if (!dev.statConsumption) { continue; }
+        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, dev.name || dev.statConsumption);
+        if (run) { devices.push(run); }
+    }
+    host._dayRing = { solar: shares.solar, grid: shares.grid, devices };
     host.requestUpdate();
 }

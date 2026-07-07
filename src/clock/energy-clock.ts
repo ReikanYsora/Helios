@@ -1026,11 +1026,49 @@ export function projectTrendFrame(
 //Project the DAY ring: a flat 24-hour ground annulus for today. Each hour's cell is split gold (solar share) then
 //import-colour (grid share), so both where the sun covered you and where you drew from the grid read at a glance.
 //No bars: the story is the colour, not the height. Reuses the clock's labels, guide, compass, now-arrow and decal.
+//A device's floating crepe: its dashboard colour + the day-slot segments it ran (or the whole ring if continuous).
+export interface DayCrepe
+{
+    color:      string;
+    segments:   { start: number; end: number }[];
+    continuous: boolean;
+}
+
+//Floating device crepes over the base ring: each device is a translucent flat annular band at its own height
+//layer, covering the slot span(s) it ran. Read against the gold/import ring below, a run over a grey (grid) sector
+//is the "you drew this off the sun" signal. Stacked bottom-to-top; the top-down view later separates them.
+function dayDeviceCrepes(camera: SceneCamera, innerR: number, outerR: number, crepes: DayCrepe[], slots: number, maxHm: number): string
+{
+    if (!crepes.length || slots <= 0) { return ''; }
+    const baseH = maxHm * 0.14;
+    const stepH = maxHm * 0.11;
+    //One flat annular sector at height `h` over the fraction [fa, fb] of the dial.
+    const sector = (fa: number, fb: number, h: number, fill: string): string =>
+    {
+        const span = Math.max(1e-4, fb - fa);
+        const n = Math.max(2, Math.round(span * 96));
+        const pts: string[] = [];
+        for (let k = 0; k <= n; k++) { const a = hourRad(fa + span * k / n, camera.southern); const p = camera.project(outerR * Math.sin(a), outerR * Math.cos(a), h); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        for (let k = n; k >= 0; k--) { const a = hourRad(fa + span * k / n, camera.southern); const p = camera.project(innerR * Math.sin(a), innerR * Math.cos(a), h); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
+        return `<polygon points="${pts.join(' ')}" fill="${fill}" stroke="rgba(0,0,0,0.35)" stroke-width="0.5"/>`;
+    };
+    let out = '';
+    crepes.forEach((c, i) =>
+    {
+        const h = baseH + i * stepH;
+        let slab = '';
+        for (const seg of c.segments) { slab += sector(seg.start / slots, seg.end / slots, h, c.color); }
+        out += `<g opacity="0.6">${slab}</g>`;
+    });
+    return out;
+}
+
 export function projectDayRingFrame(
     camera: SceneCamera,
     solar: number[],
     grid: number[],
     importColor: string,
+    crepes: DayCrepe[],
     cardinals: { n: string; s: string; e: string; w: string },
     //Whether the hub mark is hovered/tapped (drives its opacity fade), mirroring the other dials.
     columnHighlight = false,
@@ -1064,7 +1102,7 @@ export function projectDayRingFrame(
 
     return {
         guideSvg: dayRingBands(camera, innerR, outerR, solar, grid, importColor) + clockGuide(camera, outerR) + compass.svg,
-        svg: currentHourArrow(camera, outerR, maxHm, 0),
+        svg: dayDeviceCrepes(camera, innerR, outerR, crepes, solar.length, maxHm) + currentHourArrow(camera, outerR, maxHm, 0),
         hits: [], labels, compass: compass.labels,
         home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
         decal,

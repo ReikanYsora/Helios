@@ -4,7 +4,7 @@ import type { HeliosCard } from '../helios-card';
 import { HOUR_MS, HOURS_PER_DAY, CLOCK_GROW_MS } from '../core/config/constants';
 import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
-import { formatHaHour, ENERGY_COLOR } from '../core/format/format';
+import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
 import type { ClockHourly } from './clock-hourly';
 import { refreshTrendProfiles } from './trend';
@@ -479,9 +479,11 @@ export class ClockController
         //No bars, no rail, no tooltip: just the base ground ring.
         if (this.host._viewMode === 'day')
         {
+            const el          = this.host as unknown as Element;
             const dr          = this.host._dayRing;
-            const importColor = ENERGY_COLOR.gridImport(this.host as unknown as Element);
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.grid ?? [], importColor, cardinals, this.host._clockHomeHover);
+            const importColor = ENERGY_COLOR.gridImport(el);
+            const crepes      = (dr?.devices ?? []).map(dev => ({ color: deviceColorByIndex(el, dev.index), segments: dev.segments, continuous: dev.continuous }));
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.grid ?? [], importColor, crepes, cardinals, this.host._clockHomeHover);
             this._applyClockFrame(frame);
             return;
         }
