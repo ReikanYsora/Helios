@@ -934,7 +934,7 @@ export class HeliosCard extends LitElement
             {
                 void refreshDayRing(this);
             }
-            if (_changedProperties.has('_engine')) { this._engine?.setHomeOnly(true); }
+            if (_changedProperties.has('_engine')) { this._engine?.setHomeOnly(true); this._engine?.enterDayView(); }
             if (_changedProperties.has('_dayRing')
                 || _changedProperties.has('_clockHomeHover')
                 || _changedProperties.has('_nightFrac'))

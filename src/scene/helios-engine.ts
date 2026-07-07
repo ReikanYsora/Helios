@@ -378,6 +378,73 @@ export class HeliosEngine
         });
     }
 
+    //Day (rings) view: a runtime-only lock + a top-down, equator-up pose, animated on enter and restored on exit.
+    //Kept separate from the persistent camera lock so it never leaks into the scene view or localStorage.
+    private _dayView = false;
+    private _dayViewSaved?: { bearing: number; pitch: number };
+    private _cameraAnimRaf?: number;
+
+    //Enter the day view: save the current pose once, lock rotation, animate near-straight-down and equator-up
+    //(south up in the northern hemisphere, north up in the southern).
+    public enterDayView(): void
+    {
+        if (!this._renderer)
+        {
+            return;
+        }
+        if (!this._dayView)
+        {
+            this._dayViewSaved = { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
+        }
+        this._dayView = true;
+        this._animateCameraTo(this.homeLat >= 0 ? 180 : 0, 5);
+    }
+
+    //Leave the day view: unlock and animate back to the saved pose.
+    public exitDayView(): void
+    {
+        if (!this._renderer || !this._dayView)
+        {
+            return;
+        }
+        this._dayView = false;
+        const saved = this._dayViewSaved;
+        this._dayViewSaved = undefined;
+        if (saved)
+        {
+            this._animateCameraTo(saved.bearing, saved.pitch);
+        }
+    }
+
+    //Ease the camera bearing + pitch to a target over ~500 ms; setCameraBearing/Pitch redraw + re-project overlays.
+    private _animateCameraTo(bearing: number, pitch: number): void
+    {
+        const renderer = this._renderer;
+        if (!renderer)
+        {
+            return;
+        }
+        if (this._cameraAnimRaf !== undefined)
+        {
+            cancelAnimationFrame(this._cameraAnimRaf);
+            this._cameraAnimRaf = undefined;
+        }
+        const b0 = renderer.getCameraBearing();
+        const p0 = renderer.getCameraPitch();
+        const db = ((bearing - b0 + 540) % 360) - 180;   //shortest way round
+        const dp = pitch - p0;
+        const start = performance.now();
+        const tick = (t: number): void =>
+        {
+            const k = Math.min(1, (t - start) / 500);
+            const e = 1 - (1 - k) ** 3;
+            renderer.setCameraBearing(b0 + db * e);
+            renderer.setCameraPitch(p0 + dp * e);
+            this._cameraAnimRaf = k < 1 ? requestAnimationFrame(tick) : undefined;
+        };
+        this._cameraAnimRaf = requestAnimationFrame(tick);
+    }
+
     //Home prism appearance, driven by the card's active chip: `color` is the chip's accent, `bands` the
     //per-PV-string production split (empty = solid). `animate` plays the squash/grow on a chip change; an
     //instant set is used for same-chip scrubs. The card computes these (they're hass/energy-derived).
@@ -461,7 +528,7 @@ export class HeliosEngine
             //move or did time pass?"). camera-locked also suppresses it.
             const autoRotateEnabled = this.cfg['auto-rotate-enabled'] === true;
             const cameraLocked      = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
-            if (!autoRotateEnabled || cameraLocked)
+            if (!autoRotateEnabled || cameraLocked || this._dayView)
             {
                 this._autoRotateRaf = undefined;
                 return;
@@ -646,9 +713,9 @@ export class HeliosEngine
             {
                 return;
             }
-            //camera-locked: manual drag is inert. Re-checked per pointerdown so a live-preview toggle
-            //disengages immediately without a respawn.
-            if (this.isCameraLocked())
+            //camera-locked (persistent) or the day view (runtime): manual drag is inert. Re-checked per
+            //pointerdown so a live-preview toggle disengages immediately without a respawn.
+            if (this.isCameraLocked() || this._dayView)
             {
                 return;
             }

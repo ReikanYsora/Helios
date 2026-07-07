@@ -117,6 +117,8 @@ export class ClockController
         this._clockCeilEase = false;
         this.host._clockHoverSlot = null;
         this.host._clockHomeHover = false;
+        //Leaving the day view restores the camera it saved before entering (top-down + lock is day-only).
+        if (this.host._viewMode === 'day' && mode !== 'day') { this.host._engine?.exitDayView(); }
         if (mode === 'clock')
         {
             //Entering clock: the scene's selected chip drives the dial. If it is not already among the active
@@ -158,9 +160,10 @@ export class ClockController
         }
         if (mode === 'day')
         {
-            //Day mode draws no scene geometry; the overlay paints today's self-sufficiency ground ring. Fetch
-            //today's hourly profile.
+            //Day mode draws no scene geometry; the overlay paints today's ground ring. Lock the camera to a
+            //top-down, equator-up view (restored on exit).
             this.host._engine?.setHomeOnly(true);
+            this.host._engine?.enterDayView();
             this.host._viewMode = mode;
             this.host.persistUiState();
             void refreshClockHourly(this.host);   //clears the clock profile (it keys off _viewMode)
