@@ -35,8 +35,6 @@ export type ClockHost = ChartHost & {
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
 const DAY_RING_R_FRAC = 0.40;   //day mode zooms the dial in (bigger than the scene ring) while the hour labels still fit
-const DAY_RAIL_FRAC   = 0.32;   //inner fraction of a day consumption ring taken by its solid identity rail
-const DAY_GRID_HEX    = '#6d84a6';   //cold slate for grid-drawn hours, a sharp contrast with the sun gold
 const DAY_RUN_PCT     = 0.08;   //a slot counts as a real production/consumption run above this % of the day's peak
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
@@ -693,124 +691,35 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
     return s;
 }
 
-//One annular band, flat on the ground (top-down): a continuous dark track so the band is always a complete circle
-//over the basemap, plus one colour cell per slot whose OPACITY carries the slot's value. No radial gauge and
-//nothing stacked, so every band stays legible; the dark track also backs the anti-aliasing seams between cells so
-//they read as the theme background, not bright gaps. Edge outlines are drawn separately (see dayEdge), so bands can
-//be glued together (production sub-bands) with a single outline around the whole group.
-function dayOpacityBand(camera: SceneCamera, rInner: number, rOuter: number, color: string, ops: number[], slots: number): string
-{
-    const SEG = 4;
-    const pt  = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    const trackN = Math.max(24, slots);
-    const track: string[] = [];
-    for (let k = 0; k <= trackN; k++) { track.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
-    for (let k = trackN; k >= 0; k--) { track.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
-    let s = `<polygon points="${track.join(' ')}" fill="#9aa4b8" opacity="0.1"/>`;
-    for (let i = 0; i < slots; i++)
-    {
-        const op = ops[i] ?? 0;
-        if (op <= 0.02) { continue; }
-        const a0 = hourRad(i / slots, camera.southern);
-        const a1 = hourRad((i + 1) / slots, camera.southern);
-        const pts: string[] = [];
-        for (let k = 0; k <= SEG; k++) { pts.push(pt(rOuter, a0 + (a1 - a0) * k / SEG)); }
-        for (let k = SEG; k >= 0; k--) { pts.push(pt(rInner, a0 + (a1 - a0) * k / SEG)); }
-        s += `<polygon points="${pts.join(' ')}" fill="${color}" opacity="${Math.min(1, op).toFixed(3)}"/>`;
-    }
-    return s;
-}
-
-//One ground ring stroke at radius r (a projected polyline), with tunable width + opacity.
-function dayStroke(camera: SceneCamera, r: number, color: string, width: number, opacity: number, slots: number): string
-{
-    const n = Math.max(24, slots);
-    const pts: string[] = [];
-    for (let k = 0; k <= n; k++) { const a = hourRad(k / n, camera.southern); const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); pts.push(`${p[0].toFixed(1)},${p[1].toFixed(1)}`); }
-    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="${width}" stroke-opacity="${opacity}"/>`;
-}
-
-//One edge outline in the given colour (thin, mostly opaque).
-function dayEdge(camera: SceneCamera, r: number, color: string, slots: number): string
-{
-    return dayStroke(camera, r, color, 1, 0.85, slots);
-}
-
-//A device ring in two radially-separate zones, so device identity and the sun story never mix:
-//  - a thick SOLID inner rail in the device's own colour (the identity: always visible, full opacity),
-//  - the SUN-vs-GRID fragments hooked onto it toward the outer edge -- each active slot split into two layered
-//    fills whose opacities carry the slot's brightness between SUN (self-powered: solar + battery, gold) and GRID
-//    (drawn from the grid, a sharp cold slate). No outer edge; the gap to the next ring separates them.
-//`values` is the device's per-slot energy; `coverage[s]` is the self-sufficiency share (solar + battery) of the slot.
-function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, deviceColor: string, values: number[], coverage: number[], slots: number): string
-{
-    const SEG = 4;
-    const pt  = (r: number, a: number): string => { const p = camera.project(r * Math.sin(a), r * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    const rRail  = rInner + (rOuter - rInner) * DAY_RAIL_FRAC;   //fragments live in [rRail, rOuter]
-    const trackN = Math.max(24, slots);
-    //Solid identity rail (full annulus, [rInner, rRail]).
-    const rail: string[] = [];
-    for (let k = 0; k <= trackN; k++) { rail.push(pt(rRail, hourRad(k / trackN, camera.southern))); }
-    for (let k = trackN; k >= 0; k--) { rail.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
-    //Faint neutral track behind the fragment zone ([rRail, rOuter]) so idle hours read without going black.
-    const track: string[] = [];
-    for (let k = 0; k <= trackN; k++) { track.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
-    for (let k = trackN; k >= 0; k--) { track.push(pt(rRail, hourRad(k / trackN, camera.southern))); }
-    let s = `<polygon points="${track.join(' ')}" fill="#9aa4b8" opacity="0.1"/>`
-          + `<polygon points="${rail.join(' ')}" fill="${deviceColor}" opacity="1"/>`;
-    let peak = 0;
-    for (const v of values) { if (v > peak) { peak = v; } }
-    if (peak > 0)
-    {
-        for (let i = 0; i < slots; i++)
-        {
-            const iv = Math.max(0, (values[i] ?? 0) / peak);
-            if (iv <= 0.02) { continue; }
-            const op  = 0.35 + 0.65 * Math.min(1, iv);   //slot brightness = how hard the device drew
-            const cov = Math.max(0, Math.min(1, coverage[i] ?? 0));
-            const a0  = hourRad(i / slots, camera.southern);
-            const a1  = hourRad((i + 1) / slots, camera.southern);
-            const pts: string[] = [];
-            for (let k = 0; k <= SEG; k++) { pts.push(pt(rOuter, a0 + (a1 - a0) * k / SEG)); }
-            for (let k = SEG; k >= 0; k--) { pts.push(pt(rRail, a0 + (a1 - a0) * k / SEG)); }
-            const poly = pts.join(' ');
-            //Two layered fills: the gold share (ran on the sun) over the cold-grid share (drawn from the grid).
-            s += `<polygon points="${poly}" fill="${DAY_GRID_HEX}" opacity="${(op * (1 - cov)).toFixed(3)}"/>`;
-            s += `<polygon points="${poly}" fill="${SUN_COLOR_HEX}" opacity="${(op * cov).toFixed(3)}"/>`;
-        }
-    }
-    //A hair-thin light bevel where the rail meets the fragments: pops the identity colour and adds relief.
-    return s + dayStroke(camera, rRail, '#ffffff', 1, 0.3, slots);
-}
-
-//TEST: an Apple-watch-style production ring. Valid only top-down (day mode is pitch 0): a thick round-capped BLACK
-//track running the whole day with a small gap at midnight (its two round caps are the "half circles"), and inside
-//it, padded, solid gold arcs over the RUNS where production was real. What matters is WHEN there was production,
-//not how much, so no opacity shading -- each run is one rounded-cap arc (its caps mark the start + end of the run).
-//`outerRm`/`thickM` are the band's outer radius + thickness in metres; `ratio[s]` is the per-slot production value.
-function dayProductionSolarRing(camera: SceneCamera, outerRm: number, thickM: number, ratio: number[], slots: number): string
+//An Apple-watch-style run ring (top-down only, day mode is pitch 0): a thick round-capped BLACK track running the
+//whole day with a small gap at midnight (its two round caps are the "half circles"), and inside it -- padded --
+//solid `color` arcs over the RUNS where the value is above a small % of the day's peak. What matters is WHEN there
+//was real activity, not how much, so no opacity shading; each run is one rounded-cap arc (its caps mark the run's
+//start + end), and a hole ends the arc so the next run restarts with a fresh cap. Used for every ring: the energy
+//sources (solar / grid / battery) and each device. `outerRm`/`thickM` are the band's outer radius + thickness in
+//metres; `values[s]` is the per-slot magnitude.
+function dayRunRing(camera: SceneCamera, outerRm: number, thickM: number, color: string, values: number[], slots: number): string
 {
     const midRm  = outerRm - thickM / 2;
     const trackW = thickM * (camera.pxPerMetre || 1);
     const gaugeW = Math.max(1, trackW * 0.68);   //padding inside the black track (both radial sides)
     const gapF   = 0.014;                         //small gap at midnight between the two round caps
+    const STEPS  = 288;
     const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(midRm * Math.sin(a), midRm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
     //Black track: one rounded-cap polyline around the whole day (gap at midnight -> the two half-circle caps).
     const track: string[] = [];
-    const STEPS = 288;
     for (let k = 0; k <= STEPS; k++) { track.push(pAt(gapF + (1 - 2 * gapF) * k / STEPS)); }
     let s = `<polyline points="${track.join(' ')}" fill="none" stroke="#000000" stroke-opacity="1" stroke-width="${trackW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-    //Gauge: solid gold arcs over the RUNS where production is above a small % of the day's peak. Each run is one
-    //rounded-cap arc (caps = start + end of production); a hole ends the arc and the next run starts a fresh one.
+    //Solid arcs over the runs above the threshold.
     let maxV = 0;
-    for (const v of ratio) { if (v > maxV) { maxV = v; } }
+    for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
     let i = 0;
     while (i < slots)
     {
-        if ((ratio[i] ?? 0) <= thr) { i++; continue; }
+        if ((values[i] ?? 0) <= thr) { i++; continue; }
         let j = i;
-        while (j < slots && (ratio[j] ?? 0) > thr) { j++; }
+        while (j < slots && (values[j] ?? 0) > thr) { j++; }
         const f0 = Math.max(gapF, i / slots);
         const f1 = Math.min(1 - gapF, j / slots);
         if (f1 > f0)
@@ -818,7 +727,7 @@ function dayProductionSolarRing(camera: SceneCamera, outerRm: number, thickM: nu
             const steps = Math.max(2, Math.round((f1 - f0) * STEPS));
             const seg: string[] = [];
             for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
-            s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${SUN_COLOR_HEX}" stroke-opacity="0.9" stroke-width="${gaugeW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+            s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.9" stroke-width="${gaugeW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
         }
         i = j;
     }
@@ -1193,27 +1102,21 @@ export function projectDayRingFrame(
     const decal   = { svg: '', active: false };
 
     const slots = Math.max(1, solar.length);
-    //Source share (0..1) -> opacity for the production block: a floor so even a small share still reads.
-    const FLOOR = 0.4;
-    const opFor = (v: number): number => (v > 0.02 ? FLOOR + (1 - FLOOR) * Math.min(1, v) : 0);
-    //Self-sufficiency share per slot (solar + battery): how much of that hour's home load ran on your own energy.
-    //It is what recolours every device ring gold-vs-grid.
-    const coverage = solar.map((sv, s) => Math.max(0, Math.min(1, (sv ?? 0) + (battery[s] ?? 0))));
-    //Configured sources only, outermost-first (solar, grid, battery). They are MERGED into a single production ring:
-    //stuck-together sub-bands with no gap or edge between them, one outline around the whole block.
-    //TEST: solar becomes an Apple-style rounded gauge ring at the rim; grid + battery stay as merged sub-bands.
-    const sources: { color: string; ops: number[] }[] = [];
-    if (hasGrid)    { sources.push({ color: importColor,   ops: grid.map(opFor) }); }
-    if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
+    //Every ring is an Apple-style run ring: a black round-capped day track + solid arcs over the runs of real
+    //activity in its own colour. Outer -> inner: the configured energy SOURCES (solar, grid, battery), then one ring
+    //per DEVICE (already sorted by daily total). Reading a device's arcs against the solar ring's arcs tells you at
+    //a glance whether it ran under the sun or off the grid -- the whole point.
+    const layers: { color: string; values: number[]; device: number }[] = [];
+    if (hasSolar)   { layers.push({ color: SUN_COLOR_HEX, values: solar,   device: -1 }); }
+    if (hasGrid)    { layers.push({ color: importColor,   values: grid,    device: -1 }); }
+    if (hasBattery) { layers.push({ color: batteryColor,  values: battery, device: -1 }); }
+    const prodCount = layers.length;
+    rings.forEach((rg, k) => layers.push({ color: rg.color, values: rg.values, device: k }));
 
-    //Radial budget from the hub out to the hour-disc edge: the solar ring + the grid/battery block make up the
-    //production zone; the rest is the consumption zone, one equal-width ring per device.
-    const solarUnit = hasSolar ? 1 : 0;
-    const prodUnit  = solarUnit + sources.length;
-    const nDev      = rings.length;
-    const band     = (discR - hubR) / Math.max(1, prodUnit + nDev);
-    const gap      = band * 0.4;    //padding between consumption rings
-    const groupGap = band * 0.5;    //separation between the production block and the first consumption ring
+    const nRings   = layers.length;
+    const band     = (discR - hubR) / Math.max(1, nRings);
+    const thick    = band * 0.72;   //track thickness; the rest of the band is the gap to the next ring
+    const groupGap = (prodCount > 0 && rings.length > 0) ? band * 0.4 : 0;   //breathing room sources <-> devices
 
     const circle = (r: number): [number, number][] =>
     {
@@ -1223,42 +1126,19 @@ export function projectDayRingFrame(
     };
     let ringSvg = '';
     const dayHits: DayRingHit[] = [];
-
-    const prodInner = discR - prodUnit * band;
-    //Solar: Apple-style rounded gauge ring at the rim (flush to discR).
-    if (hasSolar) { ringSvg += dayProductionSolarRing(camera, discR, band, solar, slots); }
-    //Grid + battery: merged sub-bands just inside the solar ring, one outline around the block.
-    if (sources.length > 0)
+    layers.forEach((L, u) =>
     {
-        const blkOuter = discR - solarUnit * band;
-        sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, blkOuter - (i + 1) * band, blkOuter - i * band, sc.color, sc.ops, slots); });
-        ringSvg += dayEdge(camera, blkOuter, sources[0].color, slots);
-        ringSvg += dayEdge(camera, blkOuter - sources.length * band, sources[sources.length - 1].color, slots);
-    }
-
-    //Consumption rings fill [hub, prodInner - groupGap]: one equal-width ring per device, `gap` carved between.
-    const zoneTop = prodInner - (prodUnit > 0 && nDev > 0 ? groupGap : 0);
-    const dband   = (zoneTop - hubR) / Math.max(1, nDev);
-    rings.forEach((rg, k) =>
-    {
-        const rOuter = zoneTop - k * dband - (k === 0 ? 0 : gap / 2);
-        const rInner = k === nDev - 1 ? hubR : zoneTop - (k + 1) * dband + gap / 2;
-        let one = dayDeviceRing(camera, rInner, rOuter, rg.color, rg.values, coverage, slots);
-        if (k === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 4px ${rg.color})">${one}</g>`; }
+        const rOuter = discR - u * band - (u >= prodCount ? groupGap : 0);
+        let one = dayRunRing(camera, rOuter, thick, L.color, L.values, slots);
+        if (L.device >= 0 && L.device === hoverIndex) { one = `<g style="filter:drop-shadow(0 0 5px ${L.color})">${one}</g>`; }
         ringSvg += one;
-        //Hit order matches the rings array, i.e. host._dayRing.devices.
-        dayHits.push({ outer: circle(rOuter), inner: circle(rInner) });
+        //Device rings are hoverable; hit order matches the rings array, i.e. host._dayRing.devices.
+        if (L.device >= 0) { dayHits.push({ outer: circle(rOuter), inner: circle(rOuter - thick) }); }
     });
 
-    //Shadow grooves in the gaps: a dark slate line at each gap centre so every ring reads as a distinct disc
-    //stacked on the next (Apple-watch-style separation), without reintroducing heavy black.
-    const GROOVE = '#0b0e13';
-    for (let k = 0; k < nDev - 1; k++) { ringSvg += dayStroke(camera, zoneTop - (k + 1) * dband, GROOVE, 2.5, 0.6, slots); }
-    if (prodUnit > 0 && nDev > 0) { ringSvg += dayStroke(camera, prodInner - groupGap / 2, GROOVE, 2.5, 0.6, slots); }
-
     return {
-        //No compass in day mode (cardinals hidden): the rings + the under-dial hub guide.
-        guideSvg: clockGuide(camera, outerR),
+        //No ground hour grid any more (it cluttered): just the run rings + the hour labels.
+        guideSvg: '',
         svg: ringSvg,
         hits: [], labels, compass: [],
         home: { x: homeCtr[0], y: homeCtr[1], r: hubR * ppm },
