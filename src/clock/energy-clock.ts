@@ -740,9 +740,8 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
     };
     //Faint full ring (the member's track), round caps sharing the value arcs' gapF so the ends line up at the
-    //midnight slot. Kept faint so idle time reads as empty, but visible enough that a run reads as a LIT part of a
-    //ring, not a floating pill; on hover the whole track lights up so you see the complete ring the runs belong to.
-    const s = arc(gapF, 1 - gapF, hovered ? 0.38 : 0.14, 'round');
+    //midnight slot.
+    const s = arc(gapF, 1 - gapF, 0.1, 'round');
     let maxV  = 0;
     let total = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } total += Math.max(0, v); }
@@ -750,7 +749,7 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     //no scattered run pills from tiny noisy readings.
     if (total < DAY_MIN_RUN_KWH) { return s; }
     const thr = maxV * DAY_RUN_PCT;
-    const minLenF = rm * ppm > 0 ? (widthPx * 2.6) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc reads as a dash, not a dot
+    const minLenF = rm * ppm > 0 ? (widthPx * 4.5) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc is a clear elongated dash, never a disk
     let runs = '';
     let i = 0;
     while (i < slots)
@@ -779,7 +778,8 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     if (hovered && runs)
     {
         const fid = `dgl-${Math.round(rm * 100)}`;
-        return `${s}<defs><filter id="${fid}" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="3.2" flood-color="${color}" flood-opacity="1"/></filter></defs><g filter="url(#${fid})">${runs}</g>`;
+        //Tight glow that hugs the arc (a large soft blur read as a fuzzy blob on a short run).
+        return `${s}<defs><filter id="${fid}" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="${color}" flood-opacity="0.85"/></filter></defs><g filter="url(#${fid})">${runs}</g>`;
     }
     return s + runs;
 }
