@@ -769,7 +769,7 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
     const sub    = thickM / n;
-    const gaugeW = Math.max(1, sub * ppm * 0.5);     //thin member ring inside the group band
+    const gaugeW = Math.max(1, sub * ppm * 0.72);    //member ring width (small gap between rings, ~0.28 of the sub)
     const circle = (r: number): [number, number][] =>
     {
         const c: [number, number][] = [];
