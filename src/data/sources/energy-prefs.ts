@@ -42,6 +42,28 @@ export interface EnergyDefaults
     //displayed instead of the entities' friendly names wherever the family is titled.
     gridName:               string;
     batteryName:            string;
+    //Individual devices from the dashboard's per-device tracking (`device_consumption`), in dashboard order. NOT part
+    //of the source flows above (they are sub-measurements of the home load), kept separately for the day ring so
+    //summing them never touches the solar/grid/battery identity.
+    devices:                DeviceConsumption[];
+}
+
+
+//One individual device tracked by the Energy dashboard.
+export interface DeviceConsumption
+{
+    //Cumulative kWh meter (`stat_consumption`), binned by hour for the day ring on the same change-series path as the source meters.
+    statConsumption: string;
+    //Live power sensor (`stat_rate`), '' when the device exposes none.
+    statRate:        string;
+    //User-given dashboard name, '' when unset (the consumer falls back to the entity's friendly name).
+    name:            string;
+    //Parent stat this device is nested under (`included_in_stat`), '' when standalone. A child's total is subtracted
+    //from its parent so a compound device is not double-counted.
+    includedInStat:  string;
+    //Position in the dashboard's device list. HA colours its devices graph by this index
+    //(`--graph-color-{index+1}`, else `--color-{(index % 54)+1}`), so the ring reuses it to match the dashboard.
+    index:           number;
 }
 
 
@@ -76,6 +98,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     solarForecastEntryIds:  [],
     gridName:               '',
     batteryName:            '',
+    devices:                [],
 };
 
 
@@ -103,6 +126,7 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
     {
         const prefs = await callWS(host.hass, { type: 'energy/get_prefs' }) as {
             energy_sources?: Record<string, unknown>[];
+            device_consumption?: Record<string, unknown>[];
         };
         const next = parseEnergyPrefs(prefs);
         host._energyDefaults       = next;
@@ -271,6 +295,7 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
 //read so any encountered config maps cleanly.
 export function parseEnergyPrefs(prefs: {
     energy_sources?: Record<string, unknown>[];
+    device_consumption?: Record<string, unknown>[];
 }): EnergyDefaults
 {
     //Fresh literal (not `{ ...EMPTY_ENERGY_DEFAULTS }`) so array fields aren't aliased onto the shared empty default,
@@ -291,6 +316,7 @@ export function parseEnergyPrefs(prefs: {
         solarForecastEntryIds:  [],
         gridName:               '',
         batteryName:            '',
+        devices:                [],
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -405,6 +431,31 @@ export function parseEnergyPrefs(prefs: {
             }
         }
     }
+
+    //Individual devices tracked by the dashboard (`device_consumption`, electricity only; water is ignored). Keep the
+    //raw index so the colour matches HA's per-index devices-graph palette; skip only malformed rows with no meter.
+    const devices = Array.isArray(prefs?.device_consumption) ? prefs!.device_consumption! : [];
+    devices.forEach((dev, index) =>
+    {
+        if (!dev || typeof dev !== 'object')
+        {
+            return;
+        }
+        const row  = dev as Record<string, unknown>;
+        const stat = pickFirstString(row['stat_consumption']);
+        if (!stat)
+        {
+            return;
+        }
+        out.devices.push({
+            statConsumption: stat,
+            statRate:        pickFirstString(row['stat_rate']) ?? '',
+            name:            pickFirstString(row['name']) ?? '',
+            includedInStat:  pickFirstString(row['included_in_stat']) ?? '',
+            index,
+        });
+    });
+
     return out;
 }
 
