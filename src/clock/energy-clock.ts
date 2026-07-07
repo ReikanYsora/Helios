@@ -35,6 +35,7 @@ export type ClockHost = ChartHost & {
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
 const DAY_RUN_PCT     = 0.08;   //a slot counts as a real production/consumption run above this % of the day's peak
+const DAY_MIN_RUN_KWH = 0.1;    //below this daily total a device shows only its faint reserved ring (no run pills)
 const DAY_MIDNIGHT_GAP_PX = 10;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
@@ -741,8 +742,12 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     //Faint full ring, round caps sharing the value arcs' gapF, so their rounded ends line up cleanly at the
     //midnight slot (dayGapF keeps the two ends a constant px apart, so they never overlap into a disc).
     const s = arc(gapF, 1 - gapF, 0.1, 'round');
-    let maxV = 0;
-    for (const v of values) { if (v > maxV) { maxV = v; } }
+    let maxV  = 0;
+    let total = 0;
+    for (const v of values) { if (v > maxV) { maxV = v; } total += Math.max(0, v); }
+    //A barely-used device (its slot is reserved, but its total is below the noise floor) shows ONLY its faint ring,
+    //no scattered run pills from tiny noisy readings.
+    if (total < DAY_MIN_RUN_KWH) { return s; }
     const thr = maxV * DAY_RUN_PCT;
     const minLenF = rm * ppm > 0 ? (widthPx * 2.6) / (2 * Math.PI * rm * ppm) : 0;   //shortest arc reads as a dash, not a dot
     let runs = '';
