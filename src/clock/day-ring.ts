@@ -37,7 +37,8 @@ function binSlots(buckets: ChangeBucket[] | null, slots: number): number[]
     for (const b of buckets)
     {
         if (!Number.isFinite(b.kwh) || Math.abs(b.kwh) > cap) { continue; }
-        const s = Math.min(slots - 1, Math.max(0, Math.floor(serverHourFrac(b.startMs) * slots)));
+        //serverHourFrac is the hour-of-day [0, 24); scale to a slot index [0, slots).
+        const s = Math.min(slots - 1, Math.max(0, Math.floor(serverHourFrac(b.startMs) / HOURS_PER_DAY * slots)));
         out[s] += Math.max(0, b.kwh);
     }
     return out;
