@@ -726,8 +726,8 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
 //A member ring drawn IN FULL: a faint full-day ring at very low opacity (so the ring exists everywhere, even where
 //there was no activity), plus solid rounded-cap arcs at 0.9 over the RUNS where `values` exceeds DAY_RUN_PCT of the
 //day's peak. Short off-holes are bridged and a minimum arc length is enforced, so a device that flicks on/off does
-//not shatter into little dots. When `hovered`, the ring gets crisp full-opacity edge outlines to highlight it.
-function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number, hovered: boolean): string
+//not shatter into little dots.
+function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number): string
 {
     const STEPS = 288;
     const ppm = camera.pxPerMetre || 1;
@@ -773,23 +773,15 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         if (f1 > f0) { runs += arc(f0, f1, 0.9, 'round'); }
         i = end;
     }
-    //Hover highlights the PORTIONS (the run arcs) with a coloured glow -- an SVG feDropShadow (a CSS filter on an
-    //inline <g> does not take in this overlay), matching the scene's home-glow recipe.
-    if (hovered && runs)
-    {
-        const fid = `dgl-${Math.round(rm * 100)}`;
-        //Tight glow that hugs the arc (a large soft blur read as a fuzzy blob on a short run).
-        return `${s}<defs><filter id="${fid}" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="${color}" flood-opacity="0.85"/></filter></defs><g filter="url(#${fid})">${runs}</g>`;
-    }
     return s + runs;
 }
 
 //A whole GROUP (all producers, or all consumers) as ONE zone: a single black band (rounded-rectangle ends, a
 //constant-width midnight slot) spanning the group, with each member drawn inside as a full faint ring + its bright
 //run arcs at its own sub-radius. One zone per group + a clear separation reads as "producers" vs "consumers",
-//without the striped look of many stuck-together ring backgrounds. Members carry `device` (>=0 for a device, -1 for
-//a source) for hit-testing + hover glow. `outerRm`/`thickM` are the group band's outer radius + thickness.
-function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; values: number[]; hid: number }[], slots: number, hoverIndex: number): { svg: string; hits: DayRingHit[] }
+//without the striped look of many stuck-together ring backgrounds. Hits are returned in member order (for the
+//tooltip hit-test). `outerRm`/`thickM` are the group band's outer radius + thickness.
+function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; values: number[] }[], slots: number): { svg: string; hits: DayRingHit[] }
 {
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
@@ -809,7 +801,7 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     members.forEach((m, i) =>
     {
         const mMid = outerRm - (i + 0.5) * sub;
-        svg += dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW), m.hid === hoverIndex);
+        svg += dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW));
         hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) });
     });
     return { svg, hits };
@@ -1148,8 +1140,6 @@ export function projectDayRingFrame(
     batteryColor: string,
     rings: DayDeviceRing[],
     _cardinals: { n: string; s: string; e: string; w: string },
-    //Index of the hovered device ring (-1 = none): it gets a small glow in its own colour.
-    hoverIndex = -1,
     //Each source ring is drawn only when that source is configured on the dashboard.
     hasSolar = true,
     hasGrid = true,
@@ -1181,18 +1171,16 @@ export function projectDayRingFrame(
     const decal   = { svg: '', active: false };   //no central logo in day mode
 
     const slots = Math.max(1, solar.length);
-    //Two "big rings": all configured PRODUCERS (solar, grid, battery) grouped inside one black track, all DEVICES in
-    //another, each member's runs drawn as a thin coloured arc-line at its own sub-radius. Grouping drops the per-ring
-    //tracks + gaps, so the two groups need only a small separation. Reading a device arc against the solar arc shows
-    //at a glance whether it ran under the sun.
-    //Every ring is hoverable; its hover id (hid) is its index in the concatenated [producers..., devices...] list,
-    //so the host can map a hovered id back to a source or a device.
-    const producers: { color: string; values: number[]; hid: number }[] = [];
-    if (hasSolar)   { producers.push({ color: SUN_COLOR_HEX, values: solar,   hid: producers.length }); }
-    if (hasGrid)    { producers.push({ color: importColor,   values: grid,    hid: producers.length }); }
-    if (hasBattery) { producers.push({ color: batteryColor,  values: battery, hid: producers.length }); }
+    //Two "big rings": all configured PRODUCERS (solar, grid, battery) grouped inside one black zone, all DEVICES in
+    //another, each member's runs drawn as a thin coloured arc-line at its own sub-radius. Reading a device arc
+    //against the solar arc shows at a glance whether it ran under the sun. dayHits are returned in draw order
+    //(producers then devices) so the tooltip can map a hit index back to a source or a device.
+    const producers: { color: string; values: number[] }[] = [];
+    if (hasSolar)   { producers.push({ color: SUN_COLOR_HEX, values: solar   }); }
+    if (hasGrid)    { producers.push({ color: importColor,   values: grid    }); }
+    if (hasBattery) { producers.push({ color: batteryColor,  values: battery }); }
     const nP = producers.length;
-    const consumers = rings.map((rg, k) => ({ color: rg.color, values: rg.values, hid: nP + k }));
+    const consumers = rings.map(rg => ({ color: rg.color, values: rg.values }));
 
     const nC = consumers.length;
     //A clear gap (~one member band) sets the producers apart from the consumers.
@@ -1205,16 +1193,16 @@ export function projectDayRingFrame(
     let cursor = discR;
     if (nP > 0)
     {
-        const g = dayRunGroup(camera, cursor, nP * sub, producers, slots, hoverIndex);
+        const g = dayRunGroup(camera, cursor, nP * sub, producers, slots);
         ringSvg += g.svg;
         dayHits = dayHits.concat(g.hits);
         cursor -= nP * sub + groupGap;
     }
     if (nC > 0)
     {
-        const g = dayRunGroup(camera, cursor, nC * sub, consumers, slots, hoverIndex);
+        const g = dayRunGroup(camera, cursor, nC * sub, consumers, slots);
         ringSvg += g.svg;
-        dayHits = dayHits.concat(g.hits);   //hit order = hover id: producers 0..nP-1 then devices nP..
+        dayHits = dayHits.concat(g.hits);   //hit index: producers 0..nP-1 then devices nP..
     }
 
     return {
