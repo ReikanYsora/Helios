@@ -700,9 +700,11 @@ function dayOpacityRing(camera: SceneCamera, rInner: number, rOuter: number, col
     //Continuous dark track: one polygon (outer arc out, inner arc back) so an empty stretch reads as a solid dark
     //ring, not the basemap showing through.
     const trackN = Math.max(24, slots);
-    const track: string[] = [];
-    for (let k = 0; k <= trackN; k++) { track.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
-    for (let k = trackN; k >= 0; k--) { track.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
+    const outerEdge: string[] = [];
+    const innerEdge: string[] = [];
+    for (let k = 0; k <= trackN; k++) { outerEdge.push(pt(rOuter, hourRad(k / trackN, camera.southern))); }
+    for (let k = 0; k <= trackN; k++) { innerEdge.push(pt(rInner, hourRad(k / trackN, camera.southern))); }
+    const track = [...outerEdge, ...[...innerEdge].reverse()];
     let s = `<polygon points="${track.join(' ')}" fill="#000000" opacity="0.34"/>`;
     //Colour cells: fixed hue, per-slot opacity = the value. Near-zero slots are skipped (the dark track shows).
     for (let i = 0; i < slots; i++)
@@ -716,6 +718,9 @@ function dayOpacityRing(camera: SceneCamera, rInner: number, rOuter: number, col
         for (let k = SEG; k >= 0; k--) { pts.push(pt(rInner, a0 + (a1 - a0) * k / SEG)); }
         s += `<polygon points="${pts.join(' ')}" fill="${color}" opacity="${Math.min(1, op).toFixed(3)}"/>`;
     }
+    //Inner + outer edge outlines in the primary text colour, drawn on top so each ring reads as a crisp band.
+    s += `<polyline points="${outerEdge.join(' ')}" fill="none" stroke="var(--primary-text-color)" stroke-width="1" stroke-opacity="0.55"/>`;
+    s += `<polyline points="${innerEdge.join(' ')}" fill="none" stroke="var(--primary-text-color)" stroke-width="1" stroke-opacity="0.55"/>`;
     return s;
 }
 
