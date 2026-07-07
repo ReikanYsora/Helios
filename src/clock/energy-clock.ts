@@ -731,10 +731,11 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
 {
     const STEPS = 288;
     const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
-    //Faint full ring as a plain closed circle (no start/end): the ring is always drawn, dim where there's no data.
+    //Faint full ring over the whole day WITH the midnight gap (so it aligns with this member's value arcs): the
+    //ring is always drawn, just dim where there's no data.
     const full: string[] = [];
-    for (let k = 0; k <= STEPS; k++) { full.push(pAt(k / STEPS)); }
-    let s = `<polyline points="${full.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.1" stroke-width="${widthPx.toFixed(1)}" stroke-linejoin="round"/>`;
+    for (let k = 0; k <= STEPS; k++) { full.push(pAt(gapF + (1 - 2 * gapF) * k / STEPS)); }
+    let s = `<polyline points="${full.join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.1" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
     let maxV = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } }
     const thr = maxV * DAY_RUN_PCT;
