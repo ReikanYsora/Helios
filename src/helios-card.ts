@@ -676,6 +676,9 @@ export class HeliosCard extends LitElement
             refreshHaDailyTotals(this);
             //Keep the dial's "current hour" arrow in step with the clock even on an idle, camera-locked card.
             if (this._viewMode === 'clock' || this._viewMode === 'trend' || this._viewMode === 'day') { this._clock.scheduleClockPaint(); }
+            //Day rings show live data: re-fetch on the tick so the current period rolls in (keyed to 5 min, so this
+            //is a no-op until the window advances).
+            if (this._viewMode === 'day') { void refreshDayRing(this); }
         }, 30_000);
         initVisibilityObserver(this);
         if (typeof document !== 'undefined')

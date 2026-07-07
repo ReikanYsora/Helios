@@ -7,7 +7,11 @@ import { consumptionLoad } from '../core/energy';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../core/config/helios-config';
 import { serverHourFrac } from '../core/time/timezone';
-import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
+import { HOURS_PER_DAY } from '../core/config/constants';
+
+//Quantum the window end snaps to (HA's finest statistics cadence). Snapping to 5 min instead of the whole hour
+//shows the current period live, while keeping the fetch key stable within each 5-min window (no refetch loop).
+const LIVE_QUANTUM_MS = 5 * 60_000;
 
 //Per-slot ring shares (solar gold + grid-import colour, summing to ~1 under load) plus the day's qualifying device
 //runs, drawn as concentric device rings over the base ring.
@@ -148,8 +152,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
     const startMs = midnight.getTime();
-    //Quantise the end to the whole hour so the key doesn't churn every frame (Date.now() advances each render).
-    const endMs = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+    const endMs = Math.floor(Date.now() / LIVE_QUANTUM_MS) * LIVE_QUANTUM_MS;
     if (startMs >= endMs) { return; }
 
     const key = `${startMs}|${endMs}|${slots}|${period}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}`;

@@ -1092,8 +1092,6 @@ export function projectDayRingFrame(
     batteryColor: string,
     rings: DayDeviceRing[],
     cardinals: { n: string; s: string; e: string; w: string },
-    //Whether the hub mark is hovered/tapped (drives its opacity fade), mirroring the other dials.
-    columnHighlight = false,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1120,7 +1118,8 @@ export function projectDayRingFrame(
     const compass    = clockCompass(camera, outerR, bearing, tilt, cardinals);
     const decalDiaPx = outerR * ppm;
     const homeCtr    = camera.project(0, 0, 0);
-    const decal      = buildLogoDecal({ diameterPx: decalDiaPx, orientDeg: camera.southern ? 0 : 180, highlight: columnHighlight });
+    //Day mode keeps the central Helios mark at full opacity (no hover fade).
+    const decal      = buildLogoDecal({ diameterPx: decalDiaPx, orientDeg: camera.southern ? 0 : 180, highlight: true });
 
     return {
         guideSvg: dayRingBands(camera, innerR, outerR, solar, battery, grid, batteryColor, importColor) + clockGuide(camera, outerR) + compass.svg,
