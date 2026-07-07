@@ -726,21 +726,31 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
 //A member ring drawn IN FULL: a faint full-day ring at very low opacity (so the ring exists everywhere, even where
 //there was no activity), plus solid rounded-cap arcs at 0.9 over the RUNS where `values` exceeds DAY_RUN_PCT of the
 //day's peak. Short off-holes are bridged and a minimum arc length is enforced, so a device that flicks on/off does
-//not shatter into little dots.
+//not shatter into little dots. Drawn as TRUE SVG arc paths (not sampled polylines): valid because day mode is
+//top-down (pitch 0 -> ground circles are screen circles), and it avoids the bright self-overlap dots WebKit/Chrome
+//render on a wide stroked polyline at its diagonal vertices.
 function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number): string
 {
-    const STEPS = 288;
     const ppm = camera.pxPerMetre || 1;
-    const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    const c0  = camera.project(0, 0, 0);
+    const cx  = c0[0];
+    const cy  = c0[1];
+    const at  = (f: number): [number, number] => { const a = hourRad(f, camera.southern); return camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); };
+    //One true circular arc [f0, f1] as an SVG path. Sweep from the projected direction; largeArc from the span.
     const arc = (f0: number, f1: number, op: number, cap: string): string =>
     {
-        const steps = Math.max(2, Math.round((f1 - f0) * STEPS));
-        const seg: string[] = [];
-        for (let k = 0; k <= steps; k++) { seg.push(pAt(f0 + (f1 - f0) * k / steps)); }
-        return `<polyline points="${seg.join(' ')}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
+        const a0 = at(f0);
+        const a1 = at(f1);
+        const R  = Math.hypot(a0[0] - cx, a0[1] - cy);
+        const pe = at(f0 + (f1 - f0) * 0.001);
+        let da = Math.atan2(pe[1] - cy, pe[0] - cx) - Math.atan2(a0[1] - cy, a0[0] - cx);
+        while (da > Math.PI) { da -= 2 * Math.PI; }
+        while (da < -Math.PI) { da += 2 * Math.PI; }
+        const sweep = da > 0 ? 1 : 0;
+        const large = (f1 - f0) > 0.5 ? 1 : 0;
+        return `<path d="M${a0[0].toFixed(2)},${a0[1].toFixed(2)}A${R.toFixed(2)},${R.toFixed(2)} 0 ${large} ${sweep} ${a1[0].toFixed(2)},${a1[1].toFixed(2)}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}"/>`;
     };
-    //Faint full ring (the member's track), round caps sharing the value arcs' gapF so the ends line up at the
-    //midnight slot.
+    //Faint full ring (the member's track); its rounded ends share the value arcs' gapF so they line up at midnight.
     const s = arc(gapF, 1 - gapF, 0.1, 'round');
     let maxV  = 0;
     let total = 0;
