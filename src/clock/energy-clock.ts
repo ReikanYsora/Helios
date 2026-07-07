@@ -782,6 +782,37 @@ function dayDeviceRing(camera: SceneCamera, rInner: number, rOuter: number, devi
     return s + dayStroke(camera, rRail, '#ffffff', 1, 0.3, slots);
 }
 
+//TEST: an Apple-watch-style production ring. Valid only top-down (day mode is pitch 0): a thick round-capped BLACK
+//track running the whole day with a small gap at midnight (its two round caps are the "half circles"), and inside
+//it, padded, a smooth gold GAUGE whose opacity follows the production ratio at each moment. No per-hour cells --
+//fine sub-sampled segments read as one continuous ring. `outerRm`/`thickM` are the band's outer radius + thickness
+//in metres; `ratio[s]` is the 0..1 production ratio per slot.
+function dayProductionSolarRing(camera: SceneCamera, outerRm: number, thickM: number, ratio: number[], slots: number): string
+{
+    const midRm  = outerRm - thickM / 2;
+    const trackW = thickM * (camera.pxPerMetre || 1);
+    const gaugeW = Math.max(1, trackW * 0.68);   //padding inside the black track (both radial sides)
+    const gapF   = 0.014;                         //small gap at midnight between the two round caps
+    const pAt = (f: number): string => { const a = hourRad(f, camera.southern); const p = camera.project(midRm * Math.sin(a), midRm * Math.cos(a), 0); return `${p[0].toFixed(1)},${p[1].toFixed(1)}`; };
+    //Black track: one rounded-cap polyline around the whole day (gap at midnight -> the two half-circle caps).
+    const track: string[] = [];
+    const STEPS = 288;
+    for (let k = 0; k <= STEPS; k++) { track.push(pAt(gapF + (1 - 2 * gapF) * k / STEPS)); }
+    let s = `<polyline points="${track.join(' ')}" fill="none" stroke="#000000" stroke-opacity="1" stroke-width="${trackW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    //Gauge: per-slot arc segments (sub-sampled so they curve), gold, opacity = the slot's production ratio.
+    for (let i = 0; i < slots; i++)
+    {
+        const op = Math.max(0, Math.min(1, ratio[i] ?? 0));
+        const f0 = i / slots;
+        const f1 = (i + 1) / slots;
+        if (op <= 0.01 || f1 <= gapF || f0 >= 1 - gapF) { continue; }
+        const seg: string[] = [];
+        for (let k = 0; k <= 6; k++) { seg.push(pAt(Math.max(gapF, Math.min(1 - gapF, f0 + (f1 - f0) * k / 6)))); }
+        s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${SUN_COLOR_HEX}" stroke-opacity="${op.toFixed(3)}" stroke-width="${gaugeW.toFixed(1)}" stroke-linecap="butt"/>`;
+    }
+    return s;
+}
+
 //A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
 //no body below, so a marker placed lower stays visible.
 function floatingSlice(camera: SceneCamera, fp: [number, number][], loH: number, hiH: number, wall: string, roof: string, stroke: string): string
@@ -1158,15 +1189,16 @@ export function projectDayRingFrame(
     const coverage = solar.map((sv, s) => Math.max(0, Math.min(1, (sv ?? 0) + (battery[s] ?? 0))));
     //Configured sources only, outermost-first (solar, grid, battery). They are MERGED into a single production ring:
     //stuck-together sub-bands with no gap or edge between them, one outline around the whole block.
+    //TEST: solar becomes an Apple-style rounded gauge ring at the rim; grid + battery stay as merged sub-bands.
     const sources: { color: string; ops: number[] }[] = [];
-    if (hasSolar)   { sources.push({ color: SUN_COLOR_HEX, ops: solar.map(opFor) }); }
     if (hasGrid)    { sources.push({ color: importColor,   ops: grid.map(opFor) }); }
     if (hasBattery) { sources.push({ color: batteryColor,  ops: battery.map(opFor) }); }
 
-    //Radial budget from the hub out to the hour-disc edge: the merged production block is exactly as wide as the
-    //number of sources it holds (N ring-widths); the rest is the consumption zone, one equal-width ring per device.
-    const prodUnit = sources.length;
-    const nDev     = rings.length;
+    //Radial budget from the hub out to the hour-disc edge: the solar ring + the grid/battery block make up the
+    //production zone; the rest is the consumption zone, one equal-width ring per device.
+    const solarUnit = hasSolar ? 1 : 0;
+    const prodUnit  = solarUnit + sources.length;
+    const nDev      = rings.length;
     const band     = (discR - hubR) / Math.max(1, prodUnit + nDev);
     const gap      = band * 0.4;    //padding between consumption rings
     const groupGap = band * 0.5;    //separation between the production block and the first consumption ring
@@ -1180,14 +1212,16 @@ export function projectDayRingFrame(
     let ringSvg = '';
     const dayHits: DayRingHit[] = [];
 
-    //Merged production block at the rim (flush to discR): glued sub-bands (each one ring-width, no gap/edge
-    //between), one outer outline in the outermost source's colour and one inner outline in the innermost source's.
     const prodInner = discR - prodUnit * band;
-    if (prodUnit > 0)
+    //Solar: Apple-style rounded gauge ring at the rim (flush to discR).
+    if (hasSolar) { ringSvg += dayProductionSolarRing(camera, discR, band, solar, slots); }
+    //Grid + battery: merged sub-bands just inside the solar ring, one outline around the block.
+    if (sources.length > 0)
     {
-        sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, discR - (i + 1) * band, discR - i * band, sc.color, sc.ops, slots); });
-        ringSvg += dayEdge(camera, discR, sources[0].color, slots);
-        ringSvg += dayEdge(camera, prodInner, sources[sources.length - 1].color, slots);
+        const blkOuter = discR - solarUnit * band;
+        sources.forEach((sc, i) => { ringSvg += dayOpacityBand(camera, blkOuter - (i + 1) * band, blkOuter - i * band, sc.color, sc.ops, slots); });
+        ringSvg += dayEdge(camera, blkOuter, sources[0].color, slots);
+        ringSvg += dayEdge(camera, blkOuter - sources.length * band, sources[sources.length - 1].color, slots);
     }
 
     //Consumption rings fill [hub, prodInner - groupGap]: one equal-width ring per device, `gap` carved between.
