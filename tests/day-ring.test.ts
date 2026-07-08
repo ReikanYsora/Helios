@@ -3,7 +3,7 @@
 //Load follows the consumption identity (production + import - export - net battery), so battery charging counts.
 
 import { describe, it, expect } from 'vitest';
-import { ringShares, detectDeviceRuns } from '../src/clock/day-ring';
+import { ringShares, detectDeviceRuns, optimizeDevices, type DeviceRun } from '../src/clock/day-ring';
 
 describe('ringShares', () =>
 {
@@ -36,24 +36,47 @@ describe('ringShares', () =>
 
 describe('detectDeviceRuns', () =>
 {
-    it('returns null below the daily kWh threshold', () =>
+    it('returns null below the configured daily kWh threshold', () =>
     {
-        expect(detectDeviceRuns([0.01, 0.02, 0, 0], 0, 'tiny')).toBeNull();
+        expect(detectDeviceRuns([0.01, 0.02, 0, 0], 0, 'sensor.tiny', 'tiny', 0.1, false)).toBeNull();
     });
 
-    it('flags an always-on device as continuous, with the day total', () =>
+    it('threshold 0 keeps a device with any real energy', () =>
     {
-        const r = detectDeviceRuns(new Array<number>(24).fill(0.1), 3, 'Fridge');
-        expect(r?.continuous).toBe(true);
-        expect(r?.dailyKwh).toBeCloseTo(2.4, 5);
+        const r = detectDeviceRuns([0.01, 0.02, 0, 0], 0, 'sensor.tiny', 'tiny', 0, false);
+        expect(r?.dailyKwh).toBeCloseTo(0.03, 5);
     });
 
-    it('an episodic device is not flagged continuous', () =>
+    it('summarises a qualifying device with its day total and carries the fixed flag', () =>
     {
         const kwh = new Array<number>(24).fill(0);
         kwh[8] = 2; kwh[9] = 2; kwh[11] = 2;
-        const r = detectDeviceRuns(kwh, 5, 'Washer');
-        expect(r?.continuous).toBe(false);
+        const r = detectDeviceRuns(kwh, 5, 'sensor.washer', 'washer', 0.1, true);
+        expect(r?.statId).toBe('washer');
+        expect(r?.fixed).toBe(true);
         expect(r?.dailyKwh).toBeCloseTo(6, 5);
+    });
+});
+
+describe('optimizeDevices', () =>
+{
+    const mk = (values: number[], fixed: boolean): DeviceRun =>
+        ({ index: 0, name: 'd', statId: 'd', values, fixed, dailyKwh: values.reduce((t, v) => t + v, 0), solarPct: 0, gridPct: 0 });
+
+    it('shifts a shiftable device onto the sunniest window', () =>
+    {
+        //Ran at slot 0 (no sun); sun peaks at slot 3. The 1-slot run should move onto slot 3.
+        const pv     = [0, 0, 0, 5];
+        const charge = [0, 0, 0, 0];
+        const out    = optimizeDevices(pv, charge, [mk([2, 0, 0, 0], false)]);
+        expect(out[0]).toEqual([0, 0, 0, 2]);
+    });
+
+    it('leaves a user-fixed device exactly where it ran', () =>
+    {
+        const pv     = [0, 0, 0, 5];
+        const charge = [0, 0, 0, 0];
+        const out    = optimizeDevices(pv, charge, [mk([2, 0, 0, 0], true)]);
+        expect(out[0]).toEqual([2, 0, 0, 0]);
     });
 });

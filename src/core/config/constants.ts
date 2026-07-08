@@ -31,6 +31,11 @@ export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 6;
 export const DEFAULT_VALUE_DECIMALS = 1;
 export const MIN_VALUE_DECIMALS     = 0;
 export const MAX_VALUE_DECIMALS     = 3;
+//Day-ring noise floor: below this daily total (kWh) a device gets no ring. 0 shows everything; above ~2 kWh/day
+//stops being a noise floor and starts hiding real appliances, so that caps the slider.
+export const DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH = 0.1;
+export const MIN_CONSUMPTION_RING_THRESHOLD_KWH     = 0;
+export const MAX_CONSUMPTION_RING_THRESHOLD_KWH     = 2;
 
 
 //=== Colours ===

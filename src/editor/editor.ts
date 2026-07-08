@@ -23,54 +23,19 @@ import
     DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS,
     MAX_VALUE_DECIMALS,
+    DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH,
+    MIN_CONSUMPTION_RING_THRESHOLD_KWH,
+    MAX_CONSUMPTION_RING_THRESHOLD_KWH,
+    consumptionRingHidden,
+    consumptionRingOptimizeIgnored,
 } from '../core/config/helios-config';
+import { deviceColorByIndex } from '../core/format/format';
 import { pickTranslations, type Translations } from '../core/i18n';
-import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type EnergyPrefsHost } from '../data/sources/energy-prefs';
+import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type DeviceConsumption, type EnergyPrefsHost } from '../data/sources/energy-prefs';
 import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from '../data/sources/grid-guard';
 import { batteryLiveIsBucketSourced } from '../data/sources/battery';
 import './editor-custom-entity';
 import type { CustomEntityConfigValue } from './editor-custom-entity';
-
-
-// Render a localised hint with markdown-style `[text](url)` links as real `<a>` anchors via Lit's tagged template
-// (no innerHTML) so URL + text stay escaped. URL safety: anything not http(s):// or same-origin renders as plain
-// text, blocking a corrupted translation from injecting a `javascript:` URI.
-function renderMarkdownLinks(text: string): unknown[]
-{
-    const parts: unknown[] = [];
-    const re = /\[([^\]]+)\]\(([^)]+)\)/g;
-    let cursor = 0;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(text)) !== null)
-    {
-        if (match.index > cursor)
-        {
-            parts.push(text.slice(cursor, match.index));
-        }
-        const label = match[1];
-        const url   = match[2];
-        if (/^https?:\/\//i.test(url))
-        {
-            parts.push(html`<a href=${url} target="_blank" rel="noopener noreferrer">${label}</a>`);
-        }
-        else if (/^\/[a-zA-Z0-9_\-/.]*$/.test(url))
-        {
-            // Same-origin in-app navigation (e.g. /config/energy). No target=_blank so the user stays inside the HA SPA.
-            parts.push(html`<a href=${url}>${label}</a>`);
-        }
-        else
-        {
-            // Suspicious scheme: render the URL as plain text so the browser doesn't follow it.
-            parts.push(`${label} (${url})`);
-        }
-        cursor = match.index + match[0].length;
-    }
-    if (cursor < text.length)
-    {
-        parts.push(text.slice(cursor));
-    }
-    return parts;
-}
 
 
 // Visual editor exposing every config option through native HA form controls.
@@ -81,8 +46,9 @@ export class HeliosCardEditor extends LitElement
     @state()                        private _cfg: HeliosConfig = {};
     @state()                        private _pickerReady = false;
     // Accordion: at most one top-level section open at a time (a stack of expanded blocks got too tall to scan). Id
-    // of the open section, or null when all collapsed. Defaults to 'location' so a fresh card opens on the home spot.
-    @state()                        private _openSection: string | null = 'location';
+    // of the open section, or null when all collapsed. Defaults to null so a fresh card opens fully collapsed, keeping
+    // the top-pinned "Configuration status" panel in view.
+    @state()                        private _openSection: string | null = null;
     // Per-key debounce timers for slider @input. Sliders fire on every drag pixel; dispatching `config-changed` per
     // tick would cascade a full engine re-render each pixel (painful during preview). _cfg updates synchronously so
     // the bound .value tracks the drag, but `config-changed` only dispatches after a short idle window.
@@ -205,6 +171,34 @@ export class HeliosCardEditor extends LitElement
     {
         //Guard evaluation for the grid status line; no-op outside its preconditions / between re-arms.
         if (this.hass) { refreshGridGuard(this as unknown as GridGuardHost); }
+        this._pruneStaleDeviceIds();
+    }
+
+    //Drop any hidden / optimiser-ignore id whose device no longer exists in the Energy dashboard, so removing a
+    //device there also cleans it from this card's YAML. Guarded on a NON-EMPTY loaded snapshot: an empty one can also
+    //mean the prefs failed to load (RBAC), and wiping the lists then would silently lose the user's choices. Writes
+    //only when something actually changed, so it converges after a single pass and never loops.
+    private _pruneStaleDeviceIds(): void
+    {
+        if (!this._energyDefaultsLoaded) { return; }
+        const devices = this._energyDefaults.devices;
+        if (devices.length === 0) { return; }
+        const valid = new Set(devices.map(d => d.statConsumption));
+        const keys: (keyof HeliosConfig)[] = ['consumption-ring-hidden', 'consumption-ring-optimize-ignore'];
+        const next = { ...this._cfg } as Record<string, unknown>;
+        let changed = false;
+        for (const key of keys)
+        {
+            const cur = this._cfg[key];
+            if (!Array.isArray(cur)) { continue; }
+            const kept = cur.filter((v): v is string => typeof v === 'string' && valid.has(v));
+            if (kept.length === cur.length) { continue; }
+            changed = true;
+            if (kept.length) { next[key] = kept; } else { delete next[key]; }
+        }
+        if (!changed) { return; }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
     }
 
     //One live-data status line: check or alert glyph + the explanation.
@@ -247,7 +241,7 @@ export class HeliosCardEditor extends LitElement
 
         return html`
             <div class="live-data-panel">
-                <div class="section-title"><ha-icon class="section-icon" icon="mdi:flash"></ha-icon>${t.editor.liveDataTitle ?? 'Check your configuration'}</div>
+                <div class="section-title"><ha-icon class="section-icon" icon="mdi:list-status"></ha-icon>${t.editor.liveDataTitle ?? 'Configuration status'}</div>
                 <div class="hint">${t.editor.liveDataIntro ?? 'Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source; curves and totals always come from your meters.'}</div>
 
                 ${solarWired
@@ -454,6 +448,20 @@ export class HeliosCardEditor extends LitElement
         const key = el.dataset.key as keyof HeliosConfig | undefined;
         if (key) { this._update(key, el.dataset.value === 'true'); }
     };
+    //Flip a device's membership in one of the two id lists (ring-hidden / optimiser-ignore). Presence in the list =
+    //hidden / ignored; the click toggles it. Stored back trimmed to undefined when empty so the YAML drops the key.
+    private _onDeviceToggleClick = (e: Event): void =>
+    {
+        const el   = e.currentTarget as HTMLElement;
+        const stat = el.dataset.stat;
+        const kind = el.dataset.cring;
+        if (!stat || !kind) { return; }
+        const key  = kind === 'ring' ? 'consumption-ring-hidden' : 'consumption-ring-optimize-ignore';
+        const cur  = this._cfg[key];
+        const list = Array.isArray(cur) ? cur.filter((v): v is string => typeof v === 'string') : [];
+        const next = list.includes(stat) ? list.filter(v => v !== stat) : [...list, stat];
+        this._update(key, next.length ? next : undefined);
+    };
 
     private _fmtNum(v: number, step: number): string
     {
@@ -552,6 +560,82 @@ export class HeliosCardEditor extends LitElement
                 </label>`;
     }
 
+    //Consumption-ring section body: the noise-floor slider plus one row per dashboard-tracked device. Each device
+    //carries a colour dot (HA's per-index palette, matching the dashboard graph), its friendly name, and two icon
+    //toggles: show/hide in the ring, and include/ignore in the optimiser (disabled while hidden, since a hidden
+    //device is fully excluded). Devices come from the live Energy prefs snapshot, in dashboard order.
+    //Resolved display name for a tracked device: its dashboard name, else the entity's friendly name, else the id.
+    private _deviceName(dev: DeviceConsumption): string
+    {
+        return dev.name || this.hass?.states?.[dev.statConsumption]?.attributes?.friendly_name || dev.statConsumption;
+    }
+
+    //The device entity's configured MDI icon (its `icon` attribute), else a generic energy glyph.
+    private _deviceIcon(dev: DeviceConsumption): string
+    {
+        const icon = this.hass?.states?.[dev.statConsumption]?.attributes?.icon;
+        return (typeof icon === 'string' && icon) || 'mdi:flash';
+    }
+
+    private _renderConsumptionRing(t: Translations): TemplateResult
+    {
+        //Always alphabetical by display name (case-insensitive) so the list stays stable and scannable regardless of
+        //the dashboard's own device order.
+        const devices = [...this._energyDefaults.devices].sort((a, b) =>
+            this._deviceName(a).localeCompare(this._deviceName(b), undefined, { sensitivity: 'base' }));
+        const hidden  = consumptionRingHidden(this._cfg);
+        const ignored = consumptionRingOptimizeIgnored(this._cfg);
+        return html`
+            ${this._renderSlider('consumption-ring-threshold', t.editor.consumptionRingThreshold ?? 'Ignore threshold', MIN_CONSUMPTION_RING_THRESHOLD_KWH, MAX_CONSUMPTION_RING_THRESHOLD_KWH, 0.05, DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH, ' kWh')}
+            <div class="field-help">${t.editor.consumptionRingThresholdHelp ?? 'Devices using less than this over the day get no ring, so tiny always-on loads do not clutter it. Set to 0 to show every tracked device.'}</div>
+            <div class="hint">${t.editor.consumptionRingDevicesIntro ?? 'Devices tracked in your Energy dashboard. Use the eye to show or hide a device in the ring, and the second toggle to let the optimiser move it onto the sun or leave it where it really ran (for loads you cannot reschedule, like a fridge).'}</div>
+            ${devices.length === 0
+                ? html`<div class="cring-empty">${t.editor.consumptionRingNoDevices ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
+                : html`<div class="cring-list">
+                    ${devices.map(dev => this._renderDeviceRow(dev, hidden, ignored, t))}
+                </div>`}
+        `;
+    }
+
+    private _renderDeviceRow(dev: DeviceConsumption, hidden: Set<string>, ignored: Set<string>, t: Translations): TemplateResult
+    {
+        const stat      = dev.statConsumption;
+        const name      = this._deviceName(dev);
+        const color     = deviceColorByIndex(this, dev.index);
+        const shown     = !hidden.has(stat);
+        const optimized = !ignored.has(stat);
+        return html`
+            <div class="cring-row ${shown ? '' : 'is-hidden'}">
+                <span class="cring-dot" style="background:${color}"></span>
+                <ha-icon class="cring-icon" icon=${this._deviceIcon(dev)}></ha-icon>
+                <span class="cring-name">${name}</span>
+                <button
+                    type="button"
+                    class="cring-toggle ${shown ? 'active' : ''}"
+                    data-cring="ring"
+                    data-stat=${stat}
+                    aria-pressed=${shown ? 'true' : 'false'}
+                    aria-label=${t.editor.consumptionRingRingLabel ?? 'Show in the ring'}
+                    @click=${this._onDeviceToggleClick}
+                >
+                    <ha-icon icon=${shown ? 'mdi:eye' : 'mdi:eye-off'}></ha-icon>
+                </button>
+                <button
+                    type="button"
+                    class="cring-toggle ${optimized ? 'active' : ''}"
+                    data-cring="optim"
+                    data-stat=${stat}
+                    ?disabled=${!shown}
+                    aria-pressed=${optimized ? 'true' : 'false'}
+                    aria-label=${t.editor.consumptionRingOptimLabel ?? 'Include in the optimiser'}
+                    @click=${this._onDeviceToggleClick}
+                >
+                    <ha-icon icon=${optimized ? 'mdi:lock-open-variant' : 'mdi:lock'}></ha-icon>
+                </button>
+            </div>
+        `;
+    }
+
     //Custom-entity picker filter: any power (W/kW/MW) or energy (Wh/kWh/MWh) entity, by device_class or unit.
     protected render(): TemplateResult
     {
@@ -612,33 +696,6 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
-                <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
-                ${this._renderSlider('display-radius', t.editor.displayRadius ?? 'Display radius', MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
-                <div class="hint">${t.editor.displayRadiusHelp ?? 'Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home.'}</div>
-                ${this._renderSlider('building-count', t.editor.buildingCount ?? 'Building count', MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}
-                <div class="hint">${t.editor.buildingCountHelp ?? 'Maximum number of nearby buildings to draw. Lower it to lighten rendering on a slow device.'}</div>
-                ${this._renderToggle('building-real-size', t.editor.buildingRealSize ?? 'Real building heights', t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.', t.editor.buildingRealSizeOn ?? 'On', t.editor.buildingRealSizeOff ?? 'Off', true)}
-                ${c['building-real-size'] === false
-                    ? this._renderSlider('building-height', t.editor.buildingHeight ?? 'Building height', MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
-                    : nothing}
-                ${this._renderSlider('building-cluster-radius', t.editor.buildingClusterRadius, 0, 100, 1, DEFAULT_BUILDING_CLUSTER_RADIUS_M, ' m')}
-                ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
-                <div class="hint">${t.editor.buildingsHint}</div>
-                ${this._renderColorPicker('home-color', t.editor.homeColor, t.editor.homeColorHelp, 'green')}
-                ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
-
-                </details>
-
-                <details class="advanced-section" data-section="shadows" ?open=${this._openSection === 'shadows'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gradient-vertical"></ha-icon>${t.editor.shadowsSection}</summary>
-                ${this._renderToggle('shadows-enabled', t.editor.shadowsEnabled, t.editor.shadowsEnabledHint, t.editor.shadowsEnabledOn, t.editor.shadowsEnabledOff, true)}
-
-                ${this._renderSlider('shadow-opacity', t.editor.shadowOpacity, 0, 1, 0.05, DEFAULT_SHADOW_OPACITY)}
-                <div class="hint">${t.editor.shadowOpacityHint}</div>
-
-                </details>
-
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
                 ${this._renderSlider('display-update-frequency-per-hour', t.editor.displayUpdateFrequency, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, 1, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, ' / h')}
@@ -692,26 +749,23 @@ export class HeliosCardEditor extends LitElement
                 ${this._customLegacyPending() ? html`
                     <div class="hint reset-warning">${t.editor.customLegacyHint ?? 'Your previous custom entity was moved to its matching field below. Add the missing sensor to show the chip again.'}</div>
                 ` : nothing}
-                <helios-custom-entity-config
-                    .hass=${this.hass}
-                    .pickerReady=${this._pickerReady}
-                    .value=${this._customConfigValue()}
-                    .labels=${{
-                        power:      t.editor.customPowerEntity ?? 'Power sensor (live)',
-                        powerHelp:  t.editor.customPowerEntityHelp ?? 'A real power sensor (W/kW). Feeds the live chip, the scrub and the curve.',
-                        energy:     t.editor.customEnergyEntity ?? 'Energy sensor (totals)',
-                        energyHelp: t.editor.customEnergyEntityHelp ?? 'A cumulative energy meter (Wh/kWh). Feeds the energy views.',
-                        icon:       t.editor.customEntityIcon,
-                        color:      t.editor.customEntityColor,
-                    }}
-                    @value-changed=${this._onCustomEntityChanged}
-                ></helios-custom-entity-config>
-                <div class="field-help">${t.editor.customEntityColorHelp}</div>
-                </details>
+                <div class="entity-block">
+                    <helios-custom-entity-config
+                        .hass=${this.hass}
+                        .pickerReady=${this._pickerReady}
+                        .value=${this._customConfigValue()}
+                        .labels=${{
+                            power:      t.editor.customPowerEntity ?? 'Power sensor (live)',
+                            powerHelp:  t.editor.customPowerEntityHelp ?? 'A real power sensor (W/kW). Feeds the live chip, the scrub and the curve.',
+                            energy:     t.editor.customEnergyEntity ?? 'Energy sensor (totals)',
+                            energyHelp: t.editor.customEnergyEntityHelp ?? 'A cumulative energy meter (Wh/kWh). Feeds the energy views.',
+                            icon:       t.editor.customEntityIcon,
+                            color:      t.editor.customEntityColor,
+                        }}
+                        @value-changed=${this._onCustomEntityChanged}
+                    ></helios-custom-entity-config>
+                </div>
 
-                <details class="advanced-section" data-section="installation" ?open=${this._openSection === 'installation'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:solar-power-variant"></ha-icon>${t.editor.installationSection}</summary>
-                <div class="hint">${renderMarkdownLinks(t.editor.installationHint)}</div>
                 <div class="field field-block">
                     <span class="label">${t.editor.solarIrradianceEntity}</span>
                     ${this._pickerReady ? html`
@@ -727,6 +781,37 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.solarIrradianceEntityHelp}</div>
+                </details>
+
+                <details class="advanced-section" data-section="consumptionRing" ?open=${this._openSection === 'consumptionRing'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:chart-donut"></ha-icon>${t.editor.consumptionRingSection ?? 'Consumption ring'}</summary>
+                ${this._renderConsumptionRing(t)}
+                </details>
+
+                <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
+                ${this._renderSlider('display-radius', t.editor.displayRadius ?? 'Display radius', MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
+                <div class="hint">${t.editor.displayRadiusHelp ?? 'Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home.'}</div>
+                ${this._renderSlider('building-count', t.editor.buildingCount ?? 'Building count', MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}
+                <div class="hint">${t.editor.buildingCountHelp ?? 'Maximum number of nearby buildings to draw. Lower it to lighten rendering on a slow device.'}</div>
+                ${this._renderToggle('building-real-size', t.editor.buildingRealSize ?? 'Real building heights', t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.', t.editor.buildingRealSizeOn ?? 'On', t.editor.buildingRealSizeOff ?? 'Off', true)}
+                ${c['building-real-size'] === false
+                    ? this._renderSlider('building-height', t.editor.buildingHeight ?? 'Building height', MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
+                    : nothing}
+                ${this._renderSlider('building-cluster-radius', t.editor.buildingClusterRadius, 0, 100, 1, DEFAULT_BUILDING_CLUSTER_RADIUS_M, ' m')}
+                ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
+                <div class="hint">${t.editor.buildingsHint}</div>
+                ${this._renderColorPicker('home-color', t.editor.homeColor, t.editor.homeColorHelp, 'green')}
+                ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
+
+                </details>
+
+                <details class="advanced-section" data-section="shadows" ?open=${this._openSection === 'shadows'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gradient-vertical"></ha-icon>${t.editor.shadowsSection}</summary>
+                ${this._renderToggle('shadows-enabled', t.editor.shadowsEnabled, t.editor.shadowsEnabledHint, t.editor.shadowsEnabledOn, t.editor.shadowsEnabledOff, true)}
+
+                ${this._renderSlider('shadow-opacity', t.editor.shadowOpacity, 0, 1, 0.05, DEFAULT_SHADOW_OPACITY)}
+                <div class="hint">${t.editor.shadowOpacityHint}</div>
 
                 </details>
 

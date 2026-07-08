@@ -79,7 +79,7 @@ export interface Translations
     period?:
     {
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
-        standard?:   string; //'Standard' (J-2 .. J+2)
+        standard?:   string; //'Now' (J-2 .. J+2, the key stays `standard` for cache/config compat)
         yesterday?:  string; //'Yesterday' (day-rings mode only)
         today?:      string; //'Today'
         week?:       string; //'1 week'
@@ -147,6 +147,15 @@ export interface Translations
         buildingRealSizeOff?:         string;
         buildingRealSizeHint?:        string;
         buildingHeight?:              string;
+        //Consumption-ring section: noise-floor slider + per-device show/optimise toggles. Optional; fall back to English.
+        consumptionRingSection?:        string;
+        consumptionRingThreshold?:      string;
+        consumptionRingThresholdHelp?:  string;
+        consumptionRingDevicesIntro?:   string;
+        consumptionRingNoDevices?:      string;
+        //aria-labels (screen-reader only, no visible tooltip) for the two per-device icon toggles.
+        consumptionRingRingLabel?:      string;
+        consumptionRingOptimLabel?:     string;
         //PV install: install-level knobs with no HA Energy equivalent (e.g. the solar-irradiance override).
         installationSection:      string;
         //Section-top hint: entity wiring (production, grid, battery) lives in HA Energy; this section only

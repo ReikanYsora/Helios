@@ -749,7 +749,7 @@ export class SceneHudController
                     <div
                         class="custom-label ${this.host._chartTarget === 'custom' ? 'is-chart-active' : ''}"
                         style="left:${layout!.customLabel.x}px; top:${layout!.customLabel.y}px; --custom-leader-color:${customLeaderColor}"
-                        title=${customLive!.name}
+                        aria-label=${customLive!.name}
                         role="button"
                         tabindex="0"
                         data-target="custom"

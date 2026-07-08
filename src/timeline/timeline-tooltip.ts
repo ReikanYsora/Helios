@@ -189,7 +189,6 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     <span class="tb-hover-tooltip-time-label">${timeLabel}</span>
                     <span
                         class="tb-hover-tooltip-live-chip ${inMagnetZone ? 'is-visible' : ''}"
-                        title=${liveText}
                         aria-label=${liveText}
                         aria-hidden=${inMagnetZone ? 'false' : 'true'}
                     >

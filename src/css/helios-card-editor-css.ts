@@ -409,4 +409,114 @@ export const editorStyles = css`
         outline: 2px solid #ffcc00;
         outline-offset: 2px;
     }
+
+    /*  Soft framed block grouping a set of related fields (e.g. the four custom-entity options), so they read as
+        one unit within the section rather than loose rows. */
+    .entity-block
+    {
+        margin-top: 8px;
+        padding: 10px 12px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: var(--ha-border-radius-md, 6px);
+    }
+
+    /*  Consumption-ring device list: one row per dashboard-tracked device, colour dot + friendly name on the
+        left, two icon toggles on the right (show in the ring / include in the optimiser). Framed as a soft card
+        so the list reads as a distinct block within the section. */
+    .cring-list
+    {
+        display: flex;
+        flex-direction: column;
+        margin-top: 8px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: var(--ha-border-radius-md, 6px);
+        overflow: hidden;
+    }
+    .cring-row
+    {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+    }
+    .cring-row + .cring-row
+    {
+        border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.08));
+    }
+    .cring-dot
+    {
+        flex: none;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+    .cring-icon
+    {
+        flex: none;
+        --mdc-icon-size: 20px;
+        color: var(--secondary-text-color, #727272);
+    }
+    .cring-row.is-hidden .cring-icon
+    {
+        opacity: 0.5;
+    }
+    .cring-name
+    {
+        flex: 1;
+        min-width: 0;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-text-color, #212121);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /*  When a device is hidden from the ring, its whole row dims and the optimiser toggle is inert (a hidden
+        device is fully excluded, so its optimiser state is moot). */
+    .cring-row.is-hidden .cring-name
+    {
+        opacity: 0.5;
+    }
+    /*  Icon-only state toggles, HA-style: no button chrome. The icon carries the state through colour alone: normal
+        text colour when active, the dimmed "disabled" colour when inactive. */
+    .cring-toggle
+    {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--disabled-text-color, #bdbdbd);
+        cursor: pointer;
+        transition: color 0.15s, opacity 0.15s;
+        --mdc-icon-size: 22px;
+    }
+    .cring-toggle.active
+    {
+        color: var(--primary-text-color, #212121);
+    }
+    .cring-toggle:hover:not(:disabled)
+    {
+        color: var(--primary-color, #03a9f4);
+    }
+    .cring-toggle:disabled
+    {
+        opacity: 0.4;
+        cursor: default;
+    }
+    .cring-toggle:focus-visible
+    {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+        border-radius: var(--ha-border-radius-sm, 4px);
+    }
+    .cring-empty
+    {
+        font-size: var(--ha-font-size-xs, 11px);
+        color: var(--secondary-text-color, #727272);
+        padding: 4px 0;
+    }
 `;

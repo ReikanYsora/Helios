@@ -5,7 +5,7 @@
 import { fetchChangeSeries, fetchChangeById, outlierCapKwh, type ChangeBucket } from '../data/sources/energy-stats';
 import { consumptionLoad } from '../core/energy';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
-import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../core/config/helios-config';
+import { displayUpdateFrequencyPerHour, consumptionRingThresholdKwh, consumptionRingHidden, consumptionRingOptimizeIgnored, type HeliosConfig } from '../core/config/helios-config';
 import { serverHourFrac } from '../core/time/timezone';
 import { HOURS_PER_DAY, DAY_MS } from '../core/config/constants';
 
@@ -36,66 +36,44 @@ export interface DayRingData
     charge:     number[];
 }
 
-//One device's run(s) over the day: contiguous on-slots as arcs (episodic) or the whole day (continuous). `index`
-//is the dashboard position, so the ring reuses HA's per-index device colour.
+//One device's run(s) over the day: contiguous on-slots drawn as arcs at draw time. `index` is the dashboard
+//position, so the ring reuses HA's per-index device colour; `statId` is the recorder meter, the stable key the
+//hidden / optimiser-ignore config lists match on.
 export interface DeviceRun
 {
     index:      number;
     name:       string;
+    statId:     string;
     //Per-slot energy (kWh); the ring's run arcs are derived from this at draw time (dayRunArcs).
     values:     number[];
-    //True when the device ran essentially all day (a permanent load the optimiser can't shift).
-    continuous: boolean;
+    //True when the user marked this device "ignore in optimiser": the optimiser keeps its real profile instead of
+    //shifting it onto the sun (a fixed load, e.g. the fridge or an appliance you can't reschedule).
+    fixed:      boolean;
     //Tooltip figures: the day's total and the share of it that fell on solar-covered vs grid-covered slots.
     dailyKwh:   number;
     solarPct:   number;
     gridPct:    number;
 }
 
-//Below this daily total (kWh) a device gets no ring (noise cut). A slot counts as "on" above RUN_ACTIVE_FRAC of the
-//device's peak slot; a device on for at least RUN_CONTINUOUS_FRAC of slots is a permanent load.
-const DEVICE_THRESHOLD_KWH = 0.1;
-const RUN_ACTIVE_FRAC     = 0.15;
-const RUN_CONTINUOUS_FRAC = 0.8;
-
-//Summarise a device for the day ring from its per-slot energy (kWh): null below the noise threshold, otherwise its
-//day total + whether it ran essentially all day. The per-run arc geometry is derived at draw time from `values`.
-export function detectDeviceRuns(kwh: number[], index: number, name: string): DeviceRun | null
+//Summarise a device for the day ring from its per-slot energy (kWh): null below the noise threshold (a per-card
+//setting), otherwise its day total. `fixed` (user-set) tells the optimiser to leave it in place. The per-run arc
+//geometry is derived at draw time from `values`.
+export function detectDeviceRuns(kwh: number[], index: number, name: string, statId: string, thresholdKwh: number, fixed: boolean): DeviceRun | null
 {
     let total = 0;
     let peak  = 0;
     for (const v of kwh) { const x = Math.max(0, v); total += x; if (x > peak) { peak = x; } }
-    if (total < DEVICE_THRESHOLD_KWH || peak <= 0) { return null; }
-    const onCut = peak * RUN_ACTIVE_FRAC;
-    let onCount = 0;
-    for (const v of kwh) { if (v > onCut) { onCount++; } }
-    const continuous = onCount >= kwh.length * RUN_CONTINUOUS_FRAC;
-    return { index, name, values: kwh, continuous, dailyKwh: total, solarPct: 0, gridPct: 0 };
+    if (total < thresholdKwh || peak <= 0) { return null; }
+    return { index, name, statId, values: kwh, fixed, dailyKwh: total, solarPct: 0, gridPct: 0 };
 }
 
-//Optimisation replay: reschedule the SHIFTABLE devices (not always-on) into the day's real solar production, so
-//they don't just pile up at one moment -- you can only run so many appliances on the sun you actually made. Greedy:
-//continuous devices are fixed and eat their share of the sun first; then, biggest device first, each is slid to the
-//run-length window with the most REMAINING sun and that sun is spent, so later devices flow into the next-best slot.
-//A device the sun can't cover (nothing left) stays where it really ran. Returns per-slot values aligned to `devices`.
+//Optimisation replay: reschedule the SHIFTABLE devices into the day's real solar production, so they don't just pile
+//up at one moment -- you can only run so many appliances on the sun you actually made. Greedy: devices the user
+//marked fixed keep their real profile and eat their share of the sun first; then, biggest device first, each is slid
+//to the run-length window with the most REMAINING sun and that sun is spent, so later devices flow into the next-best
+//slot. A device the sun can't cover (nothing left) stays where it really ran. Returns per-slot values aligned to
+//`devices`. A permanent load left un-fixed can't move anyway: its run spans the whole day, so no window shifts it.
 const OPT_RUN_PCT = 0.08;
-//Meal/cooking loads are bound to meal times (you don't run the oven at 10am to shift it onto the sun), so the
-//optimiser treats them as FIXED like an always-on load. Matched loosely by name (EN + FR), best-effort.
-const TIME_BOUND = /oven|four|stove|cuisin|cook(top|er|ing)?|hob|hotplate|plaque|po[eê]le|grill|micro.?onde|microwave|kettle|bouilloire|toaster|grille.?pain|cuisson|hotte|range\b/i;
-//A device is FIXED (not shiftable) when it runs all day: flagged continuous, meal-time-bound by name, or spread
-//across most of the day (a fridge cycles on/off but its activity spans ~24h -- you can't shift a permanent load).
-function isFixedLoad(d: DeviceRun): boolean
-{
-    if (d.continuous || TIME_BOUND.test(d.name)) { return true; }
-    let peak = 0;
-    for (const v of d.values) { if (v > peak) { peak = v; } }
-    if (peak <= 0) { return false; }
-    const thr = peak * OPT_RUN_PCT;
-    let first = -1;
-    let last  = -1;
-    for (let i = 0; i < d.values.length; i++) { if ((d.values[i] ?? 0) > thr) { if (first < 0) { first = i; } last = i; } }
-    return first >= 0 && (last - first + 1) > d.values.length * 0.6;
-}
 export function optimizeDevices(pv: number[], charge: number[], devices: DeviceRun[]): number[][]
 {
     const slots    = pv.length;
@@ -103,15 +81,15 @@ export function optimizeDevices(pv: number[], charge: number[], devices: DeviceR
     //can't run a device on sun that charged the battery), before the fixed loads take their share below.
     const residual = pv.map((v, s) => Math.max(0, Math.max(0, v) - Math.max(0, charge[s] ?? 0)));
     const out: number[][] = devices.map(() => new Array<number>(slots).fill(0));
-    //Fixed loads (always-on OR meal-time-bound) keep their real profile and consume their part of the sun up front.
+    //User-fixed loads keep their real profile and consume their part of the sun up front.
     devices.forEach((d, i) =>
     {
-        if (!isFixedLoad(d)) { return; }
+        if (!d.fixed) { return; }
         out[i] = d.values.slice();
         for (let s = 0; s < slots; s++) { residual[s] = Math.max(0, residual[s] - Math.max(0, d.values[s])); }
     });
     //Shiftable loads, biggest first, each placed in the best-sun window of its own run length.
-    const shiftable = devices.map((d, i) => ({ d, i })).filter(x => !isFixedLoad(x.d) && x.d.dailyKwh > 0).sort((a, b) => b.d.dailyKwh - a.d.dailyKwh);
+    const shiftable = devices.map((d, i) => ({ d, i })).filter(x => !x.d.fixed && x.d.dailyKwh > 0).sort((a, b) => b.d.dailyKwh - a.d.dailyKwh);
     for (const { d, i } of shiftable)
     {
         let peak = 0;
@@ -239,10 +217,16 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     if (key === host._dayRingKey) { return; }
     host._dayRingKey = key;
 
+    //Day-ring consumption controls (per-card): noise floor, the meters hidden from the ring entirely, and the meters
+    //the optimiser must leave in place.
+    const threshold = consumptionRingThresholdKwh(host.config);
+    const hidden    = consumptionRingHidden(host.config);
+    const ignored   = consumptionRingOptimizeIgnored(host.config);
+
     const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
         ids.length ? fetchChangeSeries(host.hass, [...ids].sort(), startMs, endMs, period) : Promise.resolve(null);
-    //Every device meter in one recorder call (per-id), then binned + run-detected each.
-    const deviceIds = d.devices.map(dev => dev.statConsumption).filter(Boolean);
+    //Every non-hidden device meter in one recorder call (per-id), then binned + run-detected each.
+    const deviceIds = d.devices.map(dev => dev.statConsumption).filter(id => id && !hidden.has(id));
     const [solarB, impB, expB, bChgB, bDisB, deviceById] = await Promise.all([
         chg(d.solarStatEnergyFroms), chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
         chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
@@ -265,10 +249,11 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const devices: DeviceRun[] = [];
     for (const dev of d.devices)
     {
-        if (!dev.statConsumption) { continue; }
+        if (!dev.statConsumption || hidden.has(dev.statConsumption)) { continue; }
         const name = dev.name || host.hass?.states?.[dev.statConsumption]?.attributes?.friendly_name || dev.statConsumption;
-        //A device with no real consumption today gets no ring (detectDeviceRuns returns null below the noise floor).
-        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, name);
+        //A device below the noise floor gets no ring (detectDeviceRuns returns null). `fixed` flags the ones the user
+        //excluded from the optimiser so it keeps their real profile.
+        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, name, dev.statConsumption, threshold, ignored.has(dev.statConsumption));
         if (!run) { continue; }
         //Attribute the device's own energy to the solar / grid share of each slot it ran, for the tooltip.
         let sol = 0;

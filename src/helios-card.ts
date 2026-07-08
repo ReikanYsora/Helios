@@ -468,14 +468,14 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Timeline mode selector: Standard / Yesterday / Today / Week / Month / Year. The active mode is highlighted. In
+    //Timeline mode selector: Now / Yesterday / Today / Week / Month / Year. The active mode is highlighted. In
     //day (rings) mode only Yesterday + Today make sense, so the other modes are shown but disabled (greyed).
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
         const labels: Record<TimelineMode, string> = {
-            standard:  t.period?.standard  ?? 'Standard',
+            standard:  t.period?.standard  ?? 'Now',
             yesterday: t.period?.yesterday ?? 'Yesterday',
             today:     t.period?.today     ?? 'Today',
             week:      t.period?.week      ?? 'Week',
@@ -1272,7 +1272,6 @@ export class HeliosCard extends LitElement
                                         class="overlay-btn ${on ? 'is-on' : ''}"
                                         style="--clock-btn-color:${meta.color}"
                                         aria-pressed=${on ? 'true' : 'false'}
-                                        title=${lbl}
                                         aria-label=${lbl}
                                         data-target=${t}
                                         @click=${this._clock.onClockTargetToggleClick}
@@ -1295,7 +1294,6 @@ export class HeliosCard extends LitElement
                                 type="button"
                                 class="day-seg ${!opt ? 'active' : ''}"
                                 aria-pressed=${!opt ? 'true' : 'false'}
-                                title="Real"
                                 aria-label="Real day"
                                 @click=${this._onDayReal}
                             >
@@ -1305,7 +1303,6 @@ export class HeliosCard extends LitElement
                                 type="button"
                                 class="day-seg ${opt ? 'active' : ''}"
                                 aria-pressed=${opt ? 'true' : 'false'}
-                                title="Optimised"
                                 aria-label="Optimised day"
                                 @click=${this._onDayOptimised}
                             >
