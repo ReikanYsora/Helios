@@ -383,6 +383,10 @@ export class HeliosEngine
     private _dayView = false;
     private _dayViewSaved?: { bearing: number; pitch: number };
     private _cameraAnimRaf?: number;
+    //Clock (histogram) mode: rotation is ALWAYS free there, so the camera lock (a scene-only pose pin) is ignored
+    //while it's set. Day view stays inert regardless (top-down). Kept in sync by the card.
+    private _clockView = false;
+    public setClockView(on: boolean): void { this._clockView = on; }
 
     //Enter the day view: save the current pose once, lock rotation, animate straight-down (top-down, so the rings
     //stay perfectly concentric) and equator-up (south up in the northern hemisphere, north up in the southern).
@@ -528,7 +532,7 @@ export class HeliosEngine
             //move or did time pass?"). camera-locked also suppresses it.
             const autoRotateEnabled = this.cfg['auto-rotate-enabled'] === true;
             const cameraLocked      = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
-            if (!autoRotateEnabled || cameraLocked || this._dayView)
+            if (!autoRotateEnabled || (cameraLocked && !this._clockView) || this._dayView)
             {
                 this._autoRotateRaf = undefined;
                 return;
@@ -713,9 +717,9 @@ export class HeliosEngine
             {
                 return;
             }
-            //camera-locked (persistent) or the day view (runtime): manual drag is inert. Re-checked per
-            //pointerdown so a live-preview toggle disengages immediately without a respawn.
-            if (this.isCameraLocked() || this._dayView)
+            //Day view is always inert (top-down); the camera lock only applies to the SCENE, so it's ignored in the
+            //clock view (rotation stays free there). Re-checked per pointerdown so a toggle disengages immediately.
+            if (this._dayView || (this.isCameraLocked() && !this._clockView))
             {
                 return;
             }

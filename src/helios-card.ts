@@ -790,6 +790,13 @@ export class HeliosCard extends LitElement
         //Restore the saved view mode + selected chip once coords resolve (idempotent; retries until ready).
         this._restoreUiState();
 
+        //Keep the engine's "clock view" flag in sync so the camera lock (scene-only) is ignored in the clock view
+        //(rotation stays free there), while the scene honours it and the day view stays inert top-down regardless.
+        if (_changedProperties.has('_viewMode') || _changedProperties.has('_engine'))
+        {
+            this._engine?.setClockView(this._viewMode === 'clock');
+        }
+
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
         //(one hash compare), ~50 ms for a full 480 × 7 bucketization + forecast pass on a real refresh.
@@ -1112,9 +1119,10 @@ export class HeliosCard extends LitElement
         const isDark = this._computeIsDark(themesObj);
         const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
-        //camera-locked swaps the grab cursor for the default arrow when the camera is pinned (pan + rotate
-        //disabled, so the open-hand cursor would be misleading). Re-evaluated every render.
-        const cameraLocked = this._isCameraLocked();
+        //camera-locked swaps the grab cursor for the default arrow when drag-rotate is inert, so the open-hand cursor
+        //isn't misleading: the day view is always top-down (inert), the scene honours the lock, and the clock is
+        //always free to rotate (the lock is scene-only). Re-evaluated every render.
+        const cameraLocked = this._viewMode === 'day' || (this._viewMode === 'scene' && this._isCameraLocked());
         //Detail panel shows only in scene mode; its accent (from the active chip) drives both the panel border and
         //the little "i" badge on the open chip, so it lives as a card-level class + CSS var.
         const infoOpen = this._infoPanelOpen && this._viewMode === 'scene';
@@ -1202,12 +1210,9 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-<!--  Top-left button rail: scene/clock view toggle plus the camera-lock chip. Tapping the lock
-                      flips it and asks the engine to persist the pose (bearing + pitch + lock flag) to
-                      localStorage for the next reload. Glyphs only, no labels: tooltips are useless on touch.  -->
+<!--  Top-left button rail: the scene / clock / day view toggle. Glyphs only, no labels: tooltips are
+                      useless on touch. (The camera-lock chip lives top-right and only in scene mode.)  -->
                 ${hasHomeCoords ? (() => {
-                    const railCameraLocked = this._isCameraLocked();
-                    const lockIcon      = railCameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
                     const sceneOn       = this._viewMode === 'scene';
                     const clockOn       = this._viewMode === 'clock';
                     const dayOn         = this._viewMode === 'day';
@@ -1243,13 +1248,25 @@ export class HeliosCard extends LitElement
                             >
                                 <ha-icon icon="mdi:chart-donut"></ha-icon>
                             </button>
+                        </div>
+                    `;
+                })() : nothing}
+
+                <!--  Camera-lock chip: SCENE mode only, top-right. Pins the pose (drag-rotate/pitch + idle orbit
+                      off) and persists it to localStorage. The lock has no effect on the clock (always free to
+                      rotate) or day (always top-down) views, so it isn't shown there.  -->
+                ${hasHomeCoords && this._viewMode === 'scene' ? (() => {
+                    const locked = this._isCameraLocked();
+                    return html`
+                        <div class="overlay-top-right">
                             <button
                                 type="button"
-                                class="overlay-btn ${railCameraLocked ? 'is-on' : ''}"
-                                aria-pressed=${railCameraLocked ? 'true' : 'false'}
+                                class="overlay-btn ${locked ? 'is-on' : ''}"
+                                aria-pressed=${locked ? 'true' : 'false'}
+                                aria-label="Lock camera"
                                 @click=${this._onCameraLockToggle}
                             >
-                                <ha-icon icon=${lockIcon}></ha-icon>
+                                <ha-icon icon=${locked ? 'mdi:lock' : 'mdi:lock-open-variant'}></ha-icon>
                             </button>
                         </div>
                     `;
