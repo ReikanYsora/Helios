@@ -281,21 +281,19 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const bd  = binSlots(bDisB, slots);
     const shares = ringShares(pv, imp, exp, bc, bd);
     bridgeShareGaps(shares.solar, shares.battery, shares.grid, 3);
+    //Solar-production floor: panels trickle a few watts round the clock, and at night that tiny output is 100% of a
+    //tiny load, so the solar SHARE reads 1.0 and a bogus solar run appears at 2am. Drop the solar share for any slot
+    //whose actual production is below ~50 W (converted to kWh for this slot's length).
+    const solarFloorKwh = 0.05 * (HOURS_PER_DAY / slots);
+    for (let s = 0; s < slots; s++) { if ((pv[s] ?? 0) < solarFloorKwh) { shares.solar[s] = 0; pv[s] = 0; } }
     const devices: DeviceRun[] = [];
     for (const dev of d.devices)
     {
         if (!dev.statConsumption) { continue; }
         const name = dev.name || host.hass?.states?.[dev.statConsumption]?.attributes?.friendly_name || dev.statConsumption;
-        const kwh  = binSlots(deviceById?.[dev.statConsumption] ?? null, slots);
-        //EVERY configured device gets a ring, so its slot is reserved even on a day with no data yet (it draws as an
-        //empty faint ring). Below the noise floor detectDeviceRuns returns null, so fall back to an empty run.
-        let run = detectDeviceRuns(kwh, dev.index, name);
-        if (!run)
-        {
-            let total = 0;
-            for (const v of kwh) { total += Math.max(0, v); }
-            run = { index: dev.index, name, values: kwh, segments: [], continuous: false, dailyKwh: total, solarPct: 0, gridPct: 0 };
-        }
+        //A device with no real consumption today gets no ring (detectDeviceRuns returns null below the noise floor).
+        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, name);
+        if (!run) { continue; }
         //Attribute the device's own energy to the solar / grid share of each slot it ran, for the tooltip.
         let sol = 0;
         let gr  = 0;
