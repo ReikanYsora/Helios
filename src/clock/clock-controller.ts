@@ -509,7 +509,7 @@ export class ClockController
                 segments: dev.segments,
                 dailyKwh: dev.dailyKwh,
             }));
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false);
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this.host._dayHover ?? -1);
             this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
             return;

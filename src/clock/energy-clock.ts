@@ -729,7 +729,7 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
 //not shatter into little dots. Drawn as TRUE SVG arc paths (not sampled polylines): valid because day mode is
 //top-down (pitch 0 -> ground circles are screen circles), and it avoids the bright self-overlap dots WebKit/Chrome
 //render on a wide stroked polyline at its diagonal vertices.
-function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number): string
+function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number, dim: number): string
 {
     const ppm = camera.pxPerMetre || 1;
     const c0  = camera.project(0, 0, 0);
@@ -751,7 +751,7 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         return `<path d="M${a0[0].toFixed(2)},${a0[1].toFixed(2)}A${R.toFixed(2)},${R.toFixed(2)} 0 ${large} ${sweep} ${a1[0].toFixed(2)},${a1[1].toFixed(2)}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}"/>`;
     };
     //Faint full ring (the member's track); its rounded ends share the value arcs' gapF so they line up at midnight.
-    const s = arc(gapF, 1 - gapF, 0.1, 'round');
+    const s = arc(gapF, 1 - gapF, 0.1 * dim, 'round');
     let maxV  = 0;
     let total = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } total += Math.max(0, v); }
@@ -796,7 +796,7 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         const cellW = spanF / (b - a);
         for (let sl = a; sl < b; sl++)
         {
-            const op = 0.22 + 0.68 * Math.min(1, Math.max(0, values[sl] ?? 0) / maxV);
+            const op = (0.22 + 0.68 * Math.min(1, Math.max(0, values[sl] ?? 0) / maxV)) * dim;
             runs += arc(start + (sl - a) * cellW, start + (sl - a + 1) * cellW, op, 'butt');
         }
     }
@@ -807,8 +807,9 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
 //constant-width midnight slot) spanning the group, with each member drawn inside as a full faint ring + its bright
 //run arcs at its own sub-radius. One zone per group + a clear separation reads as "producers" vs "consumers",
 //without the striped look of many stuck-together ring backgrounds. Hits are returned in member order (for the
-//tooltip hit-test). `outerRm`/`thickM` are the group band's outer radius + thickness.
-function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; values: number[] }[], slots: number): { svg: string; hits: DayRingHit[] }
+//tooltip hit-test). `dimOf(i)` is the opacity multiplier for member i (1 = normal; <1 fades a ring during hover).
+//`outerRm`/`thickM` are the group band's outer radius + thickness.
+function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; values: number[] }[], slots: number, dimOf: (i: number) => number): { svg: string; hits: DayRingHit[] }
 {
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
@@ -828,7 +829,7 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     members.forEach((m, i) =>
     {
         const mMid = outerRm - (i + 0.5) * sub;
-        svg += dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW));
+        svg += dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW), dimOf(i));
         hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) });
     });
     return { svg, hits };
@@ -1171,6 +1172,9 @@ export function projectDayRingFrame(
     hasSolar = true,
     hasGrid = true,
     hasBattery = true,
+    //Hovered ring index (-1 = none), in the concatenated [producers..., devices...] order. On hover the other
+    //CONSUMER rings fade; production rings never fade.
+    hoverIndex = -1,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1220,14 +1224,17 @@ export function projectDayRingFrame(
     let cursor = discR;
     if (nP > 0)
     {
-        const g = dayRunGroup(camera, cursor, nP * sub, producers, slots);
+        //Production rings never fade on hover.
+        const g = dayRunGroup(camera, cursor, nP * sub, producers, slots, () => 1);
         ringSvg += g.svg;
         dayHits = dayHits.concat(g.hits);
         cursor -= nP * sub + groupGap;
     }
     if (nC > 0)
     {
-        const g = dayRunGroup(camera, cursor, nC * sub, consumers, slots);
+        //Consumers: on hover the non-hovered device rings fade (a device's global hit index is nP + k).
+        const dimOf = (k: number): number => (hoverIndex < 0 || hoverIndex === nP + k) ? 1 : 0.22;
+        const g = dayRunGroup(camera, cursor, nC * sub, consumers, slots, dimOf);
         ringSvg += g.svg;
         dayHits = dayHits.concat(g.hits);   //hit index: producers 0..nP-1 then devices nP..
     }
