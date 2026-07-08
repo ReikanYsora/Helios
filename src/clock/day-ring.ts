@@ -32,6 +32,8 @@ export interface DayRingData
     batteryKwh: number;
     //Per-slot solar production (kWh) -- the available sun the optimiser schedules shiftable devices into.
     pv:         number[];
+    //Per-slot battery charging (kWh) -- sun already committed to the battery, so it isn't free to move a device onto.
+    charge:     number[];
 }
 
 //One device's run(s) over the day: contiguous on-slots as arcs (episodic) or the whole day (continuous). `index`
@@ -108,10 +110,12 @@ function isFixedLoad(d: DeviceRun): boolean
 {
     return d.continuous || TIME_BOUND.test(d.name);
 }
-export function optimizeDevices(pv: number[], devices: DeviceRun[]): number[][]
+export function optimizeDevices(pv: number[], charge: number[], devices: DeviceRun[]): number[][]
 {
     const slots    = pv.length;
-    const residual = pv.map(v => Math.max(0, v));   //solar still available to schedule into
+    //Solar still available to schedule into = production minus what already went to charging the battery (you
+    //can't run a device on sun that charged the battery), before the fixed loads take their share below.
+    const residual = pv.map((v, s) => Math.max(0, Math.max(0, v) - Math.max(0, charge[s] ?? 0)));
     const out: number[][] = devices.map(() => new Array<number>(slots).fill(0));
     //Fixed loads (always-on OR meal-time-bound) keep their real profile and consume their part of the sun up front.
     devices.forEach((d, i) =>
@@ -297,7 +301,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const sum = (a: number[]): number => a.reduce((t, v) => t + Math.max(0, v), 0);
     host._dayRing = {
         solar: shares.solar, battery: shares.battery, grid: shares.grid, devices, hasSolar, hasGrid, hasBattery,
-        solarKwh: sum(pv), gridKwh: sum(imp), batteryKwh: sum(bd), pv,
+        solarKwh: sum(pv), gridKwh: sum(imp), batteryKwh: sum(bd), pv, charge: bc,
     };
     host.requestUpdate();
 }

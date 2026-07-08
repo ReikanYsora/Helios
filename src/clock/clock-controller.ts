@@ -502,7 +502,7 @@ export class ClockController
             const batteryColor = ENERGY_COLOR.batteryOut(el);
             //Optimised mode reschedules the shiftable devices into the real solar production (see optimizeDevices).
             const devs        = dr?.devices ?? [];
-            const optValues   = this.host._dayOptimized === true ? optimizeDevices(dr?.pv ?? [], devs) : null;
+            const optValues   = this.host._dayOptimized === true ? optimizeDevices(dr?.pv ?? [], dr?.charge ?? [], devs) : null;
             const rings       = devs.map((dev, i) => ({
                 color:    deviceColorByIndex(el, dev.index),
                 values:   optValues ? optValues[i] : dev.values,
