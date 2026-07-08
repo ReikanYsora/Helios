@@ -22,7 +22,6 @@ import {
     type ClockData, type DayRingHit,
     availableClockTargets, clockTargetMeta, clockTargetLabel,
 } from './clock/energy-clock';
-import { refreshTrendProfiles } from './clock/trend';
 import { refreshDayRing, type DayRingData } from './clock/day-ring';
 import { setServerTimeZone } from './core/time/timezone';
 import { isDarkFromCss, cssHex, uiColorVar } from './core/format/format';
@@ -106,8 +105,8 @@ export class HeliosCard extends LitElement
     //animations (prism rise, timeline curve grow) are suppressed while it is true.
     @property({ attribute: false }) public preview = false;
 
-    //Clock / trend dial subsystem (view-mode switching, the filter toggle, the grow/slide/exit + dim animation
-    //engine, dial data build, paint/hit-test, the four dial tooltips). Owns its own scratch/animation state; the
+    //Clock dial subsystem (view-mode switching, the filter toggle, the grow/slide/exit + dim animation
+    //engine, dial data build, paint/hit-test, the dial tooltips). Owns its own scratch/animation state; the
     //reactive @state it drives stays on the card and is reached through the controller's host back-reference.
     readonly _clock = new ClockController(this);
 
@@ -217,17 +216,11 @@ export class HeliosCard extends LitElement
     private _lastChipTapMs = 0;
     private _lastChipTapTarget = '';
     //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap and paints the
-    //hourly cylinder ring; 'trend' paints one ring comparing the period to the previous one. Scene is the default.
-    @state() _viewMode: 'scene' | 'clock' | 'trend' | 'day' = 'scene';
+    //hourly cylinder ring. Scene is the default.
+    @state() _viewMode: 'scene' | 'clock' | 'day' = 'scene';
     //"No UI" mode: true once the idle timer fires, hiding (fading) the timeline + controls; any input clears it.
     @state() private _uiHidden = false;
     private _uiHideTimer: number | undefined;
-    //Trend mode single metric (one choice, unlike clock's multi-filter) + the two compared hour-of-day profiles
-    //(current period P, previous period P-1) with their cache key.
-    @state() _trendTarget: ChartTarget = 'consumption';
-    @state() _trendP:    ClockHourly | null = null;
-    @state() _trendPrev: ClockHourly | null = null;
-    _trendKey = '';
     //Day mode: today's per-slot solar + grid-import shares for the ground ring (24 * display-frequency slots), with its key.
     @state() _dayRing: DayRingData | null = null;
     _dayRingKey = '';
@@ -390,11 +383,6 @@ export class HeliosCard extends LitElement
             this._clock._clockGrowStart.clear();
             void refreshClockHourly(this);
             this._clock.clockAnimate();
-        }
-        if (this._viewMode === 'trend')
-        {
-            //New window = new P and P-1: refetch both, repaint when they land.
-            void refreshTrendProfiles(this);
         }
     }
 
@@ -691,7 +679,7 @@ export class HeliosCard extends LitElement
             //non-empty entity list; totals move by watt-hours, so 30 s tracks the dashboard tile cheaply.
             refreshHaDailyTotals(this);
             //Keep the dial's "current hour" arrow in step with the clock even on an idle, camera-locked card.
-            if (this._viewMode === 'clock' || this._viewMode === 'trend' || this._viewMode === 'day') { this._clock.scheduleClockPaint(); }
+            if (this._viewMode === 'clock' || this._viewMode === 'day') { this._clock.scheduleClockPaint(); }
             //Day rings show live data: re-fetch on the tick so the current period rolls in (keyed to 5 min, so this
             //is a no-op until the window advances).
             if (this._viewMode === 'day') { void refreshDayRing(this); }
@@ -831,7 +819,7 @@ export class HeliosCard extends LitElement
 
         //Dial day/night wedges: recompute the per-hour night share when the home or window changes (keyed, so
         //this is cheap). A new _nightFrac repaints via the dial branches below.
-        if ((this._viewMode === 'clock' || this._viewMode === 'trend' || this._viewMode === 'day')
+        if ((this._viewMode === 'clock' || this._viewMode === 'day')
             && (_changedProperties.has('_viewMode')
                 || _changedProperties.has('_timeRange')
                 || _changedProperties.has('hass')
@@ -909,31 +897,6 @@ export class HeliosCard extends LitElement
             }
             if (_changedProperties.has('_clockData') || _changedProperties.has('_nightFrac'))
             {
-                this._clock.scheduleClockPaint();
-            }
-        }
-
-        //Trend dial: refetch P + P-1 when the window/data/config changes or the engine respawns; repaint when
-        //the profiles, the selected metric or the hover land.
-        if (this._viewMode === 'trend')
-        {
-            if (_changedProperties.has('_viewMode')
-                || _changedProperties.has('_timeRange')
-                || _changedProperties.has('_energyDefaults')
-                || _changedProperties.has('config')
-                || _changedProperties.has('_engine'))
-            {
-                void refreshTrendProfiles(this);
-            }
-            if (_changedProperties.has('_engine')) { this._engine?.setHomeOnly(true); }
-            if (_changedProperties.has('_trendP')
-                || _changedProperties.has('_trendPrev')
-                || _changedProperties.has('_trendTarget')
-                || _changedProperties.has('_clockHoverSlot')
-                || _changedProperties.has('_clockHomeHover')
-                || _changedProperties.has('_nightFrac'))
-            {
-                if (_changedProperties.has('_clockHoverSlot')) { this._clock.startClockDim(); }
                 this._clock.scheduleClockPaint();
             }
         }
@@ -1163,7 +1126,6 @@ export class HeliosCard extends LitElement
             cameraLocked      ? 'camera-locked'  : '',
             this.preview      ? 'helios-edit'    : '',
             this._viewMode === 'clock' ? 'mode-clock' : '',
-            this._viewMode === 'trend' ? 'mode-trend' : '',
             this._viewMode === 'day' ? 'mode-day' : '',
             infoOpen          ? 'info-open'      : '',
         ].filter(Boolean).join(' ');
@@ -1180,7 +1142,7 @@ export class HeliosCard extends LitElement
                     @pointerup=${this._clock.onClockTapEnd}
                 ></div>
 
-                ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'trend' || this._viewMode === 'day') ? html`
+                ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'day') ? html`
                     <div class="clock-overlay">
                         <svg class="clock-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         ${Array.from({ length: 24 }, (_unused, h) => html`
@@ -1188,13 +1150,9 @@ export class HeliosCard extends LitElement
                         `)}
                         ${this._clock.compassLabels().map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
                         ${this._clockHoverSlot !== null
-                            ? (this._viewMode === 'trend'
-                                ? this._clock.renderTrendTooltip(this._clockHoverSlot)
-                                : this._clock.renderClockTooltip(this._clockHoverSlot))
+                            ? this._clock.renderClockTooltip(this._clockHoverSlot)
                             : (this._clockHomeHover
-                                ? (this._viewMode === 'trend'
-                                    ? this._clock.renderTrendHomeTooltip()
-                                    : this._clock.renderClockHomeTooltip())
+                                ? this._clock.renderClockHomeTooltip()
                                 : nothing)}
                         ${this._viewMode === 'day' && this._dayHover !== null
                             ? this._clock.renderDayTooltip(this._dayHover)
@@ -1318,38 +1276,6 @@ export class HeliosCard extends LitElement
                                         aria-label=${lbl}
                                         data-target=${t}
                                         @click=${this._clock.onClockTargetToggleClick}
-                                    >
-                                        <ha-icon icon=${meta.icon}></ha-icon>
-                                    </button>
-                                `;
-                            })}
-                        </div>
-                    `;
-                })() : nothing}
-
-                <!--  Right-hand metric selector (trend mode): a SINGLE-choice vertical toggle (one metric at a
-                      time), styled as one rounded segmented control that fits the available metrics.  -->
-                ${hasHomeCoords && this._viewMode === 'trend' ? (() => {
-                    //Weather metrics (irradiance, cloud) have no per-hour P / P-1 profile (they're not recorder
-                    //stats), and they're not consumption habits anyway, so the trend selector drops them.
-                    const targets = availableClockTargets(this).filter(t => t !== 'irradiance');
-                    if (!targets.length) { return nothing; }
-                    return html`
-                        <div class="overlay-top-right trend-rail">
-                            ${targets.map(t => {
-                                const meta = clockTargetMeta(this, t);
-                                const on   = this._trendTarget === t;
-                                const lbl  = clockTargetLabel(this, t);
-                                return html`
-                                    <button
-                                        type="button"
-                                        class="trend-seg ${on ? 'active' : ''}"
-                                        style="--clock-btn-color:${meta.color}"
-                                        aria-pressed=${on ? 'true' : 'false'}
-                                        title=${lbl}
-                                        aria-label=${lbl}
-                                        data-target=${t}
-                                        @click=${this._clock.onTrendTargetClick}
                                     >
                                         <ha-icon icon=${meta.icon}></ha-icon>
                                     </button>
@@ -1543,13 +1469,9 @@ export class HeliosCard extends LitElement
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object')
             {
-                if (parsed.viewMode === 'scene' || parsed.viewMode === 'clock' || parsed.viewMode === 'trend' || parsed.viewMode === 'day')
+                if (parsed.viewMode === 'scene' || parsed.viewMode === 'clock' || parsed.viewMode === 'day')
                 {
                     this._viewMode = parsed.viewMode;
-                }
-                if (typeof parsed.trendTarget === 'string')
-                {
-                    this._trendTarget = parsed.trendTarget as ChartTarget;
                 }
                 const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'custom'];
                 if (typeof parsed.chartTarget === 'string' && valid.includes(parsed.chartTarget as ChartTarget))
@@ -1602,7 +1524,6 @@ export class HeliosCard extends LitElement
                 viewMode:     this._viewMode,
                 chartTarget:  this._chartTarget,
                 clockTargets: this._clockTargets,
-                trendTarget:  this._trendTarget,
                 timelineMode: this._timelineMode,
             }));
         }

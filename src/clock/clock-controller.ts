@@ -6,25 +6,23 @@ import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
 import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
-import type { ClockHourly } from './clock-hourly';
-import { refreshTrendProfiles } from './trend';
 import { refreshDayRing, optimizeDevices } from './day-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
 {
     type ClockData, type ClockHit, type ClockRingInput, type ClockFrame,
-    buildClockData, buildClockDataHourly, hourlyOf, clockTargetMeta, clockTargetLabel,
-    projectClockFrame, projectTrendFrame, projectDayRingFrame, trendGoodDirection, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
+    buildClockData, clockTargetMeta, clockTargetLabel,
+    projectClockFrame, projectDayRingFrame, clockHitTest, clockTotal, clockLayerValue, formatClockValue,
     clockUnitCeilings, clockLayerPeriod, clockPeriodTotal, CLOCK_SLOTS_PER_HOUR, easeOutCubic,
 } from './energy-clock';
 
 
-//Clock / trend dial subsystem: view-mode switching, the clock-filter toggle/slide, the dim + grow/slide/exit
-//rAF animation engine, clock/trend data build, paint/apply-frame, pointer hit-testing, hour/compass formatting
-//and the four dial tooltips. Extracted from HeliosCard; the reactive @state it drives (_clockData,
-//_clockTargets, _trendP/_trendPrev, _clockHoverSlot, _clockHomeHover, _nightFrac, the query refs, ...) stays on
-//the card and is reached through `this.host` so Lit reactivity and the energy-clock/trend helpers keep working.
+//Clock dial subsystem: view-mode switching, the clock-filter toggle/slide, the dim + grow/slide/exit
+//rAF animation engine, clock data build, paint/apply-frame, pointer hit-testing, hour/compass formatting
+//and the dial tooltips. Extracted from HeliosCard; the reactive @state it drives (_clockData,
+//_clockTargets, _clockHoverSlot, _clockHomeHover, _nightFrac, the query refs, ...) stays on
+//the card and is reached through `this.host` so Lit reactivity and the energy-clock helpers keep working.
 
 //Even-odd ray-cast: is the screen point inside the projected polygon (a device ring's outer/inner circle)?
 function pointInPoly(poly: [number, number][], x: number, y: number): boolean
@@ -115,7 +113,7 @@ export class ClockController
     //Switch between scene (3D view) and clock (hourly ring dial) modes. Resets clock animation state so the
     //dial enters/leaves cleanly, seeds/restores the filter set and home prism, persists, and kicks the
     //decoupled hourly fetch (clock only). No-op when already in the requested mode.
-    public setViewMode(mode: 'scene' | 'clock' | 'trend' | 'day'): void
+    public setViewMode(mode: 'scene' | 'clock' | 'day'): void
     {
         if (this.host._viewMode === mode)
         {
@@ -157,21 +155,6 @@ export class ClockController
             this.clockAnimate();
             return;
         }
-        if (mode === 'trend')
-        {
-            //The scene's selected chip drives the trend dial too (single-metric, like scene). Weather metrics have
-            //no P / P-1 profile, so an irradiance selection falls back to consumption.
-            if (this.host._chartTarget !== 'irradiance') { this.host._trendTarget = this.host._chartTarget; }
-            if (this.host._trendTarget === 'irradiance') { this.host._trendTarget = 'consumption'; }
-            //Dial draws no scene geometry; the overlay paints the comparison dial. Fetch the two profiles.
-            this.host._engine?.setHomeOnly(true);
-            this.host._viewMode = mode;
-            this.host.persistUiState();
-            void refreshClockHourly(this.host);   //clears the clock profile (it keys off _viewMode)
-            void refreshTrendProfiles(this.host); //P + P-1
-            this.scheduleClockPaint();
-            return;
-        }
         if (mode === 'day')
         {
             //Day mode draws no scene geometry; the overlay paints today's ground ring. Lock the camera to a
@@ -197,24 +180,15 @@ export class ClockController
         }
         this.host._viewMode = mode;
         this.host.persistUiState();
-        //Now that we've left the dial, let both profiles clear themselves (they key off _viewMode).
+        //Now that we've left the dial, let the clock profile clear itself (it keys off _viewMode).
         void refreshClockHourly(this.host);
-        void refreshTrendProfiles(this.host);
     }
 
     //Rail button delegate: the clicked element carries its mode in data-view.
     public onViewModeClick = (e: Event): void =>
     {
-        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | 'trend' | 'day' | undefined;
+        const view = (e.currentTarget as HTMLElement).dataset.view as 'scene' | 'clock' | 'day' | undefined;
         if (view) { this.setViewMode(view); }
-    };
-
-    //Trend metric selector (single choice): pick the metric, refetch is implicit (data is metric-independent;
-    //only the displayed vector changes), repaint.
-    public onTrendTargetClick = (e: Event): void =>
-    {
-        const t = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
-        if (t && t !== this.host._trendTarget) { this.host._trendTarget = t; this.scheduleClockPaint(); }
     };
 
     //Toggle a metric in/out of the clock filter set (multi-select). Each active filter draws its own concentric
@@ -305,7 +279,7 @@ export class ClockController
         const DUR   = 150;
         const animateDim = (now: number): void =>
         {
-            if (id !== this._clockDimSeq || (this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend'))
+            if (id !== this._clockDimSeq || this.host._viewMode !== 'clock')
             {
                 return;
             }
@@ -422,24 +396,6 @@ export class ClockController
         requestAnimationFrame(() => this.paintClock());
     }
 
-    //Trend hour-of-day vectors for the selected metric: P and P-1 totals per hour (summed across the metric's
-    //layers), the energy flag (sum vs average), and a ClockData for unit-aware value formatting.
-    public trendVectors(): { pH: number[]; prevH: number[]; isE: boolean; data: ClockData | null }
-    {
-        const target = this.host._trendTarget;
-        const dP    = this.host._trendP    ? buildClockDataHourly(this.host, target, this.host._trendP)    : null;
-        const dPrev = this.host._trendPrev ? buildClockDataHourly(this.host, target, this.host._trendPrev) : null;
-        const isE   = ((dP ?? dPrev)?.unit ?? 'energy') === 'energy';
-        const vec = (data: ClockData | null): number[] =>
-        {
-            const out = new Array<number>(HOURS_PER_DAY).fill(0);
-            if (!data) { return out; }
-            for (const L of data.layers) { const hv = hourlyOf(L.values, isE); for (let h = 0; h < HOURS_PER_DAY; h++) { out[h] += hv[h]; } }
-            return out;
-        };
-        return { pH: vec(dP), prevH: vec(dPrev), isE, data: dP ?? dPrev };
-    }
-
     //Recompute the per-hour night share for the ground wedges when the home or the window (rounded to the hour)
     //changes. Cheap + keyed, so idle frames never recompute.
     public refreshNightFrac(): void
@@ -464,7 +420,7 @@ export class ClockController
     //animation. Public so the engine's per-frame callback can reach it.
     public paintClock(): void
     {
-        if (this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend' && this.host._viewMode !== 'day')
+        if (this.host._viewMode !== 'clock' && this.host._viewMode !== 'day')
         {
             return;
         }
@@ -477,21 +433,6 @@ export class ClockController
         const tc = pickTranslations(this.host.hass?.language).clock;
         const cardinals = { n: tc.compassN, s: tc.compassS, e: tc.compassE, w: tc.compassW };
 
-        //Trend dial: one ring of bars for P, a reference marker per hour at P-1. Both vectors are the selected
-        //metric's hour-of-day totals, summed across the metric's layers (import+export, per-source PV, ...).
-        if (this.host._viewMode === 'trend')
-        {
-            const target = this.host._trendTarget;
-            const { pH, prevH } = this.trendVectors();
-            const frame = projectTrendFrame(
-                camera, pH, prevH,
-                clockTargetMeta(this.host, target).color, trendGoodDirection(target),
-                cardinals, this._clockDimSlot, this._clockDim,
-                this.host._clockHomeHover, this.host._nightFrac ?? [],
-            );
-            this._applyClockFrame(frame);
-            return;
-        }
         //Day dial: the flat 24-hour ground ring for today, each hour split gold (solar) then import-colour (grid).
         //No bars, no rail, no tooltip: just the base ground ring.
         if (this.host._viewMode === 'day')
@@ -565,7 +506,7 @@ export class ClockController
 
     //Write a projected dial frame onto the overlay DOM: cylinders/bars into .clock-svg, the flat guide into the
     //engine's ground overlay, the hit axes + centre hit, and the ground-laid hour + compass labels. Shared by
-    //the clock and trend dials.
+    //the clock and day dials.
     private _applyClockFrame(frame: ClockFrame): void
     {
         if (this.host._clockSvg) { this.host._clockSvg.innerHTML = frame.svg; }
@@ -603,7 +544,7 @@ export class ClockController
             this._dayHoverMove(e);
             return;
         }
-        if ((this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend') || e.pointerType !== 'mouse')
+        if (this.host._viewMode !== 'clock' || e.pointerType !== 'mouse')
         {
             return;
         }
@@ -745,7 +686,7 @@ export class ClockController
     //Touch: remember where the gesture began so a tap can be told from a drag-rotate on release.
     public onClockTapStart = (e: PointerEvent): void =>
     {
-        if ((this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend') || e.pointerType === 'mouse')
+        if (this.host._viewMode !== 'clock' || e.pointerType === 'mouse')
         {
             return;
         }
@@ -764,7 +705,7 @@ export class ClockController
     //the camera and is ignored here.
     public onClockTapEnd = (e: PointerEvent): void =>
     {
-        if ((this.host._viewMode !== 'clock' && this.host._viewMode !== 'trend') || e.pointerType === 'mouse')
+        if (this.host._viewMode !== 'clock' || e.pointerType === 'mouse')
         {
             return;
         }
@@ -869,99 +810,6 @@ export class ClockController
                         </div>
                     `;
                 })}
-            </div>
-        `;
-    }
-
-    //Trend tooltip for the focused hour: the current period's value, the previous period's value, and their
-    //signed delta coloured green/red by whether the change is an improvement for this metric.
-    public renderTrendTooltip(slot: number): TemplateResult | typeof nothing
-    {
-        if (!this.host._trendP && !this.host._trendPrev)
-        {
-            return nothing;
-        }
-        const hour = Math.floor(slot / CLOCK_SLOTS_PER_HOUR);
-        const head = `${String(hour).padStart(2, '0')}:00 - ${String((hour + 1) % HOURS_PER_DAY).padStart(2, '0')}:00`;
-        const target = this.host._trendTarget;
-        const meta   = clockTargetMeta(this.host, target);
-        //Sum the metric's layers for the focused hour, carrying a ClockData for unit-aware formatting.
-        const sumHour = (prof: ClockHourly | null): { v: number; data: ClockData | null } =>
-        {
-            if (!prof) { return { v: 0, data: null }; }
-            const data = buildClockDataHourly(this.host, target, prof);
-            const isE  = data.unit === 'energy';
-            let v = 0;
-            for (const L of data.layers) { v += hourlyOf(L.values, isE)[hour]; }
-            return { v, data };
-        };
-        const p    = sumHour(this.host._trendP);
-        const prev = sumHour(this.host._trendPrev);
-        const dataFmt = p.data ?? prev.data;
-        const fmt = (val: number): string => dataFmt ? formatClockValue(this.host, dataFmt, val) : val.toFixed(1);
-        const delta = p.v - prev.v;
-        const dir   = trendGoodDirection(target);
-        const deltaColor = dir === 0
-            ? 'var(--primary-text-color, #212121)'
-            : (delta * dir >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
-        return html`
-            <div class="clock-tip">
-                <div class="clock-tip-head">${head}</div>
-                <div class="clock-tip-row">
-                    <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
-                    <span class="clock-tip-name">${clockTargetLabel(this.host, target)}</span>
-                    <span class="clock-tip-val">${fmt(p.v)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:history" style="color:var(--secondary-text-color)"></ha-icon>
-                    <span class="clock-tip-name">P-1</span>
-                    <span class="clock-tip-val">${fmt(prev.v)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:delta" style="color:${deltaColor}"></ha-icon>
-                    <span class="clock-tip-name"></span>
-                    <span class="clock-tip-val" style="color:${deltaColor}">${delta >= 0 ? '+' : '-'}${fmt(Math.abs(delta))}</span>
-                </div>
-            </div>
-        `;
-    }
-
-    //Central-gauge tooltip (trend): the period GLOBAL total P, the previous period P-1, and the signed delta.
-    public renderTrendHomeTooltip(): TemplateResult | typeof nothing
-    {
-        if (!this.host._trendP && !this.host._trendPrev)
-        {
-            return nothing;
-        }
-        const { pH, prevH, isE, data } = this.trendVectors();
-        const totalOf = (a: number[]): number => { let t = 0; for (const v of a) { t += v; } return isE ? t : t / HOURS_PER_DAY; };
-        const tP    = totalOf(pH);
-        const tPrev = totalOf(prevH);
-        const fmt   = (v: number): string => data ? formatClockValue(this.host, data, v) : v.toFixed(1);
-        const delta = tP - tPrev;
-        const dir   = trendGoodDirection(this.host._trendTarget);
-        const deltaColor = dir === 0
-            ? 'var(--primary-text-color, #212121)'
-            : (delta * dir >= 0 ? 'var(--success-color, #2e7d32)' : 'var(--error-color, #c62828)');
-        const meta = clockTargetMeta(this.host, this.host._trendTarget);
-        return html`
-            <div class="clock-tip">
-                <div class="clock-tip-head">${clockTargetLabel(this.host, this.host._trendTarget)}</div>
-                <div class="clock-tip-row">
-                    <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
-                    <span class="clock-tip-name"></span>
-                    <span class="clock-tip-val">${fmt(tP)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:history" style="color:var(--secondary-text-color)"></ha-icon>
-                    <span class="clock-tip-name">P-1</span>
-                    <span class="clock-tip-val">${fmt(tPrev)}</span>
-                </div>
-                <div class="clock-tip-row">
-                    <ha-icon icon="mdi:delta" style="color:${deltaColor}"></ha-icon>
-                    <span class="clock-tip-name"></span>
-                    <span class="clock-tip-val" style="color:${deltaColor}">${delta >= 0 ? '+' : '-'}${fmt(Math.abs(delta))}</span>
-                </div>
             </div>
         `;
     }

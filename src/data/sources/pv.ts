@@ -55,7 +55,7 @@ export interface PvHost
     _pvChangeSeries:         ChangeBucket[] | null;
     _pvChangeFetch:          KeyedFetch;
     //Per-source recorder `change` series, keyed by the source's energy meter (`stat_energy_from`). Same reset-corrected,
-    //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the Clock/Trend dial
+    //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the Clock dial
     //shows each string with the exact dashboard energy (and recorded night production from non-solar sources fed in as PV),
     //instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
     _pvChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
@@ -181,7 +181,7 @@ export function refreshPv(host: PvHost): void
                     if (byId === null) { return; }
                     const agg = mergeChangeSeries(byId, changeIds);
                     if (agg !== null) { host._pvChangeSeries = agg; }
-                    //Per-source series (the Clock/Trend dial splits production by meter): read each meter's own
+                    //Per-source series (the Clock dial splits production by meter): read each meter's own
                     //buckets from the same per-id result, no extra call. Only meaningful with 2+ sources.
                     if (changeIds.length >= 2)
                     {

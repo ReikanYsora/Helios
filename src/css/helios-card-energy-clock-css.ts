@@ -147,54 +147,6 @@ export const heliosCardEnergyClockCss = css`
         color: var(--text-on-primary-color, #ffffff);
     }
 
-    /*  Trend mode: the right rail is ONE rounded segmented toggle (single choice), buttons flush inside a
-        bordered container like the editor's ON/OFF toggles. */
-    .overlay-top-right.trend-rail
-    {
-        gap: 0;
-        /*  top 4 px (not 8) + 48 px segments give the same icon pitch + centres as the clock rail's 40 px
-            chips at 8 px gaps, so switching clock <-> trend never shifts the metric icons. */
-        top: 4px;
-        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        border-radius: var(--ha-border-radius-md, 6px);
-        background: var(--card-background-color, #ffffff);
-        overflow: hidden;
-        box-shadow: var(--helios-shadow-chip);
-        pointer-events: auto;
-    }
-    .trend-seg
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        border: 0;
-        outline: 0;
-        cursor: pointer;
-        width: 40px;
-        height: 48px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: transparent;
-        -webkit-tap-highlight-color: transparent;
-        transition: background-color 0.15s, color 0.15s;
-    }
-    .trend-seg + .trend-seg
-    {
-        border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
-    }
-    .trend-seg ha-icon
-    {
-        color: var(--clock-btn-color, var(--primary-text-color, #212121));
-    }
-    .trend-seg.active
-    {
-        background: var(--clock-btn-color, var(--primary-color, #03a9f4));
-    }
-    .trend-seg.active ha-icon
-    {
-        color: var(--text-on-primary-color, #ffffff);
-    }
-
     /*  Day mode Real/Optimised toggle: a horizontal segmented pill (top-right); same round-button look as the left
         rail, and the active half fills with the brand colour (left = Real, right = Optimised). */
     .overlay-top-right.day-toggle

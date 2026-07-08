@@ -84,7 +84,7 @@ export function formatHaTime(hass: any, date: Date): string
 
 
 //Hour-only label (no minutes), localised + 12/24h aware: "12 AM" / "1 PM" in
-//am/pm locales, the bare hour in 24h ones. For the clock/trend dial's 24 ground
+//am/pm locales, the bare hour in 24h ones. For the clock dial's 24 ground
 //labels, where a ":00" on every hour is noise (and very long in English am/pm).
 export function formatHaHour(hass: any, date: Date): string
 {

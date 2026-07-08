@@ -139,7 +139,7 @@ export interface DayRingHost
     hass:            any;
     config:          HeliosConfig | undefined;
     _energyDefaults: EnergyDefaults;
-    _viewMode?:      'scene' | 'clock' | 'trend' | 'day';
+    _viewMode?:      'scene' | 'clock' | 'day';
     _timelineMode?:  string;   //'yesterday' shows the previous day; anything else = today (live)
     _dayRing:        DayRingData | null;
     _dayRingKey:     string;

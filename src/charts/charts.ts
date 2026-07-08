@@ -83,7 +83,7 @@ export interface ChartHost
     //Recorder `change` series (5-min buckets) for the solar meter(s). sumChangeForDay sums exact per-day kWh so
     //totals match HA Energy to the watt-hour, not the gap-interpolated curve.
     readonly _pvChangeSeries: ChangeBucket[] | null;
-    //Per-source recorder `change` series keyed by energy meter (`stat_energy_from`), for the Clock/Trend per-source
+    //Per-source recorder `change` series keyed by energy meter (`stat_energy_from`), for the Clock per-source
     //split at exact dashboard energy. Empty on single-source installs (the aggregate already covers it) or pre-fetch.
     readonly _pvChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
     readonly _selectedTime: Date | null;

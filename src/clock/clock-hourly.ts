@@ -36,7 +36,7 @@ export interface ClockHourlyHost
     _timeRange:      { start: Date; end: Date } | null;
     _energyDefaults: EnergyDefaults;
     _timelineMode:   TimelineMode;
-    _viewMode?:      'scene' | 'clock' | 'trend' | 'day';
+    _viewMode?:      'scene' | 'clock' | 'day';
     //Detail panel open (scene mode): it aggregates period totals with the clock's method, so on a coarse window it
     //needs the same hourly profile even outside clock mode.
     _infoPanelOpen?: boolean;
@@ -111,7 +111,7 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
 }
 
 //Fetch the 24 hour-of-day profile for an arbitrary window. Pure (no host state): used for the clock's current
-//window and, shifted, for the trend mode's previous-period comparison.
+//window.
 export async function fetchHourlyProfile(
     hass: any, d: EnergyDefaults, cid: string, startMs: number, endMs: number,
 ): Promise<ClockHourly>

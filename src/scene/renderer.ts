@@ -46,7 +46,7 @@ export class SceneRenderer
     private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
     private readonly _groundOverlay: SVGSVGElement;
-    //Flat Helios mark laid on the ground plane at the dial centre (clock/trend). A CSS-3D decal so its curves stay
+    //Flat Helios mark laid on the ground plane at the dial centre (clock). A CSS-3D decal so its curves stay
     //crisp under the tilt; content + hover glow are host-supplied, the pose is synced here each frame.
     private readonly _groundDecal:  HTMLDivElement;
     private readonly _sceneSvg:     SVGSVGElement;
@@ -335,7 +335,7 @@ export class SceneRenderer
             this._ground.fade.style.transform = transform;
         }
 
-        //Logo decal: the home sits at the screen centre in clock/trend, so tilt + turn the mark about its own
+        //Logo decal: the home sits at the screen centre in clock, so tilt + turn the mark about its own
         //centre. Hidden decals still get the write (cheap, keeps the pose fresh for the next reveal).
         this._groundDecal.style.transform =
             `translate(-50%, -50%) rotateX(${this.camera.tiltDeg}deg) rotateZ(${this.camera.bearingDeg}deg)`;

@@ -1,4 +1,4 @@
-//Helios mark laid flat on the clock/trend dial centre, replacing the old central column. Single vector path
+//Helios mark laid flat on the clock dial centre, replacing the old central column. Single vector path
 //(viewBox 0 0 512 512), drawn in primary-text-color; the engine tilts it onto the ground plane. On hover/tap the
 //card stacks one coloured glow per active filter (progressively further out) plus a thin edging as feedback.
 

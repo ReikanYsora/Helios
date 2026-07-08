@@ -121,7 +121,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
         overflow: visible;
     }
-    /*  Helios mark on the dial centre (clock/trend): a flat CSS-3D decal centred on the screen-space home, tilted
+    /*  Helios mark on the dial centre (clock): a flat CSS-3D decal centred on the screen-space home, tilted
         + turned onto the ground plane each frame by the engine. Sits above the basemap/guide yet under the
         upright bars (they live in a later sibling overlay), so nearer bars occlude it. The hover glow is a
         filter set inline; a short transition softens its appearance/removal. */
@@ -257,10 +257,9 @@ export const heliosCardStyles = css`
     {
         transition: opacity var(--ha-animation-duration-slow, 350ms) ease;
     }
-    /*  Clock + trend modes hide the scene HUD (chips/leaders/timeline); only the basemap, the dial overlay,
+    /*  Clock + day modes hide the scene HUD (chips/leaders/timeline); only the basemap, the dial overlay,
         the rails and the period band remain. */
     ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band),
-    ha-card.mode-trend > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band),
     ha-card.mode-day > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band)
     {
         opacity: 0;

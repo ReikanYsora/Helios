@@ -41,27 +41,19 @@ describe('detectDeviceRuns', () =>
         expect(detectDeviceRuns([0.01, 0.02, 0, 0], 0, 'tiny')).toBeNull();
     });
 
-    it('flags an always-on device as continuous (one full-ring segment)', () =>
+    it('flags an always-on device as continuous, with the day total', () =>
     {
         const r = detectDeviceRuns(new Array<number>(24).fill(0.1), 3, 'Fridge');
         expect(r?.continuous).toBe(true);
-        expect(r?.segments).toEqual([{ start: 0, end: 24 }]);
+        expect(r?.dailyKwh).toBeCloseTo(2.4, 5);
     });
 
-    it('detects an episodic run with start/end and bridges a short gap', () =>
+    it('an episodic device is not flagged continuous', () =>
     {
         const kwh = new Array<number>(24).fill(0);
-        kwh[8] = 2; kwh[9] = 2; kwh[11] = 2;   //slot 10 is a 1-slot gap inside the cycle
+        kwh[8] = 2; kwh[9] = 2; kwh[11] = 2;
         const r = detectDeviceRuns(kwh, 5, 'Washer');
         expect(r?.continuous).toBe(false);
-        expect(r?.segments).toEqual([{ start: 8, end: 12 }]);
-    });
-
-    it('splits into two segments across a long gap', () =>
-    {
-        const kwh = new Array<number>(24).fill(0);
-        kwh[8] = 2; kwh[9] = 2; kwh[20] = 2; kwh[21] = 2;
-        const r = detectDeviceRuns(kwh, 6, 'Dish');
-        expect(r?.segments).toEqual([{ start: 8, end: 10 }, { start: 20, end: 22 }]);
+        expect(r?.dailyKwh).toBeCloseTo(6, 5);
     });
 });

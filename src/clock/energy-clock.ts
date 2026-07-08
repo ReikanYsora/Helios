@@ -119,7 +119,7 @@ export interface ClockFrame
     //(drives the opacity fade). The engine tilts it onto the ground plane under the upright bars.
     decal: { svg: string; active: boolean };
     //Day mode only: one screen-space hover target per device ring (aligned with the device list). Undefined for
-    //the clock/trend dials.
+    //the clock dial.
     dayHits?: DayRingHit[];
 }
 
@@ -826,30 +826,6 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     return { svg, hits };
 }
 
-//A thin floating cap: the walls + roof of a prism between two heights (back-face culled, depth-sorted), with
-//no body below, so a marker placed lower stays visible.
-function floatingSlice(camera: SceneCamera, fp: [number, number][], loH: number, hiH: number, wall: string, roof: string, stroke: string): string
-{
-    const bearing = camera.bearingDeg * Math.PI / 180;
-    const lo = fp.map(p => camera.project(p[0], p[1], loH));
-    const hi = fp.map(p => camera.project(p[0], p[1], hiH));
-    const edges: { d: number; s: string }[] = [];
-    for (let i = 0; i < fp.length; i++)
-    {
-        const next  = (i + 1) % fp.length;
-        const edgeE = fp[next][0] - fp[i][0];
-        const edgeN = fp[next][1] - fp[i][1];
-        if (edgeN * Math.sin(bearing) + edgeE * Math.cos(bearing) <= 0) { continue; }
-        edges.push({
-            d: (lo[i][1] + lo[next][1]) / 2,
-            s: `<polygon points="${lo[i][0].toFixed(1)},${lo[i][1].toFixed(1)} ${lo[next][0].toFixed(1)},${lo[next][1].toFixed(1)} ${hi[next][0].toFixed(1)},${hi[next][1].toFixed(1)} ${hi[i][0].toFixed(1)},${hi[i][1].toFixed(1)}" fill="${wall}" stroke="${stroke}" stroke-width="0.4"/>`,
-        });
-    }
-    edges.sort((x, y) => x.d - y.d);
-    const roofPts = hi.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-    return edges.map(e => e.s).join('') + `<polygon points="${roofPts}" fill="${roof}" stroke="${stroke}" stroke-width="0.6"/>`;
-}
-
 //Project one frame for ALL selected metrics as concentric rings (outer first, nesting inward). Shared here:
 //the 24 hour labels, the under-dial guide + compass, the per-ring glow defs, the global back-to-front depth
 //sort; per-ring geometry lives in projectHistogramRing. Pure: the card resolves each ring's animation scalars
@@ -986,146 +962,6 @@ function projectHistogramRing(
         if (dimOp < 1) { col = `<g opacity="${dimOp.toFixed(3)}">${col}</g>`; }
         faces.push({ depth: base[1], svg: col });
     }
-}
-
-//Which way is "better" for a metric, so the trend dial colours the change green/red. +1 = up is good
-//(production), -1 = down is good (consumption, grid use), 0 = neutral (battery, weather, custom).
-export function trendGoodDirection(target: ChartTarget): number
-{
-    switch (target)
-    {
-        case 'production': return 1;
-        case 'consumption':
-        case 'grid':       return -1;
-        default:           return 0;
-    }
-}
-
-//Project the TREND dial: one ring of 24 bars for the current period P, each with a reference marker (sphere +
-//dashed stem) at the previous period's level P-1, the gap coloured green/red by whether the change is an
-//improvement for this metric. `perHourP`/`perHourPrev` are 24 hour-of-day totals; both normalise against the
-//taller of the two so the marker always fits. Pure geometry; the card resolves the focused hour + the tooltip.
-export function projectTrendFrame(
-    camera: SceneCamera,
-    perHourP: number[],
-    perHourPrev: number[],
-    color: string,
-    direction: number,
-    cardinals: { n: string; s: string; e: string; w: string },
-    dimSlot: number | null,
-    dim: number,
-    //Whether the centre mark is hovered/tapped (drives its opacity fade).
-    columnHighlight: boolean,
-    //Per-hour night share for the ground day/night wedges (empty = none drawn).
-    nightFrac: number[] = [],
-): ClockFrame
-{
-    const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
-    const ppm     = camera.pxPerMetre || 1;
-    const outerR  = (RING_R_FRAC * minEdge) / ppm;
-    const maxHm   = (MAX_HEIGHT_FRAC * minEdge) / ppm;
-    const tilt    = camera.tiltDeg;
-    const bearing = camera.bearingDeg;
-
-    const labelR = outerR * LABEL_R_MULT;
-    const projLabels = Array.from({ length: 24 }, (_, h) =>
-        camera.project3(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0));
-    let depthMin = Infinity; let depthMax = -Infinity;
-    for (const p of projLabels) { depthMin = Math.min(depthMin, p.depth); depthMax = Math.max(depthMax, p.depth); }
-    const depthRange = depthMax - depthMin || 1;
-    const labels = projLabels.map((p, h) => ({
-        x: p.x, y: p.y,
-        opacity: LABEL_MIN_OPACITY + (1 - LABEL_MIN_OPACITY) * (p.depth - depthMin) / depthRange,
-        transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,
-    }));
-
-    let ceiling = 0;
-    for (let h = 0; h < HOURS_PER_DAY; h++) { ceiling = Math.max(ceiling, perHourP[h], perHourPrev[h]); }
-    const zScale     = ceiling > 0 ? maxHm / ceiling : 0;
-    const R          = outerR;   //single outer ring
-    const halfRadial = ringSpacingM(outerR) * BAR_RADIAL_FRAC;
-    const halfTan    = (BAR_TANGENT_FRAC * minEdge) / ppm;
-    const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);
-    const good = 'var(--success-color, #2e7d32)';
-    const bad  = 'var(--error-color, #c62828)';
-
-    const hits:  ClockHit[]  = [];
-    //Depth fade: bars far from the camera dim toward FADE_MIN so the foreground stays readable (gentle, so the
-    //back of the dial stays legible).
-    const FADE_MIN = 0.6;
-    const depths = Array.from({ length: 24 }, (_u, h) =>
-    {
-        const a = hourRad((h + 0.5) / HOURS_PER_DAY, camera.southern);
-        return camera.project3(R * Math.sin(a), R * Math.cos(a), 0).depth;
-    });
-    let dMin = Infinity; let dMax = -Infinity;
-    for (const d of depths) { dMin = Math.min(dMin, d); dMax = Math.max(dMax, d); }
-    const dRange = dMax - dMin || 1;
-
-    const faces: ClockFace[] = [];
-    for (let h = 0; h < HOURS_PER_DAY; h++)
-    {
-        const a = hourRad((h + 0.5) / HOURS_PER_DAY, camera.southern);
-        const e = R * Math.sin(a); const n = R * Math.cos(a);
-        const p = Math.max(0, perHourP[h]); const prev = Math.max(0, perHourPrev[h]);
-        const pH = p * zScale; const prevH = prev * zScale;
-        const fp = foot(e, n, halfRadial, halfTan, a);
-        const base = camera.project(e, n, 0);
-        //Hit axis spans up to the taller of the two, so a floating P-1 collar is hoverable too.
-        const topH = camera.project(e, n, Math.max(pH, prevH));
-        hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: topH[0], ty: topH[1] });
-        const active = h === focusHour;
-        const dimOp  = focusHour !== null && !active ? 1 - 0.5 * dim : 1;
-        const fade   = FADE_MIN + (1 - FADE_MIN) * (depths[h] - dMin) / dRange;
-        const op     = dimOp * fade;
-
-        //Solid bar = the current period P; a sphere marker on a dashed stem sits at the previous period P-1,
-        //coloured green/red by whether the change is an improvement for this metric.
-        let svg = '';
-        if (pH > 0)
-        {
-            //Only the TOP slice of the bar (a thin slab, not the full column), so the P-1 marker below it stays
-            //visible. CAP is a small slab thickness; clamped so a tiny bar doesn't dip below the ground.
-            const cap = maxHm * 0.07;
-            svg += floatingSlice(camera, fp, Math.max(0, pH - cap), pH,
-                lerpHexToward(color, '#000000', 0.25), lerpHexToward(color, '#ffffff', active ? 0.4 : 0.12),
-                active ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.3)');
-        }
-        if (ceiling > 0)
-        {
-            const impr    = (p - prev) * direction;
-            const markCol = direction === 0 ? 'var(--primary-text-color, #212121)' : (impr >= 0 ? good : bad);
-            const top = camera.project(e, n, pH);
-            const mk  = camera.project(e, n, prevH);
-            svg += `<line x1="${top[0].toFixed(1)}" y1="${top[1].toFixed(1)}" x2="${mk[0].toFixed(1)}" y2="${mk[1].toFixed(1)}" stroke="${markCol}" stroke-width="1.5" stroke-dasharray="2 2"/>`;
-            svg += `<circle cx="${mk[0].toFixed(1)}" cy="${mk[1].toFixed(1)}" r="3.4" fill="${markCol}" stroke="rgba(255,255,255,0.85)" stroke-width="0.8"/>`;
-        }
-        if (op < 1) { svg = `<g opacity="${op.toFixed(3)}">${svg}</g>`; }
-        faces.push({ depth: base[1], svg });
-    }
-    //No central gauge: the flat Helios mark fills the hub (the ground logo can't float, and the hover total does
-    //the readout job the old lollipop did). Just the bars populate the upright pass.
-    const hubR = outerR * CLOCK_HUB_R_FRAC;
-    faces.sort((a, b) => a.depth - b.depth);
-
-    const compass = clockCompass(camera, outerR, bearing, tilt, cardinals);
-    //Home-hover target + decal, same flat Helios mark as the clock dial. Centred on the projected home; radius =
-    //half its on-ground diameter so the whole mark is the hover/tap target for the period total.
-    const decalDiaPx = outerR * ppm;
-    const homeCtr    = camera.project(0, 0, 0);
-    const decal = buildLogoDecal({
-        diameterPx: decalDiaPx,
-        orientDeg:  camera.southern ? 0 : 180,
-        highlight:  columnHighlight,
-    });
-    const night = nightFrac.length ? nightSectors(camera, hubR, outerR * 2, nightFrac, 0.5) : '';
-    return {
-        guideSvg: night + clockGuide(camera, outerR) + compass.svg,
-        svg: faces.map(f => f.svg).join('') + currentHourArrow(camera, outerR, maxHm, Math.max(0, perHourP[serverHour(Date.now())]) * zScale),
-        hits, labels, compass: compass.labels,
-        home: { x: homeCtr[0], y: homeCtr[1], r: decalDiaPx / 2 },
-        decal,
-    };
 }
 
 
