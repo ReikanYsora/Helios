@@ -692,13 +692,13 @@ function nightSectors(camera: SceneCamera, innerR: number, outerR: number, night
     return s;
 }
 
-//An Apple-watch-style run ring (top-down only, day mode is pitch 0): a thick round-capped BLACK track running the
-//whole day with a small gap at midnight (its two round caps are the "half circles"), and inside it -- padded --
-//solid `color` arcs over the RUNS where the value is above a small % of the day's peak. What matters is WHEN there
-//was real activity, not how much, so no opacity shading; each run is one rounded-cap arc (its caps mark the run's
-//start + end), and a hole ends the arc so the next run restarts with a fresh cap. Used for every ring: the energy
-//sources (solar / grid / battery) and each device. `outerRm`/`thickM` are the band's outer radius + thickness in
-//metres; `values[s]` is the per-slot magnitude.
+//Project the ground point at day-fraction `f` on a ring of radius `rm` (metres) to screen px.
+function dayPt(camera: SceneCamera, rm: number, f: number): [number, number]
+{
+    const a = hourRad(f, camera.southern);
+    return camera.project(rm * Math.sin(a), rm * Math.cos(a), 0);
+}
+
 //Midnight-gap arc-endpoint fraction giving a CONSTANT-px visual gap at every radius (a straight slot, not a wedge):
 //half the target gap plus half the round-cap overhang (`capWidthPx`, 0 for a flat end), converted from px to a
 //fraction of the full circle at ground radius `rm`.
@@ -735,7 +735,7 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     const c0  = camera.project(0, 0, 0);
     const cx  = c0[0];
     const cy  = c0[1];
-    const at  = (f: number): [number, number] => { const a = hourRad(f, camera.southern); return camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); };
+    const at  = (f: number): [number, number] => dayPt(camera, rm, f);
     //One true circular arc [f0, f1] as an SVG path. Sweep from the projected direction; largeArc from the span.
     const arc = (f0: number, f1: number, op: number, cap: string): string =>
     {
@@ -755,8 +755,7 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
     let maxV  = 0;
     let total = 0;
     for (const v of values) { if (v > maxV) { maxV = v; } total += Math.max(0, v); }
-    //A barely-used device (its slot is reserved, but its total is below the noise floor) shows ONLY its faint ring,
-    //no scattered run pills from tiny noisy readings.
+    //A source (or edge case) below the noise floor shows ONLY its faint ring -- no scattered pills from tiny readings.
     if (total < DAY_MIN_RUN_KWH) { return s; }
     const thr = maxV * DAY_RUN_PCT;
     const minLenF = rm * ppm > 0 ? (widthPx * 4.5) / (2 * Math.PI * rm * ppm) : 0;   //shortest run reads as a dash
@@ -812,12 +811,7 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     const n      = Math.max(1, members.length);
     const sub    = thickM / n;
     const gaugeW = Math.max(1, sub * ppm * 0.72);    //member ring width (small gap between rings, ~0.28 of the sub)
-    const circle = (r: number): [number, number][] =>
-    {
-        const c: [number, number][] = [];
-        for (let k = 0; k < 48; k++) { c.push(camera.project(r * Math.sin(hourRad(k / 48, camera.southern)), r * Math.cos(hourRad(k / 48, camera.southern)), 0)); }
-        return c;
-    };
+    const circle = (r: number): [number, number][] => Array.from({ length: 48 }, (_, k) => dayPt(camera, r, k / 48));
     //The zone donut hugs the member rings with just a small breathing margin (no big black border outside/inside).
     const halfW  = (gaugeW / ppm) / 2;
     const margin = sub * 0.14;
@@ -1138,15 +1132,11 @@ export function projectTrendFrame(
 //Project the DAY ring: a flat 24-hour ground annulus for today. Each hour's cell is split gold (solar share) then
 //import-colour (grid share), so both where the sun covered you and where you drew from the grid read at a glance.
 //No bars: the story is the colour, not the height. Reuses the clock's labels, guide, compass, now-arrow and decal.
-//One device's ring for the day dial: its dashboard colour, per-slot energy (the radial magnitude) and the slot
-//segments it ran.
+//One device's ring for the day dial: its dashboard colour + per-slot energy (the run arcs are derived from it).
 export interface DayDeviceRing
 {
-    color:    string;
-    values:   number[];
-    segments: { start: number; end: number }[];
-    //Day total (kWh): the ring's WIDTH scales with this device's share of the monitored consumption.
-    dailyKwh: number;
+    color:  string;
+    values: number[];
 }
 
 //Screen-space hover target for one device ring: on the band = inside the outer circle AND outside the inner one.
@@ -1164,7 +1154,6 @@ export function projectDayRingFrame(
     importColor: string,
     batteryColor: string,
     rings: DayDeviceRing[],
-    _cardinals: { n: string; s: string; e: string; w: string },
     //Each source ring is drawn only when that source is configured on the dashboard.
     hasSolar = true,
     hasGrid = true,
@@ -1178,7 +1167,7 @@ export function projectDayRingFrame(
     const ppm     = camera.pxPerMetre || 1;
     const outerR  = (RING_R_FRAC * minEdge) / ppm;   //same dial size as the other modes (no day-mode zoom)
     const hubR    = outerR * CLOCK_HUB_R_FRAC;
-    //The ground hour-disc edge (where the guide spokes end). The rings sit flush to it, no wasted gap outside.
+    //The ground hour-disc edge; the ring stack sits flush to it, no wasted gap outside.
     const discR   = outerR * CLOCK_SPOKE_OUTER_FRAC;
     const tilt    = camera.tiltDeg;
     const bearing = camera.bearingDeg;
@@ -1187,7 +1176,7 @@ export function projectDayRingFrame(
     const labelR = outerR * LABEL_R_MULT;
     const labels = Array.from({ length: 24 }, (_, h) =>
     {
-        const p = camera.project(labelR * Math.sin(hourRad(h / HOURS_PER_DAY, camera.southern)), labelR * Math.cos(hourRad(h / HOURS_PER_DAY, camera.southern)), 0);
+        const p = dayPt(camera, labelR, h / HOURS_PER_DAY);
         return {
             x: p[0], y: p[1], opacity: 1,
             transform: `translate(-50%, -50%) perspective(900px) rotateX(${tilt}deg) rotateZ(${bearing + hourDeg(h / HOURS_PER_DAY, camera.southern) + 180}deg)`,

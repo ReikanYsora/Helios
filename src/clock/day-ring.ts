@@ -42,10 +42,9 @@ export interface DeviceRun
 {
     index:      number;
     name:       string;
-    //Per-slot energy (kWh). The ring's radial extent scales each slot by values[slot] / peak-slot, so the outer
-    //edge shows how hard the device drew at that moment (inner edge = 0).
+    //Per-slot energy (kWh); the ring's run arcs are derived from this at draw time (dayRunArcs).
     values:     number[];
-    segments:   { start: number; end: number }[];
+    //True when the device ran essentially all day (a permanent load the optimiser can't shift).
     continuous: boolean;
     //Tooltip figures: the day's total and the share of it that fell on solar-covered vs grid-covered slots.
     dailyKwh:   number;
@@ -53,48 +52,25 @@ export interface DeviceRun
     gridPct:    number;
 }
 
-//Below this daily total (kWh) a device gets no ring (noise cut). Run tunables: a slot counts as "on" above this
-//fraction of the device's peak slot; a device on for at least CONTINUOUS_FRAC of slots reads as a full ring; short
-//gaps up to BRIDGE_SLOTS are bridged so sparse data does not shred a cycle into fragments.
+//Below this daily total (kWh) a device gets no ring (noise cut). A slot counts as "on" above RUN_ACTIVE_FRAC of the
+//device's peak slot; a device on for at least RUN_CONTINUOUS_FRAC of slots is a permanent load.
 const DEVICE_THRESHOLD_KWH = 0.1;
 const RUN_ACTIVE_FRAC     = 0.15;
 const RUN_CONTINUOUS_FRAC = 0.8;
-const RUN_BRIDGE_SLOTS    = 2;
 
-//Detect a device's run(s) from its per-slot energy (kWh). Null when the daily total is below the noise threshold.
+//Summarise a device for the day ring from its per-slot energy (kWh): null below the noise threshold, otherwise its
+//day total + whether it ran essentially all day. The per-run arc geometry is derived at draw time from `values`.
 export function detectDeviceRuns(kwh: number[], index: number, name: string): DeviceRun | null
 {
     let total = 0;
     let peak  = 0;
     for (const v of kwh) { const x = Math.max(0, v); total += x; if (x > peak) { peak = x; } }
     if (total < DEVICE_THRESHOLD_KWH || peak <= 0) { return null; }
-    const slots = kwh.length;
     const onCut = peak * RUN_ACTIVE_FRAC;
-    const on    = kwh.map(v => v > onCut);
     let onCount = 0;
-    for (const b of on) { if (b) { onCount++; } }
-    if (onCount >= slots * RUN_CONTINUOUS_FRAC)
-    {
-        return { index, name, values: kwh, segments: [{ start: 0, end: slots }], continuous: true, dailyKwh: total, solarPct: 0, gridPct: 0 };
-    }
-    const segments: { start: number; end: number }[] = [];
-    let i = 0;
-    while (i < slots)
-    {
-        if (!on[i]) { i++; continue; }
-        let end = i + 1;
-        let j   = i + 1;
-        let gap = 0;
-        while (j < slots && gap <= RUN_BRIDGE_SLOTS)
-        {
-            if (on[j]) { end = j + 1; gap = 0; }
-            else { gap++; }
-            j++;
-        }
-        segments.push({ start: i, end });
-        i = end;
-    }
-    return { index, name, values: kwh, segments, continuous: false, dailyKwh: total, solarPct: 0, gridPct: 0 };
+    for (const v of kwh) { if (v > onCut) { onCount++; } }
+    const continuous = onCount >= kwh.length * RUN_CONTINUOUS_FRAC;
+    return { index, name, values: kwh, continuous, dailyKwh: total, solarPct: 0, gridPct: 0 };
 }
 
 //Optimisation replay: reschedule the SHIFTABLE devices (not always-on) into the day's real solar production, so

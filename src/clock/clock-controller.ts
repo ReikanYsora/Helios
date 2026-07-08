@@ -504,12 +504,10 @@ export class ClockController
             const devs        = dr?.devices ?? [];
             const optValues   = this.host._dayOptimized === true ? optimizeDevices(dr?.pv ?? [], dr?.charge ?? [], devs) : null;
             const rings       = devs.map((dev, i) => ({
-                color:    deviceColorByIndex(el, dev.index),
-                values:   optValues ? optValues[i] : dev.values,
-                segments: dev.segments,
-                dailyKwh: dev.dailyKwh,
+                color:  deviceColorByIndex(el, dev.index),
+                values: optValues ? optValues[i] : dev.values,
             }));
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, cardinals, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this.host._dayHover ?? -1);
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this.host._dayHover ?? -1);
             this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
             return;
