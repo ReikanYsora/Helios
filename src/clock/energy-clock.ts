@@ -785,20 +785,14 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         if (last && iv[0] - last[1] <= capSlots) { last[1] = iv[1]; }
         else { merged.push([iv[0], iv[1]]); }
     }
-    //Draw each run as per-slot cells whose OPACITY carries the consumption at that moment (high vs low zones), so a
-    //run is not a flat solid block. Cells abut (butt caps) so they never double-expose.
+    //Draw each run as ONE solid rounded-cap arc (its round caps mark the run's start + end).
     let runs = '';
     for (const [a, b] of merged)
     {
         const spanF = Math.max(minLenF, (b - a) / slots);
         const mid   = (a + b) / (2 * slots);
-        const start = Math.max(gapF, Math.min(1 - gapF - spanF, mid - spanF / 2));
-        const cellW = spanF / (b - a);
-        for (let sl = a; sl < b; sl++)
-        {
-            const op = (0.22 + 0.68 * Math.min(1, Math.max(0, values[sl] ?? 0) / maxV)) * dim;
-            runs += arc(start + (sl - a) * cellW, start + (sl - a + 1) * cellW, op, 'butt');
-        }
+        const f0    = Math.max(gapF, Math.min(1 - gapF - spanF, mid - spanF / 2));
+        runs += arc(f0, f0 + spanF, 0.9 * dim, 'round');
     }
     return s + runs;
 }

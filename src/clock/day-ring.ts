@@ -106,9 +106,19 @@ const OPT_RUN_PCT = 0.08;
 //Meal/cooking loads are bound to meal times (you don't run the oven at 10am to shift it onto the sun), so the
 //optimiser treats them as FIXED like an always-on load. Matched loosely by name (EN + FR), best-effort.
 const TIME_BOUND = /oven|four|stove|cuisin|cook(top|er|ing)?|hob|hotplate|plaque|po[eê]le|grill|micro.?onde|microwave|kettle|bouilloire|toaster|grille.?pain|cuisson|hotte|range\b/i;
+//A device is FIXED (not shiftable) when it runs all day: flagged continuous, meal-time-bound by name, or spread
+//across most of the day (a fridge cycles on/off but its activity spans ~24h -- you can't shift a permanent load).
 function isFixedLoad(d: DeviceRun): boolean
 {
-    return d.continuous || TIME_BOUND.test(d.name);
+    if (d.continuous || TIME_BOUND.test(d.name)) { return true; }
+    let peak = 0;
+    for (const v of d.values) { if (v > peak) { peak = v; } }
+    if (peak <= 0) { return false; }
+    const thr = peak * OPT_RUN_PCT;
+    let first = -1;
+    let last  = -1;
+    for (let i = 0; i < d.values.length; i++) { if ((d.values[i] ?? 0) > thr) { if (first < 0) { first = i; } last = i; } }
+    return first >= 0 && (last - first + 1) > d.values.length * 0.6;
 }
 export function optimizeDevices(pv: number[], charge: number[], devices: DeviceRun[]): number[][]
 {
