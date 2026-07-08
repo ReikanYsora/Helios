@@ -10,9 +10,10 @@ import type { Translations } from '../index';
  * here automatically widens Translations and triggers a TypeScript
  * error in every locale that hasn't been updated.
  */
+
 export const en: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ A real-time 3D view of your home with the sun, weather, solar production, battery and grid, plus cast shadows, an interactive timeline and a 24-hour energy clock',
+    cardDescription: '☀️ A real-time 2.5D view of your home with the sun, weather, solar production, battery and grid, plus cast shadows, an interactive timeline and a 24-hour energy clock',
 
     period:
     {
@@ -105,12 +106,9 @@ export const en: Translations = {
         buildingRealSizeHint:  'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.',
         buildingHeight:        'Building height',
         consumptionRingSection:        'Consumption ring',
-        consumptionRingThreshold:      'Ignore threshold',
-        consumptionRingThresholdHelp:  'Devices using less than this over the day get no ring, so tiny always-on loads do not clutter it. Set to 0 to show every tracked device.',
-        consumptionRingDevicesIntro:   'Devices tracked in your Energy dashboard. Use the eye to show or hide a device in the ring, and the second toggle to let the optimiser move it onto the sun or leave it where it really ran (for loads you cannot reschedule, like a fridge).',
+        consumptionRingDevicesIntro:   'Devices tracked in your Energy dashboard. Drag to reorder the rings, and use the eye to show or hide a device in the ring.',
         consumptionRingNoDevices:      'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.',
         consumptionRingRingLabel:      'Show in the ring',
-        consumptionRingOptimLabel:     'Include in the optimiser',
         buildingClusterRadius: 'Home cluster radius',
         buildingOpacity:       'Surrounding opacity',
         buildingColor:         'Building colour',

@@ -35,7 +35,7 @@ export type ClockHost = ChartHost & {
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
 const DAY_BAND_COLOR  = 'var(--card-background-color, #000000)';   //group zone background + the ribbon-end holes (theme-linked)
-const DAY_MIDNIGHT_GAP_PX = 10;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
+const DAY_MIDNIGHT_GAP_PX = 6;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
 const CLOCK_MAX_FILTERS = 8;
@@ -731,37 +731,43 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
 //narrows smoothly rather than stepping. Each end (either side of the midnight gap) is anchored with a full-width disc
 //so start and end always read however thin the ribbon is there, with a band-colour hole punched in its centre.
 const MIN_RIBBON_PX = 2;
-function dayRibbon(camera: SceneCamera, rm: number, gaugeW: number, color: string, t: number[], slots: number, gapF: number, dim: number): string
+function dayRibbon(camera: SceneCamera, rm: number, gaugeW: number, color: string, t: number[], slots: number, gapF: number, dim: number, fade = 1, sweep = 1): string
 {
     const ppm = camera.pxPerMetre || 1;
     const wPx = (s: number): number => MIN_RIBBON_PX + (gaugeW - MIN_RIBBON_PX) * Math.min(1, Math.max(0, t[s] ?? 0));
+    //Entry sweep: the ribbon is only drawn up to the front `fEnd`, which walks from midnight (gapF) round to the day's
+    //end (1 - gapF). The end disc rides `fEnd`, so it is pushed to its final place as the ribbon fills in.
+    const fEnd  = gapF + (1 - 2 * gapF) * Math.min(1, Math.max(0, sweep));
     const STEPS = Math.max(slots * 2, 120);   //dense enough that the circle stays smooth at any slot count
-    const outer: string[] = [];
-    const inner: string[] = [];
-    for (let k = 0; k <= STEPS; k++)
+    let ribbon = '';
+    if (fEnd - gapF > 1e-4)
     {
-        const f     = gapF + (1 - 2 * gapF) * (k / STEPS);
-        const slotF = Math.min(slots - 1e-6, Math.max(0, f * slots));
-        const s0    = Math.floor(slotF);
-        const s1    = Math.min(slots - 1, s0 + 1);
-        const halfM = ((wPx(s0) + (wPx(s1) - wPx(s0)) * (slotF - s0)) / 2) / ppm;
-        const po    = dayPt(camera, rm + halfM, f);
-        const pi    = dayPt(camera, rm - halfM, f);
-        outer.push(`${k ? 'L' : 'M'}${po[0].toFixed(2)},${po[1].toFixed(2)}`);
-        inner.push(`L${pi[0].toFixed(2)},${pi[1].toFixed(2)}`);
+        const outer: string[] = [];
+        const inner: string[] = [];
+        for (let k = 0; k <= STEPS; k++)
+        {
+            const f     = gapF + (fEnd - gapF) * (k / STEPS);
+            const slotF = Math.min(slots - 1e-6, Math.max(0, f * slots));
+            const s0    = Math.floor(slotF);
+            const s1    = Math.min(slots - 1, s0 + 1);
+            const halfM = ((wPx(s0) + (wPx(s1) - wPx(s0)) * (slotF - s0)) / 2) / ppm;
+            const po    = dayPt(camera, rm + halfM, f);
+            const pi    = dayPt(camera, rm - halfM, f);
+            outer.push(`${k ? 'L' : 'M'}${po[0].toFixed(2)},${po[1].toFixed(2)}`);
+            inner.push(`L${pi[0].toFixed(2)},${pi[1].toFixed(2)}`);
+        }
+        inner.reverse();
+        ribbon = `<path d="${outer.join('')}${inner.join('')}Z" fill="${color}" fill-opacity="${(0.9 * dim).toFixed(3)}"/>`;
     }
-    inner.reverse();
-    const ribbon = `<path d="${outer.join('')}${inner.join('')}Z" fill="${color}" fill-opacity="${(0.9 * dim).toFixed(3)}"/>`;
-    //gaugeW is the ring's max width, so the disc (radius gaugeW/2) is the widest the ribbon can ever get; the hole
-    //reuses the band colour so it reads as punched through. Screen-space circles: valid at day mode's pitch 0.
+    //gaugeW is the ring's max width, so the disc (radius gaugeW/2) is the widest the ribbon can ever get. The discs
+    //fade in with the donut; the start sits at gapF, the end rides the sweep front. Screen-space circles: pitch 0.
     const rOuter = gaugeW / 2;
     const cap = (f: number): string =>
     {
         const c = dayPt(camera, rm, f);
-        return `<circle cx="${c[0].toFixed(2)}" cy="${c[1].toFixed(2)}" r="${rOuter.toFixed(2)}" fill="${color}" fill-opacity="${(0.9 * dim).toFixed(3)}"/>`
-             + `<circle cx="${c[0].toFixed(2)}" cy="${c[1].toFixed(2)}" r="${(rOuter * 0.42).toFixed(2)}" style="fill:${DAY_BAND_COLOR};fill-opacity:${dim.toFixed(3)}"/>`;
+        return `<circle cx="${c[0].toFixed(2)}" cy="${c[1].toFixed(2)}" r="${rOuter.toFixed(2)}" fill="${color}" fill-opacity="${(0.9 * dim * fade).toFixed(3)}"/>`;
     };
-    return ribbon + cap(gapF) + cap(1 - gapF);
+    return ribbon + cap(gapF) + cap(fEnd);
 }
 
 //A whole GROUP (all producers, or all consumers) as ONE zone: a single black band (rounded-rectangle ends, a
@@ -770,7 +776,7 @@ function dayRibbon(camera: SceneCamera, rm: number, gaugeW: number, color: strin
 //ring backgrounds. Hits are returned in member order (for the tooltip hit-test). `dimOf(i)` is the opacity
 //multiplier for member i (1 = normal; <1 fades a ring during hover). `outerRm`/`thickM` are the group band's outer
 //radius + thickness. Each member carries its per-slot intensity `t` in [0, 1], drawn as a variable-width ribbon.
-function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; t: number[] }[], slots: number, dimOf: (i: number) => number): { svg: string; hits: DayRingHit[] }
+function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; t: number[] }[], slots: number, dimOf: (i: number) => number, fade = 1, sweep = 1): { svg: string; hits: DayRingHit[] }
 {
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
@@ -780,14 +786,15 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
     //The zone donut hugs the member rings with just a small breathing margin (no big border outside/inside).
     const halfW  = (gaugeW / ppm) / 2;
     const margin = sub * 0.14;
-    let svg = dayDonut(camera, outerRm - 0.5 * sub + halfW + margin, outerRm - (n - 0.5) * sub - halfW - margin, DAY_BAND_COLOR, 1);
+    //The zone donut fades in with the entry animation (empty band first).
+    let svg = dayDonut(camera, outerRm - 0.5 * sub + halfW + margin, outerRm - (n - 0.5) * sub - halfW - margin, DAY_BAND_COLOR, fade);
     const hits: DayRingHit[] = [];
     members.forEach((m, i) =>
     {
         const mMid = outerRm - (i + 0.5) * sub;
         //Gap uses a cap width of gaugeW: the end discs (radius gaugeW/2) then sit with their edges the same constant
         //DAY_MIDNIGHT_GAP_PX apart at every ring, so start and end never merge across the midnight gap.
-        svg += dayRibbon(camera, mMid, gaugeW, m.color, m.t, slots, dayGapF(camera, mMid, gaugeW), dimOf(i));
+        svg += dayRibbon(camera, mMid, gaugeW, m.color, m.t, slots, dayGapF(camera, mMid, gaugeW), dimOf(i), fade, sweep);
         hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) });
     });
     return { svg, hits };
@@ -961,12 +968,15 @@ export function projectDayRingFrame(
     hasSolar = true,
     hasGrid = true,
     hasBattery = true,
-    //Hovered ring index (-1 = none), in the concatenated [producers..., devices...] order. On hover the other
-    //CONSUMER rings fade; production rings never fade.
-    hoverIndex = -1,
+    //Selected ring index (-1 = none), in the concatenated [producers..., devices...] order. When one is selected
+    //every OTHER ring fades (producers and devices alike); with no selection all stay at full opacity.
+    selectedIndex = -1,
     //Historical peak average power (kW) across all consumption meters: the device ribbons' width reference. 0 keeps
     //the fixed-width run arcs (no reference known).
     maxKw = 0,
+    //Entry-animation progress (0..1); 1 = fully drawn. Below 1, the donuts + start discs fade in, then the ribbons
+    //sweep from midnight round the day with the end disc riding the front.
+    progress = 1,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1033,20 +1043,25 @@ export function projectDayRingFrame(
 
     let ringSvg = '';
     let dayHits: DayRingHit[] = [];
+    //Every non-selected ring fades; the selected one (and everything, when nothing is selected) stays full.
+    const dimAt = (globalIndex: number): number => (selectedIndex < 0 || selectedIndex === globalIndex) ? 1 : 0.22;
+    //Entry sweep: donuts + start discs fade in over the first quarter, then the ribbon sweeps round the day.
+    const ease  = (x: number): number => { const c = Math.min(1, Math.max(0, x)); return 1 - (1 - c) ** 3; };
+    const fade  = ease(progress / 0.25);
+    const sweep = ease((progress - 0.25) / 0.75);
     let cursor = discR;
     if (nP > 0)
     {
-        //Production rings never fade on hover.
-        const g = dayRunGroup(camera, cursor, nP * sub, producers, slots, () => 1);
+        //Producer global hit index is just k.
+        const g = dayRunGroup(camera, cursor, nP * sub, producers, slots, (k) => dimAt(k), fade, sweep);
         ringSvg += g.svg;
         dayHits = dayHits.concat(g.hits);
         cursor -= nP * sub + groupGap;
     }
     if (nC > 0)
     {
-        //Consumers: on hover the non-hovered device rings fade (a device's global hit index is nP + k).
-        const dimOf = (k: number): number => (hoverIndex < 0 || hoverIndex === nP + k) ? 1 : 0.22;
-        const g = dayRunGroup(camera, cursor, nC * sub, consumers, slots, dimOf);
+        //A device's global hit index is nP + k.
+        const g = dayRunGroup(camera, cursor, nC * sub, consumers, slots, (k) => dimAt(nP + k), fade, sweep);
         ringSvg += g.svg;
         dayHits = dayHits.concat(g.hits);   //hit index: producers 0..nP-1 then devices nP..
     }

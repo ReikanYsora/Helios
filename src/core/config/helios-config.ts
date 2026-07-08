@@ -8,11 +8,9 @@ import {
     DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
-    DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH, MIN_CONSUMPTION_RING_THRESHOLD_KWH, MAX_CONSUMPTION_RING_THRESHOLD_KWH,
 } from './constants';
 
 export {
-    DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH, MIN_CONSUMPTION_RING_THRESHOLD_KWH, MAX_CONSUMPTION_RING_THRESHOLD_KWH,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
     MAX_DISPLAY_RADIUS_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
@@ -97,12 +95,10 @@ export interface HeliosConfig
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
-    //Day-ring consumption controls. Threshold: daily-total noise floor (kWh) below which a device gets no ring,
-    //clamped [MIN,MAX]. Hidden: recorder-meter ids fully excluded from the day view (no ring, no optimiser). Ignore:
-    //recorder-meter ids the optimiser leaves in place (kept at their real profile instead of being shifted onto sun).
-    'consumption-ring-threshold'?:       unknown;
+    //Day-ring consumption control. Hidden: recorder-meter ids fully excluded from the day view (no ring).
     'consumption-ring-hidden'?:          unknown;
-    'consumption-ring-optimize-ignore'?: unknown;
+    //User-defined ring order (recorder-meter ids). Devices render in this order; any not listed follow, alphabetically.
+    'consumption-ring-order'?:           unknown;
 }
 
 
@@ -221,23 +217,10 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 }
 
 
-//Resolve the day-ring noise floor (kWh daily total below which a device shows no ring), clamped [MIN,MAX],
-//defaulting on missing/invalid. A device under this cut is dropped from the day view entirely.
-export function consumptionRingThresholdKwh(config: HeliosConfig | undefined): number
+//Recorder-meter ids the user hid from the day ring (fully excluded from the ring).
+export function consumptionRingHidden(config: HeliosConfig | undefined): Set<string>
 {
-    const raw = config?.['consumption-ring-threshold'];
-    const parsed = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(parsed)) { return DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH; }
-    if (parsed < MIN_CONSUMPTION_RING_THRESHOLD_KWH) { return MIN_CONSUMPTION_RING_THRESHOLD_KWH; }
-    if (parsed > MAX_CONSUMPTION_RING_THRESHOLD_KWH) { return MAX_CONSUMPTION_RING_THRESHOLD_KWH; }
-    return parsed;
-}
-
-//Trimmed, de-duplicated set of recorder-meter ids from a string-array config key ('' entries dropped). Shared
-//shape for the hidden + optimiser-ignore lists so both read identically.
-function idSet(config: HeliosConfig | undefined, key: string): Set<string>
-{
-    const raw = config?.[key];
+    const raw = config?.['consumption-ring-hidden'];
     const out = new Set<string>();
     if (Array.isArray(raw))
     {
@@ -246,16 +229,17 @@ function idSet(config: HeliosConfig | undefined, key: string): Set<string>
     return out;
 }
 
-//Recorder-meter ids the user hid from the day ring (excluded from the ring AND the optimiser).
-export function consumptionRingHidden(config: HeliosConfig | undefined): Set<string>
+//User-defined device order (recorder-meter ids), in display order. Empty when unset; devices absent from it follow
+//in their default (alphabetical) order. Order-preserving, unlike the hidden set.
+export function consumptionRingOrder(config: HeliosConfig | undefined): string[]
 {
-    return idSet(config, 'consumption-ring-hidden');
-}
-
-//Recorder-meter ids the optimiser must leave in place (fixed load), instead of shifting them onto the sun.
-export function consumptionRingOptimizeIgnored(config: HeliosConfig | undefined): Set<string>
-{
-    return idSet(config, 'consumption-ring-optimize-ignore');
+    const raw = config?.['consumption-ring-order'];
+    const out: string[] = [];
+    if (Array.isArray(raw))
+    {
+        for (const v of raw) { if (typeof v === 'string' && v.trim() !== '') { out.push(v.trim()); } }
+    }
+    return out;
 }
 
 

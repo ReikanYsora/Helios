@@ -1,16 +1,8 @@
 import type { Translations } from '../index';
 
-//Notes de traduction (FR) :
-//  - "Cloud cover" -> "Couverture nuageuse" (terme météo standard FR)
-//  - "Global Horizontal Irradiance" -> "Irradiance horizontale globale"
-//    (terme scientifique standard, repris par Météo-France et l'INES)
-//  - "Hillshade" -> "Ombrage du relief" (rendu cartographique standard)
-//  - On garde le tutoiement informel pour rester cohérent avec le ton
-//    de Home Assistant en français.
-
 export const fr: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Une vue 3D temps réel de ta maison avec le soleil, la météo, la production solaire, la batterie et le réseau, plus les ombres projetées, une frise temporelle interactive et une horloge énergétique sur 24 h',
+    cardDescription: '☀️ Une vue 2.5D temps réel de ta maison avec le soleil, la météo, la production solaire, la batterie et le réseau, plus les ombres projetées, une frise temporelle interactive et une horloge énergétique sur 24 h',
 
     period:
     {
@@ -103,12 +95,9 @@ export const fr: Translations = {
         buildingRealSizeHint:  'Oui : utilise les hauteurs réelles OpenStreetMap (plafonnées pour garder un cadrage lisible). Non : applique à chaque bâtiment la hauteur fixe ci-dessous.',
         buildingHeight:        'Hauteur des bâtiments',
         consumptionRingSection:        'Anneau de consommation',
-        consumptionRingThreshold:      'Seuil d\'ignorance',
-        consumptionRingThresholdHelp:  'Un appareil qui consomme moins que ça sur la journée n\'a pas d\'anneau, pour que les petites charges permanentes ne l\'encombrent pas. Mettez 0 pour afficher tous les appareils suivis.',
-        consumptionRingDevicesIntro:   'Appareils suivis par votre tableau de bord Énergie. L\'oeil affiche ou masque un appareil dans l\'anneau, et le second bouton laisse l\'optimiseur le déplacer sur le soleil ou le garde là où il a réellement tourné (pour les charges non déplaçables, comme un frigo).',
+        consumptionRingDevicesIntro:   'Appareils suivis par votre tableau de bord Énergie. Glissez pour réordonner les anneaux, et l\'oeil affiche ou masque un appareil dans l\'anneau.',
         consumptionRingNoDevices:      'Aucun appareil individuel n\'est encore suivi dans votre tableau de bord Énergie. Ajoutez-y la consommation par appareil pour les gérer ici.',
         consumptionRingRingLabel:      'Afficher dans l\'anneau',
-        consumptionRingOptimLabel:     'Inclure dans l\'optimiseur',
         buildingClusterRadius: 'Rayon de regroupement maison',
         buildingOpacity:       'Opacité des bâtiments voisins',
         buildingColor:         'Couleur des bâtiments',

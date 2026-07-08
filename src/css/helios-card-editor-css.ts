@@ -420,9 +420,9 @@ export const editorStyles = css`
         border-radius: var(--ha-border-radius-md, 6px);
     }
 
-    /*  Consumption-ring device list: one row per dashboard-tracked device, colour dot + friendly name on the
-        left, two icon toggles on the right (show in the ring / include in the optimiser). Framed as a soft card
-        so the list reads as a distinct block within the section. */
+    /*  Consumption-ring device list: one row per dashboard-tracked device, drag handle + colour dot + name on the
+        left, the show/hide-in-the-ring toggle on the right. Framed as a soft card so the list reads as a distinct
+        block within the section. */
     .cring-list
     {
         display: flex;
@@ -442,6 +442,18 @@ export const editorStyles = css`
     .cring-row + .cring-row
     {
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.08));
+    }
+    .cring-handle
+    {
+        flex: none;
+        --mdc-icon-size: 20px;
+        color: var(--secondary-text-color, #727272);
+        cursor: grab;
+        touch-action: none;
+    }
+    .cring-handle:active
+    {
+        cursor: grabbing;
     }
     .cring-dot
     {
@@ -470,8 +482,7 @@ export const editorStyles = css`
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    /*  When a device is hidden from the ring, its whole row dims and the optimiser toggle is inert (a hidden
-        device is fully excluded, so its optimiser state is moot). */
+    /*  When a device is hidden from the ring, its row dims. */
     .cring-row.is-hidden .cring-name
     {
         opacity: 0.5;

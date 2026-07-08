@@ -259,8 +259,8 @@ export const heliosCardStyles = css`
     }
     /*  Clock + day modes hide the scene HUD (chips/leaders/timeline); only the basemap, the dial overlay,
         the rails and the period band remain. */
-    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band),
-    ha-card.mode-day > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band)
+    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band):not(.detail-panel),
+    ha-card.mode-day > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band):not(.detail-panel)
     {
         opacity: 0;
         pointer-events: none;
@@ -384,6 +384,15 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         pointer-events: none;
         -webkit-font-smoothing: antialiased;
+    }
+    /*  Optional header row: the day-ring selection panel shows the selected ring's name above its metric rows. */
+    .detail-panel .dp-head
+    {
+        font-weight: 700;
+        padding-bottom: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .detail-panel .dp-row
     {

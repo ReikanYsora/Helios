@@ -1,12 +1,12 @@
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { HOUR_MS, HOURS_PER_DAY, CLOCK_GROW_MS } from '../core/config/constants';
+import { HOUR_MS, HOURS_PER_DAY, CLOCK_GROW_MS, DAY_ANIM_MS } from '../core/config/constants';
 import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
 import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
-import { refreshDayRing, optimizeDevices } from './day-ring';
+import { refreshDayRing, type DayRingData } from './day-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
@@ -300,6 +300,36 @@ export class ClockController
         requestAnimationFrame(animateDim);
     }
 
+    //Day-ring entry sweep: repaint every frame for DAY_ANIM_MS so the paint branch can read the animation progress
+    //off `_dayAnimStart`. Drawn full at once in preview / reduced motion. A new call cancels the previous loop.
+    public _dayAnimSeq = 0;
+    public startDayAnim(): void
+    {
+        if (this.host.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+        {
+            this.host._dayAnimStart = 0;
+            this.scheduleClockPaint();
+            return;
+        }
+        this.host._dayAnimStart = Date.now();
+        const id = ++this._dayAnimSeq;
+        const step = (): void =>
+        {
+            if (id !== this._dayAnimSeq || this.host._viewMode !== 'day') { return; }
+            this.paintClock();
+            if (this.host._dayAnimStart > 0 && Date.now() - this.host._dayAnimStart < DAY_ANIM_MS)
+            {
+                requestAnimationFrame(step);
+            }
+            else
+            {
+                this.host._dayAnimStart = 0;
+                this.paintClock();
+            }
+        };
+        requestAnimationFrame(step);
+    }
+
     //Rebuild one ClockData per active filter (outer -> inner), immediately and unconditionally. Animation is
     //carried separately (per-ring grow start, the exit list, the slide clock), so a data-only rebuild never
     //disturbs an in-flight animation and a toggle is never blocked.
@@ -441,14 +471,14 @@ export class ClockController
             const dr          = this.host._dayRing;
             const importColor = ENERGY_COLOR.gridImport(el);
             const batteryColor = ENERGY_COLOR.batteryOut(el);
-            //Optimised mode reschedules the shiftable devices into the real solar production (see optimizeDevices).
             const devs        = dr?.devices ?? [];
-            const optValues   = this.host._dayOptimized === true ? optimizeDevices(dr?.pv ?? [], dr?.charge ?? [], devs) : null;
-            const rings       = devs.map((dev, i) => ({
+            const rings       = devs.map(dev => ({
                 color:  deviceColorByIndex(el, dev.index),
-                values: optValues ? optValues[i] : dev.values,
+                values: dev.values,
             }));
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this.host._dayHover ?? -1, dr?.maxKw ?? 0);
+            //Entry-sweep progress (0..1); 1 = fully drawn (no animation in flight).
+            const anim        = this.host._dayAnimStart > 0 ? Math.min(1, (Date.now() - this.host._dayAnimStart) / DAY_ANIM_MS) : 1;
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this._daySelectedIndex(dr), dr?.maxKw ?? 0, anim);
             this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
             return;
@@ -539,11 +569,6 @@ export class ClockController
     //drag (buttons pressed). Touch has no hover, so it's handled by tap below (onClockTapStart/End).
     public onClockHover = (e: PointerEvent): void =>
     {
-        if (this.host._viewMode === 'day')
-        {
-            this._dayHoverMove(e);
-            return;
-        }
         if (this.host._viewMode !== 'clock' || e.pointerType !== 'mouse')
         {
             return;
@@ -588,83 +613,75 @@ export class ClockController
         return !!h && Math.hypot(x - h.x, y - h.y) <= h.r;
     }
 
-    //Day mode: point-in-band hover over the concentric device rings. Sets the hovered ring index (opacity repaint)
-    //and the cursor position (tooltip), re-rendering only when it changes or while a ring stays hovered.
-    private _dayHoverMove(e: PointerEvent): void
+    //Ordered selection keys matching the frame's ring order: producers (solar, grid, battery, when configured) then
+    //devices in their display order. The key is stable ('solar' / 'grid' / 'battery' or 'dev:<statId>'), so a
+    //selection survives a reorder or refetch.
+    private _daySelectionKeys(dr: DayRingData): string[]
     {
-        if (e.pointerType !== 'mouse') { return; }
-        const card = this.host._haCard;
-        if (!card) { return; }
-        const rect = card.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        let idx: number | null = null;
-        const polys = this.host._dayHitPolys;
-        for (let i = 0; i < polys.length; i++)
-        {
-            if (pointInPoly(polys[i].outer, x, y) && !pointInPoly(polys[i].inner, x, y)) { idx = i; break; }
-        }
-        this.host._dayHoverX = x;
-        this.host._dayHoverY = y;
-        if (idx !== this.host._dayHover)
-        {
-            this.host._dayHover = idx;
-            this.scheduleClockPaint();
-            this.host.requestUpdate();
-        }
-        else if (idx !== null)
-        {
-            this.host.requestUpdate();
-        }
+        const keys: string[] = [];
+        if (dr.hasSolar)   { keys.push('solar'); }
+        if (dr.hasGrid)    { keys.push('grid'); }
+        if (dr.hasBattery) { keys.push('battery'); }
+        for (const d of dr.devices) { keys.push(`dev:${d.statId}`); }
+        return keys;
     }
 
-    //Day-mode hover tooltip, placed at the cursor. The hover id runs producers first (solar, grid, battery -- name +
-    //day total) then devices (name, day total, and the solar / grid split of that total).
-    public renderDayTooltip(index: number): TemplateResult | typeof nothing
+    //Resolve the saved selection key to a frame ring index (-1 = nothing selected, or the selected ring is gone).
+    private _daySelectedIndex(dr: DayRingData | null): number
+    {
+        const key = this.host._daySelectedKey;
+        if (!dr || !key) { return -1; }
+        return this._daySelectionKeys(dr).indexOf(key);
+    }
+
+    //Day-mode selection panel (top-right, the scene detail-panel style): the selected ring's name + day total, and
+    //for a device its solar / grid / battery split (which sums to 100%). The accent tints the panel border.
+    public renderDaySelectionPanel(key: string): TemplateResult | typeof nothing
     {
         const dr = this.host._dayRing;
         if (!dr) { return nothing; }
         const el = this.host as unknown as Element;
-        const gridColor = ENERGY_COLOR.gridImport(el);
-        const batteryColor = ENERGY_COLOR.batteryOut(el);
-        const x = (this.host._dayHoverX + 14).toFixed(0);
-        const y = this.host._dayHoverY.toFixed(0);
-        //Bottom:auto so the cursor `top` wins (the .clock-tip default anchors bottom, which would stretch the box).
-        const wrap = (inner: TemplateResult): TemplateResult => html`
-            <div class="clock-tip" style="left:${x}px; top:${y}px; bottom:auto">${inner}</div>`;
-        //Producer rings, in the same order as their hover ids.
-        const producers: { name: string; icon: string; color: string; kwh: number }[] = [];
-        if (dr.hasSolar)   { producers.push({ name: 'Solar', icon: 'mdi:white-balance-sunny', color: '#ffc107', kwh: dr.solarKwh }); }
-        if (dr.hasGrid)    { producers.push({ name: 'Grid', icon: 'mdi:transmission-tower', color: gridColor, kwh: dr.gridKwh }); }
-        if (dr.hasBattery) { producers.push({ name: 'Battery', icon: 'mdi:battery', color: batteryColor, kwh: dr.batteryKwh }); }
-        if (index < producers.length)
-        {
-            const p = producers[index];
-            return wrap(html`
-                <div class="clock-tip-head">${p.name}</div>
-                <div style="display:flex;gap:6px;align-items:center;white-space:nowrap;margin-top:3px">
-                    <ha-icon icon=${p.icon} style="--mdc-icon-size:14px;color:${p.color}"></ha-icon>
-                    <span>${p.kwh.toFixed(2)} kWh</span>
-                </div>`);
-        }
-        const dev = dr.devices[index - producers.length];
+        const kwh = (v: number): string => `${v.toFixed(2)} kWh`;
+        const pct = (v: number): string => `${Math.round(v * 100)} %`;
+        const panel = (accent: string, name: string, rows: { icon: string; value: string }[]): TemplateResult => html`
+            <div class="detail-panel" style="--detail-accent:${accent}">
+                <div class="dp-head">${name}</div>
+                ${rows.map(r => html`<div class="dp-row"><ha-icon icon=${r.icon}></ha-icon><span>${r.value}</span></div>`)}
+            </div>`;
+        if (key === 'solar')   { return panel('#ffc107', 'Solar', [{ icon: 'mdi:white-balance-sunny', value: kwh(dr.solarKwh) }]); }
+        if (key === 'grid')    { return panel(ENERGY_COLOR.gridImport(el), 'Grid', [{ icon: 'mdi:transmission-tower', value: kwh(dr.gridKwh) }]); }
+        if (key === 'battery') { return panel(ENERGY_COLOR.batteryOut(el), 'Battery', [{ icon: 'mdi:battery', value: kwh(dr.batteryKwh) }]); }
+        const dev = dr.devices.find(d => `dev:${d.statId}` === key);
         if (!dev) { return nothing; }
-        return wrap(html`
-            <div class="clock-tip-head">${dev.name}</div>
-            <div style="display:flex;gap:10px;align-items:center;white-space:nowrap;margin-top:3px">
-                <span>${dev.dailyKwh.toFixed(2)} kWh</span>
-                <span style="color:#ffc107;display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:white-balance-sunny" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.solarPct * 100)}%</span>
-                <span style="color:${gridColor};display:inline-flex;align-items:center;gap:2px"><ha-icon icon="mdi:transmission-tower" style="--mdc-icon-size:14px"></ha-icon>${Math.round(dev.gridPct * 100)}%</span>
-            </div>`);
+        const rows = [
+            { icon: 'mdi:sigma',               value: kwh(dev.dailyKwh) },
+            { icon: 'mdi:white-balance-sunny', value: pct(dev.solarPct) },
+            { icon: 'mdi:transmission-tower',  value: pct(dev.gridPct) },
+        ];
+        if (dr.hasBattery) { rows.push({ icon: 'mdi:battery', value: pct(dev.batteryPct) }); }
+        return panel(deviceColorByIndex(el, dev.index), dev.name, rows);
+    }
+
+    //Day-mode tap: toggle the ring under the point (re-tapping the selected ring, or tapping empty space, clears it).
+    private _daySelectAt(x: number, y: number): void
+    {
+        const dr = this.host._dayRing;
+        const polys = this.host._dayHitPolys;
+        let idx = -1;
+        for (let i = 0; i < polys.length; i++)
+        {
+            if (pointInPoly(polys[i].outer, x, y) && !pointInPoly(polys[i].inner, x, y)) { idx = i; break; }
+        }
+        const keys = dr ? this._daySelectionKeys(dr) : [];
+        const hitKey = idx >= 0 && idx < keys.length ? keys[idx] : null;
+        this.host._daySelectedKey = (hitKey && hitKey === this.host._daySelectedKey) ? null : hitKey;
+        this.host.persistUiState();
     }
 
     public onClockHoverEnd = (e: PointerEvent): void =>
     {
-        if (this.host._viewMode === 'day')
-        {
-            if (this.host._dayHover !== null) { this.host._dayHover = null; this.scheduleClockPaint(); this.host.requestUpdate(); }
-            return;
-        }
+        //Day mode has no hover: selection is tap-driven and sticky, so a pointer leaving changes nothing.
+        if (this.host._viewMode === 'day') { return; }
         //Touch fires pointerleave on finger-up, right after the tap toggled the home/slot: ignore it so a tap
         //isn't cancelled the instant it lands. Touch state is sticky and managed by onClockTapEnd.
         if (e.pointerType !== 'mouse')
@@ -683,10 +700,12 @@ export class ClockController
         this.host._clockHoverSlot = null;
     };
 
-    //Touch: remember where the gesture began so a tap can be told from a drag-rotate on release.
+    //Remember where the gesture began so a tap can be told from a drag-rotate on release. Day mode selects on tap
+    //for BOTH mouse and touch (no hover), so it records for every pointer type; clock keeps its touch-only tap.
     public onClockTapStart = (e: PointerEvent): void =>
     {
-        if (this.host._viewMode !== 'clock' || e.pointerType === 'mouse')
+        const day = this.host._viewMode === 'day';
+        if ((!day && this.host._viewMode !== 'clock') || (!day && e.pointerType === 'mouse'))
         {
             return;
         }
@@ -700,12 +719,12 @@ export class ClockController
         this._clockTapStartY = e.clientY - rect.top;
     };
 
-    //Touch release: if the finger barely moved it's a tap, hit-test and toggle a sticky tooltip on the
-    //tapped cylinder (or dismiss when tapping empty space). A real drag (moved past the threshold) rotated
-    //the camera and is ignored here.
+    //Release: if the pointer barely moved it's a tap. Day mode toggles the ring selection under it; clock toggles a
+    //sticky tooltip on the tapped cylinder. A real drag (past the threshold) rotated the camera and is ignored.
     public onClockTapEnd = (e: PointerEvent): void =>
     {
-        if (this.host._viewMode !== 'clock' || e.pointerType === 'mouse')
+        const day = this.host._viewMode === 'day';
+        if ((!day && this.host._viewMode !== 'clock') || (!day && e.pointerType === 'mouse'))
         {
             return;
         }
@@ -721,6 +740,7 @@ export class ClockController
         {
             return;   //drag-rotate, not a tap
         }
+        if (day) { this._daySelectAt(x, y); return; }
         this._clockHoverX = x;
         this._clockHoverY = y;
         const hit = clockHitTest(this._clockHits, x, y);

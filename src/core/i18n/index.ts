@@ -147,15 +147,12 @@ export interface Translations
         buildingRealSizeOff?:         string;
         buildingRealSizeHint?:        string;
         buildingHeight?:              string;
-        //Consumption-ring section: noise-floor slider + per-device show/optimise toggles. Optional; fall back to English.
+        //Consumption-ring section: per-device drag order + show/hide toggle. Optional; fall back to English.
         consumptionRingSection?:        string;
-        consumptionRingThreshold?:      string;
-        consumptionRingThresholdHelp?:  string;
         consumptionRingDevicesIntro?:   string;
         consumptionRingNoDevices?:      string;
-        //aria-labels (screen-reader only, no visible tooltip) for the two per-device icon toggles.
+        //aria-label (screen-reader only, no visible tooltip) for the per-device show/hide toggle.
         consumptionRingRingLabel?:      string;
-        consumptionRingOptimLabel?:     string;
         //PV install: install-level knobs with no HA Energy equivalent (e.g. the solar-irradiance override).
         installationSection:      string;
         //Section-top hint: entity wiring (production, grid, battery) lives in HA Energy; this section only

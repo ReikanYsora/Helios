@@ -31,11 +31,6 @@ export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 6;
 export const DEFAULT_VALUE_DECIMALS = 1;
 export const MIN_VALUE_DECIMALS     = 0;
 export const MAX_VALUE_DECIMALS     = 3;
-//Day-ring noise floor: below this daily total (kWh) a device gets no ring. 0 shows everything; above ~2 kWh/day
-//stops being a noise floor and starts hiding real appliances, so that caps the slider.
-export const DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH = 0.1;
-export const MIN_CONSUMPTION_RING_THRESHOLD_KWH     = 0;
-export const MAX_CONSUMPTION_RING_THRESHOLD_KWH     = 2;
 
 
 //=== Colours ===
@@ -219,3 +214,7 @@ export const HOME_GROW_MS    = 300;
 //Clock dial: grow/shrink + slot-slide duration (a ring rises when added, falls + fades when removed,
 //slides between slots when the stack recompacts).
 export const CLOCK_GROW_MS   = 320;
+
+//Day-ring entry animation: the donuts + start discs fade in, then the ribbons sweep from midnight round the day,
+//the end disc riding the sweep front. Replayed on entering day mode and on a today <-> yesterday switch.
+export const DAY_ANIM_MS = 1000;

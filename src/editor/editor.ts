@@ -23,11 +23,8 @@ import
     DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS,
     MAX_VALUE_DECIMALS,
-    DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH,
-    MIN_CONSUMPTION_RING_THRESHOLD_KWH,
-    MAX_CONSUMPTION_RING_THRESHOLD_KWH,
     consumptionRingHidden,
-    consumptionRingOptimizeIgnored,
+    consumptionRingOrder,
 } from '../core/config/helios-config';
 import { deviceColorByIndex } from '../core/format/format';
 import { pickTranslations, type Translations } from '../core/i18n';
@@ -174,7 +171,7 @@ export class HeliosCardEditor extends LitElement
         this._pruneStaleDeviceIds();
     }
 
-    //Drop any hidden / optimiser-ignore id whose device no longer exists in the Energy dashboard, so removing a
+    //Drop any hidden / order id whose device no longer exists in the Energy dashboard, so removing a
     //device there also cleans it from this card's YAML. Guarded on a NON-EMPTY loaded snapshot: an empty one can also
     //mean the prefs failed to load (RBAC), and wiping the lists then would silently lose the user's choices. Writes
     //only when something actually changed, so it converges after a single pass and never loops.
@@ -184,7 +181,7 @@ export class HeliosCardEditor extends LitElement
         const devices = this._energyDefaults.devices;
         if (devices.length === 0) { return; }
         const valid = new Set(devices.map(d => d.statConsumption));
-        const keys: (keyof HeliosConfig)[] = ['consumption-ring-hidden', 'consumption-ring-optimize-ignore'];
+        const keys: (keyof HeliosConfig)[] = ['consumption-ring-hidden', 'consumption-ring-order'];
         const next = { ...this._cfg } as Record<string, unknown>;
         let changed = false;
         for (const key of keys)
@@ -448,19 +445,16 @@ export class HeliosCardEditor extends LitElement
         const key = el.dataset.key as keyof HeliosConfig | undefined;
         if (key) { this._update(key, el.dataset.value === 'true'); }
     };
-    //Flip a device's membership in one of the two id lists (ring-hidden / optimiser-ignore). Presence in the list =
-    //hidden / ignored; the click toggles it. Stored back trimmed to undefined when empty so the YAML drops the key.
+    //Toggle a device's presence in the ring-hidden list (presence = hidden). Stored back trimmed to undefined when
+    //empty so the YAML drops the key.
     private _onDeviceToggleClick = (e: Event): void =>
     {
-        const el   = e.currentTarget as HTMLElement;
-        const stat = el.dataset.stat;
-        const kind = el.dataset.cring;
-        if (!stat || !kind) { return; }
-        const key  = kind === 'ring' ? 'consumption-ring-hidden' : 'consumption-ring-optimize-ignore';
-        const cur  = this._cfg[key];
+        const stat = (e.currentTarget as HTMLElement).dataset.stat;
+        if (!stat) { return; }
+        const cur  = this._cfg['consumption-ring-hidden'];
         const list = Array.isArray(cur) ? cur.filter((v): v is string => typeof v === 'string') : [];
         const next = list.includes(stat) ? list.filter(v => v !== stat) : [...list, stat];
-        this._update(key, next.length ? next : undefined);
+        this._update('consumption-ring-hidden', next.length ? next : undefined);
     };
 
     private _fmtNum(v: number, step: number): string
@@ -560,10 +554,9 @@ export class HeliosCardEditor extends LitElement
                 </label>`;
     }
 
-    //Consumption-ring section body: the noise-floor slider plus one row per dashboard-tracked device. Each device
-    //carries a colour dot (HA's per-index palette, matching the dashboard graph), its friendly name, and two icon
-    //toggles: show/hide in the ring, and include/ignore in the optimiser (disabled while hidden, since a hidden
-    //device is fully excluded). Devices come from the live Energy prefs snapshot, in dashboard order.
+    //Consumption-ring section body: one draggable row per dashboard-tracked device. Each row carries a drag handle,
+    //a colour dot (HA's per-index palette, matching the dashboard graph), the device icon, its friendly name, and the
+    //show/hide-in-the-ring toggle. Devices come from the live Energy prefs snapshot, ordered by the saved drag order.
     //Resolved display name for a tracked device: its dashboard name, else the entity's friendly name, else the id.
     private _deviceName(dev: DeviceConsumption): string
     {
@@ -577,60 +570,65 @@ export class HeliosCardEditor extends LitElement
         return (typeof icon === 'string' && icon) || 'mdi:flash';
     }
 
+    //Devices in the display order the rings follow: the user's saved drag order first, anything not yet in it
+    //appended alphabetically. Shared by the render and the drag handler so both agree on the sequence.
+    private _orderedDevices(): DeviceConsumption[]
+    {
+        const order = consumptionRingOrder(this._cfg);
+        const rank  = (id: string): number => { const i = order.indexOf(id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
+        return [...this._energyDefaults.devices].sort((a, b) =>
+            rank(a.statConsumption) - rank(b.statConsumption)
+            || this._deviceName(a).localeCompare(this._deviceName(b), undefined, { sensitivity: 'base' }));
+    }
+
+    //Drag + drop reorder (HA's ha-sortable): move the dragged id and persist the full order so the rings follow it.
+    private _onDeviceMoved = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void =>
+    {
+        ev.stopPropagation();
+        const { oldIndex, newIndex } = ev.detail;
+        const ids = this._orderedDevices().map(d => d.statConsumption);
+        if (oldIndex < 0 || oldIndex >= ids.length || newIndex < 0 || newIndex >= ids.length) { return; }
+        ids.splice(newIndex, 0, ids.splice(oldIndex, 1)[0]);
+        this._update('consumption-ring-order', ids);
+    };
+
     private _renderConsumptionRing(t: Translations): TemplateResult
     {
-        //Always alphabetical by display name (case-insensitive) so the list stays stable and scannable regardless of
-        //the dashboard's own device order.
-        const devices = [...this._energyDefaults.devices].sort((a, b) =>
-            this._deviceName(a).localeCompare(this._deviceName(b), undefined, { sensitivity: 'base' }));
+        const devices = this._orderedDevices();
         const hidden  = consumptionRingHidden(this._cfg);
-        const ignored = consumptionRingOptimizeIgnored(this._cfg);
         return html`
-            ${this._renderSlider('consumption-ring-threshold', t.editor.consumptionRingThreshold ?? 'Ignore threshold', MIN_CONSUMPTION_RING_THRESHOLD_KWH, MAX_CONSUMPTION_RING_THRESHOLD_KWH, 0.05, DEFAULT_CONSUMPTION_RING_THRESHOLD_KWH, ' kWh')}
-            <div class="field-help">${t.editor.consumptionRingThresholdHelp ?? 'Devices using less than this over the day get no ring, so tiny always-on loads do not clutter it. Set to 0 to show every tracked device.'}</div>
-            <div class="hint">${t.editor.consumptionRingDevicesIntro ?? 'Devices tracked in your Energy dashboard. Use the eye to show or hide a device in the ring, and the second toggle to let the optimiser move it onto the sun or leave it where it really ran (for loads you cannot reschedule, like a fridge).'}</div>
+            <div class="hint">${t.editor.consumptionRingDevicesIntro ?? 'Devices tracked in your Energy dashboard. Drag to reorder the rings, and use the eye to show or hide a device in the ring.'}</div>
             ${devices.length === 0
                 ? html`<div class="cring-empty">${t.editor.consumptionRingNoDevices ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
-                : html`<div class="cring-list">
-                    ${devices.map(dev => this._renderDeviceRow(dev, hidden, ignored, t))}
-                </div>`}
+                : html`<ha-sortable handle-selector=".cring-handle" @item-moved=${this._onDeviceMoved}>
+                    <div class="cring-list">
+                        ${devices.map(dev => this._renderDeviceRow(dev, hidden, t))}
+                    </div>
+                </ha-sortable>`}
         `;
     }
 
-    private _renderDeviceRow(dev: DeviceConsumption, hidden: Set<string>, ignored: Set<string>, t: Translations): TemplateResult
+    private _renderDeviceRow(dev: DeviceConsumption, hidden: Set<string>, t: Translations): TemplateResult
     {
-        const stat      = dev.statConsumption;
-        const name      = this._deviceName(dev);
-        const color     = deviceColorByIndex(this, dev.index);
-        const shown     = !hidden.has(stat);
-        const optimized = !ignored.has(stat);
+        const stat  = dev.statConsumption;
+        const name  = this._deviceName(dev);
+        const color = deviceColorByIndex(this, dev.index);
+        const shown = !hidden.has(stat);
         return html`
             <div class="cring-row ${shown ? '' : 'is-hidden'}">
+                <ha-icon class="cring-handle" icon="mdi:drag"></ha-icon>
                 <span class="cring-dot" style="background:${color}"></span>
                 <ha-icon class="cring-icon" icon=${this._deviceIcon(dev)}></ha-icon>
                 <span class="cring-name">${name}</span>
                 <button
                     type="button"
                     class="cring-toggle ${shown ? 'active' : ''}"
-                    data-cring="ring"
                     data-stat=${stat}
                     aria-pressed=${shown ? 'true' : 'false'}
                     aria-label=${t.editor.consumptionRingRingLabel ?? 'Show in the ring'}
                     @click=${this._onDeviceToggleClick}
                 >
                     <ha-icon icon=${shown ? 'mdi:eye' : 'mdi:eye-off'}></ha-icon>
-                </button>
-                <button
-                    type="button"
-                    class="cring-toggle ${optimized ? 'active' : ''}"
-                    data-cring="optim"
-                    data-stat=${stat}
-                    ?disabled=${!shown}
-                    aria-pressed=${optimized ? 'true' : 'false'}
-                    aria-label=${t.editor.consumptionRingOptimLabel ?? 'Include in the optimiser'}
-                    @click=${this._onDeviceToggleClick}
-                >
-                    <ha-icon icon=${optimized ? 'mdi:lock-open-variant' : 'mdi:lock'}></ha-icon>
                 </button>
             </div>
         `;
