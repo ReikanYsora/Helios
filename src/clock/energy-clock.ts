@@ -785,14 +785,17 @@ function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: str
         if (last && iv[0] - last[1] <= capSlots) { last[1] = iv[1]; }
         else { merged.push([iv[0], iv[1]]); }
     }
-    //Draw each run as ONE solid rounded-cap arc (its round caps mark the run's start + end).
+    //Draw each run as ONE solid rounded-cap arc (its round caps mark the run's start + end); a short run is grown to
+    //a minimum length so it reads as a dash, and every arc is clamped inside the midnight slot.
     let runs = '';
     for (const [a, b] of merged)
     {
-        const spanF = Math.max(minLenF, (b - a) / slots);
-        const mid   = (a + b) / (2 * slots);
-        const f0    = Math.max(gapF, Math.min(1 - gapF - spanF, mid - spanF / 2));
-        runs += arc(f0, f0 + spanF, 0.9 * dim, 'round');
+        let f0 = a / slots;
+        let f1 = b / slots;
+        if (f1 - f0 < minLenF) { const c = (f0 + f1) / 2; f0 = c - minLenF / 2; f1 = c + minLenF / 2; }
+        f0 = Math.max(gapF, f0);
+        f1 = Math.min(1 - gapF, f1);
+        if (f1 > f0) { runs += arc(f0, f1, 0.9 * dim, 'round'); }
     }
     return s + runs;
 }
