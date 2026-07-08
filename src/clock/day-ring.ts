@@ -34,6 +34,9 @@ export interface DayRingData
     pv:         number[];
     //Per-slot battery charging (kWh) -- sun already committed to the battery, so it isn't free to move a device onto.
     charge:     number[];
+    //Historical peak average power (kW) across all consumption meters: the device ribbons' width reference. A slot at
+    //this power fills the ring; a lighter slot is proportionally thinner. 0 when no history is known.
+    maxKw:      number;
 }
 
 //One device's run(s) over the day: contiguous on-slots drawn as arcs at draw time. `index` is the dashboard
@@ -44,7 +47,7 @@ export interface DeviceRun
     index:      number;
     name:       string;
     statId:     string;
-    //Per-slot energy (kWh); the ring's run arcs are derived from this at draw time (dayRunArcs).
+    //Per-slot energy (kWh); the ring's variable-width ribbon is derived from this at draw time.
     values:     number[];
     //True when the user marked this device "ignore in optimiser": the optimiser keeps its real profile instead of
     //shifting it onto the sun (a fixed load, e.g. the fridge or an appliance you can't reschedule).
@@ -121,7 +124,30 @@ export interface DayRingHost
     _timelineMode?:  string;   //'yesterday' shows the previous day; anything else = today (live)
     _dayRing:        DayRingData | null;
     _dayRingKey:     string;
+    //Cached ring-width reference (kW). Fetched once (barely moves day to day); `undefined` until the first day build.
+    _dayMaxKw?:      number;
     requestUpdate(): void;
+}
+
+//Historical peak average power (kW) across every consumption meter: the device-ribbon width reference (a slot at
+//this power fills the ring; 0 is a hairline). One hourly recorder pass over the retained history, outlier-capped so
+//a meter reset can't blow the scale. Hourly kWh already equals that hour's average kW.
+const MAX_KW_HISTORY_DAYS = 366;
+async function fetchConsumptionMaxKw(host: DayRingHost, deviceIds: string[]): Promise<number>
+{
+    if (!deviceIds.length || !host.hass?.callWS) { return 0; }
+    const end   = Date.now();
+    const byId  = await fetchChangeById(host.hass, deviceIds, end - MAX_KW_HISTORY_DAYS * DAY_MS, end, 'hour');
+    if (!byId) { return 0; }
+    let max = 0;
+    for (const id of deviceIds)
+    {
+        const buckets = byId[id];
+        if (!buckets) { continue; }
+        const cap = outlierCapKwh(buckets);
+        for (const b of buckets) { if (Number.isFinite(b.kwh) && b.kwh <= cap && b.kwh > max) { max = b.kwh; } }
+    }
+    return max;
 }
 
 //Bin a change-series (kWh) into `slots` slots-of-day, summed, in the home time zone (so the ring lines up with the
@@ -227,11 +253,16 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
         ids.length ? fetchChangeSeries(host.hass, [...ids].sort(), startMs, endMs, period) : Promise.resolve(null);
     //Every non-hidden device meter in one recorder call (per-id), then binned + run-detected each.
     const deviceIds = d.devices.map(dev => dev.statConsumption).filter(id => id && !hidden.has(id));
-    const [solarB, impB, expB, bChgB, bDisB, deviceById] = await Promise.all([
+    //The width reference spans EVERY configured consumption meter (hidden ones included), so hiding a device from the
+    //ring doesn't rescale the others. Fetched once, then reused from the host cache.
+    const allDeviceIds = d.devices.map(dev => dev.statConsumption).filter(Boolean);
+    const [solarB, impB, expB, bChgB, bDisB, deviceById, maxKw] = await Promise.all([
         chg(d.solarStatEnergyFroms), chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
         chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
         deviceIds.length ? fetchChangeById(host.hass, deviceIds, startMs, endMs, period) : Promise.resolve(null),
+        host._dayMaxKw === undefined ? fetchConsumptionMaxKw(host, allDeviceIds) : Promise.resolve(host._dayMaxKw),
     ]);
+    host._dayMaxKw = maxKw;
     //Ignore a resolution whose window/cadence moved on while it was in flight.
     if (host._dayRingKey !== key) { return; }
     const pv  = binSlots(solarB, slots);
@@ -270,7 +301,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const sum = (a: number[]): number => a.reduce((t, v) => t + Math.max(0, v), 0);
     host._dayRing = {
         solar: shares.solar, battery: shares.battery, grid: shares.grid, devices, hasSolar, hasGrid, hasBattery,
-        solarKwh: sum(pv), gridKwh: sum(imp), batteryKwh: sum(bd), pv, charge: bc,
+        solarKwh: sum(pv), gridKwh: sum(imp), batteryKwh: sum(bd), pv, charge: bc, maxKw,
     };
     host.requestUpdate();
 }

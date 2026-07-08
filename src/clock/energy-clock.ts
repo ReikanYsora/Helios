@@ -34,8 +34,7 @@ export type ClockHost = ChartHost & {
 
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
-const DAY_RUN_PCT     = 0.08;   //a slot counts as a real production/consumption run above this % of the day's peak
-const DAY_MIN_RUN_KWH = 0.1;    //below this daily total a device shows only its faint reserved ring (no run pills)
+const DAY_BAND_COLOR  = 'var(--card-background-color, #000000)';   //group zone background + the ribbon-end holes (theme-linked)
 const DAY_MIDNIGHT_GAP_PX = 10;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
@@ -720,107 +719,75 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
         for (let k = 0; k < STEPS; k++) { const a = 2 * Math.PI * k / STEPS; const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); d += `${k ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`; }
         return d + 'Z';
     };
-    return `<path d="${ring(outerRm)}${ring(innerRm)}" fill="${fill}" fill-opacity="${opacity}" fill-rule="evenodd"/>`;
+    //Fill via `style` so a CSS var (theme-linked band colour) resolves; a plain `fill=` attribute would not.
+    return `<path d="${ring(outerRm)}${ring(innerRm)}" style="fill:${fill};fill-opacity:${opacity}" fill-rule="evenodd"/>`;
 }
 
-//A member ring drawn IN FULL: a faint full-day ring at very low opacity (so the ring exists everywhere, even where
-//there was no activity), plus solid rounded-cap arcs at 0.9 over the RUNS where `values` exceeds DAY_RUN_PCT of the
-//day's peak. Short off-holes are bridged and a minimum arc length is enforced, so a device that flicks on/off does
-//not shatter into little dots. Drawn as TRUE SVG arc paths (not sampled polylines): valid because day mode is
-//top-down (pitch 0 -> ground circles are screen circles), and it avoids the bright self-overlap dots WebKit/Chrome
-//render on a wide stroked polyline at its diagonal vertices.
-function dayRunArcs(camera: SceneCamera, rm: number, widthPx: number, color: string, values: number[], slots: number, gapF: number, dim: number): string
+//A member ring drawn as a variable-WIDTH filled ribbon: each slot's radial half-thickness follows its intensity `t`
+//in [0, 1] (a consumer's average power against the historical peak; a producer's share of the slot's load). An idle
+//slot is a MIN_RIBBON_PX hairline; a slot at 1 fills the full `gaugeW`, so a heavy load reads visibly thicker than a
+//light one. Filled (not stroked), so the width is exact and it never draws the wide-stroke self-overlap dots
+//WebKit/Chrome render on polylines. Width is linearly interpolated between slot centres, so the band swells and
+//narrows smoothly rather than stepping. Each end (either side of the midnight gap) is anchored with a full-width disc
+//so start and end always read however thin the ribbon is there, with a band-colour hole punched in its centre.
+const MIN_RIBBON_PX = 2;
+function dayRibbon(camera: SceneCamera, rm: number, gaugeW: number, color: string, t: number[], slots: number, gapF: number, dim: number): string
 {
     const ppm = camera.pxPerMetre || 1;
-    const c0  = camera.project(0, 0, 0);
-    const cx  = c0[0];
-    const cy  = c0[1];
-    const at  = (f: number): [number, number] => dayPt(camera, rm, f);
-    //One true circular arc [f0, f1] as an SVG path. Sweep from the projected direction; largeArc from the span.
-    const arc = (f0: number, f1: number, op: number, cap: string): string =>
+    const wPx = (s: number): number => MIN_RIBBON_PX + (gaugeW - MIN_RIBBON_PX) * Math.min(1, Math.max(0, t[s] ?? 0));
+    const STEPS = Math.max(slots * 2, 120);   //dense enough that the circle stays smooth at any slot count
+    const outer: string[] = [];
+    const inner: string[] = [];
+    for (let k = 0; k <= STEPS; k++)
     {
-        const a0 = at(f0);
-        const a1 = at(f1);
-        const R  = Math.hypot(a0[0] - cx, a0[1] - cy);
-        const pe = at(f0 + (f1 - f0) * 0.001);
-        let da = Math.atan2(pe[1] - cy, pe[0] - cx) - Math.atan2(a0[1] - cy, a0[0] - cx);
-        while (da > Math.PI) { da -= 2 * Math.PI; }
-        while (da < -Math.PI) { da += 2 * Math.PI; }
-        const sweep = da > 0 ? 1 : 0;
-        const large = (f1 - f0) > 0.5 ? 1 : 0;
-        return `<path d="M${a0[0].toFixed(2)},${a0[1].toFixed(2)}A${R.toFixed(2)},${R.toFixed(2)} 0 ${large} ${sweep} ${a1[0].toFixed(2)},${a1[1].toFixed(2)}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${widthPx.toFixed(1)}" stroke-linecap="${cap}"/>`;
+        const f     = gapF + (1 - 2 * gapF) * (k / STEPS);
+        const slotF = Math.min(slots - 1e-6, Math.max(0, f * slots));
+        const s0    = Math.floor(slotF);
+        const s1    = Math.min(slots - 1, s0 + 1);
+        const halfM = ((wPx(s0) + (wPx(s1) - wPx(s0)) * (slotF - s0)) / 2) / ppm;
+        const po    = dayPt(camera, rm + halfM, f);
+        const pi    = dayPt(camera, rm - halfM, f);
+        outer.push(`${k ? 'L' : 'M'}${po[0].toFixed(2)},${po[1].toFixed(2)}`);
+        inner.push(`L${pi[0].toFixed(2)},${pi[1].toFixed(2)}`);
+    }
+    inner.reverse();
+    const ribbon = `<path d="${outer.join('')}${inner.join('')}Z" fill="${color}" fill-opacity="${(0.9 * dim).toFixed(3)}"/>`;
+    //gaugeW is the ring's max width, so the disc (radius gaugeW/2) is the widest the ribbon can ever get; the hole
+    //reuses the band colour so it reads as punched through. Screen-space circles: valid at day mode's pitch 0.
+    const rOuter = gaugeW / 2;
+    const cap = (f: number): string =>
+    {
+        const c = dayPt(camera, rm, f);
+        return `<circle cx="${c[0].toFixed(2)}" cy="${c[1].toFixed(2)}" r="${rOuter.toFixed(2)}" fill="${color}" fill-opacity="${(0.9 * dim).toFixed(3)}"/>`
+             + `<circle cx="${c[0].toFixed(2)}" cy="${c[1].toFixed(2)}" r="${(rOuter * 0.42).toFixed(2)}" style="fill:${DAY_BAND_COLOR};fill-opacity:${dim.toFixed(3)}"/>`;
     };
-    //Faint full ring (the member's track); its rounded ends share the value arcs' gapF so they line up at midnight.
-    const s = arc(gapF, 1 - gapF, 0.1 * dim, 'round');
-    let maxV  = 0;
-    let total = 0;
-    for (const v of values) { if (v > maxV) { maxV = v; } total += Math.max(0, v); }
-    //A source (or edge case) below the noise floor shows ONLY its faint ring -- no scattered pills from tiny readings.
-    if (total < DAY_MIN_RUN_KWH) { return s; }
-    const thr = maxV * DAY_RUN_PCT;
-    const minLenF = rm * ppm > 0 ? (widthPx * 4.5) / (2 * Math.PI * rm * ppm) : 0;   //shortest run reads as a dash
-    //Collect the runs as [start, end) slot intervals: bridge <=1-slot holes and drop negligible-energy blips.
-    const runsRaw: [number, number][] = [];
-    let i = 0;
-    while (i < slots)
-    {
-        if ((values[i] ?? 0) <= thr) { i++; continue; }
-        let end = i + 1;
-        let j = i + 1;
-        let hole = 0;
-        while (j < slots && hole <= 1) { if ((values[j] ?? 0) > thr) { end = j + 1; hole = 0; } else { hole++; } j++; }
-        let runKwh = 0;
-        for (let k = i; k < end; k++) { runKwh += Math.max(0, values[k] ?? 0); }
-        if (runKwh >= DAY_MIN_RUN_KWH) { runsRaw.push([i, end]); }
-        i = end;
-    }
-    //Merge runs whose gap is small enough that their rounded caps would overlap (a brief data dropout must not
-    //split a run into two overlapping pieces): closer than ~2 cap-widths -> one run.
-    const capSlots = Math.max(1, Math.ceil(2 * (widthPx / 2) / (2 * Math.PI * rm * ppm) * slots));
-    const merged: [number, number][] = [];
-    for (const iv of runsRaw)
-    {
-        const last = merged[merged.length - 1];
-        if (last && iv[0] - last[1] <= capSlots) { last[1] = iv[1]; }
-        else { merged.push([iv[0], iv[1]]); }
-    }
-    //Draw each run as ONE solid rounded-cap arc (its round caps mark the run's start + end); a short run is grown to
-    //a minimum length so it reads as a dash, and every arc is clamped inside the midnight slot.
-    let runs = '';
-    for (const [a, b] of merged)
-    {
-        let f0 = a / slots;
-        let f1 = b / slots;
-        if (f1 - f0 < minLenF) { const c = (f0 + f1) / 2; f0 = c - minLenF / 2; f1 = c + minLenF / 2; }
-        f0 = Math.max(gapF, f0);
-        f1 = Math.min(1 - gapF, f1);
-        if (f1 > f0) { runs += arc(f0, f1, 0.9 * dim, 'round'); }
-    }
-    return s + runs;
+    return ribbon + cap(gapF) + cap(1 - gapF);
 }
 
 //A whole GROUP (all producers, or all consumers) as ONE zone: a single black band (rounded-rectangle ends, a
-//constant-width midnight slot) spanning the group, with each member drawn inside as a full faint ring + its bright
-//run arcs at its own sub-radius. One zone per group + a clear separation reads as "producers" vs "consumers",
-//without the striped look of many stuck-together ring backgrounds. Hits are returned in member order (for the
-//tooltip hit-test). `dimOf(i)` is the opacity multiplier for member i (1 = normal; <1 fades a ring during hover).
-//`outerRm`/`thickM` are the group band's outer radius + thickness.
-function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; values: number[] }[], slots: number, dimOf: (i: number) => number): { svg: string; hits: DayRingHit[] }
+//constant-width midnight slot) spanning the group, with each member drawn inside at its own sub-radius. One zone per
+//group + a clear separation reads as "producers" vs "consumers", without the striped look of many stuck-together
+//ring backgrounds. Hits are returned in member order (for the tooltip hit-test). `dimOf(i)` is the opacity
+//multiplier for member i (1 = normal; <1 fades a ring during hover). `outerRm`/`thickM` are the group band's outer
+//radius + thickness. Each member carries its per-slot intensity `t` in [0, 1], drawn as a variable-width ribbon.
+function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; t: number[] }[], slots: number, dimOf: (i: number) => number): { svg: string; hits: DayRingHit[] }
 {
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
     const sub    = thickM / n;
     const gaugeW = Math.max(1, sub * ppm * 0.72);    //member ring width (small gap between rings, ~0.28 of the sub)
     const circle = (r: number): [number, number][] => Array.from({ length: 48 }, (_, k) => dayPt(camera, r, k / 48));
-    //The zone donut hugs the member rings with just a small breathing margin (no big black border outside/inside).
+    //The zone donut hugs the member rings with just a small breathing margin (no big border outside/inside).
     const halfW  = (gaugeW / ppm) / 2;
     const margin = sub * 0.14;
-    let svg = dayDonut(camera, outerRm - 0.5 * sub + halfW + margin, outerRm - (n - 0.5) * sub - halfW - margin, '#000000', 1);
+    let svg = dayDonut(camera, outerRm - 0.5 * sub + halfW + margin, outerRm - (n - 0.5) * sub - halfW - margin, DAY_BAND_COLOR, 1);
     const hits: DayRingHit[] = [];
     members.forEach((m, i) =>
     {
         const mMid = outerRm - (i + 0.5) * sub;
-        svg += dayRunArcs(camera, mMid, gaugeW, m.color, m.values, slots, dayGapF(camera, mMid, gaugeW), dimOf(i));
+        //Gap uses a cap width of gaugeW: the end discs (radius gaugeW/2) then sit with their edges the same constant
+        //DAY_MIDNIGHT_GAP_PX apart at every ring, so start and end never merge across the midnight gap.
+        svg += dayRibbon(camera, mMid, gaugeW, m.color, m.t, slots, dayGapF(camera, mMid, gaugeW), dimOf(i));
         hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) });
     });
     return { svg, hits };
@@ -997,6 +964,9 @@ export function projectDayRingFrame(
     //Hovered ring index (-1 = none), in the concatenated [producers..., devices...] order. On hover the other
     //CONSUMER rings fade; production rings never fade.
     hoverIndex = -1,
+    //Historical peak average power (kW) across all consumption meters: the device ribbons' width reference. 0 keeps
+    //the fixed-width run arcs (no reference known).
+    maxKw = 0,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
@@ -1024,16 +994,36 @@ export function projectDayRingFrame(
     const decal   = { svg: '', active: false };   //no central logo in day mode
 
     const slots = Math.max(1, solar.length);
-    //Two "big rings": all configured PRODUCERS (solar, grid, battery) grouped inside one black zone, all DEVICES in
-    //another, each member's runs drawn as a thin coloured arc-line at its own sub-radius. Reading a device arc
-    //against the solar arc shows at a glance whether it ran under the sun. dayHits are returned in draw order
-    //(producers then devices) so the tooltip can map a hit index back to a source or a device.
-    const producers: { color: string; values: number[] }[] = [];
-    if (hasSolar)   { producers.push({ color: SUN_COLOR_HEX, values: solar   }); }
-    if (hasGrid)    { producers.push({ color: importColor,   values: grid    }); }
-    if (hasBattery) { producers.push({ color: batteryColor,  values: battery }); }
+    //Two "big rings": all configured PRODUCERS (solar, grid, battery) grouped inside one zone, all DEVICES in
+    //another, each member drawn as a variable-width ribbon at its own sub-radius. Reading a device ribbon against the
+    //solar one shows at a glance whether it ran under the sun. dayHits are returned in draw order (producers then
+    //devices) so the tooltip can map a hit index back to a source or a device.
+    const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+    //Soften the per-slot width (edge-clamped 3-slot mean) so fine-cadence jitter and the slot-to-slot flip between
+    //competing sources don't leave the ribbon edge hairy.
+    const smooth = (a: number[]): number[] => a.map((_, i) =>
+    {
+        let s = 0; let c = 0;
+        for (let k = -1; k <= 1; k++) { const j = i + k; if (j >= 0 && j < a.length) { s += Math.max(0, a[j]); c++; } }
+        return c > 0 ? s / c : 0;
+    });
+    //Producer ribbon thickness = the source's (smoothed) share of the slot's load (already 0..1).
+    const producers: { color: string; t: number[] }[] = [];
+    if (hasSolar)   { producers.push({ color: SUN_COLOR_HEX, t: smooth(solar.map(clamp01))   }); }
+    if (hasGrid)    { producers.push({ color: importColor,   t: smooth(grid.map(clamp01))    }); }
+    if (hasBattery) { producers.push({ color: batteryColor,  t: smooth(battery.map(clamp01)) }); }
     const nP = producers.length;
-    const consumers = rings.map(rg => ({ color: rg.color, values: rg.values }));
+    //Consumer ribbon thickness = the slot's average power against the historical peak (maxKw), as an energy-per-slot
+    //reference, on a sqrt curve so a light load still reads without losing the order of magnitudes, then smoothed. No
+    //reference known -> fall back to the ring's own peak so it still shows relative intensity, not a flat hairline.
+    const slotHours = HOURS_PER_DAY / slots;
+    const consumers = rings.map(rg =>
+    {
+        let ref = maxKw > 0 ? maxKw * slotHours : 0;
+        if (ref <= 0) { for (const v of rg.values) { ref = Math.max(ref, Math.max(0, v)); } }
+        const t0 = ref > 0 ? rg.values.map(v => Math.sqrt(clamp01(Math.max(0, v) / ref))) : rg.values.map(() => 0);
+        return { color: rg.color, t: smooth(t0) };
+    });
 
     const nC = consumers.length;
     //A clear gap (~one member band) sets the producers apart from the consumers.

@@ -448,7 +448,7 @@ export class ClockController
                 color:  deviceColorByIndex(el, dev.index),
                 values: optValues ? optValues[i] : dev.values,
             }));
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this.host._dayHover ?? -1);
+            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this.host._dayHover ?? -1, dr?.maxKw ?? 0);
             this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
             return;
