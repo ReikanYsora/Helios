@@ -416,16 +416,15 @@ export class HeliosCard extends LitElement
         }
     };
 
-    //Chip click delegate: the clicked element carries its metric in data-target. A single tap points the chart at
-    //the chip AND opens its detail panel (no double-tap); re-tapping the already-active chip toggles the panel shut.
+    //Chip click delegate: the clicked element carries its metric in data-target. A tap points the chart at the
+    //chip AND opens its detail panel; re-tapping the active chip re-points/keeps it open (never toggles shut).
     onChartTargetClick = (e: Event): void =>
     {
         const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
         if (!target) { return; }
-        const switching = target !== this._chartTarget;
         this.setChartTarget(target);
-        //A new chip re-points and opens the panel on it; tapping the active chip again just toggles the panel.
-        this._infoPanelOpen = switching ? true : !this._infoPanelOpen;
+        //Any chip tap opens (or keeps open) the panel on that chip; closing is done elsewhere, not by re-tapping.
+        this._infoPanelOpen = true;
         //Opening the panel on a coarse (month/year) window needs the clock's hourly profile, which the scene does
         //not otherwise fetch: kick it now so the totals match the clock instead of showing empty.
         if (this._infoPanelOpen)
@@ -1131,7 +1130,9 @@ export class HeliosCard extends LitElement
             this._viewMode === 'clock' ? 'mode-clock' : '',
             this._viewMode === 'day' ? 'mode-day' : '',
         ].filter(Boolean).join(' ');
-        const cardStyle = infoOpen ? `--detail-accent:${activeChipColor}` : '';
+        //Expose the active chip's colour always (the timeline border tracks it for feedback); the detail-panel
+        //accent only when the panel is open.
+        const cardStyle = `--active-chip-color:${activeChipColor}${infoOpen ? `;--detail-accent:${activeChipColor}` : ''}`;
 
         return html`
             <ha-card class=${cardClasses} style=${cardStyle}>

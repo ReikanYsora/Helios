@@ -2,7 +2,7 @@
 //consumption rings, clock group buttons). Only devices that are assigned to a group AND not hidden are fetched,
 //on the same store window + cadence as the source meters. Keyed so an unchanged (id-set, window) is a no-op.
 
-import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, wattsAtFromChangeSeries, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { cssHex } from '../../core/format/format';
 import type { EnergyDefaults, DeviceConsumption } from './energy-prefs';
@@ -106,6 +106,20 @@ export function groupLivePowerW(host: DeviceConsumptionHost, group: number): num
     if (rates.length === 0) { return null; }
     const { watts, any } = sumLiveWatts(host.hass, rates);
     return any ? watts : null;
+}
+
+//Group power (W) at a past instant (scrub), summed over the group's visible devices from their `change` series.
+//null when NONE has a reading at that instant. Mirrors groupLivePowerW for the scene chip's scrub value.
+export function groupPowerWAt(host: DeviceConsumptionHost, group: number, atMs: number): number | null
+{
+    let sum = 0;
+    let any = false;
+    for (const dev of groupDevices(host.config, host._energyDefaults, group))
+    {
+        const w = wattsAtFromChangeSeries(host._deviceChangeSeries.get(dev.statConsumption) ?? null, atMs);
+        if (w !== null) { sum += w; any = true; }
+    }
+    return any ? sum : null;
 }
 
 //Fetch the per-device `change` series over the store's past window for the grouped + visible devices. One recorder

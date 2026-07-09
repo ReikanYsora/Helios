@@ -380,8 +380,8 @@ export const heliosCardStyles = css`
         flex-direction: column;
         gap: 2px;
         box-sizing: border-box;
-        min-width: 84px;
-        max-width: 40%;
+        /*  Fixed width: the panel never reflows with content; long device friendly names ellipsise instead. */
+        width: 160px;
         padding: 6px 10px;
         border: 2px solid var(--detail-accent, var(--primary-color, #03a9f4));
         border-radius: var(--ha-card-border-radius, 12px);
@@ -426,10 +426,13 @@ export const heliosCardStyles = css`
     .detail-panel .dp-row-device .dp-label
     {
         flex: 1 1 auto;
+        /*  min-width:0 lets a flex child shrink below its content so the ellipsis actually engages. */
+        min-width: 0;
         text-align: left;
+        /*  Regular weight (the panel is 600 by default): the name is a label, the value stays the emphasis. */
+        font-weight: 400;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 160px;
     }
     .detail-panel .dp-row-device .dp-value
     {
@@ -466,8 +469,8 @@ export const heliosCardStyles = css`
         color:        var(--primary-text-color, #212121);
         border-color: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
     }
-    /*  Monitoring-group chip, same pill recipe; border in the group's colour. A small numbered disc sits
-        top-right (like the old info badge) carrying the group id. */
+    /*  Monitoring-group chip, same pill recipe; border in the group's colour. A small numbered disc carries the
+        group id, placed on the chip's OUTER corner (away from the home) so it never sits over the lead's bead. */
     .group-label
     {
         z-index: 8;
@@ -479,8 +482,6 @@ export const heliosCardStyles = css`
     .group-badge
     {
         position: absolute;
-        top: -7px;
-        right: -7px;
         width: 16px;
         height: 16px;
         display: flex;
@@ -494,6 +495,12 @@ export const heliosCardStyles = css`
         line-height: 1;
         pointer-events: none;
     }
+    /*  Per-corner placement: top-left chip -> top-left badge, etc., so the disc sits on the outer edge and the
+        lead + its bead (which run from the inner edge toward the home) stay clear. */
+    .group-badge-tl { top: -7px; left: -7px; }
+    .group-badge-bl { bottom: -7px; left: -7px; }
+    .group-badge-tr { top: -7px; right: -7px; }
+    .group-badge-br { bottom: -7px; right: -7px; }
     /*  Full-size overlay SVGs for the home-cluster leaders (grid, PV to home, battery, groups); each hosts
         its own coloured path(s) below. */
     .grid-leader-svg,
@@ -511,7 +518,7 @@ export const heliosCardStyles = css`
     /*  Group leader: a thin static line from the home pill down to the group chip, in the group's colour. */
     .group-leader-line
     {
-        stroke-width: 1;
+        stroke-width: 2;
         stroke-linecap: round;
         fill: none;
     }
@@ -519,7 +526,7 @@ export const heliosCardStyles = css`
         (blue) and export (purple). */
     .grid-leader-line
     {
-        stroke-width: 1;
+        stroke-width: 2;
         stroke-linecap: round;
         fill: none;
     }
@@ -529,7 +536,7 @@ export const heliosCardStyles = css`
     .pv-home-leader-line
     {
         stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
-        stroke-width: 1;
+        stroke-width: 2;
         stroke-opacity: 1;
         stroke-linecap: round;
         fill: none;
@@ -556,7 +563,7 @@ export const heliosCardStyles = css`
     .battery-leader-line
     {
         stroke: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
-        stroke-width: 1;
+        stroke-width: 2;
         stroke-opacity: 1;
         stroke-linecap: round;
         stroke-linejoin: round;
@@ -644,14 +651,21 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.25;
     }
 
-    /*  Incidence ray: dashes flow sun to home at a speed proportional to live irradiance. 1 px hairline
-        matching the home cluster's leaders. */
+    /*  Incidence ray: dashes flow sun to home at a speed proportional to live irradiance. 2 px, matching
+        the home cluster's leaders. A soft amber glow gives the beam more presence; it feathers with
+        daylight (--solar-daylight, set on the svg) so it fades to nothing at dusk. */
     .solar-svg .solar-ray
     {
-        stroke-width: 1;
+        stroke-width: 2;
         stroke-dasharray: 5 5;
         stroke-opacity: 0.55;
         stroke-linecap: round;
+        /*  Two-stop amber halo (tight bright core + wide soft bloom) so the thin dashed beam actually glows.
+            No daylight factor here: the parent .solar-svg already fades the whole layer by --solar-daylight,
+            so folding it in again would attenuate the glow twice (daylight²) and wash it out. */
+        filter:
+            drop-shadow(0 0 3px rgba(255, 193, 7, 0.95))
+            drop-shadow(0 0 9px rgba(255, 193, 7, 0.7));
         animation: solar-ray-flow var(--sun-flow-duration, 30s) linear infinite;
     }
 

@@ -5,11 +5,11 @@
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { formatEnergyKwh, formatIrradiance, deviceColorByIndex } from '../core/format/format';
+import { formatEnergyKwh, formatIrradiance } from '../core/format/format';
 import { powerUnit, valueDecimals, irradianceUnit } from '../core/config/helios-config';
 import { buildClockData, clockLayerPeriod, clockPeriodTotal, hourlyOf, type ClockHost, type ClockData } from '../clock/energy-clock';
 import { type ChartTarget, isGroupTarget, groupOfTarget } from '../charts/charts';
-import { groupDevices, deviceName, deviceIcon, deviceWindowKwh } from '../data/sources/device-consumption';
+import { groupDevices, deviceName, deviceWindowKwh } from '../data/sources/device-consumption';
 import type { SunScene } from './hud';
 import { DAY_MS } from '../core/config/constants';
 
@@ -21,10 +21,9 @@ export interface DetailHost extends ClockHost
 
 interface DetailMetric
 {
-    icon:  string;
     value: string;
-    //Per-device rows (group targets) carry a colour dot + the device name; other rows leave these unset.
-    color?: string;
+    //Astro / energy rows carry a leading glyph; per-device (group) rows drop the icon and just show the name.
+    icon?:  string;
     label?: string;
 }
 
@@ -146,14 +145,11 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
     }
 
     //Monitoring group: one row per visible device of the group, its total consumption over the window (same
-    //magnitude the chart curves + the ring show), with the device's dashboard colour + name.
+    //magnitude the chart curves + the ring show), shown as the device name + total (no icon, to save width).
     if (isGroupTarget(target))
     {
-        const el   = host as unknown as Element;
         const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
         return devs.map(dev => ({
-            icon:  deviceIcon(host.hass, dev),
-            color: deviceColorByIndex(el, dev.index),
             label: deviceName(host.hass, dev),
             value: energy(deviceWindowKwh(host._deviceChangeSeries.get(dev.statConsumption), startMs, endMs)),
         }));
@@ -225,8 +221,9 @@ export function renderDetailPanel(host: DetailHost): TemplateResult | typeof not
         <div class="detail-panel">
             ${metrics.map(m => html`
                 <div class="dp-row ${m.label ? 'dp-row-device' : ''}">
-                    <ha-icon icon=${m.icon} style=${m.color ? `color:${m.color}` : ''}></ha-icon>
-                    ${m.label ? html`<span class="dp-label">${m.label}</span>` : nothing}
+                    ${m.label
+                        ? html`<span class="dp-label">${m.label}</span>`
+                        : html`<ha-icon icon=${m.icon}></ha-icon>`}
                     <span class="dp-value">${m.value}</span>
                 </div>
             `)}

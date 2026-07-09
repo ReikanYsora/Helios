@@ -8,7 +8,7 @@ import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from 
 import { buildArcSegments, flowDuration, type LabelLayout } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
 import { formatGridValue } from '../data/sources/grid';
-import { activeGroups, groupLivePowerW } from '../data/sources/device-consumption';
+import { activeGroups, groupLivePowerW, groupPowerWAt } from '../data/sources/device-consumption';
 import { groupTarget } from '../charts/charts';
 import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
 import { valueAt } from '../data/unifiedStore';
@@ -418,6 +418,8 @@ export class SceneHudController
             0.5 + 1.5 * GROUP_ATTACH_STEP,   //g3 top-right (outer right)
             0.5 + 0.5 * GROUP_ATTACH_STEP,   //g4 bottom-right (inner right)
         ];
+        //Scrub-aware group value: at a past instant read each device's change series, else the live stat_rate sum.
+        const groupScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
         const groupChips = layout
             ? activeGroups(this.host.config, this.host._energyDefaults).map(g =>
             {
@@ -427,7 +429,7 @@ export class SceneHudController
                 const attachX = layout.home.x + (GROUP_ATTACH_FRAC[g - 1] - 0.5) * HOME_PILL_WIDTH_PX;
                 const attachY = layout.home.y + HOME_PILL_HALF_H_PX;
                 const leadPath = this._buildLPath(attachX, attachY, innerX, anchor.y, true);
-                const watts   = groupLivePowerW(this.host, g);
+                const watts   = groupScrubMs !== null ? groupPowerWAt(this.host, g, groupScrubMs) : groupLivePowerW(this.host, g);
                 const color   = monitoringGroupColor(this.host.config, g);
                 const icon    = monitoringGroupIcon(this.host.config, g) || 'mdi:home-lightning-bolt';
                 //Bead flows home -> chip (power leaving to the group's devices), cadence proportional to the live
@@ -784,7 +786,7 @@ export class SceneHudController
                     >
                         <ha-icon icon=${gc.icon}></ha-icon>
                         <span>${gc.watts === null ? '' : formatPvValue(this.host.hass, gc.watts, 'W', valueDec, powerU)}</span>
-                        <span class="group-badge">${gc.g}</span>
+                        <span class="group-badge group-badge-${['tl', 'bl', 'tr', 'br'][gc.g - 1]}">${gc.g}</span>
                     </div>
                 `) : nothing}
 
