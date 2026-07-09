@@ -24,15 +24,17 @@ import
     MIN_VALUE_DECIMALS,
     MAX_VALUE_DECIMALS,
     consumptionRingHidden,
-    consumptionRingOrder,
+    monitoringGroups,
+    monitoringGroupName,
+    monitoringGroupColorToken,
+    monitoringGroupIcon,
+    GROUP_COUNT,
 } from '../core/config/helios-config';
 import { deviceColorByIndex } from '../core/format/format';
 import { pickTranslations, type Translations } from '../core/i18n';
 import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type DeviceConsumption, type EnergyPrefsHost } from '../data/sources/energy-prefs';
 import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from '../data/sources/grid-guard';
 import { batteryLiveIsBucketSourced } from '../data/sources/battery';
-import './editor-custom-entity';
-import type { CustomEntityConfigValue } from './editor-custom-entity';
 
 
 // Visual editor exposing every config option through native HA form controls.
@@ -74,9 +76,29 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
+    //Removed-feature keys that may linger in an older YAML (the custom entity was replaced by monitoring groups);
+    //stripped on load so the saved config stays clean.
+    private static readonly LEGACY_KEYS = ['custom-power-entity', 'custom-energy-entity', 'custom-entity', 'custom-entity-icon', 'custom-entity-color'];
+
     public setConfig(config: HeliosConfig): void
     {
         this._cfg = { ...config };
+        //Drop any legacy custom-entity keys left over from before the monitoring-groups rework. Deferred so
+        //config-changed isn't dispatched inside the host's setConfig call stack.
+        if (HeliosCardEditor.LEGACY_KEYS.some(k => k in this._cfg))
+        {
+            setTimeout(() =>
+            {
+                const next = { ...this._cfg } as Record<string, unknown>;
+                let changed = false;
+                for (const k of HeliosCardEditor.LEGACY_KEYS) { if (k in next) { delete next[k]; changed = true; } }
+                if (changed)
+                {
+                    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+                    this._cfg = next as HeliosConfig;
+                }
+            }, 0);
+        }
         //Assign a hidden, per-card cache id the first time the card is configured. It keeps each card's saved view
         //isolated and is never shown or editable. Deferred so config-changed isn't dispatched inside the host's
         //setConfig call stack; guarded so it fires once.
@@ -181,7 +203,7 @@ export class HeliosCardEditor extends LitElement
         const devices = this._energyDefaults.devices;
         if (devices.length === 0) { return; }
         const valid = new Set(devices.map(d => d.statConsumption));
-        const keys: (keyof HeliosConfig)[] = ['consumption-ring-hidden', 'consumption-ring-order'];
+        const keys: (keyof HeliosConfig)[] = ['consumption-ring-hidden'];
         const next = { ...this._cfg } as Record<string, unknown>;
         let changed = false;
         for (const key of keys)
@@ -192,6 +214,22 @@ export class HeliosCardEditor extends LitElement
             if (kept.length === cur.length) { continue; }
             changed = true;
             if (kept.length) { next[key] = kept; } else { delete next[key]; }
+        }
+        //Groups are an object map (id -> 1..4), not an array: drop entries whose device is gone.
+        const groupsRaw = this._cfg['monitoring-groups'];
+        if (groupsRaw && typeof groupsRaw === 'object' && !Array.isArray(groupsRaw))
+        {
+            const kept: Record<string, number> = {};
+            let dropped = false;
+            for (const [k, v] of Object.entries(groupsRaw as Record<string, unknown>))
+            {
+                if (valid.has(k) && typeof v === 'number') { kept[k] = v; } else { dropped = true; }
+            }
+            if (dropped)
+            {
+                changed = true;
+                if (Object.keys(kept).length) { next['monitoring-groups'] = kept; } else { delete next['monitoring-groups']; }
+            }
         }
         if (!changed) { return; }
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
@@ -278,70 +316,6 @@ export class HeliosCardEditor extends LitElement
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
     }
-
-    //---- Custom entity (measured-only: both sensors required) -------------------------------------------
-    //Migration from the legacy single slot: while the new keys are empty, the old entity prefills the field
-    //matching its device class so the user only adds the missing half; the first edit persists the new keys
-    //and drops the legacy one.
-    private _legacyCustomId(): string
-    {
-        const raw = this._cfg?.['custom-entity'];
-        return typeof raw === 'string' ? raw.trim() : '';
-    }
-
-    private _legacyCustomIsPower(): boolean
-    {
-        const st = this.hass?.states?.[this._legacyCustomId()];
-        const dc = String(st?.attributes?.device_class ?? '');
-        const u  = String(st?.attributes?.unit_of_measurement ?? '').trim().toLowerCase();
-        return dc === 'power' || u === 'w' || u === 'kw' || u === 'mw';
-    }
-
-    private _customLegacyPending(): boolean
-    {
-        const c = this._cfg as Record<string, unknown> | undefined;
-        return this._legacyCustomId() !== ''
-            && !c?.['custom-power-entity']
-            && !c?.['custom-energy-entity'];
-    }
-
-    private _customConfigValue(): CustomEntityConfigValue
-    {
-        const c = (this._cfg ?? {}) as Record<string, unknown>;
-        let power  = typeof c['custom-power-entity']  === 'string' ? String(c['custom-power-entity'])  : '';
-        let energy = typeof c['custom-energy-entity'] === 'string' ? String(c['custom-energy-entity']) : '';
-        if (this._customLegacyPending())
-        {
-            if (this._legacyCustomIsPower()) { power = this._legacyCustomId(); }
-            else                             { energy = this._legacyCustomId(); }
-        }
-        return {
-            power,
-            energy,
-            color: typeof c['custom-entity-color'] === 'string' ? String(c['custom-entity-color']) : 'red',
-            icon:  typeof c['custom-entity-icon']  === 'string' ? String(c['custom-entity-icon'])  : '',
-        };
-    }
-
-    private _onCustomEntityChanged = (e: CustomEvent<{ value: CustomEntityConfigValue }>): void =>
-    {
-        e.stopPropagation();
-        const v    = e.detail.value;
-        const next = { ...this._cfg } as Record<string, unknown>;
-        //One write for the four keys; empties clear their key so the YAML stays minimal. The legacy single
-        //slot is dropped on the first edit (its value now lives in the matching new field).
-        const setOrClear = (key: string, val: string): void =>
-        {
-            if (val) { next[key] = val; } else { delete next[key]; }
-        };
-        setOrClear('custom-power-entity',  v.power);
-        setOrClear('custom-energy-entity', v.energy);
-        setOrClear('custom-entity-icon',   v.icon);
-        if (v.color && v.color !== 'red') { next['custom-entity-color'] = v.color; } else { delete next['custom-entity-color']; }
-        delete next['custom-entity'];
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
-    };
 
     // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits
     // as-is; anything else is ignored, leaving the previous value.
@@ -456,6 +430,20 @@ export class HeliosCardEditor extends LitElement
         const next = list.includes(stat) ? list.filter(v => v !== stat) : [...list, stat];
         this._update('consumption-ring-hidden', next.length ? next : undefined);
     };
+    //Cycle a device's monitoring group: No group -> 1 -> 2 -> ... -> GROUP_COUNT -> No group. Stored as an object
+    //map (id -> 1..GROUP_COUNT); No group drops the key, and an empty map drops the whole option.
+    private _onDeviceGroupClick = (e: Event): void =>
+    {
+        const stat = (e.currentTarget as HTMLElement).dataset.stat;
+        if (!stat) { return; }
+        const cur  = monitoringGroups(this._cfg);
+        const step = (cur.get(stat) ?? 0) + 1;
+        const val  = step > GROUP_COUNT ? 0 : step;
+        const map: Record<string, number> = {};
+        for (const [k, g] of cur) { if (k !== stat) { map[k] = g; } }
+        if (val >= 1) { map[stat] = val; }
+        this._update('monitoring-groups', Object.keys(map).length ? map : undefined);
+    };
 
     private _fmtNum(v: number, step: number): string
     {
@@ -530,6 +518,26 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${help}</div>`;
     }
 
+    //One box-select field (label + ha-selector + help). Same markup for every enumerated config key.
+    private _renderSelect(key: string, label: string, options: { value: string; label: string }[], dflt: string, help: string): TemplateResult
+    {
+        const c = this._cfg as Record<string, unknown>;
+        return html`
+                <div class="field field-block">
+                    <span class="label">${label}</span>
+                    ${this._pickerReady ? html`
+                        <ha-selector
+                            .hass=${this.hass}
+                            .selector=${{ select: { mode: 'box', options } }}
+                            .value=${String(c[key] ?? dflt)}
+                            data-key=${key}
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-selector>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${help}</div>`;
+    }
+
     //One range-slider field (label + range input + live value). Same markup for every numeric config key; the hint
     //stays at the call site since some are per-field and some are shared. `suffix` is appended to the live value.
     private _renderSlider(key: string, label: string, min: number, max: number, step: number, dflt: number, suffix = ''): TemplateResult
@@ -572,60 +580,136 @@ export class HeliosCardEditor extends LitElement
 
     //Devices in the display order the rings follow: the user's saved drag order first, anything not yet in it
     //appended alphabetically. Shared by the render and the drag handler so both agree on the sequence.
+    //Devices in dashboard order (their HA Energy index), tie-broken by name. No user reordering: the group system
+    //replaced the per-device ring order.
     private _orderedDevices(): DeviceConsumption[]
     {
-        const order = consumptionRingOrder(this._cfg);
-        const rank  = (id: string): number => { const i = order.indexOf(id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
         return [...this._energyDefaults.devices].sort((a, b) =>
-            rank(a.statConsumption) - rank(b.statConsumption)
+            a.index - b.index
             || this._deviceName(a).localeCompare(this._deviceName(b), undefined, { sensitivity: 'base' }));
     }
 
-    //Drag + drop reorder (HA's ha-sortable): move the dragged id and persist the full order so the rings follow it.
-    private _onDeviceMoved = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void =>
-    {
-        ev.stopPropagation();
-        const { oldIndex, newIndex } = ev.detail;
-        const ids = this._orderedDevices().map(d => d.statConsumption);
-        if (oldIndex < 0 || oldIndex >= ids.length || newIndex < 0 || newIndex >= ids.length) { return; }
-        ids.splice(newIndex, 0, ids.splice(oldIndex, 1)[0]);
-        this._update('consumption-ring-order', ids);
-    };
-
-    private _renderConsumptionRing(t: Translations): TemplateResult
+    private _renderDeviceList(t: Translations): TemplateResult
     {
         const devices = this._orderedDevices();
         const hidden  = consumptionRingHidden(this._cfg);
+        const groups  = monitoringGroups(this._cfg);
         return html`
-            <div class="hint">${t.editor.consumptionRingDevicesIntro ?? 'Devices tracked in your Energy dashboard. Drag to reorder the rings, and use the eye to show or hide a device in the ring.'}</div>
+            <div class="field-block-label">${t.editor.devicesSection ?? 'Devices & monitoring groups'}</div>
+            <div class="hint">${t.editor.devicesIntro ?? 'Devices tracked in your Energy dashboard. The eye shows or hides a device everywhere, and the group pill assigns it to one of the four monitoring groups (X = no group).'}</div>
             ${devices.length === 0
                 ? html`<div class="cring-empty">${t.editor.consumptionRingNoDevices ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
-                : html`<ha-sortable handle-selector=".cring-handle" @item-moved=${this._onDeviceMoved}>
-                    <div class="cring-list">
-                        ${devices.map(dev => this._renderDeviceRow(dev, hidden, t))}
-                    </div>
-                </ha-sortable>`}
+                : html`<div class="cring-list">
+                    ${devices.map(dev => this._renderDeviceRow(dev, hidden, groups, t))}
+                </div>`}
         `;
     }
 
-    private _renderDeviceRow(dev: DeviceConsumption, hidden: Set<string>, t: Translations): TemplateResult
+    //Editable per-group identity (name -> colour -> icon on one line) for the groups that currently hold at least
+    //one visible device. An empty value clears its key so the card falls back to the defaults (localised "Group N",
+    //--graph-color-N, a generic glyph).
+    private _renderGroupsSection(t: Translations): TemplateResult
+    {
+        //All groups are always configurable (name / colour / icon), even before any device is assigned, so the
+        //option is discoverable. A group only appears on the card once it holds at least one visible device.
+        const groups = Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1);
+        return html`
+            <div class="field-block-label">${t.editor.groupsSection ?? 'Monitoring group configuration'}</div>
+            <div class="hint">${t.editor.groupsIntro ?? 'A monitoring group bundles several devices so you can follow them together in every view. For each group set its name, its colour and its icon.'}</div>
+            ${groups.map(g => html`
+                <div class="cring-group-block">
+                    <div class="cring-group-line">
+                        <span class="cring-groupname-badge g${g}">${g}</span>
+                        <input
+                            class="cring-groupname-input"
+                            type="text"
+                            .value=${monitoringGroupName(this._cfg, g)}
+                            placeholder=${`${t.editor.group ?? 'Group'} ${g}`}
+                            data-group=${String(g)}
+                            @change=${this._onGroupNameChanged}
+                        />
+                    </div>
+                    ${this._pickerReady ? html`
+                        <div class="cring-group-line">
+                            <ha-selector
+                                class="cring-group-picker"
+                                .hass=${this.hass}
+                                .selector=${{ ui_color: {} }}
+                                .value=${monitoringGroupColorToken(this._cfg, g) || undefined}
+                                data-group=${String(g)}
+                                @value-changed=${this._onGroupColorChanged}
+                            ></ha-selector>
+                            <ha-selector
+                                class="cring-group-picker"
+                                .hass=${this.hass}
+                                .selector=${{ icon: {} }}
+                                .value=${monitoringGroupIcon(this._cfg, g) || undefined}
+                                data-group=${String(g)}
+                                @value-changed=${this._onGroupIconChanged}
+                            ></ha-selector>
+                        </div>
+                    ` : nothing}
+                </div>
+            `)}
+        `;
+    }
+
+    //Write one entry of a per-group object-map config key (empty value clears it; empty map drops the key).
+    private _updateGroupMap(key: keyof HeliosConfig, group: string, value: string): void
+    {
+        const cur = this._cfg[key];
+        const map: Record<string, string> = (cur && typeof cur === 'object' && !Array.isArray(cur))
+            ? { ...(cur as Record<string, string>) }
+            : {};
+        if (value) { map[group] = value; } else { delete map[group]; }
+        this._update(key, Object.keys(map).length ? map : undefined);
+    }
+
+    private _onGroupNameChanged = (e: Event): void =>
+    {
+        const el = e.currentTarget as HTMLInputElement;
+        if (el.dataset.group) { this._updateGroupMap('monitoring-group-names', el.dataset.group, el.value.trim()); }
+    };
+    private _onGroupColorChanged = (e: CustomEvent<{ value?: unknown }>): void =>
+    {
+        e.stopPropagation();
+        const g = (e.currentTarget as HTMLElement).dataset.group;
+        if (g) { this._updateGroupMap('monitoring-group-colors', g, typeof e.detail.value === 'string' ? e.detail.value : ''); }
+    };
+    private _onGroupIconChanged = (e: CustomEvent<{ value?: unknown }>): void =>
+    {
+        e.stopPropagation();
+        const g = (e.currentTarget as HTMLElement).dataset.group;
+        if (g) { this._updateGroupMap('monitoring-group-icons', g, typeof e.detail.value === 'string' ? e.detail.value : ''); }
+    };
+
+    private _renderDeviceRow(dev: DeviceConsumption, hidden: Set<string>, groups: Map<string, number>, t: Translations): TemplateResult
     {
         const stat  = dev.statConsumption;
         const name  = this._deviceName(dev);
         const color = deviceColorByIndex(this, dev.index);
         const shown = !hidden.has(stat);
+        const group = groups.get(stat) ?? 0;
         return html`
             <div class="cring-row ${shown ? '' : 'is-hidden'}">
-                <ha-icon class="cring-handle" icon="mdi:drag"></ha-icon>
-                <span class="cring-dot" style="background:${color}"></span>
-                <ha-icon class="cring-icon" icon=${this._deviceIcon(dev)}></ha-icon>
+                <ha-icon class="cring-icon" icon=${this._deviceIcon(dev)} style="color:${color}"></ha-icon>
                 <span class="cring-name">${name}</span>
+                <button
+                    type="button"
+                    class="cring-group ${group ? `active g${group}` : ''}"
+                    data-stat=${stat}
+                    aria-label=${t.editor.deviceGroupLabel ?? 'Monitoring group'}
+                    title=${group ? `${t.editor.group ?? 'Group'} ${group}` : (t.editor.noGroup ?? 'No group')}
+                    @click=${this._onDeviceGroupClick}
+                >
+                    ${group ? html`<span class="cring-group-num">${group}</span>` : html`<ha-icon icon="mdi:close"></ha-icon>`}
+                </button>
                 <button
                     type="button"
                     class="cring-toggle ${shown ? 'active' : ''}"
                     data-stat=${stat}
                     aria-pressed=${shown ? 'true' : 'false'}
-                    aria-label=${t.editor.consumptionRingRingLabel ?? 'Show in the ring'}
+                    aria-label=${t.editor.consumptionRingRingLabel ?? 'Show device'}
                     @click=${this._onDeviceToggleClick}
                 >
                     <ha-icon icon=${shown ? 'mdi:eye' : 'mdi:eye-off'}></ha-icon>
@@ -634,7 +718,6 @@ export class HeliosCardEditor extends LitElement
         `;
     }
 
-    //Custom-entity picker filter: any power (W/kW/MW) or energy (Wh/kWh/MWh) entity, by device_class or unit.
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -689,82 +772,17 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
-                ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode ?? 'No UI mode', t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.')}
+                ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
+                ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Freeze the camera: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set in the preview.')}
+                <div class="hint">${t.editor.cameraAngleHint ?? 'Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it.'}</div>
 
                 </details>
 
-                <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
-                ${this._renderSlider('display-update-frequency-per-hour', t.editor.displayUpdateFrequency, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, 1, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, ' / h')}
-                <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
-                ${this._renderSlider('value-decimals', t.editor.valueDecimals ?? 'Value decimals', MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}
-                <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.powerUnit ?? 'Power unit'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-selector
-                            .hass=${this.hass}
-                            .selector=${{ select: { mode: 'box', options: [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }] } }}
-                            .value=${String(c['power-unit'] ?? 'kW')}
-                            data-key="power-unit"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.powerUnitHelp ?? 'Unit for every power readout on the card. Energy always stays in kWh.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.irradianceUnit ?? 'Solar constant unit'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-selector
-                            .hass=${this.hass}
-                            .selector=${{ select: { mode: 'box', options: [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }] } }}
-                            .value=${String(c['irradiance-unit'] ?? 'W/m²')}
-                            data-key="irradiance-unit"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.irradianceUnitHelp ?? 'Unit for the solar constant (irradiance) readout.'}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.batterySign ?? 'Battery sign'}</span>
-                    ${this._pickerReady ? html`
-                        <ha-selector
-                            .hass=${this.hass}
-                            .selector=${{ select: { mode: 'box', options: [
-                                { value: 'default', label: t.editor.batterySignDefault ?? 'Default' },
-                                { value: 'inverted', label: t.editor.batterySignInverted ?? 'Inverted' },
-                                { value: 'hidden', label: t.editor.batterySignHidden ?? 'Hidden' },
-                            ] } }}
-                            .value=${String(c['battery-sign'] ?? 'default')}
-                            data-key="battery-sign"
-                            @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
-                    ` : nothing}
-                </div>
-                <div class="field-help">${t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.'}</div>
-                ${this._renderToggle('battery-soc-per-bank', t.editor.batterySocPerBank ?? 'Battery SoC per bank', t.editor.batterySocPerBankHint ?? 'With several battery sources wired, the live SoC chip lists every bank ("100 · 82 %", Energy dashboard order) instead of the average. Scrubbing keeps the average.')}
-                <div class="hint">${t.editor.customEntityIntro ?? 'Custom entity: displayed only when BOTH sensors below are set. The power sensor feeds the live chip and the curve, the energy sensor feeds the energy views. Nothing is estimated.'}</div>
-                ${this._customLegacyPending() ? html`
-                    <div class="hint reset-warning">${t.editor.customLegacyHint ?? 'Your previous custom entity was moved to its matching field below. Add the missing sensor to show the chip again.'}</div>
-                ` : nothing}
-                <div class="entity-block">
-                    <helios-custom-entity-config
-                        .hass=${this.hass}
-                        .pickerReady=${this._pickerReady}
-                        .value=${this._customConfigValue()}
-                        .labels=${{
-                            power:      t.editor.customPowerEntity ?? 'Power sensor (live)',
-                            powerHelp:  t.editor.customPowerEntityHelp ?? 'A real power sensor (W/kW). Feeds the live chip, the scrub and the curve.',
-                            energy:     t.editor.customEnergyEntity ?? 'Energy sensor (totals)',
-                            energyHelp: t.editor.customEnergyEntityHelp ?? 'A cumulative energy meter (Wh/kWh). Feeds the energy views.',
-                            icon:       t.editor.customEntityIcon,
-                            color:      t.editor.customEntityColor,
-                        }}
-                        @value-changed=${this._onCustomEntityChanged}
-                    ></helios-custom-entity-config>
-                </div>
-
+                <details class="advanced-section" data-section="entityConfig" ?open=${this._openSection === 'entityConfig'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:home-lightning-bolt-outline"></ha-icon>${t.editor.entityConfigSection ?? 'Entity configuration'}</summary>
+                ${this._renderDeviceList(t)}
+                ${this._renderGroupsSection(t)}
                 <div class="field field-block">
                     <span class="label">${t.editor.solarIrradianceEntity}</span>
                     ${this._pickerReady ? html`
@@ -782,9 +800,24 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${t.editor.solarIrradianceEntityHelp}</div>
                 </details>
 
-                <details class="advanced-section" data-section="consumptionRing" ?open=${this._openSection === 'consumptionRing'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:chart-donut"></ha-icon>${t.editor.consumptionRingSection ?? 'Consumption ring'}</summary>
-                ${this._renderConsumptionRing(t)}
+                <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
+                ${this._renderSlider('display-update-frequency-per-hour', t.editor.displayUpdateFrequency, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, 1, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, ' / h')}
+                <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
+                ${this._renderSlider('value-decimals', t.editor.valueDecimals ?? 'Value decimals', MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}
+                <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
+                ${this._renderSelect('power-unit', t.editor.powerUnit ?? 'Power unit',
+                    [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }], 'kW',
+                    t.editor.powerUnitHelp ?? 'Unit for every power readout on the card. Energy always stays in kWh.')}
+                ${this._renderSelect('irradiance-unit', t.editor.irradianceUnit ?? 'Solar constant unit',
+                    [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }], 'W/m²',
+                    t.editor.irradianceUnitHelp ?? 'Unit for the solar constant (irradiance) readout.')}
+                ${this._renderSelect('battery-sign', t.editor.batterySign ?? 'Battery sign', [
+                        { value: 'default',  label: t.editor.batterySignDefault ?? 'Default' },
+                        { value: 'inverted', label: t.editor.batterySignInverted ?? 'Inverted' },
+                        { value: 'hidden',   label: t.editor.batterySignHidden ?? 'Hidden' },
+                    ], 'default',
+                    t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.')}
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>

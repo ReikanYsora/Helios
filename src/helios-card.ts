@@ -10,7 +10,6 @@ import
     homeColor,
     cacheId,
 } from './core/config/helios-config';
-import { refreshCustomEntity } from './data/sources/custom-entity';
 import { refreshClockHourly, clockNeedsHourly, type ClockHourly } from './clock/clock-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './timeline/timeline-modes';
 import { DAY_MS, UI_AUTOHIDE_MS, CLOCK_GROW_MS } from './core/config/constants';
@@ -22,7 +21,7 @@ import {
     type ClockData, type DayRingHit,
     availableClockTargets, clockTargetMeta, clockTargetLabel,
 } from './clock/energy-clock';
-import { refreshDayRing, type DayRingData } from './clock/day-ring';
+import { refreshDayRing, type DayRingData } from './clock/consumption-ring';
 import { setServerTimeZone } from './core/time/timezone';
 import { isDarkFromCss, cssHex, uiColorVar } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
@@ -38,6 +37,7 @@ import
     chartAccentColor,
     solarBands,
     type ChartTarget,
+    GROUP_TARGETS,
     renderTimelineTicks,
     renderTimelineDayLabels,
     renderTimelineNightZones,
@@ -56,6 +56,7 @@ import
     onTimelinePointerUp
 } from './timeline/timeline';
 import { refreshGrid } from './data/sources/grid';
+import { refreshDeviceConsumption } from './data/sources/device-consumption';
 import { createGridGuard, type GridGuardState } from './data/sources/grid-guard';
 import {
     subscribeEnergyPrefs,
@@ -165,12 +166,12 @@ export class HeliosCard extends LitElement
         times:  Date[];
         values: number[];
     } | null = null;
-    //Custom ENERGY meter recorder `change` series over the window (kWh buckets), feeding the timeline 'custom'
-    //curve, clock ring and scrub, exactly like the pv/grid/battery meters. Null until the first fetch / when no
-    //entity is configured. _customEntityKey dedupes refetches.
-    @state() _customChangeSeries: ChangeBucket[] | null = null;
-    _customEntityKey = '';
-    _customEntityFetching = false;
+    //Raw per-bank SoC series (fetch order), driving the battery chart's per-bank lines. Empty on a single-bank
+    //install or before the first fetch.
+    @state() _batterySocPerBankHistory: {
+        times:  Date[];
+        values: number[];
+    }[] = [];
     //Decoupled hourly clock profile (hour-of-day averages), built only in clock mode on a sub-hourly store
     //(month/year). Null otherwise (buildClockData then reads the store). _clockHourlyKey dedupes refetches.
     @state() _clockHourly: ClockHourly | null = null;
@@ -183,6 +184,10 @@ export class HeliosCard extends LitElement
     @state() _batteryChargeChangeSeries:    ChangeBucket[] | null = null;
     @state() _batteryDischargeChangeSeries: ChangeBucket[] | null = null;
     _batteryChangeFetch = new KeyedFetch();
+    //Per-device recorder `change` series (statConsumption id -> buckets) for the grouped + visible devices, feeding
+    //the monitoring-group chips, rings and clock histogram. Empty until the first fetch / when no device is grouped.
+    @state() _deviceChangeSeries = new Map<string, ChangeBucket[]>();
+    _deviceChangeFetch = new KeyedFetch();
     //Irradiance entity history, populated when solar-irradiance-entity is configured. Recorder
     //samples over the timeline range, merged with the live state, pushed to the engine via
     //setSolarRadiationSamples. Plain field (no @state): render never reads it, the engine owns lookup.
@@ -209,12 +214,10 @@ export class HeliosCard extends LitElement
     //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
     //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
     @state() _chartTarget: ChartTarget = 'production';
-    //Detail panel (scene mode): double-tapping the active chip opens a compact top-right readout aggregating the
-    //selected metric over the window. Bound to the active chip, not a target, so switching chips while open just
-    //re-points it. Toggled by the second tap; the two fields debounce the double-tap on both mouse and touch.
+    //Detail panel (scene mode): a compact top-right readout aggregating the selected metric over the window. Opens
+    //on a single chip tap (alongside re-pointing the chart); re-tapping the active chip toggles it shut. Bound to
+    //the active chip, not a target, so switching chips while open just re-points it.
     @state() _infoPanelOpen = false;
-    private _lastChipTapMs = 0;
-    private _lastChipTapTarget = '';
     //Top-left mode selector: 'scene' is the 3D view; 'clock' fades every layer but the basemap and paints the
     //hourly cylinder ring. Scene is the default.
     @state() _viewMode: 'scene' | 'clock' | 'day' = 'scene';
@@ -413,35 +416,22 @@ export class HeliosCard extends LitElement
         }
     };
 
-    //Chip click delegate: the clicked element carries its metric in data-target.
+    //Chip click delegate: the clicked element carries its metric in data-target. A single tap points the chart at
+    //the chip AND opens its detail panel (no double-tap); re-tapping the already-active chip toggles the panel shut.
     onChartTargetClick = (e: Event): void =>
     {
         const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
         if (!target) { return; }
-        //First tap always (re)points the chart. A second tap on the SAME chip within the window toggles the
-        //detail panel; the reset afterwards stops a third rapid tap from immediately re-toggling.
-        const now = Date.now();
-        const isDouble = target === this._lastChipTapTarget && now - this._lastChipTapMs < 350;
-        //Read BEFORE re-pointing: a single tap that lands on a different chip closes any open panel, so the panel
-        //only ever opens on an explicit double-tap and never rides along when the user just switches metric.
         const switching = target !== this._chartTarget;
         this.setChartTarget(target);
-        if (isDouble)
+        //A new chip re-points and opens the panel on it; tapping the active chip again just toggles the panel.
+        this._infoPanelOpen = switching ? true : !this._infoPanelOpen;
+        //Opening the panel on a coarse (month/year) window needs the clock's hourly profile, which the scene does
+        //not otherwise fetch: kick it now so the totals match the clock instead of showing empty.
+        if (this._infoPanelOpen)
         {
-            this._infoPanelOpen = !this._infoPanelOpen;
-            this._lastChipTapMs = 0;
-            this._lastChipTapTarget = '';
-            //Opening the panel on a coarse (month/year) window needs the clock's hourly profile, which the scene
-            //does not otherwise fetch: kick it now so the totals match the clock instead of showing empty.
             void refreshClockHourly(this);
-            return;
         }
-        if (switching)
-        {
-            this._infoPanelOpen = false;
-        }
-        this._lastChipTapMs = now;
-        this._lastChipTapTarget = target;
     };
 
     //Last target the home prism was painted for, so updated() can tell a chip CHANGE (play the squash/grow)
@@ -578,6 +568,8 @@ export class HeliosCard extends LitElement
         this._batteryChargeChangeSeries   = null;
         this._batteryDischargeChangeSeries = null;
         this._batteryChangeFetch.reset();
+        this._deviceChangeSeries          = new Map();
+        this._deviceChangeFetch.reset();
         this._irradianceHistory           = null;
         this._irradianceFetchKey          = '';
         //Drop the derived clock + unified store so the next paint rebuilds them from the refetched series rather
@@ -844,9 +836,8 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_unifiedStore')
                 || _changedProperties.has('_chartSeries')
                 || _changedProperties.has('_batterySocHistory')
-                || _changedProperties.has('_customChangeSeries')
                 || _changedProperties.has('_clockHourly')
-                //An editor save (custom-entity colour, decimals...) changes config-derived clock visuals: rebuild
+                //An editor save (decimals...) changes config-derived clock visuals: rebuild
                 //so the cylinders + home pick up the new colour instead of keeping the cached one.
                 || _changedProperties.has('config');
             if (inputsChanged)
@@ -1030,9 +1021,9 @@ export class HeliosCard extends LitElement
         refreshBattery(this);
         refreshGrid(this);
         refreshIrradiance(this);
-        //Custom entity: hourly history for the timeline curve + clock ring (fire-and-forget; keyed so an
-        //unchanged window is a no-op).
-        void refreshCustomEntity(this);
+        //Per-device consumption series for the monitoring groups (fire-and-forget; keyed so an unchanged id-set +
+        //window is a no-op; clears itself when no device is grouped).
+        refreshDeviceConsumption(this);
         //Decoupled hourly clock profile: only does work in clock mode on a long (month/year) window; clears
         //itself otherwise. Keyed so an unchanged window is a no-op.
         void refreshClockHourly(this);
@@ -1107,7 +1098,7 @@ export class HeliosCard extends LitElement
         const hasHomeCoords = getHomeCoords(this.config, this.hass) !== null;
 
 
-        //Scene HUD: the home-anchored energy chip cluster (PV / battery / grid / custom / home consumption),
+        //Scene HUD: the home-anchored energy chip cluster (PV / battery / grid / home consumption),
         //their animated leaders, the solar arc depth passes and the sun disc/ray geometry. It resolves its own
         //chip/leader/sun model from the card's scrub/live + layout + sun @state and returns the HUD fragment,
         //also exposing the two directional leader colours (read back for the detail-panel accent below).
@@ -1139,7 +1130,6 @@ export class HeliosCard extends LitElement
             this.preview      ? 'helios-edit'    : '',
             this._viewMode === 'clock' ? 'mode-clock' : '',
             this._viewMode === 'day' ? 'mode-day' : '',
-            infoOpen          ? 'info-open'      : '',
         ].filter(Boolean).join(' ');
         const cardStyle = infoOpen ? `--detail-accent:${activeChipColor}` : '';
 
@@ -1191,7 +1181,7 @@ export class HeliosCard extends LitElement
                                 @pointerleave=${this._onChartHoverLeave}
                             >
                                 ${keyed(`${this._chartTarget}|${this._timelineMode}`, renderBottomChart(this))}
-                                ${(this._timelineMode === 'standard' || this._timelineMode === 'today' || this._timelineMode === 'week')
+                                ${(this._timelineMode === 'standard' || this._timelineMode === 'today' || this._timelineMode === 'yesterday' || this._timelineMode === 'week')
                                     ? renderTimelineNightZones(this) : nothing}
                                 ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
@@ -1252,25 +1242,6 @@ export class HeliosCard extends LitElement
                     `;
                 })() : nothing}
 
-                <!--  Camera-lock chip: SCENE mode only, top-right. Pins the pose (drag-rotate/pitch + idle orbit
-                      off) and persists it to localStorage. The lock has no effect on the clock (always free to
-                      rotate) or day (always top-down) views, so it isn't shown there.  -->
-                ${hasHomeCoords && this._viewMode === 'scene' ? (() => {
-                    const locked = this._isCameraLocked();
-                    return html`
-                        <div class="overlay-top-right">
-                            <button
-                                type="button"
-                                class="overlay-btn ${locked ? 'is-on' : ''}"
-                                aria-pressed=${locked ? 'true' : 'false'}
-                                aria-label="Lock camera"
-                                @click=${this._onCameraLockToggle}
-                            >
-                                <ha-icon icon=${locked ? 'mdi:lock' : 'mdi:lock-open-variant'}></ha-icon>
-                            </button>
-                        </div>
-                    `;
-                })() : nothing}
 
                 <!--  Right-hand metric rail (clock mode): one button per configured metric, stacked with no
                       gaps. Multi-select FILTERS: each active metric adds a concentric ring; the active ones
@@ -1304,8 +1275,8 @@ export class HeliosCard extends LitElement
 
                 ${hud}
 
-                <!--  Per-chip detail panel: double-tapping the active chip aggregates its metric over the window
-                      in a compact top-right readout (icons only, values in the card's unit). Scene mode only.  -->
+                <!--  Per-chip detail panel: tapping a chip aggregates its metric over the window in a compact
+                      top-right readout (icons only, values in the card's unit). Scene mode only.  -->
                 ${infoOpen && hasHomeCoords ? renderDetailPanel(this) : nothing}
 
                 <!--  Day mode: selecting a ring opens the same top-right panel with that ring's name + day total
@@ -1466,7 +1437,7 @@ export class HeliosCard extends LitElement
                 {
                     this._viewMode = parsed.viewMode;
                 }
-                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'custom'];
+                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', ...GROUP_TARGETS];
                 if (typeof parsed.chartTarget === 'string' && valid.includes(parsed.chartTarget as ChartTarget))
                 {
                     this._chartTarget = parsed.chartTarget as ChartTarget;
@@ -1531,18 +1502,6 @@ export class HeliosCard extends LitElement
     //Thin bridge to the ClockController's paint entry point, kept so init.ts's per-frame `host.paintClock?.()`
     //callback reaches the extracted dial subsystem.
     public paintClock(): void { this._clock.paintClock(); }
-
-    //Lock-button click: flip the engine's lock state. The engine persists bearing, pitch and lock flag to
-    //localStorage (HA's lovelace doesn't persist config-changed from a live card), so the next reload restores.
-    private _onCameraLockToggle = (): void =>
-    {
-        if (!this._engine)
-        {
-            return;
-        }
-        this._engine.setCameraLocked(!this._engine.isCameraLocked());
-        this.requestUpdate();
-    };
 
     static styles = [heliosCardStyles, heliosTimelineStyles, heliosCardEnergyClockCss];
 }

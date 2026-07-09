@@ -2,11 +2,10 @@
 //modules read off, plus re-exports of the render + sampling concerns living in sibling modules. Charts only read;
 //state mutations live elsewhere.
 
-import { type HeliosConfig, customEntityId } from '../core/config/helios-config';
+import { type HeliosConfig, monitoringGroupName } from '../core/config/helios-config';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import type { UnifiedDataStore } from '../data/unifiedStore';
 import type { ChangeBucket } from '../data/sources/energy-stats';
-import { resolveCustomEntityLive } from '../data/sources/custom-entity';
 
 
 //Engine-resampled weather series, pushed to the card on every refresh.
@@ -20,10 +19,19 @@ export interface ChartSeries
     cloudHigh:    number[];
 }
 
+//Monitoring-group chart targets (one per group 1..4): the chart draws one curve per device of the group.
+export const GROUP_TARGETS = ['group-1', 'group-2', 'group-3', 'group-4'] as const;
+export type GroupTarget = typeof GROUP_TARGETS[number];
+
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (default) adds
 //the dashed forecast + per-source breakdown; 'grid'/'battery' draw two-direction flows (accent = dominant side);
-//'irradiance' draws W/m² on a fixed 0..1000 scale.
-export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'custom';
+//'irradiance' draws W/m² on a fixed 0..1000 scale; 'group-N' draws the group's per-device consumption curves.
+export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | GroupTarget;
+
+//Group target helpers: build a target from a group number, test one, and read its group number (0 when not a group).
+export function groupTarget(n: number): GroupTarget { return `group-${n}` as GroupTarget; }
+export function isGroupTarget(t: ChartTarget | undefined): t is GroupTarget { return typeof t === 'string' && t.startsWith('group-'); }
+export function groupOfTarget(t: ChartTarget | undefined): number { return isGroupTarget(t) ? Number(t.slice(6)) : 0; }
 
 //Friendly name of the first configured entity in a stat list (the HA Energy dashboard's own name), for a tooltip
 //row. Empty when none is configured.
@@ -50,24 +58,24 @@ export function gridExportName(host: ChartHost):      string { return host._ener
 export function batteryChargeName(host: ChartHost):   string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyTos); }
 export function batteryDischargeName(host: ChartHost): string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyFroms); }
 
-//Metric name for a tooltip row / rail title. en + fr; other locales fall back to en. Custom takes the entity's own
-//name. Every tooltip name comes from here or from statFriendly.
-const TARGET_LABELS_EN: Record<ChartTarget, string> = {
+//Metric name for a tooltip row / rail title. en + fr; other locales fall back to en. Group targets take their
+//editable name (or "Group N"); everything else comes from here or from statFriendly.
+const TARGET_LABELS_EN: Record<Exclude<ChartTarget, GroupTarget>, string> = {
     production: 'Production', consumption: 'Consumption', grid: 'Grid', battery: 'Battery',
-    'battery-soc': 'Battery charge', irradiance: 'Irradiance', custom: 'Custom',
+    'battery-soc': 'Battery charge', irradiance: 'Irradiance',
 };
-const TARGET_LABELS_FR: Record<ChartTarget, string> = {
+const TARGET_LABELS_FR: Record<Exclude<ChartTarget, GroupTarget>, string> = {
     production: 'Production', consumption: 'Consommation', grid: 'Réseau', battery: 'Batterie',
-    'battery-soc': 'Charge batterie', irradiance: 'Irradiance', custom: 'Personnalisé',
+    'battery-soc': 'Charge batterie', irradiance: 'Irradiance',
 };
 export function clockTargetLabel(host: ChartHost, target: ChartTarget): string
 {
-    if (target === 'custom')
-    {
-        const live = resolveCustomEntityLive(host.hass, customEntityId(host.config));
-        return live?.name || customEntityId(host.config) || 'Custom';
-    }
     const lang = String(host.hass?.language ?? '').toLowerCase();
+    if (isGroupTarget(target))
+    {
+        const n = groupOfTarget(target);
+        return monitoringGroupName(host.config, n) || `${lang.startsWith('fr') ? 'Groupe' : 'Group'} ${n}`;
+    }
     return (lang.startsWith('fr') ? TARGET_LABELS_FR : TARGET_LABELS_EN)[target];
 }
 
@@ -99,8 +107,11 @@ export interface ChartHost
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
     readonly _batterySocHistory: { times: Date[]; values: number[] } | null;
-    //Custom ENERGY meter recorder `change` series (kWh buckets) for the 'custom' target curve. Null when unconfigured.
-    readonly _customChangeSeries?: ChangeBucket[] | null;
+    //Raw per-bank SoC series (fetch order) for the battery chart's per-bank lines. Empty on a single-bank install.
+    readonly _batterySocPerBankHistory: { times: Date[]; values: number[] }[];
+    //Per-device recorder `change` series (statConsumption id -> buckets) for the grouped + visible devices, feeding
+    //the monitoring-group chart curves. Empty when no device is grouped.
+    readonly _deviceChangeSeries: Map<string, ChangeBucket[]>;
     //Active bottom-chart target. Drives which series renderBottomChart draws; defaults to 'production'.
     readonly _chartTarget?: ChartTarget;
 }

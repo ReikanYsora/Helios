@@ -8,7 +8,7 @@ import { clusterScaleRamp, steppedArcScale } from './hud-layout';
 import { sunSpherePoint, daylightRamp } from './sun-arc';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
-    SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG, PV_CHIP_OFFSET_PX,
+    SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
     SUN_COLOR_HEX, BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS} from '../core/config/constants';
 import
@@ -1427,13 +1427,15 @@ export class HeliosEngine
     //the projected home point (chip-leader anchor / disc centre). Null when the map isn't ready (card skips
     //the overlay that frame).
     public projectHomeLabelLayout(): {
-        pvLabel:           { x: number; y: number };
-        batterySocLabel:   { x: number; y: number };
-        batteryPowerLabel: { x: number; y: number };
-        gridLabel:         { x: number; y: number };
-        //Custom-entity chip anchor: top-left, above the grid chip (mirrors battery-power on the right).
-        customLabel:       { x: number; y: number };
-        home:              { x: number; y: number };
+        pvLabel:      { x: number; y: number };
+        //Single fused battery chip anchor (top of the right column, where battery-power used to sit).
+        batteryLabel: { x: number; y: number };
+        //Grid chip anchor: top-left, mirroring the battery chip on the right.
+        gridLabel:    { x: number; y: number };
+        //Monitoring-group chip anchors, fixed by group number: [g1 top-left, g2 bottom-left, g3 top-right,
+        //g4 bottom-right], in the bottom row below the home. Empty groups just leave their slot unused.
+        groupLabels:  { x: number; y: number }[];
+        home:         { x: number; y: number };
     } | null
     {
         if (!this._renderer)
@@ -1465,27 +1467,34 @@ export class HeliosEngine
         const CLUSTER_LIFT_PX = 28 * liftScale;
         const clusterY = home.y - CLUSTER_LIFT_PX;
         const pvX = home.x;
-        const pvY = clusterY - PV_CHIP_OFFSET_PX * liftScale;
-        //Battery column on the RIGHT: SoC on top, Power on the bottom.
+        //PV sits at exactly twice the home->battery vertical gap (battery is at CHIP_STACK_GAP_PX / 2 above the
+        //home hub), so the PV->battery and battery->home leaders span proportional heights and their 90-degree
+        //fillets open at the same angle.
+        const pvY = clusterY - CHIP_STACK_GAP_PX;
+        //Right column: the single fused battery chip sits on top (where battery-power used to), pairing with PV
+        //overhead and owning the lead to the home. The old SoC slot below is now free.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
-        //Power chip on top (pairs with PV overhead, owns the lead to the home); SoC below, its leader docks
-        //on the Power chip, not the home.
-        const batteryPowerY     = clusterY - CHIP_STACK_GAP_PX / 2;
-        const batterySocY       = clusterY + CHIP_STACK_GAP_PX / 2;
-        //Left column: the grid chip sits low (bottom-left), mirroring the battery SoC chip on the right; the
-        //custom-entity chip sits above it (top-left), mirroring the battery Power chip.
-        const gridXLeft         = home.x - CHIP_SIDE_X_OFFSET_PX;
-        const gridY             = clusterY + CHIP_STACK_GAP_PX / 2;
-        const customXLeft       = home.x - CHIP_SIDE_X_OFFSET_PX;
-        const customY           = clusterY - CHIP_STACK_GAP_PX / 2;
+        const batteryY          = clusterY - CHIP_STACK_GAP_PX / 2;
+        //Left column: the grid chip sits on TOP, mirroring the battery chip on the right.
+        const leftX             = home.x - CHIP_SIDE_X_OFFSET_PX;
+        const gridY             = clusterY - CHIP_STACK_GAP_PX / 2;
+        //Monitoring-group chips in the bottom row, two per side, fixed by group number. Row 1 sits the SAME
+        //distance below the home hub as grid/battery sit above it (CHIP_STACK_GAP_PX / 2), and row 2 is another
+        //half-gap below row 1. Same left/right columns as grid/battery.
+        const groupRow1Y        = clusterY + CHIP_STACK_GAP_PX / 2;
+        const groupRow2Y        = clusterY + CHIP_STACK_GAP_PX;
 
         return {
-            pvLabel:           { x: pvX,            y: pvY          },
-            batterySocLabel:   { x: batteryXRight,  y: batterySocY  },
-            batteryPowerLabel: { x: batteryXRight,  y: batteryPowerY},
-            gridLabel:         { x: gridXLeft,      y: gridY        },
-            customLabel:       { x: customXLeft,    y: customY      },
-            home:              { x: home.x,         y: clusterY     },
+            pvLabel:      { x: pvX,           y: pvY      },
+            batteryLabel: { x: batteryXRight, y: batteryY },
+            gridLabel:    { x: leftX,         y: gridY    },
+            groupLabels:  [
+                { x: leftX,         y: groupRow1Y },  //group 1: top-left
+                { x: leftX,         y: groupRow2Y },  //group 2: bottom-left
+                { x: batteryXRight, y: groupRow1Y },  //group 3: top-right
+                { x: batteryXRight, y: groupRow2Y },  //group 4: bottom-right
+            ],
+            home:         { x: home.x,        y: clusterY },
         };
     }
 
@@ -1958,6 +1967,19 @@ export class HeliosEngine
         if (nowPermitsRotation && !prevPermitsRotation && this._renderer)
         {
             this._startAutoRotateLoop();
+        }
+
+        //Camera lock is an editor toggle now (no runtime chip). When it flips, freeze/free the camera AT ITS
+        //CURRENT pose: rewrite the stored pose (which _initial*/isCameraLocked read first) with the live
+        //bearing/pitch + the new lock, so the angle the user set by dragging the preview is kept.
+        if (prevCameraLocked !== nextCameraLocked && this._renderer)
+        {
+            this._writeStoredPose({
+                bearing: this._renderer.getCameraBearing(),
+                pitch:   this._renderer.getCameraPitch(),
+                locked:  nextCameraLocked,
+            });
+            this._renderer.scheduleRedraw();
         }
 
         if (!this._renderer)

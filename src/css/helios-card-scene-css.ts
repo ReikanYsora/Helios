@@ -1,6 +1,6 @@
 import { css, unsafeCSS } from 'lit';
 import { GROUND_FADE_START } from '../scene/tiles';
-import { CUSTOM_ENTITY_COLOR } from '../core/config/constants';
+import { HOME_GROW_MS } from '../core/config/constants';
 
 //Visual styles for HeliosCard, grouped by feature (layout, overlays, solar arc, home cluster).
 export const heliosCardStyles = css`
@@ -165,7 +165,7 @@ export const heliosCardStyles = css`
     .pv-pct-label,
     .battery-pct-label,
     .grid-label,
-    .custom-label,
+    .group-label,
     .solar-pct-label,
     .home-pill
     {
@@ -305,7 +305,7 @@ export const heliosCardStyles = css`
     .pv-pct-label ha-icon,
     .battery-pct-label ha-icon,
     .grid-label ha-icon,
-    .custom-label ha-icon,
+    .group-label ha-icon,
     .solar-pct-label ha-icon
     {
         --mdc-icon-size: 16px;
@@ -319,38 +319,48 @@ export const heliosCardStyles = css`
     .pv-pct-label[role="button"],
     .battery-pct-label[role="button"],
     .grid-label[role="button"],
-    .custom-label[role="button"],
+    .group-label[role="button"],
     .solar-pct-label[role="button"]
     {
         pointer-events: auto;
         cursor: pointer;
     }
-    /*  Active target: a soft halo in the chip's own metric colour so the chip-to-chart coupling reads
-        at a glance. */
-    .pv-pct-label.is-chart-active
+    /*  Active-target glow. It lives on a ::after pseudo so it can FADE via opacity: box-shadow doesn't
+        transition reliably between transparent and color-mix on WebKit, but opacity always does. --chip-glow
+        carries each chip's metric colour; the pseudo holds the blurred halo, opacity 0 at rest, 1 while active. */
+    .pv-pct-label      { --chip-glow: var(--pv-leader-color, var(--energy-solar-color, #ff9800)); }
+    .battery-pct-label { --chip-glow: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac)); }
+    .grid-label        { --chip-glow: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2)); }
+    .group-label       { --chip-glow: var(--group-color, var(--primary-color, #03a9f4)); }
+    .solar-pct-label   { --chip-glow: var(--amber-color, #ffc107); }
+    .home-pill         { --chip-glow: var(--helios-consumption-color, #4caf50); }
+
+    .pv-pct-label::after,
+    .battery-pct-label::after,
+    .grid-label::after,
+    .group-label::after,
+    .solar-pct-label::after,
+    .home-pill::after
     {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--pv-leader-color, var(--energy-solar-color, #ff9800)) 70%, transparent);
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: 0 0 12px 1px color-mix(in srgb, var(--chip-glow, transparent) 90%, transparent);
+        opacity: 0;
+        /*  Fade synced to the home prism's grow animation (HOME_GROW_MS) so the chip's glow and the house
+            settle together on a selection. */
+        transition: opacity ${unsafeCSS(HOME_GROW_MS)}ms ease;
     }
-    .battery-pct-label.is-chart-active
+    .pv-pct-label.is-chart-active::after,
+    .battery-pct-label.is-chart-active::after,
+    .grid-label.is-chart-active::after,
+    .group-label.is-chart-active::after,
+    .solar-pct-label.is-chart-active::after,
+    .home-pill.is-chart-active::after
     {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac)) 70%, transparent);
-    }
-    .grid-label.is-chart-active
-    {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2)) 70%, transparent);
-    }
-    .custom-label.is-chart-active
-    {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--custom-leader-color, ${unsafeCSS(CUSTOM_ENTITY_COLOR)}) 70%, transparent);
-    }
-    .solar-pct-label.is-chart-active
-    {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--amber-color, #ffc107) 70%, transparent);
+        opacity: 1;
     }
 
     /*  ============================================================
@@ -412,34 +422,20 @@ export const heliosCardStyles = css`
         flex: 1 1 auto;
         text-align: right;
     }
-
-    /*  "i" badge on the chip whose panel is open: a small circle in the selection colour, top-right of the
-        active chip. One rule covers every chip type via its shared .is-chart-active marker. */
-    .info-open .pv-pct-label.is-chart-active::after,
-    .info-open .battery-pct-label.is-chart-active::after,
-    .info-open .grid-label.is-chart-active::after,
-    .info-open .custom-label.is-chart-active::after,
-    .info-open .solar-pct-label.is-chart-active::after,
-    .info-open .home-pill.is-chart-active::after
+    /*  Per-device group rows: a left-aligned name (ellipsised) then the right-aligned total. */
+    .detail-panel .dp-row-device .dp-label
     {
-        content: "i";
-        position: absolute;
-        top: -6px;
-        right: -6px;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: var(--detail-accent, var(--primary-color, #03a9f4));
-        color: var(--text-on-primary-color, #ffffff);
-        /*  Flex-centre the glyph: line-height centring left the thin "i" visually off in the disc. */
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
-        font-weight: 700;
-        font-style: normal;
-        line-height: 1;
-        pointer-events: none;
+        flex: 1 1 auto;
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 160px;
+    }
+    .detail-panel .dp-row-device .dp-value
+    {
+        flex: 0 0 auto;
+        text-align: right;
+        margin-left: 10px;
     }
 
     /*  Predicted PV chip when scrubbing into the future: the value is modelled, not measured, so the
@@ -470,22 +466,40 @@ export const heliosCardStyles = css`
         color:        var(--primary-text-color, #212121);
         border-color: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
     }
-    /*  Custom-entity chip, same pill recipe; red border + leader from --custom-leader-color. Icon-only
-        (override / entity / generic glyph carries the identity). */
-    .custom-label
+    /*  Monitoring-group chip, same pill recipe; border in the group's colour. A small numbered disc sits
+        top-right (like the old info badge) carrying the group id. */
+    .group-label
     {
         z-index: 8;
         justify-content: center;
         pointer-events: none;
         color:        var(--primary-text-color, #212121);
-        border-color: var(--custom-leader-color, ${unsafeCSS(CUSTOM_ENTITY_COLOR)});
+        border-color: var(--group-color, var(--primary-color, #03a9f4));
     }
-    /*  Full-size overlay SVGs for the home-cluster leaders (grid, custom, PV to home, battery); each hosts
+    .group-badge
+    {
+        position: absolute;
+        top: -7px;
+        right: -7px;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--group-color, var(--primary-color, #03a9f4));
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        pointer-events: none;
+    }
+    /*  Full-size overlay SVGs for the home-cluster leaders (grid, PV to home, battery, groups); each hosts
         its own coloured path(s) below. */
     .grid-leader-svg,
-    .custom-leader-svg,
     .pv-home-leader-svg,
-    .battery-leader-svg
+    .battery-leader-svg,
+    .group-leader-svg
     {
         position: absolute;
         inset: 0;
@@ -494,10 +508,16 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 5;
     }
-    /*  Grid/custom leader; stroke + bead fill from the inline colour, so one path serves both import
+    /*  Group leader: a thin static line from the home pill down to the group chip, in the group's colour. */
+    .group-leader-line
+    {
+        stroke-width: 1;
+        stroke-linecap: round;
+        fill: none;
+    }
+    /*  Grid leader; stroke + bead fill from the inline colour, so one path serves both import
         (blue) and export (purple). */
-    .grid-leader-line,
-    .custom-leader-line
+    .grid-leader-line
     {
         stroke-width: 1;
         stroke-linecap: round;
@@ -516,9 +536,10 @@ export const heliosCardStyles = css`
     }
 
     /*  Moving bead riding a leader at a speed proportional to live flow, like HA's energy-distribution
-        card. Shared by the PV to home, battery and sun to PV ray beads. */
+        card. Shared by the PV to home, battery, monitoring-group and sun to PV ray beads. */
     .pv-home-leader-bead,
     .battery-leader-bead,
+    .group-leader-bead,
     .solar-svg .solar-ray-bead
     {
         opacity: 0.95;
@@ -572,17 +593,12 @@ export const heliosCardStyles = css`
         /*  Keep the mask fade and ease the hover glow in/out. */
         transition: opacity 0.35s ease, box-shadow 0.2s ease;
     }
-    /*  Light glow on home hover; the hover state is driven from the hitbox by the card. */
+    /*  Light glow on home hover; the hover state is driven from the hitbox by the card. Active consumption target
+        uses the shared ::after glow like every other chip (fades via opacity). */
     .home-pill.is-hovered
     {
         box-shadow: var(--helios-shadow-chip),
                     0 0 7px 1px color-mix(in srgb, var(--helios-consumption-color, #4caf50) 28%, transparent);
-    }
-    /*  Active consumption target: same retarget glow the other chips use, in the consumption green. */
-    .home-pill.is-chart-active
-    {
-        box-shadow: var(--helios-shadow-chip),
-                    0 0 12px color-mix(in srgb, var(--helios-consumption-color, #4caf50) 70%, transparent);
     }
     .home-pill ha-icon
     {

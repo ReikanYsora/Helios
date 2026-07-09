@@ -1,14 +1,15 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, batterySocPerBank, customEntityId, customEntityColor } from '../core/config/helios-config';
-import { resolveCustomEntityLive, resolveCustomEntityIcon, customChipWatts } from '../data/sources/custom-entity';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, resolveUiColor, parseNumericState } from '../core/format/format';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, monitoringGroupColor, monitoringGroupIcon } from '../core/config/helios-config';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
 import { buildArcSegments, flowDuration, type LabelLayout } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
 import { formatGridValue } from '../data/sources/grid';
+import { activeGroups, groupLivePowerW } from '../data/sources/device-consumption';
+import { groupTarget } from '../charts/charts';
 import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
 import { valueAt } from '../data/unifiedStore';
 import { getHomeCoords } from '../card/init';
@@ -280,34 +281,11 @@ export class SceneHudController
             && hasAnyBankPower
             && activeBatteryPower !== null;
 
-        //Battery SoC chip text: the aggregated mean by default. With `battery-soc-per-bank` and several
-        //wired banks, the live chip lists every bank instead ("100 · 82 %", Energy-dashboard source order)
-        //so a multi-bank install reads per-bank at a glance. Scrub keeps the mean (SoC history is stored
-        //aggregated), and any unreadable bank falls back to the mean (a partial list would misassign banks).
-        let batterySocText = '';
-        if (showSocChip)
-        {
-            batterySocText = `${Math.round(activeBatterySoc!)} %`;
-            const perBankIds = this.host._energyDefaults.batteryStatSocs;
-            if (batterySocPerBank(this.host.config) && !batteryScrubbing && perBankIds.length > 1)
-            {
-                const perBank: string[] = [];
-                for (const id of perBankIds)
-                {
-                    const so = this.host.hass.states?.[id];
-                    const v  = so ? parseNumericState(so.state) : null;
-                    if (v === null)
-                    {
-                        break;
-                    }
-                    perBank.push(`${Math.round(Math.max(0, Math.min(100, v)))}`);
-                }
-                if (perBank.length === perBankIds.length)
-                {
-                    batterySocText = `${perBank.join(' · ')} %`;
-                }
-            }
-        }
+        //Fused battery chip: one chip carries both readings. The SoC drives the fill icon (built below, once the
+        //charge direction is known) and, on a SoC-only install, doubles as the chip value; the mean SoC text is
+        //the fallback value. The per-bank SoC breakdown lives in the battery chart, not the chip.
+        const showBatteryChip = showSocChip || showPowerChip;
+        const batterySocText = showSocChip ? `${Math.round(activeBatterySoc!)} %` : '';
         //Chip uses the HA energy dashboard sign convention (discharge positive, charge negative).
         //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
         //coherent with the dashboard. Colour + leader direction below keep the physical sign.
@@ -378,31 +356,34 @@ export class SceneHudController
         //draws over the chip body.
         const PV_HALF_WIDTH_PX  = 28;
 
-        //Battery chip stack: Power (kW) on top, State-of-charge (%) below, sharing the same x.
-        const BATTERY_HALF_HEIGHT_PX = 14;
-        const socChipX   = layout?.batterySocLabel.x   ?? 0;
-        const socChipY   = layout?.batterySocLabel.y   ?? 0;
-        const powerChipX = layout?.batteryPowerLabel.x ?? 0;
-        const powerChipY = layout?.batteryPowerLabel.y ?? 0;
-        //SoC -> Power chip: same battery, so the SoC leader docks on the Power chip, not the home. Straight
-        //vertical hairline between their facing edges (SoC below Power). No flow, it's a level.
-        //SoC -> Power hairline: only when BOTH battery chips show, else it would point at an empty slot. Both
-        //endpoints sit on a chip, so a hidden SoC chip must drop it (showPowerChip alone is not enough).
-        const socLeaderPath = (layout && showSocChip && showPowerChip)
-            ? `M ${socChipX.toFixed(1)},${(socChipY - BATTERY_HALF_HEIGHT_PX).toFixed(1)} L ${powerChipX.toFixed(1)},${(powerChipY + BATTERY_HALF_HEIGHT_PX).toFixed(1)}`
+        //Single fused battery chip anchor.
+        const batteryChipX = layout?.batteryLabel.x ?? 0;
+        const batteryChipY = layout?.batteryLabel.y ?? 0;
+        //Fill icon driven by the SoC (charging variant while charging); a power-only install has no level, so
+        //batteryLevelIcon falls back to a neutral battery. The chip value is the power, or the SoC percentage
+        //on a SoC-only install.
+        const batteryChipIcon = batteryLevelIcon(showSocChip ? activeBatterySoc : null, batteryCharging);
+        const batteryChipText = showPowerChip ? batteryPowerText : batterySocText;
+        //Leader anchoring on the battery chip. The home connector is always present; the PV charge lead only
+        //while charging. When BOTH show they'd merge at the centre, so split them vertically: PV charge at 35%
+        //of the chip height (above centre), home connector at 65% (below centre). When the home connector is
+        //alone it sits back at the centre (50%). +/-15% of the full height off centre.
+        const BATTERY_CHIP_HALF_HEIGHT_PX = 14;
+        const batteryTwoLeads    = !!(layout && batteryCharging && showPvLabel);
+        const batteryPvArriveY   = batteryChipY - BATTERY_CHIP_HALF_HEIGHT_PX * 0.30;
+        const batteryHomeAnchorY = batteryTwoLeads
+            ? batteryChipY + BATTERY_CHIP_HALF_HEIGHT_PX * 0.30
+            : batteryChipY;
+        //Battery -> home: the discharge flow (rounded L + bead) while discharging, else a static connector so
+        //the chip is always tied to the home hub like every other chip.
+        const dischargeLeaderPath = (layout && showBatteryChip && batteryDischarging)
+            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY, 22)
             : '';
-        //SoC -> home: the battery->home discharge flow (rounded L + bead), only while discharging. It leaves the
-        //SoC chip, so a hidden SoC chip drops it too however the power reads (no lead may outlive its chip).
-        const dischargeLeaderPath = (layout && showSocChip && batteryDischarging)
-            ? this._buildLPathToHome(layout, socChipX, socChipY, 22)
+        const batteryHomeLeaderPath = (layout && showBatteryChip && !batteryDischarging)
+            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY, 22)
             : '';
-        //SoC-only installs (no Power chip): a static connector docks the lone SoC chip to the home hub like
-        //every other chip, instead of leaving it floating. Skipped while discharging (that leader docks it).
-        const socHomeLeaderPath = (layout && showSocChip && !showPowerChip && !batteryDischarging)
-            ? this._buildLPathToHome(layout, socChipX, socChipY, 22)
-            : '';
-        //PV -> Power chip, only while charging: an inverted L dropping from the PV chip then right into the
-        //Power chip's left edge, PV-coloured bead toward the battery. Removed the instant it discharges.
+        //PV -> battery chip, only while charging: an inverted L dropping from the PV chip then right into the
+        //battery chip's left edge, PV-coloured bead toward the battery. Removed the instant it discharges.
         //Its drop starts halfway between the PV->home leg (chip centre) and the chip's right edge so the two
         //leaders leaving the PV chip don't overlap at their root.
         const PV_TO_BATTERY_NUDGE_X = 30;
@@ -410,12 +391,52 @@ export class SceneHudController
             ? this._buildLPath(
                 layout.pvLabel.x + PV_HALF_WIDTH_PX / 2,
                 layout.pvLabel.y + PV_HALF_HEIGHT_PX,
-                powerChipX - PV_TO_BATTERY_NUDGE_X,
-                powerChipY,
+                batteryChipX - PV_TO_BATTERY_NUDGE_X,
+                batteryPvArriveY,
                 true
             )
             : '';
         const gridLeaderPath       = this._buildLPathToHome(layout, layout?.gridLabel.x ?? 0, layout?.gridLabel.y ?? 0, 22);
+
+        //Monitoring-group chips: one per active group (>= 1 visible device), at its fixed anchor. Live value = the
+        //sum of the group's device stat_rate; colour = the group's graph colour; a number badge carries the group
+        //id. Each lead leaves its chip's inner edge at 50 % height and docks on the home pill's bottom edge at
+        //20/40/60/80 % of its width (fixed per group so the four leads fan out without crossing).
+        const HOME_PILL_WIDTH_PX  = 96;
+        const HOME_PILL_HALF_H_PX = 14;
+        const GROUP_CHIP_HALF_W   = 48;
+        //Bead cadence: fastest at ~5 kW, dropped below ~5 W (recorder noise), like the grid/battery beads.
+        const GROUP_BEAD_CAP_W    = 5000;
+        const GROUP_BEAD_IDLE_W   = 5;
+        //Home-pill attach fraction per group (g1..g4), evenly spaced and symmetric around the centre (0.5) with a
+        //single step, so the four leads stay harmonious. The right side is mirrored vs the left (top-right takes the
+        //outer point, bottom-right the inner) so both pairs fan out the same way.
+        const GROUP_ATTACH_STEP   = 0.12;
+        const GROUP_ATTACH_FRAC   = [
+            0.5 - 1.5 * GROUP_ATTACH_STEP,   //g1 top-left  (outer left)
+            0.5 - 0.5 * GROUP_ATTACH_STEP,   //g2 bottom-left (inner left)
+            0.5 + 1.5 * GROUP_ATTACH_STEP,   //g3 top-right (outer right)
+            0.5 + 0.5 * GROUP_ATTACH_STEP,   //g4 bottom-right (inner right)
+        ];
+        const groupChips = layout
+            ? activeGroups(this.host.config, this.host._energyDefaults).map(g =>
+            {
+                const anchor  = layout.groupLabels[g - 1];
+                const isLeft  = g <= 2;
+                const innerX  = isLeft ? anchor.x + GROUP_CHIP_HALF_W : anchor.x - GROUP_CHIP_HALF_W;
+                const attachX = layout.home.x + (GROUP_ATTACH_FRAC[g - 1] - 0.5) * HOME_PILL_WIDTH_PX;
+                const attachY = layout.home.y + HOME_PILL_HALF_H_PX;
+                const leadPath = this._buildLPath(attachX, attachY, innerX, anchor.y, true);
+                const watts   = groupLivePowerW(this.host, g);
+                const color   = monitoringGroupColor(this.host.config, g);
+                const icon    = monitoringGroupIcon(this.host.config, g) || 'mdi:home-lightning-bolt';
+                //Bead flows home -> chip (power leaving to the group's devices), cadence proportional to the live
+                //draw; dropped below the idle floor so a group at rest shows a static leader with no motion.
+                const magW    = watts === null ? 0 : Math.abs(watts);
+                const beadDur = magW < GROUP_BEAD_IDLE_W ? null : flowDuration(magW, GROUP_BEAD_CAP_W);
+                return { g, anchor, leadPath, watts, color, icon, beadDur };
+            })
+            : [];
 
         //Grid bead cadence: frequency (= 1/dur) is proportional to live power so bead speed tracks the chip
         //value linearly, via dur = MIN_DUR * CAP / watts (MIN_DUR at cap, 2x at half, 4x at a quarter),
@@ -454,29 +475,6 @@ export class SceneHudController
         //Bead cadence from the active side; null (no bead) when it's below the idle threshold, so an idle
         //grid shows the chip + a static leader with no misleading motion.
         const gridBeadDur      = gridImporting ? gridImportBeadDur : gridExportBeadDur;
-
-        //Custom user-picked entity chip: red pill top-left (above grid) with a leader to the home and a
-        //sign-driven bead. Positive value flows home -> chip (reversed traversal), negative flows chip ->
-        //home (default). Cadence scales with the value's magnitude; below the idle floor the bead is dropped.
-        const customLive        = resolveCustomEntityLive(this.host.hass, customEntityId(this.host.config));
-        const customIcon        = resolveCustomEntityIcon(this.host.hass, this.host.config);
-        const customLeaderColor = resolveUiColor(customEntityColor(this.host.config), '#f44336');
-        const customLeaderPath  = this._buildLPathToHome(layout, layout?.customLabel.x ?? 0, layout?.customLabel.y ?? 0, 22);
-        //Value at the active instant (scrub target in the past, else live now), in WATTS: the power sensor's
-        //state live, the energy meter's average watts for that bucket in scrub.
-        const customScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
-        const customW       = customChipWatts(this.host.hass, customEntityId(this.host.config), this.host._customChangeSeries, customScrubMs);
-        const customDisplay = customW === null ? '' : formatPvValue(this.host.hass, customW, 'W', valueDec, powerU);
-        const CUSTOM_BEAD_CAP_W     = 5000;
-        const CUSTOM_BEAD_MIN_DUR_S = 1.2;
-        const CUSTOM_BEAD_MAX_DUR_S = 8.0;
-        const CUSTOM_BEAD_IDLE_W    = 5;
-        const customMagW   = customW === null ? 0 : Math.abs(customW);
-        const customBeadDur = (customW === null || customMagW < CUSTOM_BEAD_IDLE_W)
-            ? null
-            : Math.min(CUSTOM_BEAD_MAX_DUR_S, Math.max(CUSTOM_BEAD_MIN_DUR_S,
-                CUSTOM_BEAD_MIN_DUR_S * CUSTOM_BEAD_CAP_W / Math.max(customMagW, 1)));
-        const customPositive = customW === null ? true : customW >= 0;
 
         //Solar-arc overlay: sun trajectory, current position and incidence ray to the home, all
         //pre-projected to screen space via projectSunScene(). Hidden until the engine is ready.
@@ -658,26 +656,18 @@ export class SceneHudController
                     </div>
                 ` : nothing}
 
-                ${(showSocChip || showPowerChip) ? html`
+                ${showBatteryChip ? html`
                     <svg class="battery-leader-svg">
-                        <!--  SoC -> Power chip: solid vertical hairline between the two stacked chips. No
-                              animation, SoC is a level, not a flow.  -->
-                        ${socLeaderPath ? svg`
+                        <!--  Battery -> home static connector: keeps the chip tied to the home hub whenever it
+                              is not actively discharging (the discharge flow below docks it then).  -->
+                        ${batteryHomeLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${socLeaderPath}"
+                                d="${batteryHomeLeaderPath}"
                             ></path>
                         ` : nothing}
-                        <!--  SoC -> home static connector when the SoC chip is the only battery chip. -->
-                        ${socHomeLeaderPath ? svg`
-                            <path
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${socHomeLeaderPath}"
-                            ></path>
-                        ` : nothing}
-                        <!--  SoC -> home discharge flow: solid rounded-L + bead toward the home, drawn only
+                        <!--  Battery -> home discharge flow: solid rounded-L + bead toward the home, drawn only
                               while the battery is discharging to feed the house.  -->
                         ${dischargeLeaderPath ? svg`
                             <path
@@ -699,7 +689,7 @@ export class SceneHudController
                                 </circle>
                             ` : nothing}
                         ` : nothing}
-                        <!--  PV -> Power chip, only while charging: an inverted L (down then right) in the PV
+                        <!--  PV -> battery chip, only while charging: an inverted L (down then right) in the PV
                               colour, bead flowing toward the battery so the user sees PV feeding it.  -->
                         ${pvToBatteryPath ? svg`
                             <path
@@ -723,65 +713,16 @@ export class SceneHudController
                             ` : nothing}
                         ` : nothing}
                     </svg>
-                    ${showSocChip ? html`
-                        <div
-                            class="battery-pct-label ${this.host._chartTarget === 'battery-soc' ? 'is-chart-active' : ''}"
-                            style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
-                            role="button"
-                            tabindex="0"
-                            data-target="battery-soc"
-                            @click=${this.host.onChartTargetClick}
-                        >
-                            <ha-icon icon="mdi:battery"></ha-icon>
-                            <span>${batterySocText}</span>
-                        </div>
-                    ` : nothing}
-                    ${showPowerChip ? html`
-                        <div
-                            class="battery-pct-label ${this.host._chartTarget === 'battery' ? 'is-chart-active' : ''}"
-                            style="left:${layout!.batteryPowerLabel.x}px; top:${layout!.batteryPowerLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
-                            role="button"
-                            tabindex="0"
-                            data-target="battery"
-                            @click=${this.host.onChartTargetClick}
-                        >
-                            <ha-icon icon="mdi:lightning-bolt"></ha-icon>
-                            <span>${batteryPowerText}</span>
-                        </div>
-                    ` : nothing}
-                ` : nothing}
-
-                <!--  Custom-entity chip (top-left, above grid). Red leader to the home; bead flows home ->
-                      chip on a positive value, chip -> home on a negative one. Shown only when the entity is
-                      configured AND has a value at the active instant; scrubbing into a gap with no history at all
-                      (null, before the entity existed) drops the chip + leader. A measured 0 is a real value and
-                      keeps the chip, so the custom entity stays visible while scrubbing even when it reads zero.  -->
-                ${hasHomeCoords && layout !== null && customLive !== null && customW !== null ? html`
-                    <svg class="custom-leader-svg">
-                        <path class="custom-leader-line" style="stroke:${customLeaderColor}" d=${customLeaderPath} />
-                        ${customBeadDur !== null ? (customPositive ? svg`
-                            <circle class="custom-leader-bead" r="3" style="fill:${customLeaderColor}">
-                                <animateMotion dur="${customBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               keyPoints="1;0" keyTimes="0;1" path="${customLeaderPath}" />
-                            </circle>
-                        ` : svg`
-                            <circle class="custom-leader-bead" r="3" style="fill:${customLeaderColor}">
-                                <animateMotion dur="${customBeadDur.toFixed(2)}s" repeatCount="indefinite"
-                                               path="${customLeaderPath}" />
-                            </circle>
-                        `) : nothing}
-                    </svg>
                     <div
-                        class="custom-label ${this.host._chartTarget === 'custom' ? 'is-chart-active' : ''}"
-                        style="left:${layout!.customLabel.x}px; top:${layout!.customLabel.y}px; --custom-leader-color:${customLeaderColor}"
-                        aria-label=${customLive!.name}
+                        class="battery-pct-label ${this.host._chartTarget === 'battery' ? 'is-chart-active' : ''}"
+                        style="left:${batteryChipX}px; top:${batteryChipY}px; --battery-leader-color:${batteryLeaderColor}"
                         role="button"
                         tabindex="0"
-                        data-target="custom"
+                        data-target="battery"
                         @click=${this.host.onChartTargetClick}
                     >
-                        <ha-icon icon=${customIcon}></ha-icon>
-                        <span>${customDisplay}</span>
+                        <ha-icon icon=${batteryChipIcon}></ha-icon>
+                        <span>${batteryChipText}</span>
                     </div>
                 ` : nothing}
 
@@ -821,6 +762,31 @@ export class SceneHudController
                         <span>${formatGridValue(this.host.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
                     </div>
                 ` : nothing}
+
+                <!--  Monitoring-group chips (bottom row, fixed by group number). Each shows the group's live total
+                      with a number badge; clicking one points the chart at that group's per-device curves.  -->
+                ${hasHomeCoords && layout !== null ? groupChips.map(gc => html`
+                    <svg class="group-leader-svg">
+                        <path class="group-leader-line" style="stroke:${gc.color}" d=${gc.leadPath} />
+                        ${gc.beadDur !== null ? svg`
+                            <circle class="group-leader-bead" r="3" style="fill:${gc.color}">
+                                <animateMotion dur="${gc.beadDur.toFixed(2)}s" repeatCount="indefinite" path="${gc.leadPath}" />
+                            </circle>
+                        ` : nothing}
+                    </svg>
+                    <div
+                        class="group-label ${this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''}"
+                        style="left:${gc.anchor.x}px; top:${gc.anchor.y}px; --group-color:${gc.color}"
+                        role="button"
+                        tabindex="0"
+                        data-target=${groupTarget(gc.g)}
+                        @click=${this.host.onChartTargetClick}
+                    >
+                        <ha-icon icon=${gc.icon}></ha-icon>
+                        <span>${gc.watts === null ? '' : formatPvValue(this.host.hass, gc.watts, 'W', valueDec, powerU)}</span>
+                        <span class="group-badge">${gc.g}</span>
+                    </div>
+                `) : nothing}
 
                 <!--  Solar arc, FAR-FRONT pass: above-horizon segments with nearness below the 0.5 midpoint
                       (arched away from the eye but still ahead of the sky dome's back wall). These render

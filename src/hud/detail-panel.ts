@@ -1,14 +1,15 @@
-//Per-chip detail panel (scene mode): double-tapping a chip opens a compact, vertical readout top-right that
+//Per-chip detail panel (scene mode): tapping a chip opens a compact, vertical readout top-right that
 //aggregates the active metric over the selected window. Every energy figure is computed with the SAME method the
 //energy clock uses for its period total (buildClockData -> clockLayerPeriod / clockPeriodTotal), so the panel and
 //the clock/dashboard always agree, on every period (day .. year), not just the rolling store window.
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { formatEnergyKwh, formatIrradiance } from '../core/format/format';
+import { formatEnergyKwh, formatIrradiance, deviceColorByIndex } from '../core/format/format';
 import { powerUnit, valueDecimals, irradianceUnit } from '../core/config/helios-config';
 import { buildClockData, clockLayerPeriod, clockPeriodTotal, hourlyOf, type ClockHost, type ClockData } from '../clock/energy-clock';
-import type { ChartTarget } from '../charts/charts';
+import { type ChartTarget, isGroupTarget, groupOfTarget } from '../charts/charts';
+import { groupDevices, deviceName, deviceIcon, deviceWindowKwh } from '../data/sources/device-consumption';
 import type { SunScene } from './hud';
 import { DAY_MS } from '../core/config/constants';
 
@@ -22,6 +23,9 @@ interface DetailMetric
 {
     icon:  string;
     value: string;
+    //Per-device rows (group targets) carry a colour dot + the device name; other rows leave these unset.
+    color?: string;
+    label?: string;
 }
 
 //Number of whole days the window spans, for the per-day averages. At least 1 so a same-day window never divides
@@ -141,6 +145,20 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         return rows;
     }
 
+    //Monitoring group: one row per visible device of the group, its total consumption over the window (same
+    //magnitude the chart curves + the ring show), with the device's dashboard colour + name.
+    if (isGroupTarget(target))
+    {
+        const el   = host as unknown as Element;
+        const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
+        return devs.map(dev => ({
+            icon:  deviceIcon(host.hass, dev),
+            color: deviceColorByIndex(el, dev.index),
+            label: deviceName(host.hass, dev),
+            value: energy(deviceWindowKwh(host._deviceChangeSeries.get(dev.statConsumption), startMs, endMs)),
+        }));
+    }
+
     const data = buildClockData(host, target);
 
     if (target === 'battery-soc')
@@ -206,9 +224,10 @@ export function renderDetailPanel(host: DetailHost): TemplateResult | typeof not
     return html`
         <div class="detail-panel">
             ${metrics.map(m => html`
-                <div class="dp-row">
-                    <ha-icon icon=${m.icon}></ha-icon>
-                    <span>${m.value}</span>
+                <div class="dp-row ${m.label ? 'dp-row-device' : ''}">
+                    <ha-icon icon=${m.icon} style=${m.color ? `color:${m.color}` : ''}></ha-icon>
+                    ${m.label ? html`<span class="dp-label">${m.label}</span>` : nothing}
+                    <span class="dp-value">${m.value}</span>
                 </div>
             `)}
         </div>

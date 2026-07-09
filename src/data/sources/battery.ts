@@ -16,7 +16,7 @@ import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constant
 
 //Module-level history cache, survives Lit unmount+remount (navigate away and back) like the PV cache. 15-min TTL covers
 //nav-around-the-dashboard without serving stale data forever, and in-flight de-dup collapses concurrent mounts to one WS hit.
-const _batteryCache = new RequestCache<BatteryHistory | null>(BATTERY_CACHE_TTL_MS);
+const _batteryCache = new RequestCache<BatterySocFetch | null>(BATTERY_CACHE_TTL_MS);
 
 
 //Wipe the module-level cache. Called from the card's `resetDataCache()` so the editor's "reset" drops the cross-mount memo.
@@ -31,6 +31,16 @@ export interface BatteryHistory
 {
     times:  Date[];
     values: number[];
+}
+
+
+//Result of a SoC history fetch: the aggregated mean (drives the chip scrub, tooltip and clock) plus the raw
+//per-bank series in fetch order, kept so the battery chart can draw one SoC line per bank scaled onto the power
+//axis. Empty perBank on a single-bank install or a failed/durable-restored fetch.
+export interface BatterySocFetch
+{
+    merged:  BatteryHistory;
+    perBank: BatteryHistory[];
 }
 
 
@@ -75,6 +85,9 @@ export interface BatteryHost
     _batteryPower:        number | null;
     _batteryPowerUnit:    string;
     _batterySocHistory:   BatteryHistory | null;
+    //Raw per-bank SoC series (fetch order), for the battery chart's per-bank lines. Empty on a single-bank
+    //install or before the first fetch.
+    _batterySocPerBankHistory: BatteryHistory[];
     _batteryFetchKey:     string;
     _batteryFetching:     boolean;
     //Recorder `change` series for charge (`stat_energy_to`) and discharge (`stat_energy_from`) meters, 5-min buckets. SEPARATE
@@ -115,6 +128,10 @@ export function refreshBattery(host: BatteryHost): void
         if (host._batterySocHistory    !== null)
         {
             host._batterySocHistory   = null;
+        }
+        if (host._batterySocPerBankHistory.length > 0)
+        {
+            host._batterySocPerBankHistory = [];
         }
         host._batteryFetchKey = '';
         return;
@@ -217,7 +234,10 @@ export function refreshBattery(host: BatteryHost): void
     const durableKey = `bsoc:${host._storeFetchPeriod}|${sortedSoc.join(',')}`;
     host._batteryFetching = true;
     void _batteryCache.get(fetchKey, () => fetchBatterySoc(host.hass, sortedSoc, ltsStart, rawStart, host._timeRange!.end, host._storeFetchPeriod, durableKey))
-        .then(soc => { host._batterySocHistory = soc ?? { times: [], values: [] }; })
+        .then(res => {
+            host._batterySocHistory        = res?.merged  ?? { times: [], values: [] };
+            host._batterySocPerBankHistory = res?.perBank ?? [];
+        })
         .finally(() => { host._batteryFetching = false; });
 }
 
@@ -418,7 +438,7 @@ export async function fetchBatterySoc(
     end:        Date,
     period:     StatPeriod,
     durableKey: string,
-): Promise<BatteryHistory | null>
+): Promise<BatterySocFetch | null>
 {
     if (!hass?.callWS)
     {
@@ -435,7 +455,7 @@ export async function fetchBatterySoc(
         const fetchEnd = end > now ? now : end;
         if (ltsStart >= fetchEnd && rawStart >= fetchEnd)
         {
-            return { times: [], values: [] };
+            return { merged: { times: [], values: [] }, perBank: [] };
         }
 
         const perEntity: Record<string, BatteryHistory> = {};
@@ -482,19 +502,19 @@ export async function fetchBatterySoc(
             }
         }
 
+        //Per-bank series in fetch order, for the chart's per-bank SoC lines. Single-bank collapses to one entry.
+        const perBank = ids.map(id => perEntity[id] ?? { times: [], values: [] });
         //Multi-bank LKCF aggregation: SoC averages across banks, single-bank collapses to the per-entity series unchanged.
-        const socSeries = aggregateBatterySocLkcf(
-            ids.map(id => perEntity[id] ?? { times: [], values: [] }),
-        );
-        //Persist the last-good series so a failed fetch on the next load restores it instead of blanking.
+        const socSeries = aggregateBatterySocLkcf(perBank);
+        //Persist the last-good mean series so a failed fetch on the next load restores it instead of blanking.
         saveDurableSeries(durableKey, socSeries);
-        return socSeries;
+        return { merged: socSeries, perBank };
     }
     catch (_e)
     {
-        //Fetch timed out or failed (LTS unavailable, entity untracked, HA restart): restore the last-good durable series
-        //so the curve survives, rather than blanking to empty.
-        return loadDurableSeries(durableKey, DAY_MS);
+        //Fetch timed out or failed (LTS unavailable, entity untracked, HA restart): restore the last-good durable mean
+        //series so the curve survives, rather than blanking to empty. Per-bank lines drop until the next good fetch.
+        return { merged: loadDurableSeries(durableKey, DAY_MS) ?? { times: [], values: [] }, perBank: [] };
     }
 }
 

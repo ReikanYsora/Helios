@@ -34,11 +34,13 @@ export interface SunScene
 export interface LabelLayout
 {
     pvLabel:           { x: number; y: number };
-    batterySocLabel:   { x: number; y: number };
-    batteryPowerLabel: { x: number; y: number };
+    //Single fused battery chip anchor (SoC drives the fill icon, the value is the power). Sits where the
+    //battery-power chip used to, top of the right column; the freed slot below opens the bottom row.
+    batteryLabel:      { x: number; y: number };
+    //Grid chip anchor: top-left, mirroring the battery chip on the right.
     gridLabel:         { x: number; y: number };
-    //Custom-entity chip anchor (top-left, above the grid chip).
-    customLabel:       { x: number; y: number };
+    //Monitoring-group chip anchors, fixed by group number ([g1, g2, g3, g4]).
+    groupLabels:       { x: number; y: number }[];
     home:              { x: number; y: number };
 }
 
@@ -103,12 +105,12 @@ function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
     {
         return false;
     }
-    return pointEq(a.pvLabel,           b.pvLabel)
-        && pointEq(a.batterySocLabel,   b.batterySocLabel)
-        && pointEq(a.batteryPowerLabel, b.batteryPowerLabel)
-        && pointEq(a.gridLabel,         b.gridLabel)
-        && pointEq(a.customLabel,       b.customLabel)
-        && pointEq(a.home,              b.home);
+    return pointEq(a.pvLabel,      b.pvLabel)
+        && pointEq(a.batteryLabel, b.batteryLabel)
+        && pointEq(a.gridLabel,    b.gridLabel)
+        && a.groupLabels.length === b.groupLabels.length
+        && a.groupLabels.every((p, i) => pointEq(p, b.groupLabels[i]))
+        && pointEq(a.home,         b.home);
 }
 
 function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean

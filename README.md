@@ -189,7 +189,6 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips, dial). Energy follows it, so `kW` pairs with `kWh` and `W` with `Wh`. |
 | `irradiance-unit` | `W/m²` \| `kW/m²` | `W/m²` | Unit for the solar-constant (irradiance) readout above the sun. |
 | `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
-| `battery-soc-per-bank` | boolean | `false` | With several battery sources wired, the live SoC chip lists every bank ("100 · 82 %", Energy-dashboard source order) instead of the mean. Scrubbing keeps the mean (SoC history is stored aggregated). |
 
 The rolling window itself is chosen live from the timeline's period selector (**Standard**, **Today**, **Week**, **Month**, **Year**) and remembered per card; it needs no YAML key.
 

@@ -3,12 +3,12 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, lerpHexToward, cssHex, uiColorVar } from '../core/format/format';
-import { customEntityColor } from '../core/config/helios-config';
+import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex } from '../core/format/format';
+import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
-import { sumChangeForDay } from '../data/sources/energy-stats';
-import type { ChartHost, ChartTarget } from './charts';
+import { sumChangeForDay, changeSeriesToWatts } from '../data/sources/energy-stats';
+import { type ChartHost, type ChartTarget, isGroupTarget, groupOfTarget } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -38,7 +38,7 @@ export function chartAccentColor(host: ChartHost): string
     if (target === 'consumption'){ return ENERGY_COLOR.consumption(el); }
     if (target === 'irradiance') { return ENERGY_COLOR.sun(el); }
     if (target === 'battery-soc'){ return ENERGY_COLOR.batteryOut(el); }
-    if (target === 'custom')     { return cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336'); }
+    if (isGroupTarget(target)) { return groupColorHex(el, host.config, groupOfTarget(target)); }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
@@ -111,7 +111,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     };
     const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
 
-    interface Line { pts: { t: number; v: number }[]; color: string }
+    //`lineOnly` series draw a stroke with no area fill (the per-bank SoC overlays on the battery chart); `dashed`
+    //marks them as levels rather than flows.
+    interface Line { pts: { t: number; v: number }[]; color: string; lineOnly?: boolean; dashed?: boolean }
     let series: Line[];
     let fixedMax = 0;
     if (target === 'consumption')
@@ -153,6 +155,62 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             { pts: charge,    color: ENERGY_COLOR.batteryIn(el) },
             { pts: discharge, color: ENERGY_COLOR.batteryOut(el) },
         ];
+        //Per-bank SoC overlays the flows: one dashed line-only curve per bank, its 0..100 % scaled onto the power
+        //peak (100 % = peak) so both share one axis and a sagging bank reads against the charge/discharge areas.
+        //Uses the raw per-bank series, falling back to the aggregated mean when only one bank is wired. A SoC-only
+        //install (no power) keeps a plain 0..100 % axis. Banks aren't told apart by colour; each SoC line instead
+        //takes the battery FLOW colour (HA charge/discharge) at each instant, so a line runs pink while its pack
+        //is charging and teal while discharging, tying the level back to the beams above it.
+        let powerMax = 0;
+        for (const s of series) { for (const p of s.pts) { if (p.v > powerMax) { powerMax = p.v; } } }
+        const banks = host._batterySocPerBankHistory.length > 0
+            ? host._batterySocPerBankHistory
+            : (host._batterySocHistory ? [host._batterySocHistory] : []);
+        if (banks.length > 0)
+        {
+            const socScale = powerMax > 0 ? powerMax / 100 : 1;
+            const socChargeCol    = ENERGY_COLOR.batteryIn(el);
+            const socDischargeCol = ENERGY_COLOR.batteryOut(el);
+            const socIdleCol      = cssHex(el, '--secondary-text-color', '#9e9e9e');
+            //Flow colour at a segment: the net battery power (charge-positive) at the segment's midpoint bucket.
+            //+/-5 W deadband so recorder noise doesn't flicker the colour on an idle pack.
+            const flowColorAt = (aMs: number, bMs: number): string =>
+            {
+                const idx = Math.floor(((aMs + bMs) / 2 - store.storeStartMs) / store.stepMs);
+                const p   = (idx >= 0 && idx < store.battery.length) ? store.battery[idx] : null;
+                if (p === null || Math.abs(p) < 5) { return socIdleCol; }
+                return p > 0 ? socChargeCol : socDischargeCol;
+            };
+            for (const bank of banks)
+            {
+                const pts: { t: number; v: number }[] = [];
+                for (let i = 0; i < bank.times.length; i++)
+                {
+                    const tMs = bank.times[i].getTime();
+                    if (tMs < startMs || tMs > endMsAbs) { continue; }
+                    const soc = bank.values[i];
+                    if (soc === undefined || !isFinite(soc)) { continue; }
+                    pts.push({ t: tMs, v: Math.max(0, Math.min(100, soc)) * socScale });
+                }
+                //Split the bank line into runs of same flow colour so a single line carries several colours along
+                //its charge/discharge portions. Adjacent runs share their boundary vertex, keeping the line gapless.
+                if (pts.length < 2) { continue; }
+                const segCount = pts.length - 1;
+                const segCols: string[] = [];
+                for (let i = 0; i < segCount; i++) { segCols.push(flowColorAt(pts[i].t, pts[i + 1].t)); }
+                let runStart = 0;
+                for (let i = 1; i <= segCount; i++)
+                {
+                    if (i === segCount || segCols[i] !== segCols[runStart])
+                    {
+                        //Run covers segments [runStart, i-1], i.e. points [runStart, i].
+                        series.push({ pts: pts.slice(runStart, i + 1), color: segCols[runStart], lineOnly: true, dashed: true });
+                        runStart = i;
+                    }
+                }
+            }
+            fixedMax = powerMax > 0 ? powerMax : 100;
+        }
     }
     else if (target === 'battery-soc')
     {
@@ -174,26 +232,19 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         series   = [{ pts, color: ENERGY_COLOR.batteryOut(el) }];
         fixedMax = 100;
     }
-    else if (target === 'custom')
+    else if (isGroupTarget(target))
     {
-        //Custom energy meter over the window, from its recorder `change` series: each bucket's kWh converted to
-        //average watts (kWh * 3600000 / bucket-ms), like the production curve. One curve in the configured custom
-        //colour, magnitude only so a signed meter reads as a single area; axis auto-scales.
-        const buckets = host._customChangeSeries;
-        const pts: { t: number; v: number }[] = [];
-        if (buckets)
+        //Monitoring group: one line+area curve per visible device of the group, its recorder `change` series
+        //mapped onto the store grid as average watts (magnitude only, like the old per-device curves). Each device
+        //keeps its dashboard graph colour so the chart, the ring and the histogram all read the same palette.
+        const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
+        series = devs.map(dev =>
         {
-            for (const b of buckets)
-            {
-                const durMs = b.endMs - b.startMs;
-                if (durMs <= 0) { continue; }
-                const tMs = (b.startMs + b.endMs) / 2;
-                if (tMs < startMs || tMs > endMsAbs) { continue; }
-                if (!isFinite(b.kwh)) { continue; }
-                pts.push({ t: tMs, v: Math.abs((b.kwh * HOUR_MS) / durMs) });
-            }
-        }
-        series = [{ pts, color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') }];
+            const watts = changeSeriesToWatts(
+                host._deviceChangeSeries.get(dev.statConsumption) ?? null,
+                store.storeStartMs, store.stepMs, store.bucketsTotal, Date.now());
+            return { pts: toPts(watts, v => Math.abs(v)), color: deviceColorByIndex(el, dev.index) };
+        });
     }
     else
     {
@@ -215,14 +266,16 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
 
     const drawn = series.map(s =>
     {
-        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, total: sum(s.pts) }; }
+        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, dashed: !!s.dashed, total: sum(s.pts) }; }
         const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
         const x0 = xOf(s.pts[0].t);
         const xN = xOf(s.pts[s.pts.length - 1].t);
         return {
-            area:  `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
+            //Line-only series (per-bank SoC) carry no filled area.
+            area:  s.lineOnly ? '' : `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
             line:  `M ${pp.join(' L ')}`,
             color: s.color,
+            dashed: !!s.dashed,
             total: sum(s.pts),
         };
     });
@@ -232,6 +285,10 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //anti-correlation reads at a glance. Their own scale maps 100% cumulated cover to the axis top; the
     //bands stay areas-only (no stroke) at a low opacity, keeping the irradiance line in the lead.
     const overlays: { area: string; color: string }[] = [];
+    //Hover-dot sources for the irradiance view's non-`series` curves (forecast + cloud bands): each carries its own
+    //y-scale, so the hover section reads their value at the cursor through these instead of the shared `yOf`.
+    let cloudHover: { bands: { t: number; lo: number; mi: number; hi: number }[]; yOfPct: (p: number) => number; colors: string[] } | null = null;
+    let forecastHover: { pts: { t: number; v: number }[]; yOf: (v: number) => number } | null = null;
     if (target === 'irradiance' && host._chartSeries)
     {
         const cs = host._chartSeries;
@@ -278,6 +335,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                     color: layer.color,
                 });
             }
+            cloudHover = { bands, yOfPct, colors: layers.map(l => l.color) };
         }
     }
 
@@ -303,6 +361,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             const yOfF = (v: number): number =>
                 H - Math.max(0, Math.min(1, v / fMax)) * (H - TOP_HEADROOM_PX);
             forecastLine = `M ${pts.map(p => `${xOf(p.t.getTime()).toFixed(2)},${yOfF(p.v).toFixed(2)}`).join(' L ')}`;
+            forecastHover = { pts: pts.map(p => ({ t: p.t.getTime(), v: p.v })), yOf: yOfF };
         }
     }
     //Forecast dash on the irradiance view. It rides the near-identical shape of the amber irradiance area, so a
@@ -333,6 +392,38 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
             showHover = true;
         }
+        //Forecast + cloud bands ride the irradiance view on their own scales (drawn outside `series`), so their
+        //hover dots are computed here too: the forecast dot on its own normalised curve, one cloud dot per layer at
+        //its cumulative stacked top, matching the tooltip's three cloud rows.
+        if (forecastHover && forecastHover.pts.length >= 1)
+        {
+            const fv = interpAt(forecastHover.pts.map(p => new Date(p.t)), forecastHover.pts.map(p => p.v), hoverMs);
+            if (isFinite(fv) && fv > 0)
+            {
+                hoverDots.push({ y: forecastHover.yOf(fv), color: forecastColor });
+                showHover = true;
+            }
+        }
+        if (cloudHover && cloudHover.bands.length >= 1)
+        {
+            const times = cloudHover.bands.map(b => new Date(b.t));
+            const lo = interpAt(times, cloudHover.bands.map(b => b.lo), hoverMs);
+            const mi = interpAt(times, cloudHover.bands.map(b => b.mi), hoverMs);
+            const hi = interpAt(times, cloudHover.bands.map(b => b.hi), hoverMs);
+            //Cumulative stacked tops (low -> mid -> high), each dot in its layer colour.
+            const tops = [
+                isFinite(lo) ? lo : 0,
+                (isFinite(lo) ? lo : 0) + (isFinite(mi) ? mi : 0),
+                (isFinite(lo) ? lo : 0) + (isFinite(mi) ? mi : 0) + (isFinite(hi) ? hi : 0),
+            ];
+            const present = [isFinite(lo), isFinite(mi), isFinite(hi)];
+            for (let k = 0; k < 3; k++)
+            {
+                if (!present[k]) { continue; }
+                hoverDots.push({ y: cloudHover.yOfPct(tops[k]), color: cloudHover.colors[k] });
+                showHover = true;
+            }
+        }
     }
 
     return html`
@@ -345,7 +436,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                     <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
                 ` : nothing)}
                 ${drawn.map(d => d.line ? svg`
-                    <path class="hc-chart-line" d="${d.line}" stroke="${d.color}"></path>
+                    <path class="hc-chart-line" d="${d.line}" stroke="${d.color}" stroke-dasharray="${d.dashed ? '4 3' : 'none'}"></path>
                 ` : nothing)}
                 ${overlays.map(o => svg`
                     <path d="${o.area}" fill="${o.color}" fill-opacity="0.35"></path>

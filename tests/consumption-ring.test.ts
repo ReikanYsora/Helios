@@ -3,7 +3,7 @@
 //Load follows the consumption identity (production + import - export - net battery), so battery charging counts.
 
 import { describe, it, expect } from 'vitest';
-import { ringShares, detectDeviceRuns } from '../src/clock/day-ring';
+import { ringShares, detectDeviceRuns } from '../src/clock/consumption-ring';
 
 describe('ringShares', () =>
 {

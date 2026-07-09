@@ -410,8 +410,8 @@ export const editorStyles = css`
         outline-offset: 2px;
     }
 
-    /*  Soft framed block grouping a set of related fields (e.g. the four custom-entity options), so they read as
-        one unit within the section rather than loose rows. */
+    /*  Soft framed block grouping a set of related fields, so they read as one unit within the section rather
+        than loose rows. */
     .entity-block
     {
         margin-top: 8px;
@@ -428,6 +428,7 @@ export const editorStyles = css`
         display: flex;
         flex-direction: column;
         margin-top: 8px;
+        margin-bottom: 16px;
         border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
         border-radius: var(--ha-border-radius-md, 6px);
         overflow: hidden;
@@ -443,32 +444,14 @@ export const editorStyles = css`
     {
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.08));
     }
-    .cring-handle
-    {
-        flex: none;
-        --mdc-icon-size: 20px;
-        color: var(--secondary-text-color, #727272);
-        cursor: grab;
-        touch-action: none;
-    }
-    .cring-handle:active
-    {
-        cursor: grabbing;
-    }
-    .cring-dot
-    {
-        flex: none;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-    }
+    /*  Device icon tinted in the entity's dashboard colour (set inline), standing in for the old colour dot. */
     .cring-icon
     {
         flex: none;
         --mdc-icon-size: 20px;
-        color: var(--secondary-text-color, #727272);
     }
-    .cring-row.is-hidden .cring-icon
+    .cring-row.is-hidden .cring-icon,
+    .cring-row.is-hidden .cring-group
     {
         opacity: 0.5;
     }
@@ -523,6 +506,121 @@ export const editorStyles = css`
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
         border-radius: var(--ha-border-radius-sm, 4px);
+    }
+    /*  Monitoring-group pill: a small circle showing the group number (1..4) filled in the group's colour, or an
+        X in a dim outlined circle for "No group". Click cycles No group -> 1 -> ... -> 4 -> No group. */
+    .cring-group
+    {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border-radius: 50%;
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
+        background: none;
+        color: var(--disabled-text-color, #bdbdbd);
+        font-size: var(--ha-font-size-xs, 12px);
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s, border-color 0.15s;
+        --mdc-icon-size: 16px;
+    }
+    .cring-group.active
+    {
+        color: #fff;
+        border-color: transparent;
+        background: var(--group-pill-color, var(--primary-color, #03a9f4));
+    }
+    .cring-group.g1 { --group-pill-color: var(--graph-color-1, #4269d0); }
+    .cring-group.g2 { --group-pill-color: var(--graph-color-2, #efb118); }
+    .cring-group.g3 { --group-pill-color: var(--graph-color-3, #ff725c); }
+    .cring-group.g4 { --group-pill-color: var(--graph-color-4, #6cc5b0); }
+    .cring-group:hover
+    {
+        border-color: var(--primary-color, #03a9f4);
+    }
+    .cring-group:focus-visible
+    {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+    }
+    /*  Sub-heading for a grouped block inside a section (e.g. the devices list under Entities & data display). */
+    /*  Sub-heading for a grouped block, styled like a normal field label (.label), not a bold heading. */
+    .field-block-label
+    {
+        margin-top: 14px;
+        margin-bottom: 4px;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-text-color, #212121);
+    }
+    /*  One group's identity in a framed block: line 1 = badge + name, line 2 = colour + icon pickers (each half). */
+    .cring-group-block
+    {
+        margin-bottom: 8px;
+        padding: 8px 10px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: var(--ha-border-radius-md, 6px);
+    }
+    /*  Breathing room after the last group block before the next field (solar-irradiance entity). */
+    .cring-group-block:last-of-type
+    {
+        margin-bottom: 16px;
+    }
+    .cring-group-line
+    {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .cring-group-line + .cring-group-line
+    {
+        margin-top: 8px;
+    }
+    .cring-groupname-badge
+    {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        color: #fff;
+        font-size: var(--ha-font-size-xs, 12px);
+        font-weight: 700;
+        line-height: 1;
+        background: var(--group-pill-color, var(--primary-color, #03a9f4));
+    }
+    .cring-groupname-badge.g1 { --group-pill-color: var(--graph-color-1, #4269d0); }
+    .cring-groupname-badge.g2 { --group-pill-color: var(--graph-color-2, #efb118); }
+    .cring-groupname-badge.g3 { --group-pill-color: var(--graph-color-3, #ff725c); }
+    .cring-groupname-badge.g4 { --group-pill-color: var(--graph-color-4, #6cc5b0); }
+    .cring-groupname-input
+    {
+        flex: 1 1 auto;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.2));
+        border-radius: var(--ha-border-radius-sm, 4px);
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        font-size: var(--ha-font-size-s, 13px);
+        font-family: inherit;
+    }
+    .cring-groupname-input:focus
+    {
+        outline: none;
+        border-color: var(--primary-color, #03a9f4);
+    }
+    .cring-group-picker
+    {
+        flex: 1 1 0;
+        min-width: 0;
     }
     .cring-empty
     {

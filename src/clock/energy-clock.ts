@@ -7,13 +7,14 @@
 import type { SceneCamera } from '../scene/projection';
 import { HOUR_MS, HOURS_PER_DAY, SUN_COLOR_HEX } from '../core/config/constants';
 import { type ChartTarget, type ChartHost, clockTargetLabel, solarSourceName,
-    gridImportName, gridExportName, batteryChargeName, batteryDischargeName } from '../charts/charts';
+    gridImportName, gridExportName, batteryChargeName, batteryDischargeName,
+    isGroupTarget, groupOfTarget, groupTarget } from '../charts/charts';
 import { changeSeriesToWatts } from '../data/sources/energy-stats';
+import { activeGroups, groupDevices, deviceName, deviceIcon } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
-import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, cssHex, uiColorVar } from '../core/format/format';
+import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, deviceColorByIndex } from '../core/format/format';
 import type { UnifiedDataStore } from '../data/unifiedStore';
-import { customEntityId, customEntityColor, valueDecimals, powerUnit, irradianceUnit } from '../core/config/helios-config';
-import { resolveCustomEntityIcon } from '../data/sources/custom-entity';
+import { valueDecimals, powerUnit, irradianceUnit, monitoringGroupColor, monitoringGroupIcon } from '../core/config/helios-config';
 import { buildLogoDecal } from '../scene/helios-logo';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from '../timeline/timeline-modes';
@@ -260,8 +261,8 @@ export function availableClockTargets(host: ClockHost): ChartTarget[]
     if (hasGrid)    { out.push('grid'); }
     //Weather metrics only when the active mode offers them (off for month/year).
     if (host._weatherAvailable && hasSignal(store?.irradiance)) { out.push('irradiance'); }
-    //Custom entity, present whenever configured (its ring may be sparse until history lands).
-    if (customEntityId(host.config))  { out.push('custom'); }
+    //Monitoring groups: one button per active group (>= 1 visible device).
+    for (const g of activeGroups(host.config, host._energyDefaults)) { out.push(groupTarget(g)); }
     return out;
 }
 
@@ -269,6 +270,11 @@ export function availableClockTargets(host: ClockHost): ChartTarget[]
 export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: string; color: string }
 {
     const el = host as unknown as Element;
+    if (isGroupTarget(target))
+    {
+        const g = groupOfTarget(target);
+        return { icon: monitoringGroupIcon(host.config, g) || 'mdi:home-lightning-bolt', color: monitoringGroupColor(host.config, g) };
+    }
     switch (target)
     {
         case 'consumption': return { icon: 'mdi:home-lightning-bolt', color: ENERGY_COLOR.consumption(el) };
@@ -276,7 +282,6 @@ export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: s
         case 'battery':     return { icon: 'mdi:battery-charging',     color: ENERGY_COLOR.batteryOut(el) };
         case 'battery-soc': return { icon: 'mdi:battery',              color: ENERGY_COLOR.batteryOut(el) };
         case 'irradiance':  return { icon: 'mdi:white-balance-sunny',  color: ENERGY_COLOR.sun(el) };
-        case 'custom':      return { icon: resolveCustomEntityIcon(host.hass, host.config), color: cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336') };
         default:            return { icon: 'mdi:solar-power',          color: ENERGY_COLOR.pv(el) };
     }
 }
@@ -294,10 +299,18 @@ export function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: Cl
     const dark = host.themeIsDark();
     const meta = clockTargetMeta(host, target);
     const data = (unit: ClockData['unit'], layers: ClockLayer[]): ClockData => ({ target, color: meta.color, unit, layers });
-    //Energy metrics expand their hour TOTALS (split across slots); soc/custom hold their hourly average.
+    //Energy metrics expand their hour TOTALS (split across slots); soc holds its hourly average.
     const oneE = (color: string, icon: string, label: string, v: number[]): ClockLayer => ({ color, icon, label, values: expandHourly(v, true) });
     const oneA = (color: string, icon: string, label: string, v: number[]): ClockLayer => ({ color, icon, label, values: expandHourly(v, false) });
     const tgtLabel = clockTargetLabel(host, target);
+    if (isGroupTarget(target))
+    {
+        //One layer per visible device of the group, from its hour-of-day totals in the profile.
+        const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
+        return data('energy', devs.map(dev =>
+            oneE(deviceColorByIndex(el, dev.index), deviceIcon(host.hass, dev), deviceName(host.hass, dev),
+                h.devices[dev.statConsumption] ?? new Array<number>(HOURS_PER_DAY).fill(0))));
+    }
     switch (target)
     {
         case 'production':  return data('energy', h.pv.map((vals, s) => oneE(energySolarColor(el, dark, s), 'mdi:solar-power', solarSourceName(host, s), vals)));
@@ -311,7 +324,6 @@ export function buildClockDataHourly(host: ClockHost, target: ChartTarget, h: Cl
             oneE(ENERGY_COLOR.batteryIn(el),  'mdi:battery-arrow-down', batteryChargeName(host),   h.batteryCharge),
         ]);
         case 'battery-soc': return data('percent', [oneA(ENERGY_COLOR.batteryOut(el), 'mdi:battery', tgtLabel, h.soc)]);
-        case 'custom':      return data('energy', [oneE(meta.color, meta.icon, tgtLabel, h.custom)]);
         default:            return data(target === 'irradiance' ? 'irradiance' : 'energy', []);
     }
 }
@@ -412,16 +424,6 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
         return data('percent', [{ color: ENERGY_COLOR.batteryOut(el), icon: 'mdi:battery', label: clockTargetLabel(host, target), values: avgOf(sum, cnt) }]);
     }
 
-    if (target === 'custom')
-    {
-        //Custom energy meter, mapped onto the store grid then summed to kWh totals per slot, exactly like the
-        //grid/battery rings. Magnitude only so a signed meter reads as a single ring.
-        if (!store) { return data('energy', []); }
-        const watts  = changeSeriesToWatts(host._customChangeSeries ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, Date.now());
-        const values = binSlotSum(store, watts.map(v => (v === null ? null : Math.abs(v))));
-        return data('energy', [{ color: meta.color, icon: meta.icon, label: clockTargetLabel(host, target), values }]);
-    }
-
     //Remaining metrics are single- or dual-layer store series, binned by hour-of-day.
     if (!store) { return data(target === 'irradiance' ? 'irradiance' : 'energy', []); }
 
@@ -449,6 +451,19 @@ export function buildClockData(host: ClockHost, target: ChartTarget): ClockData
     {
         unit  = 'irradiance';
         specs = [{ series: store.irradiance, color: ENERGY_COLOR.sun(el), icon: 'mdi:white-balance-sunny', label: clockTargetLabel(host, target) }];
+    }
+    else if (isGroupTarget(target))
+    {
+        //One layer per visible device of the group: its `change` series as watts on the store grid (magnitude),
+        //so each hour's bar subdivides into per-device pieces in their dashboard colours.
+        const nowMs = Date.now();
+        specs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target)).map(dev => ({
+            series: changeSeriesToWatts(host._deviceChangeSeries.get(dev.statConsumption) ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs)
+                .map(v => (v === null ? null : Math.abs(v))),
+            color: deviceColorByIndex(el, dev.index),
+            icon:  deviceIcon(host.hass, dev),
+            label: deviceName(host.hass, dev),
+        }));
     }
     else
     {

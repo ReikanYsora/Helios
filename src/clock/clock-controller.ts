@@ -6,7 +6,7 @@ import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
 import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
-import { refreshDayRing, type DayRingData } from './day-ring';
+import { refreshDayRing, type DayRingData } from './consumption-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { getHomeCoords } from '../card/init';
 import
@@ -473,7 +473,7 @@ export class ClockController
             const batteryColor = ENERGY_COLOR.batteryOut(el);
             const devs        = dr?.devices ?? [];
             const rings       = devs.map(dev => ({
-                color:  deviceColorByIndex(el, dev.index),
+                color:  dev.color ?? deviceColorByIndex(el, dev.index),
                 values: dev.values,
             }));
             //Entry-sweep progress (0..1); 1 = fully drawn (no animation in flight).
@@ -659,7 +659,7 @@ export class ClockController
             { icon: 'mdi:transmission-tower',  value: pct(dev.gridPct) },
         ];
         if (dr.hasBattery) { rows.push({ icon: 'mdi:battery', value: pct(dev.batteryPct) }); }
-        return panel(deviceColorByIndex(el, dev.index), dev.name, rows);
+        return panel(dev.color ?? deviceColorByIndex(el, dev.index), dev.name, rows);
     }
 
     //Day-mode tap: toggle the ring under the point (re-tapping the selected ring, or tapping empty space, clears it).

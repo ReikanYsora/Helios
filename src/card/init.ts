@@ -25,8 +25,9 @@ export const VISUAL_CONFIG_KEYS = [
     'building-height',
     'building-opacity',
     'auto-rotate-enabled',
-    //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: the editor pushes live previews through engine.setCamera* and
-    //bakes the values into config; a fresh engine reads them from _initialBearing / _initialPitch.
+    //Lock toggle: a change triggers updateConfig, which freezes/frees the camera at its current (drag-set) pose and
+    //resyncs the stored pose. The buildings re-interpret updateConfig also runs is cheap (cached footprints, no refetch).
+    'camera-locked',
 ] as const;
 
 

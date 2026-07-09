@@ -289,6 +289,28 @@ export function cloudCoverIcon(coverPct: number): string
 }
 
 
+//Map a 0..100 battery state of charge to the matching Material Design battery glyph, like HA's energy distribution
+//card: the level is rounded to the nearest ten and, when charging, the charging variant is used. Empty and full get
+//their dedicated icons; a null SoC (power-only install, no level to show) falls back to the neutral battery outline.
+export function batteryLevelIcon(soc: number | null, charging: boolean): string
+{
+    if (soc === null || !isFinite(soc))
+    {
+        return 'mdi:battery';
+    }
+    const rounded = Math.max(0, Math.min(100, Math.round(soc / 10) * 10));
+    if (charging)
+    {
+        if (rounded >= 100) { return 'mdi:battery-charging-100'; }
+        if (rounded <= 0)   { return 'mdi:battery-charging-outline'; }
+        return `mdi:battery-charging-${rounded}`;
+    }
+    if (rounded >= 100) { return 'mdi:battery'; }
+    if (rounded <= 0)   { return 'mdi:battery-outline'; }
+    return `mdi:battery-${rounded}`;
+}
+
+
 //HA ui_color tokens: a STRING token, either a theme keyword (primary, accent, disabled) or a Material colour name
 //(red, grey, ...), mapping to the CSS var `--<token>-color`. A token is just slugged into its var name and the live
 //theme resolves it. `uiColorVar` yields the var NAME (for the engine, which reads it to hex via getComputedStyle);
@@ -299,15 +321,6 @@ export function uiColorVar(token: string | undefined, fallbackToken: string): st
     const t = (token ?? '').trim();
     return `--${t || fallbackToken}-color`;
 }
-
-export function resolveUiColor(token: string | undefined, fallbackHex: string): string
-{
-    const t = (token ?? '').trim();
-    if (!t) { return fallbackHex; }
-    if (/^(#|rgb|var)/i.test(t)) { return t; }
-    return `var(--${t}-color, ${fallbackHex})`;
-}
-
 
 //Theme colour resolution for the card. Wherever a colour must be a concrete string (canvas chart fills, inline SVG
 //attributes) rather than a CSS var(), we resolve the live HA theme token off a host element's computed style, so a

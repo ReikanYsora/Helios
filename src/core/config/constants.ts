@@ -37,8 +37,6 @@ export const MAX_VALUE_DECIMALS     = 3;
 //Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart): a stable warm yellow, not
 //the theme's --warning-color which skews orange under many themes.
 export const SUN_COLOR_HEX = '#ffc107';
-//Custom-entity chip identity (chip border, leader, bead): HA's named red with hex literal fallback.
-export const CUSTOM_ENTITY_COLOR = 'var(--red-color, #f44336)';
 
 
 //=== Camera ===
@@ -58,7 +56,6 @@ export const SUN_ARC_NIGHT_OPACITY = 0.25;  //below-horizon segment opacity
 export const SUNRISE_SUNSET_ALTITUDE_DEG = -0.833;
 
 
-export const PV_CHIP_OFFSET_PX     = 70;    //PV chip lift above the home cluster
 
 //=== Animation / timing ===
 export const AUTO_ROTATE_DEG_PER_SEC   = 4.0;

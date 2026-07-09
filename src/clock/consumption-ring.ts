@@ -3,9 +3,11 @@
 //finer cadence draws a finer ring; the change-series is fetched at the matching recorder period.
 
 import { fetchChangeSeries, fetchChangeById, outlierCapKwh, type ChangeBucket } from '../data/sources/energy-stats';
-import { consumptionLoad } from '../core/energy';
+import { activeGroups, groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
-import { displayUpdateFrequencyPerHour, consumptionRingHidden, consumptionRingOrder, type HeliosConfig } from '../core/config/helios-config';
+import { consumptionLoad } from '../core/energy';
+import { displayUpdateFrequencyPerHour, consumptionRingHidden, monitoringGroupName, type HeliosConfig } from '../core/config/helios-config';
+import { pickTranslations } from '../core/i18n';
 import { serverHourFrac } from '../core/time/timezone';
 import { HOURS_PER_DAY, DAY_MS } from '../core/config/constants';
 
@@ -42,6 +44,9 @@ export interface DeviceRun
     index:      number;
     name:       string;
     statId:     string;
+    //Resolved ring colour. Set for monitoring-group rings (the group's colour); device rings leave it unset and
+    //fall back to the per-index dashboard colour.
+    color?:     string;
     //Per-slot energy (kWh); the ring's variable-width ribbon is derived from this at draw time.
     values:     number[];
     //Selection-panel figures: the day's total and how it split across the three sources (solar + grid + battery ~ 1).
@@ -185,7 +190,12 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     const endMs   = yesterday ? todayMidnight : Math.floor(Date.now() / LIVE_QUANTUM_MS) * LIVE_QUANTUM_MS;
     if (startMs >= endMs) { return; }
 
-    const key = `${startMs}|${endMs}|${slots}|${period}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}`;
+    //Group assignment (per group, its visible device ids) is part of the key so re-grouping / hiding a device
+    //rebuilds the ring instead of serving a stale one.
+    const groupSig = activeGroups(host.config, d)
+        .map(g => `${g}:${groupDevices(host.config, d, g).map(dev => dev.statConsumption).join('+')}`)
+        .join('|');
+    const key = `${startMs}|${endMs}|${slots}|${period}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}|${groupSig}`;
     if (key === host._dayRingKey) { return; }
     host._dayRingKey = key;
 
@@ -220,13 +230,22 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     //whose actual production is below ~50 W (converted to kWh for this slot's length).
     const solarFloorKwh = 0.05 * (HOURS_PER_DAY / slots);
     for (let s = 0; s < slots; s++) { if ((pv[s] ?? 0) < solarFloorKwh) { shares.solar[s] = 0; pv[s] = 0; } }
+    //One ring per active monitoring group: sum the group's visible devices' per-slot energy into a single run in
+    //the group's colour. activeGroups returns 1..GROUP_COUNT in order, so the outer ring is group 1, nesting inward.
+    const el = host as unknown as Element;
     const devices: DeviceRun[] = [];
-    for (const dev of d.devices)
+    for (const g of activeGroups(host.config, d))
     {
-        if (!dev.statConsumption || hidden.has(dev.statConsumption)) { continue; }
-        const name = dev.name || host.hass?.states?.[dev.statConsumption]?.attributes?.friendly_name || dev.statConsumption;
-        const run = detectDeviceRuns(binSlots(deviceById?.[dev.statConsumption] ?? null, slots), dev.index, name, dev.statConsumption);
-        //Attribute the device's own energy to the solar / grid / battery share of each slot it ran, for the panel
+        const values = new Array<number>(slots).fill(0);
+        for (const dev of groupDevices(host.config, d, g))
+        {
+            const dv = binSlots(deviceById?.[dev.statConsumption] ?? null, slots);
+            for (let s = 0; s < slots; s++) { values[s] += Math.max(0, dv[s]); }
+        }
+        const name = monitoringGroupName(host.config, g) || `${pickTranslations(host.hass?.language).editor.group ?? 'Group'} ${g}`;
+        const run  = detectDeviceRuns(values, g, name, `group-${g}`);
+        run.color  = groupColorHex(el, host.config, g);
+        //Attribute the group's energy to the solar / grid / battery share of each slot it ran, for the panel
         //(the three sum to ~1, so the panel's split reads as a real 100%).
         let sol = 0;
         let gr  = 0;
@@ -235,11 +254,6 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
         if (run.dailyKwh > 0) { run.solarPct = sol / run.dailyKwh; run.gridPct = gr / run.dailyKwh; run.batteryPct = bat / run.dailyKwh; }
         devices.push(run);
     }
-    //Order the device rings by the user's editor arrangement (drag + drop); devices not in that list follow,
-    //alphabetically. Outer ring = first in the order, nesting inward.
-    const order = consumptionRingOrder(host.config);
-    const rank  = (id: string): number => { const i = order.indexOf(id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
-    devices.sort((a, b) => rank(a.statId) - rank(b.statId) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     const hasSolar   = d.solarStatEnergyFroms.length > 0;
     const hasGrid    = d.gridStatEnergyFroms.length > 0 || d.gridStatEnergyTos.length > 0;
     const hasBattery = d.batteryStatEnergyFroms.length > 0 || d.batteryStatEnergyTos.length > 0;

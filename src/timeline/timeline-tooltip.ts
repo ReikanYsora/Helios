@@ -3,12 +3,13 @@
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { valueDecimals, powerUnit, irradianceUnit, customEntityColor } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit } from '../core/config/helios-config';
 import { consumptionLoad } from '../core/energy';
-import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, uiColorVar } from '../core/format/format';
+import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
 import { valueAt } from '../data/unifiedStore';
+import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
+import { groupDevices, deviceName, deviceIcon } from '../data/sources/device-consumption';
 import { pickTranslations } from '../core/i18n';
-import { resolveCustomEntityIcon } from '../data/sources/custom-entity';
 import {
     type ChartHost,
     chartIsDark,
@@ -18,9 +19,10 @@ import {
     gridExportName,
     batteryChargeName,
     batteryDischargeName,
+    isGroupTarget,
+    groupOfTarget,
 } from '../charts/charts';
 import { interpAt, pvValueAtTime } from '../data/series-sample';
-import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
 import { computeDailyKwhTotals } from '../charts/charts-generic';
 import { DAY_MS } from '../core/config/constants';
 
@@ -60,7 +62,6 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
     const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
-    const customV    = wattsAtFromChangeSeries(host._customChangeSeries ?? null, atMs) ?? NaN;
     const pv   = pvValueAtTime(host, atMs);
 
     //Active chart target: tooltip rows follow the re-targetable chart (chip <-> chart <-> tooltip coupling).
@@ -119,9 +120,36 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the three stacked
     //band shades in renderTargetChart.
     const el             = host as unknown as Element;
+    //Monitoring group: one row per visible device, its power at the hovered instant (from its change series) with
+    //the device's dashboard colour + name. Empty for non-group targets.
+    const groupRows = isGroupTarget(target)
+        ? groupDevices(host.config, host._energyDefaults, groupOfTarget(target)).map(dev =>
+        {
+            const w = wattsAtFromChangeSeries(host._deviceChangeSeries.get(dev.statConsumption) ?? null, atMs);
+            return {
+                w:     w === null ? NaN : Math.abs(w),
+                color: deviceColorByIndex(el, dev.index),
+                name:  deviceName(host.hass, dev),
+                icon:  deviceIcon(host.hass, dev),
+            };
+        })
+        : [];
     const cloudBase      = ENERGY_COLOR.cloud(el);
     const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
     const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
+
+    //Fused battery view: per-bank SoC at the cursor, to list each bank's level under the power rows (matching the
+    //chart's per-bank SoC lines and their hover beams). Falls back to the aggregated mean when no per-bank series.
+    //The beam colour tracks the charge/discharge flow (idle grey), same rule as the chart, so a row lines up with
+    //its dot's colour.
+    const socBankSeries = host._batterySocPerBankHistory.length > 0
+        ? host._batterySocPerBankHistory
+        : (host._batterySocHistory ? [host._batterySocHistory] : []);
+    const socBankVals   = socBankSeries.map(b => interpAt(b.times, b.values, atMs));
+    const socLabel      = clockTargetLabel(host, 'battery-soc');
+    const socBeamColor  = (!isFinite(battW) || Math.abs(battW) < 5)
+        ? cssHex(el, '--secondary-text-color', '#9e9e9e')
+        : (battW > 0 ? ENERGY_COLOR.batteryIn(el) : ENERGY_COLOR.batteryOut(el));
 
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
@@ -258,6 +286,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                             <span class="tb-hover-tooltip-value">${kw(-battW)}</span>
                         </div>
                     ` : nothing}
+                    ${socBankVals.map((v, i) => isFinite(v) ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${socBeamColor}" icon="mdi:battery"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${socLabel}${socBankVals.length > 1 ? ` ${i + 1}` : ''}</span>
+                            <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, v)))} %</span>
+                        </div>
+                    ` : nothing)}
                 ` : nothing}
                 ${target === 'battery-soc' && isFinite(battSocV) ? html`
                     <div class="tb-hover-tooltip-row">
@@ -266,18 +301,18 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, battSocV)))} %</span>
                     </div>
                 ` : nothing}
+                ${isGroupTarget(target) ? groupRows.map(r => isFinite(r.w) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${r.color}" icon=${r.icon}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${r.name}</span>
+                        <span class="tb-hover-tooltip-value">${kw(r.w)}</span>
+                    </div>
+                ` : nothing) : nothing}
                 ${target === 'irradiance' && isFinite(irrV) ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.sun(el)}" icon="mdi:white-balance-sunny"></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${formatIrradiance(host.hass, irrV, dec, irradU)}</span>
-                    </div>
-                ` : nothing}
-                ${target === 'custom' && isFinite(customV) ? html`
-                    <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${cssHex(el, uiColorVar(customEntityColor(host.config), 'red'), '#f44336')}" icon=${resolveCustomEntityIcon(host.hass, host.config)}></ha-icon>
-                        <span class="tb-hover-tooltip-name">${tgtName}</span>
-                        <span class="tb-hover-tooltip-value">${formatPower(host.hass, Math.abs(customV), dec, powerU)}</span>
                     </div>
                 ` : nothing}
                 ${target === 'irradiance' ? html`

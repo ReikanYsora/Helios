@@ -67,17 +67,6 @@ export interface HeliosConfig
     //forecast still come from the model.
     'solar-irradiance-entity'?: unknown;
     //Custom entity, measured-only contract: BOTH sensors are required for it to display anywhere. The power
-    //sensor feeds the live chip (instantaneous); the energy meter feeds the past curve, scrub and clock ring
-    //via its recorder change-series, exactly like grid/pv/battery. The legacy single slot below is only read
-    //by the editor to prefill a migration, never at runtime. Empty = no chip. Name follows the friendly name.
-    'custom-power-entity'?:     unknown;
-    'custom-energy-entity'?:    unknown;
-    'custom-entity'?:           unknown;
-    //MDI icon override for the custom entity (chip + clock medallion/button). Empty falls back to the entity's
-    //own icon, then a generic glyph.
-    'custom-entity-icon'?:      unknown;
-    //HA ui_color token tinting the custom-entity chip, its leader and its clock ring. Default 'red'.
-    'custom-entity-color'?:     unknown;
     //HA ui_color token for the base tint of surrounding buildings. Default 'grey'.
     'building-color'?:          unknown;
     //HA ui_color token for the home (consumption) colour: the home pill + every consumption readout. Default 'green'.
@@ -92,52 +81,22 @@ export interface HeliosConfig
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
-    //Battery SoC chip layout for multi-bank installs: when true and several battery sources are wired,
-    //the live chip lists every bank ("100 · 82 %", Energy-dashboard source order) instead of the mean.
-    //Scrub keeps the mean (SoC history is stored aggregated). Default false.
-    'battery-soc-per-bank'?:   unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
-    //Day-ring consumption control. Hidden: recorder-meter ids fully excluded from the day view (no ring).
+    //Device visibility control. Hidden: recorder-meter ids fully excluded from every view (chips, chart, ring, clock).
     'consumption-ring-hidden'?:          unknown;
-    //User-defined ring order (recorder-meter ids). Devices render in this order; any not listed follow, alphabetically.
-    'consumption-ring-order'?:           unknown;
+    //Monitoring group per device (statConsumption id -> 1..4). Absent = No group (default). Drives the group chips,
+    //the per-group consumption rings and the clock group buttons.
+    'monitoring-groups'?:          unknown;
+    //Editable group names (group number -> name). Empty/absent falls back to a localised "Group N".
+    'monitoring-group-names'?:     unknown;
+    //Editable group icons (group number -> mdi). Empty/absent falls back to a generic glyph.
+    'monitoring-group-icons'?:     unknown;
+    //Editable group colours (group number -> ui_color token or literal). Empty/absent falls back to --graph-color-N.
+    'monitoring-group-colors'?:    unknown;
 }
 
-
-//Custom power sensor id (empty when unset).
-export function customPowerEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['custom-power-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
-}
-
-//Custom energy meter id (empty when unset).
-export function customEnergyEntityId(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['custom-energy-entity'];
-    return typeof raw === 'string' ? raw.trim() : '';
-}
-
-//Validity-gated custom id, the single string every consumer gates on: the POWER sensor (the live
-//source), non-empty only when BOTH halves are configured. One incomplete half hides the custom
-//entity everywhere instead of displaying a surface we would have to invent.
-export function customEntityId(config: HeliosConfig | undefined): string
-{
-    const power = customPowerEntityId(config);
-    return power !== '' && customEnergyEntityId(config) !== '' ? power : '';
-}
-
-
-//Resolved ui_color tokens (default 'red' for the custom-entity chip/leader/clock ring, 'grey' for the
-//building base tint); the colour helpers turn these into CSS vars.
-export function customEntityColor(config: HeliosConfig | undefined): string
-{
-    const raw = config?.['custom-entity-color'];
-    const token = typeof raw === 'string' ? raw.trim() : '';
-    return token || 'red';
-}
 
 export function buildingColorToken(config: HeliosConfig | undefined): string
 {
@@ -214,13 +173,6 @@ export function batterySign(config: HeliosConfig | undefined): 'default' | 'inve
 }
 
 
-//Resolved per-bank battery SoC chip flag. Default false, so existing cards keep the aggregated mean.
-export function batterySocPerBank(config: HeliosConfig | undefined): boolean
-{
-    return config?.['battery-soc-per-bank'] === true;
-}
-
-
 //"No UI" mode: timeline + controls fade out after an idle delay, back on any input. Default false.
 export function autoHideUi(config: HeliosConfig | undefined): boolean
 {
@@ -240,17 +192,71 @@ export function consumptionRingHidden(config: HeliosConfig | undefined): Set<str
     return out;
 }
 
-//User-defined device order (recorder-meter ids), in display order. Empty when unset; devices absent from it follow
-//in their default (alphabetical) order. Order-preserving, unlike the hidden set.
-export function consumptionRingOrder(config: HeliosConfig | undefined): string[]
+//Number of monitoring groups a device can belong to (1..GROUP_COUNT); 0 means "No group".
+export const GROUP_COUNT = 4;
+
+//Per-group fallback colours (used when the theme lacks --graph-color-N and no colour is configured), shared by the
+//scene chips, the chart, the ring and the editor pills so a group reads the same everywhere.
+export const GROUP_FALLBACK_COLORS = ['#4269d0', '#efb118', '#ff725c', '#6cc5b0'];
+
+//Monitoring group assignment: device id -> group number (1..GROUP_COUNT). Stored as an object so each device
+//carries its own group independent of order/hide. Absent from the map = No group. Out-of-range values are dropped.
+export function monitoringGroups(config: HeliosConfig | undefined): Map<string, number>
 {
-    const raw = config?.['consumption-ring-order'];
-    const out: string[] = [];
-    if (Array.isArray(raw))
+    const raw = config?.['monitoring-groups'];
+    const out = new Map<string, number>();
+    if (raw && typeof raw === 'object' && !Array.isArray(raw))
     {
-        for (const v of raw) { if (typeof v === 'string' && v.trim() !== '') { out.push(v.trim()); } }
+        for (const [k, v] of Object.entries(raw as Record<string, unknown>))
+        {
+            const id = k.trim();
+            const g  = typeof v === 'number' ? v : typeof v === 'string' ? parseInt(v, 10) : NaN;
+            if (id !== '' && Number.isInteger(g) && g >= 1 && g <= GROUP_COUNT) { out.set(id, g); }
+        }
     }
     return out;
+}
+
+//Read a string entry from a per-group object map config key (group -> value). Empty when unset.
+function groupMapString(config: HeliosConfig | undefined, key: keyof HeliosConfig, group: number): string
+{
+    const raw = config?.[key];
+    if (raw && typeof raw === 'object' && !Array.isArray(raw))
+    {
+        const v = (raw as Record<string, unknown>)[String(group)];
+        if (typeof v === 'string') { return v.trim(); }
+    }
+    return '';
+}
+
+//User-given name of a monitoring group (1..GROUP_COUNT). Empty when unset, so the consumer falls back to a
+//localised "Group N".
+export function monitoringGroupName(config: HeliosConfig | undefined, group: number): string
+{
+    return groupMapString(config, 'monitoring-group-names', group);
+}
+
+//User-picked MDI icon of a group. Empty when unset, so the consumer falls back to a generic glyph.
+export function monitoringGroupIcon(config: HeliosConfig | undefined, group: number): string
+{
+    return groupMapString(config, 'monitoring-group-icons', group);
+}
+
+//Raw configured colour token of a group ('' when unset): a ui_color name, or a #/rgb/var literal.
+export function monitoringGroupColorToken(config: HeliosConfig | undefined, group: number): string
+{
+    return groupMapString(config, 'monitoring-group-colors', group);
+}
+
+//Resolved CSS colour of a group (a var()/literal string for CSS contexts): the configured ui_color token when set,
+//else the theme's --graph-color-N with a fixed hex fallback. One source so the chip, ring and editor read the same.
+export function monitoringGroupColor(config: HeliosConfig | undefined, group: number): string
+{
+    const fallback = `var(--graph-color-${group}, ${GROUP_FALLBACK_COLORS[(group - 1) % GROUP_FALLBACK_COLORS.length]})`;
+    const token = monitoringGroupColorToken(config, group);
+    if (!token) { return fallback; }
+    if (/^(#|rgb|var)/i.test(token)) { return token; }
+    return `var(--${token}-color, ${fallback})`;
 }
 
 

@@ -4,10 +4,11 @@
 //sub-hourly store). Now/week keep using the store (already >= hourly), so there's no redundant fetch in the common
 //case.
 
-import { fetchChangeSeries, outlierCapKwh, type ChangeBucket } from '../data/sources/energy-stats';
+import { fetchChangeSeries, fetchChangeById, mergeChangeSeries, outlierCapKwh, type ChangeBucket } from '../data/sources/energy-stats';
 import { callWS } from '../data/ha-gateway';
 import { modeBucketsPerHour, type TimelineMode } from '../timeline/timeline-modes';
-import { customEntityId, customEnergyEntityId, type HeliosConfig } from '../core/config/helios-config';
+import type { HeliosConfig } from '../core/config/helios-config';
+import { groupedDevices } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import { serverHour } from '../core/time/timezone';
@@ -26,7 +27,9 @@ export interface ClockHourly
     batteryDischarge: number[];
     consumption:      number[];
     soc:              number[];
-    custom:           number[];
+    //Per-device kWh hour-of-day totals (statConsumption id -> 24 values), for the monitoring-group histograms in
+    //month/year. Only the grouped + visible devices are fetched; empty otherwise.
+    devices:          Record<string, number[]>;
 }
 
 export interface ClockHourlyHost
@@ -113,7 +116,7 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
 //Fetch the 24 hour-of-day profile for an arbitrary window. Pure (no host state): used for the clock's current
 //window.
 export async function fetchHourlyProfile(
-    hass: any, d: EnergyDefaults, cid: string, startMs: number, endMs: number,
+    hass: any, d: EnergyDefaults, deviceIds: string[], startMs: number, endMs: number,
 ): Promise<ClockHourly>
 {
     const chg = (ids: string[]): Promise<ChangeBucket[] | null> =>
@@ -122,17 +125,16 @@ export async function fetchHourlyProfile(
     //solarSourceName(host, s) + the store path.
     const solarIds = d.solarStatEnergyFroms;
 
-    const [solarPerSource, gImp, gExp, bChg, bDis, soc, customChg] = await Promise.all([
+    const [solarPerSource, gImp, gExp, bChg, bDis, soc, deviceById] = await Promise.all([
         Promise.all(solarIds.map(id => fetchChangeSeries(hass, [id], startMs, endMs, 'hour'))),
         chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
         chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
         statByHour(hass, d.batteryStatSocs, startMs, endMs, false),
-        //Custom energy meter on the same measured change-series path as the other rings (kWh binned by hour).
-        chg(cid ? [cid] : []),
+        //Grouped devices in one recorder call (per-id), each binned to its own hour-of-day profile below.
+        deviceIds.length ? fetchChangeById(hass, [...deviceIds].sort(), startMs, endMs, 'hour') : Promise.resolve(null),
     ]);
 
     const pv               = solarPerSource.map(buckets => binChangeByHour(buckets));
-    const custom           = binChangeByHour(customChg);
     const pvTotal          = new Array<number>(HOURS_PER_DAY).fill(0);
     for (const src of pv) { for (let h = 0; h < HOURS_PER_DAY; h++) { pvTotal[h] += src[h]; } }
     const gridImport       = binChangeByHour(gImp);
@@ -142,7 +144,13 @@ export async function fetchHourlyProfile(
     //Consumption from the same identity the timeline uses: production + import - export - net battery, clamped.
     const consumption = pvTotal.map((p, h) => consumptionLoad(p, gridImport[h], gridExport[h], batteryCharge[h] - batteryDischarge[h]));
 
-    return { pv, gridImport, gridExport, batteryCharge, batteryDischarge, consumption, soc, custom };
+    const devices: Record<string, number[]> = {};
+    for (const id of deviceIds)
+    {
+        devices[id] = binChangeByHour(deviceById ? mergeChangeSeries(deviceById, [id]) : null);
+    }
+
+    return { pv, gridImport, gridExport, batteryCharge, batteryDischarge, consumption, soc, devices };
 }
 
 //Build (or clear) the hourly clock profile for the active window. Keyed so an unchanged window never refetches.
@@ -155,15 +163,14 @@ export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
         return;
     }
     const d   = host._energyDefaults;
-    //Custom ring reads the ENERGY meter (measured kWh), gated on the entity being fully configured (both halves).
-    const cid = customEntityId(host.config) ? customEnergyEntityId(host.config) : '';
+    const deviceIds = groupedDevices(host.config, d).map(dev => dev.statConsumption);
     const startMs = host._timeRange.start.getTime();
     //Quantise the end to the whole hour: Date.now() advances every frame, and an unquantised end would churn the key
     //every render, refetching in a loop and (with the null-on-change below) flashing the dial.
     const endMs   = Math.floor(Math.min(Date.now(), host._timeRange.end.getTime()) / HOUR_MS) * HOUR_MS;
     if (startMs >= endMs) { return; }
 
-    const key = `${startMs}|${endMs}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}|${d.batteryStatSocs}|${cid}`;
+    const key = `${startMs}|${endMs}|${d.solarStatEnergyFroms}|${d.gridStatEnergyFroms}|${d.gridStatEnergyTos}|${d.batteryStatEnergyTos}|${d.batteryStatEnergyFroms}|${d.batteryStatSocs}|${[...deviceIds].sort().join(',')}`;
     if (key === host._clockHourlyKey) { return; }
     //Drop the stale profile up front only when the window itself changed (start moved = a mode switch), so the reload
     //grow gate sees null until the new data lands. A benign end-of-window tick keeps the old profile so the dial
@@ -172,6 +179,6 @@ export async function refreshClockHourly(host: ClockHourlyHost): Promise<void>
     host._clockHourlyKey = key;
     if (windowChanged && host._clockHourly !== null) { host._clockHourly = null; host.requestUpdate(); }
 
-    host._clockHourly = await fetchHourlyProfile(host.hass, d, cid, startMs, endMs);
+    host._clockHourly = await fetchHourlyProfile(host.hass, d, deviceIds, startMs, endMs);
     host.requestUpdate();
 }
