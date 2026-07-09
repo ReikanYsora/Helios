@@ -5,7 +5,7 @@
 //by hour-of-day, no extra fetch.
 
 import type { SceneCamera } from '../scene/projection';
-import { HOUR_MS, HOURS_PER_DAY, SUN_COLOR_HEX } from '../core/config/constants';
+import { HOUR_MS, HOURS_PER_DAY } from '../core/config/constants';
 import { type ChartTarget, type ChartHost, clockTargetLabel, solarSourceName,
     gridImportName, gridExportName, batteryChargeName, batteryDischargeName,
     isGroupTarget, groupOfTarget, groupTarget } from '../charts/charts';
@@ -35,8 +35,7 @@ export type ClockHost = ChartHost & {
 
 //Ring geometry as fractions of the smaller viewport edge so the clock fills the card at any size.
 const RING_R_FRAC     = 0.34;   //outermost ring radius
-const DAY_BAND_COLOR  = 'var(--card-background-color, #000000)';   //group zone background + the ribbon-end holes (theme-linked)
-const DAY_MIDNIGHT_GAP_PX = 6;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
+const DAY_BAND_COLOR  = 'var(--card-background-color, #000000)';   //group zone background + centre disc (theme-linked)
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
 //How far a PINNED slice fades the OTHER hour bars (1 = fully transparent at full ramp). Only pin dims; hover doesn't.
 const CLOCK_DIM_STRENGTH  = 0.78;
@@ -59,6 +58,40 @@ const CLOCK_HUB_R_FRAC      = 0.12;
 const LOGO_DECAL_SCALE      = 0.8;
 const CLOCK_SPOKE_OUTER_FRAC = 1.10;
 const CLOCK_GUIDE_OPACITY   = 0.25;
+//Consumption-ring (day mode) geometry, independent of the histogram so the two dials can differ. Outer edge of
+//the ring stack + hour-label radius pushed out vs the histogram; the rings hug the rim so the middle stays free
+//for a big centre disc (the hovered ring's icon paints there). Tunable.
+const DAY_RING_OUTER_MULT   = 1.22;   //ring-stack outer edge as a multiple of outerR (histogram uses 1.10)
+const DAY_RING_LABEL_MULT   = 1.32;   //hour labels sit just outside the (bigger) ring
+const DAY_RIBBON_GAUGE_FRAC = 0.82;   //member ribbon width as a fraction of its sub-band
+//The centre disc is a FIXED size and the producer rings a FIXED width; the consumer rings share whatever radial
+//space is left between them, so a group of 12 devices just draws thinner rings (never a ballooning centre).
+const DAY_ZONE_PAD_FRAC     = 0.10;   //uniform padding between zones + before the centre disc
+const DAY_CENTER_DISC_FRAC  = 0.30;   //FIXED centre disc radius (fraction of outerR)
+const DAY_PRODUCER_W_FRAC   = 0.10;   //FIXED width of each producer ring (fraction of outerR)
+//2 px primary-text-colour outline on the CENTRE disc only (the zone donuts stay unedged).
+const DAY_CENTER_EDGE_PX    = 2;
+//Multi-colour glow rimming the PRODUCTION zone's inner + outer circles (built from its producer colours), marking
+//it as the fixed reference zone.
+const DAY_PROD_GLOW_WIDTH   = 4;
+const DAY_PROD_GLOW_BLUR    = 6;
+const DAY_PROD_GLOW_OPACITY = 0.85;
+//Midnight tick: a short radial line across the ring at 00h, marking the day's start. FIXED half-length (never
+//scales with the ring width), so every ring shows the same small marker regardless of how wide it is.
+const DAY_TICK_WIDTH_PX     = 2;
+const DAY_TICK_HALF_PX      = 8;
+//Peak-hour marker (consumers): a radial line, in the ring colour, at the ring's busiest slot, with a
+//primary-text-colour edging (drawn as a slightly wider line behind it). FIXED length, like the midnight tick.
+const DAY_PEAK_WIDTH_PX     = 3;
+const DAY_PEAK_EDGE_PX      = 1;
+const DAY_PEAK_HALF_PX      = 8;
+const DAY_PEAK_OPACITY      = 1;
+//Not-yet-lived part of today's ring: a faint hairline instead of the full ribbon, signalling "no data here yet".
+const DAY_FUTURE_WIDTH_PX   = 1.5;
+const DAY_FUTURE_OPACITY    = 0.18;
+//Edge-light on the hovered / selected ring (like the histogram's focused bar): a bright outline on the ribbon.
+const DAY_EDGE_STROKE       = 'rgba(255,255,255,0.46)';
+const DAY_EDGE_WIDTH_PX     = 1;
 //Compass: filled N/S triangles just beyond the hour labels, with a letter at each tip. Full opacity (no
 //depth fade) so orientation always reads.
 const CLOCK_COMPASS_BASE_FRAC   = 1.30;
@@ -126,9 +159,17 @@ export interface ClockFrame
     //Ground-laid Helios mark that replaces the old central column: inner SVG + whether it is hover/tap-active
     //(drives the opacity fade). The engine tilts it onto the ground plane under the upright bars.
     decal: { svg: string; active: boolean };
+    //Day mode only: the consumer rings, in a SEPARATE layer from `svg` (the producers), so the drill flip can
+    //transform the consumers without moving the static producer rings.
+    dayConsumerSvg?: string;
+    //Day mode only: the centre disc, in its OWN layer so it can counter-flip against the consumer rings.
+    dayCenterSvg?: string;
     //Day mode only: one screen-space hover target per device ring (aligned with the device list). Undefined for
     //the clock dial.
     dayHits?: DayRingHit[];
+    //Day mode only: where the centre-disc icon anchors. Midway from the disc centre to its topmost screen point,
+    //so the icon sits in the disc's upper half (room for content below).
+    centerAnchor?: { x: number; y: number };
 }
 
 
@@ -721,19 +762,10 @@ function dayPt(camera: SceneCamera, rm: number, f: number): [number, number]
     return camera.project(rm * Math.sin(a), rm * Math.cos(a), 0);
 }
 
-//Midnight-gap arc-endpoint fraction giving a CONSTANT-px visual gap at every radius (a straight slot, not a wedge):
-//half the target gap plus half the round-cap overhang (`capWidthPx`, 0 for a flat end), converted from px to a
-//fraction of the full circle at ground radius `rm`.
-function dayGapF(camera: SceneCamera, rm: number, capWidthPx: number): number
-{
-    const rPx = rm * (camera.pxPerMetre || 1);
-    if (rPx <= 0) { return 0; }
-    return (DAY_MIDNIGHT_GAP_PX / 2 + capWidthPx / 2) / rPx / (2 * Math.PI);
-}
-
 //A full DONUT (annulus) on the ground: outer + inner sampled circles as one even-odd path, so the centre is a hole.
-//Backgrounds are plain donuts (no start/end -> no overlapping midnight caps); only the value arcs have caps.
-function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: string, opacity: number): string
+//Backgrounds are plain donuts (no start/end -> no overlapping midnight caps); only the value arcs have caps. With
+//`edgeWidth` > 0, both circles get a primary-text-colour outline (used for the centre disc).
+function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: string, opacity: number, edgeWidth = 0): string
 {
     const STEPS = 120;
     const ring = (rm: number): string =>
@@ -742,8 +774,32 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
         for (let k = 0; k < STEPS; k++) { const a = 2 * Math.PI * k / STEPS; const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); d += `${k ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`; }
         return d + 'Z';
     };
-    //Fill via `style` so a CSS var (theme-linked band colour) resolves; a plain `fill=` attribute would not.
-    return `<path d="${ring(outerRm)}${ring(innerRm)}" style="fill:${fill};fill-opacity:${opacity}" fill-rule="evenodd"/>`;
+    //Fill (and the edge stroke) via `style` so CSS vars resolve; a plain `fill=`/`stroke=` attribute would not.
+    const edgeStyle = edgeWidth > 0 ? `;stroke:var(--primary-text-color, #e0e0e0);stroke-width:${edgeWidth};stroke-opacity:${opacity}` : '';
+    return `<path d="${ring(outerRm)}${ring(innerRm)}" style="fill:${fill};fill-opacity:${opacity}${edgeStyle}" fill-rule="evenodd"/>`;
+}
+
+//Multi-colour glow rimming a zone's inner + outer circles: a diagonal gradient blended across the zone's member
+//colours, softly blurred. Used on the fixed PRODUCTION zone so it reads as the anchor at a glance.
+function dayZoneGlow(camera: SceneCamera, outerRm: number, innerRm: number, colors: string[], opacity: number): string
+{
+    if (colors.length === 0 || opacity <= 0) { return ''; }
+    const STEPS = 96;
+    const circle = (rm: number): string =>
+    {
+        let d = '';
+        for (let k = 0; k < STEPS; k++) { const a = 2 * Math.PI * k / STEPS; const p = camera.project(rm * Math.sin(a), rm * Math.cos(a), 0); d += `${k ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`; }
+        return d + 'Z';
+    };
+    const stops = colors.map((c, i) => `<stop offset="${colors.length === 1 ? '0' : (i / (colors.length - 1)).toFixed(3)}" stop-color="${c}"/>`).join('');
+    const stroke = `fill="none" stroke="url(#prod-glow-grad)" stroke-width="${DAY_PROD_GLOW_WIDTH}"`;
+    return `<defs>`
+        + `<linearGradient id="prod-glow-grad" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient>`
+        + `<filter id="prod-glow-blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="${DAY_PROD_GLOW_BLUR}"/></filter>`
+        + `</defs>`
+        + `<g filter="url(#prod-glow-blur)" opacity="${opacity.toFixed(3)}">`
+        + `<path d="${circle(outerRm)}" ${stroke}/><path d="${circle(innerRm)}" ${stroke}/>`
+        + `</g>`;
 }
 
 //A member ring drawn as a variable-WIDTH filled ribbon: each slot's radial half-thickness follows its intensity `t`
@@ -754,43 +810,74 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
 //narrows smoothly rather than stepping. Each end (either side of the midnight gap) is anchored with a full-width disc
 //so start and end always read however thin the ribbon is there, with a band-colour hole punched in its centre.
 const MIN_RIBBON_PX = 2;
-function dayRibbon(camera: SceneCamera, rm: number, gaugeW: number, color: string, t: number[], slots: number, gapF: number, dim: number, fade = 1, sweep = 1): string
+//A variable-width arc from f0 to f1 (constant width when `flat` is set), used for both the solid value ribbon and
+//the faint future track.
+function dayRibbonArc(camera: SceneCamera, rm: number, f0: number, f1: number, wPx: (s: number) => number, slots: number, steps: number): string
 {
     const ppm = camera.pxPerMetre || 1;
-    const wPx = (s: number): number => MIN_RIBBON_PX + (gaugeW - MIN_RIBBON_PX) * Math.min(1, Math.max(0, t[s] ?? 0));
-    //Entry sweep: the ribbon is only drawn up to the front `fEnd`, which walks from midnight (gapF) round to the day's
-    //end (1 - gapF). The end disc rides `fEnd`, so it is pushed to its final place as the ribbon fills in.
-    const fEnd  = gapF + (1 - 2 * gapF) * Math.min(1, Math.max(0, sweep));
-    const STEPS = Math.max(slots * 2, 120);   //dense enough that the circle stays smooth at any slot count
-    let ribbon = '';
-    if (fEnd - gapF > 1e-4)
+    const outer: string[] = [];
+    const inner: string[] = [];
+    for (let k = 0; k <= steps; k++)
     {
-        const outer: string[] = [];
-        const inner: string[] = [];
-        for (let k = 0; k <= STEPS; k++)
-        {
-            const f     = gapF + (fEnd - gapF) * (k / STEPS);
-            const slotF = Math.min(slots - 1e-6, Math.max(0, f * slots));
-            const s0    = Math.floor(slotF);
-            const s1    = Math.min(slots - 1, s0 + 1);
-            const halfM = ((wPx(s0) + (wPx(s1) - wPx(s0)) * (slotF - s0)) / 2) / ppm;
-            const po    = dayPt(camera, rm + halfM, f);
-            const pi    = dayPt(camera, rm - halfM, f);
-            outer.push(`${k ? 'L' : 'M'}${po[0].toFixed(2)},${po[1].toFixed(2)}`);
-            inner.push(`L${pi[0].toFixed(2)},${pi[1].toFixed(2)}`);
-        }
-        inner.reverse();
-        ribbon = `<path d="${outer.join('')}${inner.join('')}Z" fill="${color}" fill-opacity="${(0.9 * dim).toFixed(3)}"/>`;
+        const f     = f0 + (f1 - f0) * (k / steps);
+        const slotF = Math.min(slots - 1e-6, Math.max(0, f * slots));
+        const s0    = Math.floor(slotF);
+        const s1    = Math.min(slots - 1, s0 + 1);
+        const halfM = ((wPx(s0) + (wPx(s1) - wPx(s0)) * (slotF - s0)) / 2) / ppm;
+        const po    = dayPt(camera, rm + halfM, f);
+        const pi    = dayPt(camera, rm - halfM, f);
+        outer.push(`${k ? 'L' : 'M'}${po[0].toFixed(2)},${po[1].toFixed(2)}`);
+        inner.push(`L${pi[0].toFixed(2)},${pi[1].toFixed(2)}`);
     }
-    //gaugeW is the ring's max width, so the disc (radius gaugeW/2) is the widest the ribbon can ever get. The discs
-    //fade in with the donut; the start sits at gapF, the end rides the sweep front. Screen-space circles: pitch 0.
-    const rOuter = gaugeW / 2;
-    const cap = (f: number): string =>
+    inner.reverse();
+    return `${outer.join('')}${inner.join('')}Z`;
+}
+//Midnight tick: a short radial line at 00h, marking the day's start. FIXED length (independent of the ring width,
+//so a wide single-device ring shows the same small marker, not a giant bar). Drawn on top of the ribbon.
+function dayStartTick(camera: SceneCamera, rm: number, color: string, opacity: number): string
+{
+    const halfM = DAY_TICK_HALF_PX / (camera.pxPerMetre || 1);
+    const po = dayPt(camera, rm + halfM, 0);
+    const pi = dayPt(camera, rm - halfM, 0);
+    return `<line x1="${po[0].toFixed(2)}" y1="${po[1].toFixed(2)}" x2="${pi[0].toFixed(2)}" y2="${pi[1].toFixed(2)}" stroke="${color}" stroke-opacity="${opacity.toFixed(3)}" stroke-width="${DAY_TICK_WIDTH_PX}" stroke-linecap="round"/>`;
+}
+function dayRibbon(camera: SceneCamera, rm: number, gaugeW: number, color: string, t: number[], slots: number, dim: number, edge = false, fade = 1, sweep = 1, liveFrac = 1): string
+{
+    const wPx = (s: number): number => MIN_RIBBON_PX + (gaugeW - MIN_RIBBON_PX) * Math.min(1, Math.max(0, t[s] ?? 0));
+    const fLive  = Math.min(1, Math.max(0, liveFrac));               //lived edge (today = now; a full day = 1)
+    //Ring starts at 00h (f=0). Entry sweep fills the LIVED part (0..fLive); over a complete day it closes the full
+    //circle back to 00h. The future track (fLive..1) is static + faint.
+    const fSolid = fLive * Math.min(1, Math.max(0, sweep));
+    const STEPS  = Math.max(slots * 2, 120);   //dense enough that the circle stays smooth at any slot count
+    //Edge-light: a bright outline round the solid ribbon (the hovered / selected ring only).
+    const stroke = edge ? ` stroke="${DAY_EDGE_STROKE}" stroke-width="${DAY_EDGE_WIDTH_PX}"` : '';
+    let svg = '';
+    //1. Not-yet-lived part (today): a faint constant hairline round to 00h, signalling "no data here yet". Bottom.
+    if (1 - fLive > 1e-4)
     {
-        const c = dayPt(camera, rm, f);
-        return `<circle cx="${c[0].toFixed(2)}" cy="${c[1].toFixed(2)}" r="${rOuter.toFixed(2)}" fill="${color}" fill-opacity="${(0.9 * dim * fade).toFixed(3)}"/>`;
-    };
-    return ribbon + cap(gapF) + cap(fEnd);
+        svg += `<path d="${dayRibbonArc(camera, rm, fLive, 1, () => DAY_FUTURE_WIDTH_PX, slots, STEPS)}" fill="${color}" fill-opacity="${(DAY_FUTURE_OPACITY * dim * fade).toFixed(3)}"/>`;
+    }
+    //2. Solid value ribbon over the lived part.
+    if (fSolid > 1e-4)
+    {
+        svg += `<path d="${dayRibbonArc(camera, rm, 0, fSolid, wPx, slots, STEPS)}" fill="${color}" fill-opacity="${(0.9 * dim).toFixed(3)}"${stroke}/>`;
+    }
+    //3. Midnight tick on top, so 00h always reads however thin the ribbon is there.
+    svg += dayStartTick(camera, rm, color, dim * fade);
+    return svg;
+}
+
+//Peak marker: a light radial line, in the ring's colour, at the hour a ring's consumption peaks. Spans the ring's
+//width so it reads as "this group / device peaked here".
+function dayPeakMarker(camera: SceneCamera, rm: number, color: string, peakFrac: number, opacity: number): string
+{
+    const halfM = DAY_PEAK_HALF_PX / (camera.pxPerMetre || 1);   //fixed length, independent of the ring width
+    const po = dayPt(camera, rm + halfM, peakFrac);
+    const pi = dayPt(camera, rm - halfM, peakFrac);
+    const coords = `x1="${po[0].toFixed(2)}" y1="${po[1].toFixed(2)}" x2="${pi[0].toFixed(2)}" y2="${pi[1].toFixed(2)}"`;
+    const line = (w: number, stroke: string): string => `<line ${coords} stroke="${stroke}" stroke-opacity="${opacity.toFixed(3)}" stroke-width="${w}" stroke-linecap="round"/>`;
+    //Wider primary-text edging behind, then the ring-colour line on top.
+    return line(DAY_PEAK_WIDTH_PX + 2 * DAY_PEAK_EDGE_PX, 'var(--primary-text-color, #e0e0e0)') + line(DAY_PEAK_WIDTH_PX, color);
 }
 
 //A whole GROUP (all producers, or all consumers) as ONE zone: a single black band (rounded-rectangle ends, a
@@ -799,25 +886,35 @@ function dayRibbon(camera: SceneCamera, rm: number, gaugeW: number, color: strin
 //ring backgrounds. Hits are returned in member order (for the tooltip hit-test). `dimOf(i)` is the opacity
 //multiplier for member i (1 = normal; <1 fades a ring during hover). `outerRm`/`thickM` are the group band's outer
 //radius + thickness. Each member carries its per-slot intensity `t` in [0, 1], drawn as a variable-width ribbon.
-function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; t: number[] }[], slots: number, dimOf: (i: number) => number, fade = 1, sweep = 1): { svg: string; hits: DayRingHit[] }
+function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, members: { color: string; t: number[] }[], slots: number, dimOf: (i: number) => number, edgeOf: (i: number) => boolean, fade = 1, sweep = 1, liveFrac = 1, peaks = false): { svg: string; hits: DayRingHit[] }
 {
     const ppm    = camera.pxPerMetre || 1;
     const n      = Math.max(1, members.length);
     const sub    = thickM / n;
-    const gaugeW = Math.max(1, sub * ppm * 0.72);    //member ring width (small gap between rings, ~0.28 of the sub)
+    const gaugeW = Math.max(1, sub * ppm * DAY_RIBBON_GAUGE_FRAC);   //member ring width (small gap between rings)
     const circle = (r: number): [number, number][] => Array.from({ length: 48 }, (_, k) => dayPt(camera, r, k / 48));
     //The zone donut hugs the member rings with just a small breathing margin (no big border outside/inside).
     const halfW  = (gaugeW / ppm) / 2;
     const margin = sub * 0.14;
-    //The zone donut fades in with the entry animation (empty band first).
+    //The zone donut fades in with the entry animation (empty band first); its inner + outer circles are edged.
     let svg = dayDonut(camera, outerRm - 0.5 * sub + halfW + margin, outerRm - (n - 0.5) * sub - halfW - margin, DAY_BAND_COLOR, fade);
     const hits: DayRingHit[] = [];
     members.forEach((m, i) =>
     {
         const mMid = outerRm - (i + 0.5) * sub;
-        //Gap uses a cap width of gaugeW: the end discs (radius gaugeW/2) then sit with their edges the same constant
-        //DAY_MIDNIGHT_GAP_PX apart at every ring, so start and end never merge across the midnight gap.
-        svg += dayRibbon(camera, mMid, gaugeW, m.color, m.t, slots, dayGapF(camera, mMid, gaugeW), dimOf(i), fade, sweep);
+        svg += dayRibbon(camera, mMid, gaugeW, m.color, m.t, slots, dimOf(i), edgeOf(i), fade, sweep, liveFrac);
+        //Peak-hour marker (consumers only): a radial line, in the ring's colour, at the ring's busiest slot. It
+        //appears only at the very END of the entry sweep (fades in over its last tenth), not during the fill.
+        if (peaks)
+        {
+            const appear = Math.min(1, Math.max(0, (sweep - 0.9) / 0.1));
+            if (appear > 0)
+            {
+                let pk = 0; let pv = 0;
+                for (let s = 0; s < m.t.length; s++) { if (m.t[s] > pv) { pv = m.t[s]; pk = s; } }
+                if (pv > 0) { svg += dayPeakMarker(camera, mMid, m.color, (pk + 0.5) / slots, DAY_PEAK_OPACITY * dimOf(i) * appear); }
+            }
+        }
         hits.push({ outer: circle(outerRm - i * sub), inner: circle(outerRm - (i + 1) * sub) });
     });
     return { svg, hits };
@@ -991,6 +1088,7 @@ export function projectDayRingFrame(
     solar: number[],
     battery: number[],
     grid: number[],
+    solarColor: string,
     importColor: string,
     batteryColor: string,
     rings: DayDeviceRing[],
@@ -1007,19 +1105,23 @@ export function projectDayRingFrame(
     //Entry-animation progress (0..1); 1 = fully drawn. Below 1, the donuts + start discs fade in, then the ribbons
     //sweep from midnight round the day with the end disc riding the front.
     progress = 1,
+    //Day fraction [0,1] of "now" (1 = a complete day, e.g. yesterday). For today, slots past this are the future:
+    //drawn as a faint hairline (no data yet) rather than a full ribbon.
+    liveFrac = 1,
+    //Hovered ring index (-1 = none), same order as selectedIndex. The hovered AND the selected ring are edge-lit
+    //(a bright outline), like the histogram's focused bar.
+    hoverIndex = -1,
 ): ClockFrame
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
     const ppm     = camera.pxPerMetre || 1;
-    const outerR  = (RING_R_FRAC * minEdge) / ppm;   //same dial size as the other modes (no day-mode zoom)
-    const hubR    = outerR * CLOCK_HUB_R_FRAC;
-    //The ground hour-disc edge; the ring stack sits flush to it, no wasted gap outside.
-    const discR   = outerR * CLOCK_SPOKE_OUTER_FRAC;
+    const outerR  = (RING_R_FRAC * minEdge) / ppm;   //same base dial size as the other modes (no day-mode zoom)
+    //Ring-stack outer edge, pushed out vs the histogram; the inner edge + centre disc are derived below.
+    const discR   = outerR * DAY_RING_OUTER_MULT;
     const tilt    = camera.tiltDeg;
     const bearing = camera.bearingDeg;
-    //Hour labels exactly like the clock/histogram mode: laid flat just outside the ring, radial, no dots. Keeps room
-    //for the period band below and stays visually consistent with the other modes.
-    const labelR = outerR * LABEL_R_MULT;
+    //Hour labels laid flat just outside the (bigger) ring, radial, no dots. Kept consistent with the other modes.
+    const labelR = outerR * DAY_RING_LABEL_MULT;
     const labels = Array.from({ length: 24 }, (_, h) =>
     {
         const p = dayPt(camera, labelR, h / HOURS_PER_DAY);
@@ -1049,7 +1151,7 @@ export function projectDayRingFrame(
     });
     //Producer ribbon thickness = the source's (smoothed) share of the slot's load (already 0..1).
     const producers: { color: string; t: number[] }[] = [];
-    if (hasSolar)   { producers.push({ color: SUN_COLOR_HEX, t: smooth(solar.map(clamp01))   }); }
+    if (hasSolar)   { producers.push({ color: solarColor,    t: smooth(solar.map(clamp01))   }); }
     if (hasGrid)    { producers.push({ color: importColor,   t: smooth(grid.map(clamp01))    }); }
     if (hasBattery) { producers.push({ color: batteryColor,  t: smooth(battery.map(clamp01)) }); }
     const nP = producers.length;
@@ -1066,15 +1168,30 @@ export function projectDayRingFrame(
     });
 
     const nC = consumers.length;
-    //A clear gap (~one member band) sets the producers apart from the consumers.
-    const rawSub   = (discR - hubR) / Math.max(1, nP + nC);
-    const groupGap = (nP > 0 && nC > 0) ? rawSub : 0;
-    const sub      = (discR - hubR - groupGap) / Math.max(1, nP + nC);
+    //Radial layout (outer -> inner): producer zone (FIXED width per ring), a uniform pad, consumer zone, the SAME
+    //pad, then the FIXED centre disc. The consumer rings share whatever space is left between the producer zone
+    //and the centre, so a group of many devices just draws thinner rings; the centre never balloons. The pad only
+    //appears where a boundary exists.
+    const pad        = DAY_ZONE_PAD_FRAC * outerR;
+    const centreR    = DAY_CENTER_DISC_FRAC * outerR;                //FIXED
+    const padBetween = (nP > 0 && nC > 0) ? pad : 0;
+    const padCentre  = (nP + nC > 0) ? pad : 0;
+    const producerSub   = DAY_PRODUCER_W_FRAC * outerR;             //FIXED per producer ring
+    const producerThick = nP * producerSub;
+    //Consumers fill the remainder between the producer zone and the fixed centre (floored so it never inverts);
+    //dayRunGroup derives each ring's width from this thickness / count, so 12 devices just draw thinner.
+    const consumerThick = Math.max(0, discR - centreR - padCentre - padBetween - producerThick);
 
-    let ringSvg = '';
+    //Producers and consumers are drawn into SEPARATE layers: producers never change between drill levels, so the
+    //drill zoom must not touch them; only the consumer layer (+ the centre disc) zooms.
+    let producerSvg = '';
+    let consumerSvg = '';
     let dayHits: DayRingHit[] = [];
-    //Every non-selected ring fades; the selected one (and everything, when nothing is selected) stays full.
-    const dimAt = (globalIndex: number): number => (selectedIndex < 0 || selectedIndex === globalIndex) ? 1 : 0.22;
+    //A selection fades every OTHER ring; the selected AND the hovered ring stay full (so their edge reads). With
+    //no selection nothing fades. Hover alone never dims.
+    const dimAt = (globalIndex: number): number => (selectedIndex < 0 || selectedIndex === globalIndex || globalIndex === hoverIndex) ? 1 : 0.22;
+    //The hovered AND the selected ring are edge-lit (a bright outline), like the histogram's focused bar.
+    const edgeAt = (globalIndex: number): boolean => globalIndex === hoverIndex || globalIndex === selectedIndex;
     //Entry sweep: donuts + start discs fade in over the first quarter, then the ribbon sweeps round the day.
     const ease  = (x: number): number => { const c = Math.min(1, Math.max(0, x)); return 1 - (1 - c) ** 3; };
     const fade  = ease(progress / 0.25);
@@ -1083,26 +1200,40 @@ export function projectDayRingFrame(
     if (nP > 0)
     {
         //Producer global hit index is just k.
-        const g = dayRunGroup(camera, cursor, nP * sub, producers, slots, (k) => dimAt(k), fade, sweep);
-        ringSvg += g.svg;
+        const g = dayRunGroup(camera, cursor, producerThick, producers, slots, (k) => dimAt(k), (k) => edgeAt(k), fade, sweep, liveFrac);
+        //Multi-colour glow rimming the zone's outer + inner circles, from the producer colours: marks it fixed.
+        const glow = dayZoneGlow(camera, cursor, cursor - producerThick, producers.map(p => p.color), DAY_PROD_GLOW_OPACITY * fade);
+        producerSvg += glow + g.svg;
         dayHits = dayHits.concat(g.hits);
-        cursor -= nP * sub + groupGap;
+        cursor -= producerThick + padBetween;   //pad before the consumer zone
     }
     if (nC > 0)
     {
-        //A device's global hit index is nP + k.
-        const g = dayRunGroup(camera, cursor, nC * sub, consumers, slots, (k) => dimAt(nP + k), fade, sweep);
-        ringSvg += g.svg;
+        //A device's global hit index is nP + k. Consumers carry the peak-hour markers.
+        const g = dayRunGroup(camera, cursor, consumerThick, consumers, slots, (k) => dimAt(nP + k), (k) => edgeAt(nP + k), fade, sweep, liveFrac, true);
+        consumerSvg += g.svg;
         dayHits = dayHits.concat(g.hits);   //hit index: producers 0..nP-1 then devices nP..
     }
+    //Centre disc: same background as the zone donuts, with a 2 px primary-text outline. Its OWN layer (stays fixed,
+    //like the producers, while the consumer rings flip); only its content (the button) fades.
+    const centerSvg = dayDonut(camera, centreR, 0, DAY_BAND_COLOR, fade, DAY_CENTER_EDGE_PX);
+
+    //Centre-icon anchor: midway from the disc centre to its TOPMOST screen point, so the icon sits in the disc's
+    //upper half (leaving the lower half for content below).
+    let topPt = homeCtr;
+    for (let k = 0; k < 48; k++) { const p = dayPt(camera, centreR, k / 48); if (p[1] < topPt[1]) { topPt = p; } }
+    const centerAnchor = { x: (homeCtr[0] + topPt[0]) / 2, y: (homeCtr[1] + topPt[1]) / 2 };
 
     return {
         guideSvg,
-        svg: ringSvg,
+        svg: producerSvg,
+        dayConsumerSvg: consumerSvg,
+        dayCenterSvg: centerSvg,
         hits: [], labels, compass: [],
-        home: { x: homeCtr[0], y: homeCtr[1], r: hubR * ppm },
+        home: { x: homeCtr[0], y: homeCtr[1], r: centreR * ppm },
         decal,
         dayHits,
+        centerAnchor,
     };
 }
 

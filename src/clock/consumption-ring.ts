@@ -3,7 +3,7 @@
 //finer cadence draws a finer ring; the change-series is fetched at the matching recorder period.
 
 import { fetchChangeSeries, fetchChangeById, outlierCapKwh, type ChangeBucket } from '../data/sources/energy-stats';
-import { activeGroups, groupDevices, groupColorHex } from '../data/sources/device-consumption';
+import { activeGroups, groupDevices, groupColorHex, deviceName } from '../data/sources/device-consumption';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import { consumptionLoad } from '../core/energy';
 import { displayUpdateFrequencyPerHour, consumptionRingHidden, monitoringGroupName, type HeliosConfig } from '../core/config/helios-config';
@@ -54,6 +54,8 @@ export interface DeviceRun
     solarPct:    number;
     gridPct:     number;
     batteryPct:  number;
+    //Group rings only: the per-device runs of the group, for the drill-down level (one ring per member device).
+    members?:    DeviceRun[];
 }
 
 //Summarise a device for the day ring from its per-slot energy (kWh): its day total plus the per-slot series the
@@ -233,25 +235,32 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     //One ring per active monitoring group: sum the group's visible devices' per-slot energy into a single run in
     //the group's colour. activeGroups returns 1..GROUP_COUNT in order, so the outer ring is group 1, nesting inward.
     const el = host as unknown as Element;
+    //Split a run's daily energy across the three sources by each slot's share (the three sum to ~1), for the panel.
+    const attributeShares = (run: DeviceRun): void =>
+    {
+        let sol = 0; let gr = 0; let bat = 0;
+        for (let s = 0; s < slots; s++) { const v = Math.max(0, run.values[s]); sol += v * shares.solar[s]; gr += v * shares.grid[s]; bat += v * shares.battery[s]; }
+        if (run.dailyKwh > 0) { run.solarPct = sol / run.dailyKwh; run.gridPct = gr / run.dailyKwh; run.batteryPct = bat / run.dailyKwh; }
+    };
     const devices: DeviceRun[] = [];
     for (const g of activeGroups(host.config, d))
     {
         const values = new Array<number>(slots).fill(0);
+        //One member run per visible device of the group (drill-down level), plus the summed group ring.
+        const members: DeviceRun[] = [];
         for (const dev of groupDevices(host.config, d, g))
         {
             const dv = binSlots(deviceById?.[dev.statConsumption] ?? null, slots);
             for (let s = 0; s < slots; s++) { values[s] += Math.max(0, dv[s]); }
+            const mRun = detectDeviceRuns(dv, dev.index, deviceName(host.hass, dev), dev.statConsumption);
+            attributeShares(mRun);
+            members.push(mRun);
         }
         const name = monitoringGroupName(host.config, g) || `${pickTranslations(host.hass?.language).editor.group ?? 'Group'} ${g}`;
         const run  = detectDeviceRuns(values, g, name, `group-${g}`);
         run.color  = groupColorHex(el, host.config, g);
-        //Attribute the group's energy to the solar / grid / battery share of each slot it ran, for the panel
-        //(the three sum to ~1, so the panel's split reads as a real 100%).
-        let sol = 0;
-        let gr  = 0;
-        let bat = 0;
-        for (let s = 0; s < slots; s++) { const v = Math.max(0, run.values[s]); sol += v * shares.solar[s]; gr += v * shares.grid[s]; bat += v * shares.battery[s]; }
-        if (run.dailyKwh > 0) { run.solarPct = sol / run.dailyKwh; run.gridPct = gr / run.dailyKwh; run.batteryPct = bat / run.dailyKwh; }
+        attributeShares(run);
+        run.members = members;
         devices.push(run);
     }
     const hasSolar   = d.solarStatEnergyFroms.length > 0;

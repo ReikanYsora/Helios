@@ -16,7 +16,8 @@ export const heliosCardEnergyClockCss = css`
     }
 
     /*  Screen-space SVG the cylinders paint into each frame. Above the basemap and home prism, below the
-        controls; inert so map drag-rotate passes straight through. */
+        controls; inert so map drag-rotate passes straight through. In day mode this layer holds the STATIC
+        producer rings (they never move during a drill). */
     .clock-svg
     {
         position: absolute;
@@ -26,6 +27,144 @@ export const heliosCardEnergyClockCss = css`
         z-index: 5;
         pointer-events: none;
         overflow: visible;
+    }
+    /*  Day-mode consumer rings + centre disc, in a 3D card flipper so the drill reveal (controller-driven) pivots
+        them around the 0h-12h axis WITHOUT touching the producer rings above. The perspective is scoped to this
+        wrapper so it never distorts the ground-laid hour labels' own perspective transforms. */
+    .clock-consumers-persp
+    {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        pointer-events: none;
+        perspective: 1400px;
+    }
+    .clock-consumers-flip
+    {
+        position: absolute;
+        inset: 0;
+        transform-style: preserve-3d;
+        transform-origin: center;   /*  vertical 0h-12h axis  */
+        transition: transform 300ms ease;
+    }
+    .clock-consumers-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+    }
+    /*  The back face is pre-rotated 180deg: it faces away at rest and toward the viewer once the flipper turns.  */
+    .clock-face-back
+    {
+        transform: rotateY(180deg);
+    }
+    /*  Centre layer, kept FIXED (like the producer rings) while the consumer rings flip. Drawn BEFORE the consumer
+        flipper so it sits BELOW it: the flipping rings pass over the centre disc. */
+    .clock-center-layer
+    {
+        position: absolute;
+        inset: 0;
+    }
+    .clock-center-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+    }
+    /*  Centre content, pinned to the projected disc centre (left/top + --cci-disc set per frame). Holds the Helios
+        mark at the top level, the exit button while drilled; the whole thing fades on a drill (content swap). */
+    .clock-center-content
+    {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 6;
+        transform: translate(-50%, -50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: calc(var(--cci-disc, 40px) * 1.7);
+        height: calc(var(--cci-disc, 40px) * 1.7);
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity var(--ha-animation-duration-fast, 200ms) ease;
+    }
+    /*  Helios mark filling the disc at the top level, in the theme text colour. */
+    .clock-center-logo
+    {
+        display: flex;
+        width: calc(var(--cci-disc, 40px) * 1.4);
+        height: calc(var(--cci-disc, 40px) * 1.4);
+        color: var(--primary-text-color, #e0e0e0);
+    }
+    .clock-center-logo svg
+    {
+        width: 100%;
+        height: 100%;
+    }
+
+    /*  Day-ring centre exit button: shown (and clickable) only while drilled into a group; it returns to the group
+        level. A back arrow sits above the group's glyph + name, all inside the central disc. Upright (no tilt). */
+    .clock-center-btn
+    {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: calc(var(--cci-disc, 40px) * 0.06);
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--primary-text-color, #e0e0e0);
+        cursor: pointer;
+        pointer-events: none;
+        transition: transform 120ms ease;
+        -webkit-tap-highlight-color: transparent;
+        line-height: 1;
+    }
+    .clock-center-btn.is-open
+    {
+        pointer-events: auto;
+    }
+    .clock-center-btn:hover  { transform: scale(1.06); }
+    .clock-center-btn:active { transform: scale(0.97); }
+    .clock-center-btn:focus-visible { outline: none; }
+    /*  Back-arrow hint on top, muted; the glyph / number carries the group colour below it. */
+    .clock-center-btn .cci-back
+    {
+        --mdc-icon-size: calc(var(--cci-disc, 40px) * 0.4);
+        opacity: 0.7;
+    }
+    .clock-center-btn .cci-glyph
+    {
+        --mdc-icon-size: calc(var(--cci-disc, 40px) * 0.55);
+    }
+    .clock-center-btn .cci-num
+    {
+        font-size: calc(var(--cci-disc, 40px) * 0.55);
+        font-weight: var(--ha-font-weight-bold, 700);
+        font-variant-numeric: tabular-nums;
+    }
+    .clock-center-btn .cci-name
+    {
+        max-width: calc(var(--cci-disc, 40px) * 1.5);
+        font-size: calc(var(--cci-disc, 40px) * 0.2);
+        font-weight: var(--ha-font-weight-medium, 500);
+        text-align: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     /*  Hour labels laid flat on the ground (transform set per frame), outside the ring of cylinders.

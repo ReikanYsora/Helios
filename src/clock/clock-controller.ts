@@ -6,9 +6,13 @@ import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
 import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
-import { refreshDayRing, type DayRingData } from './consumption-ring';
+import { refreshDayRing, type DayRingData, type DeviceRun } from './consumption-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
+import { serverHourFrac } from '../core/time/timezone';
 import { getHomeCoords } from '../card/init';
+import { monitoringGroupIcon } from '../core/config/helios-config';
+import { groupColorHex } from '../data/sources/device-consumption';
+import type { SceneCamera } from '../scene/projection';
 import
 {
     type ClockData, type ClockHit, type ClockRingInput, type ClockFrame,
@@ -23,6 +27,10 @@ import
 //and the dial tooltips. Extracted from HeliosCard; the reactive @state it drives (_clockData,
 //_clockTargets, _clockHoverSlot, _clockHomeHover, _nightFrac, the query refs, ...) stays on
 //the card and is reached through `this.host` so Lit reactivity and the energy-clock helpers keep working.
+
+//Card-flip duration when drilling between the group level and a group's members (ms). MUST match the
+//.clock-consumers-flip CSS transition, since the commit is timed off it.
+const DAY_DRILL_FLIP_MS = 300;
 
 //Even-odd ray-cast: is the screen point inside the projected polygon (a device ring's outer/inner circle)?
 function pointInPoly(poly: [number, number][], x: number, y: number): boolean
@@ -135,6 +143,9 @@ export class ClockController
         this.host._clockHomeHover = false;
         this.host._clockSelectedSlot = null;
         this._clockHomePinned = false;
+        this.host._dayHoverKey = null;
+        this.host._dayGroupDrill = null;
+        if (this._dayDrillTimer) { clearTimeout(this._dayDrillTimer); this._dayDrillTimer = undefined; }
         //Leaving the day view restores the camera it saved before entering (top-down + lock is day-only).
         if (this.host._viewMode === 'day' && mode !== 'day') { this.host._engine?.exitDayView(); }
         if (mode === 'clock')
@@ -473,18 +484,9 @@ export class ClockController
         //No bars, no rail, no tooltip: just the base ground ring.
         if (this.host._viewMode === 'day')
         {
-            const el          = this.host as unknown as Element;
-            const dr          = this.host._dayRing;
-            const importColor = ENERGY_COLOR.gridImport(el);
-            const batteryColor = ENERGY_COLOR.batteryOut(el);
-            const devs        = dr?.devices ?? [];
-            const rings       = devs.map(dev => ({
-                color:  dev.color ?? deviceColorByIndex(el, dev.index),
-                values: dev.values,
-            }));
             //Entry-sweep progress (0..1); 1 = fully drawn (no animation in flight).
-            const anim        = this.host._dayAnimStart > 0 ? Math.min(1, (Date.now() - this.host._dayAnimStart) / DAY_ANIM_MS) : 1;
-            const frame       = projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], importColor, batteryColor, rings, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, this._daySelectedIndex(dr), dr?.maxKw ?? 0, anim);
+            const anim  = this.host._dayAnimStart > 0 ? Math.min(1, (Date.now() - this.host._dayAnimStart) / DAY_ANIM_MS) : 1;
+            const frame = this._buildDayFrame(camera, this.host._dayGroupDrill, anim);
             this.host._dayHitPolys = frame.dayHits ?? [];
             this._applyClockFrame(frame);
             return;
@@ -547,6 +549,10 @@ export class ClockController
     private _applyClockFrame(frame: ClockFrame): void
     {
         if (this.host._clockSvg) { this.host._clockSvg.innerHTML = frame.svg; }
+        //Day mode draws consumers onto the flipper's FRONT face + the centre disc onto its own counter-flip layer
+        //(both separate from the static producers); clock mode has neither, so this clears them.
+        if (this.host._dayConsumersFront) { this.host._dayConsumersFront.innerHTML = frame.dayConsumerSvg ?? ''; }
+        if (this.host._dayCenterSvg)      { this.host._dayCenterSvg.innerHTML      = frame.dayCenterSvg ?? ''; }
         this.host._engine?.setGroundOverlay(frame.guideSvg);
         this.host._engine?.setGroundDecal(frame.decal.svg, frame.decal.active);
         this._clockHits = frame.hits;
@@ -570,13 +576,38 @@ export class ClockController
             node.style.top       = `${c.y.toFixed(1)}px`;
             node.style.transform = c.transform;
         });
+        //Centre content (day mode): pin it to the projected disc centre and expose the disc radius so the logo /
+        //exit button size to the disc. Its content (Helios mark at the top level, exit button while drilled) is
+        //Lit-rendered.
+        const cc = this.host._clockCenterContent;
+        const anchor = frame.home;
+        if (cc && anchor)
+        {
+            cc.style.left = `${anchor.x.toFixed(1)}px`;
+            cc.style.top  = `${anchor.y.toFixed(1)}px`;
+            cc.style.setProperty('--cci-disc', `${(frame.home?.r ?? 0).toFixed(0)}px`);
+        }
     }
 
     //Mouse hover hit-test against the cylinder axes; updates the glow highlight + tooltip. Cleared during a
     //drag (buttons pressed). Touch has no hover, so it's handled by tap below (onClockTapStart/End).
     public onClockHover = (e: PointerEvent): void =>
     {
-        if (this.host._viewMode !== 'clock' || e.pointerType !== 'mouse')
+        if (e.pointerType !== 'mouse')
+        {
+            return;
+        }
+        //Day mode: hover the ring under the cursor (edge-lights it + drives the detail panel). Ignored mid-flip.
+        if (this.host._viewMode === 'day')
+        {
+            const card = this.host._haCard;
+            if (!card || this._dayFlipping) { return; }
+            const rect = card.getBoundingClientRect();
+            const key  = e.buttons !== 0 ? null : this._dayKeyAt(e.clientX - rect.left, e.clientY - rect.top);
+            if (key !== this.host._dayHoverKey) { this.host._dayHoverKey = key; }
+            return;
+        }
+        if (this.host._viewMode !== 'clock')
         {
             return;
         }
@@ -620,29 +651,63 @@ export class ClockController
         return !!h && Math.hypot(x - h.x, y - h.y) <= h.r;
     }
 
+    //The consumer runs at a given drill level: the group rings at the top level (null), or a group's member device
+    //rings when drilled in (empty if that group vanished).
+    private _dayConsumerRunsFor(dr: DayRingData | null, drill: number | null): DeviceRun[]
+    {
+        if (!dr) { return []; }
+        if (drill === null) { return dr.devices; }
+        return dr.devices.find(d => d.statId === `group-${drill}`)?.members ?? [];
+    }
+    //The consumer runs at the CURRENT drill level.
+    private _dayConsumerRuns(dr: DayRingData | null): DeviceRun[]
+    {
+        return this._dayConsumerRunsFor(dr, this.host._dayGroupDrill);
+    }
+
+    //Project a day frame for a given drill level. Selection / hover only apply to the CURRENT level; a pre-rendered
+    //other level (the flip's back face) passes none. `anim` is the entry-sweep progress (1 = fully drawn).
+    private _buildDayFrame(camera: SceneCamera, drill: number | null, anim: number): ClockFrame
+    {
+        const el = this.host as unknown as Element;
+        const dr = this.host._dayRing;
+        const solarColor   = ENERGY_COLOR.pv(el);
+        const importColor  = ENERGY_COLOR.gridImport(el);
+        const batteryColor = ENERGY_COLOR.batteryOut(el);
+        const rings = this._dayConsumerRunsFor(dr, drill).map(dev => ({
+            color:  dev.color ?? deviceColorByIndex(el, dev.index),
+            values: dev.values,
+        }));
+        const liveFrac = this.host._timelineMode === 'yesterday' ? 1 : serverHourFrac(Date.now()) / HOURS_PER_DAY;
+        const current  = drill === this.host._dayGroupDrill;
+        const selIdx   = current ? this._dayKeyIndex(dr, this.host._daySelectedKey) : -1;
+        const hovIdx   = current ? this._dayKeyIndex(dr, this.host._dayHoverKey) : -1;
+        return projectDayRingFrame(camera, dr?.solar ?? [], dr?.battery ?? [], dr?.grid ?? [], solarColor, importColor, batteryColor, rings, dr?.hasSolar ?? false, dr?.hasGrid ?? false, dr?.hasBattery ?? false, selIdx, dr?.maxKw ?? 0, anim, liveFrac, hovIdx);
+    }
+
     //Ordered selection keys matching the frame's ring order: producers (solar, grid, battery, when configured) then
-    //devices in their display order. The key is stable ('solar' / 'grid' / 'battery' or 'dev:<statId>'), so a
-    //selection survives a reorder or refetch.
+    //the current level's consumer rings in display order. The key is stable ('solar' / 'grid' / 'battery' or
+    //'dev:<statId>'), so a selection survives a reorder or refetch.
     private _daySelectionKeys(dr: DayRingData): string[]
     {
         const keys: string[] = [];
         if (dr.hasSolar)   { keys.push('solar'); }
         if (dr.hasGrid)    { keys.push('grid'); }
         if (dr.hasBattery) { keys.push('battery'); }
-        for (const d of dr.devices) { keys.push(`dev:${d.statId}`); }
+        for (const d of this._dayConsumerRuns(dr)) { keys.push(`dev:${d.statId}`); }
         return keys;
     }
 
-    //Resolve the saved selection key to a frame ring index (-1 = nothing selected, or the selected ring is gone).
-    private _daySelectedIndex(dr: DayRingData | null): number
+    //Resolve a ring key to its frame ring index (-1 = no key, or the ring is gone).
+    private _dayKeyIndex(dr: DayRingData | null, key: string | null): number
     {
-        const key = this.host._daySelectedKey;
         if (!dr || !key) { return -1; }
         return this._daySelectionKeys(dr).indexOf(key);
     }
 
-    //Day-mode selection panel (top-right, the scene detail-panel style): the selected ring's name + day total, and
-    //for a device its solar / grid / battery split (which sums to 100%). The accent tints the panel border.
+    //Day-mode selection panel (top-right, the scene detail-panel style): the ring's name + day total. A GROUP ring
+    //additionally lists each member entity's consumption; an individual device shows its solar / grid / battery
+    //split. Rows with a `label` render name + value (device style); the rest render icon + value.
     public renderDaySelectionPanel(key: string): TemplateResult | typeof nothing
     {
         const dr = this.host._dayRing;
@@ -650,45 +715,145 @@ export class ClockController
         const el = this.host as unknown as Element;
         const kwh = (v: number): string => `${v.toFixed(2)} kWh`;
         const pct = (v: number): string => `${Math.round(v * 100)} %`;
-        const panel = (accent: string, name: string, rows: { icon: string; value: string }[]): TemplateResult => html`
-            <div class="detail-panel" style="--detail-accent:${accent}">
-                <div class="dp-head">${name}</div>
-                ${rows.map(r => html`<div class="dp-row"><ha-icon icon=${r.icon}></ha-icon><span>${r.value}</span></div>`)}
-            </div>`;
-        if (key === 'solar')   { return panel('#ffc107', 'Solar', [{ icon: 'mdi:white-balance-sunny', value: kwh(dr.solarKwh) }]); }
-        if (key === 'grid')    { return panel(ENERGY_COLOR.gridImport(el), 'Grid', [{ icon: 'mdi:transmission-tower', value: kwh(dr.gridKwh) }]); }
-        if (key === 'battery') { return panel(ENERGY_COLOR.batteryOut(el), 'Battery', [{ icon: 'mdi:battery', value: kwh(dr.batteryKwh) }]); }
-        const dev = dr.devices.find(d => `dev:${d.statId}` === key);
+        if (key === 'solar')   { return this._dayPanel(ENERGY_COLOR.pv(el), 'Solar', [{ icon: 'mdi:solar-power', value: kwh(dr.solarKwh) }]); }
+        if (key === 'grid')    { return this._dayPanel(ENERGY_COLOR.gridImport(el), 'Grid', [{ icon: 'mdi:transmission-tower', value: kwh(dr.gridKwh) }]); }
+        if (key === 'battery') { return this._dayPanel(ENERGY_COLOR.batteryOut(el), 'Battery', [{ icon: 'mdi:battery', value: kwh(dr.batteryKwh) }]); }
+        const dev = this._dayConsumerRuns(dr).find(d => `dev:${d.statId}` === key);
         if (!dev) { return nothing; }
-        const rows = [
+        const accent = dev.color ?? deviceColorByIndex(el, dev.index);
+        //Total + solar / grid / battery split (shared by devices and groups).
+        const rows: { icon?: string; label?: string; value: string }[] = [
             { icon: 'mdi:sigma',               value: kwh(dev.dailyKwh) },
             { icon: 'mdi:white-balance-sunny', value: pct(dev.solarPct) },
             { icon: 'mdi:transmission-tower',  value: pct(dev.gridPct) },
         ];
         if (dr.hasBattery) { rows.push({ icon: 'mdi:battery', value: pct(dev.batteryPct) }); }
-        return panel(dev.color ?? deviceColorByIndex(el, dev.index), dev.name, rows);
+        //Group ring: additionally, one row per member entity (its day consumption).
+        if (dev.members && dev.members.length > 0)
+        {
+            for (const m of dev.members) { rows.push({ label: m.name, value: kwh(m.dailyKwh) }); }
+        }
+        return this._dayPanel(accent, dev.name, rows);
     }
 
-    //Day-mode tap: toggle the ring under the point (re-tapping the selected ring, or tapping empty space, clears it).
-    private _daySelectAt(x: number, y: number): void
+    //Shared detail-panel body: a header + rows (label rows render name + value; the rest icon + value).
+    private _dayPanel(accent: string, name: string, rows: { icon?: string; label?: string; value: string }[]): TemplateResult
+    {
+        return html`
+            <div class="detail-panel" style="--detail-accent:${accent}">
+                <div class="dp-head">${name}</div>
+                ${rows.map(r => r.label !== undefined
+                    ? html`<div class="dp-row dp-row-device"><span class="dp-label">${r.label}</span><span class="dp-value">${r.value}</span></div>`
+                    : html`<div class="dp-row"><ha-icon icon=${r.icon}></ha-icon><span>${r.value}</span></div>`)}
+            </div>`;
+    }
+
+
+    //The ring key under a screen point (on a band = inside its outer poly, outside its inner), or null.
+    private _dayKeyAt(x: number, y: number): string | null
     {
         const dr = this.host._dayRing;
         const polys = this.host._dayHitPolys;
-        let idx = -1;
+        const keys = dr ? this._daySelectionKeys(dr) : [];
         for (let i = 0; i < polys.length; i++)
         {
-            if (pointInPoly(polys[i].outer, x, y) && !pointInPoly(polys[i].inner, x, y)) { idx = i; break; }
+            if (pointInPoly(polys[i].outer, x, y) && !pointInPoly(polys[i].inner, x, y))
+            {
+                return i < keys.length ? keys[i] : null;
+            }
         }
-        const keys = dr ? this._daySelectionKeys(dr) : [];
-        const hitKey = idx >= 0 && idx < keys.length ? keys[idx] : null;
+        return null;
+    }
+
+    //Day-mode tap. At the top level, tapping a GROUP ring drills into it (its member rings replace the groups);
+    //any other tap toggles the ring's selection (detail panel). Tapping empty space clears the selection.
+    private _daySelectAt(x: number, y: number): void
+    {
+        if (this._dayFlipping) { return; }   //ignore ring taps while the drill flip is in flight
+        const hitKey = this._dayKeyAt(x, y);
+        const gm = hitKey ? /^dev:group-(\d+)$/.exec(hitKey) : null;
+        if (this.host._dayGroupDrill === null && gm)
+        {
+            this.enterGroup(Number(gm[1]));
+            return;
+        }
         this.host._daySelectedKey = (hitKey && hitKey === this.host._daySelectedKey) ? null : hitKey;
         this.host.persistUiState();
     }
 
+    //Drill into a group / back out to the groups with a 3D CARD FLIP around the 0h-12h (vertical) axis: the target
+    //level is pre-rendered onto the flipper's BACK face, the consumer layer pivots edge-on and reveals it, giving a
+    //clear "the devices are underneath the group" reading. Only the consumer layer flips; the producer rings stay.
+    //Hover + clicks are disabled for the duration (this._dayFlipping).
+    public enterGroup(g: number): void { this._drillTo(g); }
+    public exitGroup(): void { this._drillTo(null); }
+    private _drillTo(target: number | null): void
+    {
+        if (this.host._dayGroupDrill === target || this._dayFlipping) { return; }
+        const camera = this.host._engine?._renderer?.camera;
+        const flip   = this.host._dayConsumersFlip;
+        const front  = this.host._dayConsumersFront;
+        const back   = this.host._dayConsumersBack;
+        const centre = this.host._clockCenterContent;
+        this.host._daySelectedKey = null;
+        this.host._dayHoverKey = null;
+        //No DOM / camera yet: swap instantly.
+        if (!camera || !camera.hasViewport || !flip || !front || !back)
+        {
+            this.host._dayGroupDrill = target;
+            return;
+        }
+        this._dayFlipping = true;
+        //Pre-render the TARGET level's consumer rings onto the back face (fully drawn, no selection/hover).
+        back.innerHTML = this._buildDayFrame(camera, target, 1).dayConsumerSvg ?? '';
+        //Only the disc CONTENT fades (logo <-> exit button); the disc itself stays fixed, like the producers.
+        if (centre) { centre.style.opacity = '0'; }
+        //Entering flips right (+180), exiting flips back (-180); either way the back (pre-rotated 180) faces us.
+        const deg = target === null ? -180 : 180;
+        flip.style.transform = `rotateY(${deg}deg)`;
+        if (this._dayDrillTimer) { clearTimeout(this._dayDrillTimer); }
+        this._dayDrillTimer = setTimeout(() =>
+        {
+            this._dayDrillTimer = undefined;
+            //Commit: the target becomes the current level and repaints onto the FRONT face; reset the flipper to 0
+            //with no transition (the front now shows exactly what the back showed, so the reset is invisible).
+            this._dayFlipping = false;
+            this.host._dayGroupDrill = target;
+            flip.style.transition = 'none';
+            flip.style.transform  = 'rotateY(0deg)';
+            void flip.getBoundingClientRect();
+            flip.style.transition = '';
+            back.innerHTML = '';
+            if (centre) { centre.style.opacity = '1'; }
+        }, DAY_DRILL_FLIP_MS);
+    }
+    private _dayDrillTimer?: ReturnType<typeof setTimeout>;
+    //True while a drill flip is in flight: hover + ring taps are ignored so the reveal isn't disturbed.
+    public _dayFlipping = false;
+
+    //Centre exit button while drilled into a group: the group's icon (or its number) + name, in the group colour.
+    //Null at the top level (no button drawn).
+    public dayDrillButton(): { icon?: string; num?: string; name: string; color: string } | null
+    {
+        const g = this.host._dayGroupDrill;
+        if (this.host._viewMode !== 'day' || g === null) { return null; }
+        const dr  = this.host._dayRing;
+        const run = dr?.devices.find(d => d.statId === `group-${g}`);
+        const el  = this.host as unknown as Element;
+        const color = run?.color ?? groupColorHex(el, this.host.config, g);
+        const name  = run?.name ?? `${pickTranslations(this.host.hass?.language).editor.group ?? 'Group'} ${g}`;
+        const gi    = monitoringGroupIcon(this.host.config, g);
+        return gi ? { icon: gi, name, color } : { num: String(g), name, color };
+    }
+
     public onClockHoverEnd = (e: PointerEvent): void =>
     {
-        //Day mode has no hover: selection is tap-driven and sticky, so a pointer leaving changes nothing.
-        if (this.host._viewMode === 'day') { return; }
+        //Day mode: leaving drops the transient hover; the tap selection persists and drives the panel.
+        if (this.host._viewMode === 'day')
+        {
+            if (e.pointerType === 'mouse' && this.host._dayHoverKey !== null) { this.host._dayHoverKey = null; }
+            return;
+        }
         //Touch fires pointerleave on finger-up, right after the tap toggled the home/slot: ignore it so a tap
         //isn't cancelled the instant it lands. Touch selection is managed by onClockTapEnd.
         if (e.pointerType !== 'mouse')

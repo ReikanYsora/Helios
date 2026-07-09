@@ -3,6 +3,7 @@ import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state, query, queryAll } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import type { HeliosEngine } from './scene/helios-engine';
+import { HELIOS_LOGO_PATH } from './scene/helios-logo';
 import
 {
     type HeliosConfig,
@@ -231,6 +232,13 @@ export class HeliosCard extends LitElement
     //refetch and can persist to localStorage. Tapping a ring sets it, re-tapping (or tapping empty) clears it; it
     //drives the dim repaint + the top-right detail panel. The hit targets are captured from the last paint.
     @state() _daySelectedKey: string | null = null;
+    //Hovered ring key (mouse, day mode): transient, edge-lights the ring under the cursor.
+    @state() _dayHoverKey: string | null = null;
+    //Drill-down level (day mode): the group number whose member device rings are shown, or null at the top level
+    //(producers + group rings). The centre disc becomes an exit button while drilled in.
+    @state() _dayGroupDrill: number | null = null;
+    //Bound so it can be passed straight to @click (Lit forbids inline arrows in templates).
+    private _onDayExitGroup = (): void => { this._clock.exitGroup(); };
     _dayHitPolys: DayRingHit[] = [];
     //Entry-animation start (ms, Date.now). 0 = no animation in flight, draw the ring fully. Set when day mode is
     //entered or the day is switched (today <-> yesterday); the controller runs a 1 s rAF sweep off it.
@@ -252,6 +260,11 @@ export class HeliosCard extends LitElement
     @state() _clockHomeHover = false;
     @query('ha-card') _haCard?: HTMLElement;
     @query('.clock-svg') _clockSvg?: SVGSVGElement;
+    @query('.clock-consumers-flip') _dayConsumersFlip?: HTMLElement;
+    @query('.clock-face-front') _dayConsumersFront?: SVGSVGElement;
+    @query('.clock-face-back') _dayConsumersBack?: SVGSVGElement;
+    @query('.clock-center-svg') _dayCenterSvg?: SVGSVGElement;
+    @query('.clock-center-content') _clockCenterContent?: HTMLElement;
     @queryAll('.clock-hour-label') _clockLabels!: NodeListOf<HTMLElement>;
     @queryAll('.clock-compass-label') _clockCompassLabels!: NodeListOf<HTMLElement>;
     @state() _chartSeries: {
@@ -932,6 +945,8 @@ export class HeliosCard extends LitElement
             }
             if (_changedProperties.has('_dayRing')
                 || _changedProperties.has('_daySelectedKey')
+                || _changedProperties.has('_dayHoverKey')
+                || _changedProperties.has('_dayGroupDrill')
                 || _changedProperties.has('_clockHomeHover')
                 || _changedProperties.has('_nightFrac'))
             {
@@ -1157,6 +1172,49 @@ export class HeliosCard extends LitElement
                 ${hasHomeCoords && (this._viewMode === 'clock' || this._viewMode === 'day') ? html`
                     <div class="clock-overlay">
                         <svg class="clock-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+                        <!--  Day-mode consumer flipper (3D card flip around the 0h-12h axis to reveal the target
+                              level on the back face) over a FIXED centre layer. The centre is drawn FIRST so it sits
+                              BELOW the consumers: the flipping rings pass over the centre disc. Perspective is scoped
+                              here so it never touches the ground-laid labels' own perspective transforms.  -->
+                        <div class="clock-consumers-persp">
+                            <div class="clock-center-layer">
+                                <svg class="clock-center-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+                                ${this._viewMode === 'day' ? html`
+                                    <!--  Centre content, pinned to the disc per frame: the Helios mark at the top
+                                          level, the group exit button while drilled. Fades on a drill.  -->
+                                    <div class="clock-center-content">
+                                        ${this._dayGroupDrill === null ? html`
+                                            <div class="clock-center-logo">
+                                                <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d=${HELIOS_LOGO_PATH} fill="currentColor"></path>
+                                                </svg>
+                                            </div>
+                                        ` : (() => {
+                                            const b = this._clock.dayDrillButton();
+                                            return html`<button
+                                                class="clock-center-btn ${b ? 'is-open' : ''}"
+                                                type="button"
+                                                aria-label=${b ? `Exit ${b.name}` : ''}
+                                                ?disabled=${!b}
+                                                @click=${this._onDayExitGroup}
+                                            >
+                                                ${b ? html`
+                                                    <ha-icon class="cci-back" icon="mdi:arrow-u-left-top"></ha-icon>
+                                                    ${b.icon
+                                                        ? html`<ha-icon class="cci-glyph" icon=${b.icon} style="color:${b.color}"></ha-icon>`
+                                                        : html`<span class="cci-num" style="color:${b.color}">${b.num}</span>`}
+                                                    <span class="cci-name">${b.name}</span>
+                                                ` : nothing}
+                                            </button>`;
+                                        })()}
+                                    </div>
+                                ` : nothing}
+                            </div>
+                            <div class="clock-consumers-flip">
+                                <svg class="clock-consumers-svg clock-face-front" xmlns="http://www.w3.org/2000/svg"></svg>
+                                <svg class="clock-consumers-svg clock-face-back" xmlns="http://www.w3.org/2000/svg"></svg>
+                            </div>
+                        </div>
                         ${Array.from({ length: 24 }, (_unused, h) => html`
                             <div class="clock-hour-label">${this._clock.formatClockHour(h)}</div>
                         `)}
@@ -1291,10 +1349,10 @@ export class HeliosCard extends LitElement
                       top-right readout (icons only, values in the card's unit). Scene mode only.  -->
                 ${infoOpen && hasHomeCoords ? renderDetailPanel(this) : nothing}
 
-                <!--  Day mode: selecting a ring opens the same top-right panel with that ring's name + day total
-                      (and, for a device, its solar / grid / battery split).  -->
-                ${this._viewMode === 'day' && this._daySelectedKey
-                    ? this._clock.renderDaySelectionPanel(this._daySelectedKey)
+                <!--  Day mode: hovering / selecting a ring opens the top-right panel (name + day total, and for a
+                      group each member entity's consumption).  -->
+                ${this._viewMode === 'day' && (this._dayHoverKey ?? this._daySelectedKey)
+                    ? this._clock.renderDaySelectionPanel((this._dayHoverKey ?? this._daySelectedKey)!)
                     : nothing}
 
             </ha-card>
