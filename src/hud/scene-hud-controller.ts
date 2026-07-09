@@ -1,9 +1,9 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, customEntityId, customEntityColor } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, batterySocPerBank, customEntityId, customEntityColor } from '../core/config/helios-config';
 import { resolveCustomEntityLive, resolveCustomEntityIcon, customChipWatts } from '../data/sources/custom-entity';
-import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, resolveUiColor } from '../core/format/format';
+import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, resolveUiColor, parseNumericState } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
 import { buildArcSegments, flowDuration, type LabelLayout } from './hud';
@@ -280,9 +280,34 @@ export class SceneHudController
             && hasAnyBankPower
             && activeBatteryPower !== null;
 
-        const batterySocText = showSocChip
-            ? `${Math.round(activeBatterySoc!)} %`
-            : '';
+        //Battery SoC chip text: the aggregated mean by default. With `battery-soc-per-bank` and several
+        //wired banks, the live chip lists every bank instead ("100 · 82 %", Energy-dashboard source order)
+        //so a multi-bank install reads per-bank at a glance. Scrub keeps the mean (SoC history is stored
+        //aggregated), and any unreadable bank falls back to the mean (a partial list would misassign banks).
+        let batterySocText = '';
+        if (showSocChip)
+        {
+            batterySocText = `${Math.round(activeBatterySoc!)} %`;
+            const perBankIds = this.host._energyDefaults.batteryStatSocs;
+            if (batterySocPerBank(this.host.config) && !batteryScrubbing && perBankIds.length > 1)
+            {
+                const perBank: string[] = [];
+                for (const id of perBankIds)
+                {
+                    const so = this.host.hass.states?.[id];
+                    const v  = so ? parseNumericState(so.state) : null;
+                    if (v === null)
+                    {
+                        break;
+                    }
+                    perBank.push(`${Math.round(Math.max(0, Math.min(100, v)))}`);
+                }
+                if (perBank.length === perBankIds.length)
+                {
+                    batterySocText = `${perBank.join(' · ')} %`;
+                }
+            }
+        }
         //Chip uses the HA energy dashboard sign convention (discharge positive, charge negative).
         //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
         //coherent with the dashboard. Colour + leader direction below keep the physical sign.

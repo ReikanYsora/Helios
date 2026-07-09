@@ -63,6 +63,8 @@ export const en: Translations = {
         batterySignDefault:           'Default',
         batterySignInverted:          'Inverted',
         batterySignHidden:            'Hidden',
+        batterySocPerBank:            'Battery SoC per bank',
+        batterySocPerBankHint:        'With several battery sources wired, the live SoC chip lists every bank ("100 · 82 %", Energy dashboard order) instead of the average. Scrubbing keeps the average.',
         noUiMode:                     'No UI mode',
         noUiModeHint:                 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.',
         installationSection: 'PV installation',
