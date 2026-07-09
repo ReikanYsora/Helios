@@ -14,7 +14,7 @@ import { activeGroups, groupDevices, deviceName, deviceIcon } from '../data/sour
 import { consumptionLoad } from '../core/energy';
 import { ENERGY_COLOR, energySolarColor, lerpHexToward, formatPower, formatIrradiance, formatEnergyKwh, deviceColorByIndex } from '../core/format/format';
 import type { UnifiedDataStore } from '../data/unifiedStore';
-import { valueDecimals, powerUnit, irradianceUnit, monitoringGroupColor, monitoringGroupIcon } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, monitoringGroupColor, monitoringGroupIcon, GROUP_COUNT } from '../core/config/helios-config';
 import { buildLogoDecal } from '../scene/helios-logo';
 import type { ClockHourly } from './clock-hourly';
 import { modeBucketsPerHour, type TimelineMode } from '../timeline/timeline-modes';
@@ -38,8 +38,13 @@ const RING_R_FRAC     = 0.34;   //outermost ring radius
 const DAY_BAND_COLOR  = 'var(--card-background-color, #000000)';   //group zone background + the ribbon-end holes (theme-linked)
 const DAY_MIDNIGHT_GAP_PX = 6;   //midnight gap width in SCREEN px -- constant at every radius (a slot, not a wedge)
 const RING_INNER_MIN_FRAC = 0.4;//innermost ring radius as a fraction of the outer one
+//How far a PINNED slice fades the OTHER hour bars (1 = fully transparent at full ramp). Only pin dims; hover doesn't.
+const CLOCK_DIM_STRENGTH  = 0.78;
 //Fixed slot count: rings always sit at their slot radius, so adding/removing a filter never re-spaces the others.
-const CLOCK_MAX_FILTERS = 8;
+//Sized to the maximum number of filters availableClockTargets can ever return (6 base metrics: production,
+//consumption, battery-soc, battery, grid, irradiance + one per monitoring group), so the innermost ring never
+//clamps onto its neighbour when everything is enabled.
+const CLOCK_MAX_FILTERS = 6 + GROUP_COUNT;
 const MAX_HEIGHT_FRAC = 0.30;   //tallest bar
 //Bar tangential half-width (scaled per ring) and radial half-depth (fraction of slot spacing so consecutive
 //rings' bars sit flush).
@@ -49,6 +54,9 @@ const LABEL_R_MULT    = 1.18;   //hour labels sit just outside the ring
 const LABEL_MIN_OPACITY = 0.15; //farthest-back hour label opacity (nearest is opaque)
 //Clock-face guide: faint centre ring + 24 spokes reaching toward (but stopping short of) the hour labels.
 const CLOCK_HUB_R_FRAC      = 0.12;
+//Helios hub mark diameter as a fraction of the outer-ring disc: shrunk so the logo doesn't crowd the inner ring.
+//Only the drawn decal scales; the central home tap/hover disc keeps the full radius.
+const LOGO_DECAL_SCALE      = 0.8;
 const CLOCK_SPOKE_OUTER_FRAC = 1.10;
 const CLOCK_GUIDE_OPACITY   = 0.25;
 //Compass: filled N/S triangles just beyond the hour labels, with a letter at each tip. Full opacity (no
@@ -576,14 +584,14 @@ function stackedColumn(
         for (let k = 0; k < bands.length; k++)
         {
             const lo = levels[k]; const hi = levels[k + 1];
-            walls += `<polygon points="${lo[i][0].toFixed(1)},${lo[i][1].toFixed(1)} ${lo[next][0].toFixed(1)},${lo[next][1].toFixed(1)} ${hi[next][0].toFixed(1)},${hi[next][1].toFixed(1)} ${hi[i][0].toFixed(1)},${hi[i][1].toFixed(1)}" fill="${bands[k].wall}" stroke="${stroke}" stroke-width="0.4"/>`;
+            walls += `<polygon points="${lo[i][0].toFixed(1)},${lo[i][1].toFixed(1)} ${lo[next][0].toFixed(1)},${lo[next][1].toFixed(1)} ${hi[next][0].toFixed(1)},${hi[next][1].toFixed(1)} ${hi[i][0].toFixed(1)},${hi[i][1].toFixed(1)}" fill="${bands[k].wall}" stroke="${stroke}" stroke-width="1.4"/>`;
         }
         edges.push({ depth: (levels[0][i][1] + levels[0][next][1]) / 2, faces: walls });
     }
     edges.sort((a, b) => a.depth - b.depth);
     let svg = edges.map(e => e.faces).join('');
     const roof = levels[levels.length - 1].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-    svg += `<polygon points="${roof}" fill="${bands[bands.length - 1].roof}" stroke="${stroke}" stroke-width="0.6"/>`;
+    svg += `<polygon points="${roof}" fill="${bands[bands.length - 1].roof}" stroke="${stroke}" stroke-width="1.6"/>`;
     return svg;
 }
 
@@ -822,9 +830,12 @@ function dayRunGroup(camera: SceneCamera, outerRm: number, thickM: number, membe
 export function projectClockFrame(
     camera: SceneCamera,
     rings: ClockRingInput[],
-    //Focused slot (hover/tap) + the 0..1 fade ramp. dimSlot persists through the fade-out so it ramps smoothly.
+    //PINNED slot + the 0..1 fade ramp: only a pinned slice dims the OTHER bars (they fade transparent). dimSlot
+    //persists through the fade-out so it ramps smoothly. Both the pinned and the hovered bar are edge-lit.
     dimSlot: number | null,
     dim: number,
+    //HOVERED slot (transient): edge-lights that bar only, never dims the others. Null when nothing is hovered.
+    hoverSlot: number | null,
     //Localised compass letters, supplied by the card.
     cardinals: { n: string; s: string; e: string; w: string },
     //Per-unit ceiling override (eased between filter changes so bars don't snap to a new scale). Units missing
@@ -868,7 +879,7 @@ export function projectClockFrame(
     {
         const R = outerR * ringRadiusFrac(ring.slot);
         const ceiling = unitCeil?.get(ring.data.unit) ?? unitMax.get(ring.data.unit) ?? 0;
-        projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, faces, hits);
+        projectHistogramRing(camera, R, outerR, ring, ri, maxHm, ceiling, minEdge, ppm, dimSlot, dim, hoverSlot, faces, hits);
     });
     //The central column is gone: a flat Helios mark now fills the hub (drawn by the engine on the ground plane,
     //UNDER these bars, so the nearer bars occlude it). The bars alone populate the upright depth pass.
@@ -889,7 +900,7 @@ export function projectClockFrame(
     //Highlighted (hover/tap) mark stacks one glow per active filter, in ring order, behind a thin edging. Top
     //faces the equator (south in the northern hemisphere, north in the southern) so it aligns with the sun run.
     const decal = buildLogoDecal({
-        diameterPx: decalDiaPx,
+        diameterPx: decalDiaPx * LOGO_DECAL_SCALE,
         orientDeg:  camera.southern ? 0 : 180,
         highlight:  columnHighlight,
     });
@@ -904,10 +915,11 @@ export function projectClockFrame(
 }
 
 //24 stacked bars, one per hour, sitting BETWEEN the hour lines (centred at H+0.5, each bar the value over
-//H..H+1). The hovered bar glows, others dim. Grow / slide / exit ride on the ring's animation scalars.
+//H..H+1). The hovered AND the pinned bar are edge-lit; only a PINNED bar dims the others (they fade transparent).
+//Grow / slide / exit ride on the ring's animation scalars.
 function projectHistogramRing(
     camera: SceneCamera, R: number, outerR: number, ring: ClockRingInput, ri: number, maxHm: number, ceiling: number,
-    minEdge: number, ppm: number, dimSlot: number | null, dim: number, faces: ClockFace[], hits: ClockHit[]
+    minEdge: number, ppm: number, dimSlot: number | null, dim: number, hoverSlot: number | null, faces: ClockFace[], hits: ClockHit[]
 ): void
 {
     const data   = ring.data;
@@ -917,7 +929,9 @@ function projectHistogramRing(
     const zScale = ceiling > 0 ? (maxHm * ring.heightScale) / ceiling : 0;
     const halfRadial = ringSpacingM(outerR) * BAR_RADIAL_FRAC;
     const halfTan    = (BAR_TANGENT_FRAC * minEdge) / ppm * ringRadiusFrac(ring.slot);
-    const focusHour  = dimSlot === null ? null : Math.floor(dimSlot / CLOCK_SLOTS_PER_HOUR);
+    //Pinned hour drives the transparency of the OTHERS; hovered hour is edge-lit only. Both are "active" (glow).
+    const pinHour   = dimSlot   === null ? null : Math.floor(dimSlot   / CLOCK_SLOTS_PER_HOUR);
+    const hoverHour = hoverSlot === null ? null : Math.floor(hoverSlot / CLOCK_SLOTS_PER_HOUR);
 
     for (let h = 0; h < HOURS_PER_DAY; h++)
     {
@@ -928,8 +942,9 @@ function projectHistogramRing(
         const top   = camera.project(e, n, total * zScale);
         //Hit axis tagged with the hour's first slot, so the card maps it back to the hour.
         hits.push({ slot: h * CLOCK_SLOTS_PER_HOUR, bx: base[0], by: base[1], tx: top[0], ty: top[1] });
-        const active = h === focusHour;
-        const dimOp  = ring.opacity * (focusHour !== null && !active ? 1 - 0.5 * dim : 1);
+        const active = h === pinHour || h === hoverHour;
+        //Only a PINNED slice fades the rest; the edge-lit bars (pinned + hovered) stay fully opaque.
+        const dimOp  = ring.opacity * (pinHour !== null && !active ? 1 - CLOCK_DIM_STRENGTH * dim : 1);
         if (total <= 0)
         {
             //Empty hour: a flat neutral puck so all 24 stay on the dial.

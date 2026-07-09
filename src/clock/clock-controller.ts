@@ -55,9 +55,13 @@ export class ClockController
     public _clockHits: ClockHit[] = [];
     public _clockHoverX = 0;
     public _clockHoverY = 0;
-    //Touch: a tapped tooltip is sticky (hover doesn't fire on touch), cleared by tapping empty space or
-    //another cylinder. _clockTapStart* anchor the move-threshold that tells a tap from a drag-rotate.
-    public _clockTapSticky = false;
+    //Pinned selection (BOTH mouse and touch): tapping a cylinder pins it so its tooltip + the dim-the-others
+    //effect survive the pointer leaving (like the day ring, and like touch where there is no hover). Hover is
+    //transient ON TOP: the pinned slice lives on host._clockSelectedSlot (drives the dim + the fallback tooltip),
+    //the hovered slice on host._clockHoverSlot (edge-light only). _clockHomePinned is the home's equivalent pin.
+    //Slice pin and home pin are mutually exclusive.
+    private _clockHomePinned = false;
+    //_clockTapStart* anchor the move-threshold that tells a tap from a drag-rotate.
     public _clockTapStartX = 0;
     public _clockTapStartY = 0;
     //Per-ring animation, keyed by metric so rapid toggles never desync (no held rebuild, no shared index):
@@ -129,6 +133,8 @@ export class ClockController
         this._clockCeilEase = false;
         this.host._clockHoverSlot = null;
         this.host._clockHomeHover = false;
+        this.host._clockSelectedSlot = null;
+        this._clockHomePinned = false;
         //Leaving the day view restores the camera it saved before entering (top-down + lock is day-only).
         if (this.host._viewMode === 'day' && mode !== 'day') { this.host._engine?.exitDayView(); }
         if (mode === 'clock')
@@ -256,16 +262,16 @@ export class ClockController
         this._clockSlideStart = now;
     }
 
-    //Slice-focus dim fade: ramp _clockDim toward 1 while an hour is focused (others fade to 0.5), back to 0
-    //when the hover/tap ends. _clockDimSlot is kept through the fade-out so the dimmed bars + the focused
-    //spoke ramp back smoothly. Instant in preview / reduced motion.
+    //Pinned-slice dim fade: ramp _clockDim toward 1 while a slice is PINNED (the other bars fade transparent),
+    //back to 0 when it is unpinned. Hover never triggers this (hover only edge-lights). _clockDimSlot is kept
+    //through the fade-out so the dimmed bars ramp back smoothly. Instant in preview / reduced motion.
     public startClockDim(): void
     {
-        if (this.host._clockHoverSlot !== null)
+        if (this.host._clockSelectedSlot !== null)
         {
-            this._clockDimSlot = this.host._clockHoverSlot;
+            this._clockDimSlot = this.host._clockSelectedSlot;
         }
-        const target = this.host._clockHoverSlot !== null ? 1 : 0;
+        const target = this.host._clockSelectedSlot !== null ? 1 : 0;
         if (this.host.preview || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
         {
             this._clockDim = target;
@@ -526,6 +532,7 @@ export class ClockController
         const frame = projectClockFrame(
             camera, rings,
             this._clockDimSlot, this._clockDim,
+            this.host._clockHoverSlot,
             cardinals,
             dispCeil,
             this.host._clockHomeHover,
@@ -575,11 +582,10 @@ export class ClockController
         }
         if (e.buttons !== 0)
         {
-            if (this.host._clockHoverSlot !== null)
-            {
-                this.host._clockHoverSlot = null;
-                this._clockTapSticky = false;
-            }
+            //Dragging (camera rotate): drop the transient hover; the pinned slice (host._clockSelectedSlot) is
+            //untouched so its dim + tooltip persist. Home falls back to its pin.
+            if (this.host._clockHoverSlot !== null)             { this.host._clockHoverSlot = null; }
+            if (this.host._clockHomeHover !== this._clockHomePinned) { this.host._clockHomeHover = this._clockHomePinned; }
             return;
         }
         const card = this.host._haCard;
@@ -591,13 +597,14 @@ export class ClockController
         this._clockHoverX = e.clientX - rect.left;
         this._clockHoverY = e.clientY - rect.top;
         const hit = clockHitTest(this._clockHits, this._clockHoverX, this._clockHoverY);
-        this._clockTapSticky = false;
-        //The home owns only the central disc, and only when no cylinder is under the cursor: it brightens the
-        //prism + shows the window total, and never dims the cylinders.
-        const homeHit = hit === null && this._clockHomeHit(this._clockHoverX, this._clockHoverY);
-        if (homeHit !== this.host._clockHomeHover)
+        //Hover is transient and edge-light ONLY: it sets the hovered slice, never the dim (that's the pin's job,
+        //so hovering never disturbs a pinned selection). The home tooltip shows when the disc is hovered, or when
+        //home is pinned and the cursor is off the bars.
+        const homeHit   = hit === null && this._clockHomeHit(this._clockHoverX, this._clockHoverY);
+        const homeShown = homeHit || (hit === null && this._clockHomePinned);
+        if (homeShown !== this.host._clockHomeHover)
         {
-            this.host._clockHomeHover = homeHit;
+            this.host._clockHomeHover = homeShown;
         }
         if (hit !== this.host._clockHoverSlot)
         {
@@ -683,29 +690,23 @@ export class ClockController
         //Day mode has no hover: selection is tap-driven and sticky, so a pointer leaving changes nothing.
         if (this.host._viewMode === 'day') { return; }
         //Touch fires pointerleave on finger-up, right after the tap toggled the home/slot: ignore it so a tap
-        //isn't cancelled the instant it lands. Touch state is sticky and managed by onClockTapEnd.
+        //isn't cancelled the instant it lands. Touch selection is managed by onClockTapEnd.
         if (e.pointerType !== 'mouse')
         {
             return;
         }
-        if (this.host._clockHomeHover)
-        {
-            this.host._clockHomeHover = false;
-        }
-        //Leaving the surface only dismisses a mouse hover; a tapped (sticky) tooltip stays until tapped away.
-        if (this.host._clockHoverSlot === null || this._clockTapSticky)
-        {
-            return;
-        }
-        this.host._clockHoverSlot = null;
+        //Leaving the surface only drops the transient hover; the pinned slice (host._clockSelectedSlot) is left
+        //alone, so its dim + fallback tooltip stay until tapped away (matching touch). Home falls back to its pin.
+        if (this.host._clockHoverSlot !== null)                   { this.host._clockHoverSlot = null; }
+        if (this.host._clockHomeHover !== this._clockHomePinned)  { this.host._clockHomeHover = this._clockHomePinned; }
     };
 
-    //Remember where the gesture began so a tap can be told from a drag-rotate on release. Day mode selects on tap
-    //for BOTH mouse and touch (no hover), so it records for every pointer type; clock keeps its touch-only tap.
+    //Remember where the gesture began so a tap can be told from a drag-rotate on release. Both clock and day
+    //select on tap for EVERY pointer type (mouse tap pins alongside hover; touch has no hover), so record for all.
     public onClockTapStart = (e: PointerEvent): void =>
     {
         const day = this.host._viewMode === 'day';
-        if ((!day && this.host._viewMode !== 'clock') || (!day && e.pointerType === 'mouse'))
+        if (!day && this.host._viewMode !== 'clock')
         {
             return;
         }
@@ -719,12 +720,13 @@ export class ClockController
         this._clockTapStartY = e.clientY - rect.top;
     };
 
-    //Release: if the pointer barely moved it's a tap. Day mode toggles the ring selection under it; clock toggles a
-    //sticky tooltip on the tapped cylinder. A real drag (past the threshold) rotated the camera and is ignored.
+    //Release: if the pointer barely moved it's a tap. Day mode toggles the ring selection under it; clock pins a
+    //sticky tooltip on the tapped cylinder (re-tap or tap elsewhere clears it). A real drag (past the threshold)
+    //rotated the camera and is ignored.
     public onClockTapEnd = (e: PointerEvent): void =>
     {
         const day = this.host._viewMode === 'day';
-        if ((!day && this.host._viewMode !== 'clock') || (!day && e.pointerType === 'mouse'))
+        if (!day && this.host._viewMode !== 'clock')
         {
             return;
         }
@@ -746,20 +748,25 @@ export class ClockController
         const hit = clockHitTest(this._clockHits, x, y);
         if (hit !== null)
         {
-            this._clockTapSticky = true;
+            //Toggle the pinned slice: re-tapping the pinned one clears its dim. Pinning a slice drops the home pin.
+            //The cursor is over the bar, so keep it hovered (edge-lit) either way.
+            this.host._clockSelectedSlot = hit === this.host._clockSelectedSlot ? null : hit;
+            this._clockHomePinned = false;
             this.host._clockHoverSlot = hit;
             this.host._clockHomeHover = false;
         }
         else if (this._clockHomeHit(x, y))
         {
-            //Tap the home: toggle its window-total tooltip (re-tap or tap elsewhere dismisses).
-            this.host._clockHomeHover = !this.host._clockHomeHover;
+            //Tap the home: toggle its window-total tooltip (re-tap or tap elsewhere dismisses). Drops any slice pin.
+            this._clockHomePinned = !this._clockHomePinned;
+            this.host._clockSelectedSlot = null;
+            this.host._clockHomeHover = this._clockHomePinned;
             this.host._clockHoverSlot = null;
-            this._clockTapSticky = this.host._clockHomeHover;
         }
         else
         {
-            this._clockTapSticky = false;
+            this.host._clockSelectedSlot = null;
+            this._clockHomePinned = false;
             this.host._clockHoverSlot = null;
             this.host._clockHomeHover = false;
         }

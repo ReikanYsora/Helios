@@ -243,8 +243,11 @@ export class HeliosCard extends LitElement
     //Energy-clock rings, one ClockData per active filter (outer -> inner). Rebuilt on a filter/data change.
     //Reactive so the dial repaints on a rebuild; the ClockController mutates it through its host reference.
     @state() _clockData: ClockData[] = [];
-    //Hovered slot; resolves to its hour and lights every ring's area for that hour + drives the tooltip. null = off.
+    //Hovered slot (transient, mouse): edge-lights that hour on every ring + drives the tooltip. null = off.
     @state() _clockHoverSlot: number | null = null;
+    //Pinned slot (tap, mouse + touch): edge-lights AND fades the other hours transparent; its tooltip persists
+    //until tapped away. The hovered slice shows on top without disturbing this. null = nothing pinned.
+    @state() _clockSelectedSlot: number | null = null;
     //Home prism hovered/tapped: brightens it + shows the window-total tooltip (does NOT dim the cylinders).
     @state() _clockHomeHover = false;
     @query('ha-card') _haCard?: HTMLElement;
@@ -881,7 +884,13 @@ export class HeliosCard extends LitElement
                 this._clockTargets.forEach(t => this._clock._clockGrowStart.set(t, now));
                 this._clock.clockAnimate();
             }
+            //Hover only edge-lights the hovered bar: a plain repaint. The dim fade is driven by the PIN below.
             if (_changedProperties.has('_clockHoverSlot'))
+            {
+                this._clock.scheduleClockPaint();
+            }
+            //Pinning/unpinning a slice ramps the dim of the other bars.
+            if (_changedProperties.has('_clockSelectedSlot'))
             {
                 this._clock.startClockDim();
             }
@@ -1154,9 +1163,11 @@ export class HeliosCard extends LitElement
                         ${this._clock.compassLabels().map(o => html`<div class="clock-compass-label" style="color:${o.c}">${o.l}</div>`)}
                         ${this._clockHoverSlot !== null
                             ? this._clock.renderClockTooltip(this._clockHoverSlot)
-                            : (this._clockHomeHover
-                                ? this._clock.renderClockHomeTooltip()
-                                : nothing)}
+                            : this._clockSelectedSlot !== null
+                                ? this._clock.renderClockTooltip(this._clockSelectedSlot)
+                                : (this._clockHomeHover
+                                    ? this._clock.renderClockHomeTooltip()
+                                    : nothing)}
                     </div>
                 ` : nothing}
 

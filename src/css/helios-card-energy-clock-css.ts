@@ -70,7 +70,8 @@ export const heliosCardEnergyClockCss = css`
         position: absolute;
         left: 8px;
         bottom: calc(36px + 12px);
-        z-index: 14;
+        /*  Above the top-left mode rail (z 60) so a tall tooltip is never clipped behind the mode buttons. */
+        z-index: 70;
         min-width: 120px;
         max-width: calc(100% - 16px);
         box-sizing: border-box;
@@ -118,8 +119,9 @@ export const heliosCardEnergyClockCss = css`
         font-variant-numeric: tabular-nums;
     }
 
-    /*  Right-hand metric rail: a dynamic list of clickable chips that retargets the clock. Mirrors the
-        top-left rail; only configured metrics render. */
+    /*  Right-hand metric rail: a single vertical band of stacked filter cells (was a column of separate
+        round buttons, which grew too tall with many metrics). One themed plate; each metric is a flush cell,
+        divided by a hairline, so up to ~10 filters fit in a compact strip. */
     .overlay-top-right
     {
         position: absolute;
@@ -128,17 +130,37 @@ export const heliosCardEnergyClockCss = css`
         z-index: 60;
         display: flex;
         flex-direction: column;
-        align-items: flex-end;
-        gap: 8px;
+        align-items: stretch;
+        gap: 0;
+        overflow: hidden;
+        border-radius: var(--ha-border-radius-lg, 12px);
+        background: var(--card-background-color, #ffffff);
+        box-shadow: var(--helios-shadow-chip);
         pointer-events: none;
     }
-    /*  Idle icon takes the metric's colour so the rail reads like the chips; the active button fills with
-        that same colour, overriding the shared --primary-color fill. */
+    /*  Each metric is a flush cell inside the band: shorter than the free-standing 40 px circle and square
+        (the band clips the outer corners), so the whole strip stays low. */
+    .overlay-top-right .overlay-btn
+    {
+        width: 34px;
+        height: 36px;
+        border-radius: 0;
+    }
+    /*  Hairline divider between stacked cells (skipped on the first). */
+    .overlay-top-right .overlay-btn + .overlay-btn
+    {
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
+    }
+    /*  Idle icon takes the metric's colour so the rail reads like the chips; the active cell fills with
+        that same colour (also on hover/active, overriding the shared --primary-color states). */
     .overlay-top-right .overlay-btn ha-icon
     {
+        --mdc-icon-size: 20px;
         color: var(--clock-btn-color, var(--primary-text-color, #212121));
     }
-    .overlay-top-right .overlay-btn.is-on
+    .overlay-top-right .overlay-btn.is-on,
+    .overlay-top-right .overlay-btn.is-on:hover,
+    .overlay-top-right .overlay-btn.is-on:active
     {
         background: var(--clock-btn-color, var(--primary-color, #03a9f4));
     }
