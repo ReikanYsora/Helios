@@ -52,6 +52,8 @@ export const fr: Translations = {
         batterySignDefault:           'Par défaut',
         batterySignInverted:          'Inversé',
         batterySignHidden:            'Masqué',
+        batterySocPerBank:            'SoC batterie par banc',
+        batterySocPerBankHint:        'Avec plusieurs sources de batterie câblées, le chip de SoC en direct liste chaque banc ("100 · 82 %", ordre du tableau de bord Énergie) au lieu de la moyenne. Le défilement conserve la moyenne.',
         noUiMode:                     'Mode sans interface',
         noUiModeHint:                 'Fait disparaître la timeline et les contrôles de la carte après quelques secondes d\'inactivité. Le moindre appui ou mouvement les fait revenir. Idéal pour un affichage mural.',
         installationSection: 'Installation photovoltaïque',
