@@ -255,3 +255,29 @@ export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: num
     }
     return pt.w;
 }
+
+
+//Average forecast watts across a whole bucket span [startMs, endMs). Production stores each bucket as the MEAN watts
+//over its span (energy / bucket-hours), so on coarse (daily) buckets the forecast must be averaged the same way: a
+//single midpoint sample would read noon's peak watts, not the day's mean, towering the year curve over the actuals.
+//Hours with no forecast coverage count as 0 (night contributes 0 energy but still spans the denominator), matching
+//production which averages the day's energy over the full 24 h. Null only when the span holds no samples at all.
+export function forecastAverageWatts(forecast: readonly SolarForecastPoint[], startMs: number, endMs: number): number | null
+{
+    if (forecast.length === 0 || endMs <= startMs)
+    {
+        return null;
+    }
+    //Sub-sample at half-hour midpoints so 30-minute feeds (Solcast) aren't under-sampled; midpoint rule over an
+    //hourly-native curve is exact enough for a daily mean.
+    const subStepMs = HOUR_MS / 2;
+    let sum = 0;
+    let n = 0;
+    for (let t = startMs + subStepMs / 2; t < endMs; t += subStepMs)
+    {
+        const w = forecastWattsAt(forecast, t);
+        sum += w !== null && Number.isFinite(w) ? Math.max(0, w) : 0;
+        n++;
+    }
+    return n > 0 ? sum / n : null;
+}

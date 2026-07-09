@@ -18,7 +18,7 @@
 import type { HeliosConfig } from '../core/config/helios-config';
 import type { ChartSeries } from '../charts/charts';
 import { changeSeriesToWatts, type ChangeBucket } from './sources/energy-stats';
-import { forecastWattsAt, type SolarForecastPoint } from './energy-forecast';
+import { forecastWattsAt, forecastAverageWatts, type SolarForecastPoint } from './energy-forecast';
 import { modeBucketsPerHour, type TimelineMode } from '../timeline/timeline-modes';
 import { HOUR_MS, DAY_MS } from '../core/config/constants';
 
@@ -208,18 +208,24 @@ function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEn
 
 
 //Forecast = HA Energy's solar forecast (energy/solar_forecast) aligned to store buckets. The forecast is hourly
-//watt-hours; each bucket reads the wh of the forecast hour its midpoint falls inside (stepped hourly curve, the
-//magnitude the Energy dashboard draws). All-null when no forecast source is configured.
+//watt-hours; on fine buckets (<= 1 h) each reads the wh of the forecast hour its midpoint falls inside (stepped
+//hourly curve, the magnitude the Energy dashboard draws). On coarse (daily) buckets a single midpoint sample would
+//read noon's peak watts while production stores the day's MEAN watts, so the whole bucket is averaged instead - else
+//the year curve towers over the actuals. All-null when no forecast source is configured.
 function buildForecast(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
 {
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
     const forecast = host._haSolarForecast;
     if (!forecast || forecast.length === 0) { return out; }
+    const coarse = p.stepMs > HOUR_MS;
     for (let h = 0; h < p.bucketsTotal; h++)
     {
-        const mid = storeStartMs + h * p.stepMs + p.stepMs / 2;
+        const start = storeStartMs + h * p.stepMs;
+        const mid = start + p.stepMs / 2;
         if (mid < storeStartMs || mid >= storeEndMs) { continue; }
-        const w = forecastWattsAt(forecast, mid);
+        const w = coarse
+            ? forecastAverageWatts(forecast, start, start + p.stepMs)
+            : forecastWattsAt(forecast, mid);
         if (w !== null && Number.isFinite(w)) { out[h] = Math.max(0, w); }
     }
     return out;
