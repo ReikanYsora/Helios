@@ -63,6 +63,9 @@ const CLOCK_GUIDE_OPACITY   = 0.25;
 //for a big centre disc (the hovered ring's icon paints there). Tunable.
 const DAY_RING_OUTER_MULT   = 1.22;   //ring-stack outer edge as a multiple of outerR (histogram uses 1.10)
 const DAY_RING_LABEL_MULT   = 1.32;   //hour labels sit just outside the (bigger) ring
+//Uniform shrink of the whole day dial (rings, disc, hour labels all derive from outerR), so its wider
+//1.32x label ring clears the card edge in small layouts. Preserves every internal ratio/padding above.
+const DAY_RING_SCALE        = 0.82;
 const DAY_RIBBON_GAUGE_FRAC = 0.82;   //member ribbon width as a fraction of its sub-band
 //The centre disc is a FIXED size and the producer rings a FIXED width; the consumer rings share whatever radial
 //space is left between them, so a group of 12 devices just draws thinner rings (never a ballooning centre).
@@ -70,12 +73,12 @@ const DAY_ZONE_PAD_FRAC     = 0.10;   //uniform padding between zones + before t
 const DAY_CENTER_DISC_FRAC  = 0.30;   //FIXED centre disc radius (fraction of outerR)
 const DAY_PRODUCER_W_FRAC   = 0.10;   //FIXED width of each producer ring (fraction of outerR)
 //2 px primary-text-colour outline on the CENTRE disc only (the zone donuts stay unedged).
-const DAY_CENTER_EDGE_PX    = 2;
+const DAY_CENTER_EDGE_PX    = 1;
 //Multi-colour glow rimming the PRODUCTION zone's inner + outer circles (built from its producer colours), marking
 //it as the fixed reference zone.
-const DAY_PROD_GLOW_WIDTH   = 4;
-const DAY_PROD_GLOW_BLUR    = 6;
-const DAY_PROD_GLOW_OPACITY = 0.85;
+const DAY_PROD_GLOW_WIDTH   = 2;
+const DAY_PROD_GLOW_BLUR    = 3.5;
+const DAY_PROD_GLOW_OPACITY = 0.5;
 //Midnight tick: a short radial line across the ring at 00h, marking the day's start. FIXED half-length (never
 //scales with the ring width), so every ring shows the same small marker regardless of how wide it is.
 const DAY_TICK_WIDTH_PX     = 2;
@@ -316,13 +319,16 @@ export function availableClockTargets(host: ClockHost): ChartTarget[]
 }
 
 //Rail button appearance per metric: a glyph + the metric's colour (idle icon tint + active fill).
-export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon: string; color: string }
+export function clockTargetMeta(host: ClockHost, target: ChartTarget): { icon?: string; num?: string; color: string }
 {
     const el = host as unknown as Element;
     if (isGroupTarget(target))
     {
-        const g = groupOfTarget(target);
-        return { icon: monitoringGroupIcon(host.config, g) || 'mdi:home-lightning-bolt', color: monitoringGroupColor(host.config, g) };
+        const g     = groupOfTarget(target);
+        const icon  = monitoringGroupIcon(host.config, g);
+        const color = monitoringGroupColor(host.config, g);
+        //Groups fall back to their number glyph when no custom icon is set (mirrors the scene chip and editor pastille).
+        return icon ? { icon, color } : { num: String(g), color };
     }
     switch (target)
     {
@@ -775,7 +781,8 @@ function dayDonut(camera: SceneCamera, outerRm: number, innerRm: number, fill: s
         return d + 'Z';
     };
     //Fill (and the edge stroke) via `style` so CSS vars resolve; a plain `fill=`/`stroke=` attribute would not.
-    const edgeStyle = edgeWidth > 0 ? `;stroke:var(--primary-text-color, #e0e0e0);stroke-width:${edgeWidth};stroke-opacity:${opacity}` : '';
+    //The edge uses Home Assistant's standard card border (colour + width) so the centre disc reads like a mini card.
+    const edgeStyle = edgeWidth > 0 ? `;stroke:var(--ha-card-border-color, var(--divider-color, rgba(0, 0, 0, 0.12)));stroke-width:${edgeWidth};stroke-opacity:${opacity}` : '';
     return `<path d="${ring(outerRm)}${ring(innerRm)}" style="fill:${fill};fill-opacity:${opacity}${edgeStyle}" fill-rule="evenodd"/>`;
 }
 
@@ -1115,7 +1122,7 @@ export function projectDayRingFrame(
 {
     const minEdge = Math.min(camera.centreX * 2, camera.centreY * 2) || 1;
     const ppm     = camera.pxPerMetre || 1;
-    const outerR  = (RING_R_FRAC * minEdge) / ppm;   //same base dial size as the other modes (no day-mode zoom)
+    const outerR  = (RING_R_FRAC * DAY_RING_SCALE * minEdge) / ppm;   //day dial shrunk uniformly so the wide label ring clears the card edge
     //Ring-stack outer edge, pushed out vs the histogram; the inner edge + centre disc are derived below.
     const discR   = outerR * DAY_RING_OUTER_MULT;
     const tilt    = camera.tiltDeg;

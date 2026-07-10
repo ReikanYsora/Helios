@@ -31,8 +31,8 @@ The code is organised in layers:
   `src/hud/scene-hud-controller.ts`), plain classes constructed with the card as
   their `host`. Each owns one view's animation / hit-test / paint / render logic
   and its scratch state, while the reactive data stays on the card; they reach it
-  through `this.host`. This is what keeps the card small: the clock/trend dial and
-  the scene HUD are ~2000 lines that live in their controllers, not in the card.
+  through `this.host`. This is what keeps the card small: the clock and day dials
+  and the scene HUD are ~2000 lines that live in their controllers, not in the card.
 * **The data layer** (`src/data/*`), a typed boundary over the HA WebSocket. Every
   recorder read flows through one gateway, one request cache, one durable last-good
   store, and the shared per-source fetch plumbing (`src/data/sources/*`).
@@ -42,7 +42,7 @@ The code is organised in layers:
   shade. It decides *how* the scene is drawn and projected.
 
 Cutting across all of it, `src/core/*` holds the pure shared primitives that both
-sides reuse: `render-kit/` (2D point geometry, hex + tint colour math), `energy/`
+sides reuse: `render-kit/` (2D point geometry, hex + tint colour math), `energy.ts`
 (the consumption identity), `format/`, `time/` (timezone, sun-zone and sun
 position math), `config/` and `i18n/`.
 
@@ -68,7 +68,7 @@ hass -> data/ (gateway -> request-cache -> durable) -> card @state
 
 ## 2. The 2.5D rendering engine (`src/scene/`)
 
-Helios renders a faux-3D ("2.5D") scene with **no WebGL**. The illusion is a
+Helios renders a **2.5D** scene with **no WebGL**. The illusion is a
 tilted raster basemap with every overlay projected on top in SVG so it stays
 glued to the rotating ground.
 
@@ -129,18 +129,19 @@ polygons by the renderer; they fade as the sun nears the horizon.
 
 ## 3. View modes
 
-The card has three modes (`_viewMode`), switched from the top-left rail. A CSS
+The card has three modes (`_viewMode`, one of `scene` / `clock` / `day`),
+switched from the top-left rail: Scene, Clock, and the "Solar Day" day ring. A CSS
 class on `<ha-card>` fades the layers that do not belong to the active mode. The
-scene HUD and the clock / trend dial each live in their own controller; the card
+scene HUD and the clock / day dials each live in their own controller; the card
 just holds the reactive data they read and inserts their render output.
 
 ### Scene (default), `src/hud/`
 
-The full live 3D view: tilted basemap, extruded buildings, cast shadows, night
+The full live 2.5D view: tilted basemap, extruded buildings, cast shadows, night
 shade, the sun arc (a back pass of below-horizon dots and a front pass of the
 daylight arc + disc + ray + irradiance readout), the home pill and its orbiting
-chip cluster (PV, battery SoC + power, grid, custom entity), and the timeline
-below.
+chip cluster (PV, battery SoC + power, grid, and one chip per active monitoring
+group), and the timeline below.
 
 The HUD is **projected, not laid out**: `hud/scene-hud-controller.ts`
 (`SceneHudController`, with `hud/hud.ts` / `hud/hud-geometry.ts`) asks the engine
@@ -154,8 +155,8 @@ live flow. Clicking a chip points the timeline at that metric.
 (`hud/detail-panel.ts`), tinted in the active chip's live colour: it aggregates
 that metric over the selected window as icon-only rows (total, peak, per-day
 average; import / export / net for grid; charged / discharged for battery flux;
-min / avg / max for SoC and the custom entity; peak + average irradiance plus the
-astro rows for the sun). Values print in the card's configured unit. The panel is
+min / avg / max for SoC and per monitoring group; peak + average irradiance plus
+the astro rows for the sun). Values print in the card's configured unit. The panel is
 bound to the active chip, so a single tap on another chip re-points the chart and
 closes it; a second tap re-opens it for the new metric. Every figure is
 recomputed from the very series the bottom chart draws, so panel and curve always
@@ -171,7 +172,7 @@ data build it drives, and `clock/clock-hourly.ts` the hour-of-day profile.
 
 Each selected metric is binned into 24 hours-of-day over the active period and
 drawn as a ring of bars (one per hour) projected flat on the same ground plane,
-around the flat **Helios mark** at the centre (a CSS-3D ground decal,
+around the flat **Helios mark** at the centre (a CSS-transform ground decal,
 `scene/helios-logo.ts`, laid on the tilted plane by the renderer under the bars so
 nearer bars occlude it; it rests at half opacity and fades to full on hover/tap,
 when it shows the window total). The right-hand rail is a **multi-select filter**:
@@ -184,18 +185,29 @@ horizon) and an N / S compass keep it legible as the dial rotates with the camer
 The bars are built as a raw SVG string and injected imperatively each frame, the
 same trick the renderer uses for buildings, to stay cheap under rotation.
 
-### Trend, `src/clock/` + `clock/trend.ts`
+### Solar Day, `src/clock/` + `clock/consumption-ring.ts`
 
-A period-over-period comparison of one metric. `clock/trend.ts` builds two
-hour-of-day profiles, the **current period** and the **previous comparable
-period** of the same length, and the controller stands the current period as a
-ring of bars with a floating marker + stem pinning the previous period's value at
-the same hour. Bars are coloured good or bad by the metric's desirable direction
-(more production good, more grid import not). An arrow with a drop line marks the
-current hour; the same flat Helios mark sits at the centre (hover/tap for the
-window total, so no gauge obstructs the view); the same day / night wedge grounds
-the dial. Weather-only metrics (irradiance, cloud) have no period-over-period
-profile and are excluded from the trend selector.
+The day ring: a flat 24-hour dial of what the home consumed and where that energy
+came from. `clock/consumption-ring.ts` builds the data (`refreshDayRing`),
+`clock/energy-clock.ts` projects it (`projectDayRingFrame`), and
+`clock/clock-controller.ts` drives its animation, hit-testing and detail panel.
+
+Each tracked device or **monitoring group** draws its own concentric ring whose
+per-slot width tracks how hard it ran (a slot at the historical peak average power
+fills the ring; a lighter slot is a thinner ribbon). Every slot is coloured by how
+that hour's load was met, split across the three sources: local solar, battery
+discharge and grid import. Tapping a group ring flips (a CSS-transform card-flip)
+into its member devices, one ring each; the centre disc becomes the exit button
+while drilled in. Tapping a ring selects it and opens a top-right detail panel that
+splits the ring's day energy across those same three sources. The flat Helios mark
+sits at the centre and the same day / night ground wedge grounds the dial.
+
+The ring works across **every period**: the same Standard (Now), Yesterday, Today,
+Week, Month and Year selector drives it. A single-day window (Today) fills up to
+the current hour at the fine per-frequency cadence; a multi-day window aggregates
+its days by hour-of-day (each source's buckets summed into their hour-of-day slot)
+at hourly cadence, so a long span shows the summed daily profile without pulling
+sub-hour rows.
 
 ---
 
@@ -252,24 +264,26 @@ samples; the energy series are filled from the recorder `change` buckets (past
 only, null in the future); the forecast is a stepped hourly curve. A `dataVersion`
 hash lets consumers detect "same store as last frame" and skip the rebuild; it
 rolls over at midnight. Read-side accessors (`valueAt`, `sliceForRange`) give the
-charts, the clock and the trend dial a consistent view regardless of cadence.
+charts, the clock and the day dial a consistent view regardless of cadence.
 
 ### Periods, `timeline/timeline-modes.ts`
 
 One spec per period drives the whole pipeline (store window, whether weather is
-available, the bucket cadence cap). The five periods are **Standard**, **Today**,
-**Week**, **Month** and **Year**. Today / Week / Month / Year end on today; Month
-and Year resolve their length from the previous calendar month / year. The store
-cadence and the recorder fetch period derive from the user's data-detail setting,
-capped per period (long windows fall back to hourly, then daily, so a year never
-pulls a year of 5-minute rows).
+available, the bucket cadence cap). The six periods are **Standard** (Now),
+**Yesterday**, **Today**, **Week**, **Month** and **Year**, and all six drive the
+day-ring view as well as the timeline (the ring aggregates multi-day periods by
+hour-of-day). Yesterday is exactly the previous day; Today / Week / Month / Year
+end on today; Month and Year resolve their length from the previous calendar month
+/ year. The store cadence and the recorder fetch period derive from the user's
+data-detail setting, capped per period (long windows fall back to hourly, then
+daily, so a year never pulls a year of 5-minute rows).
 
 ### Charts, `src/charts/`
 
 The timeline is a re-targetable SVG chart over the store. `_chartTarget` selects
 the series-set: production (with dashed forecast and a per-string stacked
 breakdown, in `charts/charts-pv.ts`), consumption, grid, battery, battery SoC,
-irradiance, cloud or the custom entity (the generic single-series path lives in
+irradiance, cloud or a monitoring group (the generic single-series path lives in
 `charts/charts-generic.ts`). It draws day separators, night-zone hatching
 (`timeline/timeline-overlays.ts`), a future mask, the live + the scrub cursors, and a
 hover tooltip (`timeline/timeline-tooltip.ts`) whose icons take each series'
@@ -280,23 +294,23 @@ colour.
 Every recorder read shares one typed stack, so an N-card dashboard is a good
 citizen and a stalled fetch never blanks the card:
 
-* **`data/ha-gateway.ts`** — the single typed boundary over `hass.callWS`. It
+* **`data/ha-gateway.ts`**: the single typed boundary over `hass.callWS`. It
   applies the shared timeout and a concurrency cap (the recorder is a
   single-threaded SQLite consumer per connection), so no code path hits the
   WebSocket raw.
-* **`data/request-cache.ts`** — one fresh-within-TTL cache with in-flight
+* **`data/request-cache.ts`**: one fresh-within-TTL cache with in-flight
   de-duplication and a prune sweep. Several cards (or several sources on one card)
   asking for the same key within the window collapse to a single round-trip.
-* **`data/durable-cache.ts`** — a versioned `localStorage` last-good store. Every
+* **`data/durable-cache.ts`**: a versioned `localStorage` last-good store. Every
   recorder series and the day-total persist a copy; on a rejected fetch (recorder
   stall, HA restart, cold reload) the source restores the last-good instead of
   blanking to empty. Date-bearing series round-trip through `saveDurableSeries` /
   `loadDurableSeries` (epoch-ms, since JSON drops `Date`).
-* **`data/source-fetch.ts`** — the per-source plumbing: `KeyedFetch` (a keyed,
+* **`data/source-fetch.ts`**: the per-source plumbing: `KeyedFetch` (a keyed,
   de-duplicated fetch gate that replaces the hand-rolled fetch-key / fetching
   field pairs), `sumLiveWatts` (the live multi-source power aggregation), and
   `minuteAnchorMs` (the minute-quantised refresh anchor).
-* **One recorder call per refresh** — `data/sources/energy-stats.ts` exposes
+* **One recorder call per refresh**: `data/sources/energy-stats.ts` exposes
   `fetchChangeById`, which returns the recorder `change` buckets **per statistic
   id** in a single WS call. pv, grid and battery all request the same **union** of
   every configured meter (`unionChangeMeters`) over a common window, so the request
@@ -307,15 +321,22 @@ citizen and a stalled fetch never blanks the card:
 
 ---
 
-## 5. Custom entity, `data/sources/custom-entity.ts`
+## 5. Monitoring groups, `data/sources/device-consumption.ts`
 
-A user-picked power or energy entity surfaced two ways: as a chip (top-left, above
-the grid chip) with a leader + a sign-driven bead in scene mode, and as a
-selectable metric (its own ring) in clock and trend modes. The resolver handles
-both wirings: an instantaneous power reading is shown signed directly; a
-cumulative energy meter is shown in its native unit. The chip's icon is the editor
-override, else the entity's own icon, else a generic glyph; its colour is the
-configured colour or the Home Assistant frontend's named red.
+The devices tracked in the user's HA Energy dashboard can be bundled into up to
+four **monitoring groups**, each with a name, colour and icon. The assignment and
+its labels are flat config keys (`monitoring-groups`, `monitoring-group-names`,
+`monitoring-group-colors`, `monitoring-group-icons`), with `consumption-ring-hidden`
+listing meters to drop from the ring; the resolvers that clamp + default them
+(`monitoringGroupName` / `monitoringGroupColor` / `monitoringGroupIcon`,
+`GROUP_COUNT`) live in `core/config/helios-config.ts`, and the device data
+(`activeGroups`, `groupDevices`, `deviceName`) in
+`data/sources/device-consumption.ts`.
+
+Each active group surfaces four ways: as a chip on the scene (with a leader + bead,
+like the source chips), a selectable curve in the timeline, a ring in the Solar Day
+view, and a slice in the clock. A group with no visible device renders nothing
+anywhere.
 
 ---
 
@@ -325,7 +346,7 @@ Two things survive a reload, both keyed per home (or per `cache-id` when set, so
 two cards on one home stay independent):
 
 * **The saved view**, the view mode, the selected period, the selected clock /
-  trend metrics, and the selected chip, written to `localStorage` by the card on
+  day-ring metrics, and the selected chip, written to `localStorage` by the card on
   change and on teardown, restored once coordinates resolve.
 * **The camera pose**, bearing, pitch and the lock flag, written by the engine on
   drag-end and on teardown (capturing an auto-rotated bearing too), and read back

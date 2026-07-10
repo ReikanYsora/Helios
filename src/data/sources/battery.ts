@@ -8,10 +8,12 @@ import { pvNormalizeToWatts } from './pv';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
+import { warnOnce } from '../log';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
-import { sumLiveWatts, minuteAnchorMs, type KeyedFetch } from '../source-fetch';
+import { sumLiveWatts, quantizedAnchorMs, type KeyedFetch } from '../source-fetch';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
+import { localMidnightMinusDays } from '../../core/time/timezone';
 
 
 //Module-level history cache, survives Lit unmount+remount (navigate away and back) like the PV cache. 15-min TTL covers
@@ -213,13 +215,15 @@ export function refreshBattery(host: BatteryHost): void
     //are off `Date.now()` so the inner clamp in fetchBatterySoc never tips into the future.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    //Quantise the now-anchor to the minute so the dedupe key below stays stable between renders; an unquantised Date.now()
-    //changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
-    //the minute of slop is harmless.
-    const anchorMs     = minuteAnchorMs();
+    //Quantise the now-anchor to the cache TTL so the dedupe key below only re-arms once per TTL, not every render:
+    //an unquantised Date.now() never matches and the fetch re-fires constantly. The 6 h cap is approximate, so the
+    //TTL of slop is harmless. The key's end is quantised the same way (the real end still drives the fetch below),
+    //so a live present does not rotate the key either.
+    const anchorMs     = quantizedAnchorMs(BATTERY_CACHE_TTL_MS);
     const rawStart     = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
-    const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
+    const keyEnd       = Math.floor(host._timeRange.end.getTime() / BATTERY_CACHE_TTL_MS) * BATTERY_CACHE_TTL_MS;
+    const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${keyEnd}`;
     //Fetch key carries every wired SoC entity (sorted) so adding/removing a bank flips the key and invalidates the snapshot.
     const sortedSoc      = [...socEntities].sort();
     const fetchKey       = `${sortedSoc.join(',')}@${rangeKey}`;
@@ -251,11 +255,9 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
     const dischargeIds = host._energyDefaults.batteryStatEnergyFroms;
     if (chargeIds.length === 0 && dischargeIds.length === 0) { return; }
 
-    const today0 = new Date();
-    today0.setHours(0, 0, 0, 0);
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
-    const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
+    const startMs = localMidnightMinusDays(host._periodPastDays);
     //Rounded end anchor so the past curve + scrub keep tracking new buckets. One call for the union of every
     //source's meters; RequestCache collapses pv/grid/battery to a single recorder round-trip. Charge and
     //discharge are merged separately so the net power keeps a structural sign.
@@ -514,6 +516,7 @@ export async function fetchBatterySoc(
     {
         //Fetch timed out or failed (LTS unavailable, entity untracked, HA restart): restore the last-good durable mean
         //series so the curve survives, rather than blanking to empty. Per-bank lines drop until the next good fetch.
+        warnOnce('battery-soc-fetch', 'battery SoC fetch failed; showing cached data until it recovers');
         return { merged: loadDurableSeries(durableKey, DAY_MS) ?? { times: [], values: [] }, perBank: [] };
     }
 }

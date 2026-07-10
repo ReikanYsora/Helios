@@ -479,28 +479,19 @@ export const heliosCardStyles = css`
         color:        var(--primary-text-color, #212121);
         border-color: var(--group-color, var(--primary-color, #03a9f4));
     }
-    .group-badge
+    /*  Group pastille glyph shown when the group has no configured icon: its number, sized + weighted like the
+        chip icon it stands in for (the chip border already carries the group colour). */
+    .group-label .group-glyph-num
     {
-        position: absolute;
-        width: 16px;
-        height: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 50%;
-        background: var(--group-color, var(--primary-color, #03a9f4));
-        color: #fff;
-        font-size: 10px;
+        font-size: 15px;
         font-weight: 700;
         line-height: 1;
-        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+        color: inherit;
     }
-    /*  Per-corner placement: top-left chip -> top-left badge, etc., so the disc sits on the outer edge and the
-        lead + its bead (which run from the inner edge toward the home) stay clear. */
-    .group-badge-tl { top: -7px; left: -7px; }
-    .group-badge-bl { bottom: -7px; left: -7px; }
-    .group-badge-tr { top: -7px; right: -7px; }
-    .group-badge-br { bottom: -7px; right: -7px; }
     /*  Full-size overlay SVGs for the home-cluster leaders (grid, PV to home, battery, groups); each hosts
         its own coloured path(s) below. */
     .grid-leader-svg,

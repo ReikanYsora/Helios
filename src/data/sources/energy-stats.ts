@@ -11,6 +11,7 @@ import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_B
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
 import { loadDurable, saveDurable } from '../durable-cache';
+import { warnOnce } from '../log';
 
 
 //Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
@@ -70,9 +71,10 @@ export async function fetchChangeById(
 
     const sorted     = [...statisticIds].sort();
     const cacheKey   = `${period}|${startMs}|${endMs}|${sorted.join('|')}`;
-    //Stable key for the durable copy (no minute anchor): a reload restores the last buckets for this view
-    //(period + window span + ids) instead of blanking, then a fresh fetch replaces it.
-    const durableKey = `cbid:${period}|${Math.round((endMs - startMs) / HOUR_MS)}|${sorted.join('|')}`;
+    //Stable key for the durable copy: floor the span to whole DAYS so it identifies the view (period + window days
+    //+ ids) without rotating as the live end advances through the day. A reload restores the last buckets for this
+    //view instead of blanking, then a fresh fetch replaces it.
+    const durableKey = `cbid:${period}|${Math.floor((endMs - startMs) / DAY_MS)}|${sorted.join('|')}`;
     return _cache.get(cacheKey, async () =>
     {
         try
@@ -115,6 +117,7 @@ export async function fetchChangeById(
         {
             //A rejected fetch (timeout, recorder stall, HA restart) falls back to the durable copy so the
             //curves survive instead of blanking; a fresh fetch replaces it on the next refresh.
+            warnOnce('recorder-change', 'recorder change fetch failed; showing cached data until it recovers');
             return loadDurable<Record<string, ChangeBucket[]>>(durableKey, DAY_MS);
         }
     });

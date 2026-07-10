@@ -138,6 +138,9 @@ export const OFM_TILEJSON_URL     = 'https://tiles.openfreemap.org/planet';
 export const OFM_TILE_ZOOM        = 14;
 //Per-tile watchdog: fetch has no native timeout, so a hung tile would otherwise stall the whole set.
 export const OFM_FETCH_TIMEOUT_MS = 10_000;
+//Per-image watchdog for the raster basemap: an <img> whose load/error never fires would otherwise leave the tile
+//promise pending forever and hang the renderer bootstrap (which awaits the tile set).
+export const RASTER_TILE_TIMEOUT_MS = 10_000;
 //Re-attempt delay after a total buildings-fetch outage: it heals without a page reload (the scene shows the
 //fallback house in the meantime).
 export const BUILDINGS_REFETCH_DELAY_MS = 5 * 60_000;

@@ -126,7 +126,6 @@ export const chartIsDark = (host: ChartHost): boolean => !!host.hass?.themes?.da
 export {
     renderTimelineNightZones,
     renderTimelineFutureMask,
-    solarBands,
 } from '../timeline/timeline-overlays';
 export {
     renderTimelineHoverTooltip,

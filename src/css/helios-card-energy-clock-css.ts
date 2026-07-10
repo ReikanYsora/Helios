@@ -242,6 +242,19 @@ export const heliosCardEnergyClockCss = css`
         --mdc-icon-size: 16px;
         flex: none;
     }
+    /*  Group glyph fallback: same 16 px footprint as the icon, tabular number in the group's colour. */
+    .clock-tip-row .clock-tip-num
+    {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        flex: none;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+    }
     /*  Entity / metric name between the glyph and the value; truncated so a long friendly name can't widen the
         tooltip past its clamp. */
     .clock-tip-name
@@ -296,6 +309,22 @@ export const heliosCardEnergyClockCss = css`
     {
         --mdc-icon-size: 20px;
         color: var(--clock-btn-color, var(--primary-text-color, #212121));
+    }
+    /*  Group number fallback in the rail cell: same footprint and colour as the icon. */
+    .overlay-top-right .overlay-btn .overlay-btn-num
+    {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        color: var(--clock-btn-color, var(--primary-text-color, #212121));
+    }
+    .overlay-top-right .overlay-btn.is-on .overlay-btn-num
+    {
+        color: var(--text-on-primary-color, #ffffff);
     }
     .overlay-top-right .overlay-btn.is-on,
     .overlay-top-right .overlay-btn.is-on:hover,

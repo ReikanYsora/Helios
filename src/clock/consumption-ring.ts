@@ -8,7 +8,8 @@ import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import { consumptionLoad } from '../core/energy';
 import { displayUpdateFrequencyPerHour, consumptionRingHidden, monitoringGroupName, type HeliosConfig } from '../core/config/helios-config';
 import { pickTranslations } from '../core/i18n';
-import { serverHourFrac } from '../core/time/timezone';
+import { serverHourFrac, localMidnightMinusDays } from '../core/time/timezone';
+import { modePastDays, type TimelineMode } from '../timeline/timeline-modes';
 import { HOURS_PER_DAY, DAY_MS } from '../core/config/constants';
 
 //Quantum the window end snaps to (HA's finest statistics cadence). Snapping to 5 min instead of the whole hour
@@ -74,7 +75,7 @@ export interface DayRingHost
     config:          HeliosConfig | undefined;
     _energyDefaults: EnergyDefaults;
     _viewMode?:      'scene' | 'clock' | 'day';
-    _timelineMode?:  string;   //'yesterday' shows the previous day; anything else = today (live)
+    _timelineMode?:  TimelineMode;   //the active period; the ring aggregates its days by hour-of-day
     _dayRing:        DayRingData | null;
     _dayRingKey:     string;
     //Cached ring-width reference (kW). Fetched once (barely moves day to day); `undefined` until the first day build.
@@ -142,11 +143,21 @@ export function ringShares(pv: number[], imp: number[], exp: number[], charge: n
     return { solar, battery, grid };
 }
 
-//Slots-per-day + the recorder period that resolves them: hourly at freq 1, else 5-minute (binned down to slots).
-function daySlotting(config: HeliosConfig | undefined): { slots: number; period: '5minute' | 'hour' }
+//The 24-hour dial's window + cadence for the active period. Every day in the window aggregates by hour-of-day
+//(binSlots sums each source's buckets into their hour-of-day slot), so a multi-day period shows the summed daily
+//profile. A single-day window keeps the fine per-freq cadence; a multi-day window drops to hourly (24 slots) so a
+//long span never pulls sub-hour rows and each hourly bucket still lands in exactly one slot.
+function ringWindow(host: DayRingHost): { startMs: number; endMs: number; slots: number; period: '5minute' | 'hour'; nDays: number }
 {
-    const freq = Math.max(1, Math.min(6, Math.round(displayUpdateFrequencyPerHour(config))));
-    return { slots: HOURS_PER_DAY * freq, period: freq <= 1 ? 'hour' : '5minute' };
+    const mode     = host._timelineMode ?? 'today';
+    const liveEdge = Math.floor(Date.now() / LIVE_QUANTUM_MS) * LIVE_QUANTUM_MS;
+    //Yesterday is exactly the previous whole day; every other mode ends at the live edge and spans its past days.
+    const startMs = mode === 'yesterday' ? localMidnightMinusDays(1) : localMidnightMinusDays(modePastDays(mode));
+    const endMs   = mode === 'yesterday' ? localMidnightMinusDays(0) : liveEdge;
+    const nDays   = Math.max(1, Math.round((endMs - startMs) / DAY_MS));
+    const freq    = Math.max(1, Math.min(6, Math.round(displayUpdateFrequencyPerHour(host.config))));
+    if (nDays <= 1 && freq > 1) { return { startMs, endMs, slots: HOURS_PER_DAY * freq, period: '5minute', nDays }; }
+    return { startMs, endMs, slots: HOURS_PER_DAY, period: 'hour', nDays };
 }
 
 //Fill short INTERIOR data holes (a slot with no source share, flanked by data on both sides) by carrying the
@@ -182,14 +193,7 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
         return;
     }
     const d = host._energyDefaults;
-    const { slots, period } = daySlotting(host.config);
-    const midnight = new Date();
-    midnight.setHours(0, 0, 0, 0);
-    const todayMidnight = midnight.getTime();
-    //Yesterday shows the whole previous day (a complete ring); Today runs from local midnight to the live 5-min edge.
-    const yesterday = host._timelineMode === 'yesterday';
-    const startMs = yesterday ? todayMidnight - DAY_MS : todayMidnight;
-    const endMs   = yesterday ? todayMidnight : Math.floor(Date.now() / LIVE_QUANTUM_MS) * LIVE_QUANTUM_MS;
+    const { startMs, endMs, slots, period, nDays } = ringWindow(host);
     if (startMs >= endMs) { return; }
 
     //Group assignment (per group, its visible device ids) is part of the key so re-grouping / hiding a device
@@ -230,7 +234,8 @@ export async function refreshDayRing(host: DayRingHost): Promise<void>
     //Solar-production floor: panels trickle a few watts round the clock, and at night that tiny output is 100% of a
     //tiny load, so the solar SHARE reads 1.0 and a bogus solar run appears at 2am. Drop the solar share for any slot
     //whose actual production is below ~50 W (converted to kWh for this slot's length).
-    const solarFloorKwh = 0.05 * (HOURS_PER_DAY / slots);
+    //~50 W average for the slot's hour-of-day, summed across the window's days (each slot holds nDays contributions).
+    const solarFloorKwh = 0.05 * (HOURS_PER_DAY / slots) * nDays;
     for (let s = 0; s < slots; s++) { if ((pv[s] ?? 0) < solarFloorKwh) { shares.solar[s] = 0; pv[s] = 0; } }
     //One ring per active monitoring group: sum the group's visible devices' per-slot energy into a single run in
     //the group's colour. activeGroups returns 1..GROUP_COUNT in order, so the outer ring is group 1, nesting inward.

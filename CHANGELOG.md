@@ -7,6 +7,68 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.8.0
+
+The biggest release yet. Devices you track in the Home Assistant energy dashboard
+become first-class citizens of the card, a new day view tells the story of your
+consumption against the sun, and the whole thing is lighter and faster.
+
+### New: monitoring groups replace the custom entity
+
+You can now bundle the devices tracked in your energy dashboard into up to **four
+monitoring groups**, each with its own name, colour and icon, set in the editor.
+A group follows you everywhere: its chip on the scene, its curve in the timeline,
+its ring in the day view and its slice in the clock. The old single "custom
+entity" is gone; groups do the same job for any number of devices and need no
+YAML. Each group is shown by a coloured pill (its number by default, its icon once
+you set one), consistent across the editor, the scene chip and both dials.
+
+### New: the Solar Day ring
+
+A day view built around a flat 24-hour dial: each of your devices (or groups)
+draws a ring, its width tracking how hard it ran through the day, coloured by
+whether that hour's load was met by solar, battery or the grid. Tap a group to
+flip into its member devices, tap a ring for a detail panel splitting its energy
+across the three sources. It reads across **every period**: Now, Week, Month and
+Year aggregate their days by hour-of-day (sums), so the ring shows your typical
+day shaped by the whole window; Today fills up to the current hour.
+
+### New: richer clock and battery views
+
+The energy clock gained a compact vertical filter band, slice selection (hover or
+tap an hour to pin it across every ring, tap the centre for the period total) and
+a cap that keeps the dial legible with many metrics. The battery timeline now
+draws one **state-of-charge line per battery bank**, each tinted by its live
+charge/discharge flow.
+
+### Changed: a calmer scene
+
+The home now simply takes the active chip's colour (keeping the squash-and-grow
+animation when you switch chips). The camera lock is a scene-only setting. Tap
+anywhere on the scene background to dismiss an open chip, which finally makes the
+detail panel easy to close on a phone. The sun arc uses the true -0.833 degree
+horizon so sunrise and sunset land where Home Assistant puts them.
+
+### Changed: focused translations
+
+Helios now ships **27 European languages**, curated for the communities that use
+the card most. This cuts the download size substantially with no change to the
+languages kept; any other language falls back to English.
+
+### Fixed
+
+- The day bar no longer freezes on the month and year periods (data-freshness fix).
+- The battery timeline no longer stacks a cluster of markers on its charge line.
+- Assorted robustness: DST-safe day maths, a watchdog on slow map tiles, cleaner
+  teardown of animations, and quieter, deduplicated data-layer warnings.
+
+### Removed
+
+- The period-over-period **trend** view. Its story is better told by the day view
+  and the timeline's period selector.
+
+---
+
 ## 2026.7.4
 
 A quick corrective release. Apologies: 2026.7.3 shipped a detail-panel bug, and I
@@ -171,7 +233,7 @@ onto a zero reading; it disappears only where the entity has no history at all.
   a flat line. Its threshold now uses the 90th percentile instead of the
   median: genuine peaks always pass, meter-reset spikes are still rejected.
 
-### Fixed: 3D buildings are back, from a more reliable source
+### Fixed: 2.5D buildings are back, from a more reliable source
 
 * The buildings were fetched from the OpenStreetMap Overpass API, which had
   started refusing the card by waves. Helios now reads the same OpenStreetMap
@@ -217,7 +279,7 @@ and unit options, and a batch of accuracy fixes for specific setups.
 * An optional **astronomical readout** (a toggle in the editor, shown only when
   the panel is on) that adds the sun's altitude and azimuth, sunrise, solar noon,
   sunset and day length, each labelled with an icon to keep the panel compact.
-* The wind-direction arrow is **projected onto the tilted 3D ground**, so it
+* The wind-direction arrow is **projected onto the tilted 2.5D ground**, so it
   keeps pointing at the true compass direction as you orbit the camera.
 * The panel stays visible in **No UI mode**, so a wall display keeps its ambient
   weather even once the timeline and controls have faded away.
@@ -265,12 +327,12 @@ and unit options, and a batch of accuracy fixes for specific setups.
 
 A new chapter for Helios. This release describes the card as it is **today**:
 a single, self-contained Lovelace card that gives your solar setup a living,
-real-time 3D presence on your dashboard. Everything below is what `2026.7.1`
+real-time 2.5D presence on your dashboard. Everything below is what `2026.7.1`
 does, here and now.
 
 ### The scene
 
-* A faux-3D ("2.5D") view of your home drawn entirely **without WebGL**: a
+* A 2.5D view of your home drawn entirely **without WebGL**: a
   tilted raster basemap from CARTO (free, no key, themed to match Home
   Assistant light / dark) with every overlay projected on top in SVG, so the
   card stays fluid on any device, phones included.
@@ -313,7 +375,7 @@ does, here and now.
 
 ### Three view modes
 
-* **Scene**, the live 3D view with the timeline below.
+* **Scene**, the live 2.5D view with the timeline below.
 * **Clock**, a 24-hour dial that bins each metric into hours of the day as
   concentric rings around a central column; tap an hour to read every metric,
   with a day / night ground wedge and an N / S compass.

@@ -36,7 +36,6 @@ import
 {
     renderBottomChart,
     chartAccentColor,
-    solarBands,
     type ChartTarget,
     GROUP_TARGETS,
     renderTimelineTicks,
@@ -243,6 +242,10 @@ export class HeliosCard extends LitElement
     //Entry-animation start (ms, Date.now). 0 = no animation in flight, draw the ring fully. Set when day mode is
     //entered or the day is switched (today <-> yesterday); the controller runs a 1 s rAF sweep off it.
     _dayAnimStart = 0;
+    //Armed when the view/day changes so the entry sweep plays on the FRESH ring: the day data refetches async, so
+    //firing the sweep at the switch would run it on the stale/empty ring and finish before the new data lands. We
+    //instead replay it the moment `_dayRing` next changes (the new data arrived).
+    _daySweepPending = false;
     //Per-hour night share for the dial's ground day/night wedges, recomputed when the home or window changes.
     @state() _nightFrac: number[] | null = null;
     //Active clock-mode filters, ordered: each selected metric draws one concentric ring (first = outermost).
@@ -453,9 +456,8 @@ export class HeliosCard extends LitElement
     //from a same-chip scrub/tick (instant recolour). Undefined until the first paint (no squash on load).
     private _lastHomeTarget?: ChartTarget;
 
-    //Push the home prism's appearance for the active chip to the renderer (via the engine): the chip's
-    //accent colour, plus the per-PV-string production histogram when the solar chip is active (a single
-    //producing string falls back to a solid block). `animate` plays the squash/grow on a chip change.
+    //Push the home prism's appearance to the renderer (via the engine): a solid block in the active chip's accent
+    //colour. `animate` plays the squash/grow on a chip change.
     updateHomeAppearance(animate: boolean): void
     {
         if (!this._engine)
@@ -463,17 +465,15 @@ export class HeliosCard extends LitElement
             return;
         }
         const color = chartAccentColor(this);
-        const atMs  = this._selectedTime?.getTime() ?? Date.now();
-        const bands = this._chartTarget === 'production' ? solarBands(this, atMs) : [];
         //No squash on the very first paint (no prior target to grow away from).
         const play  = animate && this._lastHomeTarget !== undefined;
         this._lastHomeTarget = this._chartTarget;
-        this._engine.setHomeAppearance(color, bands, play);
+        this._engine.setHomeAppearance(color, [], play);
     }
 
 
-    //Timeline mode selector: Now / Yesterday / Today / Week / Month / Year. The active mode is highlighted. In
-    //day (rings) mode only Yesterday + Today make sense, so the other modes are shown but disabled (greyed).
+    //Timeline mode selector: Now / Yesterday / Today / Week / Month / Year. The active mode is highlighted. Every
+    //mode is available in every view (the ring aggregates a multi-day period by hour-of-day).
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
@@ -486,7 +486,6 @@ export class HeliosCard extends LitElement
             month:     t.period?.month     ?? 'Month',
             year:      t.period?.year      ?? 'Year',
         };
-        const dayOnly = this._viewMode === 'day';
         return html`
             <div
                 class="tb-period-selector"
@@ -494,18 +493,14 @@ export class HeliosCard extends LitElement
                 aria-label=${t.period?.rangeLabel ?? 'Time range'}
                 @pointerdown=${this._stopPropagation}
             >
-                ${TIMELINE_MODE_ORDER.map(m => {
-                    const disabled = dayOnly && m !== 'yesterday' && m !== 'today';
-                    return html`
-                        <button
-                            type="button"
-                            class="tb-period-seg ${this._timelineMode === m ? 'is-on' : ''} ${disabled ? 'is-disabled' : ''}"
-                            data-mode=${m}
-                            ?disabled=${disabled}
-                            @click=${this._onTimelineModeClick}
-                        >${labels[m]}</button>
-                    `;
-                })}
+                ${TIMELINE_MODE_ORDER.map(m => html`
+                    <button
+                        type="button"
+                        class="tb-period-seg ${this._timelineMode === m ? 'is-on' : ''}"
+                        data-mode=${m}
+                        @click=${this._onTimelineModeClick}
+                    >${labels[m]}</button>
+                `)}
             </div>
         `;
     }
@@ -736,9 +731,9 @@ export class HeliosCard extends LitElement
         this._engine?.persistCameraPose();
         this.persistUiState();
         this._unregisterCacheId();
-        //Stop any in-flight clock grow / slide / exit / dim animation so a removed card doesn't keep an rAF alive.
-        this._clock._clockAnimSeq++;
-        this._clock._clockDimSeq++;
+        //Stop every in-flight clock / day animation + the pending drill-flip timer so a removed card keeps no rAF
+        //alive and no timer fires on the detached tree.
+        this._clock.stopAnimations();
         //HA's edit-mode wrapping fires disconnect + reconnect in the same tick. Defer the engine teardown so a
         //quick reconnect (cancelled in connectedCallback) keeps the live engine; only a real removal lets it fire.
         if (this._engine !== undefined && this._engineTeardownTimer === undefined)
@@ -919,15 +914,10 @@ export class HeliosCard extends LitElement
             }
         }
 
-        //Day dial: refetch today's hourly profile when the window/data/config changes or the engine respawns;
-        //repaint when the profile, the home hover or the night share land. No rail, no hover tooltip here.
+        //Day dial: refetch the per-period hour-of-day profile when the window/data/config changes or the engine
+        //respawns; repaint when the profile, the home hover or the night share land. No rail, no hover tooltip here.
         if (this._viewMode === 'day')
         {
-            //Entering day mode from a period that has no daily ring (week/month/year/standard) snaps to Today.
-            if (_changedProperties.has('_viewMode') && this._timelineMode !== 'yesterday' && this._timelineMode !== 'today')
-            {
-                this._setTimelineMode('today');
-            }
             if (_changedProperties.has('_viewMode')
                 || _changedProperties.has('_timelineMode')
                 || _changedProperties.has('_timeRange')
@@ -938,12 +928,19 @@ export class HeliosCard extends LitElement
                 void refreshDayRing(this);
             }
             if (_changedProperties.has('_engine')) { this._engine?.setHomeOnly(true); this._engine?.enterDayView(); }
-            //Replay the entry sweep whenever the day view is (re)entered or the day is switched (today <-> yesterday).
+            //Arm the entry sweep when the day view is (re)entered or the day is switched (today <-> yesterday); it
+            //plays once the fresh ring lands (below), not now, since the day data refetches asynchronously.
             if (_changedProperties.has('_viewMode') || _changedProperties.has('_timelineMode'))
             {
+                this._daySweepPending = true;
+            }
+            //Fresh ring landed while a switch is pending: replay the sweep on it. Otherwise just repaint.
+            if (_changedProperties.has('_dayRing') && this._daySweepPending)
+            {
+                this._daySweepPending = false;
                 this._clock.startDayAnim();
             }
-            if (_changedProperties.has('_dayRing')
+            else if (_changedProperties.has('_dayRing')
                 || _changedProperties.has('_daySelectedKey')
                 || _changedProperties.has('_dayHoverKey')
                 || _changedProperties.has('_dayGroupDrill')
@@ -1154,9 +1151,8 @@ export class HeliosCard extends LitElement
             this._viewMode === 'clock' ? 'mode-clock' : '',
             this._viewMode === 'day' ? 'mode-day' : '',
         ].filter(Boolean).join(' ');
-        //Expose the active chip's colour always (the timeline border tracks it for feedback); the detail-panel
-        //accent only when the panel is open.
-        const cardStyle = `--active-chip-color:${activeChipColor}${infoOpen ? `;--detail-accent:${activeChipColor}` : ''}`;
+        //The detail-panel accent (from the active chip) only when the panel is open.
+        const cardStyle = infoOpen ? `--detail-accent:${activeChipColor}` : '';
 
         return html`
             <ha-card class=${cardClasses} style=${cardStyle}>
@@ -1173,48 +1169,49 @@ export class HeliosCard extends LitElement
                     <div class="clock-overlay">
                         <svg class="clock-svg" xmlns="http://www.w3.org/2000/svg"></svg>
                         <!--  Day-mode consumer flipper (3D card flip around the 0h-12h axis to reveal the target
-                              level on the back face) over a FIXED centre layer. The centre is drawn FIRST so it sits
-                              BELOW the consumers: the flipping rings pass over the centre disc. Perspective is scoped
-                              here so it never touches the ground-laid labels' own perspective transforms.  -->
+                              level on the back face) over a FIXED centre disc. The disc SVG is drawn FIRST so it sits
+                              BELOW the consumers: the flipping rings pass over it. Perspective is scoped here so it
+                              never touches the ground-laid labels' own perspective transforms.  -->
                         <div class="clock-consumers-persp">
                             <div class="clock-center-layer">
                                 <svg class="clock-center-svg" xmlns="http://www.w3.org/2000/svg"></svg>
-                                ${this._viewMode === 'day' ? html`
-                                    <!--  Centre content, pinned to the disc per frame: the Helios mark at the top
-                                          level, the group exit button while drilled. Fades on a drill.  -->
-                                    <div class="clock-center-content">
-                                        ${this._dayGroupDrill === null ? html`
-                                            <div class="clock-center-logo">
-                                                <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d=${HELIOS_LOGO_PATH} fill="currentColor"></path>
-                                                </svg>
-                                            </div>
-                                        ` : (() => {
-                                            const b = this._clock.dayDrillButton();
-                                            return html`<button
-                                                class="clock-center-btn ${b ? 'is-open' : ''}"
-                                                type="button"
-                                                aria-label=${b ? `Exit ${b.name}` : ''}
-                                                ?disabled=${!b}
-                                                @click=${this._onDayExitGroup}
-                                            >
-                                                ${b ? html`
-                                                    <ha-icon class="cci-back" icon="mdi:arrow-u-left-top"></ha-icon>
-                                                    ${b.icon
-                                                        ? html`<ha-icon class="cci-glyph" icon=${b.icon} style="color:${b.color}"></ha-icon>`
-                                                        : html`<span class="cci-num" style="color:${b.color}">${b.num}</span>`}
-                                                    <span class="cci-name">${b.name}</span>
-                                                ` : nothing}
-                                            </button>`;
-                                        })()}
-                                    </div>
-                                ` : nothing}
                             </div>
                             <div class="clock-consumers-flip">
                                 <svg class="clock-consumers-svg clock-face-front" xmlns="http://www.w3.org/2000/svg"></svg>
                                 <svg class="clock-consumers-svg clock-face-back" xmlns="http://www.w3.org/2000/svg"></svg>
                             </div>
                         </div>
+                        <!--  Centre CONTENT (crisp HTML: Helios mark / group exit button) lives OUTSIDE the
+                              perspective wrapper: a perspective ancestor rasterises its subtree to a texture and
+                              blurs the text. Pinned to the disc per frame; sits above the flipper (z-index). -->
+                        ${this._viewMode === 'day' ? html`
+                            <div class="clock-center-content">
+                                ${this._dayGroupDrill === null ? html`
+                                    <div class="clock-center-logo">
+                                        <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                                            <path d=${HELIOS_LOGO_PATH} fill="currentColor"></path>
+                                        </svg>
+                                    </div>
+                                ` : (() => {
+                                    const b = this._clock.dayDrillButton();
+                                    return html`<button
+                                        class="clock-center-btn ${b ? 'is-open' : ''}"
+                                        type="button"
+                                        aria-label=${b ? `Exit ${b.name}` : ''}
+                                        ?disabled=${!b}
+                                        @click=${this._onDayExitGroup}
+                                    >
+                                        ${b ? html`
+                                            <ha-icon class="cci-back" icon="mdi:arrow-u-left-top"></ha-icon>
+                                            ${b.icon
+                                                ? html`<ha-icon class="cci-glyph" icon=${b.icon} style="color:${b.color}"></ha-icon>`
+                                                : html`<span class="cci-num" style="color:${b.color}">${b.num}</span>`}
+                                            <span class="cci-name">${b.name}</span>
+                                        ` : nothing}
+                                    </button>`;
+                                })()}
+                            </div>
+                        ` : nothing}
                         ${Array.from({ length: 24 }, (_unused, h) => html`
                             <div class="clock-hour-label">${this._clock.formatClockHour(h)}</div>
                         `)}
@@ -1335,7 +1332,9 @@ export class HeliosCard extends LitElement
                                         data-target=${t}
                                         @click=${this._clock.onClockTargetToggleClick}
                                     >
-                                        <ha-icon icon=${meta.icon}></ha-icon>
+                                        ${meta.icon
+                                            ? html`<ha-icon icon=${meta.icon}></ha-icon>`
+                                            : html`<span class="overlay-btn-num">${meta.num}</span>`}
                                     </button>
                                 `;
                             })}

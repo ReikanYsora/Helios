@@ -21,6 +21,7 @@ import { changeSeriesToWatts, type ChangeBucket } from './sources/energy-stats';
 import { forecastWattsAt, forecastAverageWatts, type SolarForecastPoint } from './energy-forecast';
 import { modeBucketsPerHour, type TimelineMode } from '../timeline/timeline-modes';
 import { HOUR_MS, DAY_MS } from '../core/config/constants';
+import { localMidnightMinusDays } from '../core/time/timezone';
 
 //Per-build cadence bundle, derived from config once in buildUnifiedStore and threaded through every per-metric builder
 //so bucket arithmetic stays consistent across passes.
@@ -137,9 +138,7 @@ function interpolateNullGaps(arr: (number | null)[]): void
 //Local midnight of the first day in the window (today - daysPast), so every bucket lines up on calendar day boundaries.
 function storeOriginMs(daysPast: number): number
 {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() - daysPast * DAY_MS;
+    return localMidnightMinusDays(daysPast);
 }
 
 
@@ -286,22 +285,37 @@ function buildGridChange(
 }
 
 
-//Cheap data-version hash: cadence + the lengths of every source, so a fetch that grows any of them OR a cadence knob
-//change invalidates the cache key.
+//Compact content signature for a recorder change-series: its length plus the last bucket's end + kWh. The last-kWh
+//term is what tracks an in-place growing bucket: in month/year the current day is a single daily bucket whose kWh
+//climbs all day at constant length, so it must feed the hash for the store to rebuild and the day bar to advance.
+function changeSig(s: ChangeBucket[] | null): string
+{
+    const n = s?.length ?? 0;
+    if (n === 0) { return '0'; }
+    const last = s![n - 1];
+    return `${n}.${last.endMs}.${last.kwh.toFixed(3)}`;
+}
+
+//Data-version hash: the active window + cadence + a content signature of every source, so the store rebuilds on a
+//period change, a cadence-knob change, a new bucket, or the current bucket growing in place.
 function computeDataVersion(host: UnifiedStoreHost): string
 {
-    //Day-key (local midnight) included so the store auto-rebuilds at midnight rollover even when no new rows landed.
-    //Without it, opening the dashboard after midnight with the same arrays leaves the store anchored on the previous day's
-    //J-2 origin and every per-day slice shifts by one day until a fetch trips a length change.
+    //Day-key (local midnight) so the store rebuilds at the midnight rollover even when no new rows landed; otherwise
+    //the per-day slices stay anchored on the previous day's origin until a fetch trips the hash.
     const todayKey = new Date().toDateString();
-    const cadence       = modeBucketsPerHour(host._timelineMode, host.config);
-    const seriesLen     = host._chartSeries?.times.length ?? 0;
-    const pvChangeLen   = host._pvChangeSeries?.length ?? 0;
-    const battHistLen   = (host._batteryChargeChangeSeries?.length ?? 0) + (host._batteryDischargeChangeSeries?.length ?? 0);
-    const gridImpLen = host._gridImportChangeSeries?.length ?? 0;
-    const gridExpLen = host._gridExportChangeSeries?.length ?? 0;
-    const forecastLen = host._haSolarForecast?.length ?? 0;
-    return `d${todayKey}|c${cadence}|${seriesLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|f${forecastLen}`;
+    const cadence  = modeBucketsPerHour(host._timelineMode, host.config);
+    //Window in the hash so a period change invalidates on its own, no reliance on a store-null happening elsewhere.
+    const window   = `${host._timelineMode}.${host._periodPastDays}.${host._periodFutureDays}`;
+    //Weather series signature: its length + last time + last irradiance.
+    const chart    = host._chartSeries;
+    const chartN   = chart?.times.length ?? 0;
+    const chartSig = chartN === 0 ? '0' : `${chartN}.${chart!.times[chartN - 1].getTime()}.${chart!.irradiance[chartN - 1] ?? 0}`;
+    //Battery charge + discharge kept SEPARATE (summing their lengths could collide, e.g. 3+5 == 5+3).
+    return `d${todayKey}|w${window}|c${cadence}|s${chartSig}`
+        + `|pv${changeSig(host._pvChangeSeries)}`
+        + `|bc${changeSig(host._batteryChargeChangeSeries)}|bd${changeSig(host._batteryDischargeChangeSeries)}`
+        + `|gi${changeSig(host._gridImportChangeSeries)}|ge${changeSig(host._gridExportChangeSeries)}`
+        + `|f${host._haSolarForecast?.length ?? 0}`;
 }
 
 

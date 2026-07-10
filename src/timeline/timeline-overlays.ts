@@ -1,14 +1,11 @@
-//Sun/night geometry for the timeline: the sun-altitude crossing search, the memoised per-day night intervals, the
-//night-zone + future-mask overlays, and the per-source production shares for the home histogram.
+//Sun/night geometry for the timeline: the sun-altitude crossing search, the memoised per-day night intervals, and the
+//night-zone + future-mask overlays.
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { energySolarColor } from '../core/format/format';
-import { pvNormalizeToWatts } from '../data/sources/pv';
 import { getHomeCoords } from '../card/init';
 import { getSunPosition } from '../core/time/sun';
-import { type ChartHost, chartIsDark } from '../charts/charts';
-import { pvValueAtTime } from '../data/series-sample';
+import type { ChartHost } from '../charts/charts';
 
 
 //Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd] in the requested direction. Null during polar
@@ -225,44 +222,3 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult | type
 }
 
 
-//Per-PV-string production shares at an instant, for the home stacked histogram. Measured-only sources:
-//in true live mode each source reads its own live power sensor (stat_rate, when the install declares one
-//per source); at any past instant, and whenever the live sensors don't cover the sources, each share
-//reads its meter's recorder change series. Returns {fraction, #rrggbb colour} hue-spread off the solar
-//token by source index, matching the per-source chart curves. Empty unless 2+ sources are producing.
-export function solarBands(host: ChartHost, atMs: number): { frac: number; color: string }[]
-{
-    const meters = host._energyDefaults.solarStatEnergyFroms;
-    if (meters.length < 2 || host._pvChangeSeriesPerEntity.size < 2) { return []; }
-    const el    = host as unknown as Element;
-    const dark  = chartIsDark(host);
-    const rates = host._energyDefaults.solarStatRates;
-    //Live shares only when the instant is genuinely "now" AND every source has its own live sensor
-    //(a partial set would skew the split); otherwise the recorder change series carries every source.
-    const live = host._isLiveMode
-        && atMs >= Date.now() - 5 * 60_000
-        && rates.length === meters.length;
-    const parts: { v: number; idx: number }[] = [];
-    for (let i = 0; i < meters.length; i++)
-    {
-        let v = NaN;
-        if (live)
-        {
-            const so = host.hass?.states?.[rates[i]];
-            if (so)
-            {
-                const raw = parseFloat(so.state);
-                if (isFinite(raw)) { v = pvNormalizeToWatts(raw, String(so.attributes?.unit_of_measurement ?? '')); }
-            }
-        }
-        if (!(isFinite(v) && v > 0))
-        {
-            v = pvValueAtTime(host, atMs, meters[i]).value;
-        }
-        if (isFinite(v) && v > 0) { parts.push({ v, idx: i }); }
-    }
-    const total = parts.reduce((s, p) => s + p.v, 0);
-    if (total <= 0 || parts.length < 2) { return []; }
-    //Same per-source colour ramp as the chart curves.
-    return parts.map((p) => ({ frac: p.v / total, color: energySolarColor(el, dark, p.idx) }));
-}

@@ -101,6 +101,28 @@ export const editorStyles = css`
     .live-status.is-ok ha-icon   { color: var(--success-color, #4caf50); }
     .live-status.is-warn ha-icon { color: var(--warning-color, #ff9800); }
     .live-status.is-info ha-icon { color: var(--secondary-text-color, #727272); }
+    /*  Standalone jump to Home Assistant's Energy config: shown once under the status section and under the
+        groups hint, on its own line with a little breathing room above. */
+    .live-config-link-row
+    {
+        margin-top: 10px;
+    }
+    .live-status-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-color, #03a9f4);
+        text-decoration: none;
+    }
+    .live-status-link:hover { text-decoration: underline; }
+    .live-status-link ha-icon
+    {
+        --mdc-icon-size: 15px;
+        color: var(--primary-color, #03a9f4);
+    }
 
     /*  Always-visible live-data status, pinned above the collapsible sections (its own title, no <details>).
         Its title matches the collapsible sections' flex row so the icon centres on the text (a bare
@@ -327,14 +349,6 @@ export const editorStyles = css`
         --mdc-icon-size: 18px;
         color: inherit;
     }
-    /*  X brand mark: inline SVG (mdi:twitter mis-labels the platform). Sized to match adjacent ha-icon
-        glyphs. */
-    .about-row-svg
-    {
-        width:  18px;
-        height: 18px;
-        flex-shrink: 0;
-    }
     /*  Version chip styled as a link to the matching GitHub release page. */
     .about-version-link
     {
@@ -535,10 +549,6 @@ export const editorStyles = css`
         border-color: transparent;
         background: var(--group-pill-color, var(--primary-color, #03a9f4));
     }
-    .cring-group.g1 { --group-pill-color: var(--graph-color-1, #4269d0); }
-    .cring-group.g2 { --group-pill-color: var(--graph-color-2, #efb118); }
-    .cring-group.g3 { --group-pill-color: var(--graph-color-3, #ff725c); }
-    .cring-group.g4 { --group-pill-color: var(--graph-color-4, #6cc5b0); }
     .cring-group:hover
     {
         border-color: var(--primary-color, #03a9f4);
@@ -595,10 +605,13 @@ export const editorStyles = css`
         line-height: 1;
         background: var(--group-pill-color, var(--primary-color, #03a9f4));
     }
-    .cring-groupname-badge.g1 { --group-pill-color: var(--graph-color-1, #4269d0); }
-    .cring-groupname-badge.g2 { --group-pill-color: var(--graph-color-2, #efb118); }
-    .cring-groupname-badge.g3 { --group-pill-color: var(--graph-color-3, #ff725c); }
-    .cring-groupname-badge.g4 { --group-pill-color: var(--graph-color-4, #6cc5b0); }
+    .cring-groupname-badge ha-icon
+    {
+        --mdc-icon-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
     .cring-groupname-input
     {
         flex: 1 1 auto;

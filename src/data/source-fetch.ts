@@ -87,9 +87,10 @@ export function sumLiveWatts(
 }
 
 
-//"Now" floored to the minute: a stable dedupe anchor for raw-window fetches (battery SoC, irradiance) so an
-//unquantised Date.now() does not change the fetch key every render and re-fire the fetch.
-export function minuteAnchorMs(): number
+//"Now" floored to `intervalMs`: a dedupe anchor for raw-window fetches (battery SoC, irradiance) that stays stable
+//for one whole interval, so the fetch key only re-arms once per interval instead of every render. Callers pass
+//their cache TTL as the interval, so the honoured refetch cadence matches the TTL.
+export function quantizedAnchorMs(intervalMs: number): number
 {
-    return Math.floor(Date.now() / 60_000) * 60_000;
+    return Math.floor(Date.now() / intervalMs) * intervalMs;
 }

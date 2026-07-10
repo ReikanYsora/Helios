@@ -431,7 +431,8 @@ export class SceneHudController
                 const leadPath = this._buildLPath(attachX, attachY, innerX, anchor.y, true);
                 const watts   = groupScrubMs !== null ? groupPowerWAt(this.host, g, groupScrubMs) : groupLivePowerW(this.host, g);
                 const color   = monitoringGroupColor(this.host.config, g);
-                const icon    = monitoringGroupIcon(this.host.config, g) || 'mdi:home-lightning-bolt';
+                //Group pastille glyph: the configured icon, else the group number (so groups stay distinguishable).
+                const icon    = monitoringGroupIcon(this.host.config, g);
                 //Bead flows home -> chip (power leaving to the group's devices), cadence proportional to the live
                 //draw; dropped below the idle floor so a group at rest shows a static leader with no motion.
                 const magW    = watts === null ? 0 : Math.abs(watts);
@@ -784,9 +785,10 @@ export class SceneHudController
                         data-target=${groupTarget(gc.g)}
                         @click=${this.host.onChartTargetClick}
                     >
-                        <ha-icon icon=${gc.icon}></ha-icon>
+                        ${gc.icon
+                            ? html`<ha-icon icon=${gc.icon}></ha-icon>`
+                            : html`<span class="group-glyph-num">${gc.g}</span>`}
                         <span>${gc.watts === null ? '' : formatPvValue(this.host.hass, gc.watts, 'W', valueDec, powerU)}</span>
-                        <span class="group-badge group-badge-${['tl', 'bl', 'tr', 'br'][gc.g - 1]}">${gc.g}</span>
                     </div>
                 `) : nothing}
 

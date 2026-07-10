@@ -12,7 +12,8 @@ import type { HeliosEngine } from '../../scene/helios-engine';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
-import { minuteAnchorMs } from '../source-fetch';
+import { warnOnce } from '../log';
+import { quantizedAnchorMs } from '../source-fetch';
 import { parseStatBoundaryLoose } from './energy-stats';
 import { IRRADIANCE_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
 
@@ -122,13 +123,14 @@ export function refreshIrradiance(host: IrradianceHost): void
     // Anchoring on timeline end would put fetchStart in the future and the inner clamp would leave the result empty.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    // Quantise the now-anchor to the minute so the dedupe key below stays stable between renders; an unquantised Date.now()
-    // changes every millisecond, so the key never matches and the fetch re-fires every render. The 6 h cap is approximate, so
-    // the minute of slop is harmless.
-    const anchorMs     = minuteAnchorMs();
+    // Quantise the now-anchor to the cache TTL so the dedupe key below only re-arms once per TTL, not every render:
+    // an unquantised Date.now() never matches and the fetch re-fires constantly. The 6 h cap is approximate, so the
+    // TTL of slop is harmless. The key's end is quantised the same way (the real end still drives the fetch below).
+    const anchorMs     = quantizedAnchorMs(IRRADIANCE_CACHE_TTL_MS);
     const cap          = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
-    const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
+    const keyEnd       = Math.floor(host._timeRange.end.getTime() / IRRADIANCE_CACHE_TTL_MS) * IRRADIANCE_CACHE_TTL_MS;
+    const rangeKey = `${fetchStart.getTime()}|${keyEnd}`;
     const fetchKey = `${entity}@${rangeKey}`;
     if (fetchKey === host._irradianceFetchKey)
     {
@@ -274,6 +276,7 @@ export async function fetchIrradiance(
     {
         // Fetch timed out or failed (HA restart, recorder stall): restore the last-good durable series so the engine keeps
         // real past irradiance rather than blanking back to Open-Meteo.
+        warnOnce('irradiance-fetch', 'irradiance fetch failed; showing cached data until it recovers');
         return loadDurableSeries(durableKey, DAY_MS);
     }
 }

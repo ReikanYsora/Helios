@@ -9,6 +9,17 @@
 
 import { HOUR_MS, DAY_MS, HOURS_PER_DAY} from '../config/constants';
 
+//Local (browser) midnight `days` calendar-days ago, in epoch ms. setDate lands on real local midnight across a
+//DST change, where subtracting a flat days * 86_400_000 would drift the origin to 23h or 01h and shift every
+//per-day bucket by an hour.
+export function localMidnightMinusDays(days: number): number
+{
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - days);
+    return d.getTime();
+}
+
 let _tz: string | undefined;
 let _fmt: Intl.DateTimeFormat | undefined;
 //Cache of (UTC-hour bucket) -> home wall-clock offset in ms. Cleared when the zone changes. Keyed by hour so a

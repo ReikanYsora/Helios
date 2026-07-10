@@ -7,7 +7,7 @@ import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { cssHex } from '../../core/format/format';
 import type { EnergyDefaults, DeviceConsumption } from './energy-prefs';
 import { monitoringGroups, consumptionRingHidden, monitoringGroupColorToken, GROUP_COUNT, GROUP_FALLBACK_COLORS, type HeliosConfig } from '../../core/config/helios-config';
-import { DAY_MS } from '../../core/config/constants';
+import { localMidnightMinusDays } from '../../core/time/timezone';
 
 
 export interface DeviceConsumptionHost
@@ -133,9 +133,7 @@ export function refreshDeviceConsumption(host: DeviceConsumptionHost): void
         if (host._deviceChangeSeries.size > 0) { host._deviceChangeSeries = new Map(); host.requestUpdate(); }
         return;
     }
-    const today0 = new Date();
-    today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
+    const startMs = localMidnightMinusDays(host._periodPastDays);
     const endMs   = changeRefreshAnchorMs();
     const sorted  = [...ids].sort();
     const key     = `${sorted.join(',')}|${startMs}|${endMs}`;

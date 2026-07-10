@@ -18,7 +18,7 @@ import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { refreshGridGuard, type GridGuardState } from './grid-guard';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
-import { DAY_MS } from '../../core/config/constants';
+import { localMidnightMinusDays } from '../../core/time/timezone';
 
 
 export interface GridHost
@@ -94,11 +94,9 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
     const ids = slot === 'import' ? ed.gridStatEnergyFroms : ed.gridStatEnergyTos;
     if (ids.length === 0) { return; }
 
-    const today0 = new Date();
-    today0.setHours(0, 0, 0, 0);
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
-    const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
+    const startMs = localMidnightMinusDays(host._periodPastDays);
     //Rounded end anchor so the past curve tracks newly committed buckets. One call for the union of every
     //source's meters; RequestCache collapses pv/grid/battery to a single recorder round-trip, then each
     //merges its own ids.

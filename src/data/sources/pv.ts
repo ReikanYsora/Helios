@@ -8,7 +8,7 @@ import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { formatEntityValue, parseNumericState, type PowerUnit } from '../../core/format/format';
 import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
-import { DAY_MS } from '../../core/config/constants';
+import { localMidnightMinusDays } from '../../core/time/timezone';
 //Re-export so battery/grid/charts/helios-card can import pvNormalizeToWatts from './pv'.
 export { pvNormalizeToWatts } from '../../core/format/format';
 
@@ -156,9 +156,6 @@ export function refreshPv(host: PvHost): void
     {
         return;
     }
-    const today0   = new Date();
-    today0.setHours(0, 0, 0, 0);
-
     //Past-production curve for the unified store + chip scrub. From the recorder `change` metric on the solar ENERGY meter(s)
     //(`stat_energy_from`), like the HA Energy dashboard: reset-corrected, unit-normalised kWh per 5-min bucket, divided by bucket
     //duration for average watts. No client-side differentiation, so coarse-reporting or daily-reset meters work natively.
@@ -167,7 +164,7 @@ export function refreshPv(host: PvHost): void
     {
         //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
         //wide window (e.g. 7 d) come back empty.
-        const startMs = today0.getTime() - host._periodPastDays * DAY_MS;
+        const startMs = localMidnightMinusDays(host._periodPastDays);
         //End anchored to the refresh boundary (the recorder holds nothing beyond now, so the forecast horizon
         //is irrelevant): one call fetches the union of every source's meters, and RequestCache collapses pv/
         //grid/battery to a single recorder round-trip. Each source then merges its own ids from the result.

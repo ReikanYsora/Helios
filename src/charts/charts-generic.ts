@@ -112,10 +112,14 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
 
     //`lineOnly` series draw a stroke with no area fill (the per-bank SoC overlays on the battery chart); `dashed`
-    //marks them as levels rather than flows.
-    interface Line { pts: { t: number; v: number }[]; color: string; lineOnly?: boolean; dashed?: boolean }
+    //marks them as levels rather than flows. `noHoverDot` suppresses the per-series hover dot (the SoC line is split
+    //into many colour runs, which would otherwise stack a dot per run; one SoC dot per bank is added separately).
+    interface Line { pts: { t: number; v: number }[]; color: string; lineOnly?: boolean; dashed?: boolean; noHoverDot?: boolean }
     let series: Line[];
     let fixedMax = 0;
+    //Battery SoC hover source: one dot per bank at the cursor (not one per colour run). Full per-bank pts + the
+    //flow-colour resolver, captured so the hover section can place a single SoC dot in the live flow colour.
+    let socHover: { banks: { t: number; v: number }[][]; flowColorAt: (aMs: number, bMs: number) => string } | null = null;
     if (target === 'consumption')
     {
         //Home consumption (load) per bucket: production + grid import - grid export - net battery (charge-positive),
@@ -181,6 +185,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 if (p === null || Math.abs(p) < 5) { return socIdleCol; }
                 return p > 0 ? socChargeCol : socDischargeCol;
             };
+            const socBanks: { t: number; v: number }[][] = [];
             for (const bank of banks)
             {
                 const pts: { t: number; v: number }[] = [];
@@ -195,6 +200,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 //Split the bank line into runs of same flow colour so a single line carries several colours along
                 //its charge/discharge portions. Adjacent runs share their boundary vertex, keeping the line gapless.
                 if (pts.length < 2) { continue; }
+                socBanks.push(pts);
                 const segCount = pts.length - 1;
                 const segCols: string[] = [];
                 for (let i = 0; i < segCount; i++) { segCols.push(flowColorAt(pts[i].t, pts[i + 1].t)); }
@@ -203,12 +209,14 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 {
                     if (i === segCount || segCols[i] !== segCols[runStart])
                     {
-                        //Run covers segments [runStart, i-1], i.e. points [runStart, i].
-                        series.push({ pts: pts.slice(runStart, i + 1), color: segCols[runStart], lineOnly: true, dashed: true });
+                        //Run covers segments [runStart, i-1], i.e. points [runStart, i]. noHoverDot: the whole line
+                        //gets a SINGLE hover dot (added below from socHover), not one per colour run.
+                        series.push({ pts: pts.slice(runStart, i + 1), color: segCols[runStart], lineOnly: true, dashed: true, noHoverDot: true });
                         runStart = i;
                     }
                 }
             }
+            if (socBanks.length > 0) { socHover = { banks: socBanks, flowColorAt }; }
             fixedMax = powerMax > 0 ? powerMax : 100;
         }
     }
@@ -386,11 +394,23 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
         for (const s of series)
         {
-            if (s.pts.length < 1) { continue; }
+            if (s.pts.length < 1 || s.noHoverDot) { continue; }
             const v = interpAt(s.pts.map(p => new Date(p.t)), s.pts.map(p => p.v), hoverMs);
             if (!isFinite(v)) { continue; }
             hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
             showHover = true;
+        }
+        //Battery SoC: ONE dot per bank at the cursor, in the live flow colour, instead of one dot per colour run.
+        if (socHover)
+        {
+            for (const pts of socHover.banks)
+            {
+                if (pts.length < 1) { continue; }
+                const v = interpAt(pts.map(p => new Date(p.t)), pts.map(p => p.v), hoverMs);
+                if (!isFinite(v)) { continue; }
+                hoverDots.push({ y: yOf(Math.max(0, v)), color: socHover.flowColorAt(hoverMs, hoverMs) });
+                showHover = true;
+            }
         }
         //Forecast + cloud bands ride the irradiance view on their own scales (drawn outside `series`), so their
         //hover dots are computed here too: the forecast dot on its own normalised curve, one cloud dot per layer at

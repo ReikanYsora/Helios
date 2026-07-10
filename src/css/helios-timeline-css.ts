@@ -56,10 +56,8 @@ export const heliosTimelineStyles = css`
             band keep the exact same outer width (both span card - 16px). Without it the border adds outside
             and the stack reads wider than the band. */
         box-sizing: border-box;
-        /*  Border tracks the ACTIVE chip's colour (2 px, like the chips), so the chip <-> chart <-> timeline
-            coupling reads at a glance; falls back to the neutral divider before a chip resolves. */
-        border: 2px solid var(--active-chip-color, var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12))));
-        transition: border-color var(--ha-animation-duration-normal, 250ms) ease;
+        /*  Neutral themed border (like the period band), independent of the active chip's colour. */
+        border: 2px solid var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
         overflow: hidden;
     }
     .tb-chart-card

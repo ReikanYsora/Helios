@@ -5,7 +5,7 @@
 //
 //Attribution (CARTO, OpenStreetMap) is satisfied in the README / HACS info pane.
 
-import { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, EARTH_CIRCUMFERENCE_M, DEG } from '../core/config/constants';
+import { TILE_PX, GROUND_RADIUS, GROUND_ZOOM, EARTH_CIRCUMFERENCE_M, DEG, RASTER_TILE_TIMEOUT_MS } from '../core/config/constants';
 //Re-exported so the scene CSS can read the ground fade start from './tiles' alongside the tile helpers.
 export { GROUND_FADE_START } from '../core/config/constants';
 
@@ -79,12 +79,17 @@ export async function buildGround(
                 loads.push(new Promise<void>((resolve) =>
                 {
                     const img = new Image();
+                    let done = false;
+                    //Watchdog: an <img> whose load/error never fires (a stalled CDN response) must not leave this
+                    //promise pending and hang the whole tile set; after the timeout the tile is just skipped.
+                    const finish = (): void => { if (done) { return; } done = true; clearTimeout(timer); resolve(); };
+                    const timer  = setTimeout(finish, RASTER_TILE_TIMEOUT_MS);
                     img.onload = (): void =>
                     {
-                        ctx.drawImage(img, col * TILE_PX, row * TILE_PX, TILE_PX, TILE_PX);
-                        resolve();
+                        if (!done) { ctx.drawImage(img, col * TILE_PX, row * TILE_PX, TILE_PX, TILE_PX); }
+                        finish();
                     };
-                    img.onerror = (): void => resolve();
+                    img.onerror = (): void => finish();
                     img.referrerPolicy = 'no-referrer';
                     img.src = tileUrl(x, y, zoom);
                 }));

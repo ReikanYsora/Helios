@@ -4,13 +4,13 @@ import type { HeliosCard } from '../helios-card';
 import { HOUR_MS, HOURS_PER_DAY, CLOCK_GROW_MS, DAY_ANIM_MS } from '../core/config/constants';
 import { pickTranslations } from '../core/i18n';
 import type { ChartTarget } from '../charts/charts';
-import { formatHaHour, ENERGY_COLOR, deviceColorByIndex } from '../core/format/format';
+import { formatHaHour, ENERGY_COLOR, deviceColorByIndex, formatEnergyKwh } from '../core/format/format';
 import { refreshClockHourly } from './clock-hourly';
 import { refreshDayRing, type DayRingData, type DeviceRun } from './consumption-ring';
 import { nightFractionByHour } from '../core/time/sun-zones';
 import { serverHourFrac } from '../core/time/timezone';
 import { getHomeCoords } from '../card/init';
-import { monitoringGroupIcon } from '../core/config/helios-config';
+import { monitoringGroupIcon, valueDecimals, powerUnit } from '../core/config/helios-config';
 import { groupColorHex } from '../data/sources/device-consumption';
 import type { SceneCamera } from '../scene/projection';
 import
@@ -28,8 +28,8 @@ import
 //_clockTargets, _clockHoverSlot, _clockHomeHover, _nightFrac, the query refs, ...) stays on
 //the card and is reached through `this.host` so Lit reactivity and the energy-clock helpers keep working.
 
-//Card-flip duration when drilling between the group level and a group's members (ms). MUST match the
-//.clock-consumers-flip CSS transition, since the commit is timed off it.
+//Fallback ceiling (ms) for the drill flip commit: the commit is normally driven by the flip's transitionend, so
+//this only needs to be >= the .clock-consumers-flip CSS transition, not an exact match.
 const DAY_DRILL_FLIP_MS = 300;
 
 //Even-odd ray-cast: is the screen point inside the projected polygon (a device ring's outer/inner circle)?
@@ -145,6 +145,7 @@ export class ClockController
         this._clockHomePinned = false;
         this.host._dayHoverKey = null;
         this.host._dayGroupDrill = null;
+        this._dayFlipping = false;
         if (this._dayDrillTimer) { clearTimeout(this._dayDrillTimer); this._dayDrillTimer = undefined; }
         //Leaving the day view restores the camera it saved before entering (top-down + lock is day-only).
         if (this.host._viewMode === 'day' && mode !== 'day') { this.host._engine?.exitDayView(); }
@@ -678,7 +679,9 @@ export class ClockController
             color:  dev.color ?? deviceColorByIndex(el, dev.index),
             values: dev.values,
         }));
-        const liveFrac = this.host._timelineMode === 'yesterday' ? 1 : serverHourFrac(Date.now()) / HOURS_PER_DAY;
+        //Only Today is a partial day (its hours after now haven't happened); every other mode fills the whole ring
+        //(Yesterday is a complete day; the multi-day modes aggregate past days, so every hour-of-day slot has data).
+        const liveFrac = (this.host._timelineMode ?? 'today') === 'today' ? serverHourFrac(Date.now()) / HOURS_PER_DAY : 1;
         const current  = drill === this.host._dayGroupDrill;
         const selIdx   = current ? this._dayKeyIndex(dr, this.host._daySelectedKey) : -1;
         const hovIdx   = current ? this._dayKeyIndex(dr, this.host._dayHoverKey) : -1;
@@ -713,11 +716,12 @@ export class ClockController
         const dr = this.host._dayRing;
         if (!dr) { return nothing; }
         const el = this.host as unknown as Element;
-        const kwh = (v: number): string => `${v.toFixed(2)} kWh`;
+        //Localised label + energy formatting (unit + decimals + locale number), same as the scene detail panel.
+        const kwh = (v: number): string => formatEnergyKwh(this.host.hass, v, valueDecimals(this.host.config), powerUnit(this.host.config));
         const pct = (v: number): string => `${Math.round(v * 100)} %`;
-        if (key === 'solar')   { return this._dayPanel(ENERGY_COLOR.pv(el), 'Solar', [{ icon: 'mdi:solar-power', value: kwh(dr.solarKwh) }]); }
-        if (key === 'grid')    { return this._dayPanel(ENERGY_COLOR.gridImport(el), 'Grid', [{ icon: 'mdi:transmission-tower', value: kwh(dr.gridKwh) }]); }
-        if (key === 'battery') { return this._dayPanel(ENERGY_COLOR.batteryOut(el), 'Battery', [{ icon: 'mdi:battery', value: kwh(dr.batteryKwh) }]); }
+        if (key === 'solar')   { return this._dayPanel(ENERGY_COLOR.pv(el),         clockTargetLabel(this.host, 'production'), [{ icon: 'mdi:solar-power',        value: kwh(dr.solarKwh) }]); }
+        if (key === 'grid')    { return this._dayPanel(ENERGY_COLOR.gridImport(el),  clockTargetLabel(this.host, 'grid'),       [{ icon: 'mdi:transmission-tower', value: kwh(dr.gridKwh) }]); }
+        if (key === 'battery') { return this._dayPanel(ENERGY_COLOR.batteryOut(el),  clockTargetLabel(this.host, 'battery'),    [{ icon: 'mdi:battery',           value: kwh(dr.batteryKwh) }]); }
         const dev = this._dayConsumerRuns(dr).find(d => `dev:${d.statId}` === key);
         if (!dev) { return nothing; }
         const accent = dev.color ?? deviceColorByIndex(el, dev.index);
@@ -810,11 +814,23 @@ export class ClockController
         if (centre) { centre.style.opacity = '0'; }
         //Entering flips right (+180), exiting flips back (-180); either way the back (pre-rotated 180) faces us.
         const deg = target === null ? -180 : 180;
-        flip.style.transform = `rotateY(${deg}deg)`;
-        if (this._dayDrillTimer) { clearTimeout(this._dayDrillTimer); }
-        this._dayDrillTimer = setTimeout(() =>
+        if (this._dayDrillTimer) { clearTimeout(this._dayDrillTimer); this._dayDrillTimer = undefined; }
+        //Force a clean 0deg start THIS frame (transition off + reflow), then animate to deg on the NEXT frame so the
+        //browser always registers a real 0 -> deg transition. Without this, a fast re-entry (or a resting transform
+        //that already equals the target) can set the same value and the flip silently skips its animation.
+        flip.style.transition = 'none';
+        flip.style.transform  = 'rotateY(0deg)';
+        void flip.getBoundingClientRect();
+        flip.style.transition = '';
+        let committed = false;
+        const finish = (): void =>
         {
-            this._dayDrillTimer = undefined;
+            if (committed) { return; }
+            committed = true;
+            flip.removeEventListener('transitionend', onEnd);
+            if (this._dayDrillTimer) { clearTimeout(this._dayDrillTimer); this._dayDrillTimer = undefined; }
+            //Cancelled meanwhile (a mode change / disconnect cleared the flip): don't commit onto a torn-down tree.
+            if (!this._dayFlipping) { return; }
             //Commit: the target becomes the current level and repaints onto the FRONT face; reset the flipper to 0
             //with no transition (the front now shows exactly what the back showed, so the reset is invisible).
             this._dayFlipping = false;
@@ -825,11 +841,36 @@ export class ClockController
             flip.style.transition = '';
             back.innerHTML = '';
             if (centre) { centre.style.opacity = '1'; }
-        }, DAY_DRILL_FLIP_MS);
+        };
+        //Commit when the flip's transform transition actually ends, so the timing is owned by the CSS, not a
+        //hand-synced constant. A slightly-longer timeout is the fallback for when transitionend never arrives
+        //(reduced motion collapses the transition, or it is interrupted).
+        //Only the flipper's OWN transform ends the drill: transitionend bubbles, so a ring/face transform inside the
+        //faces (e.g. a hovered ring released as we clear hover on enter) would otherwise commit the flip early.
+        const onEnd = (e: TransitionEvent): void => { if (e.target === flip && e.propertyName === 'transform') { finish(); } };
+        flip.addEventListener('transitionend', onEnd);
+        //Kick the rotation on the next frame (after the forced 0deg start has painted) so the transition runs.
+        requestAnimationFrame(() =>
+        {
+            if (!this._dayFlipping) { return; }
+            this._dayDrillTimer = setTimeout(finish, DAY_DRILL_FLIP_MS + 120);
+            flip.style.transform = `rotateY(${deg}deg)`;
+        });
     }
     private _dayDrillTimer?: ReturnType<typeof setTimeout>;
     //True while a drill flip is in flight: hover + ring taps are ignored so the reveal isn't disturbed.
     public _dayFlipping = false;
+
+    //Cancel every in-flight animation (clock grow/slide/exit, dim fade, day sweep) and the pending drill-flip
+    //timer, so a removed card leaves no rAF ticking a dead tree and no timer firing on a detached element.
+    public stopAnimations(): void
+    {
+        this._clockAnimSeq++;
+        this._clockDimSeq++;
+        this._dayAnimSeq++;
+        if (this._dayDrillTimer) { clearTimeout(this._dayDrillTimer); this._dayDrillTimer = undefined; }
+        this._dayFlipping = false;
+    }
 
     //Centre exit button while drilled into a group: the group's icon (or its number) + name, in the group colour.
     //Null at the top level (no button drawn).
@@ -870,11 +911,7 @@ export class ClockController
     //select on tap for EVERY pointer type (mouse tap pins alongside hover; touch has no hover), so record for all.
     public onClockTapStart = (e: PointerEvent): void =>
     {
-        const day = this.host._viewMode === 'day';
-        if (!day && this.host._viewMode !== 'clock')
-        {
-            return;
-        }
+        //Recorded for every mode (scene included): a scene tap on the map closes the detail panel on release.
         const card = this.host._haCard;
         if (!card)
         {
@@ -890,8 +927,9 @@ export class ClockController
     //rotated the camera and is ignored.
     public onClockTapEnd = (e: PointerEvent): void =>
     {
-        const day = this.host._viewMode === 'day';
-        if (!day && this.host._viewMode !== 'clock')
+        const day   = this.host._viewMode === 'day';
+        const scene = this.host._viewMode === 'scene';
+        if (!day && !scene && this.host._viewMode !== 'clock')
         {
             return;
         }
@@ -907,6 +945,10 @@ export class ClockController
         {
             return;   //drag-rotate, not a tap
         }
+        //Scene: a tap on the map background (chips / timeline / buttons are separate overlays that never reach this
+        //handler) closes the open detail panel, so a selected chip can be dismissed by tapping empty space (touch
+        //has no click-outside otherwise).
+        if (scene) { if (this.host._infoPanelOpen) { this.host._infoPanelOpen = false; } return; }
         if (day) { this._daySelectAt(x, y); return; }
         this._clockHoverX = x;
         this._clockHoverY = y;
@@ -996,7 +1038,9 @@ export class ClockController
                     }
                     return html`
                         <div class="clock-tip-row">
-                            <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
+                            ${meta.icon
+                                ? html`<ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>`
+                                : html`<span class="clock-tip-num" style="color:${meta.color}">${meta.num}</span>`}
                             <span class="clock-tip-name">${clockTargetLabel(this.host, data.target)}</span>
                             <span class="clock-tip-val">${formatClockValue(this.host, data, clockTotal(data, slot))}</span>
                         </div>
@@ -1036,7 +1080,9 @@ export class ClockController
                     }
                     return html`
                         <div class="clock-tip-row">
-                            <ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>
+                            ${meta.icon
+                                ? html`<ha-icon icon=${meta.icon} style="color:${meta.color}"></ha-icon>`
+                                : html`<span class="clock-tip-num" style="color:${meta.color}">${meta.num}</span>`}
                             <span class="clock-tip-name">${clockTargetLabel(this.host, data.target)}</span>
                             <span class="clock-tip-val">${formatClockValue(this.host, data, clockPeriodTotal(data))}</span>
                         </div>

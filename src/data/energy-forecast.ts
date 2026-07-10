@@ -3,7 +3,8 @@
 //result lands.
 
 import type { EnergyDefaults } from './sources/energy-prefs';
-import { FORECAST_THROTTLE_MS, HOUR_MS, DAY_MS } from '../core/config/constants';
+import { FORECAST_THROTTLE_MS, HOUR_MS } from '../core/config/constants';
+import { localMidnightMinusDays } from '../core/time/timezone';
 import { callWS } from './ha-gateway';
 
 
@@ -101,10 +102,8 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     }
     //Rolling window from the card's active period: local midnight minus daysPast to plus (daysFuture + 1), so a
     //widened period still gets its whole forecast curve instead of a truncated fixed slice.
-    const midnight = new Date();
-    midnight.setHours(0, 0, 0, 0);
-    const startIso = new Date(midnight.getTime() - host._periodPastDays * DAY_MS).toISOString();
-    const endIso   = new Date(midnight.getTime() + (host._periodFutureDays + 1) * DAY_MS).toISOString();
+    const startIso = new Date(localMidnightMinusDays(host._periodPastDays)).toISOString();
+    const endIso   = new Date(localMidnightMinusDays(-(host._periodFutureDays + 1))).toISOString();
 
     //Fetch every entry in parallel, then sum the answering ones per timestamp. A rejecting entry (not the Helios
     //provider) resolves to null and drops out; an empty-but-valid answer counts as answered but adds nothing.

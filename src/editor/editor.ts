@@ -26,6 +26,7 @@ import
     consumptionRingHidden,
     monitoringGroups,
     monitoringGroupName,
+    monitoringGroupColor,
     monitoringGroupColorToken,
     monitoringGroupIcon,
     GROUP_COUNT,
@@ -89,6 +90,7 @@ export class HeliosCardEditor extends LitElement
         {
             setTimeout(() =>
             {
+                if (!this.isConnected) { return; }   //editor detached before the tick: nothing to dispatch onto
                 const next = { ...this._cfg } as Record<string, unknown>;
                 let changed = false;
                 for (const k of HeliosCardEditor.LEGACY_KEYS) { if (k in next) { delete next[k]; changed = true; } }
@@ -107,6 +109,7 @@ export class HeliosCardEditor extends LitElement
             const id = `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
             setTimeout(() =>
             {
+                if (!this.isConnected) { return; }   //editor detached before the tick: skip the deferred update
                 if (!this._cfg['cache-id'])
                 {
                     this._update('cache-id', id);
@@ -249,6 +252,19 @@ export class HeliosCardEditor extends LitElement
         `;
     }
 
+    //One-tap jump to Home Assistant's Energy configuration (a single dashboard covers solar / grid / battery;
+    //HA has no per-family deep anchor). Shown once under the status section and under the groups hint.
+    private _energyConfigLink()
+    {
+        const t = pickTranslations(this.hass?.language);
+        return html`
+            <a class="live-status-link" href="/config/energy/dashboard" target="_blank" rel="noopener noreferrer">
+                <ha-icon icon="mdi:open-in-new"></ha-icon>
+                <span>${t.editor.openEnergyConfig ?? 'Open Energy configuration'}</span>
+            </a>
+        `;
+    }
+
     //Live-data status, pinned at the top of the editor (outside every section) so setup gaps surface at once.
     //One line per energy family whether or not it is configured in the HA Energy dashboard: a configured
     //family reports whether its live chip can exist (and what to add if not), a family that is not set up says
@@ -302,6 +318,8 @@ export class HeliosCardEditor extends LitElement
                 ${this._liveStatusLine(homeReady, false, homeReady
                     ? (t.editor.liveHomeOk ?? 'Home consumption: shown, derived from the live families above.')
                     : (t.editor.liveHomeNote ?? 'Home consumption: appears once every configured family above has its live sensor.'))}
+
+                <div class="live-config-link-row">${this._energyConfigLink()}</div>
             </div>
         `;
     }
@@ -595,8 +613,9 @@ export class HeliosCardEditor extends LitElement
         const hidden  = consumptionRingHidden(this._cfg);
         const groups  = monitoringGroups(this._cfg);
         return html`
-            <div class="field-block-label">${t.editor.devicesSection ?? 'Devices & monitoring groups'}</div>
+            <div class="field-block-label">${t.editor.devicesSection ?? 'Monitoring group management'}</div>
             <div class="hint">${t.editor.devicesIntro ?? 'Devices tracked in your Energy dashboard. The eye shows or hides a device everywhere, and the group pill assigns it to one of the four monitoring groups (X = no group).'}</div>
+            <div class="live-config-link-row">${this._energyConfigLink()}</div>
             ${devices.length === 0
                 ? html`<div class="cring-empty">${t.editor.consumptionRingNoDevices ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
                 : html`<div class="cring-list">
@@ -619,7 +638,10 @@ export class HeliosCardEditor extends LitElement
             ${groups.map(g => html`
                 <div class="cring-group-block">
                     <div class="cring-group-line">
-                        <span class="cring-groupname-badge g${g}">${g}</span>
+                        <span class="cring-groupname-badge" style="--group-pill-color:${monitoringGroupColor(this._cfg, g)}">${(() => {
+                            const gi = monitoringGroupIcon(this._cfg, g);
+                            return gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`${g}`;
+                        })()}</span>
                         <input
                             class="cring-groupname-input"
                             type="text"
@@ -696,13 +718,19 @@ export class HeliosCardEditor extends LitElement
                 <span class="cring-name">${name}</span>
                 <button
                     type="button"
-                    class="cring-group ${group ? `active g${group}` : ''}"
+                    class="cring-group ${group ? 'active' : ''}"
+                    style=${group ? `--group-pill-color:${monitoringGroupColor(this._cfg, group)}` : ''}
                     data-stat=${stat}
                     aria-label=${t.editor.deviceGroupLabel ?? 'Monitoring group'}
                     title=${group ? `${t.editor.group ?? 'Group'} ${group}` : (t.editor.noGroup ?? 'No group')}
                     @click=${this._onDeviceGroupClick}
                 >
-                    ${group ? html`<span class="cring-group-num">${group}</span>` : html`<ha-icon icon="mdi:close"></ha-icon>`}
+                    ${group
+                        ? (() => {
+                            const gi = monitoringGroupIcon(this._cfg, group);
+                            return gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`<span class="cring-group-num">${group}</span>`;
+                        })()
+                        : html`<ha-icon icon="mdi:close"></ha-icon>`}
                 </button>
                 <button
                     type="button"
@@ -781,8 +809,8 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="entityConfig" ?open=${this._openSection === 'entityConfig'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:home-lightning-bolt-outline"></ha-icon>${t.editor.entityConfigSection ?? 'Entity configuration'}</summary>
-                ${this._renderDeviceList(t)}
                 ${this._renderGroupsSection(t)}
+                ${this._renderDeviceList(t)}
                 <div class="field field-block">
                     <span class="label">${t.editor.solarIrradianceEntity}</span>
                     ${this._pickerReady ? html`
@@ -862,8 +890,7 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section about-section" data-section="about" ?open=${this._openSection === 'about'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:information-outline"></ha-icon>${t.editor.aboutSection}</summary>
                     <!-- Identity + links column: one .about-row line per item, label left and value (or icon link)
-                         right. The X brand mark is an inline SVG because the MDI icon set doesn't ship the current
-                         glyph and mdi:twitter would mis-label the platform. -->
+                         right. -->
                     <div class="about-row">
                         <span class="about-label">${t.editor.aboutVersionLabel}</span>
                         <a class="about-row-link about-version-link"
@@ -873,15 +900,13 @@ export class HeliosCardEditor extends LitElement
                     </div>
                     <div class="about-row">
                         <span class="about-label">${t.editor.aboutDeveloperLabel}</span>
-                        <span class="about-row-value">ReikanYsora (Jérôme Crémoux)</span>
+                        <span class="about-row-value">ReikanYsora (Jérôme CREMOUX)</span>
                     </div>
                     <div class="about-row">
                         <span class="about-label" aria-hidden="true"></span>
-                        <a class="about-row-link" href="https://x.com/ReikanYsora" target="_blank" rel="noopener noreferrer">
-                            <svg class="about-row-svg" viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644Z" fill="currentColor"/>
-                            </svg>
-                            <span>@ReikanYsora</span>
+                        <a class="about-row-link" href="https://helios-ha.org" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:web"></ha-icon>
+                            <span>helios-ha.org</span>
                         </a>
                     </div>
                     <div class="about-row">

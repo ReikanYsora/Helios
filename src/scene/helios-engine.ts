@@ -2038,6 +2038,12 @@ export class HeliosEngine
             cancelAnimationFrame(this._autoRotateRaf);
             this._autoRotateRaf = undefined;
         }
+        //A camera ease (animateHomeTo) in flight would otherwise keep ticking a dead renderer for its remaining ~0.5 s.
+        if (this._cameraAnimRaf !== undefined)
+        {
+            cancelAnimationFrame(this._cameraAnimRaf);
+            this._cameraAnimRaf = undefined;
+        }
 
         //Detach the drag-rotate pointer listeners from the renderer's container before the renderer tears
         //down its own DOM, so a lingering closure can't pin the dead engine.
