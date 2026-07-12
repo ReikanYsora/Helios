@@ -609,6 +609,11 @@ export class HeliosEngine
         //touch-action is set to none so every gesture over the scene is a card interaction (dashboard scroll
         //happens by touching outside the card, like Google Maps on mobile).
         container.style.touchAction = 'none';
+        //Firefox starts a native text/image drag on a left-mouse press over the canvas, which swallows the follow-up
+        //pointermove stream so the scene never rotates (Chrome is lenient). Suppressing selection + the drag default
+        //(preventDefault in onDown below) keeps the gesture ours. Touch is unaffected (touch-action already none).
+        container.style.userSelect = 'none';
+        (container.style as unknown as { webkitUserSelect: string }).webkitUserSelect = 'none';
 
         const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
         //Vertical drag drives pitch (down = flatter, up = bird's-eye). Bounds from the module CAMERA_PITCH_*
@@ -636,6 +641,8 @@ export class HeliosEngine
             {
                 return;
             }
+            //Claim the gesture: stop Firefox's native drag/selection so the pointermove stream keeps coming.
+            e.preventDefault();
             dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
