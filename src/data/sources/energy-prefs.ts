@@ -20,6 +20,11 @@ export interface EnergyDefaults
     //Grid import kWh meters (`stat_energy_from`). Drives scrub past derivation and `imported today`.
     gridStatEnergyFroms:    string[];
     gridStatEnergyTos:      string[]; //Grid export kWh meters (`stat_energy_to`).
+    //Grid export earnings config (from the dashboard's `flow_to`): a compensation statistic in the local currency
+    //(preferred, exact), or a fixed / entity-driven price per exported kWh. Empty/null when no sale is configured.
+    gridExportCompensationStats: string[];
+    gridExportPriceNumber:  number | null;
+    gridExportPriceEntity:  string | null;
     //Battery live power sensors (`power_config`). After `invertedRateEntities` sign flips: charge positive / discharge negative.
     batteryStatRates:       string[];
     batteryStatEnergyFroms: string[]; //Battery discharge kWh meters (`stat_energy_from`). Drives `discharged today`.
@@ -89,6 +94,9 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     gridStatRates:          [],
     gridStatEnergyFroms:    [],
     gridStatEnergyTos:      [],
+    gridExportCompensationStats: [],
+    gridExportPriceNumber:  null,
+    gridExportPriceEntity:  null,
     batteryStatRates:       [],
     batteryStatEnergyFroms: [],
     batteryStatEnergyTos:   [],
@@ -307,6 +315,9 @@ export function parseEnergyPrefs(prefs: {
         gridStatRates:          [],
         gridStatEnergyFroms:    [],
         gridStatEnergyTos:      [],
+        gridExportCompensationStats: [],
+        gridExportPriceNumber:  null,
+        gridExportPriceEntity:  null,
         batteryStatRates:       [],
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
@@ -330,11 +341,7 @@ export function parseEnergyPrefs(prefs: {
 
         if (type === 'solar')
         {
-            const meter = pickFirstString(src['stat_energy_from']);
-            if (meter)
-            {
-                out.solarStatEnergyFroms.push(meter);
-            }
+            pushStrings(src['stat_energy_from'], out.solarStatEnergyFroms);
             const rate = pickFirstString(src['stat_rate']);
             if (rate)
             {
@@ -363,15 +370,31 @@ export function parseEnergyPrefs(prefs: {
             {
                 out.gridName = pickFirstString(src['name']) ?? '';
             }
-            const imp = pickFirstString(src['stat_energy_from']);
-            if (imp)
+            //Import + export meters come either flat on the source (the simplified/mock shape) or - in a real HA
+            //dashboard - as `flow_from[]` / `flow_to[]` arrays (multi-tariff, several meters). Collect ALL of them so
+            //the aggregate sums every meter, not just the first.
+            pushStrings(src['stat_energy_from'], out.gridStatEnergyFroms);
+            pushStrings(src['stat_energy_to'], out.gridStatEnergyTos);
+            for (const f of asRecordArray(src['flow_from']))
             {
-                out.gridStatEnergyFroms.push(imp);
+                pushStrings(f['stat_energy_from'], out.gridStatEnergyFroms);
             }
-            const exp = pickFirstString(src['stat_energy_to']);
-            if (exp)
+            for (const f of asRecordArray(src['flow_to']))
             {
-                out.gridStatEnergyTos.push(exp);
+                pushStrings(f['stat_energy_to'], out.gridStatEnergyTos);
+                //Export earnings config on this flow: a compensation stat (exact, in currency), else a fixed or
+                //entity-driven price per kWh. First wins for the single-price fields.
+                pushStrings(f['stat_compensation'], out.gridExportCompensationStats);
+                const num = f['number_energy_price'];
+                if (typeof num === 'number' && Number.isFinite(num) && out.gridExportPriceNumber === null)
+                {
+                    out.gridExportPriceNumber = num;
+                }
+                const ent = pickFirstString(f['entity_energy_price']);
+                if (ent && !out.gridExportPriceEntity)
+                {
+                    out.gridExportPriceEntity = ent;
+                }
             }
             const directRate = pickFirstString(src['stat_rate']);
             if (directRate)
@@ -396,16 +419,8 @@ export function parseEnergyPrefs(prefs: {
             {
                 out.batteryName = pickFirstString(src['name']) ?? '';
             }
-            const discharge = pickFirstString(src['stat_energy_from']);
-            if (discharge)
-            {
-                out.batteryStatEnergyFroms.push(discharge);
-            }
-            const charge = pickFirstString(src['stat_energy_to']);
-            if (charge)
-            {
-                out.batteryStatEnergyTos.push(charge);
-            }
+            pushStrings(src['stat_energy_from'], out.batteryStatEnergyFroms);
+            pushStrings(src['stat_energy_to'], out.batteryStatEnergyTos);
             const soc = pickFirstString(src['stat_soc']);
             if (soc)
             {
@@ -516,6 +531,23 @@ function collectPowerConfigRates(raw: unknown, flavor: 'grid' | 'battery'): { en
     return out;
 }
 
+
+//Push every non-empty string found in `v` (a string or a nested array) into `arr`, de-duped. Used to collect ALL
+//meters for a source (multi-tariff grids expose several under `flow_from`/`flow_to`), not just the first.
+function pushStrings(v: unknown, arr: string[]): void
+{
+    if (typeof v === 'string' && v.trim() !== '')
+    {
+        const s = v.trim();
+        if (!arr.includes(s)) { arr.push(s); }
+    }
+    else if (Array.isArray(v))
+    {
+        for (const item of v) { pushStrings(item, arr); }
+    }
+}
+
+const asRecordArray = (v: unknown): Record<string, unknown>[] => Array.isArray(v) ? v.filter((e): e is Record<string, unknown> => !!e && typeof e === 'object') : [];
 
 function pickFirstString(v: unknown): string | null
 {

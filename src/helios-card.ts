@@ -72,6 +72,8 @@ import
 } from './card/init';
 //Side-effect import: registers <helios-mini-card>, the live-only companion card, in the shared bundle.
 import './helios-mini-card';
+//Side-effect import: registers <helios-fingerprint-card>, the energy-habits heatmap, in the shared bundle.
+import './helios-fingerprint-card';
 //Side-effect import: registers <helios-card-editor> as a custom element.
 import './editor/editor';
 //Side-effect import: writes the Helios entry into window.customCards for the HA card picker.

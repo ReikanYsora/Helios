@@ -33,6 +33,26 @@ export const en: Translations = {
         cloudHigh: 'High cloud cover',
     },
 
+    fingerprint:
+    {
+        title:         'Energy fingerprint',
+        consumption:   'Consumption',
+        production:    'Production',
+        grid:          'Grid',
+        solar:         'Solar',
+        battery:       'Battery',
+        lost:          'Lost',
+        exported:      'Exported',
+        sold:          'Sold',
+        solarCoverage: 'Solar coverage',
+        selectDay:     'Select a day to see its profile',
+        noData:        'No energy data in your Home Assistant Energy dashboard for this week.',
+        loading:       'Reading your energy history…',
+        prevWeek:      'Previous week',
+        nextWeek:      'Next week',
+        close:         'Close',
+    },
+
     editor:
     {
         locationSection:    'Home location',

@@ -22,6 +22,26 @@ export const fr: Translations = {
         cloudHigh: 'Couverture haute',
     },
 
+    fingerprint:
+    {
+        title:         'Empreinte énergétique',
+        consumption:   'Consommation',
+        production:    'Production',
+        grid:          'Réseau',
+        solar:         'Solaire',
+        battery:       'Batterie',
+        lost:          'Perdu',
+        exported:      'Exporté',
+        sold:          'Revendu',
+        solarCoverage: 'Couverture solaire',
+        selectDay:     'Sélectionnez un jour pour voir son profil',
+        noData:        "Aucune donnée d'énergie dans votre tableau de bord Énergie pour cette semaine.",
+        loading:       'Lecture de votre historique énergétique…',
+        prevWeek:      'Semaine précédente',
+        nextWeek:      'Semaine suivante',
+        close:         'Fermer',
+    },
+
     editor:
     {
         locationSection:    'Emplacement de la maison',
