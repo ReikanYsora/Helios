@@ -43,8 +43,8 @@ export interface EnergyDefaults
     gridName:               string;
     batteryName:            string;
     //Individual devices from the dashboard's per-device tracking (`device_consumption`), in dashboard order. NOT part
-    //of the source flows above (they are sub-measurements of the home load), kept separately for the day ring so
-    //summing them never touches the solar/grid/battery identity.
+    //of the source flows above (they are sub-measurements of the home load), kept separately for the monitoring
+    //groups so summing them never touches the solar/grid/battery identity.
     devices:                DeviceConsumption[];
 }
 
@@ -52,7 +52,7 @@ export interface EnergyDefaults
 //One individual device tracked by the Energy dashboard.
 export interface DeviceConsumption
 {
-    //Cumulative kWh meter (`stat_consumption`), binned by hour for the day ring on the same change-series path as the source meters.
+    //Cumulative kWh meter (`stat_consumption`), on the same change-series path as the source meters.
     statConsumption: string;
     //Live power sensor (`stat_rate`), '' when the device exposes none.
     statRate:        string;
@@ -62,7 +62,7 @@ export interface DeviceConsumption
     //from its parent so a compound device is not double-counted.
     includedInStat:  string;
     //Position in the dashboard's device list. HA colours its devices graph by this index
-    //(`--graph-color-{index+1}`, else `--color-{(index % 54)+1}`), so the ring reuses it to match the dashboard.
+    //(`--graph-color-{index+1}`, else `--color-{(index % 54)+1}`), so the device curves reuse it to match the dashboard.
     index:           number;
 }
 

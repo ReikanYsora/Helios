@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Danish locale.
 export const da: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ En 3D-visning i realtid af dit hjem med solen, vejret, solproduktion, batteri og net, plus kastede skygger, en interaktiv tidslinje og et 24-timers energiur',
+    cardDescription: '☀️ En 2.5D-visning i realtid af dit hjem med solen, vejret, solproduktion, batteri og net, plus kastede skygger og en interaktiv tidslinje',
 
     period:
     {
@@ -15,16 +15,11 @@ export const da: Translations = {
         year:  'år',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'Ø',
-        compassW: 'V',
         cloudLow:  'Lav skydække',
         cloudMid:  'Mellem skydække',
         cloudHigh: 'Høj skydække',
-        total:     'I alt',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const da: Translations = {
         valueDecimals:                'Decimaler',
         valueDecimalsHelp:            'Antal decimaler vist på hver værdiaflæsning. Effekt vises altid i kW og energi i kWh; dette indstiller præcisionen for dem alle, så chipsene fremstår ensartet. 0 til 3, standard 1.',
         powerUnit:                    'Effektenhed',
-        powerUnitHelp:                'Enhed for hver effektaflæsning på kortet (chips, grafværktøjstips, urskive). Energi følger den også, så kortet forbliver konsistent: kW parres med kWh, W med Wh.',
+        powerUnitHelp:                'Enhed for hver effektaflæsning på kortet (chips, grafværktøjstips). Energi følger den også, så kortet forbliver konsistent: kW parres med kWh, W med Wh.',
         irradianceUnit:               'Enhed for solkonstant',
         irradianceUnitHelp:           'Enhed for aflæsningen af solkonstanten (irradians) over solen.',
         batterySign:                  'Batteritegn',

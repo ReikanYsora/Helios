@@ -167,7 +167,7 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
 
 //Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per
 //projection). Called on every map transform, once at first weather update (projection matrix ready only after style
-//load), and on every clock tick in live mode (sun position depends on time).
+//load), and on every periodic tick in live mode (sun position depends on time).
 //
 //Each assignment is gated by an equality check: Lit dirty-checks @state by identity, so a fresh-identity assignment
 //with identical content still triggers a full re-render. During manual rotation the engine fires transform events at

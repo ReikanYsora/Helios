@@ -500,9 +500,8 @@ export const heliosTimelineStyles = css`
     }
 
     /*  Period-mode band: a separate strip below the timeline with its own card frame (same 8 px gutters,
-        radius and themed border as the timeline card). Pinned to the bottom; the timeline sits above it
-        and stays visible in clock mode. pointer-events: auto, but the band stays transparent to map
-        rotation. */
+        radius and themed border as the timeline card). Pinned to the bottom; the timeline sits above it.
+        pointer-events: auto, but the band stays transparent to map rotation. */
     .tb-band
     {
         position: absolute;
@@ -566,13 +565,6 @@ export const heliosTimelineStyles = css`
         color: var(--text-on-primary-color, #ffffff);
     }
     .tb-period-seg.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
-    /*  Day (rings) mode: week/month/year/standard have no single-day meaning, so they're greyed + non-interactive. */
-    .tb-period-seg.is-disabled
-    {
-        opacity: 0.35;
-        cursor: default;
-        pointer-events: none;
-    }
 
     /*  Vertical separator at each between-day boundary, dotted to match the chart's day separators.
         None at the outer edges since the strip border closes those. */

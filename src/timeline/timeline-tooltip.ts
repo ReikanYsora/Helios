@@ -13,7 +13,7 @@ import { pickTranslations } from '../core/i18n';
 import {
     type ChartHost,
     chartIsDark,
-    clockTargetLabel,
+    targetLabel,
     solarSourceName,
     gridImportName,
     gridExportName,
@@ -91,7 +91,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
     //duplicating the headline row).
     const perEntityMap     = host._pvChangeSeriesPerEntity;
-    //Source order (not sorted), so row index lines up with solarSourceName + the clock: the per-source
+    //Source order (not sorted), so row index lines up with solarSourceName: the per-source
     //change map is keyed by the solar meters in HA Energy source order.
     const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()) : [];
     const perEntityRows: { id: string; label: string; valueText: string; colorIdx: number }[] = [];
@@ -109,15 +109,15 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const hasPv = isFinite(pv.value);
 
     //Row names: the metric name, or the configured entity's HA Energy name for the two-direction grid/battery rows.
-    const tgtName        = clockTargetLabel(host, target);
+    const tgtName        = targetLabel(host, target);
     //Cloud layer names for the irradiance view's overlay rows (percent unit, separate from the W/m² row).
-    const cloudNames     = pickTranslations(host.hass?.language).clock;
+    const cloudNames     = pickTranslations(host.hass?.language).cloudCover;
     const gridFromName   = gridImportName(host);
     const gridToName     = gridExportName(host);
     const battChargeName = batteryChargeName(host);
     const battDisName    = batteryDischargeName(host);
     //Each row's icon takes the colour of the series it represents (matching the chart curves) so the readout is
-    //scannable at a glance; only the clock + live chip keep the theme colour. Cloud greys mirror the three stacked
+    //scannable at a glance; only the live chip keeps the theme colour. Cloud greys mirror the three stacked
     //band shades in renderTargetChart.
     const el             = host as unknown as Element;
     //Monitoring group: one row per visible device, its power at the hovered instant (from its change series) with
@@ -146,7 +146,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         ? host._batterySocPerBankHistory
         : (host._batterySocHistory ? [host._batterySocHistory] : []);
     const socBankVals   = socBankSeries.map(b => interpAt(b.times, b.values, atMs));
-    const socLabel      = clockTargetLabel(host, 'battery-soc');
+    const socLabel      = targetLabel(host, 'battery-soc');
     const socBeamColor  = (!isFinite(battW) || Math.abs(battW) < 5)
         ? cssHex(el, '--secondary-text-color', '#9e9e9e')
         : (battW > 0 ? ENERGY_COLOR.batteryIn(el) : ENERGY_COLOR.batteryOut(el));
@@ -177,8 +177,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     {
         dayKwh = host._haSolarTodayKwh;
     }
-    //Past cursor shows only instantaneous power (the day total lives in the clock); a future cursor adds the forecast
-    //day total, which has no other home in the UI.
+    //Past cursor shows only instantaneous power (the day total lives in the detail panel); a future cursor adds the
+    //forecast day total, which has no other home in the UI.
     const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
         ? formatEnergyKwh(host.hass, dayKwh, dec, powerU)

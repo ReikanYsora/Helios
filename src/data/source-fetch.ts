@@ -1,4 +1,4 @@
-//Shared fetch plumbing for the per-source data subsystems (pv, grid, battery, custom): the keyed-fetch
+//Shared fetch plumbing for the per-source data subsystems (pv, grid, battery): the keyed-fetch
 //gate, the live-power aggregation, and the minute anchor. Each source keeps its own divergent window/key
 //logic and its series data on the host; only these genuinely-shared pieces live here.
 

@@ -42,7 +42,7 @@ export function statFriendly(host: ChartHost, ids: string[]): string
 }
 
 //Canonical per-source PV name: the HA Energy solar source's energy meter (stat_energy_from), by source index. Single
-//source of the per-string name so the clock (both data paths) and the timeline label string `index` identically; the
+//source of the per-string name so the period aggregation and the timeline label string `index` identically; the
 //rate/meter arrays are parallel per source, so this stays aligned as long as nothing re-sorts.
 export function solarSourceName(host: ChartHost, index: number): string
 {
@@ -50,7 +50,7 @@ export function solarSourceName(host: ChartHost, index: number): string
     return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `PV ${index + 1}`;
 }
 
-//Directional energy names, so the clock + timeline tooltips never diverge: the user-given source name
+//Directional energy names, so the detail panel + timeline tooltips never diverge: the user-given source name
 //from the dashboard settings when one exists, else the meter's friendly name (the direction stays
 //readable through each row's icon and colour).
 export function gridImportName(host: ChartHost):      string { return host._energyDefaults.gridName    || statFriendly(host, host._energyDefaults.gridStatEnergyFroms); }
@@ -68,7 +68,7 @@ const TARGET_LABELS_FR: Record<Exclude<ChartTarget, GroupTarget>, string> = {
     production: 'Production', consumption: 'Consommation', grid: 'Réseau', battery: 'Batterie',
     'battery-soc': 'Charge batterie', irradiance: 'Irradiance',
 };
-export function clockTargetLabel(host: ChartHost, target: ChartTarget): string
+export function targetLabel(host: ChartHost, target: ChartTarget): string
 {
     const lang = String(host.hass?.language ?? '').toLowerCase();
     if (isGroupTarget(target))
@@ -91,8 +91,8 @@ export interface ChartHost
     //Recorder `change` series (5-min buckets) for the solar meter(s). sumChangeForDay sums exact per-day kWh so
     //totals match HA Energy to the watt-hour, not the gap-interpolated curve.
     readonly _pvChangeSeries: ChangeBucket[] | null;
-    //Per-source recorder `change` series keyed by energy meter (`stat_energy_from`), for the Clock per-source
-    //split at exact dashboard energy. Empty on single-source installs (the aggregate already covers it) or pre-fetch.
+    //Per-source recorder `change` series keyed by energy meter (`stat_energy_from`), for the period aggregation's
+    //per-source split at exact dashboard energy. Empty on single-source installs (the aggregate already covers it) or pre-fetch.
     readonly _pvChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;

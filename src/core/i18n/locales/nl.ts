@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Dutch locale.
 export const nl: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Een realtime 3D-weergave van je huis met de zon, het weer, de zonneproductie, de batterij en het net, plus geprojecteerde schaduwen, een interactieve tijdlijn en een energieklok van 24 uur',
+    cardDescription: '☀️ Een realtime 2.5D-weergave van je huis met de zon, het weer, de zonneproductie, de batterij en het net, plus geprojecteerde schaduwen en een interactieve tijdlijn',
 
     period:
     {
@@ -15,16 +15,11 @@ export const nl: Translations = {
         year:  'jaar',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'Z',
-        compassE: 'O',
-        compassW: 'W',
         cloudLow:  'Lage bewolking',
         cloudMid:  'Middelhoge bewolking',
         cloudHigh: 'Hoge bewolking',
-        total:     'Totaal',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const nl: Translations = {
         valueDecimals:                'Decimalen',
         valueDecimalsHelp:            'Aantal decimalen dat bij elke waardeweergave wordt getoond. Vermogen wordt altijd in kW en energie in kWh getoond; dit stelt de precisie voor allemaal in zodat de chips uniform leesbaar zijn. 0 tot 3, standaard 1.',
         powerUnit:                    'Vermogenseenheid',
-        powerUnitHelp:                'Eenheid voor elke vermogensweergave op de kaart (chips, grafiektooltips, wijzerplaat). Energie volgt deze ook, zodat de kaart consistent blijft: kW hoort bij kWh, W bij Wh.',
+        powerUnitHelp:                'Eenheid voor elke vermogensweergave op de kaart (chips, grafiektooltips). Energie volgt deze ook, zodat de kaart consistent blijft: kW hoort bij kWh, W bij Wh.',
         irradianceUnit:               'Eenheid van de zonneconstante',
         irradianceUnitHelp:           'Eenheid voor de weergave van de zonneconstante (instraling) boven de zon.',
         batterySign:                  'Batterijteken',

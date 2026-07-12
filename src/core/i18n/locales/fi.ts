@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Finnish locale.
 export const fi: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Reaaliaikainen 3D-näkymä kodistasi auringon, sään, aurinkotuotannon, akun ja verkon kanssa, lisäksi heitetyt varjot, vuorovaikutteinen aikajana ja 24 tunnin energiakello',
+    cardDescription: '☀️ Reaaliaikainen 2.5D-näkymä kodistasi auringon, sään, aurinkotuotannon, akun ja verkon kanssa, lisäksi heitetyt varjot ja vuorovaikutteinen aikajana',
 
     period:
     {
@@ -15,16 +15,11 @@ export const fi: Translations = {
         year:  'vuosi',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'P',
-        compassS: 'E',
-        compassE: 'I',
-        compassW: 'L',
         cloudLow:  'Matala pilvisyys',
         cloudMid:  'Keskikorkea pilvisyys',
         cloudHigh: 'Korkea pilvisyys',
-        total:     'Yhteensä',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const fi: Translations = {
         valueDecimals:                'Desimaalit',
         valueDecimalsHelp:            'Jokaisessa arvolukemassa näytettävien desimaalien määrä. Teho näytetään aina kilowatteina (kW) ja energia kilowattitunteina (kWh); tämä asettaa tarkkuuden niille kaikille, jotta sirut näkyvät yhtenäisinä. 0-3, oletus 1.',
         powerUnit:          'Tehon yksikkö',
-        powerUnitHelp:      'Yksikkö jokaiselle kortin teholukemalle (sirut, kaavion työkaluvihjeet, kellotaulu). Energia noudattaa sitä myös, joten kortti pysyy yhtenäisenä: kW yhdistyy kWh:hon, W Wh:hon.',
+        powerUnitHelp:      'Yksikkö jokaiselle kortin teholukemalle (sirut, kaavion työkaluvihjeet). Energia noudattaa sitä myös, joten kortti pysyy yhtenäisenä: kW yhdistyy kWh:hon, W Wh:hon.',
         irradianceUnit:     'Aurinkovakion yksikkö',
         irradianceUnitHelp: 'Yksikkö auringon yläpuolella olevalle aurinkovakion (irradianssin) lukemalle.',
         batterySign:                  'Akun merkki',

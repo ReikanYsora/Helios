@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Hungarian locale.
 export const hu: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Otthonod valós idejű 3D nézete a nappal, az időjárással, a napelemes termeléssel, az akkumulátorral és a hálózattal, ráadásul vetett árnyékokkal, interaktív idővonallal és 24 órás energiaórával',
+    cardDescription: '☀️ Otthonod valós idejű 2.5D nézete a nappal, az időjárással, a napelemes termeléssel, az akkumulátorral és a hálózattal, ráadásul vetett árnyékokkal és interaktív idővonallal',
 
     period:
     {
@@ -15,16 +15,11 @@ export const hu: Translations = {
         year:  'év',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'E',
-        compassS: 'D',
-        compassE: 'K',
-        compassW: 'Ny',
         cloudLow:  'Alacsony felhőzet',
         cloudMid:  'Közepes felhőzet',
         cloudHigh: 'Magas felhőzet',
-        total:     'Összesen',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const hu: Translations = {
         valueDecimals:                'Tizedesjegyek',
         valueDecimalsHelp:            'Az egyes értékek mellett megjelenített tizedesjegyek száma. A teljesítmény mindig kW-ban, az energia kWh-ban jelenik meg; ez állítja be mindegyik pontosságát, hogy a chipek egységesek legyenek. 0-tól 3-ig, alapértelmezett 1.',
         powerUnit:                    'Teljesítmény mértékegysége',
-        powerUnitHelp:                'A kártya minden teljesítménykijelzésének mértékegysége (chipek, grafikon buboréksúgók, számlap). Az energia is ezt követi, így a kártya következetes marad: a kW a kWh-val, a W a Wh-val párosul.',
+        powerUnitHelp:                'A kártya minden teljesítménykijelzésének mértékegysége (chipek, grafikon buboréksúgók). Az energia is ezt követi, így a kártya következetes marad: a kW a kWh-val, a W a Wh-val párosul.',
         irradianceUnit:               'Napállandó mértékegysége',
         irradianceUnitHelp:           'A nap fölött megjelenő napállandó (besugárzás) kijelzésének mértékegysége.',
         batterySign:                  'Akkumulátor előjele',

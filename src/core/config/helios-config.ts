@@ -66,7 +66,6 @@ export interface HeliosConfig
     //Live irradiance sensor (W/m²) at the home, preferred over the model for the live "now" reading. Past +
     //forecast still come from the model.
     'solar-irradiance-entity'?: unknown;
-    //Custom entity, measured-only contract: BOTH sensors are required for it to display anywhere. The power
     //HA ui_color token for the base tint of surrounding buildings. Default 'grey'.
     'building-color'?:          unknown;
     //HA ui_color token for the home (consumption) colour: the home pill + every consumption readout. Default 'green'.
@@ -84,10 +83,9 @@ export interface HeliosConfig
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
     'auto-hide-ui'?:           unknown;
-    //Device visibility control. Hidden: recorder-meter ids fully excluded from every view (chips, chart, ring, clock).
-    'consumption-ring-hidden'?:          unknown;
-    //Monitoring group per device (statConsumption id -> 1..4). Absent = No group (default). Drives the group chips,
-    //the per-group consumption rings and the clock group buttons.
+    //Device visibility control. Hidden: recorder-meter ids fully excluded from every view (chips, chart).
+    'hidden-devices'?:          unknown;
+    //Monitoring group per device (statConsumption id -> 1..4). Absent = No group (default). Drives the group chips.
     'monitoring-groups'?:          unknown;
     //Editable group names (group number -> name). Empty/absent falls back to a localised "Group N".
     'monitoring-group-names'?:     unknown;
@@ -180,10 +178,10 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 }
 
 
-//Recorder-meter ids the user hid from the day ring (fully excluded from the ring).
-export function consumptionRingHidden(config: HeliosConfig | undefined): Set<string>
+//Recorder-meter ids the user hid (fully excluded from every view).
+export function hiddenDevices(config: HeliosConfig | undefined): Set<string>
 {
-    const raw = config?.['consumption-ring-hidden'];
+    const raw = config?.['hidden-devices'];
     const out = new Set<string>();
     if (Array.isArray(raw))
     {
@@ -196,7 +194,7 @@ export function consumptionRingHidden(config: HeliosConfig | undefined): Set<str
 export const GROUP_COUNT = 4;
 
 //Per-group fallback colours (used when the theme lacks --graph-color-N and no colour is configured), shared by the
-//scene chips, the chart, the ring and the editor pills so a group reads the same everywhere.
+//scene chips, the chart and the editor pills so a group reads the same everywhere.
 export const GROUP_FALLBACK_COLORS = ['#4269d0', '#efb118', '#ff725c', '#6cc5b0'];
 
 //Monitoring group assignment: device id -> group number (1..GROUP_COUNT). Stored as an object so each device
@@ -249,7 +247,7 @@ export function monitoringGroupColorToken(config: HeliosConfig | undefined, grou
 }
 
 //Resolved CSS colour of a group (a var()/literal string for CSS contexts): the configured ui_color token when set,
-//else the theme's --graph-color-N with a fixed hex fallback. One source so the chip, ring and editor read the same.
+//else the theme's --graph-color-N with a fixed hex fallback. One source so the chip, chart and editor read the same.
 export function monitoringGroupColor(config: HeliosConfig | undefined, group: number): string
 {
     const fallback = `var(--graph-color-${group}, ${GROUP_FALLBACK_COLORS[(group - 1) % GROUP_FALLBACK_COLORS.length]})`;

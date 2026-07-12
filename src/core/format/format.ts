@@ -67,29 +67,11 @@ function haUseAmPm(locale: { time_format?: string; language?: string } | undefin
 }
 
 //Format a time like the HA frontend: hour + minute in the user's language, honouring their 12/24-hour setting. No
-//time-zone conversion: callers pass a local Date for the clock face, so the hour shown is the one meant.
+//time-zone conversion: callers pass a local Date for wall-clock display, so the hour shown is the one meant.
 export function formatHaTime(hass: any, date: Date): string
 {
     const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
     const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: haUseAmPm(locale) };
-    try
-    {
-        return new Intl.DateTimeFormat(locale?.language, opts).format(date);
-    }
-    catch (_)
-    {
-        return new Intl.DateTimeFormat(undefined, opts).format(date);
-    }
-}
-
-
-//Hour-only label (no minutes), localised + 12/24h aware: "12 AM" / "1 PM" in
-//am/pm locales, the bare hour in 24h ones. For the clock dial's 24 ground
-//labels, where a ":00" on every hour is noise (and very long in English am/pm).
-export function formatHaHour(hass: any, date: Date): string
-{
-    const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
-    const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', hour12: haUseAmPm(locale) };
     try
     {
         return new Intl.DateTimeFormat(locale?.language, opts).format(date);
@@ -424,10 +406,10 @@ function labToHex([l, a, b]: [number, number, number]): string
 
 //Per-energy-source colour, matching the HA Energy palette: source `idx` 0 is the base solar token; higher indices
 //brighten it (dark theme) or darken it (light theme) by 18 LAB-lightness units per step, unless the theme defines an
-//explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for the per-source chart curves and the home
-//histogram bands so the two always match the energy dashboard.
+//explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for the per-source chart curves so they
+//always match the energy dashboard.
 //Memo for the deterministic LAB ramp step, keyed by base+dark+idx: per-source colours are recomputed every
-//chart/tooltip/histogram render, but the conversion only depends on those three.
+//chart/tooltip render, but the conversion only depends on those three.
 const _solarRampMemo = new Map<string, string>();
 
 export function energySolarColor(host: Element | null | undefined, dark: boolean, idx: number): string
@@ -451,8 +433,8 @@ export function energySolarColor(host: Element | null | undefined, dark: boolean
 }
 
 //Colour HA gives an individual device by its position in the Energy dashboard's device list: the theme's
-//`--graph-color-{index+1}`, falling back to `--color-{(index % 54)+1}`, then grey. Lets the day-ring device
-//rings match the colours the user already sees on the dashboard's devices graph.
+//`--graph-color-{index+1}`, falling back to `--color-{(index % 54)+1}`, then grey. Lets the device curves
+//match the colours the user already sees on the dashboard's devices graph.
 export function deviceColorByIndex(host: Element | null | undefined, index: number): string
 {
     return cssHex(host, `--graph-color-${index + 1}`, cssHex(host, `--color-${(index % 54) + 1}`, '#8a8a8a'));

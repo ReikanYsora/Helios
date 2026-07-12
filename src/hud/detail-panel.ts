@@ -1,20 +1,20 @@
 //Per-chip detail panel (scene mode): tapping a chip opens a compact, vertical readout top-right that
 //aggregates the active metric over the selected window. Every energy figure is computed with the SAME method the
-//energy clock uses for its period total (buildClockData -> clockLayerPeriod / clockPeriodTotal), so the panel and
-//the clock/dashboard always agree, on every period (day .. year), not just the rolling store window.
+//period aggregation uses for its total (buildPeriodData -> layerPeriodTotal / periodTotal), so the panel and the
+//dashboard always agree, on every period (day .. year), not just the rolling store window.
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { formatEnergyKwh, formatIrradiance } from '../core/format/format';
 import { powerUnit, valueDecimals, irradianceUnit } from '../core/config/helios-config';
-import { buildClockData, clockLayerPeriod, clockPeriodTotal, hourlyOf, type ClockHost, type ClockData } from '../clock/energy-clock';
+import { buildPeriodData, layerPeriodTotal, periodTotal, hourlyOf, type PeriodHost, type PeriodData } from '../data/period-totals/period-totals';
 import { type ChartTarget, isGroupTarget, groupOfTarget } from '../charts/charts';
 import { groupDevices, deviceName, deviceWindowKwh } from '../data/sources/device-consumption';
 import type { SunScene } from './hud';
 import { DAY_MS } from '../core/config/constants';
 
-//The panel reads exactly what the clock reads (ClockHost) plus the sun scene for the astro rows.
-export interface DetailHost extends ClockHost
+//The panel reads exactly what the period aggregation reads (PeriodHost) plus the sun scene for the astro rows.
+export interface DetailHost extends PeriodHost
 {
     readonly _sunScene: SunScene | null;
 }
@@ -34,9 +34,9 @@ function windowDays(startMs: number, endMs: number): number
     return Math.max(1, Math.round((endMs - startMs) / DAY_MS));
 }
 
-//Min / mean / max over a store watt-array inside the window, for the weather metric (irradiance is not a clock
-//ring, so it keeps its own aggregation over the store's own window).
-function aggWatts(store: NonNullable<ClockHost['_unifiedStore']>, arr: readonly (number | null)[], startMs: number, endMs: number):
+//Min / mean / max over a store watt-array inside the window, for the weather metric (irradiance is not a period
+//aggregation metric, so it keeps its own aggregation over the store's own window).
+function aggWatts(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly (number | null)[], startMs: number, endMs: number):
     { peak: number; avg: number; count: number }
 {
     let peak = 0;
@@ -55,9 +55,9 @@ function aggWatts(store: NonNullable<ClockHost['_unifiedStore']>, arr: readonly 
     return { peak, avg: count ? sum / count : 0, count };
 }
 
-//Min / mean / max over a percent ClockData layer's 24 hour-of-day values (state of charge). Empty when there is
+//Min / mean / max over a percent PeriodData layer's 24 hour-of-day values (state of charge). Empty when there is
 //no history in the window.
-function socStats(data: ClockData): { min: number; avg: number; max: number } | null
+function socStats(data: PeriodData): { min: number; avg: number; max: number } | null
 {
     const layer = data.layers[0];
     if (!layer) { return null; }
@@ -94,7 +94,7 @@ function formatDayLength(ms: number): string
 }
 
 //Build the metric rows for the active target. Returns [] when there is nothing to aggregate yet (no window, or
-//the clock data has not resolved), so the caller can drop the panel entirely.
+//the period data has not resolved), so the caller can drop the panel entirely.
 function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 {
     const range = host._timeRange;
@@ -110,8 +110,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
     const days = windowDays(startMs, endMs);
     const energy = (kwh: number): string => formatEnergyKwh(hass, kwh, dec, pu);
 
-    //Irradiance is weather, not a clock ring: aggregate the store's own W/m2 series + read the astro from the sun
-    //scene. Everything else routes through buildClockData so it matches the clock's period total exactly.
+    //Irradiance is weather, not a period aggregation metric: aggregate the store's own W/m2 series + read the astro
+    //from the sun scene. Everything else routes through buildPeriodData so it matches the period total exactly.
     if (target === 'irradiance')
     {
         const store = host._unifiedStore;
@@ -145,7 +145,7 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
     }
 
     //Monitoring group: one row per visible device of the group, its total consumption over the window (same
-    //magnitude the chart curves + the ring show), shown as the device name + total (no icon, to save width).
+    //magnitude the chart curves show), shown as the device name + total (no icon, to save width).
     if (isGroupTarget(target))
     {
         const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
@@ -155,7 +155,7 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         }));
     }
 
-    const data = buildClockData(host, target);
+    const data = buildPeriodData(host, target);
 
     if (target === 'battery-soc')
     {
@@ -175,9 +175,9 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 
     if (target === 'grid')
     {
-        //Layer order from buildClockData: [import, export].
-        const imp = clockLayerPeriod(data.layers[0], data);
-        const exp = data.layers[1] ? clockLayerPeriod(data.layers[1], data) : 0;
+        //Layer order from buildPeriodData: [import, export].
+        const imp = layerPeriodTotal(data.layers[0], data);
+        const exp = data.layers[1] ? layerPeriodTotal(data.layers[1], data) : 0;
         const net = imp - exp;
         const netStr = `${net < 0 ? '-' : ''}${energy(Math.abs(net))}`;
         return [
@@ -190,17 +190,17 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 
     if (target === 'battery')
     {
-        //Layer order from buildClockData: [discharge, charge].
-        const discharged = clockLayerPeriod(data.layers[0], data);
-        const charged    = data.layers[1] ? clockLayerPeriod(data.layers[1], data) : 0;
+        //Layer order from buildPeriodData: [discharge, charge].
+        const discharged = layerPeriodTotal(data.layers[0], data);
+        const charged    = data.layers[1] ? layerPeriodTotal(data.layers[1], data) : 0;
         return [
             { icon: 'mdi:battery-arrow-down', value: energy(charged) },
             { icon: 'mdi:battery-arrow-up',   value: energy(discharged) },
         ];
     }
 
-    //production, consumption, custom: one grand total (all layers) + its per-day average.
-    const total = clockPeriodTotal(data);
+    //production, consumption: one grand total (all layers) + its per-day average.
+    const total = periodTotal(data);
     return [
         { icon: 'mdi:sigma',          value: energy(total) },
         { icon: 'mdi:calendar-today', value: energy(total / days) },

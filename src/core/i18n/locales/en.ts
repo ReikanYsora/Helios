@@ -13,7 +13,7 @@ import type { Translations } from '../index';
 
 export const en: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ A real-time 2.5D view of your home with the sun, weather, solar production, battery and grid, plus cast shadows, an interactive timeline and a 24-hour energy clock',
+    cardDescription: '☀️ A real-time 2.5D view of your home with the sun, weather, solar production, battery and grid, plus cast shadows and an interactive timeline',
 
     period:
     {
@@ -26,16 +26,11 @@ export const en: Translations = {
         year:  'Year',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'E',
-        compassW: 'W',
         cloudLow:  'Low cloud cover',
         cloudMid:  'Mid cloud cover',
         cloudHigh: 'High cloud cover',
-        total:     'Total',
     },
 
     editor:
@@ -55,7 +50,7 @@ export const en: Translations = {
         valueDecimals:                'Decimals',
         valueDecimalsHelp:            'Number of decimals shown on every value readout, so the chips read uniform. Applies to kW values (whole watts stay integers) and to kWh. 0 to 3, default 1.',
         powerUnit:                    'Power unit',
-        powerUnitHelp:                'Unit for every power readout on the card (chips, graph tooltips, dial). Energy follows it too, so the card stays consistent: kW pairs with kWh, W with Wh.',
+        powerUnitHelp:                'Unit for every power readout on the card (chips, graph tooltips). Energy follows it too, so the card stays consistent: kW pairs with kWh, W with Wh.',
         irradianceUnit:               'Solar constant unit',
         irradianceUnitHelp:           'Unit for the solar constant (irradiance) readout above the sun.',
         batterySign:                  'Battery sign',
@@ -98,10 +93,10 @@ export const en: Translations = {
         buildingRealSizeOff:   'Off',
         buildingRealSizeHint:  'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.',
         buildingHeight:        'Building height',
-        consumptionRingNoDevices:      'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.',
-        consumptionRingRingLabel:      'Show device',
+        hiddenDevicesEmpty:      'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.',
+        deviceVisibilityLabel:      'Show device',
         entityConfigSection:           'Entities & monitoring groups',
-        groupsIntro:                   'A monitoring group bundles several devices so you can follow them together in every view (scene chip, chart, ring, histogram). For each group set its name, its colour and its icon.',
+        groupsIntro:                   'A monitoring group bundles several devices so you can follow them together in every view (scene chip, chart). For each group set its name, its colour and its icon.',
         devicesSection:                'Monitoring group management',
         devicesIntro:                  'Devices tracked in your Energy dashboard. The eye shows or hides a device everywhere, and the group pill assigns it to one of the four monitoring groups (X = no group).',
         deviceGroupLabel:              'Monitoring group',

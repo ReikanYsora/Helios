@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Slovak locale.
 export const sk: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ 3D pohľad na tvoj domov v reálnom čase so slnkom, počasím, solárnou výrobou, batériou a sieťou, plus vrhané tiene, interaktívna časová os a 24-hodinové energetické hodiny',
+    cardDescription: '☀️ 2.5D pohľad na tvoj domov v reálnom čase so slnkom, počasím, solárnou výrobou, batériou a sieťou, plus vrhané tiene a interaktívna časová os',
 
     period:
     {
@@ -15,16 +15,11 @@ export const sk: Translations = {
         year:  'rok',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'S',
-        compassS: 'J',
-        compassE: 'V',
-        compassW: 'Z',
         cloudLow:  'Nízka oblačnosť',
         cloudMid:  'Stredná oblačnosť',
         cloudHigh: 'Vysoká oblačnosť',
-        total:     'Spolu',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const sk: Translations = {
         valueDecimals:                'Desatinné miesta',
         valueDecimalsHelp:            'Počet desatinných miest zobrazených pri každej hodnote. Výkon je vždy v kW a energia v kWh; toto nastaví presnosť pre všetky, aby čipy vyzerali jednotne. 0 až 3, predvolené 1.',
         powerUnit:                    'Jednotka výkonu',
-        powerUnitHelp:                'Jednotka pre každé zobrazenie výkonu na karte (čipy, popisy grafu, ciferník). Energia ju tiež nasleduje, aby karta zostala konzistentná: kW sa páruje s kWh, W s Wh.',
+        powerUnitHelp:                'Jednotka pre každé zobrazenie výkonu na karte (čipy, popisy grafu). Energia ju tiež nasleduje, aby karta zostala konzistentná: kW sa páruje s kWh, W s Wh.',
         irradianceUnit:               'Jednotka solárnej konštanty',
         irradianceUnitHelp:           'Jednotka pre zobrazenie solárnej konštanty (ožiarenia) nad slnkom.',
         batterySign:                  'Znamienko batérie',

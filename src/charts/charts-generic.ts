@@ -243,8 +243,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     else if (isGroupTarget(target))
     {
         //Monitoring group: one line+area curve per visible device of the group, its recorder `change` series
-        //mapped onto the store grid as average watts (magnitude only, like the old per-device curves). Each device
-        //keeps its dashboard graph colour so the chart, the ring and the histogram all read the same palette.
+        //mapped onto the store grid as average watts (magnitude only). Each device keeps its dashboard graph
+        //colour so the chart and its tooltip read the same palette.
         const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
         series = devs.map(dev =>
         {
@@ -508,7 +508,7 @@ export function renderTimelineTicks(host: ChartHost): TemplateResult | typeof no
 
 //Adaptive timeline labels over the chart-card footer. The shared model picks granularity from the visible span
 //(hours / weekdays / day+month / months) and thins the count so a wide window stays legible. Each label sits at its
-//model fraction; the day view emphasises today, matching the now-cursor.
+//model fraction; day-granularity labels emphasise today, matching the now-cursor.
 export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeof nothing
 {
     if (!host._timeRange)
@@ -524,8 +524,8 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeo
 
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
-    //Emphasise today only in the day view (each label names one calendar day); wider spans already mark the present
-    //with the now-cursor.
+    //Emphasise today only when labels are day-granular (each names one calendar day); wider spans already mark the
+    //present with the now-cursor.
     const isTodayLabel = (d: Date): boolean =>
         model.kind === 'days' && d.getTime() === today0.getTime();
 

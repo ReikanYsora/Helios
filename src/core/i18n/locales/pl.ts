@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Polish locale.
 export const pl: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Trójwymiarowy widok Twojego domu w czasie rzeczywistym ze słońcem, pogodą, produkcją solarną, baterią i siecią, a do tego rzucane cienie, interaktywna oś czasu i 24-godzinny zegar energii',
+    cardDescription: '☀️ Widok 2.5D Twojego domu w czasie rzeczywistym ze słońcem, pogodą, produkcją solarną, baterią i siecią, a do tego rzucane cienie i interaktywna oś czasu',
 
     period:
     {
@@ -15,16 +15,11 @@ export const pl: Translations = {
         year:  'rok',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'E',
-        compassW: 'W',
         cloudLow:  'Niskie zachmurzenie',
         cloudMid:  'Średnie zachmurzenie',
         cloudHigh: 'Wysokie zachmurzenie',
-        total:     'Razem',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const pl: Translations = {
         valueDecimals:                'Miejsca dziesiętne',
         valueDecimalsHelp:            'Liczba miejsc dziesiętnych pokazywanych przy każdej wartości. Moc jest zawsze w kW, a energia w kWh; to ustawia precyzję dla wszystkich, aby chipy wyglądały jednolicie. Od 0 do 3, domyślnie 1.',
         powerUnit:                    'Jednostka mocy',
-        powerUnitHelp:                'Jednostka dla każdego odczytu mocy na karcie (chipy, dymki wykresu, tarcza). Energia też za nią podąża, aby karta pozostała spójna: kW łączy się z kWh, W z Wh.',
+        powerUnitHelp:                'Jednostka dla każdego odczytu mocy na karcie (chipy, dymki wykresu). Energia też za nią podąża, aby karta pozostała spójna: kW łączy się z kWh, W z Wh.',
         irradianceUnit:               'Jednostka stałej słonecznej',
         irradianceUnitHelp:           'Jednostka odczytu stałej słonecznej (nasłonecznienia) nad słońcem.',
         batterySign:                  'Znak baterii',

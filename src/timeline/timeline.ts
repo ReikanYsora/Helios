@@ -1,4 +1,4 @@
-//Timeline subsystem: the periodic clock tick that advances the live cursor and re-projects the screen-space
+//Timeline subsystem: the periodic tick that advances the live cursor and re-projects the screen-space
 //overlays, plus the pointer handlers that scrub the timeline into the past.
 //
 //Host-driven like the data modules: the card owns the `@state` timeline fields, the functions here read/write them
@@ -14,7 +14,7 @@ import type { TimelineMode } from './timeline-modes';
 //Bound pointer-handler references the host keeps so it can add/remove the same listener instance.
 type PointerHandler = (e: PointerEvent) => void;
 
-//Structural surface the host card exposes here. Extends HudHost so the clock tick can fire refreshHud(host).
+//Structural surface the host card exposes here. Extends HudHost so the periodic tick can fire refreshHud(host).
 export interface TimelineHost extends HudHost
 {
     readonly config:    HeliosConfig | undefined;
@@ -40,8 +40,8 @@ export interface TimelineHost extends HudHost
 }
 
 
-//Re-renders the card on a 30 s cadence: in live mode advances the HH:MM clock and live cursor; in scrubbed mode the
-//clock shows the selected instant while the live cursor keeps moving as wall-clock time progresses. PV/battery live
+//Re-renders the card on a 30 s cadence: in live mode advances the HH:MM header and live cursor; in scrubbed mode the
+//header shows the selected instant while the live cursor keeps moving as wall-clock time progresses. PV/battery live
 //readings update on HA state changes, not this tick. The display only shows HH:MM, so bail when the minute/hour/day
 //hasn't changed to avoid a full Lit re-render with no visible delta (wasted renders add up with several cards).
 export function tick(host: TimelineHost): void

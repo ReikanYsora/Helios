@@ -36,7 +36,7 @@ export interface BatteryHistory
 }
 
 
-//Result of a SoC history fetch: the aggregated mean (drives the chip scrub, tooltip and clock) plus the raw
+//Result of a SoC history fetch: the aggregated mean (drives the chip scrub, tooltip and detail panel) plus the raw
 //per-bank series in fetch order, kept so the battery chart can draw one SoC line per bank scaled onto the power
 //axis. Empty perBank on a single-bank install or a failed/durable-restored fetch.
 export interface BatterySocFetch
@@ -101,6 +101,41 @@ export interface BatteryHost
 }
 
 
+//Live SoC + power read shared by the full and live-only refresh paths.
+//Live SoC: clamped to [0, 100] since some battery management systems briefly report 100.5% during absorption or dip
+//negative near calibration. Multi-bank SoC is the arithmetic mean of every wired `stat_soc` (NaN filtered, single-bank
+//collapses to the one value); capacity-weighted averaging is not possible (no capacity field in the storage schema).
+//Live power, "positive = charging": measured or absent. When power sensors cover EVERY bank (`power_config` on each
+//source), sum their states like the HA Energy live tile (per-bank sign honoured via `invertedRateEntities`). A mixed or
+//energy-only wiring shows NO live power (the sum would silently miss a bank, and a live value is never derived from the
+//meters); scrub and curves keep netting the directional change series regardless.
+function computeBatteryLive(hass: any, defaults: EnergyDefaults): { soc: number | null; power: number | null; unit: string }
+{
+    let soc: number | null = null;
+    const socEntities = defaults.batteryStatSocs;
+    if (socEntities.length > 0)
+    {
+        let sum   = 0;
+        let count = 0;
+        for (const id of socEntities)
+        {
+            const so = hass.states?.[id];
+            const v  = so ? parseNumericState(so.state) : null;
+            if (v !== null) { sum += v; count += 1; }
+        }
+        if (count > 0) { soc = Math.max(0, Math.min(100, sum / count)); }
+    }
+    let power: number | null = null;
+    let unit = '';
+    if (!batteryLiveIsBucketSourced(defaults))
+    {
+        const { watts, any } = sumLiveWatts(hass, defaults.batteryStatRates, defaults.invertedRateEntities);
+        if (any) { power = watts; unit = 'W'; }
+    }
+    return { soc, power, unit };
+}
+
+
 //Live + history refresh, called every lifecycle cycle. Reads SoC and power from hass.states for the resolved entities and
 //dispatches a history fetch when the (entities, range) tuple changes; history fields land in fetchBatterySoc.
 export function refreshBattery(host: BatteryHost): void
@@ -139,48 +174,8 @@ export function refreshBattery(host: BatteryHost): void
         return;
     }
 
-    //Live SoC: clamped to [0, 100] since some battery management systems briefly report 100.5% during absorption or dip negative
-    //near calibration. Power normalised to watts so consumers work in one unit. Multi-bank SoC is the arithmetic mean of every
-    //wired `stat_soc` (NaN filtered, single-bank collapses to the one value); capacity-weighted averaging is not possible (no
-    //capacity field in the storage schema).
-    let nextSoc: number | null = null;
     const socEntities = host._energyDefaults.batteryStatSocs;
-    if (socEntities.length > 0)
-    {
-        let sum = 0;
-        let count = 0;
-        for (const id of socEntities)
-        {
-            const so = host.hass.states?.[id];
-            const v  = so ? parseNumericState(so.state) : null;
-            if (v !== null)
-            {
-                sum   += v;
-                count += 1;
-            }
-        }
-        if (count > 0)
-        {
-            nextSoc = Math.max(0, Math.min(100, sum / count));
-        }
-    }
-    //Live battery power, "positive = charging": measured or absent. When power sensors cover EVERY bank
-    //(`power_config` on each source), sum their states like the HA Energy live tile (per-bank sign honoured
-    //via `invertedRateEntities`). A mixed or energy-only wiring shows NO live power (the sum would silently
-    //miss a bank, and a live value is never derived from the meters); scrub and curves keep netting the
-    //directional change series regardless.
-    let nextPower: number | null = null;
-    let nextUnit        = '';
-    const rateEntities = host._energyDefaults.batteryStatRates;
-    if (!batteryLiveIsBucketSourced(host._energyDefaults))
-    {
-        const { watts, any } = sumLiveWatts(host.hass, rateEntities, host._energyDefaults.invertedRateEntities);
-        if (any)
-        {
-            nextPower = watts;
-            nextUnit  = 'W';
-        }
-    }
+    const { soc: nextSoc, power: nextPower, unit: nextUnit } = computeBatteryLive(host.hass, host._energyDefaults);
     if (nextSoc   !== host._batterySoc)
     {
         host._batterySoc       = nextSoc;
@@ -243,6 +238,38 @@ export function refreshBattery(host: BatteryHost): void
             host._batterySocPerBankHistory = res?.perBank ?? [];
         })
         .finally(() => { host._batteryFetching = false; });
+}
+
+
+//Narrow host for the live-only battery read (Helios Mini): the live chip fields only, no history surface.
+export interface BatteryLiveHost
+{
+    readonly hass:            any;
+    readonly _energyDefaults: EnergyDefaults;
+    _batterySoc:       number | null;
+    _batteryPower:     number | null;
+    _batteryPowerUnit: string;
+}
+
+
+//Live-only battery refresh for a card that never fetches history: mean SoC across every wired `stat_soc`
+//bank and summed live power (only when every bank exposes a power sensor). No recorder call.
+export function refreshBatteryLive(host: BatteryLiveHost): void
+{
+    if (!host.hass) { return; }
+    const { powerEntity, socEntity } = resolveBatteryEntities(host._energyDefaults);
+    if (!powerEntity && !socEntity)
+    {
+        if (host._batterySoc       !== null) { host._batterySoc       = null; }
+        if (host._batteryPower     !== null) { host._batteryPower     = null; }
+        if (host._batteryPowerUnit !== '')   { host._batteryPowerUnit = ''; }
+        return;
+    }
+
+    const { soc: nextSoc, power: nextPower, unit: nextUnit } = computeBatteryLive(host.hass, host._energyDefaults);
+    if (nextSoc   !== host._batterySoc)       { host._batterySoc       = nextSoc; }
+    if (nextPower !== host._batteryPower)      { host._batteryPower     = nextPower; }
+    if (nextUnit  !== host._batteryPowerUnit)  { host._batteryPowerUnit = nextUnit; }
 }
 
 

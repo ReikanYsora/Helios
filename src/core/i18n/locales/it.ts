@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Italian locale.
 export const it: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Una vista 3D in tempo reale di casa tua con il sole, il meteo, la produzione solare, la batteria e la rete, oltre alle ombre proiettate, una linea temporale interattiva e un orologio energetico su 24 ore',
+    cardDescription: '☀️ Una vista 2.5D in tempo reale di casa tua con il sole, il meteo, la produzione solare, la batteria e la rete, oltre alle ombre proiettate e una linea temporale interattiva',
 
     period:
     {
@@ -15,16 +15,11 @@ export const it: Translations = {
         year:  'anno',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'E',
-        compassW: 'O',
         cloudLow:  'Nuvolosità bassa',
         cloudMid:  'Nuvolosità media',
         cloudHigh: 'Nuvolosità alta',
-        total:     'Totale',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const it: Translations = {
         valueDecimals:                'Decimali',
         valueDecimalsHelp:            'Numero di decimali mostrati su ogni valore. La potenza è sempre in kW e l\'energia in kWh; questo imposta la precisione per tutti, così i chip restano uniformi. Da 0 a 3, predefinito 1.',
         powerUnit:                    'Unità di potenza',
-        powerUnitHelp:                'Unità per ogni lettura di potenza sulla scheda (chip, tooltip del grafico, quadrante). Anche l\'energia la segue, così la scheda resta coerente: kW si abbina a kWh, W a Wh.',
+        powerUnitHelp:                'Unità per ogni lettura di potenza sulla scheda (chip, tooltip del grafico). Anche l\'energia la segue, così la scheda resta coerente: kW si abbina a kWh, W a Wh.',
         irradianceUnit:               'Unità della costante solare',
         irradianceUnitHelp:           'Unità per la lettura della costante solare (irraggiamento) sopra il sole.',
         batterySign:                  'Segno della batteria',

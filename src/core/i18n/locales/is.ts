@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Icelandic locale.
 export const isLocale: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Rauntíma 3D-sýn af heimilinu þínu með sólinni, veðrinu, sólarframleiðslu, rafhlöðu og raforkukerfi, auk varpaðra skugga, gagnvirks tímaáss og 24 klukkustunda orkuklukku',
+    cardDescription: '☀️ Rauntíma 2.5D-sýn af heimilinu þínu með sólinni, veðrinu, sólarframleiðslu, rafhlöðu og raforkukerfi, auk varpaðra skugga og gagnvirks tímaáss',
 
     period:
     {
@@ -15,16 +15,11 @@ export const isLocale: Translations = {
         year:  'ár',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'A',
-        compassW: 'V',
         cloudLow:  'Lág skýjahula',
         cloudMid:  'Miðlungs skýjahula',
         cloudHigh: 'Há skýjahula',
-        total:     'Samtals',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const isLocale: Translations = {
         valueDecimals:                'Aukastafir',
         valueDecimalsHelp:            'Fjöldi aukastafa sem birtir eru á hverjum gildislestri. Afl er alltaf sýnt í kW og orka í kWh; þetta stillir nákvæmnina fyrir þau öll svo flögurnar lesist samræmt. 0 til 3, sjálfgefið 1.',
         powerUnit:                    'Afleining',
-        powerUnitHelp:                'Eining fyrir hverja aflmælingu á kortinu (flögur, ábendingar á grafi, skífu). Orkan fylgir henni líka, svo kortið haldist samræmt: kW parast við kWh, W við Wh.',
+        powerUnitHelp:                'Eining fyrir hverja aflmælingu á kortinu (flögur, ábendingar á grafi). Orkan fylgir henni líka, svo kortið haldist samræmt: kW parast við kWh, W við Wh.',
         irradianceUnit:               'Eining sólfastans',
         irradianceUnitHelp:           'Eining fyrir mælingu sólfastans (geislunar) fyrir ofan sólina.',
         batterySign:                  'Formerki rafhlöðu',

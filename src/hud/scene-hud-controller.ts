@@ -153,6 +153,11 @@ export class SceneHudController
         //override). The basemap is keyless CARTO raster tiles, so this is purely "can we project the home".
         const hasHomeCoords = getHomeCoords(this.host.config, this.host.hass) !== null;
 
+        //Chip interactivity: the main card wires each chip as a button that re-points the bottom chart and glows
+        //when active. A display-only host (Helios Mini) sets `_interactive = false` to drop the button role,
+        //tab focus, click wiring and active-glow. Unset (main card) reads as interactive.
+        const interactive = (this.host as unknown as { _interactive?: boolean })._interactive !== false;
+
         //Always-visible chip anchors come pre-projected from engine.projectHomeLabelLayout(). Suppressed until
         //both the layout (map ready) and a data value exist.
         const layout         = this.host._labelLayout;
@@ -647,12 +652,12 @@ export class SceneHudController
 
                 ${showPvLabel ? html`
                     <div
-                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${this.host._chartTarget === 'production' ? 'is-chart-active' : ''}"
+                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${interactive && this.host._chartTarget === 'production' ? 'is-chart-active' : ''}"
                         style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
-                        role="button"
-                        tabindex="0"
+                        role=${interactive ? 'button' : nothing}
+                        tabindex=${interactive ? '0' : nothing}
                         data-target="production"
-                        @click=${this.host.onChartTargetClick}
+                        @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
                         <ha-icon icon="mdi:solar-power"></ha-icon>
                         <span>${pvDisplayValue}</span>
@@ -717,12 +722,12 @@ export class SceneHudController
                         ` : nothing}
                     </svg>
                     <div
-                        class="battery-pct-label ${this.host._chartTarget === 'battery' ? 'is-chart-active' : ''}"
+                        class="battery-pct-label ${interactive && this.host._chartTarget === 'battery' ? 'is-chart-active' : ''}"
                         style="left:${batteryChipX}px; top:${batteryChipY}px; --battery-leader-color:${batteryLeaderColor}"
-                        role="button"
-                        tabindex="0"
+                        role=${interactive ? 'button' : nothing}
+                        tabindex=${interactive ? '0' : nothing}
                         data-target="battery"
-                        @click=${this.host.onChartTargetClick}
+                        @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
                         <ha-icon icon=${batteryChipIcon}></ha-icon>
                         <span>${batteryChipText}</span>
@@ -754,12 +759,12 @@ export class SceneHudController
                         `) : nothing}
                     </svg>
                     <div
-                        class="grid-label ${this.host._chartTarget === 'grid' ? 'is-chart-active' : ''}"
+                        class="grid-label ${interactive && this.host._chartTarget === 'grid' ? 'is-chart-active' : ''}"
                         style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
-                        role="button"
-                        tabindex="0"
+                        role=${interactive ? 'button' : nothing}
+                        tabindex=${interactive ? '0' : nothing}
                         data-target="grid"
-                        @click=${this.host.onChartTargetClick}
+                        @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
                         <ha-icon icon=${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}></ha-icon>
                         <span>${formatGridValue(this.host.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
@@ -778,12 +783,12 @@ export class SceneHudController
                         ` : nothing}
                     </svg>
                     <div
-                        class="group-label ${this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''}"
+                        class="group-label ${interactive && this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''}"
                         style="left:${gc.anchor.x}px; top:${gc.anchor.y}px; --group-color:${gc.color}"
-                        role="button"
-                        tabindex="0"
+                        role=${interactive ? 'button' : nothing}
+                        tabindex=${interactive ? '0' : nothing}
                         data-target=${groupTarget(gc.g)}
-                        @click=${this.host.onChartTargetClick}
+                        @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
                         ${gc.icon
                             ? html`<ha-icon icon=${gc.icon}></ha-icon>`
@@ -958,12 +963,12 @@ export class SceneHudController
                       view, where the cloud layers overlay the curve.  -->
                 ${showSunLabel ? html`
                     <div
-                        class="solar-pct-label ${this.host._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
+                        class="solar-pct-label ${interactive && this.host._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
                         style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px"
-                        role="button"
-                        tabindex="0"
+                        role=${interactive ? 'button' : nothing}
+                        tabindex=${interactive ? '0' : nothing}
                         data-target="irradiance"
-                        @click=${this.host.onChartTargetClick}
+                        @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
                         <ha-icon icon=${this.host._cloudCover >= 0 ? cloudCoverIcon(this.host._cloudCover) : 'mdi:white-balance-sunny'}></ha-icon>
                         <span>${sunIrradText}</span>
@@ -984,12 +989,12 @@ export class SceneHudController
                       the home glyph on top, the live home consumption below.  -->
                 ${hasHomeCoords && layout !== null ? html`
                     <div
-                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this.host._homeHover ? 'is-hovered' : ''} ${this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
+                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
-                        role="button"
-                        tabindex="0"
+                        role=${interactive ? 'button' : nothing}
+                        tabindex=${interactive ? '0' : nothing}
                         data-target="consumption"
-                        @click=${this.host.onChartTargetClick}
+                        @click=${interactive ? this.host.onChartTargetClick : undefined}
                         @mouseenter=${this.host.onHomeEnter}
                         @mouseleave=${this.host.onHomeLeave}
                     >

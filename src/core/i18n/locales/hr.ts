@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Croatian locale.
 export const hr: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ 3D prikaz tvog doma u stvarnom vremenu sa suncem, vremenom, solarnom proizvodnjom, baterijom i mrežom, plus bačene sjene, interaktivna vremenska traka i 24-satni energetski sat',
+    cardDescription: '☀️ 2.5D prikaz tvog doma u stvarnom vremenu sa suncem, vremenom, solarnom proizvodnjom, baterijom i mrežom, plus bačene sjene i interaktivna vremenska traka',
 
     period:
     {
@@ -15,16 +15,11 @@ export const hr: Translations = {
         year:  'godina',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'S',
-        compassS: 'J',
-        compassE: 'I',
-        compassW: 'Z',
         cloudLow:  'Niska naoblaka',
         cloudMid:  'Srednja naoblaka',
         cloudHigh: 'Visoka naoblaka',
-        total:     'Ukupno',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const hr: Translations = {
         valueDecimals:                'Decimalna mjesta',
         valueDecimalsHelp:            'Broj decimalnih mjesta prikazanih uz svaku vrijednost. Snaga je uvijek u kW, a energija u kWh; ovo postavlja preciznost za sve, da čipovi izgledaju ujednačeno. 0 do 3, zadano 1.',
         powerUnit:                    'Jedinica snage',
-        powerUnitHelp:                'Jedinica za svako očitanje snage na kartici (čipovi, opisi u grafu, brojčanik). Energija je slijedi, pa kartica ostaje dosljedna: kW ide uz kWh, W uz Wh.',
+        powerUnitHelp:                'Jedinica za svako očitanje snage na kartici (čipovi, opisi u grafu). Energija je slijedi, pa kartica ostaje dosljedna: kW ide uz kWh, W uz Wh.',
         irradianceUnit:               'Jedinica solarne konstante',
         irradianceUnitHelp:           'Jedinica za očitanje solarne konstante (ozračenja) iznad sunca.',
         batterySign:                  'Predznak baterije',

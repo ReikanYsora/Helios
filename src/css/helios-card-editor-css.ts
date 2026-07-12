@@ -434,10 +434,10 @@ export const editorStyles = css`
         border-radius: var(--ha-border-radius-md, 6px);
     }
 
-    /*  Consumption-ring device list: one row per dashboard-tracked device, drag handle + colour dot + name on the
-        left, the show/hide-in-the-ring toggle on the right. Framed as a soft card so the list reads as a distinct
-        block within the section. */
-    .cring-list
+    /*  Device list: one row per dashboard-tracked device, colour dot + name on the left, the group pill and the
+        show/hide toggle on the right. Framed as a soft card so the list reads as a distinct block within the
+        section. */
+    .device-list
     {
         display: flex;
         flex-direction: column;
@@ -447,29 +447,29 @@ export const editorStyles = css`
         border-radius: var(--ha-border-radius-md, 6px);
         overflow: hidden;
     }
-    .cring-row
+    .device-row
     {
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 8px 10px;
     }
-    .cring-row + .cring-row
+    .device-row + .device-row
     {
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.08));
     }
     /*  Device icon tinted in the entity's dashboard colour (set inline), standing in for the old colour dot. */
-    .cring-icon
+    .device-icon
     {
         flex: none;
         --mdc-icon-size: 20px;
     }
-    .cring-row.is-hidden .cring-icon,
-    .cring-row.is-hidden .cring-group
+    .device-row.is-hidden .device-icon,
+    .device-row.is-hidden .device-group
     {
         opacity: 0.5;
     }
-    .cring-name
+    .device-name
     {
         flex: 1;
         min-width: 0;
@@ -479,14 +479,14 @@ export const editorStyles = css`
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    /*  When a device is hidden from the ring, its row dims. */
-    .cring-row.is-hidden .cring-name
+    /*  When a device is hidden, its row dims. */
+    .device-row.is-hidden .device-name
     {
         opacity: 0.5;
     }
     /*  Icon-only state toggles, HA-style: no button chrome. The icon carries the state through colour alone: normal
         text colour when active, the dimmed "disabled" colour when inactive. */
-    .cring-toggle
+    .device-toggle
     {
         flex: none;
         display: inline-flex;
@@ -502,20 +502,20 @@ export const editorStyles = css`
         transition: color 0.15s, opacity 0.15s;
         --mdc-icon-size: 22px;
     }
-    .cring-toggle.active
+    .device-toggle.active
     {
         color: var(--primary-text-color, #212121);
     }
-    .cring-toggle:hover:not(:disabled)
+    .device-toggle:hover:not(:disabled)
     {
         color: var(--primary-color, #03a9f4);
     }
-    .cring-toggle:disabled
+    .device-toggle:disabled
     {
         opacity: 0.4;
         cursor: default;
     }
-    .cring-toggle:focus-visible
+    .device-toggle:focus-visible
     {
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
@@ -523,7 +523,7 @@ export const editorStyles = css`
     }
     /*  Monitoring-group pill: a small circle showing the group number (1..4) filled in the group's colour, or an
         X in a dim outlined circle for "No group". Click cycles No group -> 1 -> ... -> 4 -> No group. */
-    .cring-group
+    .device-group
     {
         flex: none;
         display: inline-flex;
@@ -543,17 +543,17 @@ export const editorStyles = css`
         transition: color 0.15s, background 0.15s, border-color 0.15s;
         --mdc-icon-size: 16px;
     }
-    .cring-group.active
+    .device-group.active
     {
         color: #fff;
         border-color: transparent;
         background: var(--group-pill-color, var(--primary-color, #03a9f4));
     }
-    .cring-group:hover
+    .device-group:hover
     {
         border-color: var(--primary-color, #03a9f4);
     }
-    .cring-group:focus-visible
+    .device-group:focus-visible
     {
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
@@ -568,7 +568,7 @@ export const editorStyles = css`
         color: var(--primary-text-color, #212121);
     }
     /*  One group's identity in a framed block: line 1 = badge + name, line 2 = colour + icon pickers (each half). */
-    .cring-group-block
+    .group-block
     {
         margin-bottom: 8px;
         padding: 8px 10px;
@@ -576,21 +576,21 @@ export const editorStyles = css`
         border-radius: var(--ha-border-radius-md, 6px);
     }
     /*  Breathing room after the last group block before the next field (solar-irradiance entity). */
-    .cring-group-block:last-of-type
+    .group-block:last-of-type
     {
         margin-bottom: 16px;
     }
-    .cring-group-line
+    .group-line
     {
         display: flex;
         align-items: center;
         gap: 8px;
     }
-    .cring-group-line + .cring-group-line
+    .group-line + .group-line
     {
         margin-top: 8px;
     }
-    .cring-groupname-badge
+    .group-name-badge
     {
         flex: 0 0 auto;
         display: inline-flex;
@@ -605,14 +605,14 @@ export const editorStyles = css`
         line-height: 1;
         background: var(--group-pill-color, var(--primary-color, #03a9f4));
     }
-    .cring-groupname-badge ha-icon
+    .group-name-badge ha-icon
     {
         --mdc-icon-size: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
     }
-    .cring-groupname-input
+    .group-name-input
     {
         flex: 1 1 auto;
         min-width: 0;
@@ -625,17 +625,17 @@ export const editorStyles = css`
         font-size: var(--ha-font-size-s, 13px);
         font-family: inherit;
     }
-    .cring-groupname-input:focus
+    .group-name-input:focus
     {
         outline: none;
         border-color: var(--primary-color, #03a9f4);
     }
-    .cring-group-picker
+    .group-picker
     {
         flex: 1 1 0;
         min-width: 0;
     }
-    .cring-empty
+    .device-empty
     {
         font-size: var(--ha-font-size-xs, 11px);
         color: var(--secondary-text-color, #727272);

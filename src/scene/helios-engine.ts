@@ -66,7 +66,7 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 //              always available, used as fallback past the forecast horizon or when shortwave is missing.
 //  shortwave - shortwave_radiation_instant from the weather model (median of active models in 'high');
 //              more accurate as it accounts for aerosols/humidity/multi-layer cloud.
-//  sensor    - value from a HA entity via setLiveIrradianceOverride; a real measurement at the home, so
+//  sensor    - value from a HA entity via setSolarRadiationSamples; a real measurement at the home, so
 //              it wins, but only in live mode (scrubbing past/forecast falls back to shortwave/haurwitz).
 export type IrradianceSource = 'haurwitz' | 'shortwave' | 'sensor';
 
@@ -378,81 +378,9 @@ export class HeliosEngine
         });
     }
 
-    //Day (rings) view: a runtime-only lock + a top-down, equator-up pose, animated on enter and restored on exit.
-    //Kept separate from the persistent camera lock so it never leaks into the scene view or localStorage.
-    private _dayView = false;
-    private _dayViewSaved?: { bearing: number; pitch: number };
-    private _cameraAnimRaf?: number;
-    //Clock (histogram) mode: rotation is ALWAYS free there, so the camera lock (a scene-only pose pin) is ignored
-    //while it's set. Day view stays inert regardless (top-down). Kept in sync by the card.
-    private _clockView = false;
-    public setClockView(on: boolean): void { this._clockView = on; }
-
-    //Enter the day view: save the current pose once, lock rotation, animate straight-down (top-down, so the rings
-    //stay perfectly concentric) and equator-up (south up in the northern hemisphere, north up in the southern).
-    public enterDayView(): void
-    {
-        if (!this._renderer)
-        {
-            return;
-        }
-        if (!this._dayView)
-        {
-            this._dayViewSaved = { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
-        }
-        this._dayView = true;
-        this._animateCameraTo(this.homeLat >= 0 ? 180 : 0, 0);
-    }
-
-    //Leave the day view: unlock and animate back to the saved pose.
-    public exitDayView(): void
-    {
-        if (!this._renderer || !this._dayView)
-        {
-            return;
-        }
-        this._dayView = false;
-        const saved = this._dayViewSaved;
-        this._dayViewSaved = undefined;
-        if (saved)
-        {
-            this._animateCameraTo(saved.bearing, saved.pitch);
-        }
-    }
-
-    //Ease the camera bearing + pitch to a target over ~500 ms; setCameraBearing/Pitch redraw + re-project overlays.
-    private _animateCameraTo(bearing: number, pitch: number): void
-    {
-        const renderer = this._renderer;
-        if (!renderer)
-        {
-            return;
-        }
-        if (this._cameraAnimRaf !== undefined)
-        {
-            cancelAnimationFrame(this._cameraAnimRaf);
-            this._cameraAnimRaf = undefined;
-        }
-        const b0 = renderer.getCameraBearing();
-        const p0 = renderer.getCameraPitch();
-        const db = ((bearing - b0 + 540) % 360) - 180;   //shortest way round
-        const dp = pitch - p0;
-        const start = performance.now();
-        const tick = (t: number): void =>
-        {
-            const k = Math.min(1, (t - start) / 500);
-            const e = 1 - (1 - k) ** 3;
-            renderer.setCameraBearing(b0 + db * e);
-            renderer.setCameraPitch(p0 + dp * e);
-            this._cameraAnimRaf = k < 1 ? requestAnimationFrame(tick) : undefined;
-        };
-        this._cameraAnimRaf = requestAnimationFrame(tick);
-    }
-
-    //Home prism appearance, driven by the card's active chip: `color` is the chip's accent, `bands` the
-    //per-PV-string production split (empty = solid). `animate` plays the squash/grow on a chip change; an
-    //instant set is used for same-chip scrubs. The card computes these (they're hass/energy-derived).
-    public setHomeAppearance(color: string, bands: { frac: number; color: string }[], animate: boolean, highlight = false): void
+    //Home prism colour, driven by the card's active chip: `color` is the chip's accent. `animate` plays the
+    //squash/grow on a chip change; an instant set is used for same-chip scrubs.
+    public setHomeAppearance(color: string, animate: boolean): void
     {
         if (!this._renderer)
         {
@@ -460,28 +388,14 @@ export class HeliosEngine
         }
         if (animate)
         {
-            this._renderer.animateHomeTo(color, bands);
+            this._renderer.animateHomeTo(color);
         }
         else
         {
-            this._renderer.setHome(color, bands, highlight);
+            this._renderer.setHome(color);
         }
     }
 
-    //Clock mode renders the home prism alone (no neighbours) as the dial anchor; scene mode shows everything.
-    public setHomeOnly(on: boolean): void
-    {
-        this._renderer?.setHomeOnly(on);
-    }
-    //Clock-mode ground guide, painted between the basemap and the home prism. '' clears it.
-    public setGroundOverlay(svg: string): void
-    {
-        this._renderer?.setGroundOverlay(svg);
-    }
-    public setGroundDecal(svg: string | null, active = false): void
-    {
-        this._renderer?.setGroundDecal(svg, active);
-    }
     //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
     //sun-arc-scale memo key keeps a stable value.
     public getCameraZoom():    number { return 18; }
@@ -532,7 +446,7 @@ export class HeliosEngine
             //move or did time pass?"). camera-locked also suppresses it.
             const autoRotateEnabled = this.cfg['auto-rotate-enabled'] === true;
             const cameraLocked      = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
-            if (!autoRotateEnabled || (cameraLocked && !this._clockView) || this._dayView)
+            if (!autoRotateEnabled || cameraLocked)
             {
                 this._autoRotateRaf = undefined;
                 return;
@@ -717,9 +631,8 @@ export class HeliosEngine
             {
                 return;
             }
-            //Day view is always inert (top-down); the camera lock only applies to the SCENE, so it's ignored in the
-            //clock view (rotation stays free there). Re-checked per pointerdown so a toggle disengages immediately.
-            if (this._dayView || (this.isCameraLocked() && !this._clockView))
+            //The camera lock pins the scene pose. Re-checked per pointerdown so a toggle disengages immediately.
+            if (this.isCameraLocked())
             {
                 return;
             }
@@ -2038,13 +1951,6 @@ export class HeliosEngine
             cancelAnimationFrame(this._autoRotateRaf);
             this._autoRotateRaf = undefined;
         }
-        //A camera ease (animateHomeTo) in flight would otherwise keep ticking a dead renderer for its remaining ~0.5 s.
-        if (this._cameraAnimRaf !== undefined)
-        {
-            cancelAnimationFrame(this._cameraAnimRaf);
-            this._cameraAnimRaf = undefined;
-        }
-
         //Detach the drag-rotate pointer listeners from the renderer's container before the renderer tears
         //down its own DOM, so a lingering closure can't pin the dead engine.
         if (this._dragRotateHandlers)

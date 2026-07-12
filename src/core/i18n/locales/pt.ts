@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Portuguese (Portugal) locale.
 export const pt: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Uma vista 3D em tempo real da tua casa com o sol, o tempo, a produção solar, a bateria e a rede, além de sombras projetadas, uma linha temporal interativa e um relógio de energia de 24 horas',
+    cardDescription: '☀️ Uma vista 2.5D em tempo real da tua casa com o sol, o tempo, a produção solar, a bateria e a rede, além de sombras projetadas e uma linha temporal interativa',
 
     period:
     {
@@ -15,16 +15,11 @@ export const pt: Translations = {
         year:  'ano',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'E',
-        compassW: 'O',
         cloudLow:  'Nebulosidade baixa',
         cloudMid:  'Nebulosidade média',
         cloudHigh: 'Nebulosidade alta',
-        total:     'Total',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const pt: Translations = {
         valueDecimals:                'Decimais',
         valueDecimalsHelp:            'Número de decimais mostrado em cada leitura de valor. A potência é sempre mostrada em kW e a energia em kWh; isto define a precisão de todos para que os chips fiquem uniformes. De 0 a 3, predefinição 1.',
         powerUnit:                    'Unidade de potência',
-        powerUnitHelp:                'Unidade para cada leitura de potência no cartão (chips, dicas do gráfico, mostrador). A energia também a segue, para que o cartão se mantenha consistente: kW combina com kWh, W com Wh.',
+        powerUnitHelp:                'Unidade para cada leitura de potência no cartão (chips, dicas do gráfico). A energia também a segue, para que o cartão se mantenha consistente: kW combina com kWh, W com Wh.',
         irradianceUnit:               'Unidade da constante solar',
         irradianceUnitHelp:           'Unidade para a leitura da constante solar (irradiância) acima do sol.',
         batterySign:                  'Sinal da bateria',

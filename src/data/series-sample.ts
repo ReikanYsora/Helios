@@ -63,7 +63,7 @@ export function interpAt(times: Date[], values: number[], targetMs: number): num
 export function pvValueAtTime(
     host: ChartHost,
     targetMs: number,
-    //Optional per-source meter id (multi-source tooltip rows, stacked bands, clock rings): reads that
+    //Optional per-source meter id (multi-source tooltip rows, stacked chart areas): reads that
     //meter's own recorder change series; rows read a dash until the per-source fetch lands.
     sourceMeterId?: string,
 ): { value: number; unit: string; isPredicted: boolean }

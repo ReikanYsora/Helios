@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Lithuanian locale.
 export const lt: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Realaus laiko 3D tavo namų vaizdas su saule, oru, saulės gamyba, akumuliatoriumi ir tinklu, taip pat metami šešėliai, interaktyvi laiko juosta ir 24 valandų energijos laikrodis',
+    cardDescription: '☀️ Realaus laiko 2.5D tavo namų vaizdas su saule, oru, saulės gamyba, akumuliatoriumi ir tinklu, taip pat metami šešėliai ir interaktyvi laiko juosta',
 
     period:
     {
@@ -15,16 +15,11 @@ export const lt: Translations = {
         year:  'metai',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'S',
-        compassS: 'P',
-        compassE: 'R',
-        compassW: 'V',
         cloudLow:  'Žema debesuotumas',
         cloudMid:  'Vidutinė debesuotumas',
         cloudHigh: 'Aukšta debesuotumas',
-        total:     'Iš viso',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const lt: Translations = {
         valueDecimals:                'Dešimtainės dalys',
         valueDecimalsHelp:            'Dešimtainių skaitmenų skaičius, rodomas kiekviename vertės rodmenyje. Galia visada rodoma kW, o energija kWh; tai nustato tikslumą visiems jiems, kad lustai atrodytų vienodi. Nuo 0 iki 3, numatytasis 1.',
         powerUnit:                    'Galios vienetas',
-        powerUnitHelp:                'Vienetas kiekvienam galios rodmeniui kortelėje (lustai, grafiko debesėliai, ciferblatas). Energija taip pat jo laikosi, kad kortelė liktų nuosekli: kW poruojasi su kWh, W su Wh.',
+        powerUnitHelp:                'Vienetas kiekvienam galios rodmeniui kortelėje (lustai, grafiko debesėliai). Energija taip pat jo laikosi, kad kortelė liktų nuosekli: kW poruojasi su kWh, W su Wh.',
         irradianceUnit:               'Saulės konstantos vienetas',
         irradianceUnitHelp:           'Vienetas saulės konstantos (apšvitos) rodmeniui virš saulės.',
         batterySign:                  'Baterijos ženklas',

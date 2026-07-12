@@ -55,9 +55,9 @@ export interface PvHost
     _pvChangeSeries:         ChangeBucket[] | null;
     _pvChangeFetch:          KeyedFetch;
     //Per-source recorder `change` series, keyed by the source's energy meter (`stat_energy_from`). Same reset-corrected,
-    //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the Clock dial
-    //shows each string with the exact dashboard energy (and recorded night production from non-solar sources fed in as PV),
-    //instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
+    //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the period
+    //aggregation shows each string with the exact dashboard energy (and recorded night production from non-solar
+    //sources fed in as PV), instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
     _pvChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
 }
 
@@ -178,7 +178,7 @@ export function refreshPv(host: PvHost): void
                     if (byId === null) { return; }
                     const agg = mergeChangeSeries(byId, changeIds);
                     if (agg !== null) { host._pvChangeSeries = agg; }
-                    //Per-source series (the Clock dial splits production by meter): read each meter's own
+                    //Per-source series (the period aggregation splits production by meter): read each meter's own
                     //buckets from the same per-id result, no extra call. Only meaningful with 2+ sources.
                     if (changeIds.length >= 2)
                     {
@@ -217,11 +217,40 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 }
 
 
+//Narrow host for the live-only PV read (Helios Mini): just the live chip fields, no history/store surface.
+export interface PvLiveHost
+{
+    readonly hass:            any;
+    readonly _energyDefaults: EnergyDefaults;
+    _pvCurrent: number | null;
+    _pvUnit:    string;
+}
+
+
+//Live-only PV refresh for a card that never fetches history: lands the shared currentPvRate read into
+//`_pvCurrent`/`_pvUnit`, clearing them when no live value resolves. No recorder call.
+export function refreshPvLive(host: PvLiveHost): void
+{
+    if (!host.hass) { return; }
+    const rate = currentPvRate(host);
+    if (rate)
+    {
+        if (host._pvCurrent !== rate.value) { host._pvCurrent = rate.value; }
+        if (host._pvUnit    !== rate.unit)  { host._pvUnit    = rate.unit; }
+    }
+    else if (host._pvCurrent !== null)
+    {
+        host._pvCurrent = null;
+        host._pvUnit    = '';
+    }
+}
+
+
 //Live "now" PV rate: measured or absent. With power sensors (`stat_rate`), read their states directly,
 //summed across every wired source, like the HA Energy live tile. Without one, return null so the chip
 //hides (and the editor explains what to configure): a live value is never derived from the cumulative
 //meters. Past curves and scrub keep reading the recorder series regardless.
-export function currentPvRate(host: PvHost): PvRate | null
+export function currentPvRate(host: PvLiveHost): PvRate | null
 {
     const rates = host._energyDefaults.solarStatRates;
     if (rates.length === 0) { return null; }

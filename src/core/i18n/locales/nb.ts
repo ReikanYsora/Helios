@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Norwegian Bokmal locale.
 export const nb: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ En 3D-visning i sanntid av hjemmet ditt med solen, været, solproduksjon, batteri og strømnett, pluss kastede skygger, en interaktiv tidslinje og en 24-timers energiklokke',
+    cardDescription: '☀️ En 2.5D-visning i sanntid av hjemmet ditt med solen, været, solproduksjon, batteri og strømnett, pluss kastede skygger og en interaktiv tidslinje',
 
     period:
     {
@@ -15,16 +15,11 @@ export const nb: Translations = {
         year:  'år',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'Ø',
-        compassW: 'V',
         cloudLow:  'Lavt skydekke',
         cloudMid:  'Middels skydekke',
         cloudHigh: 'Høyt skydekke',
-        total:     'Totalt',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const nb: Translations = {
         valueDecimals:                'Desimaler',
         valueDecimalsHelp:            'Antall desimaler vist på hver verdiavlesning. Effekt vises alltid i kW og energi i kWh; dette setter presisjonen for dem alle slik at chipene ser ensartet ut. 0 til 3, standard 1.',
         powerUnit:                    'Effektenhet',
-        powerUnitHelp:                'Enhet for hver effektavlesning på kortet (chips, graftooltips, urskive). Energi følger den også, slik at kortet forblir konsistent: kW hører sammen med kWh, W med Wh.',
+        powerUnitHelp:                'Enhet for hver effektavlesning på kortet (chips, graftooltips). Energi følger den også, slik at kortet forblir konsistent: kW hører sammen med kWh, W med Wh.',
         irradianceUnit:               'Enhet for solkonstanten',
         irradianceUnitHelp:           'Enhet for avlesningen av solkonstanten (innstråling) over sola.',
         batterySign:                  'Batteritegn',

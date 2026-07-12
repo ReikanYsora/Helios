@@ -51,6 +51,51 @@ export interface GridHost
 }
 
 
+//The four live grid chip fields, exposed by both the full and live-only hosts.
+interface GridSlots
+{
+    _gridImportValue: number | null;
+    _gridImportUnit:  string;
+    _gridExportValue: number | null;
+    _gridExportUnit:  string;
+}
+
+
+//Assign one directional slot. Negative on a directional slot is meaningless (a negative import is export, already
+//reported by the other slot), so clamp to 0: the chip stays readable and the absolute-watts bead animation never
+//runs on the wrong direction.
+function applyGridSlot(host: GridSlots, slot: 'import' | 'export', value: number | null, unit: string): void
+{
+    const clamped = value === null ? null : Math.max(0, value);
+    if (slot === 'import')
+    {
+        if (host._gridImportValue !== clamped) { host._gridImportValue = clamped; }
+        if (host._gridImportUnit  !== unit)    { host._gridImportUnit  = unit; }
+    }
+    else
+    {
+        if (host._gridExportValue !== clamped) { host._gridExportValue = clamped; }
+        if (host._gridExportUnit  !== unit)    { host._gridExportUnit  = unit; }
+    }
+}
+
+
+//Route a signed net watt reading into the import (net >= 0) / export (net < 0) slots, like the HA Energy live tile.
+function applyGridSplit(host: GridSlots, signedWatts: number): void
+{
+    if (signedWatts >= 0)
+    {
+        applyGridSlot(host, 'import', signedWatts, 'W');
+        applyGridSlot(host, 'export', null, '');
+    }
+    else
+    {
+        applyGridSlot(host, 'import', null, '');
+        applyGridSlot(host, 'export', -signedWatts, 'W');
+    }
+}
+
+
 export function refreshGrid(host: GridHost): void
 {
     if (!host.hass)
@@ -78,9 +123,37 @@ export function refreshGrid(host: GridHost): void
     }
     else
     {
-        applyValue(host, 'import', null, '');
-        applyValue(host, 'export', null, '');
+        applyGridSlot(host, 'import', null, '');
+        applyGridSlot(host, 'export', null, '');
     }
+}
+
+
+//Narrow host for the live-only grid read (Helios Mini): just the live chip fields, no change-series/guard surface.
+export interface GridLiveHost
+{
+    readonly hass:             any;
+    readonly _energyDefaults?: EnergyDefaults;
+    _gridImportValue: number | null;
+    _gridImportUnit:  string;
+    _gridExportValue: number | null;
+    _gridExportUnit:  string;
+}
+
+
+//Live-only grid refresh for a card that never fetches history: sum the signed `stat_rate` sensors and split
+//net into import (>= 0) / export (< 0), like the HA Energy live tile. No recorder call and no mis-scope guard
+//(the guard audits against the change series, which this card never fetches).
+export function refreshGridLive(host: GridLiveHost): void
+{
+    const rates = host.hass ? (host._energyDefaults?.gridStatRates ?? []) : [];
+    if (rates.length > 0)
+    {
+        const { watts, any } = sumLiveWatts(host.hass, rates, host._energyDefaults?.invertedRateEntities);
+        if (any) { applyGridSplit(host, watts); return; }
+    }
+    applyGridSlot(host, 'import', null, '');
+    applyGridSlot(host, 'export', null, '');
 }
 
 
@@ -122,7 +195,7 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 
 
 //Live grid read like the HA Energy dashboard: sum signed power across every `stat_rate` entity, then route the
-//net through applyCombinedSplit (non-negative net -> import, negative -> export). No integration; reads the sensor
+//net through applyGridSplit (non-negative net -> import, negative -> export). No integration; reads the sensor
 //as-is, SI-prefix-normalised.
 function readStatRates(host: GridHost, rates: string[]): void
 {
@@ -130,40 +203,7 @@ function readStatRates(host: GridHost, rates: string[]): void
     //applies it at read time so the split below sees the canonical "positive = import" convention.
     const { watts, any } = sumLiveWatts(host.hass, rates, host._energyDefaults?.invertedRateEntities);
     if (!any) { return; }
-    applyCombinedSplit(host, watts);
-}
-
-
-function applyCombinedSplit(host: GridHost, signedWatts: number): void
-{
-    if (signedWatts >= 0)
-    {
-        applyValue(host, 'import', signedWatts, 'W');
-        applyValue(host, 'export', null, '');
-    }
-    else
-    {
-        applyValue(host, 'import', null, '');
-        applyValue(host, 'export', -signedWatts, 'W');
-    }
-}
-
-
-function applyValue(host: GridHost, slot: 'import' | 'export', value: number | null, unit: string): void
-{
-    //Negative on a directional slot is meaningless (a negative import is export, already reported by the other
-    //slot). Clamp to 0 so the chip stays readable and the absolute-watts bead animation never runs on the wrong direction.
-    const clamped = (value === null) ? null : Math.max(0, value);
-    if (slot === 'import')
-    {
-        if (host._gridImportValue !== clamped) { host._gridImportValue = clamped; }
-        if (host._gridImportUnit  !== unit)    { host._gridImportUnit  = unit; }
-    }
-    else
-    {
-        if (host._gridExportValue !== clamped) { host._gridExportValue = clamped; }
-        if (host._gridExportUnit  !== unit)    { host._gridExportUnit  = unit; }
-    }
+    applyGridSplit(host, watts);
 }
 
 

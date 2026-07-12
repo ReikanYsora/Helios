@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Slovenian locale.
 export const sl: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ 3D pogled na tvoj dom v realnem času s soncem, vremenom, solarno proizvodnjo, baterijo in omrežjem, poleg tega vržene sence, interaktivna časovnica in 24-urna energijska ura',
+    cardDescription: '☀️ 2.5D pogled na tvoj dom v realnem času s soncem, vremenom, solarno proizvodnjo, baterijo in omrežjem, poleg tega vržene sence in interaktivna časovnica',
 
     period:
     {
@@ -15,16 +15,11 @@ export const sl: Translations = {
         year:  'leto',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'S',
-        compassS: 'J',
-        compassE: 'V',
-        compassW: 'Z',
         cloudLow:  'Nizka oblačnost',
         cloudMid:  'Srednja oblačnost',
         cloudHigh: 'Visoka oblačnost',
-        total:     'Skupaj',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const sl: Translations = {
         valueDecimals:                'Decimalna mesta',
         valueDecimalsHelp:            'Število decimalnih mest, prikazanih pri vsaki vrednosti. Moč je vedno v kW in energija v kWh; to nastavi natančnost za vse, da so čipi videti enotni. 0 do 3, privzeto 1.',
         powerUnit:                    'Enota moči',
-        powerUnitHelp:                'Enota za vsak prikaz moči na kartici (čipi, namigi grafa, številčnica). Energija ji tudi sledi, da kartica ostane usklajena: kW se ujema s kWh, W z Wh.',
+        powerUnitHelp:                'Enota za vsak prikaz moči na kartici (čipi, namigi grafa). Energija ji tudi sledi, da kartica ostane usklajena: kW se ujema s kWh, W z Wh.',
         irradianceUnit:               'Enota sončne konstante',
         irradianceUnitHelp:           'Enota za prikaz sončne konstante (obsevanja) nad soncem.',
         batterySign:                  'Predznak baterije',

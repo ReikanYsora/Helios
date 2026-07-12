@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Latvian locale.
 export const lv: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Reāllaika 3D skats uz tavu māju ar sauli, laikapstākļiem, saules ražošanu, akumulatoru un tīklu, kā arī mestas ēnas, interaktīva laika josla un 24 stundu enerģijas pulkstenis',
+    cardDescription: '☀️ Reāllaika 2.5D skats uz tavu māju ar sauli, laikapstākļiem, saules ražošanu, akumulatoru un tīklu, kā arī mestas ēnas un interaktīva laika josla',
 
     period:
     {
@@ -15,16 +15,11 @@ export const lv: Translations = {
         year:  'gads',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'Z',
-        compassS: 'D',
-        compassE: 'A',
-        compassW: 'R',
         cloudLow:  'Zems mākoņu segums',
         cloudMid:  'Vidējs mākoņu segums',
         cloudHigh: 'Augsts mākoņu segums',
-        total:     'Kopā',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const lv: Translations = {
         valueDecimals:                'Decimāldaļas',
         valueDecimalsHelp:            'Decimāldaļu skaits, kas tiek parādīts katrā vērtības nolasījumā. Jauda vienmēr tiek rādīta kW un enerģija kWh; tas iestata precizitāti tām visām, lai mikroshēmas izskatītos vienveidīgi. No 0 līdz 3, noklusējums 1.',
         powerUnit:                    'Jaudas mērvienība',
-        powerUnitHelp:                'Mērvienība katram jaudas rādījumam kartītē (mikroshēmas, grafika rīka padomi, ciparnīca). Enerģija tai arī seko, tāpēc kartīte paliek konsekventa: kW veido pāri ar kWh, W ar Wh.',
+        powerUnitHelp:                'Mērvienība katram jaudas rādījumam kartītē (mikroshēmas, grafika rīka padomi). Enerģija tai arī seko, tāpēc kartīte paliek konsekventa: kW veido pāri ar kWh, W ar Wh.',
         irradianceUnit:               'Saules konstantes mērvienība',
         irradianceUnitHelp:           'Mērvienība saules konstantes (apstarojuma) rādījumam virs saules.',
         batterySign:                  'Akumulatora zīme',

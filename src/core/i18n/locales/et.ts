@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Estonian locale.
 export const et: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Reaalajas 3D-vaade sinu kodust koos päikese, ilma, päikesetootmise, aku ja võrguga, lisaks heidetud varjud, interaktiivne ajateljel ja 24-tunnine energiakell',
+    cardDescription: '☀️ Reaalajas 2.5D-vaade sinu kodust koos päikese, ilma, päikesetootmise, aku ja võrguga, lisaks heidetud varjud ja interaktiivne ajateljel',
 
     period:
     {
@@ -15,16 +15,11 @@ export const et: Translations = {
         year:  'aasta',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'P',
-        compassS: 'L',
-        compassE: 'I',
-        compassW: 'Lä',
         cloudLow:  'Madal pilvkate',
         cloudMid:  'Keskmine pilvkate',
         cloudHigh: 'Kõrge pilvkate',
-        total:     'Kokku',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const et: Translations = {
         valueDecimals:                'Kümnendkohad',
         valueDecimalsHelp:            'Igal väärtuse näidul kuvatavate kümnendkohtade arv. Võimsus kuvatakse alati kilovattides (kW) ja energia kilovatt-tundides (kWh); see määrab täpsuse neile kõigile, et kiibid näeksid ühtlased välja. 0 kuni 3, vaikimisi 1.',
         powerUnit:          'Võimsuse ühik',
-        powerUnitHelp:      'Ühik iga võimsuse näidu jaoks kaardil (kiibid, graafiku kohtspikrid, sihverplaat). Energia järgib seda samuti, nii et kaart jääb ühtseks: kW sobib kWh-ga, W Wh-ga.',
+        powerUnitHelp:      'Ühik iga võimsuse näidu jaoks kaardil (kiibid, graafiku kohtspikrid). Energia järgib seda samuti, nii et kaart jääb ühtseks: kW sobib kWh-ga, W Wh-ga.',
         irradianceUnit:     'Päikesekonstandi ühik',
         irradianceUnitHelp: 'Ühik päikesekonstandi (kiirgustugevuse) näidu jaoks päikese kohal.',
         batterySign:                  'Aku märk',

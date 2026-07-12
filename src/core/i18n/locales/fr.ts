@@ -2,7 +2,7 @@ import type { Translations } from '../index';
 
 export const fr: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Une vue 2.5D temps réel de ta maison avec le soleil, la météo, la production solaire, la batterie et le réseau, plus les ombres projetées, une frise temporelle interactive et une horloge énergétique sur 24 h',
+    cardDescription: '☀️ Une vue 2.5D temps réel de ta maison avec le soleil, la météo, la production solaire, la batterie et le réseau, plus les ombres projetées et une frise temporelle interactive',
 
     period:
     {
@@ -15,16 +15,11 @@ export const fr: Translations = {
         year:  'Année',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'E',
-        compassW: 'O',
         cloudLow:  'Couverture basse',
         cloudMid:  'Couverture moyenne',
         cloudHigh: 'Couverture haute',
-        total:     'Total',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const fr: Translations = {
         valueDecimals:                'Décimales',
         valueDecimalsHelp:            'Nombre de décimales affichées sur chaque valeur, pour que les chips restent uniformes. S\'applique aux valeurs en kW (les watts entiers restent sans décimale) et aux kWh. De 0 à 3, par défaut 1.',
         powerUnit:                    'Unité de puissance',
-        powerUnitHelp:                'Unité de tous les affichages de puissance de la carte (chips, infobulles du graphe, cadran). L\'énergie suit aussi, pour que la carte reste cohérente : kW va avec kWh, W avec Wh.',
+        powerUnitHelp:                'Unité de tous les affichages de puissance de la carte (chips, infobulles du graphe). L\'énergie suit aussi, pour que la carte reste cohérente : kW va avec kWh, W avec Wh.',
         irradianceUnit:               'Unité de constante solaire',
         irradianceUnitHelp:           'Unité de la constante solaire (irradiance) affichée au-dessus du soleil.',
         batterySign:                  'Signe batterie',
@@ -87,10 +82,10 @@ export const fr: Translations = {
         buildingRealSizeOff:   'Non',
         buildingRealSizeHint:  'Oui : utilise les hauteurs réelles OpenStreetMap (plafonnées pour garder un cadrage lisible). Non : applique à chaque bâtiment la hauteur fixe ci-dessous.',
         buildingHeight:        'Hauteur des bâtiments',
-        consumptionRingNoDevices:      'Aucun appareil individuel n\'est encore suivi dans votre tableau de bord Énergie. Ajoutez-y la consommation par appareil pour les gérer ici.',
-        consumptionRingRingLabel:      'Afficher l\'appareil',
+        hiddenDevicesEmpty:      'Aucun appareil individuel n\'est encore suivi dans votre tableau de bord Énergie. Ajoutez-y la consommation par appareil pour les gérer ici.',
+        deviceVisibilityLabel:      'Afficher l\'appareil',
         entityConfigSection:           'Entités et groupes de suivi',
-        groupsIntro:                   'Un groupe de suivi rassemble plusieurs appareils pour les suivre ensemble dans toutes les vues (chip scène, graphe, anneau, histogramme). Pour chaque groupe, définis son nom, sa couleur et son icône.',
+        groupsIntro:                   'Un groupe de suivi rassemble plusieurs appareils pour les suivre ensemble dans toutes les vues (chip scène, graphe). Pour chaque groupe, définis son nom, sa couleur et son icône.',
         devicesSection:                'Gestion des groupes de suivi',
         devicesIntro:                  'Appareils suivis par votre tableau de bord Énergie. L\'oeil affiche ou masque un appareil partout, et la pastille de groupe l\'assigne à l\'un des quatre groupes de suivi (X = aucun groupe).',
         deviceGroupLabel:              'Groupe de suivi',

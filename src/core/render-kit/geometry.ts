@@ -1,4 +1,4 @@
-//2D point geometry shared by the scene painters (buildings, dial columns). Pure, no deps.
+//2D point geometry shared by the scene painters (buildings). Pure, no deps.
 
 //A 2D point in whatever space the caller is using ([x, y] or [east, north] metres).
 export type Point = [number, number];

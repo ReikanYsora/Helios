@@ -44,26 +44,19 @@ export interface Translations
     {
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
         standard?:   string; //'Now' (J-2 .. J+2, the key stays `standard` for cache/config compat)
-        yesterday?:  string; //'Yesterday' (day-rings mode only)
+        yesterday?:  string; //'Yesterday'
         today?:      string; //'Today'
         week?:       string; //'1 week'
         month?:      string; //'1 month'
         year?:       string; //'1 year'
     };
 
-    //Energy-clock labels: ground compass letters (N/S/E/W, localised, e.g. W to O in French) and the three
-    //cloud-cover band names in the tooltip.
-    clock:
+    //The three cloud-cover band names shown in the timeline tooltip.
+    cloudCover:
     {
-        compassN: string;
-        compassS: string;
-        compassE: string;
-        compassW: string;
         cloudLow:  string;
         cloudMid:  string;
         cloudHigh: string;
-        //Home-hover tooltip header: the window aggregate for the active filters.
-        total:     string;
     };
 
     editor:
@@ -115,10 +108,10 @@ export interface Translations
         buildingRealSizeOff?:         string;
         buildingRealSizeHint?:        string;
         buildingHeight?:              string;
-        //Devices & monitoring groups: per-device drag order, show/hide, and group assignment. Optional; fall back to English.
-        consumptionRingNoDevices?:      string;
+        //Devices & monitoring groups: per-device show/hide and group assignment. Optional; fall back to English.
+        hiddenDevicesEmpty?:      string;
         //aria-label (screen-reader only, no visible tooltip) for the per-device show/hide toggle.
-        consumptionRingRingLabel?:      string;
+        deviceVisibilityLabel?:      string;
         //Section title for the entity-configuration section (groups + devices + irradiance).
         entityConfigSection?:           string;
         //Intro under the group-configuration heading: what a monitoring group is + what each control does.

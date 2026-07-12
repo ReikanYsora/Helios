@@ -103,9 +103,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
     }
 
     //Per-source stacked areas (multi-source installs): each source's share of the aggregate at every bucket, stacked
-    //so the filled areas sum to the aggregate and never overlap. Same per-source colour ramp as the home histogram
-    //(energySolarColor by sorted index). Single-source installs keep the plain aggregate area.
-    //Keyed by solar meter in HA Energy source order (matches solarSourceName + the clock + the tooltip).
+    //so the filled areas sum to the aggregate and never overlap. Per-source colour ramp (energySolarColor by sorted
+    //index). Single-source installs keep the plain aggregate area.
+    //Keyed by solar meter in HA Energy source order (matches solarSourceName + the tooltip).
     const perEntityIdsForCurves = host._pvChangeSeriesPerEntity.size > 1
         ? Array.from(host._pvChangeSeriesPerEntity.keys())
         : [];

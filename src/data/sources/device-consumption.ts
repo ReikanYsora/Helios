@@ -1,12 +1,12 @@
-//Per-device recorder `change` series + live power for the monitoring-group system (scene group chips, per-group
-//consumption rings, clock group buttons). Only devices that are assigned to a group AND not hidden are fetched,
-//on the same store window + cadence as the source meters. Keyed so an unchanged (id-set, window) is a no-op.
+//Per-device recorder `change` series + live power for the monitoring-group system (scene group chips). Only devices
+//that are assigned to a group AND not hidden are fetched, on the same store window + cadence as the source meters.
+//Keyed so an unchanged (id-set, window) is a no-op.
 
 import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, wattsAtFromChangeSeries, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { cssHex } from '../../core/format/format';
 import type { EnergyDefaults, DeviceConsumption } from './energy-prefs';
-import { monitoringGroups, consumptionRingHidden, monitoringGroupColorToken, GROUP_COUNT, GROUP_FALLBACK_COLORS, type HeliosConfig } from '../../core/config/helios-config';
+import { monitoringGroups, hiddenDevices, monitoringGroupColorToken, GROUP_COUNT, GROUP_FALLBACK_COLORS, type HeliosConfig } from '../../core/config/helios-config';
 import { localMidnightMinusDays } from '../../core/time/timezone';
 
 
@@ -33,7 +33,7 @@ export interface DeviceConsumptionHost
 export function groupedDevices(config: HeliosConfig | undefined, defaults: EnergyDefaults): DeviceConsumption[]
 {
     const groups = monitoringGroups(config);
-    const hidden = consumptionRingHidden(config);
+    const hidden = hiddenDevices(config);
     return defaults.devices.filter(d =>
         d.statConsumption !== '' && groups.has(d.statConsumption) && !hidden.has(d.statConsumption));
 }
@@ -42,7 +42,7 @@ export function groupedDevices(config: HeliosConfig | undefined, defaults: Energ
 export function groupDevices(config: HeliosConfig | undefined, defaults: EnergyDefaults, group: number): DeviceConsumption[]
 {
     const groups = monitoringGroups(config);
-    const hidden = consumptionRingHidden(config);
+    const hidden = hiddenDevices(config);
     return defaults.devices.filter(d =>
         d.statConsumption !== '' && groups.get(d.statConsumption) === group && !hidden.has(d.statConsumption));
 }

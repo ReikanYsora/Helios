@@ -67,13 +67,8 @@ export interface HomeAppearance
 {
     //Solid fill colour. Defaults to palette.home.
     color?:  string;
-    //Stacked histogram: one band per producing PV string, `frac` summing to ~1, bottom to top. With 2+
-    //bands the home paints as a vertical stack instead of a solid block.
-    bands?:  { frac: number; color: string }[];
     //Extra height multiplier (0..1) for the squash/grow animation; multiplies `growth`.
     growth?: number;
-    //Focal highlight: a coloured glow halo, white edge, and brighter roof, matching the focused histogram bar.
-    highlight?: boolean;
 }
 
 //---------------------------------------------------------------------------------------------------------
@@ -463,7 +458,7 @@ export function renderShadows(
 
 //Extrude + paint the buildings far to near. `altitude` is the sun altitude (deg) for the time-of-day tint;
 //`growth` in [0,1] animates the prisms rising. `neighborOpacity` (0..1) sets how solid the surrounding
-//(non-home) prisms read. `home` customises the home prism only (colour, growth multiplier, band histogram).
+//(non-home) prisms read. `home` customises the home prism only (colour, growth multiplier).
 export function renderBuildings(
     cam:             SceneCamera,
     buildings:       Building[],
@@ -496,7 +491,6 @@ export function renderBuildings(
     const nb       = palette.neighbor;
     const nbWall   = mixHex(nb, '#000000', 0.18);
     const nbStroke = mixHex(nb, '#000000', 0.30);
-    const homeBands = home.bands && home.bands.length >= 2 ? home.bands : null;
 
     //Faces split by group: neighbours (faded together) and the home (always full opacity, drawn on top). Each
     //group is painted far-to-near by nearest-corner depth, so within a group two touching prisms interleave
@@ -511,50 +505,26 @@ export function renderBuildings(
         //Home prism height carries the extra squash/grow multiplier.
         const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);
 
-        //Vertical bands as cumulative height fractions [0..1] with a fill per band. A solid prism is one
-        //band spanning the full height; the home histogram is one band per producing PV string.
-        const cum:  number[] = [0];
-        const fill: string[] = [];
-        if (b.isHome && homeBands)
-        {
-            for (const band of homeBands)
-            {
-                cum.push(Math.min(1, cum[cum.length - 1] + band.frac));
-                fill.push(tintedRgba(mixHex(band.color, '#000000', 0.22), altitude, 0.9));
-            }
-            cum[cum.length - 1] = 1; //pin the top against rounding drift
-        }
-        else
-        {
-            cum.push(1);
-            fill.push(b.isHome
-                ? tintedRgba(mixHex(home.color ?? palette.home, '#000000', 0.22), altitude, 0.9)
-                : nbWall);
-        }
-        const rings    = cum.map((c) => fp.map((p) => cam.project(p[0], p[1], h * c)));
-        const base     = rings[0];
-        const roof     = rings[rings.length - 1];
-        //Roof + edge stroke follow the top band (histogram) or the solid colour; the home keeps a brightened
-        //edge so it reads as the focal building.
-        const topColor = homeBands ? homeBands[homeBands.length - 1].color : (home.color ?? palette.home);
-        //Focused home: roof lifted harder toward white, near-opaque white edge, and the glow halo (below).
-        const hl = !!(b.isHome && home.highlight);
+        //Single solid prism: one base ring and one roof ring, one full-height wall quad per edge.
+        const wallFill = b.isHome
+            ? tintedRgba(mixHex(home.color ?? palette.home, '#000000', 0.22), altitude, 0.9)
+            : nbWall;
+        const base     = fp.map((p) => cam.project(p[0], p[1], 0));
+        const roof     = fp.map((p) => cam.project(p[0], p[1], h));
+        //Roof + edge stroke follow the solid colour; the home keeps a brightened edge so it reads as the focal building.
+        const topColor = home.color ?? palette.home;
         const roofFill = b.isHome
-            ? tintedRgba(mixHex(topColor, '#ffffff', hl ? 0.4 : 0.18), altitude, 0.92)
+            ? tintedRgba(mixHex(topColor, '#ffffff', 0.18), altitude, 0.92)
             : nb;
         let stroke = nbStroke;
-        if (hl)
-        {
-            stroke = 'rgba(255,255,255,0.9)';
-        }
-        else if (b.isHome)
+        if (b.isHome)
         {
             const eg = mixHex(home.color ?? palette.home, '#ffffff', 0.5);
             stroke   = `rgba(${hexByte(eg, 1)},${hexByte(eg, 3)},${hexByte(eg, 5)},0.1)`;
         }
         const strokeW = b.isHome ? 1 : 0.4;
 
-        //Emit each visible wall band into the shared face list (sorted globally below).
+        //Emit each visible wall into the shared face list (sorted globally below).
         for (let i = 0; i < base.length; i++)
         {
             const next = (i + 1) % base.length;
@@ -574,25 +544,8 @@ export function renderBuildings(
             {
                 continue;
             }
-            //One quad per band, stacked up the wall; a solid prism is one full-height band.
-            let wall = '';
-            for (let k = 0; k < fill.length; k++)
-            {
-                const lo = rings[k];
-                const hi = rings[k + 1];
-                wall += `<polygon points="${pointsAttr([lo[i], lo[next], hi[next], hi[i]])}" fill="${fill[k]}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
-            }
-            //Histogram separations: a crisp horizontal edge at each colour boundary, so the stacked bands
-            //read as distinct layers on the home prism.
-            if (homeBands && fill.length > 1)
-            {
-                for (let k = 1; k < fill.length; k++)
-                {
-                    const r   = rings[k];
-                    const sep = tintedRgba(mixHex(homeBands[k - 1].color, '#000000', 0.45), altitude, 0.95);
-                    wall += `<line x1="${r[i][0].toFixed(2)}" y1="${r[i][1].toFixed(2)}" x2="${r[next][0].toFixed(2)}" y2="${r[next][1].toFixed(2)}" stroke="${sep}" stroke-width="0.9"/>`;
-                }
-            }
+            //One full-height wall quad per edge.
+            const wall = `<polygon points="${pointsAttr([p0, p1, p2, p3])}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
             //Sort key = the wall's NEAREST corner (max cameraZ, larger = nearer). On a concave footprint an
             //edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
             const wallDepth = Math.max(
@@ -622,14 +575,7 @@ export function renderBuildings(
 
     //Home on top at full opacity (the focal building). Far-to-near within its own parts.
     homeFaces.sort((a, c) => a.depth - c.depth);
-    let homeSvg = homeFaces.map((f) => f.svg).join('');
-    //Focused-home glow halo: a drop-shadow tinted to the home colour, matching the focused histogram bar (only
-    //fires in the clock dial, where there are no neighbours).
-    if (home.highlight && homeSvg)
-    {
-        const glow = `<defs><filter id="home-glow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${home.color ?? palette.home}" flood-opacity="0.95"/></filter></defs>`;
-        homeSvg = `${glow}<g filter="url(#home-glow)">${homeSvg}</g>`;
-    }
+    const homeSvg = homeFaces.map((f) => f.svg).join('');
     return neighborsSvg + homeSvg;
 }
 

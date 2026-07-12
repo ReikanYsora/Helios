@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //German locale.
 export const de: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Eine 3D-Echtzeitansicht deines Zuhauses mit Sonne, Wetter, Solarproduktion, Batterie und Netz, dazu Schlagschatten, eine interaktive Zeitleiste und eine 24-Stunden-Energieuhr',
+    cardDescription: '☀️ Eine 2.5D-Echtzeitansicht deines Zuhauses mit Sonne, Wetter, Solarproduktion, Batterie und Netz, dazu Schlagschatten und eine interaktive Zeitleiste',
 
     period:
     {
@@ -15,16 +15,11 @@ export const de: Translations = {
         year:  'Jahr',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'O',
-        compassW: 'W',
         cloudLow:  'Tiefe Bewölkung',
         cloudMid:  'Mittlere Bewölkung',
         cloudHigh: 'Hohe Bewölkung',
-        total:     'Gesamt',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const de: Translations = {
         valueDecimals:                'Dezimalstellen',
         valueDecimalsHelp:            'Anzahl der Dezimalstellen, die bei jeder Wertanzeige gezeigt werden. Leistung wird immer in kW und Energie in kWh angezeigt; dies legt die Genauigkeit für alle fest, damit die Chips einheitlich lesbar sind. 0 bis 3, Standard 1.',
         powerUnit:                    'Leistungseinheit',
-        powerUnitHelp:                'Einheit für jede Leistungsanzeige auf der Karte (Chips, Diagramm-Tooltips, Zifferblatt). Energie folgt ihr ebenfalls, damit die Karte konsistent bleibt: kW passt zu kWh, W zu Wh.',
+        powerUnitHelp:                'Einheit für jede Leistungsanzeige auf der Karte (Chips, Diagramm-Tooltips). Energie folgt ihr ebenfalls, damit die Karte konsistent bleibt: kW passt zu kWh, W zu Wh.',
         irradianceUnit:               'Einheit der Solarkonstante',
         irradianceUnitHelp:           'Einheit für die Anzeige der Solarkonstante (Bestrahlung) über der Sonne.',
         batterySign:                  'Batterievorzeichen',

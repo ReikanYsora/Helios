@@ -52,9 +52,8 @@ export const heliosCardStyles = css`
         inset: -1px;
         overflow: hidden;
         perspective: 1200px;
-        /*  z-index 1 keeps the container (and home prism) above the clock's ground guide layer (z 0) yet
-            below every HUD overlay (z 4+) and the clock cylinders (z 5), so dial spokes/hub pass under
-            the house. */
+        /*  z-index 1 keeps the container (and home prism) above the ground guide layer (z 0) yet below every
+            HUD overlay (z 4+). */
         z-index: 1;
     }
 
@@ -110,43 +109,6 @@ export const heliosCardStyles = css`
         pointer-events: none;
         z-index: 1;
     }
-    /*  Clock-mode ground guide overlay: screen-space, between the basemap and home prism (DOM order +
-        scene-svg z 1 keep it under the home), so the home reads over the hub + hour spokes. */
-    .scene-ground-overlay
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        overflow: visible;
-    }
-    /*  Helios mark on the dial centre (clock): a flat CSS-3D decal centred on the screen-space home, tilted
-        + turned onto the ground plane each frame by the engine. Sits above the basemap/guide yet under the
-        upright bars (they live in a later sibling overlay), so nearer bars occlude it. The hover glow is a
-        filter set inline; a short transition softens its appearance/removal. */
-    .scene-logo-decal
-    {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform-origin: 50% 50%;
-        pointer-events: none;
-        z-index: 0;
-        /*  Rests at half opacity; fades to full on hover/tap (the .is-active class). Reads on any background
-            (bright basemap or dark night wash) without depending on an edge colour. */
-        opacity: 0.5;
-        will-change: transform, opacity;
-        transition: opacity var(--ha-animation-duration-normal, 250ms) ease;
-    }
-    .scene-logo-decal.is-active
-    {
-        opacity: 1;
-    }
-    .scene-logo-decal .logo-decal-svg
-    {
-        display: block;
-    }
     /*  Camera-locked cursor: default cursor when rotation is disabled, so the scene doesn't advertise an
         interaction that doesn't exist. */
     ha-card.camera-locked #map-container
@@ -195,100 +157,6 @@ export const heliosCardStyles = css`
         -webkit-font-smoothing: antialiased;
     }
 
-    /*  Camera-lock toggle, top-left. 40 px circle; brand-blue pastille appears when locked. */
-    .overlay-btn
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  40px;
-        height: 40px;
-        box-sizing: border-box;
-        padding: 0;
-        background-color: transparent;
-        background-clip: padding-box;
-        color: var(--primary-text-color, #212121);
-        border: 0;
-        outline: 0 !important;
-        outline-offset: 0;
-        border-radius: 50%;
-        overflow: hidden;
-        cursor: pointer;
-        pointer-events: auto;
-        position: relative;
-        z-index: 50;
-        opacity: 1;
-        -webkit-tap-highlight-color: transparent;
-        transition: background-color 0.15s, color 0.15s;
-    }
-    .overlay-btn:hover,
-    .overlay-btn:focus,
-    .overlay-btn:focus-visible,
-    .overlay-btn:active
-    {
-        outline: 0 !important;
-        box-shadow: none !important;
-    }
-    .overlay-btn ha-icon
-    {
-        --mdc-icon-size: 22px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-        pointer-events: none;
-    }
-    .overlay-btn:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
-    .overlay-btn:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
-    .overlay-btn.is-on
-    {
-        background: var(--primary-color, #03a9f4);
-        color: var(--text-on-primary-color, #ffffff);
-    }
-    .overlay-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
-    .overlay-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
-
-    /*  View mode. Clock fades every layer but the basemap and top-left controls; Scene restores them. The
-        basemap holder lives inside #map-container alongside .scene-svg, so the scene SVG is faded by name
-        while the map container (and holder) stay. */
-    ha-card > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right),
-    ha-card .scene-svg
-    {
-        transition: opacity var(--ha-animation-duration-slow, 350ms) ease;
-    }
-    /*  Clock + day modes hide the scene HUD (chips/leaders/timeline); only the basemap, the dial overlay,
-        the rails and the period band remain. */
-    ha-card.mode-clock > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band):not(.detail-panel),
-    ha-card.mode-day > :not(#map-container):not(.overlay-top-left):not(.time-bar):not(.clock-overlay):not(.overlay-top-right):not(.tb-band):not(.detail-panel)
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-
-    /*  Day (rings) mode keeps the period band, but it holds only a Yesterday / Today selector (rendered by the
-        card); the week/month/year modes don't apply to a single-day ring. */
-
-    /*  Day mode hides the compass letters (the top-down ring has no need for N/S/E/W). */
-    ha-card.mode-day .clock-compass-label
-    {
-        display: none;
-    }
-
-    /*  Top-left rail hosting the mode toggles + camera-lock. pointer-events off on the rail; the buttons
-        opt back in so they don't steal map interactions. */
-    .overlay-top-left
-    {
-        position: absolute;
-        top: 8px;
-        left: 8px;
-        z-index: 60;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-        pointer-events: none;
-    }
     /*  PV production chip: pill tinted in the production colour (--pv-leader-color, set inline). Shares the
         fixed width so the leader gap stays identical however wide the value reads. */
     .pv-pct-label
@@ -394,15 +262,6 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         pointer-events: none;
         -webkit-font-smoothing: antialiased;
-    }
-    /*  Optional header row: the day-ring selection panel shows the selected ring's name above its metric rows. */
-    .detail-panel .dp-head
-    {
-        font-weight: 700;
-        padding-bottom: 2px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
     .detail-panel .dp-row
     {
@@ -582,7 +441,7 @@ export const heliosCardStyles = css`
         z-index: 9;
         flex-direction: row;
         justify-content: center;
-        /*  Home == consumption: matches the consumption green used by its clock area + chart. */
+        /*  Home == consumption: matches the consumption green used by its chart. */
         color: var(--helios-consumption-color, #4caf50);
         border-color: var(--helios-consumption-color, #4caf50);
         /*  Clickable: the home is the consumption chip, retargeting the bottom chart to home usage. */
@@ -753,16 +612,12 @@ export const heliosCardStyles = css`
        (driven by the data-ui-hidden host attribute; see _uiHidden / UI_AUTOHIDE_MS). The reduced-motion block
        above drops the fade to an instant show/hide. */
     .time-bar,
-    .tb-band,
-    .overlay-top-left,
-    .overlay-top-right
+    .tb-band
     {
         transition: opacity 1000ms ease;
     }
     :host([data-ui-hidden]) .time-bar,
-    :host([data-ui-hidden]) .tb-band,
-    :host([data-ui-hidden]) .overlay-top-left,
-    :host([data-ui-hidden]) .overlay-top-right
+    :host([data-ui-hidden]) .tb-band
     {
         opacity: 0;
         pointer-events: none;

@@ -1,4 +1,4 @@
-//Hour-of-day binning in the HOME's time zone, not the browser's. The clock groups every reading by hour of
+//Hour-of-day binning in the HOME's time zone, not the browser's. The period aggregation groups every reading by hour of
 //day; that grouping has to follow the home's zone (hass.config.time_zone) so a dashboard opened from another
 //zone (a trip abroad, a shared link, a remote test) still shows the home's real solar day. The card sets the
 //zone once from hass.config; until it is set, the helpers fall back to the browser zone (identical result when

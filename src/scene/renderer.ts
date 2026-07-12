@@ -45,10 +45,6 @@ export class SceneRenderer
 
     private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
-    private readonly _groundOverlay: SVGSVGElement;
-    //Flat Helios mark laid on the ground plane at the dial centre (clock). A CSS-3D decal so its curves stay
-    //crisp under the tilt; content + hover glow are host-supplied, the pose is synced here each frame.
-    private readonly _groundDecal:  HTMLDivElement;
     private readonly _sceneSvg:     SVGSVGElement;
 
     private _ground?:     Ground;
@@ -58,12 +54,9 @@ export class SceneRenderer
     private _buildings: Building[] = [];
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
-    //Home prism appearance (colour, optional stacked PV-string bands, squash multiplier). Empty colour
-    //falls back to palette.home (solid block).
+    //Home prism appearance (colour, squash multiplier). Empty colour falls back to palette.home.
     private _home: HomeAppearance = { growth: 1 };
     private _homeRaf = 0;
-    //Home-only mode: draw just the home prism (no neighbours, no night wash) as the dial anchor.
-    private _homeOnly = false;
     private _palette: ScenePaletteFull = {
         home:            '#488fc2',
         neighbor:        '#cccccc',
@@ -93,19 +86,9 @@ export class SceneRenderer
 
         this._groundHolder = document.createElement('div');
         this._groundHolder.className = 'scene-ground-holder';
-        //Host-supplied screen-space overlay BETWEEN the basemap and the home prism. Sits here so it reads
-        //above the map yet UNDER the home, which the basemap + home being one stacking unit can't achieve
-        //with z-index alone.
-        this._groundOverlay = document.createElementNS(SVG_NS, 'svg');
-        this._groundOverlay.setAttribute('class', 'scene-ground-overlay');
-        this._groundDecal = document.createElement('div');
-        this._groundDecal.className = 'scene-logo-decal';
-        this._groundDecal.style.display = 'none';
         this._sceneSvg = document.createElementNS(SVG_NS, 'svg');
         this._sceneSvg.setAttribute('class', 'scene-svg');
         container.appendChild(this._groundHolder);
-        container.appendChild(this._groundOverlay);
-        container.appendChild(this._groundDecal);
         container.appendChild(this._sceneSvg);
 
         //The camera centres on width/2 x height/2, so a draw taken before the container has its final size
@@ -146,34 +129,12 @@ export class SceneRenderer
     public async setLocation(lat: number, lon: number): Promise<void>
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
-        this.camera.southern   = lat < 0;
         const token  = ++this._groundToken;
         const ground = await buildGround(lat, lon);
         if (!this._alive || token !== this._groundToken) { return; }
         this._ground = ground;
         this._groundHolder.replaceChildren(ground.el, ground.fade);
         this.scheduleRedraw();
-    }
-
-    //Host-supplied screen-space SVG painted between the basemap and the home prism. Empty string clears it.
-    public setGroundOverlay(svg: string): void
-    {
-        this._groundOverlay.innerHTML = svg;
-    }
-
-    //Host-supplied flat mark on the ground at the dial centre. `null`/empty hides it; `active` (hover/tap) toggles
-    //the CSS opacity fade. The pose (tilt/turn about the screen-centred home) is applied every frame in draw().
-    public setGroundDecal(svg: string | null, active = false): void
-    {
-        if (!svg)
-        {
-            this._groundDecal.style.display = 'none';
-            this._groundDecal.innerHTML = '';
-            return;
-        }
-        this._groundDecal.innerHTML = svg;
-        this._groundDecal.classList.toggle('is-active', active);
-        this._groundDecal.style.display = 'block';
     }
 
     public setBuildings(buildings: Building[]): void
@@ -227,31 +188,23 @@ export class SceneRenderer
         this.scheduleRedraw();
     }
 
-    //Set the home prism's colour + optional PV-string histogram bands instantly. Keeps the current squash
-    //multiplier so it doesn't interrupt an in-flight animation.
-    public setHome(color: string, bands: { frac: number; color: string }[] = [], highlight = false): void
+    //Set the home prism's colour instantly. Keeps the current squash multiplier so it doesn't interrupt an
+    //in-flight animation.
+    public setHome(color: string): void
     {
-        this._home = { color, bands, growth: this._home.growth ?? 1, highlight };
+        this._home = { color, growth: this._home.growth ?? 1 };
         this.scheduleRedraw();
     }
 
-    //Toggle home-only rendering (the home prism alone, as the dial's centre anchor).
-    public setHomeOnly(on: boolean): void
-    {
-        if (this._homeOnly === on) { return; }
-        this._homeOnly = on;
-        this.scheduleRedraw();
-    }
 
-    //Animate the home to a new colour/bands: squash to the ground (old appearance), swap colour + bands at
-    //the bottom, then grow back up (new appearance). Instant under reduced motion or on first paint (no
-    //prior colour).
-    public animateHomeTo(color: string, bands: { frac: number; color: string }[] = []): void
+    //Animate the home to a new colour: squash to the ground (old colour), swap colour at the bottom, then
+    //grow back up (new colour). Instant under reduced motion or on first paint (no prior colour).
+    public animateHomeTo(color: string): void
     {
         if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
         if (!this._home.color || prefersReducedMotion())
         {
-            this._home = { color, bands, growth: 1 };
+            this._home = { color, growth: 1 };
             this.scheduleRedraw();
             return;
         }
@@ -265,16 +218,16 @@ export class SceneRenderer
             if (t < DOWN)
             {
                 const x = t / DOWN;
-                this._home = { ...this._home, growth: 1 - x * x * x }; //ease-in squash 1 -> 0, old appearance
+                this._home = { ...this._home, growth: 1 - x * x * x }; //ease-in squash 1 -> 0, old colour
             }
             else if (t < DOWN + UP)
             {
                 const x = (t - DOWN) / UP;
-                this._home = { color, bands, growth: 1 - (1 - x) ** 3 }; //swapped at the bottom, ease-out grow
+                this._home = { color, growth: 1 - (1 - x) ** 3 }; //swapped at the bottom, ease-out grow
             }
             else
             {
-                this._home = { color, bands, growth: 1 };
+                this._home = { color, growth: 1 };
                 this.scheduleRedraw();
                 this._homeRaf = 0;
                 return;
@@ -335,18 +288,11 @@ export class SceneRenderer
             this._ground.fade.style.transform = transform;
         }
 
-        //Logo decal: the home sits at the screen centre in clock, so tilt + turn the mark about its own
-        //centre. Hidden decals still get the write (cheap, keeps the pose fresh for the next reveal).
-        this._groundDecal.style.transform =
-            `translate(-50%, -50%) rotateX(${this.camera.tiltDeg}deg) rotateZ(${this.camera.bearingDeg}deg)`;
-
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
         const alt = this._sun.altitude;
-        //Home-only (clock dial): draw NO scene geometry. The card paints the dial (bars + central column) into
-        //its own overlay, so the engine just keeps the basemap underneath.
-        const drawn = this._homeOnly ? [] : this._buildings;
-        //Full-frame night/twilight wash for the current sun altitude (empty in daylight / home-only).
-        const shade = this._homeOnly ? { opacity: 0, color: '' } : nightShade(alt);
+        const drawn = this._buildings;
+        //Full-frame night/twilight wash for the current sun altitude (empty in daylight).
+        const shade = nightShade(alt);
         const shadeSvg = shade.opacity > 0
             ? `<rect width="${width}" height="${height}" fill="${shade.color}" opacity="${shade.opacity.toFixed(3)}"/>`
             : '';
@@ -367,8 +313,6 @@ export class SceneRenderer
         if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
         if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
         this._groundHolder.remove();
-        this._groundOverlay.remove();
-        this._groundDecal.remove();
         this._sceneSvg.remove();
     }
 }

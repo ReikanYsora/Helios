@@ -23,7 +23,7 @@ import
     DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS,
     MAX_VALUE_DECIMALS,
-    consumptionRingHidden,
+    hiddenDevices,
     monitoringGroups,
     monitoringGroupName,
     monitoringGroupColor,
@@ -77,15 +77,14 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
-    //Removed-feature keys that may linger in an older YAML (the custom entity was replaced by monitoring groups);
-    //stripped on load so the saved config stays clean.
+    //Legacy custom-entity config keys that may linger in an older YAML; stripped on load so the saved config stays clean.
     private static readonly LEGACY_KEYS = ['custom-power-entity', 'custom-energy-entity', 'custom-entity', 'custom-entity-icon', 'custom-entity-color'];
 
     public setConfig(config: HeliosConfig): void
     {
         this._cfg = { ...config };
-        //Drop any legacy custom-entity keys left over from before the monitoring-groups rework. Deferred so
-        //config-changed isn't dispatched inside the host's setConfig call stack.
+        //Drop any legacy custom-entity keys from an older YAML. Deferred so config-changed isn't dispatched inside
+        //the host's setConfig call stack.
         if (HeliosCardEditor.LEGACY_KEYS.some(k => k in this._cfg))
         {
             setTimeout(() =>
@@ -206,7 +205,7 @@ export class HeliosCardEditor extends LitElement
         const devices = this._energyDefaults.devices;
         if (devices.length === 0) { return; }
         const valid = new Set(devices.map(d => d.statConsumption));
-        const keys: (keyof HeliosConfig)[] = ['consumption-ring-hidden'];
+        const keys: (keyof HeliosConfig)[] = ['hidden-devices'];
         const next = { ...this._cfg } as Record<string, unknown>;
         let changed = false;
         for (const key of keys)
@@ -437,16 +436,16 @@ export class HeliosCardEditor extends LitElement
         const key = el.dataset.key as keyof HeliosConfig | undefined;
         if (key) { this._update(key, el.dataset.value === 'true'); }
     };
-    //Toggle a device's presence in the ring-hidden list (presence = hidden). Stored back trimmed to undefined when
-    //empty so the YAML drops the key.
+    //Toggle a device's presence in the hidden-devices list (presence = hidden). Stored back trimmed to undefined
+    //when empty so the YAML drops the key.
     private _onDeviceToggleClick = (e: Event): void =>
     {
         const stat = (e.currentTarget as HTMLElement).dataset.stat;
         if (!stat) { return; }
-        const cur  = this._cfg['consumption-ring-hidden'];
+        const cur  = this._cfg['hidden-devices'];
         const list = Array.isArray(cur) ? cur.filter((v): v is string => typeof v === 'string') : [];
         const next = list.includes(stat) ? list.filter(v => v !== stat) : [...list, stat];
-        this._update('consumption-ring-hidden', next.length ? next : undefined);
+        this._update('hidden-devices', next.length ? next : undefined);
     };
     //Cycle a device's monitoring group: No group -> 1 -> 2 -> ... -> GROUP_COUNT -> No group. Stored as an object
     //map (id -> 1..GROUP_COUNT); No group drops the key, and an empty map drops the whole option.
@@ -580,9 +579,6 @@ export class HeliosCardEditor extends LitElement
                 </label>`;
     }
 
-    //Consumption-ring section body: one draggable row per dashboard-tracked device. Each row carries a drag handle,
-    //a colour dot (HA's per-index palette, matching the dashboard graph), the device icon, its friendly name, and the
-    //show/hide-in-the-ring toggle. Devices come from the live Energy prefs snapshot, ordered by the saved drag order.
     //Resolved display name for a tracked device: its dashboard name, else the entity's friendly name, else the id.
     private _deviceName(dev: DeviceConsumption): string
     {
@@ -596,10 +592,7 @@ export class HeliosCardEditor extends LitElement
         return (typeof icon === 'string' && icon) || 'mdi:flash';
     }
 
-    //Devices in the display order the rings follow: the user's saved drag order first, anything not yet in it
-    //appended alphabetically. Shared by the render and the drag handler so both agree on the sequence.
-    //Devices in dashboard order (their HA Energy index), tie-broken by name. No user reordering: the group system
-    //replaced the per-device ring order.
+    //Devices in dashboard order (their HA Energy index), tie-broken by name.
     private _orderedDevices(): DeviceConsumption[]
     {
         return [...this._energyDefaults.devices].sort((a, b) =>
@@ -610,15 +603,15 @@ export class HeliosCardEditor extends LitElement
     private _renderDeviceList(t: Translations): TemplateResult
     {
         const devices = this._orderedDevices();
-        const hidden  = consumptionRingHidden(this._cfg);
+        const hidden  = hiddenDevices(this._cfg);
         const groups  = monitoringGroups(this._cfg);
         return html`
             <div class="field-block-label">${t.editor.devicesSection ?? 'Monitoring group management'}</div>
             <div class="hint">${t.editor.devicesIntro ?? 'Devices tracked in your Energy dashboard. The eye shows or hides a device everywhere, and the group pill assigns it to one of the four monitoring groups (X = no group).'}</div>
             <div class="live-config-link-row">${this._energyConfigLink()}</div>
             ${devices.length === 0
-                ? html`<div class="cring-empty">${t.editor.consumptionRingNoDevices ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
-                : html`<div class="cring-list">
+                ? html`<div class="device-empty">${t.editor.hiddenDevicesEmpty ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
+                : html`<div class="device-list">
                     ${devices.map(dev => this._renderDeviceRow(dev, hidden, groups, t))}
                 </div>`}
         `;
@@ -636,14 +629,14 @@ export class HeliosCardEditor extends LitElement
             <div class="field-block-label">${t.editor.groupsSection ?? 'Monitoring group configuration'}</div>
             <div class="hint">${t.editor.groupsIntro ?? 'A monitoring group bundles several devices so you can follow them together in every view. For each group set its name, its colour and its icon.'}</div>
             ${groups.map(g => html`
-                <div class="cring-group-block">
-                    <div class="cring-group-line">
-                        <span class="cring-groupname-badge" style="--group-pill-color:${monitoringGroupColor(this._cfg, g)}">${(() => {
+                <div class="group-block">
+                    <div class="group-line">
+                        <span class="group-name-badge" style="--group-pill-color:${monitoringGroupColor(this._cfg, g)}">${(() => {
                             const gi = monitoringGroupIcon(this._cfg, g);
                             return gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`${g}`;
                         })()}</span>
                         <input
-                            class="cring-groupname-input"
+                            class="group-name-input"
                             type="text"
                             .value=${monitoringGroupName(this._cfg, g)}
                             placeholder=${`${t.editor.group ?? 'Group'} ${g}`}
@@ -652,9 +645,9 @@ export class HeliosCardEditor extends LitElement
                         />
                     </div>
                     ${this._pickerReady ? html`
-                        <div class="cring-group-line">
+                        <div class="group-line">
                             <ha-selector
-                                class="cring-group-picker"
+                                class="group-picker"
                                 .hass=${this.hass}
                                 .selector=${{ ui_color: {} }}
                                 .value=${monitoringGroupColorToken(this._cfg, g) || undefined}
@@ -662,7 +655,7 @@ export class HeliosCardEditor extends LitElement
                                 @value-changed=${this._onGroupColorChanged}
                             ></ha-selector>
                             <ha-selector
-                                class="cring-group-picker"
+                                class="group-picker"
                                 .hass=${this.hass}
                                 .selector=${{ icon: {} }}
                                 .value=${monitoringGroupIcon(this._cfg, g) || undefined}
@@ -713,12 +706,12 @@ export class HeliosCardEditor extends LitElement
         const shown = !hidden.has(stat);
         const group = groups.get(stat) ?? 0;
         return html`
-            <div class="cring-row ${shown ? '' : 'is-hidden'}">
-                <ha-icon class="cring-icon" icon=${this._deviceIcon(dev)} style="color:${color}"></ha-icon>
-                <span class="cring-name">${name}</span>
+            <div class="device-row ${shown ? '' : 'is-hidden'}">
+                <ha-icon class="device-icon" icon=${this._deviceIcon(dev)} style="color:${color}"></ha-icon>
+                <span class="device-name">${name}</span>
                 <button
                     type="button"
-                    class="cring-group ${group ? 'active' : ''}"
+                    class="device-group ${group ? 'active' : ''}"
                     style=${group ? `--group-pill-color:${monitoringGroupColor(this._cfg, group)}` : ''}
                     data-stat=${stat}
                     aria-label=${t.editor.deviceGroupLabel ?? 'Monitoring group'}
@@ -728,16 +721,16 @@ export class HeliosCardEditor extends LitElement
                     ${group
                         ? (() => {
                             const gi = monitoringGroupIcon(this._cfg, group);
-                            return gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`<span class="cring-group-num">${group}</span>`;
+                            return gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`<span class="device-group-num">${group}</span>`;
                         })()
                         : html`<ha-icon icon="mdi:close"></ha-icon>`}
                 </button>
                 <button
                     type="button"
-                    class="cring-toggle ${shown ? 'active' : ''}"
+                    class="device-toggle ${shown ? 'active' : ''}"
                     data-stat=${stat}
                     aria-pressed=${shown ? 'true' : 'false'}
-                    aria-label=${t.editor.consumptionRingRingLabel ?? 'Show device'}
+                    aria-label=${t.editor.deviceVisibilityLabel ?? 'Show device'}
                     @click=${this._onDeviceToggleClick}
                 >
                     <ha-icon icon=${shown ? 'mdi:eye' : 'mdi:eye-off'}></ha-icon>

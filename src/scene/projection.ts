@@ -38,9 +38,6 @@ export class SceneCamera
     //False until the first setViewport with a real size. Consumers gate on it so nothing projects against
     //the seed centre (0,0), which would briefly throw the whole HUD into the top-left corner.
     public hasViewport = false;
-    //Southern hemisphere (home latitude < 0). The clock reflects its hour ring about the east-west
-    //axis so noon sits north and the sun runs anticlockwise, matching the real sky and the scene view.
-    public southern = false;
 
     //Cached trig basis, recomputed by setViewport. Seeded to the default pose so a project() before the
     //first setViewport() still returns a sane value rather than NaN.

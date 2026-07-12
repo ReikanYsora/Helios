@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Spanish (Spain) locale.
 export const es: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ Una vista 3D en tiempo real de tu casa con el sol, el tiempo, la producción solar, la batería y la red, además de sombras proyectadas, una línea de tiempo interactiva y un reloj de energía de 24 horas',
+    cardDescription: '☀️ Una vista 2.5D en tiempo real de tu casa con el sol, el tiempo, la producción solar, la batería y la red, además de sombras proyectadas y una línea de tiempo interactiva',
 
     period:
     {
@@ -15,16 +15,11 @@ export const es: Translations = {
         year:  'año',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'E',
-        compassW: 'O',
         cloudLow:  'Nubosidad baja',
         cloudMid:  'Nubosidad media',
         cloudHigh: 'Nubosidad alta',
-        total:     'Total',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const es: Translations = {
         valueDecimals:                'Decimales',
         valueDecimalsHelp:            'Número de decimales mostrados en cada lectura de valor. La potencia siempre se muestra en kW y la energía en kWh; esto fija la precisión de todos para que los chips se lean uniformes. De 0 a 3, por defecto 1.',
         powerUnit:          'Unidad de potencia',
-        powerUnitHelp:      'Unidad para cada lectura de potencia en la tarjeta (chips, información sobre herramientas del gráfico, esfera). La energía también la sigue, así que la tarjeta se mantiene coherente: kW se combina con kWh, y W con Wh.',
+        powerUnitHelp:      'Unidad para cada lectura de potencia en la tarjeta (chips, información sobre herramientas del gráfico). La energía también la sigue, así que la tarjeta se mantiene coherente: kW se combina con kWh, y W con Wh.',
         irradianceUnit:     'Unidad de constante solar',
         irradianceUnitHelp: 'Unidad para la lectura de la constante solar (irradiancia) sobre el sol.',
         batterySign:                  'Signo de la batería',

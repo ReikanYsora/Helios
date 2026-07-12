@@ -3,7 +3,7 @@ import type { Translations } from '../index';
 //Romanian locale.
 export const ro: Translations = {
     cardName:        'Helios',
-    cardDescription: '☀️ O vedere 3D in timp real a casei tale cu soarele, vremea, productia solara, bateria si reteaua, plus umbre proiectate, o cronologie interactiva si un ceas energetic de 24 de ore',
+    cardDescription: '☀️ O vedere 2.5D in timp real a casei tale cu soarele, vremea, productia solara, bateria si reteaua, plus umbre proiectate si o cronologie interactiva',
 
     period:
     {
@@ -15,16 +15,11 @@ export const ro: Translations = {
         year:  'an',
     },
 
-    clock:
+    cloudCover:
     {
-        compassN: 'N',
-        compassS: 'S',
-        compassE: 'E',
-        compassW: 'V',
         cloudLow:  'Nori josi',
         cloudMid:  'Nori medii',
         cloudHigh: 'Nori inalti',
-        total:     'Total',
     },
 
     editor:
@@ -44,7 +39,7 @@ export const ro: Translations = {
         valueDecimals:                'Zecimale',
         valueDecimalsHelp:            'Numarul de zecimale afisate la fiecare valoare. Puterea este intotdeauna in kW, iar energia in kWh; aceasta seteaza precizia pentru toate, astfel incat cipurile sa arate uniform. De la 0 la 3, implicit 1.',
         powerUnit:                    'Unitate de putere',
-        powerUnitHelp:                'Unitatea pentru fiecare citire a puterii de pe card (cipuri, indicii graficului, cadran). Energia o urmeaza si ea, astfel incat cardul ramane consecvent: kW se imperecheaza cu kWh, W cu Wh.',
+        powerUnitHelp:                'Unitatea pentru fiecare citire a puterii de pe card (cipuri, indicii graficului). Energia o urmeaza si ea, astfel incat cardul ramane consecvent: kW se imperecheaza cu kWh, W cu Wh.',
         irradianceUnit:               'Unitatea constantei solare',
         irradianceUnitHelp:           'Unitatea pentru citirea constantei solare (iradiere) de deasupra soarelui.',
         batterySign:                  'Semnul bateriei',

@@ -167,7 +167,7 @@ export async function fetchChangeSeries(
 
 //A change bucket whose magnitude exceeds this multiple of the reference quantile is a meter reset/rollover
 //artefact, not real flow. Single source of the outlier rule for every change-series consumer (store curves
-//and the clock).
+//and the period aggregation).
 const OUTLIER_CAP_FACTOR = 20;
 //Reference quantile for the cap. The 90th percentile, NOT the median: a summer production day carries a long
 //twilight tail of tiny non-zero buckets that drags the median far below the midday peak, and a median-based
