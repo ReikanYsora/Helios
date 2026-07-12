@@ -13,6 +13,23 @@ The biggest release yet. Devices you track in the Home Assistant energy dashboar
 become first-class citizens of the card, a new day view tells the story of your
 consumption against the sun, and the whole thing is lighter and faster.
 
+### New: the Helios family, now three cards
+
+Helios ships as three cards you can mix on one dashboard, sharing the same
+configuration keys so you can copy-paste between them:
+
+- **Helios**: the full 2.5D scene with the interactive timeline.
+- **Helios Mini**: a compact, live-only scene, no timeline or controls.
+- **Helios Energy Fingerprint**: a weekly heatmap of your energy habits (one week
+  by 15-minute slots, cell colour = solar coverage, intensity = consumption) with
+  week navigation and a day-detail chart of consumption, grid, solar, battery and
+  exported energy, including the money earned when a feed-in tariff is configured.
+
+### Fixes
+
+- Scene: left-click drag-rotate now works on Firefox (#306).
+- Timeline: the irradiance tooltip shows the forecast value and its beam again (#305).
+
 ### New: monitoring groups replace the custom entity
 
 You can now bundle the devices tracked in your energy dashboard into up to **four
