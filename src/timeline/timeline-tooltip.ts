@@ -74,6 +74,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //Home consumption (load) at the hovered instant: production + import - export - net battery (charge+), clamped at
     //0. Same formula as the consumption chart series. Hidden when no flow has any reading.
     const prodW          = store ? (valueAt(store.production, store, atMs) ?? NaN) : NaN;
+    //Forecast at the cursor from the SAME series the dashed ghost curve draws (store.forecast), so the irradiance
+    //view's tooltip row matches its curve + hover dot for the whole day (pvValueAtTime returns recorded production in
+    //the past, which is a different number than the forecast reference the ghost curve shows).
+    const forecastW      = store ? (valueAt(store.forecast, store, atMs) ?? NaN) : NaN;
     const hasConsumption = isFinite(prodW) || isFinite(gridImpW) || isFinite(gridExpW) || isFinite(battW);
     const consumptionW   = consumptionLoad(
         isFinite(prodW) ? prodW : 0, isFinite(gridImpW) ? gridImpW : 0,
@@ -137,6 +141,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const cloudBase      = ENERGY_COLOR.cloud(el);
     const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
     const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
+    //Ghosted PV colour for the irradiance view's forecast row, identical to the dashed forecast curve + its hover dot.
+    const forecastColor  = chartIsDark(host)
+        ? lerpHexToward(ENERGY_COLOR.pv(el), '#ffffff', 0.75)
+        : lerpHexToward(ENERGY_COLOR.pv(el), '#000000', 0.55);
 
     //Fused battery view: per-bank SoC at the cursor, to list each bank's level under the power rows (matching the
     //chart's per-bank SoC lines and their hover beams). Falls back to the aggregated mean when no per-bank series.
@@ -313,6 +321,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.sun(el)}" icon="mdi:white-balance-sunny"></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${formatIrradiance(host.hass, irrV, dec, irradU)}</span>
+                    </div>
+                ` : nothing}
+                ${target === 'irradiance' && isFinite(forecastW) && forecastW > 0 ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${forecastColor}" icon="mdi:crystal-ball"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${targetLabel(host, 'production')}</span>
+                        <span class="tb-hover-tooltip-value">${kw(forecastW)}</span>
                     </div>
                 ` : nothing}
                 ${target === 'irradiance' ? html`

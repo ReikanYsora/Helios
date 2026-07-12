@@ -1331,9 +1331,9 @@ return new Date((d+c)/2)}var kt=null;function renderTimelineNightZones(e){const 
                 >${function formatTimelineLabel(e,t,i){const n=i?.language||void 0,r="intraday"===e?{hour:"2-digit",minute:"2-digit"}:"days"===e?{weekday:"short"}:"weeks"===e?{day:"numeric",month:"short"}:{month:"short"};try{return new Intl.DateTimeFormat(n,r).format(t)}catch(L){return new Intl.DateTimeFormat(void 0,r).format(t)}}(n.kind,t.date,e.hass)}</span>
             `)}
         </div>
-    `}function renderTimelineHoverTooltip(e){const t=e._timeRange,i=e._chartSeries;if(!t)return K;const n=t.start.getTime(),r=t.end.getTime()-n;if(r<=0)return K;const s=e._chartHoverPct;if(null===s||s<0||s>100)return K;const l=s,d=n+l/100*r,c=i?interpAt(i.times,i.irradiance,d):NaN,u=i?interpAt(i.times,i.cloudLow,d):NaN,p=i?interpAt(i.times,i.cloudMid,d):NaN,g=i?interpAt(i.times,i.cloudHigh,d):NaN,m=pvValueAtTime(e,d),f=e._chartTarget??"production",v=e._unifiedStore,b=v?valueAt(v.gridImport,v,d)??NaN:NaN,y=v?valueAt(v.gridExport,v,d)??NaN:NaN,_=v?valueAt(v.battery,v,d)??NaN:NaN,w=v?valueAt(v.production,v,d)??NaN:NaN,H=isFinite(w)||isFinite(b)||isFinite(y)||isFinite(_),j=consumptionLoad(isFinite(w)?w:0,isFinite(b)?b:0,isFinite(y)?y:0,isFinite(_)?_:0),z=e._batterySocHistory?interpAt(e._batterySocHistory.times,e._batterySocHistory.values,d):NaN,M=valueDecimals(e.config),$=powerUnit(e.config),C=irradianceUnit(e.config),kw=t=>formatPower(e.hass,t,M,$),D=e._pvChangeSeriesPerEntity,A=D.size>1?Array.from(D.keys()):[],R=[];for(let L=0;L<A.length;L++){const t=A[L],i=pvValueAtTime(e,d,t);if(!isFinite(i.value))continue;const n=formatPower(e.hass,pvNormalizeToWatts(i.value,i.unit),M,$);R.push({id:t,label:solarSourceName(e,L),valueText:n,colorIdx:L})}const E=isFinite(m.value),T=targetLabel(e,f),O=pickTranslations(e.hass?.language).cloudCover,P=function gridImportName(e){return e._energyDefaults.gridName||statFriendly(e,e._energyDefaults.gridStatEnergyFroms)}(e),F=function gridExportName(e){return e._energyDefaults.gridName||statFriendly(e,e._energyDefaults.gridStatEnergyTos)}(e),I=function batteryChargeName(e){return e._energyDefaults.batteryName||statFriendly(e,e._energyDefaults.batteryStatEnergyTos)}(e),U=function batteryDischargeName(e){return e._energyDefaults.batteryName||statFriendly(e,e._energyDefaults.batteryStatEnergyFroms)}(e),W=e,q=isGroupTarget(f)?groupDevices(e.config,e._energyDefaults,groupOfTarget(f)).map(t=>{const i=wattsAtFromChangeSeries(e._deviceChangeSeries.get(t.statConsumption)??null,d);return{w:null===i?NaN:Math.abs(i),color:deviceColorByIndex(W,t.index),name:deviceName(e.hass,t),icon:deviceIcon(e.hass,t)}}):[],G=ENERGY_COLOR_cloud(W),Y=lerpHexToward(G,"#ffffff",.55),Z=lerpHexToward(G,"#000000",.5),J=(e._batterySocPerBankHistory.length>0?e._batterySocPerBankHistory:e._batterySocHistory?[e._batterySocHistory]:[]).map(e=>interpAt(e.times,e.values,d)),X=targetLabel(e,"battery-soc"),Q=!isFinite(_)||Math.abs(_)<5?cssHex(W,"--secondary-text-color","#9e9e9e"):_>0?ENERGY_COLOR_batteryIn(W):ENERGY_COLOR_batteryOut(W),ee=new Date(d),te=e.hass?.language||void 0,ie=r/fe,ae=ie<=2.05?{hour:"2-digit",minute:"2-digit"}:ie<=14.05?{weekday:"short",hour:"2-digit",minute:"2-digit"}:{weekday:"short",day:"numeric",month:"short"},ne=new Intl.DateTimeFormat(te,ae).format(ee),oe=new Date(ee);oe.setHours(0,0,0,0);const re=/* @__PURE__ */new Date;re.setHours(0,0,0,0);const se=oe.getTime()===re.getTime(),le=d>Date.now();let de=function computeDailyKwhTotals(e){const t=/* @__PURE__ */new Map;if(!e._timeRange)return t;const{start:i,end:n}=e._timeRange,r=i.getTime(),s=n.getTime(),dayKey=e=>{const t=new Date(e);return t.setHours(0,0,0,0),t.getTime()},l=e._pvChangeSeries;if(l&&l.length>0){const e=new Date(r);for(e.setHours(0,0,0,0);e.getTime()<s;){const i=e.getTime(),n=new Date(e);n.setDate(n.getDate()+1);const r=sumChangeForDay(l,i,n.getTime());null!==r&&t.set(i,Math.max(0,r)),e.setTime(n.getTime())}}const d=e._unifiedStore;if(d){const e=Date.now(),i=d.stepMs/me;for(let n=0;n<d.bucketsTotal;n++){const l=d.storeStartMs+(n+.5)*d.stepMs;if(l<r||l>s)continue;if(l<e)continue;const c=d.forecast[n];if(null===c||!isFinite(c)||c<=0)continue;const u=dayKey(l);t.set(u,(t.get(u)??0)+c*i/1e3)}}return t}(e).get(oe.getTime());se&&!le&&"number"==typeof e._haSolarTodayKwh&&isFinite(e._haSolarTodayKwh)&&(de=e._haSolarTodayKwh);const ce=le&&void 0!==de&&isFinite(de)&&de>=.05,ue=void 0!==de&&isFinite(de)&&de>=.05?formatEnergyKwh(e.hass,de,M,$):"",he=Date.now(),pe=he>=n&&he<=n+r&&Math.abs(l-(he-n)/r*100)<=1.2,ge=(e.hass?.language||"").toLowerCase().startsWith("fr")?"Retour au live":"Back to live";return B`
+    `}function renderTimelineHoverTooltip(e){const t=e._timeRange,i=e._chartSeries;if(!t)return K;const n=t.start.getTime(),r=t.end.getTime()-n;if(r<=0)return K;const s=e._chartHoverPct;if(null===s||s<0||s>100)return K;const l=s,d=n+l/100*r,c=i?interpAt(i.times,i.irradiance,d):NaN,u=i?interpAt(i.times,i.cloudLow,d):NaN,p=i?interpAt(i.times,i.cloudMid,d):NaN,g=i?interpAt(i.times,i.cloudHigh,d):NaN,m=pvValueAtTime(e,d),f=e._chartTarget??"production",v=e._unifiedStore,b=v?valueAt(v.gridImport,v,d)??NaN:NaN,y=v?valueAt(v.gridExport,v,d)??NaN:NaN,_=v?valueAt(v.battery,v,d)??NaN:NaN,w=v?valueAt(v.production,v,d)??NaN:NaN,H=v?valueAt(v.forecast,v,d)??NaN:NaN,j=isFinite(w)||isFinite(b)||isFinite(y)||isFinite(_),z=consumptionLoad(isFinite(w)?w:0,isFinite(b)?b:0,isFinite(y)?y:0,isFinite(_)?_:0),M=e._batterySocHistory?interpAt(e._batterySocHistory.times,e._batterySocHistory.values,d):NaN,$=valueDecimals(e.config),C=powerUnit(e.config),D=irradianceUnit(e.config),kw=t=>formatPower(e.hass,t,$,C),A=e._pvChangeSeriesPerEntity,R=A.size>1?Array.from(A.keys()):[],E=[];for(let L=0;L<R.length;L++){const t=R[L],i=pvValueAtTime(e,d,t);if(!isFinite(i.value))continue;const n=formatPower(e.hass,pvNormalizeToWatts(i.value,i.unit),$,C);E.push({id:t,label:solarSourceName(e,L),valueText:n,colorIdx:L})}const T=isFinite(m.value),O=targetLabel(e,f),P=pickTranslations(e.hass?.language).cloudCover,F=function gridImportName(e){return e._energyDefaults.gridName||statFriendly(e,e._energyDefaults.gridStatEnergyFroms)}(e),I=function gridExportName(e){return e._energyDefaults.gridName||statFriendly(e,e._energyDefaults.gridStatEnergyTos)}(e),U=function batteryChargeName(e){return e._energyDefaults.batteryName||statFriendly(e,e._energyDefaults.batteryStatEnergyTos)}(e),W=function batteryDischargeName(e){return e._energyDefaults.batteryName||statFriendly(e,e._energyDefaults.batteryStatEnergyFroms)}(e),q=e,G=isGroupTarget(f)?groupDevices(e.config,e._energyDefaults,groupOfTarget(f)).map(t=>{const i=wattsAtFromChangeSeries(e._deviceChangeSeries.get(t.statConsumption)??null,d);return{w:null===i?NaN:Math.abs(i),color:deviceColorByIndex(q,t.index),name:deviceName(e.hass,t),icon:deviceIcon(e.hass,t)}}):[],Y=ENERGY_COLOR_cloud(q),Z=lerpHexToward(Y,"#ffffff",.55),J=lerpHexToward(Y,"#000000",.5),X=chartIsDark(e)?lerpHexToward(ENERGY_COLOR_pv(q),"#ffffff",.75):lerpHexToward(ENERGY_COLOR_pv(q),"#000000",.55),Q=(e._batterySocPerBankHistory.length>0?e._batterySocPerBankHistory:e._batterySocHistory?[e._batterySocHistory]:[]).map(e=>interpAt(e.times,e.values,d)),ee=targetLabel(e,"battery-soc"),te=!isFinite(_)||Math.abs(_)<5?cssHex(q,"--secondary-text-color","#9e9e9e"):_>0?ENERGY_COLOR_batteryIn(q):ENERGY_COLOR_batteryOut(q),ie=new Date(d),ae=e.hass?.language||void 0,ne=r/fe,oe=ne<=2.05?{hour:"2-digit",minute:"2-digit"}:ne<=14.05?{weekday:"short",hour:"2-digit",minute:"2-digit"}:{weekday:"short",day:"numeric",month:"short"},re=new Intl.DateTimeFormat(ae,oe).format(ie),se=new Date(ie);se.setHours(0,0,0,0);const le=/* @__PURE__ */new Date;le.setHours(0,0,0,0);const de=se.getTime()===le.getTime(),ce=d>Date.now();let ue=function computeDailyKwhTotals(e){const t=/* @__PURE__ */new Map;if(!e._timeRange)return t;const{start:i,end:n}=e._timeRange,r=i.getTime(),s=n.getTime(),dayKey=e=>{const t=new Date(e);return t.setHours(0,0,0,0),t.getTime()},l=e._pvChangeSeries;if(l&&l.length>0){const e=new Date(r);for(e.setHours(0,0,0,0);e.getTime()<s;){const i=e.getTime(),n=new Date(e);n.setDate(n.getDate()+1);const r=sumChangeForDay(l,i,n.getTime());null!==r&&t.set(i,Math.max(0,r)),e.setTime(n.getTime())}}const d=e._unifiedStore;if(d){const e=Date.now(),i=d.stepMs/me;for(let n=0;n<d.bucketsTotal;n++){const l=d.storeStartMs+(n+.5)*d.stepMs;if(l<r||l>s)continue;if(l<e)continue;const c=d.forecast[n];if(null===c||!isFinite(c)||c<=0)continue;const u=dayKey(l);t.set(u,(t.get(u)??0)+c*i/1e3)}}return t}(e).get(se.getTime());de&&!ce&&"number"==typeof e._haSolarTodayKwh&&isFinite(e._haSolarTodayKwh)&&(ue=e._haSolarTodayKwh);const he=ce&&void 0!==ue&&isFinite(ue)&&ue>=.05,pe=void 0!==ue&&isFinite(ue)&&ue>=.05?formatEnergyKwh(e.hass,ue,$,C):"",ge=Date.now(),ve=ge>=n&&ge<=n+r&&Math.abs(l-(ge-n)/r*100)<=1.2,be=(e.hass?.language||"").toLowerCase().startsWith("fr")?"Retour au live":"Back to live";return B`
         <div
-            class="tb-hover-tooltip-tail ${pe?"is-magnet-snap":""}"
+            class="tb-hover-tooltip-tail ${ve?"is-magnet-snap":""}"
             style="left:${l.toFixed(2)}%"
         ></div>
         <div
@@ -1343,33 +1343,33 @@ return new Date((d+c)/2)}var kt=null;function renderTimelineNightZones(e){const 
             <div class="tb-hover-tooltip">
                 <div class="tb-hover-tooltip-time">
                     <ha-icon class="tb-hover-tooltip-time-icon" icon="mdi:clock-outline"></ha-icon>
-                    <span class="tb-hover-tooltip-time-label">${ne}</span>
+                    <span class="tb-hover-tooltip-time-label">${re}</span>
                     <span
-                        class="tb-hover-tooltip-live-chip ${pe?"is-visible":""}"
-                        aria-label=${ge}
-                        aria-hidden=${pe?"false":"true"}
+                        class="tb-hover-tooltip-live-chip ${ve?"is-visible":""}"
+                        aria-label=${be}
+                        aria-hidden=${ve?"false":"true"}
                     >
                         <ha-icon class="tb-hover-tooltip-live-chip-dot" icon="mdi:circle-medium"></ha-icon>
                         <span class="tb-hover-tooltip-live-chip-label">${"Live"}</span>
                     </span>
-                    <span class="tb-hover-tooltip-exact">${function formatHaDateTime(e,t){const i=e?.locale,n={day:"numeric",month:"short",hour:"numeric",minute:"2-digit",hour12:haUseAmPm(i)};try{return new Intl.DateTimeFormat(i?.language,n).format(t)}catch(L){return new Intl.DateTimeFormat(void 0,n).format(t)}}(e.hass,ee)}</span>
+                    <span class="tb-hover-tooltip-exact">${function formatHaDateTime(e,t){const i=e?.locale,n={day:"numeric",month:"short",hour:"numeric",minute:"2-digit",hour12:haUseAmPm(i)};try{return new Intl.DateTimeFormat(i?.language,n).format(t)}catch(L){return new Intl.DateTimeFormat(void 0,n).format(t)}}(e.hass,ie)}</span>
                 </div>
                 ${"production"===f?B`
-                    ${ce&&ue?B`
+                    ${he&&pe?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_pv(W)}" icon="mdi:crystal-ball"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${T}</span>
-                            <span class="tb-hover-tooltip-value">${ue}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_pv(q)}" icon="mdi:crystal-ball"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${O}</span>
+                            <span class="tb-hover-tooltip-value">${pe}</span>
                         </div>
                     `:K}
-                    ${E?B`
+                    ${T?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_pv(W)}" icon="mdi:solar-power"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${T}</span>
-                            <span class="tb-hover-tooltip-value">${formatPower(e.hass,pvNormalizeToWatts(m.value,m.unit),M,$)}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_pv(q)}" icon="mdi:solar-power"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${O}</span>
+                            <span class="tb-hover-tooltip-value">${formatPower(e.hass,pvNormalizeToWatts(m.value,m.unit),$,C)}</span>
                         </div>
                     `:K}
-                    ${R.map(t=>B`
+                    ${E.map(t=>B`
                         <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
                             <span class="tb-hover-tooltip-dot" style="background:${energySolarColor(e,chartIsDark(e),t.colorIdx)}"></span>
                             <span class="tb-hover-tooltip-sublabel">${t.label}</span>
@@ -1377,25 +1377,25 @@ return new Date((d+c)/2)}var kt=null;function renderTimelineNightZones(e){const 
                         </div>
                     `)}
                 `:K}
-                ${"consumption"===f&&H?B`
+                ${"consumption"===f&&j?B`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_consumption(W)}" icon="mdi:home-lightning-bolt"></ha-icon>
-                        <span class="tb-hover-tooltip-name">${T}</span>
-                        <span class="tb-hover-tooltip-value">${kw(j)}</span>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_consumption(q)}" icon="mdi:home-lightning-bolt"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${O}</span>
+                        <span class="tb-hover-tooltip-value">${kw(z)}</span>
                     </div>
                 `:K}
                 ${"grid"===f?B`
                     ${isFinite(b)&&b>=1?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_gridImport(W)}" icon="mdi:transmission-tower-export"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${P}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_gridImport(q)}" icon="mdi:transmission-tower-export"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${F}</span>
                             <span class="tb-hover-tooltip-value">${kw(b)}</span>
                         </div>
                     `:K}
                     ${isFinite(y)&&y>=1?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_gridExport(W)}" icon="mdi:transmission-tower-import"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${F}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_gridExport(q)}" icon="mdi:transmission-tower-import"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${I}</span>
                             <span class="tb-hover-tooltip-value">${kw(y)}</span>
                         </div>
                     `:K}
@@ -1403,34 +1403,34 @@ return new Date((d+c)/2)}var kt=null;function renderTimelineNightZones(e){const 
                 ${"battery"===f?B`
                     ${isFinite(_)&&_>=1?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_batteryIn(W)}" icon="mdi:battery-arrow-up"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${I}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_batteryIn(q)}" icon="mdi:battery-arrow-up"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${U}</span>
                             <span class="tb-hover-tooltip-value">${kw(_)}</span>
                         </div>
                     `:K}
                     ${isFinite(_)&&_<=-1?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_batteryOut(W)}" icon="mdi:battery-arrow-down"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${U}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_batteryOut(q)}" icon="mdi:battery-arrow-down"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${W}</span>
                             <span class="tb-hover-tooltip-value">${kw(-_)}</span>
                         </div>
                     `:K}
-                    ${J.map((e,t)=>isFinite(e)?B`
+                    ${Q.map((e,t)=>isFinite(e)?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${Q}" icon="mdi:battery"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${X}${J.length>1?` ${t+1}`:""}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${te}" icon="mdi:battery"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${ee}${Q.length>1?` ${t+1}`:""}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,e)))} %</span>
                         </div>
                     `:K)}
                 `:K}
-                ${"battery-soc"===f&&isFinite(z)?B`
+                ${"battery-soc"===f&&isFinite(M)?B`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_batteryOut(W)}" icon="mdi:battery"></ha-icon>
-                        <span class="tb-hover-tooltip-name">${T}</span>
-                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,z)))} %</span>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_batteryOut(q)}" icon="mdi:battery"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${O}</span>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,M)))} %</span>
                     </div>
                 `:K}
-                ${isGroupTarget(f)?q.map(e=>isFinite(e.w)?B`
+                ${isGroupTarget(f)?G.map(e=>isFinite(e.w)?B`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${e.color}" icon=${e.icon}></ha-icon>
                         <span class="tb-hover-tooltip-name">${e.name}</span>
@@ -1439,30 +1439,37 @@ return new Date((d+c)/2)}var kt=null;function renderTimelineNightZones(e){const 
                 `:K):K}
                 ${"irradiance"===f&&isFinite(c)?B`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_sun(W)}" icon="mdi:white-balance-sunny"></ha-icon>
-                        <span class="tb-hover-tooltip-name">${T}</span>
-                        <span class="tb-hover-tooltip-value">${formatIrradiance(e.hass,c,M,C)}</span>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR_sun(q)}" icon="mdi:white-balance-sunny"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${O}</span>
+                        <span class="tb-hover-tooltip-value">${formatIrradiance(e.hass,c,$,D)}</span>
+                    </div>
+                `:K}
+                ${"irradiance"===f&&isFinite(H)&&H>0?B`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${X}" icon="mdi:crystal-ball"></ha-icon>
+                        <span class="tb-hover-tooltip-name">${targetLabel(e,"production")}</span>
+                        <span class="tb-hover-tooltip-value">${kw(H)}</span>
                     </div>
                 `:K}
                 ${"irradiance"===f?B`
                     ${isFinite(g)?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${Z}" icon="mdi:format-vertical-align-top"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${O.cloudHigh}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${J}" icon="mdi:format-vertical-align-top"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${P.cloudHigh}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,g)))} %</span>
                         </div>
                     `:K}
                     ${isFinite(p)?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${G}" icon="mdi:format-vertical-align-center"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${O.cloudMid}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${Y}" icon="mdi:format-vertical-align-center"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${P.cloudMid}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,p)))} %</span>
                         </div>
                     `:K}
                     ${isFinite(u)?B`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${Y}" icon="mdi:format-vertical-align-bottom"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${O.cloudLow}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${Z}" icon="mdi:format-vertical-align-bottom"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${P.cloudLow}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,u)))} %</span>
                         </div>
                     `:K}
