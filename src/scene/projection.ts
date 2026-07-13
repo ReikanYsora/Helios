@@ -94,9 +94,17 @@ export class SceneCamera
         return [p.x, p.y];
     }
 
-    //CSS transform for the basemap tile canvas, given the home's pixel position within that canvas. The
-    //canvas is tilted (rotateX = pitch) and turned (rotateZ = bearing) about the home, then translated so
-    //the home lands on the screen-space centre, exactly the inverse of what project3 does for overlays.
+    //CSS transform for the basemap tile canvas, given the home's pixel position within that canvas. Turned
+    //(rotateZ = bearing) then tilted (rotateX = pitch) about the home, projected by a self-contained
+    //perspective() FUNCTION, then translated so the home lands on the screen-space centre.
+    //
+    //The perspective is a transform FUNCTION here, not a CSS `perspective` PROPERTY on the container. The two are
+    //NOT equivalent in practice: the property version projects the ground on a slightly different footing than
+    //project3 (the SVG overlays' pinhole projection), so the painted buildings/shadows drifted off the basemap
+    //under tilt. Reading `translate P rotateX rotateZ` right-to-left (rotateZ, rotateX, perspective, translate)
+    //reproduces project3 exactly for a ground point: rx*p and ry*cosT*p about the home, p = P/(P - ry*sinT).
+    //It also means no element carries a `perspective` property, so the flat scene SVG never joins a 3D layer
+    //(fixes the A9X iPad half-render, #304).
     public groundTransform(homeX: number, homeY: number): GroundTransform
     {
         const origin = `${homeX}px ${homeY}px`;
@@ -104,6 +112,7 @@ export class SceneCamera
             transformOrigin: origin,
             transform:
                 `translate(${(this.centreX - homeX).toFixed(2)}px, ${(this.centreY - homeY).toFixed(2)}px) ` +
+                `perspective(${PERSPECTIVE}px) ` +
                 `rotateX(${this.tiltDeg}deg) rotateZ(${this.bearingDeg}deg)`,
         };
     }

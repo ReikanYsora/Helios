@@ -44,14 +44,15 @@ export const heliosCardStyles = css`
         /*  Absolute + inset so the container fills the ha-card via containing-block dimensions (which
             respect min-height); a percentage height collapses to 0 under Masonry. Hosts the renderer's
             ground holder + scene SVG. overflow:hidden clips the tilted basemap canvas (which extends past
-            the frame at low pitch); perspective gives the rotateX/rotateZ ground transform its vanishing
-            point. */
+            the frame at low pitch). No CSS perspective property here: the ground carries its own perspective() in
+            its transform (see SceneCamera.groundTransform), so it projects EXACTLY like the overlays' project3, and
+            the flat scene SVG stays out of any 3D context (fixes the buildings-vs-basemap drift + the A9X iPad
+            half-render, #304). */
         position: absolute;
         /*  Bleed 1 px under the border (re-clipped by overflow:hidden) to cover the anti-alias seam at
             the rounded corners. */
         inset: -1px;
         overflow: hidden;
-        perspective: 1200px;
         /*  z-index 1 keeps the container (and home prism) above the ground guide layer (z 0) yet below every
             HUD overlay (z 4+). */
         z-index: 1;
