@@ -59,27 +59,6 @@ export interface Translations
         cloudHigh: string;
     };
 
-    //Energy Fingerprint card (weekly heatmap of energy habits). Optional; every field falls back to English.
-    fingerprint?:
-    {
-        title:         string;
-        consumption:   string;
-        production:    string;
-        grid:          string;
-        solar:         string;
-        battery:       string;
-        lost:          string; //deprecated (kept for compat); use exported/sold
-        exported:      string; //exported solar, no sale configured (neutral)
-        sold:          string; //exported solar sold back (a feed-in tariff is configured)
-        solarCoverage: string;
-        selectDay:     string;
-        noData:        string;
-        loading:       string;
-        prevWeek:      string; //aria-label
-        nextWeek:      string; //aria-label
-        close:         string; //aria-label
-    };
-
     editor:
     {
         //Home-location override for the card's center. Blank falls back to hass.config; valid coords
