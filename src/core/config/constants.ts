@@ -60,8 +60,11 @@ export const SUNRISE_SUNSET_ALTITUDE_DEG = -0.833;
 //=== Animation / timing ===
 export const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
 export const AUTO_ROTATE_INACTIVITY_MS = 5_000;
-//"No UI" mode: idle time before the timeline + controls fade away (any input brings them back).
-export const UI_AUTOHIDE_MS            = 5_000;
+//"No UI" mode: idle time (seconds) before the timeline + controls fade away, any input brings them back. Set
+//via the 'no-ui-delay' config key, clamped to [MIN,MAX], defaulting to DEFAULT.
+export const DEFAULT_NO_UI_DELAY_S     = 5;
+export const MIN_NO_UI_DELAY_S         = 0;
+export const MAX_NO_UI_DELAY_S         = 10;
 
 //=== Cache TTLs / timeouts / throttles ===
 export const BATTERY_CACHE_TTL_MS   = 15 * 60_000;

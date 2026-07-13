@@ -217,32 +217,13 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 }
 
 
-//Narrow host for the live-only PV read (Helios Mini): just the live chip fields, no history/store surface.
+//Narrow host for the live PV read: just the live chip fields, no history/store surface.
 export interface PvLiveHost
 {
     readonly hass:            any;
     readonly _energyDefaults: EnergyDefaults;
     _pvCurrent: number | null;
     _pvUnit:    string;
-}
-
-
-//Live-only PV refresh for a card that never fetches history: lands the shared currentPvRate read into
-//`_pvCurrent`/`_pvUnit`, clearing them when no live value resolves. No recorder call.
-export function refreshPvLive(host: PvLiveHost): void
-{
-    if (!host.hass) { return; }
-    const rate = currentPvRate(host);
-    if (rate)
-    {
-        if (host._pvCurrent !== rate.value) { host._pvCurrent = rate.value; }
-        if (host._pvUnit    !== rate.unit)  { host._pvUnit    = rate.unit; }
-    }
-    else if (host._pvCurrent !== null)
-    {
-        host._pvCurrent = null;
-        host._pvUnit    = '';
-    }
 }
 
 

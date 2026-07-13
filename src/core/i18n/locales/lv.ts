@@ -8,7 +8,7 @@ export const lv: Translations = {
     period:
     {
         rangeLabel: 'Laika diapazons',
-        standard: 'Standarta',
+        standard: "D-2 / D+2",
         today: 'Šodien',
         week:  'nedēļa',
         month: 'mēnesis',

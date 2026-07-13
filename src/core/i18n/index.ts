@@ -43,7 +43,7 @@ export interface Translations
     period?:
     {
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
-        standard?:   string; //'Now' (J-2 .. J+2, the key stays `standard` for cache/config compat)
+        standard?:   string; //'D-2 / D+2' (localised day letter; the key stays `standard` for cache/config compat)
         yesterday?:  string; //'Yesterday'
         today?:      string; //'Today'
         week?:       string; //'1 week'
@@ -115,10 +115,31 @@ export interface Translations
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
         noUiMode?:                    string;
         noUiModeHint?:                string;
+        //"No UI" idle-delay slider (0-10 s). Only editable when No UI mode is on. Optional; fall back to English.
+        noUiDelay?:                   string;
+        noUiDelayHint?:               string;
+        //Scene element visibility toggles. Optional; fall back to English.
+        showTimeline?:                string;
+        showTimelineHint?:            string;
+        showDetailPanel?:             string;
+        showDetailPanelHint?:         string;
+        showSunTimes?:                string;
+        showSunTimesHint?:            string;
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
         lockRotation?:                string;
         lockRotationHint?:            string;
         cameraAngleHint?:             string;
+        //"Chips & colours" section: per-chip show/hide toggles + colour pickers. Optional; fall back to English.
+        chipsSection?:                string;
+        chipsIntro?:                  string;
+        chipIrradiance?:              string;
+        chipProduction?:              string;
+        chipGrid?:                    string;
+        chipBattery?:                 string;
+        chipHome?:                    string;
+        //Sections split out of "Entity display": group definitions and optional sensors.
+        groupsConfigTitle?:           string;
+        optionalSensors?:             string;
         //Global display radius slider (50-500 m). Optional, FR-only.
         displayRadius?:               string;
         displayRadiusHelp?:           string;
@@ -144,6 +165,8 @@ export interface Translations
         deviceGroupLabel?:              string;
         group?:                         string;
         noGroup?:                       string;
+        //Note above the device list clarifying these are the entities set up in the HA Energy dashboard.
+        devicesEnergyNote?:             string;
         //Heading above the editable per-group identity rows (name / colour / icon).
         groupsSection?:                 string;
         //Solar-irradiance override entity (W/m² sensor). When wired, preferred over the model for live + past
@@ -173,6 +196,7 @@ export interface Translations
         homeColorHelp:            string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
+        buildingClusterRadiusHelp?: string;
         buildingOpacity:          string;
         buildingColor:            string;
         buildingColorHelp:        string;
@@ -186,13 +210,18 @@ export interface Translations
         //Cast-shadow opacity, 0..1 slider.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
-        //Reset: one destructive button wiping every cached payload (weather, PV history, sample buffer)
-        //and forcing a fresh fetch. resetCacheDone is a transient confirmation shown on the button.
+        //Reset: two buttons. One refetches every cached payload (weather, all energy series, forecast
+        //calibration, OpenFreeMap footprints); the other resets every card option to its default (a confirming
+        //second click). The *Done keys are transient confirmations shown on each button.
         resetSection:             string;
         resetSectionHint:         string;
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
+        resetOptionsButton?:      string;
+        resetOptionsConfirm?:     string;
+        resetOptionsWarning?:     string;
+        resetOptionsDone?:        string;
         //About section: version string, source repo, appreciation line + Buy Me A Coffee link.
         aboutSection:             string;
         aboutVersionLabel:        string;

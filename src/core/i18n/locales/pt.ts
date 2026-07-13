@@ -8,7 +8,7 @@ export const pt: Translations = {
     period:
     {
         rangeLabel: 'Período',
-        standard: 'Padrão',
+        standard: "D-2 / D+2",
         today: 'Hoje',
         week:  'semana',
         month: 'mês',

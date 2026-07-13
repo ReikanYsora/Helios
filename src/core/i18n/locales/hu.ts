@@ -8,7 +8,7 @@ export const hu: Translations = {
     period:
     {
         rangeLabel: 'Időtartomány',
-        standard: 'Normál',
+        standard: "N-2 / N+2",
         today: 'Ma',
         week:  'hét',
         month: 'hónap',

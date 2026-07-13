@@ -241,38 +241,6 @@ export function refreshBattery(host: BatteryHost): void
 }
 
 
-//Narrow host for the live-only battery read (Helios Mini): the live chip fields only, no history surface.
-export interface BatteryLiveHost
-{
-    readonly hass:            any;
-    readonly _energyDefaults: EnergyDefaults;
-    _batterySoc:       number | null;
-    _batteryPower:     number | null;
-    _batteryPowerUnit: string;
-}
-
-
-//Live-only battery refresh for a card that never fetches history: mean SoC across every wired `stat_soc`
-//bank and summed live power (only when every bank exposes a power sensor). No recorder call.
-export function refreshBatteryLive(host: BatteryLiveHost): void
-{
-    if (!host.hass) { return; }
-    const { powerEntity, socEntity } = resolveBatteryEntities(host._energyDefaults);
-    if (!powerEntity && !socEntity)
-    {
-        if (host._batterySoc       !== null) { host._batterySoc       = null; }
-        if (host._batteryPower     !== null) { host._batteryPower     = null; }
-        if (host._batteryPowerUnit !== '')   { host._batteryPowerUnit = ''; }
-        return;
-    }
-
-    const { soc: nextSoc, power: nextPower, unit: nextUnit } = computeBatteryLive(host.hass, host._energyDefaults);
-    if (nextSoc   !== host._batterySoc)       { host._batterySoc       = nextSoc; }
-    if (nextPower !== host._batteryPower)      { host._batteryPower     = nextPower; }
-    if (nextUnit  !== host._batteryPowerUnit)  { host._batteryPowerUnit = nextUnit; }
-}
-
-
 //Fetch the recorder `change` series for charge (stat_energy_to) + discharge (stat_energy_from) meters. Gated on a per-host key
 //that re-arms every CHANGE_REFRESH_MS (and on entity-set/window changes) so the series tracks newly committed buckets. Charge
 //and discharge fetched as two independent series so the consumer can net them with a structural sign.

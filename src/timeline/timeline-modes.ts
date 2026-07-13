@@ -1,7 +1,7 @@
 //The timeline's rolling-window modes. One spec per mode drives the whole pipeline (the store window and whether
 //weather is available), so adding/tuning a mode is a one-line change here. The store cadence and recorder fetch
 //period derive from the user's data-detail setting (display-update-frequency-per-hour, 1..12) capped per mode, not
-//hard-coded, so the editor knob drives every mode, not just Now. The scrub is free (no quantisation) in every mode.
+//hard-coded, so the editor knob drives every mode, not just D-2/D+2. The scrub is free (no quantisation) in every mode.
 
 import type { StatPeriod } from '../data/sources/energy-stats';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../core/config/helios-config';
@@ -14,7 +14,7 @@ export interface TimelineModeSpec
     //Days of history in the window. A function for month/year: the window length tracks the PREVIOUS calendar
     //month/year (so a 31-day month shows 31 days), always ending today.
     pastDays:    number | (() => number);
-    futureDays:  number;       //days of forecast (Standard only; the "past" modes end today, no forecast)
+    futureDays:  number;       //days of forecast (D-2/D+2 only; the "past" modes end today, no forecast)
     weather:     boolean;      //irradiance + cloud available (Open-Meteo forecast only reaches ~16 days)
     //Cap on store buckets/hour for this window: short windows honour the user's setting fully; month is capped
     //at hourly and year at daily so a long window can't pull a year of 5-min rows.
@@ -38,7 +38,7 @@ function daysInPrevYear(): number
 }
 
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
-    //Standard: J-2 .. J+2 (past, today, forecast) - the at-a-glance default. today/week/month/year all END today.
+    //D-2/D+2: J-2 .. J+2 (past, today, forecast) - the at-a-glance default. today/week/month/year all END today.
     standard:  { pastDays: 2,                           futureDays: 2, weather: true,  maxBucketsPerHour: 12   },
     //Yesterday: EXACTLY the previous day. futureDays -1 ends the window at today's midnight (start + storeDays =
     //past 1 + 1 - 1 = 1 day), so the timeline shows only J-1, not J-1..today.

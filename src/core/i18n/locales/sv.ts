@@ -8,7 +8,7 @@ export const sv: Translations = {
     period:
     {
         rangeLabel: 'Tidsintervall',
-        standard: 'Standard',
+        standard: "D-2 / D+2",
         today: 'Idag',
         week:  'vecka',
         month: 'månad',

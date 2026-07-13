@@ -7,6 +7,7 @@ import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { formatEnergyKwh, formatIrradiance } from '../core/format/format';
 import { powerUnit, valueDecimals, irradianceUnit } from '../core/config/helios-config';
+import { chipSlotIcon } from '../core/config/chip-appearance';
 import { buildPeriodData, layerPeriodTotal, periodTotal, hourlyOf, type PeriodHost, type PeriodData } from '../data/period-totals/period-totals';
 import { type ChartTarget, isGroupTarget, groupOfTarget } from '../charts/charts';
 import { groupDevices, deviceName, deviceWindowKwh } from '../data/sources/device-consumption';
@@ -78,21 +79,6 @@ function socStats(data: PeriodData): { min: number; avg: number; max: number } |
     return { min, avg: sum / count, max };
 }
 
-//Local clock (HH:MM) in the user's language. Day length as Hh MM with a padded minute.
-function formatClock(hass: unknown, d: Date): string
-{
-    const lang = (hass as { locale?: { language?: string } } | undefined)?.locale?.language ?? 'en';
-    return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatDayLength(ms: number): string
-{
-    const totalMin = Math.max(0, Math.round(ms / 60000));
-    const h = Math.floor(totalMin / 60);
-    const m = totalMin % 60;
-    return `${h}h${String(m).padStart(2, '0')}`;
-}
-
 //Build the metric rows for the active target. Returns [] when there is nothing to aggregate yet (no window, or
 //the period data has not resolved), so the caller can drop the panel entirely.
 function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
@@ -125,22 +111,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
                 { icon: 'mdi:approximately-equal', value: irr(a.avg) },
             );
         }
-        const scene = host._sunScene;
-        if (scene && scene.sunrise && scene.sunset)
-        {
-            const rise = scene.sunrise.time;
-            const set  = scene.sunset.time;
-            const noon = new Date((rise.getTime() + set.getTime()) / 2);
-            let maxAlt = 0;
-            for (const s of scene.arc) { if (s.altitude > maxAlt) { maxAlt = s.altitude; } }
-            rows.push(
-                { icon: 'mdi:weather-sunset-up',   value: formatClock(hass, rise) },
-                { icon: 'mdi:weather-sunny',       value: formatClock(hass, noon) },
-                { icon: 'mdi:weather-sunset-down', value: formatClock(hass, set) },
-                { icon: 'mdi:angle-acute',         value: `${Math.round(maxAlt)}°` },
-                { icon: 'mdi:timelapse',           value: formatDayLength(set.getTime() - rise.getTime()) },
-            );
-        }
+        //Sunrise/noon/sunset, peak altitude and day length used to live here too, but the scene already draws the
+        //whole solar arc with those markers, so repeating them in the panel was redundant.
         return rows;
     }
 
@@ -181,8 +153,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         const net = imp - exp;
         const netStr = `${net < 0 ? '-' : ''}${energy(Math.abs(net))}`;
         return [
-            { icon: 'mdi:transmission-tower-import', value: energy(imp) },
-            { icon: 'mdi:transmission-tower-export', value: energy(exp) },
+            { icon: chipSlotIcon(host.config, 'gridImport', 'mdi:transmission-tower-import'), value: energy(imp) },
+            { icon: chipSlotIcon(host.config, 'gridExport', 'mdi:transmission-tower-export'), value: energy(exp) },
             { icon: 'mdi:scale-balance',             value: netStr },
             { icon: 'mdi:calendar-today',            value: energy(imp / days) },
         ];
@@ -194,8 +166,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         const discharged = layerPeriodTotal(data.layers[0], data);
         const charged    = data.layers[1] ? layerPeriodTotal(data.layers[1], data) : 0;
         return [
-            { icon: 'mdi:battery-arrow-down', value: energy(charged) },
-            { icon: 'mdi:battery-arrow-up',   value: energy(discharged) },
+            { icon: chipSlotIcon(host.config, 'batteryCharge', 'mdi:battery-arrow-down'), value: energy(charged) },
+            { icon: chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-up'),   value: energy(discharged) },
         ];
     }
 

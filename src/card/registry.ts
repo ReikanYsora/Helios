@@ -38,23 +38,3 @@ window.customCards = window.customCards || [];
         window.customCards.push(heliosEntry);
     }
 }
-
-//Helios Mini: the live-only, non-interactive scene card (same scene + chips, no timeline / scrub / detail).
-{
-    const miniEntry =
-    {
-        type:        'helios-mini-card',
-        name:        `${_bootI18n.cardName} Mini`,
-        description: '☀️ A compact live-only Helios scene: the sun, weather, cast shadows and live solar, battery, grid and group chips, with no timeline or controls.',
-        preview:     true,
-    };
-    const existingMiniIdx = window.customCards.findIndex(c => c.type === 'helios-mini-card');
-    if (existingMiniIdx >= 0)
-    {
-        window.customCards[existingMiniIdx] = miniEntry;
-    }
-    else
-    {
-        window.customCards.push(miniEntry);
-    }
-}

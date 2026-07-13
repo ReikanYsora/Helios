@@ -23,14 +23,20 @@ import
     DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS,
     MAX_VALUE_DECIMALS,
+    DEFAULT_NO_UI_DELAY_S,
+    MIN_NO_UI_DELAY_S,
+    MAX_NO_UI_DELAY_S,
     hiddenDevices,
     monitoringGroups,
     monitoringGroupName,
     monitoringGroupColor,
     monitoringGroupColorToken,
     monitoringGroupIcon,
+    groupChipVisible,
+    chipVisible,
     GROUP_COUNT,
 } from '../core/config/helios-config';
+import { CHIP_SLOTS, chipSlotColor, chipSlotIcon, type ChipSlot } from '../core/config/chip-appearance';
 import { deviceColorByIndex } from '../core/format/format';
 import { pickTranslations, type Translations } from '../core/i18n';
 import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type DeviceConsumption, type EnergyPrefsHost } from '../data/sources/energy-prefs';
@@ -68,17 +74,22 @@ export class HeliosCardEditor extends LitElement
             window.clearTimeout(t);
         }
         this._sliderDebounce.clear();
-        // Clear the cache-reset confirmation timer; otherwise a fast unmount lets it fire on a dead element and warn
-        // about touching @state after disconnect.
-        if (this._resetFeedbackTimer !== undefined)
+        // Clear the reset confirmation/feedback timers; otherwise a fast unmount lets one fire on a dead element and
+        // warn about touching @state after disconnect.
+        for (const timer of [this._resetFeedbackTimer, this._optionsResetConfirmTimer, this._optionsResetFeedbackTimer])
         {
-            window.clearTimeout(this._resetFeedbackTimer);
-            this._resetFeedbackTimer = undefined;
+            if (timer !== undefined) { window.clearTimeout(timer); }
         }
+        this._resetFeedbackTimer = undefined;
+        this._optionsResetConfirmTimer = undefined;
+        this._optionsResetFeedbackTimer = undefined;
     }
 
     //Legacy custom-entity config keys that may linger in an older YAML; stripped on load so the saved config stays clean.
     private static readonly LEGACY_KEYS = ['custom-power-entity', 'custom-energy-entity', 'custom-entity', 'custom-entity-icon', 'custom-entity-color'];
+    //Lovelace-managed keys, preserved by the "reset options" button (the card `type` is mandatory; the layout keys
+    //keep the card's dashboard placement/size). Everything else is a Helios option and gets cleared.
+    private static readonly LOVELACE_KEYS = ['type', 'view_layout', 'grid_options', 'layout_options'];
 
     public setConfig(config: HeliosConfig): void
     {
@@ -512,7 +523,7 @@ export class HeliosCardEditor extends LitElement
                         >${offLabel ?? t.editor.autoRotateOff}</button>
                     </div>
                 </div>
-                <div class="hint">${hint}</div>`;
+                ${hint ? html`<div class="hint">${hint}</div>` : nothing}`;
     }
 
     //One ui_color picker field (label + ha-selector + help). Same markup for every colour config key.
@@ -532,7 +543,7 @@ export class HeliosCardEditor extends LitElement
                         ></ha-selector>
                     ` : nothing}
                 </div>
-                <div class="field-help">${help}</div>`;
+                ${help ? html`<div class="field-help">${help}</div>` : nothing}`;
     }
 
     //One box-select field (label + ha-selector + help). Same markup for every enumerated config key.
@@ -557,12 +568,13 @@ export class HeliosCardEditor extends LitElement
 
     //One range-slider field (label + range input + live value). Same markup for every numeric config key; the hint
     //stays at the call site since some are per-field and some are shared. `suffix` is appended to the live value.
-    private _renderSlider(key: string, label: string, min: number, max: number, step: number, dflt: number, suffix = ''): TemplateResult
+    //`disabled` greys the whole row and blocks input (used to keep a dependent slider visible but inert).
+    private _renderSlider(key: string, label: string, min: number, max: number, step: number, dflt: number, suffix = '', disabled = false): TemplateResult
     {
         const c   = this._cfg as Record<string, unknown>;
         const raw = c[key] ?? dflt;
         return html`
-                <label class="field">
+                <label class="field ${disabled ? 'field-disabled' : ''}">
                     <span class="label">${label}</span>
                     <div class="slider-row">
                         <input
@@ -571,12 +583,41 @@ export class HeliosCardEditor extends LitElement
                             max=${max}
                             step=${step}
                             .value=${String(raw)}
+                            ?disabled=${disabled}
                             data-key=${key}
                             @input=${this._onNumSliderInput}
                         />
                         <span class="slider-value">${this._fmtNum(Number(raw), step)}${suffix}</span>
                     </div>
                 </label>`;
+    }
+
+    //One action button: an icon + label, its border and text tinted by `color` (a full-colour fill when `filled`,
+    //for a destructive confirm). Renders a link when `href` is given, else a button firing `onClick`. All action
+    //buttons share this markup + width, so they read as one consistent family (reset cache / options / coffee).
+    private _renderActionButton(opts: {
+        icon: string; label: string; color: string; onClick?: () => void; href?: string; filled?: boolean;
+    }): TemplateResult
+    {
+        const cls   = `action-btn ${opts.filled ? 'action-btn-filled' : ''}`;
+        const inner = html`<ha-icon icon=${opts.icon}></ha-icon><span>${opts.label}</span>`;
+        return opts.href !== undefined
+            ? html`<a class=${cls} style="--btn-color:${opts.color}" href=${opts.href} target="_blank" rel="noopener noreferrer">${inner}</a>`
+            : html`<button type="button" class=${cls} style="--btn-color:${opts.color}" @click=${opts.onClick}>${inner}</button>`;
+    }
+
+    //One About-section external link row: an icon + label linking out. Shared markup for the site / LinkedIn /
+    //GitHub rows so they stay identical.
+    private _renderAboutLink(icon: string, label: string, href: string): TemplateResult
+    {
+        return html`
+                <div class="about-row">
+                    <span class="about-label" aria-hidden="true"></span>
+                    <a class="about-row-link" href=${href} target="_blank" rel="noopener noreferrer">
+                        <ha-icon icon=${icon}></ha-icon>
+                        <span>${label}</span>
+                    </a>
+                </div>`;
     }
 
     //Resolved display name for a tracked device: its dashboard name, else the entity's friendly name, else the id.
@@ -606,8 +647,7 @@ export class HeliosCardEditor extends LitElement
         const hidden  = hiddenDevices(this._cfg);
         const groups  = monitoringGroups(this._cfg);
         return html`
-            <div class="field-block-label">${t.editor.devicesSection ?? 'Monitoring group management'}</div>
-            <div class="hint">${t.editor.devicesIntro ?? 'Devices tracked in your Energy dashboard. The eye shows or hides a device everywhere, and the group pill assigns it to one of the four monitoring groups (X = no group).'}</div>
+            <div class="hint">${t.editor.devicesEnergyNote ?? 'These are the individual devices currently set up in your Home Assistant Energy dashboard. The eye shows or hides each one everywhere, and the pill assigns it to a group.'}</div>
             <div class="live-config-link-row">${this._energyConfigLink()}</div>
             ${devices.length === 0
                 ? html`<div class="device-empty">${t.editor.hiddenDevicesEmpty ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
@@ -617,24 +657,80 @@ export class HeliosCardEditor extends LitElement
         `;
     }
 
-    //Editable per-group identity (name -> colour -> icon on one line) for the groups that currently hold at least
-    //one visible device. An empty value clears its key so the card falls back to the defaults (localised "Group N",
-    //--graph-color-N, a generic glyph).
-    private _renderGroupsSection(t: Translations): TemplateResult
+
+    //"Entity display" section: one framed box per fixed chip (styled like the group blocks) plus the device list.
+    //Header = a colour+icon badge, the entity name, a show/hide toggle; body = one row per state, each an icon
+    //picker + a colour picker at 50/50. Grid + battery carry two states (import/export, charge/discharge). Every
+    //key + default comes from the shared CHIP_SLOTS table, so the editor and the card never drift.
+    private _renderChipsSection(t: Translations): TemplateResult
     {
-        //All groups are always configurable (name / colour / icon), even before any device is assigned, so the
-        //option is discoverable. A group only appears on the card once it holds at least one visible device.
-        const groups = Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1);
         return html`
-            <div class="field-block-label">${t.editor.groupsSection ?? 'Monitoring group configuration'}</div>
-            <div class="hint">${t.editor.groupsIntro ?? 'A monitoring group bundles several devices so you can follow them together in every view. For each group set its name, its colour and its icon.'}</div>
-            ${groups.map(g => html`
+            <div class="hint">${t.editor.chipsIntro ?? 'Show or hide each entity, and pick its icon and colour. The home follows the selected chip, or your primary colour by default.'}</div>
+            ${this._renderChipBox(t.editor.chipIrradiance ?? 'Irradiance display', 'chip-irradiance-visible', ['irradiance'])}
+            ${this._renderChipBox(t.editor.chipProduction ?? 'Production display', 'chip-production-visible', ['production'])}
+            ${this._renderChipBox(t.editor.chipGrid ?? 'Grid display', 'chip-grid-visible', ['gridImport', 'gridExport'])}
+            ${this._renderChipBox(t.editor.chipBattery ?? 'Battery display', 'chip-battery-visible', ['batteryCharge', 'batteryDischarge'])}
+            ${this._renderChipBox(t.editor.chipHome ?? 'Home consumption display', 'chip-home-visible', ['home'])}
+            ${Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1).map(g => this._renderGroupChipBox(t, g))}
+        `;
+    }
+
+    //One fixed chip's box: a colour+icon badge, the chip name and a show/hide toggle on the header line, then one
+    //body row per state (icon picker + colour picker at 50/50). Single-state chips get one row; grid/battery get
+    //two (one per direction). The icon picker shows the resolved icon (chosen or the built-in default) selected.
+    private _renderChipBox(label: string, visKey: string, slots: ChipSlot[]): TemplateResult
+    {
+        const c    = this._cfg as Record<string, unknown>;
+        const on   = chipVisible(this._cfg, visKey);
+        const t    = this._t();
+        const badge     = chipSlotColor(this, this._cfg, slots[0]);
+        const badgeIcon = chipSlotIcon(this._cfg, slots[0]);
+        return html`
                 <div class="group-block">
                     <div class="group-line">
-                        <span class="group-name-badge" style="--group-pill-color:${monitoringGroupColor(this._cfg, g)}">${(() => {
-                            const gi = monitoringGroupIcon(this._cfg, g);
-                            return gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`${g}`;
-                        })()}</span>
+                        <span class="group-name-badge" style="--group-pill-color:${badge}"><ha-icon icon=${badgeIcon}></ha-icon></span>
+                        <span class="chip-box-name">${label}</span>
+                        <div class="segmented-toggle">
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-key=${visKey} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-key=${visKey} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
+                        </div>
+                    </div>
+                    ${this._pickerReady ? slots.map(slot => {
+                        const def = CHIP_SLOTS[slot];
+                        return html`
+                        <div class="group-line chip-body">
+                            <ha-selector
+                                class="chip-picker"
+                                .hass=${this.hass}
+                                .selector=${{ icon: {} }}
+                                .value=${chipSlotIcon(this._cfg, slot)}
+                                data-key=${def.iconKey}
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-selector>
+                            <ha-selector
+                                class="chip-picker"
+                                .hass=${this.hass}
+                                .selector=${{ ui_color: { default_color: def.uiColorDefault } }}
+                                .value=${String(c[def.colorKey as string] ?? def.uiColorDefault)}
+                                data-key=${def.colorKey}
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-selector>
+                        </div>`;
+                    }) : nothing}
+                </div>`;
+    }
+
+    //One group's box: a colour+icon badge, an editable name field and a show/hide toggle on the header line, then
+    //a body line with the group's icon + colour pickers. All bound to the shared group maps (rename lives here).
+    private _renderGroupChipBox(t: Translations, g: number): TemplateResult
+    {
+        const on    = groupChipVisible(this._cfg, g);
+        const badge = monitoringGroupColor(this._cfg, g);
+        const gi    = monitoringGroupIcon(this._cfg, g);
+        return html`
+                <div class="group-block">
+                    <div class="group-line">
+                        <span class="group-name-badge" style="--group-pill-color:${badge}">${gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`${g}`}</span>
                         <input
                             class="group-name-input"
                             type="text"
@@ -643,30 +739,32 @@ export class HeliosCardEditor extends LitElement
                             data-group=${String(g)}
                             @change=${this._onGroupNameChanged}
                         />
+                        <div class="segmented-toggle">
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-group=${String(g)} data-value="true" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-group=${String(g)} data-value="false" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOff}</button>
+                        </div>
                     </div>
                     ${this._pickerReady ? html`
-                        <div class="group-line">
+                        <div class="group-line chip-body">
                             <ha-selector
-                                class="group-picker"
-                                .hass=${this.hass}
-                                .selector=${{ ui_color: {} }}
-                                .value=${monitoringGroupColorToken(this._cfg, g) || undefined}
-                                data-group=${String(g)}
-                                @value-changed=${this._onGroupColorChanged}
-                            ></ha-selector>
-                            <ha-selector
-                                class="group-picker"
+                                class="chip-picker"
                                 .hass=${this.hass}
                                 .selector=${{ icon: {} }}
                                 .value=${monitoringGroupIcon(this._cfg, g) || undefined}
                                 data-group=${String(g)}
                                 @value-changed=${this._onGroupIconChanged}
                             ></ha-selector>
+                            <ha-selector
+                                class="chip-picker"
+                                .hass=${this.hass}
+                                .selector=${{ ui_color: {} }}
+                                .value=${monitoringGroupColorToken(this._cfg, g) || undefined}
+                                data-group=${String(g)}
+                                @value-changed=${this._onGroupColorChanged}
+                            ></ha-selector>
                         </div>
                     ` : nothing}
-                </div>
-            `)}
-        `;
+                </div>`;
     }
 
     //Write one entry of a per-group object-map config key (empty value clears it; empty map drops the key).
@@ -696,6 +794,20 @@ export class HeliosCardEditor extends LitElement
         e.stopPropagation();
         const g = (e.currentTarget as HTMLElement).dataset.group;
         if (g) { this._updateGroupMap('monitoring-group-icons', g, typeof e.detail.value === 'string' ? e.detail.value : ''); }
+    };
+    //Toggle a group chip's visibility. Stored as a 'monitoring-group-hidden' object map (group -> true = hidden);
+    //visible drops the key, an empty map drops the whole option.
+    private _onGroupVisibleClick = (e: Event): void =>
+    {
+        const el = e.currentTarget as HTMLElement;
+        const g  = el.dataset.group;
+        if (!g) { return; }
+        const cur = this._cfg['monitoring-group-hidden'];
+        const map: Record<string, boolean> = (cur && typeof cur === 'object' && !Array.isArray(cur))
+            ? { ...(cur as Record<string, boolean>) }
+            : {};
+        if (el.dataset.value === 'true') { delete map[g]; } else { map[g] = true; }
+        this._update('monitoring-group-hidden', Object.keys(map).length ? map : undefined);
     };
 
     private _renderDeviceRow(dev: DeviceConsumption, hidden: Set<string>, groups: Map<string, number>, t: Translations): TemplateResult
@@ -793,17 +905,29 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
+                ${this._renderToggle('show-timeline', t.editor.showTimeline ?? 'Show timeline', t.editor.showTimelineHint ?? 'Show the timeline and the period selector below the scene. Off keeps just the scene.', undefined, undefined, true)}
+                ${this._renderToggle('show-detail-panel', t.editor.showDetailPanel ?? 'Show additional info', t.editor.showDetailPanelHint ?? 'Allow the per-chip mini-panel (aggregated metrics) to open top-right when a chip is tapped. Off never shows it.', undefined, undefined, true)}
+                ${this._renderToggle('show-sun-times', t.editor.showSunTimes ?? 'Show sunrise / sunset times', t.editor.showSunTimesHint ?? 'Show the sunrise and sunset times and their markers at the feet of the solar arc.', undefined, undefined, true)}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode ?? 'No UI mode', t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.')}
+                ${this._renderSlider('no-ui-delay', t.editor.noUiDelay ?? 'Idle delay before hiding', MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}
+                <div class="field-help">${t.editor.noUiDelayHint ?? 'Seconds of inactivity before the timeline and controls fade away in No UI mode. 0 keeps the UI hidden permanently. Only used when No UI mode is on.'}</div>
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
-                ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Freeze the camera: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set in the preview.')}
-                <div class="hint">${t.editor.cameraAngleHint ?? 'Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it.'}</div>
+                ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set.')}
 
                 </details>
 
-                <details class="advanced-section" data-section="entityConfig" ?open=${this._openSection === 'entityConfig'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:home-lightning-bolt-outline"></ha-icon>${t.editor.entityConfigSection ?? 'Entity configuration'}</summary>
-                ${this._renderGroupsSection(t)}
+                <details class="advanced-section" data-section="chips" ?open=${this._openSection === 'chips'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:palette-swatch-outline"></ha-icon>${t.editor.chipsSection ?? 'Entity display'}</summary>
+                ${this._renderChipsSection(t)}
+                </details>
+
+                <details class="advanced-section" data-section="groups" ?open=${this._openSection === 'groups'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:select-group"></ha-icon>${t.editor.groupsConfigTitle ?? 'Group configuration'}</summary>
                 ${this._renderDeviceList(t)}
+                </details>
+
+                <details class="advanced-section" data-section="sensors" ?open=${this._openSection === 'sensors'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:sun-wireless-outline"></ha-icon>${t.editor.optionalSensors ?? 'Optional sensors'}</summary>
                 <div class="field field-block">
                     <span class="label">${t.editor.solarIrradianceEntity}</span>
                     ${this._pickerReady ? html`
@@ -852,9 +976,9 @@ export class HeliosCardEditor extends LitElement
                     ? this._renderSlider('building-height', t.editor.buildingHeight ?? 'Building height', MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
                     : nothing}
                 ${this._renderSlider('building-cluster-radius', t.editor.buildingClusterRadius, 0, 100, 1, DEFAULT_BUILDING_CLUSTER_RADIUS_M, ' m')}
+                <div class="hint">${t.editor.buildingClusterRadiusHelp ?? 'Radius around the home within which attached outbuildings (verandas, garages, sheds) are treated as part of the home: they render at the home\'s full opacity and colour instead of as faded neighbours. 0 keeps only the main building.'}</div>
                 ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
                 <div class="hint">${t.editor.buildingsHint}</div>
-                ${this._renderColorPicker('home-color', t.editor.homeColor, t.editor.homeColorHelp, 'green')}
                 ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
 
                 </details>
@@ -873,11 +997,20 @@ export class HeliosCardEditor extends LitElement
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:refresh"></ha-icon>${t.editor.resetSection}</summary>
                     <div class="hint">${t.editor.resetSectionHint}</div>
                     <div class="hint reset-warning">${t.editor.resetCacheWarning}</div>
-                    <button
-                        type="button"
-                        class="reset-btn"
-                        @click=${this._onResetCacheClick}
-                    >${this._resetFeedback ?? t.editor.resetCacheButton}</button>
+                    ${this._renderActionButton({
+                        icon: 'mdi:database-refresh-outline',
+                        label: this._resetFeedback ?? t.editor.resetCacheButton,
+                        color: 'var(--error-color, #ef4444)',
+                        onClick: this._onResetCacheClick.bind(this),
+                    })}
+                    <div class="hint reset-warning">${t.editor.resetOptionsWarning ?? 'Warning: this resets ALL of this card\'s options to their defaults (chip visibility, colours and icons, group names/colours/icons, buildings, shadows, units and every other setting). Your Home Assistant data is untouched, but your customisation is cleared. Click again to confirm.'}</div>
+                    ${this._renderActionButton({
+                        icon: 'mdi:cog-refresh-outline',
+                        label: this._optionsResetFeedback ?? (this._optionsResetArmed ? (t.editor.resetOptionsConfirm ?? 'Click again to confirm') : (t.editor.resetOptionsButton ?? 'Reset options to defaults')),
+                        color: 'var(--error-color, #ef4444)',
+                        onClick: this._onResetOptionsClick.bind(this),
+                        filled: this._optionsResetArmed,
+                    })}
                 </details>
 
                 <details class="advanced-section about-section" data-section="about" ?open=${this._openSection === 'about'} @toggle=${this._onSectionToggleEvt}>
@@ -895,33 +1028,17 @@ export class HeliosCardEditor extends LitElement
                         <span class="about-label">${t.editor.aboutDeveloperLabel}</span>
                         <span class="about-row-value">ReikanYsora (Jérôme CREMOUX)</span>
                     </div>
-                    <div class="about-row">
-                        <span class="about-label" aria-hidden="true"></span>
-                        <a class="about-row-link" href="https://helios-ha.org" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:web"></ha-icon>
-                            <span>helios-ha.org</span>
-                        </a>
-                    </div>
-                    <div class="about-row">
-                        <span class="about-label" aria-hidden="true"></span>
-                        <a class="about-row-link" href="https://www.linkedin.com/in/jerome-cremoux/" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:linkedin"></ha-icon>
-                            <span>${t.editor.aboutDeveloperLinkedIn}</span>
-                        </a>
-                    </div>
-                    <div class="about-row">
-                        <span class="about-label" aria-hidden="true"></span>
-                        <a class="about-row-link" href="https://github.com/ReikanYsora/Helios" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:github"></ha-icon>
-                            <span>${t.editor.aboutRepoCard}</span>
-                        </a>
-                    </div>
+                    ${this._renderAboutLink('mdi:web', 'helios-ha.org', 'https://helios-ha.org')}
+                    ${this._renderAboutLink('mdi:linkedin', t.editor.aboutDeveloperLinkedIn, 'https://www.linkedin.com/in/jerome-cremoux/')}
+                    ${this._renderAboutLink('mdi:github', t.editor.aboutRepoCard, 'https://github.com/ReikanYsora/Helios')}
                     <div class="about-block about-coffee">
                         <p class="about-paragraph">${t.editor.aboutCoffeeMessage}</p>
-                        <a class="about-link about-coffee-link" href="https://www.buymeacoffee.com/reikanysora" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:coffee"></ha-icon>
-                            <span>${t.editor.aboutCoffeeLink}</span>
-                        </a>
+                        ${this._renderActionButton({
+                            icon: 'mdi:coffee',
+                            label: t.editor.aboutCoffeeLink,
+                            color: '#ffcc00',
+                            href: 'https://www.buymeacoffee.com/reikanysora',
+                        })}
                     </div>
                 </details>
 
@@ -951,6 +1068,44 @@ export class HeliosCardEditor extends LitElement
         this._resetFeedbackTimer = window.setTimeout(() =>
         {
             this._resetFeedback = null;
+        }, HeliosCardEditor.RESET_FEEDBACK_MS);
+    }
+
+    //Reset every card option to its default. Destructive (wipes all customisation), so it takes a confirming
+    //second click: the first arms it (button turns into a confirm prompt for a few seconds), the second clears
+    //the whole config to {}. Only the card's own options are touched; Home Assistant data is never affected.
+    private _optionsResetConfirmTimer?: number;
+    private _optionsResetFeedbackTimer?: number;
+    @state() private _optionsResetArmed = false;
+    @state() private _optionsResetFeedback: string | null = null;
+
+    private _onResetOptionsClick(): void
+    {
+        if (!this._optionsResetArmed)
+        {
+            this._optionsResetArmed = true;
+            if (this._optionsResetConfirmTimer !== undefined) { window.clearTimeout(this._optionsResetConfirmTimer); }
+            this._optionsResetConfirmTimer = window.setTimeout(() => { this._optionsResetArmed = false; }, 4000);
+            return;
+        }
+        this._optionsResetArmed = false;
+        if (this._optionsResetConfirmTimer !== undefined) { window.clearTimeout(this._optionsResetConfirmTimer); }
+        //Clear every Helios option but keep the Lovelace-managed keys (the card `type` is mandatory, plus any
+        //layout placement HA stored), so the card stays valid and keeps its dashboard slot.
+        const cur  = this._cfg as Record<string, unknown>;
+        const next = {} as Record<string, unknown>;
+        for (const k of HeliosCardEditor.LOVELACE_KEYS)
+        {
+            if (cur[k] !== undefined) { next[k] = cur[k]; }
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+        const t = pickTranslations(this.hass?.language);
+        this._optionsResetFeedback = t.editor.resetOptionsDone ?? 'Options reset ✓';
+        if (this._optionsResetFeedbackTimer !== undefined) { window.clearTimeout(this._optionsResetFeedbackTimer); }
+        this._optionsResetFeedbackTimer = window.setTimeout(() =>
+        {
+            this._optionsResetFeedback = null;
         }, HeliosCardEditor.RESET_FEEDBACK_MS);
     }
 

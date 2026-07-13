@@ -6,6 +6,7 @@ import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, irradianceUnit } from '../core/config/helios-config';
 import { consumptionLoad } from '../core/energy';
 import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
+import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { valueAt } from '../data/unifiedStore';
 import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
 import { groupDevices, deviceName, deviceIcon } from '../data/sources/device-consumption';
@@ -111,6 +112,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         perEntityRows.push({ id, label: solarSourceName(host, i), valueText, colorIdx: i });
     }
     const hasPv = isFinite(pv.value);
+    //Forecast label, FR/EN like the other tooltip metric names (targetLabel is FR/EN only). Used wherever the row
+    //shows the predicted curve rather than measured production - the irradiance view's ghost line, and the PV view
+    //once the cursor is past the last recorded sample.
+    const forecastLabel  = String(host.hass?.language ?? '').toLowerCase().startsWith('fr') ? 'Prévision' : 'Forecast';
 
     //Row names: the metric name, or the configured entity's HA Energy name for the two-direction grid/battery rows.
     const tgtName        = targetLabel(host, target);
@@ -141,10 +146,11 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const cloudBase      = ENERGY_COLOR.cloud(el);
     const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
     const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
-    //Ghosted PV colour for the irradiance view's forecast row, identical to the dashed forecast curve + its hover dot.
+    //Ghosted irradiance colour for the irradiance view's forecast row, identical to the dashed forecast curve + its hover dot.
+    const irradColor     = chipSlotColor(el, host.config, 'irradiance');
     const forecastColor  = chartIsDark(host)
-        ? lerpHexToward(ENERGY_COLOR.pv(el), '#ffffff', 0.75)
-        : lerpHexToward(ENERGY_COLOR.pv(el), '#000000', 0.55);
+        ? lerpHexToward(irradColor, '#ffffff', 0.75)
+        : lerpHexToward(irradColor, '#000000', 0.55);
 
     //Fused battery view: per-bank SoC at the cursor, to list each bank's level under the power rows (matching the
     //chart's per-bank SoC lines and their hover beams). Falls back to the aggregated mean when no per-bank series.
@@ -157,7 +163,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const socLabel      = targetLabel(host, 'battery-soc');
     const socBeamColor  = (!isFinite(battW) || Math.abs(battW) < 5)
         ? cssHex(el, '--secondary-text-color', '#9e9e9e')
-        : (battW > 0 ? ENERGY_COLOR.batteryIn(el) : ENERGY_COLOR.batteryOut(el));
+        : (battW > 0 ? chipSlotColor(el, host.config, 'batteryCharge') : chipSlotColor(el, host.config, 'batteryDischarge'));
 
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
@@ -236,16 +242,23 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ${target === 'production' ? html`
                     ${showForecast && dayKwhText ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:crystal-ball"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${forecastColor}" icon="mdi:crystal-ball"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${forecastLabel}</span>
                             <span class="tb-hover-tooltip-value">${dayKwhText}</span>
                         </div>
                     ` : nothing}
                     ${hasPv ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.pv(el)}" icon="mdi:solar-power"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${tgtName}</span>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${pv.isPredicted ? forecastColor : chipSlotColor(el, host.config, 'production')}" icon=${pv.isPredicted ? 'mdi:crystal-ball' : chipSlotIcon(host.config, 'production', 'mdi:solar-power')}></ha-icon>
+                            <span class="tb-hover-tooltip-name">${pv.isPredicted ? forecastLabel : tgtName}</span>
                             <span class="tb-hover-tooltip-value">${formatPower(host.hass, pvNormalizeToWatts(pv.value, pv.unit), dec, powerU)}</span>
+                        </div>
+                    ` : nothing}
+                    ${!pv.isPredicted && isFinite(forecastW) && forecastW > 0 ? html`
+                        <div class="tb-hover-tooltip-row">
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${forecastColor}" icon="mdi:crystal-ball"></ha-icon>
+                            <span class="tb-hover-tooltip-name">${forecastLabel}</span>
+                            <span class="tb-hover-tooltip-value">${kw(forecastW)}</span>
                         </div>
                     ` : nothing}
                     ${perEntityRows.map(prow => html`
@@ -258,7 +271,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ` : nothing}
                 ${target === 'consumption' && hasConsumption ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.consumption(el)}" icon="mdi:home-lightning-bolt"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'home')}" icon=${chipSlotIcon(host.config, 'home', 'mdi:home-lightning-bolt')}></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${kw(consumptionW)}</span>
                     </div>
@@ -266,14 +279,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ${target === 'grid' ? html`
                     ${isFinite(gridImpW) && gridImpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridImport(el)}" icon="mdi:transmission-tower-export"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'gridImport')}" icon=${chipSlotIcon(host.config, 'gridImport', 'mdi:transmission-tower-export')}></ha-icon>
                             <span class="tb-hover-tooltip-name">${gridFromName}</span>
                             <span class="tb-hover-tooltip-value">${kw(gridImpW)}</span>
                         </div>
                     ` : nothing}
                     ${isFinite(gridExpW) && gridExpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.gridExport(el)}" icon="mdi:transmission-tower-import"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'gridExport')}" icon=${chipSlotIcon(host.config, 'gridExport', 'mdi:transmission-tower-import')}></ha-icon>
                             <span class="tb-hover-tooltip-name">${gridToName}</span>
                             <span class="tb-hover-tooltip-value">${kw(gridExpW)}</span>
                         </div>
@@ -282,14 +295,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ${target === 'battery' ? html`
                     ${isFinite(battW) && battW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryIn(el)}" icon="mdi:battery-arrow-up"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'batteryCharge')}" icon=${chipSlotIcon(host.config, 'batteryCharge', 'mdi:battery-arrow-up')}></ha-icon>
                             <span class="tb-hover-tooltip-name">${battChargeName}</span>
                             <span class="tb-hover-tooltip-value">${kw(battW)}</span>
                         </div>
                     ` : nothing}
                     ${isFinite(battW) && battW <= -1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery-arrow-down"></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'batteryDischarge')}" icon=${chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-down')}></ha-icon>
                             <span class="tb-hover-tooltip-name">${battDisName}</span>
                             <span class="tb-hover-tooltip-value">${kw(-battW)}</span>
                         </div>
@@ -304,7 +317,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ` : nothing}
                 ${target === 'battery-soc' && isFinite(battSocV) ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.batteryOut(el)}" icon="mdi:battery"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'batteryDischarge')}" icon="mdi:battery"></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, battSocV)))} %</span>
                     </div>
@@ -318,7 +331,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ` : nothing) : nothing}
                 ${target === 'irradiance' && isFinite(irrV) ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" style="color:${ENERGY_COLOR.sun(el)}" icon="mdi:white-balance-sunny"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'irradiance')}" icon=${chipSlotIcon(host.config, 'irradiance', 'mdi:white-balance-sunny')}></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
                         <span class="tb-hover-tooltip-value">${formatIrradiance(host.hass, irrV, dec, irradU)}</span>
                     </div>
@@ -326,7 +339,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ${target === 'irradiance' && isFinite(forecastW) && forecastW > 0 ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${forecastColor}" icon="mdi:crystal-ball"></ha-icon>
-                        <span class="tb-hover-tooltip-name">${targetLabel(host, 'production')}</span>
+                        <span class="tb-hover-tooltip-name">${forecastLabel}</span>
                         <span class="tb-hover-tooltip-value">${kw(forecastW)}</span>
                     </div>
                 ` : nothing}

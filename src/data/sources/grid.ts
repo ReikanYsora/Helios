@@ -129,34 +129,6 @@ export function refreshGrid(host: GridHost): void
 }
 
 
-//Narrow host for the live-only grid read (Helios Mini): just the live chip fields, no change-series/guard surface.
-export interface GridLiveHost
-{
-    readonly hass:             any;
-    readonly _energyDefaults?: EnergyDefaults;
-    _gridImportValue: number | null;
-    _gridImportUnit:  string;
-    _gridExportValue: number | null;
-    _gridExportUnit:  string;
-}
-
-
-//Live-only grid refresh for a card that never fetches history: sum the signed `stat_rate` sensors and split
-//net into import (>= 0) / export (< 0), like the HA Energy live tile. No recorder call and no mis-scope guard
-//(the guard audits against the change series, which this card never fetches).
-export function refreshGridLive(host: GridLiveHost): void
-{
-    const rates = host.hass ? (host._energyDefaults?.gridStatRates ?? []) : [];
-    if (rates.length > 0)
-    {
-        const { watts, any } = sumLiveWatts(host.hass, rates, host._energyDefaults?.invertedRateEntities);
-        if (any) { applyGridSplit(host, watts); return; }
-    }
-    applyGridSlot(host, 'import', null, '');
-    applyGridSlot(host, 'export', null, '');
-}
-
-
 //Fetch the recorder `change` series for a direction's meters over the store's past window, gated on a per-host
 //fetch key that re-arms every CHANGE_REFRESH_MS (and on entity-set / window changes) to track newly committed
 //buckets. Window matches the unified store's origin.

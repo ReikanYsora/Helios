@@ -8,6 +8,7 @@ import {
     DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
+    DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
 } from './constants';
 
 export {
@@ -19,6 +20,7 @@ export {
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
+    DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
 } from './constants';
 
 
@@ -68,8 +70,44 @@ export interface HeliosConfig
     'solar-irradiance-entity'?: unknown;
     //HA ui_color token for the base tint of surrounding buildings. Default 'grey'.
     'building-color'?:          unknown;
-    //HA ui_color token for the home (consumption) colour: the home pill + every consumption readout. Default 'green'.
-    'home-color'?:              unknown;
+    //"No UI" idle delay in seconds (0..10) before the timeline + controls fade in No UI mode. Default 5. Only
+    //used when 'auto-hide-ui' is on.
+    'no-ui-delay'?:            unknown;
+    //Per-chip visibility (the "Chips & colours" section). Each defaults to visible; explicit false hides that
+    //chip family. Home hidden swaps the central pill for a small hollow ring the leads converge on.
+    'chip-irradiance-visible'?: unknown;
+    'chip-production-visible'?: unknown;
+    'chip-grid-visible'?:       unknown;
+    'chip-battery-visible'?:    unknown;
+    'chip-home-visible'?:       unknown;
+    //Per-group chip visibility override (group number -> true = hidden). A group chip shows when it has visible
+    //devices AND is not hidden here. Absent = every group visible.
+    'monitoring-group-hidden'?: unknown;
+    //Per-chip colour overrides (ui_color token or #/rgb/var literal). Empty/absent falls back to the energy token.
+    //Grid + battery carry a colour per direction so import/export and charge/discharge stay distinct.
+    'chip-irradiance-color'?:        unknown;
+    'chip-production-color'?:        unknown;
+    'chip-grid-import-color'?:       unknown;
+    'chip-grid-export-color'?:       unknown;
+    'chip-battery-charge-color'?:    unknown;
+    'chip-battery-discharge-color'?: unknown;
+    //Home (consumption) chip colour; also the home pill's resting colour. Default 'primary'. The home building
+    //otherwise follows the selected chip's colour.
+    'chip-home-color'?:         unknown;
+    //Per-chip icon overrides (mdi). Empty/absent falls back to the chip's built-in glyph. Grid + battery carry an
+    //icon per direction so import/export and charge/discharge each stay recognisable.
+    'chip-irradiance-icon'?:          unknown;
+    'chip-production-icon'?:           unknown;
+    'chip-grid-import-icon'?:          unknown;
+    'chip-grid-export-icon'?:          unknown;
+    'chip-battery-charge-icon'?:       unknown;
+    'chip-battery-discharge-icon'?:    unknown;
+    'chip-home-icon'?:                unknown;
+    //Scene UI toggles (all default visible). show-timeline hides the timeline + the period selector; the detail
+    //panel toggle hides the tap-to-open per-chip mini-panel; sun-times hides the sunrise/sunset markers at the arc.
+    'show-timeline'?:           unknown;
+    'show-detail-panel'?:       unknown;
+    'show-sun-times'?:          unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
@@ -81,7 +119,7 @@ export interface HeliosConfig
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
-    //any input (kiosk/immersive display). Default false. See UI_AUTOHIDE_MS.
+    //any input (kiosk/immersive display). Default false. Idle delay set via 'no-ui-delay'.
     'auto-hide-ui'?:           unknown;
     //Device visibility control. Hidden: recorder-meter ids fully excluded from every view (chips, chart).
     'hidden-devices'?:          unknown;
@@ -103,13 +141,13 @@ export function buildingColorToken(config: HeliosConfig | undefined): string
     return token || 'grey';
 }
 
-//Resolved ui_color token for the home (consumption) colour (home pill + every consumption readout).
-//Default 'green'.
+//Resolved ui_color token for the home (consumption) colour (home pill + every consumption readout). Reads the
+//home chip's colour; default 'primary' (the home building otherwise follows the selected chip).
 export function homeColor(config: HeliosConfig | undefined): string
 {
-    const raw = config?.['home-color'];
+    const raw = config?.['chip-home-color'];
     const token = typeof raw === 'string' ? raw.trim() : '';
-    return token || 'green';
+    return token || 'primary';
 }
 
 
@@ -175,6 +213,34 @@ export function batterySign(config: HeliosConfig | undefined): 'default' | 'inve
 export function autoHideUi(config: HeliosConfig | undefined): boolean
 {
     return config?.['auto-hide-ui'] === true;
+}
+
+
+//Scene UI element toggles (all default visible; explicit false hides). show-timeline covers the timeline band +
+//the period selector; detail-panel is the tap-to-open per-chip mini-panel; sun-times are the sunrise/sunset arc markers.
+export function showTimeline(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-timeline'] !== false;
+}
+export function showDetailPanel(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-detail-panel'] !== false;
+}
+export function showSunTimes(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-sun-times'] !== false;
+}
+
+
+//Idle delay (ms) before the No UI fade, from the 'no-ui-delay' config key (seconds, clamped to [MIN,MAX]).
+//Defaults to DEFAULT_NO_UI_DELAY_S when unset or invalid.
+export function noUiDelayMs(config: HeliosConfig | undefined): number
+{
+    const raw = Number(config?.['no-ui-delay']);
+    const secs = Number.isFinite(raw)
+        ? Math.min(MAX_NO_UI_DELAY_S, Math.max(MIN_NO_UI_DELAY_S, raw))
+        : DEFAULT_NO_UI_DELAY_S;
+    return secs * 1000;
 }
 
 
@@ -255,6 +321,26 @@ export function monitoringGroupColor(config: HeliosConfig | undefined, group: nu
     if (!token) { return fallback; }
     if (/^(#|rgb|var)/i.test(token)) { return token; }
     return `var(--${token}-color, ${fallback})`;
+}
+
+
+//Whether a group's chip is shown: true unless the user hid it via 'monitoring-group-hidden' (group -> true). A
+//group still only appears once it ALSO has at least one visible device (see activeGroups).
+export function groupChipVisible(config: HeliosConfig | undefined, group: number): boolean
+{
+    const raw = config?.['monitoring-group-hidden'];
+    if (raw && typeof raw === 'object' && !Array.isArray(raw))
+    {
+        return (raw as Record<string, unknown>)[String(group)] !== true;
+    }
+    return true;
+}
+
+
+//Whether a fixed chip is shown: true unless hidden via its 'chip-<name>-visible' key.
+export function chipVisible(config: HeliosConfig | undefined, key: string): boolean
+{
+    return (config as Record<string, unknown> | undefined)?.[key] !== false;
 }
 
 

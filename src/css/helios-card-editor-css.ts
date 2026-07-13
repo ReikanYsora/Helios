@@ -278,30 +278,63 @@ export const editorStyles = css`
         opacity: 0.85;
         margin-bottom: 8px;
     }
-    .reset-btn
+    /*  Shared action button (reset cache / reset options / …): icon + label, tinted by --btn-color (set inline),
+        full width so every action button reads as one consistent row. The filled variant inverts to a solid fill
+        for a destructive confirm. */
+    .action-btn
     {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        /*  Fixed width (fits the longest label), right-aligned so every action button lines up on the right edge. */
+        width: 260px;
+        max-width: 100%;
+        margin-left: auto;
+        margin-right: 0;
+        box-sizing: border-box;
+        white-space: nowrap;
+        text-decoration: none;
         background: transparent;
-        border: var(--ha-border-width-sm, 1px) solid var(--error-color, #ef4444);
-        color: var(--error-color, #ef4444);
+        border: var(--ha-border-width-sm, 1px) solid var(--btn-color, var(--error-color, #ef4444));
+        color: var(--btn-color, var(--error-color, #ef4444));
         border-radius: var(--ha-border-radius-sm, 4px);
-        padding: 4px 10px;
+        padding: 8px 12px;
         font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         font-family: inherit;
         cursor: pointer;
-        display: block;
-        margin-left: auto;
         margin-top: 8px;
-        width: fit-content;
     }
-    .reset-btn:hover
+    .action-btn ha-icon
     {
-        background: color-mix(in srgb, var(--error-color, #ef4444) 8%, transparent);
+        --mdc-icon-size: 18px;
+        flex: 0 0 auto;
     }
-    .reset-btn:focus-visible
+    .action-btn:hover
     {
-        outline: 2px solid var(--error-color, #ef4444);
+        background: color-mix(in srgb, var(--btn-color, #ef4444) 8%, transparent);
+    }
+    .action-btn:focus-visible
+    {
+        outline: 2px solid var(--btn-color, #ef4444);
         outline-offset: 2px;
+    }
+    /*  Filled state (e.g. an armed destructive confirm): solid --btn-color fill so it reads clearly. */
+    .action-btn-filled,
+    .action-btn-filled:hover
+    {
+        background: var(--btn-color, var(--error-color, #ef4444));
+        color: var(--text-primary-color, #fff);
+    }
+    /*  Disabled field (a dependent control kept visible but inert, e.g. the No-UI delay when the mode is off). */
+    .field-disabled
+    {
+        opacity: 0.45;
+    }
+    .field-disabled input
+    {
+        cursor: not-allowed;
     }
 
     /*  About section pinned at the editor bottom. Compact rows styled as a soft credits footer, not a
@@ -393,37 +426,6 @@ export const editorStyles = css`
         padding-top: 14px;
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  BMC button: same outline shape and hover bloom as reset-btn, in Buy Me a Coffee brand yellow
-        (kept literal: it's an external brand colour, not a themeable surface). */
-    .about-coffee-link
-    {
-        margin-top: 8px;
-        background: transparent;
-        border: var(--ha-border-width-sm, 1px) solid #ffcc00;
-        color: #ffcc00;
-        border-radius: var(--ha-border-radius-sm, 4px);
-        padding: 4px 10px;
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        align-self: flex-end;
-        margin-left: auto;
-        width: fit-content;
-    }
-    .about-coffee-link:hover
-    {
-        background: rgba(255, 204, 0, 0.08);
-        text-decoration: none;
-    }
-    .about-coffee-link:focus-visible
-    {
-        outline: 2px solid #ffcc00;
-        outline-offset: 2px;
-    }
-
     /*  Soft framed block grouping a set of related fields, so they read as one unit within the section rather
         than loose rows. */
     .entity-block
@@ -634,6 +636,23 @@ export const editorStyles = css`
     {
         flex: 1 1 0;
         min-width: 0;
+    }
+    /*  Chip box (Chips & colours): the chip's name grows to push the on/off toggle to the right edge; the small
+        direction label sits before grid/battery's two colour pickers. */
+    .chip-box-name
+    {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-text-color, #212121);
+    }
+    /*  Chip box body row: an icon picker + a colour picker sharing the width 50/50 (each state gets its own row
+        for grid/battery). flex-basis 0 + equal grow makes them the same width regardless of intrinsic content. */
+    .chip-body .chip-picker
+    {
+        flex: 1 1 0;
+        min-width: 0;
+        width: 0;
     }
     .device-empty
     {

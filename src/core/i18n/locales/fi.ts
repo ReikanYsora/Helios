@@ -8,7 +8,7 @@ export const fi: Translations = {
     period:
     {
         rangeLabel: 'Aikaväli',
-        standard: 'Vakio',
+        standard: "P-2 / P+2",
         today: 'Tänään',
         week:  'viikko',
         month: 'kuukausi',

@@ -277,7 +277,7 @@ export class HeliosEngine
         const lon = Math.round(this.homeLon * 1000) / 1000;
         return `helios:camera-pose:${lat}:${lon}`;
     }
-    private _readStoredPose(): { bearing?: number; pitch?: number; locked?: boolean } | null
+    private _readStoredPose(): { bearing?: number; pitch?: number } | null
     {
         try
         {
@@ -289,7 +289,7 @@ export class HeliosEngine
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object')
             {
-                return parsed as { bearing?: number; pitch?: number; locked?: boolean };
+                return parsed as { bearing?: number; pitch?: number };
             }
         }
         catch
@@ -298,7 +298,7 @@ export class HeliosEngine
         }
         return null;
     }
-    private _writeStoredPose(pose: { bearing: number; pitch: number; locked: boolean }): void
+    private _writeStoredPose(pose: { bearing: number; pitch: number }): void
     {
         try
         {
@@ -309,8 +309,9 @@ export class HeliosEngine
             //Silent-degrade like the reader; only cross-reload persistence is lost, live state is intact.
         }
     }
-    //Resting pose at init: localStorage (runtime lock chip) first, then the YAML camera-*-deg keys, then
-    //the hemisphere-aware default (south up in NH, north up in SH). Wrapped/clamped against stale reads.
+    //Resting pose at init: the stored bearing/pitch from localStorage (the drag-set angle) first, then the YAML
+    //camera-*-deg keys, then the hemisphere-aware default (south up in NH, north up in SH). Wrapped/clamped
+    //against stale reads.
     private _initialBearing(): number
     {
         const stored = this._readStoredPose();
@@ -335,20 +336,16 @@ export class HeliosEngine
         }
         return CAMERA_PITCH_REST_DEG;
     }
-    //True when drag-rotate/pitch and idle auto-orbit are all suppressed (locked pose). localStorage flag
-    //(live lock chip) first, then the YAML key.
+    //True when drag-rotate/pitch and idle auto-orbit are all suppressed (locked pose). The lock is purely the
+    //editor/YAML `camera-locked` toggle now (the old runtime lock chip is gone), so the config key is the sole
+    //authority: a stale localStorage flag must never override it.
     public isCameraLocked(): boolean
     {
-        const stored = this._readStoredPose();
-        if (stored && typeof stored.locked === 'boolean')
-        {
-            return stored.locked;
-        }
         return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
     }
-    //Persist the camera's CURRENT bearing/pitch (with the live lock flag) to localStorage, so reopening the
-    //dashboard restores the exact view. Called on drag-end and by the card on teardown (captures an
-    //auto-rotated bearing too). No-op before the renderer exists.
+    //Persist the camera's CURRENT bearing/pitch to localStorage, so reopening the dashboard restores the exact
+    //view. Called on drag-end and by the card on teardown (captures an auto-rotated bearing too). No-op before
+    //the renderer exists.
     public persistCameraPose(): void
     {
         if (!this._renderer)
@@ -358,23 +355,6 @@ export class HeliosEngine
         this._writeStoredPose({
             bearing: this._renderer.getCameraBearing(),
             pitch:   this._renderer.getCameraPitch(),
-            locked:  this.isCameraLocked(),
-        });
-    }
-
-    //Toggle the lock at runtime (no respawn). The custom drag handlers re-check isCameraLocked() per
-    //pointerdown. Mutates cfg in-place and refreshes localStorage for the next boot.
-    public setCameraLocked(locked: boolean): void
-    {
-        if (!this._renderer)
-        {
-            return;
-        }
-        (this.cfg as Record<string, unknown>)['camera-locked'] = locked;
-        this._writeStoredPose({
-            bearing: this._renderer.getCameraBearing(),
-            pitch:   this._renderer.getCameraPitch(),
-            locked,
         });
     }
 
@@ -475,10 +455,11 @@ export class HeliosEngine
     //Single-pointer drag-rotate (left-click on desktop, one-finger drag on touch). Bound to the renderer's
     //container element.
     private _dragRotateHandlers?: {
-        canvas:  HTMLElement;
-        onDown:  (e: PointerEvent) => void;
-        onMove:  (e: PointerEvent) => void;
-        onEnd:   (e: PointerEvent) => void;
+        canvas:      HTMLElement;
+        onDown:      (e: PointerEvent) => void;
+        onMove:      (e: PointerEvent) => void;
+        onEnd:       (e: PointerEvent) => void;
+        onDragStart: (e: Event) => void;
     };
 
 
@@ -682,11 +663,17 @@ export class HeliosEngine
             //Persist the pose the user just dragged to, so a return restores the same view.
             this.persistCameraPose();
         };
+        //Firefox starts a native drag on a left-mouse press over the canvas/SVG and, once it does, stops delivering
+        //the pointermove stream, so the scene freezes mid-drag. preventDefault in onDown is not always enough there;
+        //cancelling `dragstart` outright (it bubbles up from whatever child the press landed on) is what reliably
+        //keeps the gesture ours. Harmless in Chromium, which never starts the drag here anyway.
+        const onDragStart = (e: Event): void => { e.preventDefault(); };
         container.addEventListener('pointerdown',   onDown);
         container.addEventListener('pointermove',   onMove);
         container.addEventListener('pointerup',     onEnd);
         container.addEventListener('pointercancel', onEnd);
-        this._dragRotateHandlers = { canvas: container, onDown, onMove, onEnd };
+        container.addEventListener('dragstart',     onDragStart);
+        this._dragRotateHandlers = { canvas: container, onDown, onMove, onEnd, onDragStart };
 
         this._refreshWeather();
     }
@@ -1352,8 +1339,9 @@ export class HeliosEngine
         batteryLabel: { x: number; y: number };
         //Grid chip anchor: top-left, mirroring the battery chip on the right.
         gridLabel:    { x: number; y: number };
-        //Monitoring-group chip anchors, fixed by group number: [g1 top-left, g2 bottom-left, g3 top-right,
-        //g4 bottom-right], in the bottom row below the home. Empty groups just leave their slot unused.
+        //Four candidate group-chip anchors below the home: [top-left, bottom-left, top-right, bottom-right]. The
+        //HUD controller uses these as geometry primitives (the two side columns + the two rows) and re-arranges
+        //the actual chips dynamically by how many groups are active (see SceneHudController.render).
         groupLabels:  { x: number; y: number }[];
         home:         { x: number; y: number };
     } | null
@@ -1398,9 +1386,9 @@ export class HeliosEngine
         //Left column: the grid chip sits on TOP, mirroring the battery chip on the right.
         const leftX             = home.x - CHIP_SIDE_X_OFFSET_PX;
         const gridY             = clusterY - CHIP_STACK_GAP_PX / 2;
-        //Monitoring-group chips in the bottom row, two per side, fixed by group number. Row 1 sits the SAME
-        //distance below the home hub as grid/battery sit above it (CHIP_STACK_GAP_PX / 2), and row 2 is another
-        //half-gap below row 1. Same left/right columns as grid/battery.
+        //Group-chip candidate anchors in the two rows below the home. Row 1 sits the SAME distance below the home
+        //hub as grid/battery sit above it (CHIP_STACK_GAP_PX / 2), and row 2 is another half-gap below row 1. Same
+        //left/right columns as grid/battery. The controller picks among these by active-group count.
         const groupRow1Y        = clusterY + CHIP_STACK_GAP_PX / 2;
         const groupRow2Y        = clusterY + CHIP_STACK_GAP_PX;
 
@@ -1409,10 +1397,10 @@ export class HeliosEngine
             batteryLabel: { x: batteryXRight, y: batteryY },
             gridLabel:    { x: leftX,         y: gridY    },
             groupLabels:  [
-                { x: leftX,         y: groupRow1Y },  //group 1: top-left
-                { x: leftX,         y: groupRow2Y },  //group 2: bottom-left
-                { x: batteryXRight, y: groupRow1Y },  //group 3: top-right
-                { x: batteryXRight, y: groupRow2Y },  //group 4: bottom-right
+                { x: leftX,         y: groupRow1Y },  //slot 0: top-left
+                { x: leftX,         y: groupRow2Y },  //slot 1: bottom-left
+                { x: batteryXRight, y: groupRow1Y },  //slot 2: top-right
+                { x: batteryXRight, y: groupRow2Y },  //slot 3: bottom-right
             ],
             home:         { x: home.x,        y: clusterY },
         };
@@ -1897,7 +1885,6 @@ export class HeliosEngine
             this._writeStoredPose({
                 bearing: this._renderer.getCameraBearing(),
                 pitch:   this._renderer.getCameraPitch(),
-                locked:  nextCameraLocked,
             });
             this._renderer.scheduleRedraw();
         }
@@ -1967,6 +1954,7 @@ export class HeliosEngine
             h.canvas.removeEventListener('pointermove',   h.onMove);
             h.canvas.removeEventListener('pointerup',     h.onEnd);
             h.canvas.removeEventListener('pointercancel', h.onEnd);
+            h.canvas.removeEventListener('dragstart',     h.onDragStart);
         }
 
         //Drop heavy instance state.

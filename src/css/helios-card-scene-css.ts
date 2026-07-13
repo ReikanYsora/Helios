@@ -200,7 +200,7 @@ export const heliosCardStyles = css`
     .battery-pct-label { --chip-glow: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac)); }
     .grid-label        { --chip-glow: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2)); }
     .group-label       { --chip-glow: var(--group-color, var(--primary-color, #03a9f4)); }
-    .solar-pct-label   { --chip-glow: var(--amber-color, #ffc107); }
+    .solar-pct-label   { --chip-glow: var(--solar-color, var(--amber-color, #ffc107)); }
     .home-pill         { --chip-glow: var(--helios-consumption-color, #4caf50); }
 
     .pv-pct-label::after,
@@ -450,6 +450,23 @@ export const heliosCardStyles = css`
         /*  Keep the mask fade and ease the hover glow in/out. */
         transition: opacity 0.35s ease, box-shadow 0.2s ease;
     }
+    /*  Neutral home ring: shown in place of the home pill when the home chip is hidden. A hollow stadium (same 2 px
+        border as the chips) with a transparent centre so the 2.5D home shows through it. Its height matches the
+        leads' vertical dock (2 x HOME_PILL_HALF_HEIGHT_PX = 28 in scene-hud-controller) so every leader still meets
+        its top/bottom edge; the width is kept compact. Purely a contact point; non-interactive. */
+    .home-ring
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        box-sizing: border-box;
+        width: 50px;
+        height: 28px;
+        border: 2px solid var(--home-ring-color, var(--primary-color, #4caf50));
+        border-radius: 999px;
+        background: transparent;
+        z-index: 9;
+        pointer-events: none;
+    }
     /*  Light glow on home hover; the hover state is driven from the hitbox by the card. Active consumption target
         uses the shared ::after glow like every other chip (fades via opacity). */
     .home-pill.is-hovered
@@ -565,8 +582,9 @@ export const heliosCardStyles = css`
             (z 12) still paints on top. */
         z-index: 13;
         color: var(--primary-text-color, #212121);
-        /*  HA amber token so it stays distinct from the PV production chip (orange). */
-        border-color: var(--amber-color, var(--warning-color, #ffc107));
+        /*  Configured irradiance colour (--solar-color, set inline), else the HA amber token so it stays distinct
+            from the PV production chip (orange). */
+        border-color: var(--solar-color, var(--amber-color, var(--warning-color, #ffc107)));
     }
 
 
@@ -609,7 +627,7 @@ export const heliosCardStyles = css`
     }
 
     /* "No UI" mode: the timeline + on-card controls fade out after an idle delay and reappear on any input
-       (driven by the data-ui-hidden host attribute; see _uiHidden / UI_AUTOHIDE_MS). The reduced-motion block
+       (driven by the data-ui-hidden host attribute; see _uiHidden / noUiDelayMs). The reduced-motion block
        above drops the fade to an instant show/hide. */
     .time-bar,
     .tb-band

@@ -7,11 +7,13 @@ import
 {
     type HeliosConfig,
     autoHideUi,
+    noUiDelayMs,
+    showTimeline,
+    showDetailPanel,
     cacheId,
 } from './core/config/helios-config';
 import { refreshPeriodHourly, type PeriodHourly } from './data/period-totals/period-hourly';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './timeline/timeline-modes';
-import { UI_AUTOHIDE_MS } from './core/config/constants';
 import { pickTranslations } from './core/i18n';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
@@ -70,8 +72,6 @@ import
     initVisibilityObserver,
     publishConsumptionColor
 } from './card/init';
-//Side-effect import: registers <helios-mini-card>, the live-only companion card, in the shared bundle.
-import './helios-mini-card';
 //Side-effect import: registers <helios-fingerprint-card>, the energy-habits heatmap, in the shared bundle.
 import './helios-fingerprint-card';
 //Side-effect import: registers <helios-card-editor> as a custom element.
@@ -225,7 +225,7 @@ export class HeliosCard extends LitElement
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
-    //Active timeline mode (now / week / month / year). Drives the window + store cadence + fetch period +
+    //Active timeline mode (D-2/D+2 / week / month / year). Drives the window + store cadence + fetch period +
     //scrub snapping (see card/timeline-modes.ts). Persisted per card; the toggle lives in the bottom band.
     @state() _timelineMode: TimelineMode = 'standard';
     //Active rolling-window span (days of history/forecast around today), derived from the mode. Pushed to the
@@ -315,7 +315,7 @@ export class HeliosCard extends LitElement
         this.requestUpdate();
     }
 
-    //Timeline mode selector (Now / 1 week / 1 month / 1 year). Derives the window from the mode spec, applies
+    //Timeline mode selector (D-2/D+2 / 1 week / 1 month / 1 year). Derives the window from the mode spec, applies
     //it (drops + rebuilds the store at the mode's cadence) and persists.
     private _setTimelineMode(mode: TimelineMode): void
     {
@@ -343,7 +343,7 @@ export class HeliosCard extends LitElement
         if (mode) { this._setTimelineMode(mode); }
     };
 
-    //Recorder period for the energy change-series, per the active mode (5-min for Now, hourly for a week,
+    //Recorder period for the energy change-series, per the active mode (5-min for D-2/D+2, hourly for a week,
     //daily for month/year), so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
     get _storeFetchPeriod(): StatPeriod { return modeFetchPeriod(this._timelineMode, this.config); }
 
@@ -398,14 +398,14 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Timeline mode selector: Now / Yesterday / Today / Week / Month / Year. The active mode is highlighted. Every
+    //Timeline mode selector: D-2/D+2 / Yesterday / Today / Week / Month / Year. The active mode is highlighted. Every
     //mode is available (the detail panel aggregates a multi-day period by hour-of-day).
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
         const labels: Record<TimelineMode, string> = {
-            standard:  t.period?.standard  ?? 'Now',
+            standard:  t.period?.standard  ?? 'D-2 / D+2',
             yesterday: t.period?.yesterday ?? 'Yesterday',
             today:     t.period?.today     ?? 'Today',
             week:      t.period?.week      ?? 'Week',
@@ -557,11 +557,17 @@ export class HeliosCard extends LitElement
         };
     }
 
-    //"No UI" mode: fade the timeline + controls after UI_AUTOHIDE_MS of no input; any input brings them back and
-    //restarts the countdown. Listeners are attached in connectedCallback; a no-op when the mode is off.
+    //"No UI" mode: fade the timeline + controls after the configured idle delay (noUiDelayMs) of no input; any
+    //input brings them back and restarts the countdown. Listeners are attached in connectedCallback; a no-op
+    //when the mode is off. A delay of 0 means "never show the UI": input keeps it hidden rather than flashing it.
     private _onUiActivity = (): void =>
     {
         if (!autoHideUi(this.config)) { return; }
+        if (noUiDelayMs(this.config) <= 0)
+        {
+            if (!this._uiHidden) { this._uiHidden = true; }
+            return;
+        }
         if (this._uiHidden) { this._uiHidden = false; }
         this._scheduleUiHide();
     };
@@ -578,7 +584,14 @@ export class HeliosCard extends LitElement
             if (this._uiHidden) { this._uiHidden = false; }
             return;
         }
-        this._uiHideTimer = window.setTimeout(() => { this._uiHidden = true; }, UI_AUTOHIDE_MS);
+        //Delay 0: hide immediately and stay hidden (no timer), so the UI never reappears on input.
+        const delay = noUiDelayMs(this.config);
+        if (delay <= 0)
+        {
+            if (!this._uiHidden) { this._uiHidden = true; }
+            return;
+        }
+        this._uiHideTimer = window.setTimeout(() => { this._uiHidden = true; }, delay);
     }
 
     public connectedCallback(): void
@@ -697,6 +710,14 @@ export class HeliosCard extends LitElement
     {
         //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
         this.toggleAttribute('data-ui-hidden', this._uiHidden);
+
+        //With the timeline hidden there's no period selector or scrub: pin the mode to Today so the scene reads
+        //as "right now", and snap any active scrub back to live (a frozen past instant would otherwise stick).
+        if (!showTimeline(this.config))
+        {
+            if (this._timelineMode !== 'today') { this._setTimelineMode('today'); }
+            this._exitScrubMode();
+        }
 
         //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it.
         publishConsumptionColor(this);
@@ -938,7 +959,7 @@ export class HeliosCard extends LitElement
                     @pointerup=${this._onSceneTapEnd}
                 ></div>
 
-                ${hasHomeCoords && this._timeRange ? html`
+                ${hasHomeCoords && this._timeRange && showTimeline(this.config) ? html`
                     <div
                         class="time-bar"
                         @pointerdown=${this._onTimelinePointerDown}
@@ -971,8 +992,8 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 <!--  Period-mode band: a separate strip BELOW the timeline (own card styling, same width,
-                      radius and themed border), holding the Now / 1 week / 1 month / 1 year selector.  -->
-                ${hasHomeCoords ? html`
+                      radius and themed border), holding the D-2/D+2 / 1 week / 1 month / 1 year selector.  -->
+                ${hasHomeCoords && showTimeline(this.config) ? html`
                     <div class="tb-band">
                         ${this._renderPeriodSelector()}
                     </div>
@@ -982,7 +1003,7 @@ export class HeliosCard extends LitElement
 
                 <!--  Per-chip detail panel: tapping a chip aggregates its metric over the window in a compact
                       top-right readout (icons only, values in the card's unit).  -->
-                ${infoOpen && hasHomeCoords ? renderDetailPanel(this) : nothing}
+                ${infoOpen && hasHomeCoords && showDetailPanel(this.config) ? renderDetailPanel(this) : nothing}
 
             </ha-card>
         `;

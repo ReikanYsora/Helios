@@ -8,7 +8,7 @@ export const hr: Translations = {
     period:
     {
         rangeLabel: 'Vremenski raspon',
-        standard: 'Standardni',
+        standard: "D-2 / D+2",
         today: 'Danas',
         week:  'tjedan',
         month: 'mjesec',

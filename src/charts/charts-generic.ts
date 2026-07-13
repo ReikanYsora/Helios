@@ -4,6 +4,7 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex } from '../core/format/format';
+import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
@@ -34,16 +35,16 @@ export function chartAccentColor(host: ChartHost): string
 {
     const el = host as unknown as Element; //live HA theme-token colour resolution
     const target = host._chartTarget ?? 'production';
-    if (target === 'production') { return ENERGY_COLOR.pv(el); }
-    if (target === 'consumption'){ return ENERGY_COLOR.consumption(el); }
-    if (target === 'irradiance') { return ENERGY_COLOR.sun(el); }
-    if (target === 'battery-soc'){ return ENERGY_COLOR.batteryOut(el); }
+    if (target === 'production') { return chipSlotColor(el, host.config, 'production'); }
+    if (target === 'consumption'){ return chipSlotColor(el, host.config, 'home'); }
+    if (target === 'irradiance') { return chipSlotColor(el, host.config, 'irradiance'); }
+    if (target === 'battery-soc'){ return chipSlotColor(el, host.config, 'batteryDischarge'); }
     if (isGroupTarget(target)) { return groupColorHex(el, host.config, groupOfTarget(target)); }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
     {
-        return target === 'grid' ? ENERGY_COLOR.gridImport(el) : ENERGY_COLOR.batteryOut(el);
+        return target === 'grid' ? chipSlotColor(el, host.config, 'gridImport') : chipSlotColor(el, host.config, 'batteryDischarge');
     }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
@@ -63,12 +64,12 @@ export function chartAccentColor(host: ChartHost): string
     if (target === 'grid')
     {
         return sumArr(store.gridImport) >= sumArr(store.gridExport)
-            ? ENERGY_COLOR.gridImport(el)
-            : ENERGY_COLOR.gridExport(el);
+            ? chipSlotColor(el, host.config, 'gridImport')
+            : chipSlotColor(el, host.config, 'gridExport');
     }
     return sumArr(store.battery, v => Math.max(0, v)) >= sumArr(store.battery, v => Math.max(0, -v))
-        ? ENERGY_COLOR.batteryIn(el)
-        : ENERGY_COLOR.batteryOut(el);
+        ? chipSlotColor(el, host.config, 'batteryCharge')
+        : chipSlotColor(el, host.config, 'batteryDischarge');
 }
 
 
@@ -138,15 +139,15 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             const v = consumptionLoad(p ?? 0, gi ?? 0, ge ?? 0, b ?? 0);
             cons.push({ t: tMs, v });
         }
-        series = [{ pts: cons, color: ENERGY_COLOR.consumption(el) }];
+        series = [{ pts: cons, color: chipSlotColor(el, host.config, 'home') }];
     }
     else if (target === 'grid')
     {
         const imp = toPts(store.gridImport);
         const exp = toPts(store.gridExport);
         series = [
-            { pts: imp, color: ENERGY_COLOR.gridImport(el) },
-            { pts: exp, color: ENERGY_COLOR.gridExport(el) },
+            { pts: imp, color: chipSlotColor(el, host.config, 'gridImport') },
+            { pts: exp, color: chipSlotColor(el, host.config, 'gridExport') },
         ];
     }
     else if (target === 'battery')
@@ -156,8 +157,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         const charge    = toPts(store.battery, v => Math.max(0, v));
         const discharge = toPts(store.battery, v => Math.max(0, -v));
         series = [
-            { pts: charge,    color: ENERGY_COLOR.batteryIn(el) },
-            { pts: discharge, color: ENERGY_COLOR.batteryOut(el) },
+            { pts: charge,    color: chipSlotColor(el, host.config, 'batteryCharge') },
+            { pts: discharge, color: chipSlotColor(el, host.config, 'batteryDischarge') },
         ];
         //Per-bank SoC overlays the flows: one dashed line-only curve per bank, its 0..100 % scaled onto the power
         //peak (100 % = peak) so both share one axis and a sagging bank reads against the charge/discharge areas.
@@ -173,8 +174,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         if (banks.length > 0)
         {
             const socScale = powerMax > 0 ? powerMax / 100 : 1;
-            const socChargeCol    = ENERGY_COLOR.batteryIn(el);
-            const socDischargeCol = ENERGY_COLOR.batteryOut(el);
+            const socChargeCol    = chipSlotColor(el, host.config, 'batteryCharge');
+            const socDischargeCol = chipSlotColor(el, host.config, 'batteryDischarge');
             const socIdleCol      = cssHex(el, '--secondary-text-color', '#9e9e9e');
             //Flow colour at a segment: the net battery power (charge-positive) at the segment's midpoint bucket.
             //+/-5 W deadband so recorder noise doesn't flicker the colour on an idle pack.
@@ -237,7 +238,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 pts.push({ t: tMs, v });
             }
         }
-        series   = [{ pts, color: ENERGY_COLOR.batteryOut(el) }];
+        series   = [{ pts, color: chipSlotColor(el, host.config, 'batteryDischarge') }];
         fixedMax = 100;
     }
     else if (isGroupTarget(target))
@@ -256,7 +257,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     }
     else
     {
-        series   = [{ pts: toPts(store.irradiance), color: ENERGY_COLOR.sun(el) }];
+        series   = [{ pts: toPts(store.irradiance), color: chipSlotColor(el, host.config, 'irradiance') }];
         fixedMax = 1000;
     }
 
@@ -376,9 +377,10 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //plain predicted shade blends in: push the contrast harder (toward white on dark, black on light) than the
     //production line so the dashed silhouette clearly separates from the fill under it.
     const isDarkTheme  = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const irradColor = chipSlotColor(el, host.config, 'irradiance');
     const forecastColor = isDarkTheme
-        ? lerpHexToward(ENERGY_COLOR.pv(el), '#ffffff', 0.75)
-        : lerpHexToward(ENERGY_COLOR.pv(el), '#000000', 0.55);
+        ? lerpHexToward(irradColor, '#ffffff', 0.75)
+        : lerpHexToward(irradColor, '#000000', 0.55);
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);

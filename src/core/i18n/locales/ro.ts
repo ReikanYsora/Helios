@@ -8,7 +8,7 @@ export const ro: Translations = {
     period:
     {
         rangeLabel: 'Interval de timp',
-        standard: 'Standard',
+        standard: "Z-2 / Z+2",
         today: 'Astazi',
         week:  'saptamana',
         month: 'luna',

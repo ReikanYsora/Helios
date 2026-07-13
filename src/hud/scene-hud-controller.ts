@@ -1,7 +1,8 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, monitoringGroupColor, monitoringGroupIcon } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes } from '../core/config/helios-config';
+import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
@@ -115,6 +116,14 @@ export class SceneHudController
         return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${preX.toFixed(1)},${sy.toFixed(1)} Q ${ex.toFixed(1)},${sy.toFixed(1)} ${ex.toFixed(1)},${postY.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
     }
 
+    //Straight vertical lead from the home pill's bottom edge down to a chip centred on the home's x-axis (chip
+    //x == home x). The bead runs home -> chip; the segment under the chip is hidden by its opaque background.
+    private _buildVerticalLeadFromHome(layout: LabelLayout, x: number, chipY: number): string
+    {
+        const homeBottomY = layout.home.y + HOME_PILL_HALF_HEIGHT_PX;
+        return `M ${x.toFixed(1)},${homeBottomY.toFixed(1)} L ${x.toFixed(1)},${chipY.toFixed(1)}`;
+    }
+
     //One sunrise/sunset marker: a glyph + local time pinned just OUTSIDE the arc at the horizon crossing
     //(offset radially out from the home so it clears the arc line). Null crossing (polar day/night) -> nothing.
     private _renderSunCrossing(
@@ -153,21 +162,36 @@ export class SceneHudController
         //override). The basemap is keyless CARTO raster tiles, so this is purely "can we project the home".
         const hasHomeCoords = getHomeCoords(this.host.config, this.host.hass) !== null;
 
-        //Chip interactivity: the main card wires each chip as a button that re-points the bottom chart and glows
-        //when active. A display-only host (Helios Mini) sets `_interactive = false` to drop the button role,
-        //tab focus, click wiring and active-glow. Unset (main card) reads as interactive.
+        //Chip interactivity: the card wires each chip as a button that re-points the bottom chart and glows when
+        //active. A display-only host can set `_interactive = false` to drop the button role, tab focus, click
+        //wiring and active-glow; unset reads as interactive.
         const interactive = (this.host as unknown as { _interactive?: boolean })._interactive !== false;
 
         //Always-visible chip anchors come pre-projected from engine.projectHomeLabelLayout(). Suppressed until
         //both the layout (map ready) and a data value exist.
         const layout         = this.host._labelLayout;
 
+        //Per-chip visibility from the "Entity display" config (each defaults visible). Home visibility (the
+        //neutral-ring swap) is handled separately at the home pill.
+        const cfg = this.host.config;
+        const showChipIrradiance = chipVisible(cfg, 'chip-irradiance-visible');
+        const showChipProduction = chipVisible(cfg, 'chip-production-visible');
+        const showChipGrid       = chipVisible(cfg, 'chip-grid-visible');
+        const showChipBattery    = chipVisible(cfg, 'chip-battery-visible');
+        //Irradiance chip colour (the W/m² readout above the sun); overridable, resolved through the central table.
+        const irradChipColor     = chipSlotColor(this.host, cfg, 'irradiance');
+        //Home chip hidden: the central pill collapses to a hollow ring sized to the same docking outline, so the
+        //leads keep their normal shapes and dock on it exactly as they did on the pill, with the home visible
+        //through the transparent centre.
+        const homeHidden         = !chipVisible(cfg, 'chip-home-visible');
+
         //PV production chip above the home, tied to it by an animated leader. Only renders when the HA
         //Energy dashboard exposes a solar source and the live read is a finite number.
         const pvEntityId   = resolvePvLiveEntity(this.host._energyDefaults);
         //ENERGY_COLOR.pv resolves the HA Energy solar token; inline SVG attrs that need a literal hex
         //(not a CSS var) read it directly so colours stay in sync with the CSS rules using the same token.
-        const pvColor      = ENERGY_COLOR.pv(this.host);
+        //The user's per-chip colour overrides it when set (resolved through the central chip-appearance table).
+        const pvColor      = chipSlotColor(this.host, cfg, 'production');
         //Past scrub: the chip reflects actual production at that instant (like the cloud/irradiance chips).
         //Future scrub has no PV data yet, so we hide the chip rather than show a stale/fake number.
         const pvScrubbing  = !this.host._isLiveMode && this.host._selectedTime !== null;
@@ -199,6 +223,7 @@ export class SceneHudController
         const pvActiveRate  = isPvPredicted ? pvPredictedRate : pvRate;
 
         const showPvLabel = hasHomeCoords
+            && showChipProduction
             && layout !== null
             && pvEntityId !== ''
             && pvActiveRate !== null
@@ -289,7 +314,7 @@ export class SceneHudController
         //Fused battery chip: one chip carries both readings. The SoC drives the fill icon (built below, once the
         //charge direction is known) and, on a SoC-only install, doubles as the chip value; the mean SoC text is
         //the fallback value. The per-bank SoC breakdown lives in the battery chart, not the chip.
-        const showBatteryChip = showSocChip || showPowerChip;
+        const showBatteryChip = (showSocChip || showPowerChip) && showChipBattery;
         const batterySocText = showSocChip ? `${Math.round(activeBatterySoc!)} %` : '';
         //Chip uses the HA energy dashboard sign convention (discharge positive, charge negative).
         //activeBatteryPower is the physical charge-positive net, so it's negated for display to stay
@@ -340,9 +365,9 @@ export class SceneHudController
         //flip above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
         const batteryDischarging = showPowerChip && (activeBatteryPower! < 0);
-        const batteryLeaderColor = batteryCharging
-            ? 'var(--energy-battery-in-color, #f06292)'
-            : 'var(--energy-battery-out-color, #4db6ac)';
+        const batteryChargeColor    = chipSlotColor(this.host, cfg, 'batteryCharge');
+        const batteryDischargeColor = chipSlotColor(this.host, cfg, 'batteryDischarge');
+        const batteryLeaderColor = batteryCharging ? batteryChargeColor : batteryDischargeColor;
         this._batteryLeaderColor = batteryLeaderColor;
         const batteryWattsForFlow = showPowerChip
             ? Math.abs(pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
@@ -367,7 +392,7 @@ export class SceneHudController
         //Fill icon driven by the SoC (charging variant while charging); a power-only install has no level, so
         //batteryLevelIcon falls back to a neutral battery. The chip value is the power, or the SoC percentage
         //on a SoC-only install.
-        const batteryChipIcon = batteryLevelIcon(showSocChip ? activeBatterySoc : null, batteryCharging);
+        const batteryChipIcon = chipSlotIcon(cfg, batteryCharging ? 'batteryCharge' : 'batteryDischarge', batteryLevelIcon(showSocChip ? activeBatterySoc : null, batteryCharging));
         const batteryChipText = showPowerChip ? batteryPowerText : batterySocText;
         //Leader anchoring on the battery chip. The home connector is always present; the PV charge lead only
         //while charging. When BOTH show they'd merge at the centre, so split them vertically: PV charge at 35%
@@ -403,37 +428,79 @@ export class SceneHudController
             : '';
         const gridLeaderPath       = this._buildLPathToHome(layout, layout?.gridLabel.x ?? 0, layout?.gridLabel.y ?? 0, 22);
 
-        //Monitoring-group chips: one per active group (>= 1 visible device), at its fixed anchor. Live value = the
-        //sum of the group's device stat_rate; colour = the group's graph colour; a number badge carries the group
-        //id. Each lead leaves its chip's inner edge at 50 % height and docks on the home pill's bottom edge at
-        //20/40/60/80 % of its width (fixed per group so the four leads fan out without crossing).
+        //Monitoring-group chips: DYNAMIC placement by the number of active groups (each = >= 1 visible device), so
+        //the cluster stays balanced instead of pinning every group to a fixed corner:
+        //  1 group  -> centred below the home on the lower row, vertical lead;
+        //  2 groups -> left + right, grid/battery-style horizontal lead off each chip's mid-height;
+        //  3 groups -> two on top (left/right) + one centred on the lower row, vertical lead;
+        //  4 groups -> the original four-corner fan-out.
+        //Live value = the sum of the group's device stat_rate; colour = the group's graph colour; a number badge
+        //carries the group id. Every lead's bead runs home -> chip (power leaving to the group's devices).
         const HOME_PILL_WIDTH_PX  = 96;
-        const HOME_PILL_HALF_H_PX = 14;
         const GROUP_CHIP_HALF_W   = 48;
         //Bead cadence: fastest at ~5 kW, dropped below ~5 W (recorder noise), like the grid/battery beads.
         const GROUP_BEAD_CAP_W    = 5000;
         const GROUP_BEAD_IDLE_W   = 5;
-        //Home-pill attach fraction per group (g1..g4), evenly spaced and symmetric around the centre (0.5) with a
-        //single step, so the four leads stay harmonious. The right side is mirrored vs the left (top-right takes the
-        //outer point, bottom-right the inner) so both pairs fan out the same way.
+        //Four-corner fan-out (4 groups only): each lead docks the home pill's bottom edge at 32/44/56/68 % of its
+        //width, symmetric around the centre and mirrored left/right, so the four leads fan out without crossing.
         const GROUP_ATTACH_STEP   = 0.12;
         const GROUP_ATTACH_FRAC   = [
-            0.5 - 1.5 * GROUP_ATTACH_STEP,   //g1 top-left  (outer left)
-            0.5 - 0.5 * GROUP_ATTACH_STEP,   //g2 bottom-left (inner left)
-            0.5 + 1.5 * GROUP_ATTACH_STEP,   //g3 top-right (outer right)
-            0.5 + 0.5 * GROUP_ATTACH_STEP,   //g4 bottom-right (inner right)
+            0.5 - 1.5 * GROUP_ATTACH_STEP,   //slot 0 top-left  (outer left)
+            0.5 - 0.5 * GROUP_ATTACH_STEP,   //slot 1 bottom-left (inner left)
+            0.5 + 1.5 * GROUP_ATTACH_STEP,   //slot 2 top-right (outer right)
+            0.5 + 0.5 * GROUP_ATTACH_STEP,   //slot 3 bottom-right (inner right)
         ];
+        //Geometry primitives read back from the projected layout so the dynamic slots track the home + kiosk
+        //scale: the two side columns (grid/battery x), the home's x, and the two group rows below the home.
+        const groupLeftX   = layout?.gridLabel.x       ?? 0;
+        const groupRightX  = layout?.batteryLabel.x    ?? 0;
+        const groupCenterX = layout?.home.x            ?? 0;
+        const groupRow1Y   = layout?.groupLabels[0]?.y ?? 0;
+        const groupRow2Y   = layout?.groupLabels[1]?.y ?? 0;
         //Scrub-aware group value: at a past instant read each device's change series, else the live stat_rate sum.
         const groupScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
+        const activeGroupList = layout
+            ? activeGroups(this.host.config, this.host._energyDefaults).filter(g => groupChipVisible(cfg, g))
+            : [];
+        const groupCount      = activeGroupList.length;
         const groupChips = layout
-            ? activeGroups(this.host.config, this.host._energyDefaults).map(g =>
+            ? activeGroupList.map((g, i) =>
             {
-                const anchor  = layout.groupLabels[g - 1];
-                const isLeft  = g <= 2;
-                const innerX  = isLeft ? anchor.x + GROUP_CHIP_HALF_W : anchor.x - GROUP_CHIP_HALF_W;
-                const attachX = layout.home.x + (GROUP_ATTACH_FRAC[g - 1] - 0.5) * HOME_PILL_WIDTH_PX;
-                const attachY = layout.home.y + HOME_PILL_HALF_H_PX;
-                const leadPath = this._buildLPath(attachX, attachY, innerX, anchor.y, true);
+                //Slot + lead per (index within the active set, total count). `reverse` flips the bead so it runs
+                //home -> chip even on the horizontal leads (which are geometrically built chip -> home).
+                let anchor:   { x: number; y: number };
+                let leadPath: string;
+                let reverse = false;
+                if (groupCount === 1)
+                {
+                    //Single group sits on the lower row, at the same height as the centred chip of the 3-group case.
+                    anchor   = { x: groupCenterX, y: groupRow2Y };
+                    leadPath = this._buildVerticalLeadFromHome(layout, groupCenterX, anchor.y);
+                }
+                else if (groupCount === 4)
+                {
+                    //Original four-corner arrangement: slots [top-left, bottom-left, top-right, bottom-right].
+                    const isLeft  = i < 2;
+                    anchor        = { x: isLeft ? groupLeftX : groupRightX, y: i % 2 === 0 ? groupRow1Y : groupRow2Y };
+                    const innerX  = isLeft ? anchor.x + GROUP_CHIP_HALF_W : anchor.x - GROUP_CHIP_HALF_W;
+                    const attachX = layout.home.x + (GROUP_ATTACH_FRAC[i] - 0.5) * HOME_PILL_WIDTH_PX;
+                    const attachY = layout.home.y + HOME_PILL_HALF_HEIGHT_PX;
+                    leadPath      = this._buildLPath(attachX, attachY, innerX, anchor.y, true);
+                }
+                else if (i < 2)
+                {
+                    //2 or 3 groups: the first two sit left/right on the top row, with a grid/battery-style
+                    //horizontal lead leaving the chip's mid-height and docking on the home pill.
+                    anchor   = { x: i === 0 ? groupLeftX : groupRightX, y: groupRow1Y };
+                    leadPath = this._buildLPathToHome(layout, anchor.x, anchor.y, 22);
+                    reverse  = true;
+                }
+                else
+                {
+                    //3 groups: the third is centred below (lower row) with a vertical lead.
+                    anchor   = { x: groupCenterX, y: groupRow2Y };
+                    leadPath = this._buildVerticalLeadFromHome(layout, groupCenterX, anchor.y);
+                }
                 const watts   = groupScrubMs !== null ? groupPowerWAt(this.host, g, groupScrubMs) : groupLivePowerW(this.host, g);
                 const color   = monitoringGroupColor(this.host.config, g);
                 //Group pastille glyph: the configured icon, else the group number (so groups stay distinguishable).
@@ -442,7 +509,7 @@ export class SceneHudController
                 //draw; dropped below the idle floor so a group at rest shows a static leader with no motion.
                 const magW    = watts === null ? 0 : Math.abs(watts);
                 const beadDur = magW < GROUP_BEAD_IDLE_W ? null : flowDuration(magW, GROUP_BEAD_CAP_W);
-                return { g, anchor, leadPath, watts, color, icon, beadDur };
+                return { g, anchor, leadPath, reverse, watts, color, icon, beadDur };
             })
             : [];
 
@@ -476,9 +543,9 @@ export class SceneHudController
         //value, icon and bead direction. Scrub-aware watts feed the choice so it tracks the timeline. Ties
         //(including idle 0/0) fall to import, a neutral consumption-blue resting state.
         const gridImporting    = (gridImportDisplayWatts ?? 0) >= (gridExportDisplayWatts ?? 0);
-        const gridLeaderColor  = gridImporting
-            ? 'var(--energy-grid-consumption-color, #488fc2)'
-            : 'var(--energy-grid-return-color, #8353d1)';
+        const gridImportColor  = chipSlotColor(this.host, cfg, 'gridImport');
+        const gridExportColor  = chipSlotColor(this.host, cfg, 'gridExport');
+        const gridLeaderColor  = gridImporting ? gridImportColor : gridExportColor;
         this._gridLeaderColor = gridLeaderColor;
         //Bead cadence from the active side; null (no bead) when it's below the idle threshold, so an idle
         //grid shows the chip + a static leader with no misleading motion.
@@ -534,7 +601,7 @@ export class SceneHudController
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
         //The W/m² readout + cloud chip are weather; hidden in modes without it (month/year). The sun
         //disc/arc (pure geometry) stays.
-        const showSunLabel    = showSun && sunScene!.sun.altitude > 0 && this.host._weatherAvailable;
+        const showSunLabel    = showSun && showChipIrradiance && sunScene!.sun.altitude > 0 && this.host._weatherAvailable;
         //Solar-ray dash-flow duration, same scale as the PV leader so both streams pulse coherently;
         //saturates at 1000 W/m². The ray spans the whole card, so its saturated pace is a touch slower than
         //the PV leader (0.8 s) to stay readable at peak irradiance.
@@ -659,7 +726,7 @@ export class SceneHudController
                         data-target="production"
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
-                        <ha-icon icon="mdi:solar-power"></ha-icon>
+                        <ha-icon icon=${chipSlotIcon(cfg, 'production', 'mdi:solar-power')}></ha-icon>
                         <span>${pvDisplayValue}</span>
                     </div>
                 ` : nothing}
@@ -737,7 +804,7 @@ export class SceneHudController
                 <!--  Grid chip on the LEFT of the home: one pill showing the ACTIVE flow only. Importing reads
                       consumption blue with a grid -> home bead; exporting flips to return purple with a
                       home -> grid bead. The dominant side wins when both are live.  -->
-                ${hasHomeCoords && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
+                ${hasHomeCoords && showChipGrid && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d=${gridLeaderPath} />
                         <!--  Single bead on the active flow. Import
@@ -766,19 +833,22 @@ export class SceneHudController
                         data-target="grid"
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
-                        <ha-icon icon=${gridImporting ? 'mdi:transmission-tower-export' : 'mdi:transmission-tower-import'}></ha-icon>
+                        <ha-icon icon=${gridImporting ? chipSlotIcon(cfg, 'gridImport', 'mdi:transmission-tower-export') : chipSlotIcon(cfg, 'gridExport', 'mdi:transmission-tower-import')}></ha-icon>
                         <span>${formatGridValue(this.host.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
                     </div>
                 ` : nothing}
 
-                <!--  Monitoring-group chips (bottom row, fixed by group number). Each shows the group's live total
-                      with a number badge; clicking one points the chart at that group's per-device curves.  -->
+                <!--  Monitoring-group chips (dynamic placement by active-group count). Each shows the group's live
+                      total with a number badge; clicking one points the chart at that group's per-device curves.
+                      The bead runs home -> chip; horizontal leads are reversed (keyPoints) to keep that direction.  -->
                 ${hasHomeCoords && layout !== null ? groupChips.map(gc => html`
                     <svg class="group-leader-svg">
                         <path class="group-leader-line" style="stroke:${gc.color}" d=${gc.leadPath} />
                         ${gc.beadDur !== null ? svg`
                             <circle class="group-leader-bead" r="3" style="fill:${gc.color}">
-                                <animateMotion dur="${gc.beadDur.toFixed(2)}s" repeatCount="indefinite" path="${gc.leadPath}" />
+                                <animateMotion dur="${gc.beadDur.toFixed(2)}s" repeatCount="indefinite"
+                                               keyPoints=${gc.reverse ? '1;0' : nothing} keyTimes=${gc.reverse ? '0;1' : nothing}
+                                               path="${gc.leadPath}" />
                             </circle>
                         ` : nothing}
                     </svg>
@@ -964,30 +1034,34 @@ export class SceneHudController
                 ${showSunLabel ? html`
                     <div
                         class="solar-pct-label ${interactive && this.host._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
-                        style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px"
+                        style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px; --solar-color:${irradChipColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="irradiance"
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
-                        <ha-icon icon=${this.host._cloudCover >= 0 ? cloudCoverIcon(this.host._cloudCover) : 'mdi:white-balance-sunny'}></ha-icon>
+                        <ha-icon icon=${chipSlotIcon(cfg, 'irradiance', this.host._cloudCover >= 0 ? cloudCoverIcon(this.host._cloudCover) : 'mdi:white-balance-sunny')}></ha-icon>
                         <span>${sunIrradText}</span>
                     </div>
                 ` : nothing}
 
-                <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at
-                      each horizon crossing.  -->
-                ${showSun && sunScene ? html`
+                <!--  Sunrise / sunset markers: a sun-coloured glyph + local time just outside the arc at each
+                      horizon crossing. Hidden by the show-sun-times option.  -->
+                ${showSun && sunScene && showSunTimes(cfg) ? html`
                     ${this._renderSunCrossing(sunScene.sunrise, sunScene.home, 'mdi:weather-sunset-up',   sunColor)}
                     ${this._renderSunCrossing(sunScene.sunset,  sunScene.home, 'mdi:weather-sunset-down', sunColor)}
                 ` : nothing}
 
 
 
-                <!--  Home pill: the hub the chip cluster orbits, at the projected home centre with no
-                      drop-leader so every chip leader docks straight against its border. Two stacked lines:
-                      the home glyph on top, the live home consumption below.  -->
-                ${hasHomeCoords && layout !== null ? html`
+                <!--  Home hub: the node the chip cluster orbits, at the projected home centre with no drop-leader
+                      so every chip leader docks straight against it. Shown as the home pill (glyph + live
+                      consumption) unless the home chip is hidden, in which case it collapses to a small hollow
+                      ring: a bare contact point the leads converge on, the scene still visible through it.  -->
+                ${hasHomeCoords && layout !== null
+                    ? (homeHidden
+                        ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
+                        : html`
                     <div
                         class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
@@ -998,10 +1072,10 @@ export class SceneHudController
                         @mouseenter=${this.host.onHomeEnter}
                         @mouseleave=${this.host.onHomeLeave}
                     >
-                        <ha-icon icon="mdi:home"></ha-icon>
+                        <ha-icon icon=${chipSlotIcon(cfg, 'home', 'mdi:home')}></ha-icon>
                         ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}
-                    </div>
-                ` : nothing}
+                    </div>`)
+                    : nothing}
         `;
     }
 }

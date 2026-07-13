@@ -8,7 +8,7 @@ export const lt: Translations = {
     period:
     {
         rangeLabel: 'Laiko intervalas',
-        standard: 'Standartinis',
+        standard: "D-2 / D+2",
         today: 'Šiandien',
         week:  'savaitė',
         month: 'mėnuo',

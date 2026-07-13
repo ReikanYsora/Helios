@@ -8,7 +8,7 @@ export const da: Translations = {
     period:
     {
         rangeLabel: 'Tidsrum',
-        standard: 'Standard',
+        standard: "D-2 / D+2",
         today: 'I dag',
         week:  'uge',
         month: 'måned',

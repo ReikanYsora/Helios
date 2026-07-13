@@ -8,7 +8,7 @@ export const ru: Translations = {
     period:
     {
         rangeLabel: 'Период',
-        standard: 'Стандарт',
+        standard: "Д-2 / Д+2",
         today: 'Сегодня',
         week:  'неделя',
         month: 'месяц',

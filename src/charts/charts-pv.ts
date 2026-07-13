@@ -3,7 +3,8 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, energySolarColor, lerpHexToward } from '../core/format/format';
+import { energySolarColor, lerpHexToward } from '../core/format/format';
+import { chipSlotColor } from '../core/config/chip-appearance';
 import { buildTimelineModel } from '../timeline/timeline-model';
 import { sliceForRange } from '../data/unifiedStore';
 import { type ChartHost, chartIsDark } from './charts';
@@ -32,7 +33,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
     }
 
-    const pvColor = ENERGY_COLOR.pv(el);
+    const pvColor = chipSlotColor(el, host.config, 'production');
     //Theme-aware "predicted" shade for the dashed forecast curve: light theme blends toward black, dark toward
     //white, so it stays a readable softer line on either plate.
     const isDarkTheme       = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
