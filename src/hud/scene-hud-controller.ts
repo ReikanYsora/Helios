@@ -621,33 +621,15 @@ export class SceneHudController
         //home instead of pointing at the vanished chip's slot.
         if (layout && sunScene && showPvLabel)
         {
-            const cx = layout.pvLabel.x;
-            const cy = layout.pvLabel.y;
-            const halfW = PV_HALF_WIDTH_PX;
-            const halfH = PV_HALF_HEIGHT_PX;
-            const ex = sunScene.sun.x - cx;
-            const ey = sunScene.sun.y - cy;
-            //Width of the rectangular middle (between the end-cap semicircles).
-            const straightHalfW = Math.max(0, halfW - halfH);
-
-            if (Math.abs(ex) <= straightHalfW)
-            {
-                //Sun over the straight middle: nearest point is on the top/bottom edge under the sun.
-                sunRayTargetX = sunScene.sun.x;
-                sunRayTargetY = cy + (ey >= 0 ? 1 : -1) * halfH;
-            }
-            else
-            {
-                //Sun off to a rounded end: nearest point is on the matching end-cap arc, along the line
-                //from the end-cap centre to the sun.
-                const cornerX = cx + (ex >= 0 ? 1 : -1) * straightHalfW;
-                const cornerY = cy;
-                const dx = sunScene.sun.x - cornerX;
-                const dy = sunScene.sun.y - cornerY;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                sunRayTargetX = cornerX + halfH * dx / dist;
-                sunRayTargetY = cornerY + halfH * dy / dist;
-            }
+            //Same stadium-nearest-point math as the chip leaders, roles swapped: stadium = the PV chip, external
+            //point = the sun.
+            const target = nudgeToHomePill(
+                sunScene.sun.x, sunScene.sun.y,
+                layout.pvLabel.x, layout.pvLabel.y,
+                PV_HALF_WIDTH_PX, PV_HALF_HEIGHT_PX,
+            );
+            sunRayTargetX = target.x;
+            sunRayTargetY = target.y;
         }
 
         return html`
