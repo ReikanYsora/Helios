@@ -42,8 +42,8 @@ export const SUN_COLOR_HEX = '#ffc107';
 //=== Camera ===
 //Pitch bounds shared by the engine pose policy, drag-rotate, the editor and the initial-pose clamp.
 //MIN = mostly top-down, MAX = nearly horizontal, REST = default.
-export const CAMERA_PITCH_MIN_DEG  = 15;
-export const CAMERA_PITCH_MAX_DEG  = 55;
+export const CAMERA_PITCH_MIN_DEG  = 0;
+export const CAMERA_PITCH_MAX_DEG  = 75;
 export const CAMERA_PITCH_REST_DEG = 50;
 
 //=== Sun arc ===
@@ -181,7 +181,7 @@ export const LAB_T3 = 0.008856452;
 //0 is the lowest tilt the pose clamp permits (fully top-down, no parallax); interactive drag stays floored at
 //CAMERA_PITCH_MIN_DEG, so the scene view is unaffected.
 export const PITCH_MIN      = 0;
-export const PITCH_MAX      = 65;
+export const PITCH_MAX      = 75;
 export const DEFAULT_BEARING = 180;
 export const DEFAULT_TILT    = 50;
 export const NEAR_PLANE      = 0.15;
