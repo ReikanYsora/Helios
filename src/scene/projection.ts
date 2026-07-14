@@ -103,8 +103,7 @@ export class SceneCamera
     //project3 (the SVG overlays' pinhole projection), so the painted buildings/shadows drifted off the basemap
     //under tilt. Reading `translate P rotateX rotateZ` right-to-left (rotateZ, rotateX, perspective, translate)
     //reproduces project3 exactly for a ground point: rx*p and ry*cosT*p about the home, p = P/(P - ry*sinT).
-    //It also means no element carries a `perspective` property, so the flat scene SVG never joins a 3D layer
-    //(fixes the A9X iPad half-render, #304).
+    //It also means no element carries a `perspective` property, so the flat scene SVG never joins a 3D layer.
     public groundTransform(homeX: number, homeY: number): GroundTransform
     {
         const origin = `${homeX}px ${homeY}px`;

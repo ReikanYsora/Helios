@@ -8,7 +8,7 @@ export const et: Translations = {
     period:
     {
         rangeLabel: 'Ajavahemik',
-        standard: "P-2 / P+2",
+        forecast: 'Prognoos',
         today: 'Täna',
         week:  'nädal',
         month: 'kuu',

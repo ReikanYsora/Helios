@@ -96,7 +96,6 @@ export function refreshIrradiance(host: IrradianceHost): void
 
     if (!entity || !host.hass)
     {
-        // Clear everything when the entity is removed so the engine drops back to its built-in irradiance sources.
         if (host._irradianceHistory !== null)
         {
             host._irradianceHistory = null;
@@ -208,10 +207,9 @@ export function pushIrradianceToEngine(host: IrradianceHost): void
 }
 
 
-// Fetch the irradiance history: defensive parsing across HA's compaction / minimal_response variants. W/m² values are taken
-// as-is; the sensor is expected to expose irradiance in the unit the engine consumes, no normalisation.
 // Pure irradiance history fetcher: no host mutation, no fetching flag, no module cache write, and it does NOT push to the
-// engine (the caller does that in the `.then`, since the engine owns the merged series). Returns the fresh series on
+// engine (the caller does that in the `.then`, since the engine owns the merged series). Defensive parsing across HA's
+// compaction / minimal_response variants; W/m² values are taken as-is, with no normalisation. Returns the fresh series on
 // success, the last-good durable copy on a failed fetch (so the curve survives an HA restart / timeout), or an empty
 // series for an empty window.
 export async function fetchIrradiance(

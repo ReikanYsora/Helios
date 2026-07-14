@@ -42,7 +42,7 @@ export function statFriendly(host: ChartHost, ids: string[]): string
 }
 
 //Canonical per-source PV name: the HA Energy solar source's energy meter (stat_energy_from), by source index. Single
-//source of the per-string name so the period aggregation and the timeline label string `index` identically; the
+//source of the per-string name so the period aggregation and the timeline label agree on the same `index`; the
 //rate/meter arrays are parallel per source, so this stays aligned as long as nothing re-sorts.
 export function solarSourceName(host: ChartHost, index: number): string
 {

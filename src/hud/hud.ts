@@ -34,8 +34,7 @@ export interface SunScene
 export interface LabelLayout
 {
     pvLabel:           { x: number; y: number };
-    //Single fused battery chip anchor (SoC drives the fill icon, the value is the power). Sits where the
-    //battery-power chip used to, top of the right column; the freed slot below opens the bottom row.
+    //Single fused battery chip anchor (SoC drives the fill icon, the value is the power), top of the right column.
     batteryLabel:      { x: number; y: number };
     //Grid chip anchor: top-left, mirroring the battery chip on the right.
     gridLabel:         { x: number; y: number };

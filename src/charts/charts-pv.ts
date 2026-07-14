@@ -46,7 +46,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     const endMsAbs = range.end.getTime();
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
 
-    //unifiedStore carries the production series over the full J-2..J+2 window in watts (linearly interpolated, never
+    //unifiedStore carries the production series over the full J-1..J+2 window in watts (linearly interpolated, never
     //mixed with forecast). sliceForRange returns one sample per display bucket in view; empty before the first build
     //gives an empty frame. Both curves live in watts (the store is the single source), so they share the Y axis with
     //no unit conversion.

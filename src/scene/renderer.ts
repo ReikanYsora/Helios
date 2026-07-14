@@ -130,7 +130,7 @@ export class SceneRenderer
         }
     }
 
-    //Build the CARTO basemap for a home position. One Voyager style serves both themes; dark mode is a CSS
+    //Build the ground basemap for a home position. One style serves both themes; dark mode is a CSS
     //filter on the canvas, so a theme flip never re-tiles.
     public async setLocation(lat: number, lon: number, style: GroundStyle): Promise<void>
     {

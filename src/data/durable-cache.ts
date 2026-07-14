@@ -46,7 +46,7 @@ export function loadDurable<T>(key: string, maxAgeMs: number): T | null
 }
 
 
-//localStorage, or null if it throws on access (private-mode / disabled storage).
+//Returns localStorage, or null if it throws on access (private-mode / disabled storage).
 function safeLocalStorage(): Storage | null
 {
     try { return window.localStorage ?? null; } catch { return null; }

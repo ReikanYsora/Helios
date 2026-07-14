@@ -88,7 +88,7 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
 }
 
 
-//Try the detail websocket for EVERY configured provider entry over the card's J-2..J+2 window, and SUM their curves:
+//Try the detail websocket for EVERY configured provider entry over the card's active period window, and SUM their curves:
 //a multi-string install wires one forecast config entry per array (east roof + west roof, ...), and the card must
 //show their combined output, not just the first. Each `pv_w` is already watts, so summing watts per timestamp is
 //correct. Entries that reject the command (not the Helios provider) are skipped; null only when NONE answered, so
@@ -240,7 +240,7 @@ export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: num
     }
     const pt   = forecast[idx];
     const next = forecast[idx + 1];
-    //Interpolate toward the next hour when it is consecutive (no gap larger than ~1 h).
+    //Interpolate toward the next point when it is consecutive (no gap larger than 1.5 h).
     if (next && next.tMs - pt.tMs <= HOUR_MS * 1.5 && next.tMs > pt.tMs)
     {
         const f = (ms - pt.tMs) / (next.tMs - pt.tMs);

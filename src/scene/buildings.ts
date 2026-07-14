@@ -124,8 +124,8 @@ function distanceToHome(polygon: Point[]): number
     return nearest;
 }
 
-//localStorage cache key: rounded home position only, so one entry serves every option set. The bld3 version tag
-//isolates the current geometry format, so entries written by an older format are never mixed in.
+//localStorage cache key: rounded home position only, so one entry serves every option set. Includes a format
+//tag so entries written by an older cached-geometry format are never mixed in.
 function cacheKey(lat: number, lng: number): string
 {
     return `helios-bld3:${lat.toFixed(4)}:${lng.toFixed(4)}`;

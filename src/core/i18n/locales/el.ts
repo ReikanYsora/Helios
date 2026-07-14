@@ -8,7 +8,7 @@ export const el: Translations = {
     period:
     {
         rangeLabel: 'Περίοδος',
-        standard: "Η-2 / Η+2",
+        forecast: 'Πρόγνωση',
         today: 'Σήμερα',
         week:  'εβδομάδα',
         month: 'μήνας',

@@ -343,9 +343,8 @@ export class HeliosEngine
         }
         return CAMERA_PITCH_REST_DEG;
     }
-    //True when drag-rotate/pitch and idle auto-orbit are all suppressed (locked pose). The lock is purely the
-    //editor/YAML `camera-locked` toggle now (the old runtime lock chip is gone), so the config key is the sole
-    //authority: a stale localStorage flag must never override it.
+    //True when drag-rotate/pitch and idle auto-orbit are all suppressed (locked pose). The editor/YAML
+    //`camera-locked` toggle is the sole authority: a stale localStorage flag must never override it.
     public isCameraLocked(): boolean
     {
         return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
@@ -1377,7 +1376,7 @@ export class HeliosEngine
     //the overlay that frame).
     public projectHomeLabelLayout(): {
         pvLabel:      { x: number; y: number };
-        //Single fused battery chip anchor (top of the right column, where battery-power used to sit).
+        //Battery chip anchor, top of the right column.
         batteryLabel: { x: number; y: number };
         //Grid chip anchor: top-left, mirroring the battery chip on the right.
         gridLabel:    { x: number; y: number };
@@ -1421,8 +1420,7 @@ export class HeliosEngine
         //home hub), so the PV->battery and battery->home leaders span proportional heights and their 90-degree
         //fillets open at the same angle.
         const pvY = clusterY - CHIP_STACK_GAP_PX;
-        //Right column: the single fused battery chip sits on top (where battery-power used to), pairing with PV
-        //overhead and owning the lead to the home. The old SoC slot below is now free.
+        //Right column: the battery chip sits on top, pairing with PV overhead and owning the lead to the home.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
         const batteryY          = clusterY - CHIP_STACK_GAP_PX / 2;
         //Left column: the grid chip sits on TOP, mirroring the battery chip on the right.
@@ -1912,9 +1910,9 @@ export class HeliosEngine
             this._startAutoRotateLoop();
         }
 
-        //Camera lock is an editor toggle now (no runtime chip). When it flips, freeze/free the camera AT ITS
-        //CURRENT pose: rewrite the stored pose (which _initial*/isCameraLocked read first) with the live
-        //bearing/pitch + the new lock, so the angle the user set by dragging the preview is kept.
+        //When the camera-lock toggle flips, freeze/free the camera AT ITS CURRENT pose: rewrite the stored
+        //pose (which _initial*/isCameraLocked read first) with the live bearing/pitch + the new lock, so the
+        //angle the user set by dragging the preview is kept.
         if (prevCameraLocked !== nextCameraLocked && this._renderer)
         {
             this._writeStoredPose({

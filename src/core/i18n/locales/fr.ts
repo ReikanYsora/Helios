@@ -7,7 +7,7 @@ export const fr: Translations = {
     period:
     {
         rangeLabel: 'Période',
-        standard: "J-2 / J+2",
+        forecast: 'Prévision',
         yesterday: 'Hier',
         today: "Aujourd'hui",
         week:  'Semaine',

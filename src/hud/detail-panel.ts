@@ -111,8 +111,6 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
                 { icon: 'mdi:approximately-equal', value: irr(a.avg) },
             );
         }
-        //Sunrise/noon/sunset, peak altitude and day length used to live here too, but the scene already draws the
-        //whole solar arc with those markers, so repeating them in the panel was redundant.
         return rows;
     }
 

@@ -22,7 +22,7 @@ export const heliosCardStyles = css`
             corner outside HA's frame. */
         background-clip: padding-box;
         /*  Container-query host so the kiosk breakpoint reacts to the card's own width, not the viewport
-            (which would mis-fire with several cards side by side). See issue #33. */
+            (which would mis-fire with several cards side by side). */
         container-type: inline-size;
         container-name: helios-card;
         /*  border-radius stays because overflow:hidden clips the full-bleed map to it. */
@@ -60,8 +60,7 @@ export const heliosCardStyles = css`
             ground holder + scene SVG. overflow:hidden clips the tilted basemap canvas (which extends past
             the frame at low pitch). No CSS perspective property here: the ground carries its own perspective() in
             its transform (see SceneCamera.groundTransform), so it projects EXACTLY like the overlays' project3, and
-            the flat scene SVG stays out of any 3D context (fixes the buildings-vs-basemap drift + the A9X iPad
-            half-render, #304). */
+            the flat scene SVG stays out of any 3D context (keeps the buildings aligned with the basemap). */
         position: absolute;
         /*  Bleed 1 px under the border (re-clipped by overflow:hidden) to cover the anti-alias seam at
             the rounded corners. */
@@ -74,9 +73,7 @@ export const heliosCardStyles = css`
 
     /*  Ground holder: tilted basemap canvas + edge fade, driven by a CSS 3D transform (rotateX = pitch,
         rotateZ = bearing) written each frame. preserve-3d is REQUIRED: without it, at some pitch angles the
-        3D-transformed ground canvas composites ABOVE the flat sibling scene-svg and hides the buildings. (An
-        earlier #304 attempt removed this and regressed desktop, so it stays; the A9X half-render needs another
-        approach.) */
+        3D-transformed ground canvas composites ABOVE the flat sibling scene-svg and hides the buildings. */
     .scene-ground-holder
     {
         position: absolute;

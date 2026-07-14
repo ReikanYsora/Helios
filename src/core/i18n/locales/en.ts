@@ -18,7 +18,7 @@ export const en: Translations = {
     period:
     {
         rangeLabel: 'Time range',
-        standard: "D-2 / D+2",
+        forecast: 'Forecast',
         yesterday: 'Yesterday',
         today: 'Today',
         week:  'Week',

@@ -8,7 +8,7 @@ export const sk: Translations = {
     period:
     {
         rangeLabel: 'Časový rozsah',
-        standard: "D-2 / D+2",
+        forecast: 'Predpoveď',
         today: 'Dnes',
         week:  'týždeň',
         month: 'mesiac',

@@ -43,7 +43,7 @@ export interface Translations
     period?:
     {
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
-        standard?:   string; //'D-2 / D+2' (localised day letter; the key stays `standard` for cache/config compat)
+        forecast?:   string; //'Forecast' (the J-1..J+2 rolling window: yesterday, today, two forecast days)
         yesterday?:  string; //'Yesterday'
         today?:      string; //'Today'
         week?:       string; //'1 week'
@@ -119,7 +119,7 @@ export interface Translations
         //Sections split out of "Entity display": group definitions and optional sensors.
         groupsConfigTitle?:           string;
         optionalSensors?:             string;
-        //Global display radius slider (50-500 m). Optional, FR-only.
+        //Global display radius slider (50-500 m).
         displayRadius?:               string;
         displayRadiusHelp?:           string;
         buildingCount?:               string;

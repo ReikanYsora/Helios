@@ -223,14 +223,14 @@ export class HeliosCard extends LitElement
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
-    //Active timeline mode (D-2/D+2 / week / month / year). Drives the window + store cadence + fetch period +
+    //Active timeline mode (forecast / week / month / year). Drives the window + store cadence + fetch period +
     //scrub snapping (see card/timeline-modes.ts). Persisted per card; the toggle lives in the bottom band.
-    @state() _timelineMode: TimelineMode = 'standard';
+    @state() _timelineMode: TimelineMode = 'forecast';
     //Active rolling-window span (days of history/forecast around today), derived from the mode. Pushed to the
     //engine via setPeriodDays(), read by buildUnifiedStore. Single runtime source of truth for the window.
     //Not @state: changes go through _applyPeriod(), which requestUpdate()s after dropping store + window.
-    _periodPastDays   = modePastDays('standard');
-    _periodFutureDays = modeFutureDays('standard');
+    _periodPastDays   = modePastDays('forecast');
+    _periodFutureDays = modeFutureDays('forecast');
 
     //Flipped by fetchEnergyPrefs after the first parse lands, so the card kicks refreshHaDailyTotals as
     //soon as the HA Energy defaults snapshot appears rather than waiting up to 30 s for the next tick.
@@ -313,7 +313,7 @@ export class HeliosCard extends LitElement
         this.requestUpdate();
     }
 
-    //Timeline mode selector (D-2/D+2 / 1 week / 1 month / 1 year). Derives the window from the mode spec, applies
+    //Timeline mode selector (Forecast / 1 week / 1 month / 1 year). Derives the window from the mode spec, applies
     //it (drops + rebuilds the store at the mode's cadence) and persists.
     private _setTimelineMode(mode: TimelineMode): void
     {
@@ -341,7 +341,7 @@ export class HeliosCard extends LitElement
         if (mode) { this._setTimelineMode(mode); }
     };
 
-    //Recorder period for the energy change-series, per the active mode (5-min for D-2/D+2, hourly for a week,
+    //Recorder period for the energy change-series, per the active mode (5-min for forecast, hourly for a week,
     //daily for month/year), so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
     get _storeFetchPeriod(): StatPeriod { return modeFetchPeriod(this._timelineMode, this.config); }
 
@@ -396,14 +396,14 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Timeline mode selector: D-2/D+2 / Yesterday / Today / Week / Month / Year. The active mode is highlighted. Every
+    //Timeline mode selector: Forecast / Yesterday / Today / Week / Month / Year. The active mode is highlighted. Every
     //mode is available (the detail panel aggregates a multi-day period by hour-of-day).
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
         const labels: Record<TimelineMode, string> = {
-            standard:  t.period?.standard  ?? 'D-2 / D+2',
+            forecast:  t.period?.forecast  ?? 'Forecast',
             yesterday: t.period?.yesterday ?? 'Yesterday',
             today:     t.period?.today     ?? 'Today',
             week:      t.period?.week      ?? 'Week',
@@ -911,7 +911,7 @@ export class HeliosCard extends LitElement
     protected render(): TemplateResult
     {
         //Precondition for the live card chrome: home coordinates resolved (HA config or card-level lat/lon
-        //override). The basemap is keyless CARTO raster tiles, so this is purely "can we project the home".
+        //override). The basemap needs no API key, so this is purely "can we project the home".
         const hasHomeCoords = getHomeCoords(this.config, this.hass) !== null;
 
 
@@ -979,7 +979,7 @@ export class HeliosCard extends LitElement
                                 @pointerleave=${this._onChartHoverLeave}
                             >
                                 ${keyed(`${this._chartTarget}|${this._timelineMode}`, renderBottomChart(this))}
-                                ${(this._timelineMode === 'standard' || this._timelineMode === 'today' || this._timelineMode === 'yesterday' || this._timelineMode === 'week')
+                                ${(this._timelineMode === 'forecast' || this._timelineMode === 'today' || this._timelineMode === 'yesterday' || this._timelineMode === 'week')
                                     ? renderTimelineNightZones(this) : nothing}
                                 ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
@@ -990,7 +990,7 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 <!--  Period-mode band: a separate strip BELOW the timeline (own card styling, same width,
-                      radius and themed border), holding the D-2/D+2 / 1 week / 1 month / 1 year selector.  -->
+                      radius and themed border), holding the Forecast / 1 week / 1 month / 1 year selector.  -->
                 ${hasHomeCoords && showTimeline(this.config) ? html`
                     <div class="tb-band">
                         ${this._renderPeriodSelector()}

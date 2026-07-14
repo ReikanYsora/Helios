@@ -681,10 +681,6 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    //"Entity display" section: one framed box per fixed chip (styled like the group blocks) plus the device list.
-    //Header = a colour+icon badge, the entity name, a show/hide toggle; body = one row per state, each an icon
-    //picker + a colour picker at 50/50. Grid + battery carry two states (import/export, charge/discharge). Every
-    //key + default comes from the shared CHIP_SLOTS table, so the editor and the card never drift.
     //Map configuration section: the 4-way theme toggle, plus the per-layer colour + visibility blocks in Custom.
     private _renderMapSection(t: Translations): TemplateResult
     {

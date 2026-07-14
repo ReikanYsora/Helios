@@ -8,7 +8,7 @@ export const it: Translations = {
     period:
     {
         rangeLabel: 'Periodo',
-        standard: "G-2 / G+2",
+        forecast: 'Previsione',
         today: 'Oggi',
         week:  'settimana',
         month: 'mese',

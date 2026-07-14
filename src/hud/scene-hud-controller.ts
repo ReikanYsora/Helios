@@ -159,7 +159,7 @@ export class SceneHudController
     public render(): TemplateResult
     {
         //Precondition for the live card chrome: home coordinates resolved (HA config or card-level lat/lon
-        //override). The basemap is keyless CARTO raster tiles, so this is purely "can we project the home".
+        //override); nothing else in this render can project without them.
         const hasHomeCoords = getHomeCoords(this.host.config, this.host.hass) !== null;
 
         //Chip interactivity: the card wires each chip as a button that re-points the bottom chart and glows when

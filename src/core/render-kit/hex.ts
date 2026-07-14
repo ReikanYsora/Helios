@@ -1,8 +1,5 @@
 //Hex colour primitives shared by the scene painters and the card charts. Pure, no deps.
 
-//Linear interpolate from a to b by t.
-export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
 //Read the byte at offset i of a #rrggbb hex (i = 1 red, 3 green, 5 blue).
 export const hexByte = (hex: string, i: number): number => parseInt(hex.slice(i, i + 2), 16);
 

@@ -31,7 +31,7 @@ export interface HeliosConfig
     //Index signature so unknown keys read as `unknown` without widening errors; the editor strips any
     //key not in the named schema below on save.
     [key: string]: unknown;
-    //Storage + render cadence in buckets/hour for the unified data source and every graph. Range 1-60,
+    //Storage + render cadence in buckets/hour for the unified data source and every graph. Range 1-6,
     //default 4 (15 min). Higher = finer curves at more CPU/memory. Forecast stays hourly, then interpolated.
     'display-update-frequency-per-hour'?: unknown;
     //Idle-camera orbit opt-in. Default false.
@@ -42,7 +42,7 @@ export interface HeliosConfig
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.
     'camera-locked'?:          unknown;
-    //Global display radius (m) around the home within which buildings and shadows render. Clamped [50,500],
+    //Global display radius (m) around the home within which buildings and shadows render. Clamped [0,500],
     //default 200. Lowering it is the main perf lever on weak hardware.
     'display-radius'?:         unknown;
     //Opacity 0..1 of surrounding buildings (home stays 1.0). Default 0.5.

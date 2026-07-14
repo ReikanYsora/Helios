@@ -570,7 +570,7 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     };
 
     //Pass 1: past + today-so-far, summed per day from the recorder `change` buckets so each day matches HA Energy to
-    //the watt-hour (no curve integration / gap interpolation, which inflates totals). The series spans the J-2 past
+    //the watt-hour (no curve integration / gap interpolation, which inflates totals). The series spans the past
     //window, covering every past day shown.
     const changeSeries = host._pvChangeSeries;
     if (changeSeries && changeSeries.length > 0)

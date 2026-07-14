@@ -595,7 +595,7 @@ export const heliosTimelineStyles = css`
         stroke: rgba(255, 255, 255, 0.55);
     }
 
-    /*  Kiosk breakpoint (issue #33): above 900 px card width the text bumps one size step up so the chips,
+    /*  Kiosk breakpoint: above 900 px card width the text bumps one size step up so the chips,
         day-strip and W/m² readout stay legible from across the room. On-map geometry is scaled separately
         by the engine. Keyed on the container query so it flips on the card's own width, not the
         viewport's. */

@@ -8,7 +8,7 @@ export const nb: Translations = {
     period:
     {
         rangeLabel: 'Tidsrom',
-        standard: "D-2 / D+2",
+        forecast: 'Prognose',
         today: 'I dag',
         week:  'uke',
         month: 'måned',
