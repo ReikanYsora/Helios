@@ -43,7 +43,7 @@ export const SUN_COLOR_HEX = '#ffc107';
 //Pitch bounds shared by the engine pose policy, drag-rotate, the editor and the initial-pose clamp.
 //MIN = mostly top-down, MAX = nearly horizontal, REST = default.
 export const CAMERA_PITCH_MIN_DEG  = 0;
-export const CAMERA_PITCH_MAX_DEG  = 75;
+export const CAMERA_PITCH_MAX_DEG  = 65;
 export const CAMERA_PITCH_REST_DEG = 50;
 
 //=== Sun arc ===
