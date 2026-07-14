@@ -20,7 +20,7 @@ interface ConsumptionColorHost extends HTMLElement
 
 //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it. Resolves the
 //configured ui_color token to a hex once per token change (getComputedStyle forces a reflow), so it no-ops while
-//the token is unchanged. Both the scene and mini cards call this from updated().
+//the token is unchanged. The card calls this from updated().
 export function publishConsumptionColor(host: ConsumptionColorHost): void
 {
     const homeToken = homeColor(host.config);
