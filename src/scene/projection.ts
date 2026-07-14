@@ -5,7 +5,7 @@
 //All coordinates are LOCAL METRES relative to the home origin: +east, +north, +up. The lat/lng to
 //local-metre conversion (and tile math) lives in ./tiles. Pure and card-agnostic.
 
-import { PITCH_MIN, PITCH_MAX, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE, DEG } from '../core/config/constants';
+import { CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, DEFAULT_BEARING, DEFAULT_TILT, NEAR_PLANE, PERSPECTIVE, DEG } from '../core/config/constants';
 //Re-exported so buildings.ts reads the projection constants it shares from './projection'.
 export { NEAR_PLANE, PERSPECTIVE } from '../core/config/constants';
 
@@ -46,11 +46,11 @@ export class SceneCamera
     private _cosT = Math.cos(DEFAULT_TILT * DEG);
     private _sinT = Math.sin(DEFAULT_TILT * DEG);
 
-    //Set the camera pose. Tilt is clamped to [PITCH_MIN, PITCH_MAX]; bearing is free (0..360 by convention).
+    //Set the camera pose. Tilt is clamped to [CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG]; bearing is free (0..360 by convention).
     public setPose(bearingDeg: number, tiltDeg: number): void
     {
         this.bearingDeg = bearingDeg;
-        this.tiltDeg    = Math.min(PITCH_MAX, Math.max(PITCH_MIN, tiltDeg));
+        this.tiltDeg    = Math.min(CAMERA_PITCH_MAX_DEG, Math.max(CAMERA_PITCH_MIN_DEG, tiltDeg));
     }
 
     //Recompute the centre + trig basis for one frame. The camera aims at the home origin, so the home

@@ -557,13 +557,13 @@ export class HeliosCardEditor extends LitElement
                 <div class="field field-block">
                     <span class="label">${label}</span>
                     ${this._pickerReady ? html`
-                        <ha-selector
+                        ${keyed(this._colorNonce, html`<ha-selector
                             .hass=${this.hass}
                             .selector=${{ ui_color: { default_color: defaultColor } }}
                             .value=${String(c[key] ?? defaultColor)}
                             data-key=${key}
                             @value-changed=${this._onEntityValueChanged}
-                        ></ha-selector>
+                        ></ha-selector>`)}
                     ` : nothing}
                 </div>
                 ${help ? html`<div class="field-help">${help}</div>` : nothing}`;
