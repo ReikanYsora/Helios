@@ -527,15 +527,15 @@ export class HeliosCard extends LitElement
 
 
 
-    //Masonry sizing. 1 unit = 50 px so 15 ~ 750 px, leaving the basemap ~480 px after the timeline's ~150 px.
+    //Masonry sizing. 1 unit = 50 px so 10 ~ 500 px.
     public getCardSize(): number
     {
-        return 15;
+        return 10;
     }
 
-    //Sections-view sizing. 1 row ~ 56 px, 1 col ~ 30 px (section width 360 px). 12 cols × 8 rows is both the
-    //section editor's ceiling and the card's minimum: the basemap, chip cluster and timeline need the full
-    //width and all 8 rows to stay legible.
+    //Sections-view sizing. Full width (12 cols). The default is 8 rows (~480 px, the card's sweet spot), with a
+    //low 4-row minimum so the user can still shrink it freely; below the comfortable height the timeline gets
+    //cramped, which is the user's compromise to make.
     public getGridOptions(): {
         rows:        number;
         columns:     number;
@@ -548,7 +548,7 @@ export class HeliosCard extends LitElement
         return {
             rows:        8,
             columns:     12,
-            min_rows:    8,
+            min_rows:    4,
             max_rows:    24,
             min_columns: 12,
             max_columns: 12

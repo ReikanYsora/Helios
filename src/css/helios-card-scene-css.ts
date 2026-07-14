@@ -31,12 +31,26 @@ export const heliosCardStyles = css`
         height:     100%;
         width:      100%;
         /*  Floor for layouts that give no explicit height (vertical-stack, panel, some grids): without it
-            height:100% collapses to the children's intrinsic height and the map area vanishes. 480 px
-            gives the map ~330 px; layouts passing a height override this. */
-        min-height: 480px;
+            height:100% collapses to the children's intrinsic height and the map area vanishes. Kept in step
+            with the 4-row grid minimum (~248 px) so the sections view can shrink the card that small; layouts
+            passing a taller height override this, and going this small is the user's timeline compromise. */
+        min-height: 240px;
         /*  Stacking context so absolute z-index children stay scoped to the card and don't escape above
             HA chrome on scroll. */
         isolation: isolate;
+    }
+
+    /*  Auto-height sizing. The map, HUD and timeline are all position:absolute, so the card has no in-flow
+        content and would collapse to min-height under any layout that gives no explicit height (sections
+        "auto" mode, vertical-stack, panel). This flow spacer gives the card its natural 480 px height there.
+        A layout passing an explicit height (fixed sections rows, a set panel height) OVERRIDES this content
+        height, and overflow:hidden clips the spacer, so the card still shrinks freely down to min_rows. */
+    ha-card::before
+    {
+        content: '';
+        display: block;
+        height: 480px;
+        pointer-events: none;
     }
 
     #map-container
