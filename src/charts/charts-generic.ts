@@ -9,7 +9,7 @@ import { groupDevices, groupColorHex } from '../data/sources/device-consumption'
 import { consumptionLoad } from '../core/energy';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts } from '../data/sources/energy-stats';
-import { type ChartHost, type ChartTarget, isGroupTarget, groupOfTarget } from './charts';
+import { type ChartHost, type ChartTarget, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -376,7 +376,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //Forecast dash on the irradiance view. It rides the near-identical shape of the amber irradiance area, so a
     //plain predicted shade blends in: push the contrast harder (toward white on dark, black on light) than the
     //production line so the dashed silhouette clearly separates from the fill under it.
-    const isDarkTheme  = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const isDarkTheme  = chartIsDark(host);
     const irradColor = chipSlotColor(el, host.config, 'irradiance');
     const forecastColor = isDarkTheme
         ? lerpHexToward(irradColor, '#ffffff', 0.75)

@@ -27,7 +27,7 @@ import
     mapLayerColor,
     mapLayerVisible,
 } from '../core/config/helios-config';
-import { uiColorVar, isDarkFromCss } from '../core/format/format';
+import { uiColorVar, isDarkFromCss, cssHex } from '../core/format/format';
 
 
 //Module-scope cache for the RAW (option-independent) building footprints. HA re-creates the card element
@@ -431,7 +431,7 @@ export class HeliosEngine
             //Defaults OFF: rotation is opt-in (it can distract and, in scrub mode, blurs "did the camera
             //move or did time pass?"). camera-locked also suppresses it.
             const autoRotateEnabled = this.cfg['auto-rotate-enabled'] === true;
-            const cameraLocked      = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+            const cameraLocked      = this.isCameraLocked();
             if (!autoRotateEnabled || cameraLocked)
             {
                 this._autoRotateRaf = undefined;
@@ -703,6 +703,22 @@ export class HeliosEngine
         this._onRendererReady();
     }
 
+    //Arm the 60 s sky/atmosphere refresh, clearing any existing timer first so it never double-arms.
+    //_refreshShadowsAndAtmosphere short-circuits when the sun barely moved, so the cost is negligible; the
+    //paused skip avoids even that signature check while the card is invisible.
+    private _startSkyTimer(): void
+    {
+        window.clearInterval(this._skyTimer);
+        this._skyTimer = window.setInterval(() =>
+        {
+            if (this._paused)
+            {
+                return;
+            }
+            this._refreshShadowsAndAtmosphere();
+        }, 60_000);
+    }
+
     //Called once the renderer's basemap has resolved: feeds the (possibly already-cached) buildings, paints
     //the first atmosphere pass, arms the sky refresh + auto-rotate loop, and renders the current selection.
     private _onRendererReady(): void
@@ -717,19 +733,9 @@ export class HeliosEngine
         this._applyBuildings();
         this._ensureBuildings();
 
-        window.clearInterval(this._skyTimer);
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
-        //60 s sky/atmosphere refresh. _refreshShadowsAndAtmosphere short-circuits when the sun barely moved,
-        //so the cost is negligible; the paused skip avoids even the signature check while invisible.
-        this._skyTimer = window.setInterval(() =>
-        {
-            if (this._paused)
-            {
-                return;
-            }
-            this._refreshShadowsAndAtmosphere();
-        }, 60_000);
+        this._startSkyTimer();
 
         this._startAutoRotateLoop();
 
@@ -744,27 +750,11 @@ export class HeliosEngine
     //the engine itself does not track theme polarity.
     private _container?: HTMLElement;
 
-    //Resolve a theme colour token to #rrggbb. Reads the CSS custom property off the host's computed style
-    //(so it follows the active HA theme), accepting #rgb / #rrggbb / rgb()/rgba(); falls back when unset.
-    private _cssHex(name: string, fallback: string): string
-    {
-        const raw = this._container ? getComputedStyle(this._container).getPropertyValue(name).trim() : '';
-        if (/^#[0-9a-f]{6}$/i.test(raw)) { return raw; }
-        if (/^#[0-9a-f]{3}$/i.test(raw)) { return '#' + raw.slice(1).split('').map(c => c + c).join(''); }
-        const m = raw.match(/rgba?\(\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)/i);
-        if (m)
-        {
-            const h = (n: string): string => Math.max(0, Math.min(255, Math.round(parseFloat(n)))).toString(16).padStart(2, '0');
-            return '#' + h(m[1]) + h(m[2]) + h(m[3]);
-        }
-        return fallback;
-    }
-
     //Resolve a stored map colour (a ui_color token or a raw #hex / rgb()) to a paintable colour.
     private _resolveMapColor(value: string, fallback: string): string
     {
         if (/^(#|rgb)/i.test(value)) { return value; }
-        return this._cssHex(`--${value}-color`, fallback);
+        return cssHex(this._container, `--${value}-color`, fallback);
     }
 
     //The vector basemap style for the active config: 'auto' follows the HA theme, 'dark'/'light' force a
@@ -795,9 +785,9 @@ export class HeliosEngine
     private _resolvePalette(): void
     {
         this._renderer?.setPalette({
-            home:            this._cssHex('--energy-grid-consumption-color', '#488fc2'),
+            home:            cssHex(this._container, '--energy-grid-consumption-color', '#488fc2'),
             neighbor:        this._buildingColor(),
-            shadow:          this._cssHex('--shadow-color', '#000000'),
+            shadow:          cssHex(this._container, '--shadow-color', '#000000'),
             shadowOpacity:   this._shadowsEnabled() ? this._shadowOpacity() : 0,
             neighborOpacity: this._buildingOpacity(),
         });
@@ -969,7 +959,7 @@ export class HeliosEngine
     //snapshot, so a building-colour change re-tints via _resolvePalette without a refetch.
     private _buildingColor(): string
     {
-        return this._cssHex(uiColorVar(buildingColorToken(this.cfg), 'grey'), '#9e9e9e');
+        return cssHex(this._container, uiColorVar(buildingColorToken(this.cfg), 'grey'), '#9e9e9e');
     }
 
     //Location-keyed key for the raw fetch + shared cache. Options are deliberately absent: a building-option
@@ -1311,17 +1301,7 @@ export class HeliosEngine
             this._refreshShadowsAndAtmosphere();
             //Restart the auto-rotate loop the tick stopped on pause (no-op via its own guard if still running).
             this._startAutoRotateLoop();
-            if (this._skyTimer === undefined)
-            {
-                this._skyTimer = window.setInterval(() =>
-                {
-                    if (this._paused)
-                    {
-                        return;
-                    }
-                    this._refreshShadowsAndAtmosphere();
-                }, 60_000);
-            }
+            this._startSkyTimer();
             //Re-arm weather: one immediate fetch (served from the localStorage cache inside its TTL, so a
             //quick flip costs nothing); the success path schedules the 10 min interval.
             if (this._weatherTimer === undefined)
@@ -1886,13 +1866,13 @@ export class HeliosEngine
         const prevShadowOpa   = this._shadowOpacity();
         const prevShadowsOn   = this._shadowsEnabled();
         const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
-        const prevCameraLocked = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+        const prevCameraLocked = this.isCameraLocked();
         this.cfg = { ...cfg };
 
         //Re-arm the auto-rotate rAF loop when the flags transition back to rotation-permitting (the loop
         //suspends itself when disabled to avoid a 60 Hz no-op tick).
         const nextAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
-        const nextCameraLocked = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+        const nextCameraLocked = this.isCameraLocked();
         const nowPermitsRotation  = nextAutoRotateOn && !nextCameraLocked;
         const prevPermitsRotation = prevAutoRotateOn && !prevCameraLocked;
         if (nowPermitsRotation && !prevPermitsRotation && this._renderer)

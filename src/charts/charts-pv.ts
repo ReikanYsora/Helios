@@ -36,7 +36,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     const pvColor = chipSlotColor(el, host.config, 'production');
     //Theme-aware "predicted" shade for the dashed forecast curve: light theme blends toward black, dark toward
     //white, so it stays a readable softer line on either plate.
-    const isDarkTheme       = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const isDarkTheme       = chartIsDark(host);
     const predictedPvColor  = isDarkTheme
         ? lerpHexToward(pvColor, '#ffffff', 0.55)
         : lerpHexToward(pvColor, '#000000', 0.35);
