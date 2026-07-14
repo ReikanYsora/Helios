@@ -52,8 +52,6 @@ export const it: Translations = {
         solarIrradianceEntity:     'Entità di irraggiamento solare',
         solarIrradianceEntityHelp: 'Scegli un sensore che riporta l\'irraggiamento globale a onda corta in W/m² (tipico delle stazioni Ecowitt / Davis / meteo personali). Quando impostato, il suo stato attuale e lo storico del recorder sostituiscono Open-Meteo per l\'irraggiamento live e passato ovunque appaia (numero sul chip del sole, asse Y del grafico FV, colorazione dell\'arco solare). Le ore di previsione restano su Open-Meteo, dato che un sensore non può avere valori futuri.',
         buildingsSection:   'Casa ed edifici',
-        homeColor:          'Colore della casa',
-        homeColorHelp:      'Colore della casa: la pillola della casa e tutte le letture di consumo.',
         buildingsHint:      'Per mantenere la scheda fluida nelle zone urbane dense, solo gli edifici entro il raggio configurato attorno alla casa vengono resi in 3D. La casa stessa resta a piena opacità; gli edifici vicini vengono resi con l\'opacità configurata così da dare contesto urbano senza competere con i livelli di dati. Il raggio di raggruppamento unisce le pertinenze attigue (verande, garage, capanni) nel gruppo "casa".',
         displayRadius:         'Raggio di visualizzazione',
         displayRadiusHelp:     'Raggio attorno alla casa in cui gli edifici vengono recuperati e disegnati, fino al bordo del disco della mappa sfumato. Abbassalo per alleggerire il rendering su un dispositivo lento; 0 mostra solo la casa.',

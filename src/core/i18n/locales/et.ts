@@ -52,8 +52,6 @@ export const et: Translations = {
         solarIrradianceEntity:     'Päikesekiirguse olem',
         solarIrradianceEntityHelp: 'Vali andur, mis raporteerib globaalse lühilaine kiirgustugevuse ühikus W/m² (tüüpiliselt Ecowitt / Davis / isiklik ilmajaam). Kui see on määratud, asendab selle praegune olek ja salvestaja ajalugu Open-Meteo otse- ja minevikukiirguse jaoks kõikjal, kus see esineb (päikesekiibi number, päikesegraafiku Y-telg, päikesekaare värvimine). Prognoosi tunnid jäävad Open-Meteo peale, kuna andur ei saa kanda tulevasi väärtusi.',
         buildingsSection:   'Kodu & hooned',
-        homeColor:          'Kodu värv',
-        homeColorHelp:      'Kodu värv: kodupill ja iga tarbimisnäit.',
         buildingsHint:      'Et hoida kaart tihedalt asustatud linnapiirkondades sujuvana, renderdatakse 3D-s ainult kodu ümber seadistatud raadiuse sees olevad hooned. Kodu ise jääb täiesti läbipaistmatuks; lähedalasuvad hooned renderdatakse seadistatud läbipaistmatusega, et need annaksid linnakonteksti ilma andmekihtidega võistlemata. Klastri raadius koondab külgneva kõrvalhooned (verandad, garaažid, kuurid) "kodu" hulka.',
         displayRadius:         'Kuvamisraadius',
         displayRadiusHelp:     'Kodu ümber olev raadius, mille sees hooned tõmmatakse ja joonistatakse, kuni tuhmunud kaardiketta servani. Vähenda seda, et kergendada renderdamist aeglasel seadmel; 0 näitab ainult kodu.',

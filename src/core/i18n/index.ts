@@ -107,7 +107,6 @@ export interface Translations
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
         lockRotation?:                string;
         lockRotationHint?:            string;
-        cameraAngleHint?:             string;
         //"Chips & colours" section: per-chip show/hide toggles + colour pickers. Optional; fall back to English.
         chipsSection?:                string;
         chipsIntro?:                  string;
@@ -133,21 +132,12 @@ export interface Translations
         hiddenDevicesEmpty?:      string;
         //aria-label (screen-reader only, no visible tooltip) for the per-device show/hide toggle.
         deviceVisibilityLabel?:      string;
-        //Section title for the entity-configuration section (groups + devices + irradiance).
-        entityConfigSection?:           string;
-        //Intro under the group-configuration heading: what a monitoring group is + what each control does.
-        groupsIntro?:                   string;
-        //Devices & monitoring groups block.
-        devicesSection?:                string;
-        devicesIntro?:                  string;
         //The group pill: its aria-label, the "Group" word (+ number) and the "No group" state.
         deviceGroupLabel?:              string;
         group?:                         string;
         noGroup?:                       string;
         //Note above the device list clarifying these are the entities set up in the HA Energy dashboard.
         devicesEnergyNote?:             string;
-        //Heading above the editable per-group identity rows (name / colour / icon).
-        groupsSection?:                 string;
         //Solar-irradiance override entity (W/m² sensor). When wired, preferred over the model for live + past
         //irradiance; forecast hours always fall through to the model.
         solarIrradianceEntity:     string;
@@ -171,8 +161,6 @@ export interface Translations
         openEnergyConfig?:         string;
         //Surrounding buildings: cluster radius, neighbour opacity, base tint.
         buildingsSection:         string;
-        homeColor:                string;
-        homeColorHelp:            string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
         buildingClusterRadiusHelp?: string;

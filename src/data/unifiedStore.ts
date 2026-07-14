@@ -28,7 +28,6 @@ import { localMidnightMinusDays } from '../core/time/timezone';
 interface CadenceParams
 {
     bucketsPerHour:  number;
-    bucketsPerDay:   number;
     bucketsTotal:    number;
     stepMs:          number;
 }
@@ -70,7 +69,6 @@ export interface UnifiedStoreHost
     readonly _periodFutureDays:       number;
     //Active timeline mode: drives the store cadence (now = fine, week = hourly, month/year = daily).
     readonly _timelineMode:           TimelineMode;
-    readonly hass:                    { language?: string; states?: Record<string, { state: string }>; config?: { latitude?: number; longitude?: number } } | undefined;
     readonly _chartSeries:            ChartSeries | null;
     //Recorder `change` series for the solar meter(s), 5-min buckets. buildProduction converts each bucket's reset-corrected
     //kWh to average watts.
@@ -185,16 +183,16 @@ function buildIrradiance(host: UnifiedStoreHost, storeStartMs: number, storeEndM
 //Store buckets are always >= the 5-min source period (data-interval caps at 12/hour = 5 min), so each store bucket
 //aggregates whole source buckets and the conversion is exact. Past gaps interpolated; future buckets stay null so the
 //forecast series owns the future half.
-function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
+function buildProduction(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
-    const out = changeSeriesToWatts(host._pvChangeSeries, _storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
+    const out = changeSeriesToWatts(host._pvChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
     //Production is never negative; floor tiny negative recorder changes (meter glitch noise).
     for (let i = 0; i < out.length; i++)
     {
         const v = out[i];
         if (v !== null && v < 0) { out[i] = 0; }
     }
-    const nowBucket = bucketForMs(_storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
+    const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
     if (pastEnd > 0)
     {
@@ -331,14 +329,14 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const storeDays  = daysPast + 1 + daysFuture;
     const bucketsTotal   = storeDays * bucketsPerDay;
     const stepMs         = HOUR_MS / bucketsPerHour;
-    const p: CadenceParams = { bucketsPerHour, bucketsPerDay, bucketsTotal, stepMs };
+    const p: CadenceParams = { bucketsPerHour, bucketsTotal, stepMs };
 
     const storeStartMs = storeOriginMs(daysPast);
     const storeEndMs   = storeStartMs + storeDays * DAY_MS;
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
     //Production reads ONLY real sensor samples and interpolates; forecast reads the HA Energy forecast at store cadence.
-    const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
+    const production   = buildProduction(host, storeStartMs, nowMs, p);
     const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
     const battery      = buildBattery(host, storeStartMs, nowMs, p);
     const gridImport   = buildGridChange(host._gridImportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);

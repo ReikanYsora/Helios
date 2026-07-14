@@ -52,8 +52,6 @@ export const hu: Translations = {
         solarIrradianceEntity:     'Napsugárzás entitás',
         solarIrradianceEntityHelp: 'Válassz egy érzékelőt, amely globális rövidhullámú besugárzást jelent W/m²-ben (jellemzően Ecowitt / Davis / saját időjárás-állomás). Ha be van állítva, az aktuális állapota és a rögzítő előzményei felváltják az Open-Meteo-t az élő és múltbeli besugárzásnál mindenhol, ahol megjelenik (nap chip szám, PV diagram Y tengely, napívszínezés). Az előrejelzési órák az Open-Meteo-n maradnak, mivel egy érzékelő nem hordozhat jövőbeli értékeket.',
         buildingsSection:   'Otthon és épületek',
-        homeColor:          'Otthon színe',
-        homeColorHelp:      'Az otthon színe: az otthon jelvénye és minden fogyasztási kijelzés.',
         buildingsHint:      'Hogy a kártya sűrűn beépített városi területeken is sima maradjon, csak az otthon körüli beállított sugáron belüli épületek jelennek meg 3D-ben. Maga az otthon teljes átlátszatlanságban marad; a közeli épületek a beállított átlátszósággal jelennek meg, így városi kontextust adnak anélkül, hogy versenyeznének az adatrétegekkel. A csoportosítási sugár a hozzáépített melléképületeket (verandák, garázsok, fészerek) az "otthon" csoportba vonja.',
         displayRadius:         'Megjelenítési sugár',
         displayRadiusHelp:     'Az otthon körüli sugár, amelyen belül az épületeket lekéri és kirajzolja, egészen az elhalványuló térképkorong széléig. Csökkentsd, hogy lassú eszközön könnyítsd a kirajzolást; a 0 csak az otthont mutatja.',

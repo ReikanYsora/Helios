@@ -52,8 +52,6 @@ export const fi: Translations = {
         solarIrradianceEntity:     'Auringon irradianssin entiteetti',
         solarIrradianceEntityHelp: 'Valitse anturi, joka raportoi globaalin lyhytaaltoisen irradianssin yksikössä W/m² (tyypillisesti Ecowitt / Davis / oma sääasema). Kun se on asetettu, sen nykyinen tila ja tallentimen historia korvaavat Open-Meteon live- ja menneessä irradianssissa kaikkialla, missä se esiintyy (aurinkosirun luku, aurinkosähkökaavion Y-akseli, aurinkokaaren väritys). Ennustetunnit pysyvät Open-Meteossa, koska anturi ei voi kantaa tulevia arvoja.',
         buildingsSection:   'Koti & rakennukset',
-        homeColor:          'Kodin väri',
-        homeColorHelp:      'Kodin väri: kotipilleri ja jokainen kulutuslukema.',
         buildingsHint:      'Jotta kortti pysyy sujuvana tiheillä kaupunkialueilla, vain kodin ympärillä määritetyn säteen sisällä olevat rakennukset renderöidään 3D:nä. Koti itse pysyy täysin läpinäkymättömänä; lähellä olevat rakennukset renderöidään määritetyllä läpinäkymättömyydellä, jotta ne tarjoavat kaupunkikontekstia kilpailematta tietopeitteiden kanssa. Klusterisäde ryhmittelee liittyvät ulkorakennukset (kuistit, autotallit, vajat) "koti"-joukkoon.',
         displayRadius:         'Näyttösäde',
         displayRadiusHelp:     'Säde kodin ympärillä, jonka sisällä rakennukset haetaan ja piirretään, aina haalistuneen karttalevyn reunaan asti. Laske sitä keventääksesi renderöintiä hitaalla laitteella; 0 näyttää vain kodin.',

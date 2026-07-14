@@ -52,8 +52,6 @@ export const sl: Translations = {
         solarIrradianceEntity:     'Entiteta sončnega obsevanja',
         solarIrradianceEntityHelp: 'Izberi senzor, ki poroča globalno kratkovalovno obsevanje v W/m² (običajno Ecowitt / Davis / osebna vremenska postaja). Ko je nastavljen, njegovo trenutno stanje in zgodovina iz snemalnika nadomestita Open-Meteo za živo in pretekto obsevanje povsod, kjer se pojavi (število na čipu sonca, os Y grafa PV, obarvanje sončnega loka). Ure napovedi ostanejo na Open-Meteo, saj senzor ne more nositi prihodnjih vrednosti.',
         buildingsSection:   'Dom in stavbe',
-        homeColor:          'Barva doma',
-        homeColorHelp:      'Barva doma: oznaka doma in vsi odčitki porabe.',
         buildingsHint:      'Da kartica ostane tekoča v gosto pozidanih mestnih območjih, se v 3D izrišejo le stavbe v nastavljenem polmeru okoli doma. Sam dom ostane pri polni neprosojnosti; bližnje stavbe se izrišejo z nastavljeno prosojnostjo, tako da dajejo mestni kontekst, ne da bi tekmovale s podatkovnimi prekrivami. Polmer združevanja združi prizidane pomožne stavbe (verande, garaže, lope) v skupino "doma".',
         displayRadius:         'Polmer prikaza',
         displayRadiusHelp:     'Polmer okoli doma, v katerem se stavbe pridobijo in narišejo, do roba zatemnjene plošče zemljevida. Zniži ga, da olajšaš izris na počasni napravi; 0 prikaže le dom.',

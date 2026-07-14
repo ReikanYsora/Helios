@@ -52,8 +52,6 @@ export const sv: Translations = {
         solarIrradianceEntity:     'Entitet för solirradians',
         solarIrradianceEntityHelp: 'Välj en sensor som rapporterar global kortvågig irradians i W/m² (vanligtvis Ecowitt / Davis / personlig väderstation). När den är inställd ersätter dess aktuella tillstånd och inspelarhistorik Open-Meteo för live- och tidigare irradians överallt där den visas (siffra på solchippet, PV-diagrammets Y-axel, färgläggning av solbågen). Prognostimmar stannar på Open-Meteo eftersom en sensor inte kan bära framtida värden.',
         buildingsSection:   'Hem & byggnader',
-        homeColor:          'Hemmets färg',
-        homeColorHelp:      'Hemmets färg: hempillret och varje förbrukningsutläsning.',
         buildingsHint:      'För att hålla kortet flytande i tätbebyggda stadsområden renderas endast byggnader inom den konfigurerade radien runt hemmet i 3D. Hemmet självt förblir helt ogenomskinligt; närliggande byggnader renderas med den konfigurerade ogenomskinligheten så att de ger urban kontext utan att konkurrera med dataöverläggen. Klusterradien grupperar tillhörande uthus (verandor, garage, skjul) i "hem"-uppsättningen.',
         displayRadius:         'Visningsradie',
         displayRadiusHelp:     'Radie runt hemmet inom vilken byggnader hämtas och ritas, ända ut till kanten av den blekta kortskivan. Sänk den för att lätta renderingen på en långsam enhet; 0 visar bara hemmet.',

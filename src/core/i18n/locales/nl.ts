@@ -52,8 +52,6 @@ export const nl: Translations = {
         solarIrradianceEntity:     'Zonne-instralingsentiteit',
         solarIrradianceEntityHelp: 'Kies een sensor die de globale kortgolvige instraling in W/m² meldt (typisch een Ecowitt- / Davis- / persoonlijk weerstation). Indien ingesteld vervangen de huidige toestand en de recordergeschiedenis Open-Meteo voor de live en historische instraling overal waar die verschijnt (getal op de zonchip, Y-as van de PV-grafiek, kleuring van de zonneboog). Voorspellingsuren blijven op Open-Meteo, want een sensor kan geen toekomstige waarden bevatten.',
         buildingsSection:   'Huis & gebouwen',
-        homeColor:          'Kleur van het huis',
-        homeColorHelp:      'Kleur van het huis: de huispil en alle verbruiksaflezingen.',
         buildingsHint:      'Om de kaart soepel te houden in dichtbebouwde stedelijke gebieden worden alleen gebouwen binnen de geconfigureerde straal rond het huis in 3D gerenderd. Het huis zelf blijft volledig dekkend; nabijgelegen gebouwen worden gerenderd met de geconfigureerde dekking zodat ze stedelijke context geven zonder met de gegevensoverlays te concurreren. De clusterstraal groepeert aangebouwde bijgebouwen (veranda\'s, garages, schuren) in de "huis"-groep.',
         displayRadius:         'Weergavestraal',
         displayRadiusHelp:     'Straal rond het huis waarbinnen gebouwen worden opgehaald en getekend, tot aan de rand van de vervaagde kaartschijf. Verlaag het om het renderen op een traag apparaat te verlichten; 0 toont alleen het huis.',

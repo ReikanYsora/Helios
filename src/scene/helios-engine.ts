@@ -11,7 +11,7 @@ import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
-    SUN_COLOR_HEX, BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS} from '../core/config/constants';
+    BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS} from '../core/config/constants';
 import
 {
     type HeliosConfig,
@@ -537,17 +537,16 @@ export class HeliosEngine
         //Create the map immediately regardless of container size: in some layouts (Masonry) neither the
         //ResizeObserver nor the IntersectionObserver fires, so deferring until one reports "ready" would
         //leave the map null. The post-load resize handling covers any 0×0-at-init case.
-        this._initMapInstance(container, haCoords);
+        this._initMapInstance(container);
     }
 
-    private _initMapInstance(container: HTMLElement, _haCoords: [number, number]): void
+    private _initMapInstance(container: HTMLElement): void
     {
         //Spin up the renderer. It builds its own DOM (ground holder + scene SVG) inside the container, owns
-        //the SceneCamera every projection routes through, and paints night-shade + cast shadows + extruded
-        //buildings itself. The home colour + shadow colour/opacity are merged into its palette.
+        //the SceneCamera every projection routes through, and paints cast shadows + extruded buildings itself.
+        //The shadow colour/opacity is merged into its palette.
         this._container = container;
         this._renderer = new SceneRenderer(container, {
-            sun:           SUN_COLOR_HEX,
             shadow:        '#000000',
             shadowOpacity: this._shadowOpacity(),
         });
@@ -798,7 +797,6 @@ export class HeliosEngine
         this._renderer?.setPalette({
             home:            this._cssHex('--energy-grid-consumption-color', '#488fc2'),
             neighbor:        this._buildingColor(),
-            sun:             SUN_COLOR_HEX,
             shadow:          this._cssHex('--shadow-color', '#000000'),
             shadowOpacity:   this._shadowsEnabled() ? this._shadowOpacity() : 0,
             neighborOpacity: this._buildingOpacity(),
@@ -1145,9 +1143,9 @@ export class HeliosEngine
     }
 
 
-    //Drive the renderer's sun position for the current (live or scrubbed) time. The renderer paints
-    //night-shade, building face shading and cast shadows itself from this azimuth/altitude via one setter.
-    //The ≥1.5° altitude throttle (~6 min of motion) avoids needless redraws.
+    //Drive the renderer's sun position for the current (live or scrubbed) time. The renderer paints the
+    //building face shading and cast shadows itself from this azimuth/altitude via one setter, and the ground
+    //re-tints through the graded day/night palette. The ≥1.5° altitude throttle (~6 min of motion) avoids needless redraws.
     private _refreshShadowsAndAtmosphere(): void
     {
         if (!this._renderer)
@@ -1181,12 +1179,6 @@ export class HeliosEngine
         }
     }
 
-    //Precision fixed to 'high' (multi-model median).
-    private _resolvedPrecision(): 'standard' | 'high'
-    {
-        return 'high';
-    }
-
     private async _refreshWeather(lat?: number, lon?: number): Promise<void>
     {
         const fLat = lat ?? this.homeLat;
@@ -1201,7 +1193,8 @@ export class HeliosEngine
         try
         {
             //Single home-point fetch (with elevation): the only weather source; surroundings reuse the series.
-            const precision = this._resolvedPrecision();
+            //Precision is fixed to 'high' (multi-model median); no config toggle selects 'standard'.
+            const precision = 'high' as const;
             this._homeHourlyData = await fetchHomePointData(
                 fLat, fLon, this.homeElevation, precision, signal
             );
@@ -1529,8 +1522,7 @@ export class HeliosEngine
     public getSunArcScale(): number { return this._sunArcScale(); }
 
     //Keystone projection: lon/lat/altitude -> screen px via the SceneCamera. Every card-facing projection
-    //method (projectSunScene, projectHomeFootprints, projectHomeLabelLayout, getSunArcScale,
-    //_applyCameraTargetPadding) routes through here. Coordinates are converted to local metres relative to
+    //method (projectSunScene, projectHomeLabelLayout, getSunArcScale) routes through here. Coordinates are converted to local metres relative to
     //the home, then the camera's project3() returns {x, y, depth}. The camera basis is refreshed each frame
     //by the renderer's _draw (setViewport), so this is a cheap per-point transform with no per-frame cache.
     private _projectScenePoint(
@@ -1555,7 +1547,7 @@ export class HeliosEngine
     public projectSunScene(now: Date): {
         arc:      {
             x: number; y: number;
-            irradiance: number; altitude: number; nearness: number; belowHorizon: boolean;
+            altitude: number; nearness: number; belowHorizon: boolean;
         }[];
         sun:      { x: number; y: number; irradiance: number; altitude: number; nearness: number };
         home:     { x: number; y: number };
@@ -1648,7 +1640,7 @@ export class HeliosEngine
 
         //Per-frame: re-project the cached samples, recording depth to normalise into nearness below.
         interface RawArcPoint {
-            x: number; y: number; irradiance: number; depth: number;
+            x: number; y: number; depth: number;
             altitude: number; belowHorizon: boolean;
         }
         const raw: RawArcPoint[] = [];
@@ -1667,7 +1659,6 @@ export class HeliosEngine
             raw.push({
                 x:            px.x,
                 y:            px.y,
-                irradiance:   s.wm2,
                 depth:        px.depth,
                 altitude:     s.altitudeDeg,
                 belowHorizon: s.belowHorizon
@@ -1714,7 +1705,6 @@ export class HeliosEngine
         const arc = raw.map(p => ({
             x:            p.x,
             y:            p.y,
-            irradiance:   p.irradiance,
             altitude:     p.altitude,
             nearness:     nearnessOf(p.depth),
             belowHorizon: p.belowHorizon

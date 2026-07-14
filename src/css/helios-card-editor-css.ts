@@ -410,23 +410,6 @@ export const editorStyles = css`
         flex-direction: column;
         gap: 6px;
     }
-    .about-link
-    {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        text-decoration: none;
-        color: var(--primary-color, #3b82f6);
-        font-size: var(--ha-font-size-m, 14px);
-        font-weight: var(--ha-font-weight-medium, 500);
-        padding: 6px 0;
-    }
-    .about-link:hover { text-decoration: underline; }
-    .about-link ha-icon
-    {
-        --mdc-icon-size: 18px;
-        color: inherit;
-    }
     .about-paragraph
     {
         margin: 0;
@@ -440,16 +423,6 @@ export const editorStyles = css`
         padding-top: 14px;
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  Soft framed block grouping a set of related fields, so they read as one unit within the section rather
-        than loose rows. */
-    .entity-block
-    {
-        margin-top: 8px;
-        padding: 10px 12px;
-        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
-        border-radius: var(--ha-border-radius-md, 6px);
-    }
-
     /*  Device list: one row per dashboard-tracked device, colour dot + name on the left, the group pill and the
         show/hide toggle on the right. Framed as a soft card so the list reads as a distinct block within the
         section. */
@@ -574,15 +547,6 @@ export const editorStyles = css`
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
     }
-    /*  Sub-heading for a grouped block inside a section (e.g. the devices list under Entities & data display). */
-    /*  Sub-heading for a grouped block, styled like a normal field label (.label), not a bold heading. */
-    .field-block-label
-    {
-        margin-top: 14px;
-        margin-bottom: 4px;
-        font-size: var(--ha-font-size-s, 13px);
-        color: var(--primary-text-color, #212121);
-    }
     /*  One group's identity in a framed block: line 1 = badge + name, line 2 = colour + icon pickers (each half). */
     .group-block
     {
@@ -645,11 +609,6 @@ export const editorStyles = css`
     {
         outline: none;
         border-color: var(--primary-color, #03a9f4);
-    }
-    .group-picker
-    {
-        flex: 1 1 0;
-        min-width: 0;
     }
     /*  Chip box (Chips & colours): the chip's name grows to push the on/off toggle to the right edge; the small
         direction label sits before grid/battery's two colour pickers. */

@@ -355,7 +355,6 @@ function wireEngineCallbacks(host: InitHost): void
         //matrix is available. Subsequent transforms refresh via onMapTransform.
         refreshHud(host);
     };
-    //Cloud-disc hover is wired directly on the SVG via @mousemove/@mouseleave (render path's solar-svg), so no engine callback for it.
     //rAF-coalesced overlay refresh: the engine fires transform events in bursts during inertial pan; without coalescing, refreshHud
     //+ dome re-projection ran several times per frame (heavy: sun arc, home silhouettes, dome cells + ribbon). The gate caps it at
     //one full pass per frame.

@@ -52,8 +52,6 @@ export const lv: Translations = {
         solarIrradianceEntity:     'Saules starojuma entītija',
         solarIrradianceEntityHelp: 'Izvēlies sensoru, kas ziņo par globālo īsviļņu starojumu W/m² (parasti Ecowitt / Davis / personīgā meteostacija). Kad tas ir iestatīts, tā pašreizējais stāvoklis un ierakstītāja vēsture aizstāj Open-Meteo dzīvajam un pagātnes starojumam visur, kur tas parādās (saules mikroshēmas skaitlis, PV diagrammas Y ass, saules loka krāsojums). Prognozes stundas paliek uz Open-Meteo, jo sensors nevar nest nākotnes vērtības.',
         buildingsSection:   'Māja & ēkas',
-        homeColor:          'Mājas krāsa',
-        homeColorHelp:      'Mājas krāsa: mājas plāksnīte un katrs patēriņa nolasījums.',
         buildingsHint:      'Lai karte blīvās pilsētu teritorijās paliktu raita, 3D tiek renderētas tikai ēkas konfigurētā rādiusa robežās ap māju. Pati māja paliek pilnīgi necaurspīdīga; tuvumā esošās ēkas tiek renderētas ar konfigurēto necaurspīdību, lai tās sniegtu pilsētas kontekstu, nekonkurējot ar datu pārklājumiem. Klastera rādiuss grupē piesaistītās palīgēkas (verandas, garāžas, šķūņus) "mājas" kopā.',
         displayRadius:         'Attēlojuma rādiuss',
         displayRadiusHelp:     'Rādiuss ap māju, kurā ēkas tiek iegūtas un zīmētas, līdz pat izbalējušā kartes diska malai. Samazini to, lai atvieglotu renderēšanu lēnā ierīcē; 0 rāda tikai māju.',

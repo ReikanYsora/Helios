@@ -471,7 +471,7 @@ export class HeliosCard extends LitElement
     //Called by the setHeliosLocation / clearHeliosLocation debug helpers. Clears the cached home key so
     //the next updated() sees identityChanged and re-inits the engine against the new coordinates, then
     //schedules that pass. The visual editor reaches the same re-init via the natural identity-drift path
-    //(config-changed -> setConfig -> updated() notices _getHomeCoords() resolves to a new key).
+    //(config-changed -> setConfig -> updated() notices getHomeCoords() resolves to a new key).
     public invalidateLocation(): void
     {
         this._lastHomeKey = '';
@@ -1082,8 +1082,7 @@ export class HeliosCard extends LitElement
         }
         return false;
     }
-    //Per-home localStorage key for the card's UI state (selected chip + timeline mode). Mirrors the engine's
-    //camera-pose key scheme so each home restores its own view. Null before coords resolve.
+    //True once _restoreUiState() has run, so updated() reads localStorage at most once instead of on every pass.
     private _uiStateRestored = false;
     //Join the cache-id registry in connection order, so a pasted card sharing the source's id gets its own
     //order-stable slot. Idempotent (HA edit-mode thrash re-fires connect).
@@ -1133,6 +1132,8 @@ export class HeliosCard extends LitElement
         return idx > 0 ? `${id}#${idx + 1}` : id;
     }
 
+    //Per-home localStorage key for the card's UI state (selected chip + timeline mode). Mirrors the engine's
+    //camera-pose key scheme so each home restores its own view. Null before coords resolve.
     private _uiStateStorageKey(): string | null
     {
         //A per-card cache id isolates cards on the same home (duplicates get a #N suffix); else fall back to

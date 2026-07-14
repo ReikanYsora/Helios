@@ -52,8 +52,6 @@ export const pl: Translations = {
         solarIrradianceEntity:     'Encja nasłonecznienia solarnego',
         solarIrradianceEntityHelp: 'Wybierz czujnik raportujący globalne nasłonecznienie krótkofalowe w W/m² (typowo Ecowitt / Davis / własna stacja pogodowa). Po ustawieniu jego bieżący stan i historia z rejestratora zastępują Open-Meteo dla bieżącego i przeszłego nasłonecznienia wszędzie tam, gdzie się pojawia (liczba na chipie słońca, oś Y wykresu PV, kolorowanie łuku słonecznego). Godziny prognozy pozostają na Open-Meteo, ponieważ czujnik nie może mieć wartości z przyszłości.',
         buildingsSection:   'Dom i budynki',
-        homeColor:          'Kolor domu',
-        homeColorHelp:      'Kolor domu: pigułka domu i wszystkie odczyty zużycia.',
         buildingsHint:      'Aby karta działała płynnie w gęsto zabudowanych terenach miejskich, w 3D renderowane są tylko budynki w skonfigurowanym promieniu wokół domu. Sam dom pozostaje w pełnej nieprzezroczystości; pobliskie budynki są renderowane ze skonfigurowaną przezroczystością, aby dawały kontekst miejski bez konkurowania z nakładkami danych. Promień grupowania łączy przylegające zabudowania (werandy, garaże, szopy) w zbiór "domu".',
         displayRadius:         'Promień wyświetlania',
         displayRadiusHelp:     'Promień wokół domu, w którym budynki są pobierane i rysowane, aż do krawędzi przygaszonego dysku mapy. Zmniejsz, aby odciążyć renderowanie na wolnym urządzeniu; 0 pokazuje tylko dom.',

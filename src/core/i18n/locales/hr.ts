@@ -52,8 +52,6 @@ export const hr: Translations = {
         solarIrradianceEntity:     'Entitet sunčevog ozračenja',
         solarIrradianceEntityHelp: 'Odaberi senzor koji javlja globalno kratkovalno ozračenje u W/m² (tipično Ecowitt / Davis / osobna meteorološka postaja). Kada je postavljen, njegovo trenutno stanje i povijest iz snimača zamjenjuju Open-Meteo za uživo i prošlo ozračenje svugdje gdje se pojavljuje (broj na čipu sunca, os Y grafa PV, bojanje sunčevog luka). Sati prognoze ostaju na Open-Meteo jer senzor ne može nositi buduće vrijednosti.',
         buildingsSection:   'Dom i zgrade',
-        homeColor:          'Boja doma',
-        homeColorHelp:      'Boja doma: oznaka doma i sva očitanja potrošnje.',
         buildingsHint:      'Da bi kartica ostala glatka u gusto izgrađenim urbanim područjima, u 3D se iscrtavaju samo zgrade unutar postavljenog radijusa oko doma. Sam dom ostaje u punoj neprozirnosti; obližnje zgrade iscrtavaju se s postavljenom prozirnošću, tako da daju urbani kontekst bez natjecanja s podatkovnim slojevima. Radijus grupiranja okuplja prislonjene pomoćne zgrade (verande, garaže, šupe) u skupinu "doma".',
         displayRadius:         'Radijus prikaza',
         displayRadiusHelp:     'Radijus oko doma u kojem se zgrade dohvaćaju i crtaju, sve do ruba izblijedjelog diska karte. Smanji ga da olakšaš iscrtavanje na sporom uređaju; 0 prikazuje samo dom.',

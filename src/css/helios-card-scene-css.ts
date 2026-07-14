@@ -107,7 +107,7 @@ export const heliosCardStyles = css`
             var(--ha-card-background, var(--card-background-color, #fff)) 100%
         );
     }
-    /*  Screen-space scene SVG: night-shade + cast shadows + extruded buildings repainted every frame.
+    /*  Screen-space scene SVG: cast shadows + extruded buildings repainted every frame.
         Full-size overlay above the ground, click-transparent (the HUD SVGs own their pointer events). */
     .scene-svg
     {

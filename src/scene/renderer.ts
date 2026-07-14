@@ -1,8 +1,8 @@
 //SceneRenderer: the card-agnostic 2.5D renderer. It owns sibling elements inside the host container: a
 //ground holder (the tilted basemap tile canvas + edge fade, driven by a CSS 3D transform), an optional
 //ground overlay, and a screen-space scene <svg> repainted each frame with the occluding geometry
-//(night-shade wash, cast shadows, extruded buildings). The host drives data (location, buildings, sun,
-//palette) and pose (bearing/pitch), then calls redraw(); per-frame work is rAF-coalesced.
+//(cast shadows, extruded buildings). The host drives data (location, buildings, sun, palette) and pose
+//(bearing/pitch), then calls redraw(); per-frame work is rAF-coalesced.
 //
 //It does not own the HUD (chips, leaders, sun arc, timeline): the host owns those in its own SVG layer
 //above this one, projected through `camera`.
@@ -24,15 +24,13 @@ const prefersReducedMotion = (): boolean =>
 
 export interface SceneRendererOptions
 {
-    //Sun colour + shadow colour/opacity for the painted geometry, merged into the palette.
-    sun?:           string;
+    //Shadow colour/opacity for the painted geometry, merged into the palette.
     shadow?:        string;
     shadowOpacity?: number;
 }
 
 export interface ScenePaletteFull extends ScenePalette
 {
-    sun:             string;
     shadow:          string;
     shadowOpacity:   number;
     //0..1 how solid the surrounding (non-home) buildings read.
@@ -66,7 +64,6 @@ export class SceneRenderer
     private _palette: ScenePaletteFull = {
         home:            '#488fc2',
         neighbor:        '#cccccc',
-        sun:             '#ffc107',
         shadow:          '#000000',
         shadowOpacity:   0.32,
         neighborOpacity: 0.25,
@@ -86,7 +83,6 @@ export class SceneRenderer
     public constructor(container: HTMLElement, opts: SceneRendererOptions = {})
     {
         this._container = container;
-        if (opts.sun)           { this._palette.sun = opts.sun; }
         if (opts.shadow)        { this._palette.shadow = opts.shadow; }
         if (opts.shadowOpacity != null) { this._palette.shadowOpacity = opts.shadowOpacity; }
 

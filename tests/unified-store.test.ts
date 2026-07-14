@@ -19,7 +19,6 @@ function makeHost(over: Partial<UnifiedStoreHost> = {}): UnifiedStoreHost
         _periodPastDays:              365,
         _periodFutureDays:            0,
         _timelineMode:                'year',
-        hass:                         { language: 'en', config: { latitude: 48, longitude: 2 } },
         _chartSeries:                 null,
         _pvChangeSeries:              null,
         _batteryChargeChangeSeries:   null,

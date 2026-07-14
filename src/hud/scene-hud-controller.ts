@@ -30,6 +30,8 @@ const SUN_RIM_WIDTH = 1.5;
 //leaders dock against this stadium so they all meet the same focal energy node.
 const HOME_PILL_HALF_WIDTH_PX  = 38;
 const HOME_PILL_HALF_HEIGHT_PX = 14;
+//Px a chip leader's start point is nudged horizontally toward the home before the L-path turns.
+const CHIP_HOME_NUDGE_PX       = 22;
 //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
 const SUN_FILL_OPACITY_BG = 0.20;
 //Below-horizon segments are dots whose diameter IS the stroke width, scaled down vs daytime so the
@@ -68,8 +70,8 @@ export class SceneHudController
 
     //Build a rounded L from a chip to the home pill: horizontal leg toward the home's vertical axis,
     //fillet, vertical leg to the pill border. chipX/chipY is the chip centre; the leader starts at the
-    //chip edge nudged by chipNudgePx toward the home.
-    private _buildLPathToHome(layout: LabelLayout | null, chipX: number, chipY: number, chipNudgePx: number): string
+    //chip edge nudged CHIP_HOME_NUDGE_PX toward the home.
+    private _buildLPathToHome(layout: LabelLayout | null, chipX: number, chipY: number): string
     {
         if (!layout)
         {
@@ -80,7 +82,7 @@ export class SceneHudController
         //Chip-side start: nudge horizontally toward home.
         const dirH = homeX > chipX ? 1 : -1;
         const dirV = homeY > chipY ? 1 : -1;
-        const sx = chipX + dirH * chipNudgePx;
+        const sx = chipX + dirH * CHIP_HOME_NUDGE_PX;
         const sy = chipY;
         //Land the vertical leg ~13 px off centre so two leaders on the same row don't collide on the
         //pill's axis. That x sits over the stadium's flat edge, so the leg docks at the half-height.
@@ -407,10 +409,10 @@ export class SceneHudController
         //Battery -> home: the discharge flow (rounded L + bead) while discharging, else a static connector so
         //the chip is always tied to the home hub like every other chip.
         const dischargeLeaderPath = (layout && showBatteryChip && batteryDischarging)
-            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY, 22)
+            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY)
             : '';
         const batteryHomeLeaderPath = (layout && showBatteryChip && !batteryDischarging)
-            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY, 22)
+            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY)
             : '';
         //PV -> battery chip, only while charging: an inverted L dropping from the PV chip then right into the
         //battery chip's left edge, PV-coloured bead toward the battery. Removed the instant it discharges.
@@ -426,7 +428,7 @@ export class SceneHudController
                 true
             )
             : '';
-        const gridLeaderPath       = this._buildLPathToHome(layout, layout?.gridLabel.x ?? 0, layout?.gridLabel.y ?? 0, 22);
+        const gridLeaderPath       = this._buildLPathToHome(layout, layout?.gridLabel.x ?? 0, layout?.gridLabel.y ?? 0);
 
         //Monitoring-group chips: DYNAMIC placement by the number of active groups (each = >= 1 visible device), so
         //the cluster stays balanced instead of pinning every group to a fixed corner:
@@ -494,7 +496,7 @@ export class SceneHudController
                     //2 or 3 groups: the first two sit left/right on the top row, with a grid/battery-style
                     //horizontal lead leaving the chip's mid-height and docking on the home pill.
                     anchor   = { x: i === 0 ? groupLeftX : groupRightX, y: groupRow1Y };
-                    leadPath = this._buildLPathToHome(layout, anchor.x, anchor.y, 22);
+                    leadPath = this._buildLPathToHome(layout, anchor.x, anchor.y);
                     reverse  = true;
                 }
                 else
@@ -1065,7 +1067,7 @@ export class SceneHudController
                         ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
                         : html`
                     <div
-                        class="home-pill ${showHomeUsageChip ? 'has-usage' : ''} ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
+                        class="home-pill ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}

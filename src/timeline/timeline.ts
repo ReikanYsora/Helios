@@ -48,8 +48,7 @@ export function tick(host: TimelineHost): void
 {
     const next = new Date();
     const prev = host._now;
-    if (prev
-        && next.getMinutes() === prev.getMinutes()
+    if (next.getMinutes() === prev.getMinutes()
         && next.getHours()   === prev.getHours()
         && next.getDate()    === prev.getDate()
         && next.getMonth()   === prev.getMonth()
@@ -60,8 +59,7 @@ export function tick(host: TimelineHost): void
     //Day rollover: getTimelineRange() is computed off "today midnight - N past days", so crossing midnight must shift
     //the window by 24 h. Without this refetch the timeline stays stuck on the previous day's window until the next
     //weather push.
-    const dayRolledOver = !prev
-        || next.getDate()     !== prev.getDate()
+    const dayRolledOver = next.getDate()     !== prev.getDate()
         || next.getMonth()    !== prev.getMonth()
         || next.getFullYear() !== prev.getFullYear();
     host._now = next;

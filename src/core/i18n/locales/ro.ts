@@ -52,8 +52,6 @@ export const ro: Translations = {
         solarIrradianceEntity:     'Entitatea de iradianta solara',
         solarIrradianceEntityHelp: 'Alege un senzor care raporteaza iradianta globala in unde scurte in W/m² (de regula o statie meteo Ecowitt / Davis / personala). Cand este setat, starea sa actuala si istoricul din recorder inlocuiesc Open-Meteo pentru iradianta live si trecuta peste tot unde apare (numarul de pe cipul soarelui, axa Y a graficului PV, colorarea arcului solar). Orele de prognoza raman pe Open-Meteo, deoarece un senzor nu poate purta valori viitoare.',
         buildingsSection:   'Casa si cladiri',
-        homeColor:          'Culoarea casei',
-        homeColorHelp:      'Culoarea casei: pastila casei si toate afisarile de consum.',
         buildingsHint:      'Pentru a pastra cardul fluid in zone urbane dense, doar cladirile aflate in raza configurata in jurul casei sunt redate in 3D. Casa in sine ramane la opacitate completa; cladirile din apropiere sunt redate cu opacitatea configurata, astfel incat ofera context urban fara a concura cu suprapunerile de date. Raza de grupare aduna anexele atasate (verande, garaje, soproane) in setul "casei".',
         displayRadius:         'Raza de afisare',
         displayRadiusHelp:     'Raza din jurul casei in care cladirile sunt preluate si desenate, pana la marginea discului hartii estompat. Coboara-o pentru a usura redarea pe un dispozitiv lent; 0 arata doar casa.',

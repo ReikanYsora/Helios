@@ -52,8 +52,6 @@ export const isLocale: Translations = {
         solarIrradianceEntity:     'Eind fyrir sólargeislun',
         solarIrradianceEntityHelp: 'Veldu skynjara sem skráir hnattræna stuttbylgjugeislun í W/m² (venjulega Ecowitt / Davis / persónuleg veðurstöð). Þegar hann er stilltur koma núverandi staða hans og upptökuferill í stað Open-Meteo fyrir rauntíma- og fortíðargeislunina alls staðar þar sem hún birtist (tala á sólarflögunni, Y-ás PV-grafsins, litun sólarbogans). Spástundir haldast á Open-Meteo þar sem skynjari getur ekki borið framtíðargildi.',
         buildingsSection:   'Heimili & byggingar',
-        homeColor:          'Litur heimilis',
-        homeColorHelp:      'Litur heimilis: heimilispillan og hver notkunarlestur.',
         buildingsHint:      'Til að halda kortinu lipru á þéttbýlum svæðum eru aðeins byggingar innan stillta radíusins umhverfis heimilið myndgerðar í 3D. Heimilið sjálft helst í fullri ógagnsæi; nálægar byggingar eru myndgerðar með stilltu ógagnsæi svo þær veiti borgarsamhengi án þess að keppa við gagnayfirlögin. Klasaradíusinn flokkar áfastar útibyggingar (verandir, bílskúra, skúra) í "heimilis"-mengið.',
         displayRadius:         'Birtingarradíus',
         displayRadiusHelp:     'Radíus umhverfis heimilið þar sem byggingar eru sóttar og teiknaðar, allt að jaðri dofnaða kortskífunnar. Lækkaðu hann til að létta myndgerð á hægu tæki; 0 sýnir aðeins heimilið.',

@@ -295,9 +295,7 @@ export function batteryLevelIcon(soc: number | null, charging: boolean): string
 
 //HA ui_color tokens: a STRING token, either a theme keyword (primary, accent, disabled) or a Material colour name
 //(red, grey, ...), mapping to the CSS var `--<token>-color`. A token is just slugged into its var name and the live
-//theme resolves it. `uiColorVar` yields the var NAME (for the engine, which reads it to hex via getComputedStyle);
-//`resolveUiColor` yields a ready `var(--token-color, fallback)` for CSS/inline styles, passing through values already
-//given as #/rgb/var.
+//theme resolves it. `uiColorVar` yields the var NAME (for the engine, which reads it to hex via getComputedStyle).
 export function uiColorVar(token: string | undefined, fallbackToken: string): string
 {
     const t = (token ?? '').trim();

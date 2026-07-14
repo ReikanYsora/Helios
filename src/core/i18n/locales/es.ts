@@ -52,8 +52,6 @@ export const es: Translations = {
         solarIrradianceEntity:     'Entidad de irradiancia solar',
         solarIrradianceEntityHelp: 'Elige un sensor que reporte la irradiancia global de onda corta en W/m² (típico de estaciones Ecowitt / Davis / meteorológicas personales). Cuando se define, su estado actual y su historial del recorder reemplazan a Open-Meteo para la irradiancia en directo y pasada en todos los sitios donde aparece (número del chip del sol, eje Y del gráfico FV, coloreado del arco solar). Las horas de previsión siguen usando Open-Meteo, ya que un sensor no puede tener valores futuros.',
         buildingsSection:   'Casa y edificios',
-        homeColor:          'Color de la casa',
-        homeColorHelp:      'Color de la casa: la píldora de la casa y todas las lecturas de consumo.',
         buildingsHint:      'Para mantener la tarjeta fluida en zonas urbanas densas, solo se renderizan en 3D los edificios dentro del radio configurado alrededor de la casa. La casa en sí se mantiene a plena opacidad; los edificios cercanos se renderizan con la opacidad configurada para dar contexto urbano sin competir con las capas de datos. El radio de agrupación reúne los anexos adosados (porches, garajes, cobertizos) en el grupo "casa".',
         displayRadius:         'Radio de visualización',
         displayRadiusHelp:     'Radio alrededor de la casa en el que se obtienen y dibujan los edificios, hasta el borde del disco del mapa difuminado. Bájalo para aligerar el renderizado en un dispositivo lento; 0 muestra solo la casa.',

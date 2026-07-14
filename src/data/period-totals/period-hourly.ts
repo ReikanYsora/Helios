@@ -67,9 +67,8 @@ function binChangeByHour(buckets: ChangeBucket[] | null): number[]
     return sum;
 }
 
-//Fetch hourly statistics and bin one value by hour-of-day. `power`: energy/power meters resolved to watts (mean
-//preferred, else change/duration); otherwise the raw mean (SoC %).
-async function statByHour(hass: any, ids: string[], startMs: number, endMs: number, power: boolean): Promise<number[]>
+//Fetch hourly statistics and bin the per-bucket `mean` by hour-of-day (used for the battery SoC percent profile).
+async function statByHour(hass: any, ids: string[], startMs: number, endMs: number): Promise<number[]>
 {
     const sum = new Array<number>(HOURS_PER_DAY).fill(0);
     const cnt = new Array<number>(HOURS_PER_DAY).fill(0);
@@ -82,10 +81,7 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
             end_time:      new Date(endMs).toISOString(),
             statistic_ids: [...ids].sort(),
             period:        'hour',
-            //Power slots read the recorded per-bucket mean ONLY (measured watts): a mis-picked energy
-            //meter yields nothing rather than watts derived from its kWh deltas.
             types:         ['mean'],
-            ...(power ? { units: { power: 'W' } } : {}),
         });
         for (const id of ids)
         {
@@ -97,7 +93,7 @@ async function statByHour(hass: any, ids: string[], startMs: number, endMs: numb
                 const v = typeof b?.mean === 'number' && isFinite(b.mean) ? b.mean : null;
                 if (v === null) { continue; }
                 const h = serverHour(tMs);
-                sum[h] += power ? Math.abs(v) : v;
+                sum[h] += v;
                 cnt[h] += 1;
             }
         }
@@ -121,7 +117,7 @@ async function fetchHourlyProfile(
         Promise.all(solarIds.map(id => fetchChangeSeries(hass, [id], startMs, endMs, 'hour'))),
         chg(d.gridStatEnergyFroms), chg(d.gridStatEnergyTos),
         chg(d.batteryStatEnergyTos), chg(d.batteryStatEnergyFroms),
-        statByHour(hass, d.batteryStatSocs, startMs, endMs, false),
+        statByHour(hass, d.batteryStatSocs, startMs, endMs),
     ]);
 
     const pv               = solarPerSource.map(buckets => binChangeByHour(buckets));

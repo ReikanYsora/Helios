@@ -36,8 +36,9 @@ export interface HeliosConfig
     'display-update-frequency-per-hour'?: unknown;
     //Idle-camera orbit opt-in. Default false.
     'auto-rotate-enabled'?:    unknown;
-    //Camera pose pinned at init (degrees), overriding the auto-default (pitch 55, bearing toward the
-    //equator). pitch 15..85, bearing 0..359; either can be set alone. Drag still works unless camera-locked.
+    //Camera pose pinned at init (degrees), overriding the auto-default (CAMERA_PITCH_REST_DEG, bearing toward
+    //the equator). pitch CAMERA_PITCH_MIN_DEG..CAMERA_PITCH_MAX_DEG (0..75), bearing 0..359; either can be set
+    //alone. Drag still works unless camera-locked.
     'camera-pitch-deg'?:       unknown;
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.

@@ -8,12 +8,11 @@ import { arcColor } from '../core/render-kit/colors';
 
 
 //One arc sample from engine.projectSunScene(): (x,y) for placement, nearness/belowHorizon for visual modulation,
-//altitude (deg) for the time-of-day arc colour, irradiance for the legend.
+//altitude (deg) for the time-of-day arc colour.
 export interface SunArcSample
 {
     x: number;
     y: number;
-    irradiance: number;
     altitude:   number;
     nearness:   number;
     belowHorizon: boolean;

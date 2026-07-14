@@ -52,8 +52,6 @@ export const lt: Translations = {
         solarIrradianceEntity:     'Saulės apšvitos objektas',
         solarIrradianceEntityHelp: 'Pasirink jutiklį, pranešantį apie globalią trumpabangę apšvitą W/m² (paprastai Ecowitt / Davis / asmeninė orų stotis). Kai nustatyta, jo dabartinė būsena ir įrašymo istorija pakeičia Open-Meteo gyvai ir praeities apšvitai visur, kur ji rodoma (saulės lusto skaičius, PV diagramos Y ašis, saulės lanko spalvinimas). Prognozės valandos lieka su Open-Meteo, nes jutiklis negali turėti ateities verčių.',
         buildingsSection:   'Namai & pastatai',
-        homeColor:          'Namų spalva',
-        homeColorHelp:      'Namų spalva: namų plokštelė ir kiekvienas suvartojimo rodmuo.',
         buildingsHint:      'Kad kortelė tankiose miesto vietovėse išliktų sklandi, 3D atvaizduojami tik pastatai sukonfigūruoto spindulio ribose aplink namus. Patys namai lieka visiškai nepermatomi; netoliese esantys pastatai atvaizduojami su sukonfigūruotu nepermatomumu, kad suteiktų miesto kontekstą nekonkuruodami su duomenų sluoksniais. Sankaupos spindulys sugrupuoja prijungtus pagalbinius pastatus (verandas, garažus, sandėliukus) į "namų" rinkinį.',
         displayRadius:         'Rodymo spindulys',
         displayRadiusHelp:     'Spindulys aplink namus, kuriame pastatai gaunami ir piešiami, iki pat išblukusio žemėlapio disko krašto. Sumažink jį, kad palengvintum atvaizdavimą lėtame įrenginyje; 0 rodo tik namus.',

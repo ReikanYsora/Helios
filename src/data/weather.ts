@@ -240,11 +240,11 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 
 //Variables requested from Open-Meteo. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged
 //over the preceding one), matching the visual time cursor; it powers the live irradiance chip and sun-arc colouring.
-//The split cloud variables keep total cloud_cover for rendering and let us detect the low-layer "fog spike" failure
-//mode. Only the irradiance (shortwave) + cloud series are requested; the PV forecast is read natively from Home Assistant.
+//The low/mid/high cloud layers are combined client-side into cloudEffective for rendering (and let us detect the
+//low-layer "fog spike" failure mode); the API's raw total cloud_cover is not used. Only the irradiance (shortwave)
+//+ split cloud series are requested; the PV forecast is read natively from Home Assistant.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
-    'cloud_cover',
     'cloud_cover_low',
     'cloud_cover_mid',
     'cloud_cover_high',

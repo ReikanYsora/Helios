@@ -52,8 +52,6 @@ export const de: Translations = {
         solarIrradianceEntity:     'Sonneneinstrahlungs-Entität',
         solarIrradianceEntityHelp: 'Wähle einen Sensor, der die globale kurzwellige Bestrahlung in W/m² meldet (typischerweise eine Ecowitt- / Davis- / private Wetterstation). Wenn gesetzt, ersetzen sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo für die Live- und Vergangenheitsbestrahlung überall, wo sie erscheint (Zahl auf dem Sonnen-Chip, Y-Achse des PV-Diagramms, Färbung des Sonnenbogens). Prognosestunden bleiben bei Open-Meteo, da ein Sensor keine Zukunftswerte liefern kann.',
         buildingsSection:   'Zuhause & Gebäude',
-        homeColor:          'Farbe des Zuhauses',
-        homeColorHelp:      'Farbe des Zuhauses: die Zuhause-Pille und alle Verbrauchsanzeigen.',
         buildingsHint:      'Damit die Karte in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des konfigurierten Radius um das Zuhause in 3D gerendert. Das Zuhause selbst bleibt voll deckend; nahe Gebäude werden mit der konfigurierten Deckkraft gerendert, sodass sie städtischen Kontext liefern, ohne mit den Datenoverlays zu konkurrieren. Der Cluster-Radius gruppiert angebaute Nebengebäude (Wintergärten, Garagen, Schuppen) in die "Zuhause"-Gruppe.',
         displayRadius:         'Anzeigeradius',
         displayRadiusHelp:     'Radius um das Zuhause, in dem Gebäude geladen und gezeichnet werden, bis zum Rand der ausgeblendeten Kartenscheibe. Senke ihn, um das Rendern auf einem langsamen Gerät zu erleichtern; 0 zeigt nur das Zuhause.',

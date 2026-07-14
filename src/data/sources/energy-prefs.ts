@@ -20,11 +20,6 @@ export interface EnergyDefaults
     //Grid import kWh meters (`stat_energy_from`). Drives scrub past derivation and `imported today`.
     gridStatEnergyFroms:    string[];
     gridStatEnergyTos:      string[]; //Grid export kWh meters (`stat_energy_to`).
-    //Grid export earnings config (from the dashboard's `flow_to`): a compensation statistic in the local currency
-    //(preferred, exact), or a fixed / entity-driven price per exported kWh. Empty/null when no sale is configured.
-    gridExportCompensationStats: string[];
-    gridExportPriceNumber:  number | null;
-    gridExportPriceEntity:  string | null;
     //Battery live power sensors (`power_config`). After `invertedRateEntities` sign flips: charge positive / discharge negative.
     batteryStatRates:       string[];
     batteryStatEnergyFroms: string[]; //Battery discharge kWh meters (`stat_energy_from`). Drives `discharged today`.
@@ -63,8 +58,8 @@ export interface DeviceConsumption
     statRate:        string;
     //User-given dashboard name, '' when unset (the consumer falls back to the entity's friendly name).
     name:            string;
-    //Parent stat this device is nested under (`included_in_stat`), '' when standalone. A child's total is subtracted
-    //from its parent so a compound device is not double-counted.
+    //Parent stat this device is nested under (`included_in_stat`), '' when standalone. Parsed and reserved for a
+    //future parent-subtraction pass (so a compound device isn't double-counted); no consumer reads it yet.
     includedInStat:  string;
     //Position in the dashboard's device list. HA colours its devices graph by this index
     //(`--graph-color-{index+1}`, else `--color-{(index % 54)+1}`), so the device curves reuse it to match the dashboard.
@@ -94,9 +89,6 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     gridStatRates:          [],
     gridStatEnergyFroms:    [],
     gridStatEnergyTos:      [],
-    gridExportCompensationStats: [],
-    gridExportPriceNumber:  null,
-    gridExportPriceEntity:  null,
     batteryStatRates:       [],
     batteryStatEnergyFroms: [],
     batteryStatEnergyTos:   [],
@@ -315,9 +307,6 @@ export function parseEnergyPrefs(prefs: {
         gridStatRates:          [],
         gridStatEnergyFroms:    [],
         gridStatEnergyTos:      [],
-        gridExportCompensationStats: [],
-        gridExportPriceNumber:  null,
-        gridExportPriceEntity:  null,
         batteryStatRates:       [],
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
@@ -382,19 +371,6 @@ export function parseEnergyPrefs(prefs: {
             for (const f of asRecordArray(src['flow_to']))
             {
                 pushStrings(f['stat_energy_to'], out.gridStatEnergyTos);
-                //Export earnings config on this flow: a compensation stat (exact, in currency), else a fixed or
-                //entity-driven price per kWh. First wins for the single-price fields.
-                pushStrings(f['stat_compensation'], out.gridExportCompensationStats);
-                const num = f['number_energy_price'];
-                if (typeof num === 'number' && Number.isFinite(num) && out.gridExportPriceNumber === null)
-                {
-                    out.gridExportPriceNumber = num;
-                }
-                const ent = pickFirstString(f['entity_energy_price']);
-                if (ent && !out.gridExportPriceEntity)
-                {
-                    out.gridExportPriceEntity = ent;
-                }
             }
             const directRate = pickFirstString(src['stat_rate']);
             if (directRate)

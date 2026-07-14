@@ -52,8 +52,6 @@ export const cs: Translations = {
         solarIrradianceEntity:     'Entita slunečního ozáření',
         solarIrradianceEntityHelp: 'Vyber senzor hlásící globální krátkovlnné ozáření ve W/m² (typicky Ecowitt / Davis / vlastní meteostanice). Po nastavení jeho aktuální stav a historie z rekordéru nahradí Open-Meteo pro živé i minulé ozáření všude, kde se objevuje (číslo na čipu slunce, osa Y grafu FV, vybarvení slunečního oblouku). Hodiny předpovědi zůstávají na Open-Meteo, protože senzor nemůže nést budoucí hodnoty.',
         buildingsSection:   'Domov a budovy',
-        homeColor:          'Barva domova',
-        homeColorHelp:      'Barva domova: bublina domova a všechny odečty spotřeby.',
         buildingsHint:      'Aby karta zůstala plynulá v hustě zastavěných městských oblastech, ve 3D se vykreslují pouze budovy v nastaveném poloměru kolem domova. Samotný domov zůstává v plné neprůhlednosti; okolní budovy se vykreslují s nastavenou průhledností, takže poskytují městský kontext, aniž by soupeřily s datovými vrstvami. Poloměr shlukování seskupuje přilehlé přístavby (verandy, garáže, kůlny) do skupiny "domova".',
         displayRadius:         'Poloměr zobrazení',
         displayRadiusHelp:     'Poloměr kolem domova, ve kterém se budovy načítají a vykreslují, až k okraji ztlumeného disku mapy. Sniž ho, abys odlehčil vykreslování na pomalém zařízení; 0 zobrazí jen domov.',
