@@ -3,7 +3,7 @@
 //and owns the per-frame caches.
 
 import { getSunPosition } from '../core/time/sun';
-import { SUN_ARC_RADIUS_M, METRES_PER_DEGREE } from '../core/config/constants';
+import { SUN_ARC_RADIUS_M, METRES_PER_DEGREE, DEG } from '../core/config/constants';
 
 //date -> 3D point on the celestial hemisphere (radius SUN_ARC_RADIUS_M × scale, centred on home) as
 //(lon, lat, altitude_m) for the scene projection. Azimuth clockwise from North; ENU offsets
@@ -13,9 +13,8 @@ export function sunSpherePoint(
 ): { lon: number; lat: number; altitudeM: number; altitudeDeg: number }
 {
     const sun = getSunPosition(date, homeLat, homeLon);
-    const D   = Math.PI / 180;
-    const a   = sun.altitude * D;
-    const z   = sun.azimuth  * D;
+    const a   = sun.altitude * DEG;
+    const z   = sun.azimuth  * DEG;
 
     //Scale the celestial radius on kiosk layouts so the arc doesn't sit at its grid-tuned size.
     const R = SUN_ARC_RADIUS_M * scale;
@@ -25,7 +24,7 @@ export function sunSpherePoint(
 
     //Local metres-per-degree.
     const mPerDegLat = METRES_PER_DEGREE;
-    const mPerDegLon = METRES_PER_DEGREE * Math.cos(homeLat * D);
+    const mPerDegLon = METRES_PER_DEGREE * Math.cos(homeLat * DEG);
 
     return {
         lon:         homeLon + east  / mPerDegLon,

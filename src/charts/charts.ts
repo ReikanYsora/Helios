@@ -129,8 +129,8 @@ export {
 } from '../timeline/timeline-overlays';
 export {
     renderTimelineHoverTooltip,
-    handleChartHoverMove,
-    handleChartHoverLeave,
+    onChartHoverMove,
+    onChartHoverLeave,
 } from '../timeline/timeline-tooltip';
 export {
     renderBottomChart,

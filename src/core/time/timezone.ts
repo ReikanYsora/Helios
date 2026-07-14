@@ -79,5 +79,6 @@ export function serverHourFrac(ms: number): number
 //Integer hour-of-day [0, 23] of an instant, in the home zone.
 export function serverHour(ms: number): number
 {
-    return Math.floor(serverHourFrac(ms)) % HOURS_PER_DAY;
+    //serverHourFrac is already in [0, 24), so the floor is in [0, 23]; no wrap needed.
+    return Math.floor(serverHourFrac(ms));
 }

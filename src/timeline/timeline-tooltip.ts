@@ -370,7 +370,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 //Hover-cursor pointer handlers, attached per chart card (its bounding rect drives the fractional X). A press
 //(e.buttons !== 0) clears the hover so a scrub drag leaves no stale dot; the scrub itself lives on the time-bar
 //pointerdown and captures the pointer until release.
-export function handleChartHoverMove(host: ChartHost, e: PointerEvent): void
+export function onChartHoverMove(host: ChartHost, e: PointerEvent): void
 {
     if (e.buttons !== 0)
     {
@@ -392,7 +392,7 @@ export function handleChartHoverMove(host: ChartHost, e: PointerEvent): void
 }
 
 
-export function handleChartHoverLeave(host: ChartHost): void
+export function onChartHoverLeave(host: ChartHost): void
 {
     host._chartHoverPct = null;
 }

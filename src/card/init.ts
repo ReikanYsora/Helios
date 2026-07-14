@@ -279,13 +279,13 @@ export function initVisibilityObserver(host: InitHost): void
 export function initEngine(host: InitHost): void
 {
     host._initInflight = true;
-    initEngineNow(host);
+    scheduleEngineInit(host);
 }
 
 
-//Build the engine + wire its callbacks back into card state. Bails (clearing the inflight flag so the caller
-//retries next Lit cycle) if the card detached or the container / hass.config / coords aren't ready yet.
-export function initEngineNow(host: InitHost): void
+//Build the engine on the next frame + wire its callbacks back into card state. Bails (clearing the inflight flag
+//so the caller retries next Lit cycle) if the card detached or the container / hass.config / coords aren't ready yet.
+function scheduleEngineInit(host: InitHost): void
 {
     requestAnimationFrame(() =>
     {

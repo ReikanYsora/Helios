@@ -37,8 +37,8 @@ import
     renderTimelineNightZones,
     renderTimelineFutureMask,
     renderTimelineHoverTooltip,
-    handleChartHoverMove,
-    handleChartHoverLeave
+    onChartHoverMove,
+    onChartHoverLeave
 } from './charts/charts';
 import { renderDetailPanel } from './hud/detail-panel';
 import type { ArcSegment, SunScene, LabelLayout } from './hud/hud';
@@ -179,7 +179,7 @@ export class HeliosCard extends LitElement
     _deviceChangeFetch = new KeyedFetch();
     //Irradiance entity history, populated when solar-irradiance-entity is configured. Recorder
     //samples over the timeline range, merged with the live state, pushed to the engine via
-    //setSolarRadiationSamples. Plain field (no @state): render never reads it, the engine owns lookup.
+    //setSolarIrradianceSamples. Plain field (no @state): render never reads it, the engine owns lookup.
     _irradianceHistory: { times: Date[]; values: number[] } | null = null;
     _irradianceFetchKey = '';
     _irradianceFetching = false;
@@ -875,8 +875,8 @@ export class HeliosCard extends LitElement
 
     //Bound delegates to the timeline + chart-hover module helpers, which need the host as first arg.
     private _onTimelinePointerDown = (e: PointerEvent): void => onTimelinePointerDown(this, e);
-    private _onChartHoverMove      = (e: PointerEvent): void => handleChartHoverMove(this, e);
-    private _onChartHoverLeave     = (): void => handleChartHoverLeave(this);
+    private _onChartHoverMove      = (e: PointerEvent): void => onChartHoverMove(this, e);
+    private _onChartHoverLeave     = (): void => onChartHoverLeave(this);
 
 
     //Resolve the active theme polarity, used to drive the `theme-dark` / `theme-light` class on the card. The

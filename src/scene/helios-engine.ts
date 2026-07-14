@@ -70,7 +70,7 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 //              always available, used as fallback past the forecast horizon or when shortwave is missing.
 //  shortwave - shortwave_radiation_instant from the weather model (median of active models in 'high');
 //              more accurate as it accounts for aerosols/humidity/multi-layer cloud.
-//  sensor    - value from a HA entity via setSolarRadiationSamples; a real measurement at the home, so
+//  sensor    - value from a HA entity via setSolarIrradianceSamples; a real measurement at the home, so
 //              it wins, but only in live mode (scrubbing past/forecast falls back to shortwave/haurwitz).
 export type IrradianceSource = 'haurwitz' | 'shortwave' | 'sensor';
 
@@ -156,7 +156,7 @@ export class HeliosEngine
     //it (and always for forecast time) fall through to the model rather than extrapolate stale values.
     private _sensorIrradianceSamples: { tMs: number; wm2: number }[] | null = null;
     private static readonly SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1000;
-    public setSolarRadiationSamples(
+    public setSolarIrradianceSamples(
         samples: { time: Date; wm2: number }[] | null
     ): void
     {

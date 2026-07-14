@@ -2,7 +2,7 @@
 //
 // When `solar-irradiance-entity` is wired to a W/m² sensor, its samples beat the weather model for the live + past portions of
 // the irradiance pipeline. Fetches history, keeps the live sample fresh each refresh cycle, and pushes the merged set into the
-// engine via setSolarRadiationSamples().
+// engine via setSolarIrradianceSamples().
 //
 // Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_irradiance*` fields; functions here read/write
 // them through the structural IrradianceHost interface.
@@ -101,7 +101,7 @@ export function refreshIrradiance(host: IrradianceHost): void
             host._irradianceHistory = null;
         }
         host._irradianceFetchKey = '';
-        host._engine?.setSolarRadiationSamples(null);
+        host._engine?.setSolarIrradianceSamples(null);
         return;
     }
 
@@ -169,7 +169,7 @@ export function pushIrradianceToEngine(host: IrradianceHost): void
     const entity = String(host.config?.['solar-irradiance-entity'] ?? '').trim();
     if (!entity || !host.hass)
     {
-        host._engine.setSolarRadiationSamples(null);
+        host._engine.setSolarIrradianceSamples(null);
         _pushedIrradianceKey.delete(host);
         return;
     }
@@ -202,7 +202,7 @@ export function pushIrradianceToEngine(host: IrradianceHost): void
             samples.push({ time: ts, wm2: v });
         }
     }
-    host._engine.setSolarRadiationSamples(samples.length > 0 ? samples : null);
+    host._engine.setSolarIrradianceSamples(samples.length > 0 ? samples : null);
     _pushedIrradianceKey.set(host, { histRef: hist, stateRef, entity });
 }
 
