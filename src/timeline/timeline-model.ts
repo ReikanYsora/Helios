@@ -173,9 +173,10 @@ export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TI
             .filter(s => s.frac > 0 && s.frac < 1);
     }
 
-    //Midnight gridlines, only when individual days read clearly.
+    //Midnight gridlines, only up to a week span (D-2/D+2 and Week); Month and Year drop them so the graph stays
+    //clean when the days are too dense to read individually.
     const dayBoundaries: number[] = [];
-    if (spanDays > 1.05 && spanDays <= 40)
+    if (spanDays > 1.05 && spanDays <= 8)
     {
         let day = addDays(startOfDay(start), 1);
         for (let g = 0; day.getTime() < end.getTime() && g < 64; g++)

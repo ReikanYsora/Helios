@@ -12,12 +12,12 @@ export const heliosTimelineStyles = css`
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
         position: absolute;
-        /*  Sits above the period-mode band (which is pinned at bottom: 6px). */
-        bottom: calc(36px + 12px);
-        /*  Centred via left/right gutters, not translateX(-50%): that transform promotes the bar into a
+        /*  Flush on top of the period-mode band (pinned at the bottom, 33px tall), no gap. */
+        bottom: 33px;
+        /*  Full width, flush to the card edges. Not translateX(-50%): that transform promotes the bar into a
             compositor layer and rasterises the inner SVG charts at fractional resolution (blur). */
-        left: 8px;
-        right: 8px;
+        left: 0;
+        right: 0;
         width: auto;
         /*  Own stacking layer at the top of the card so the sun arc, home glow and overlay chips never
             cross over it during auto-rotate. */
@@ -37,13 +37,13 @@ export const heliosTimelineStyles = css`
         cursor: grabbing;
     }
 
-    /*  Shared themed-plate surface for the chart stack and the period band: same background, radius and
-        drop shadow; each adds its own border + layout below. */
+    /*  Shared themed-plate surface for the chart stack and the period band: same background + drop shadow. No
+        border-radius: both are full-width and flush at the bottom of the card, forming one continuous bar. */
     .tb-chart-stack,
     .tb-band
     {
         background: var(--card-background-color, #ffffff);
-        border-radius: var(--ha-border-radius-lg, 8px);
+        border-radius: 0;
         box-shadow: var(--helios-shadow-chip);
     }
 
@@ -56,8 +56,9 @@ export const heliosTimelineStyles = css`
             band keep the exact same outer width (both span card - 16px). Without it the border adds outside
             and the stack reads wider than the band. */
         box-sizing: border-box;
-        /*  Neutral themed border (like the period band), independent of the active chip's colour. */
-        border: 2px solid var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
+        /*  Only a top divider (neutral themed), no side/bottom border: the bar is flush full-width at the
+            bottom of the card. */
+        border-top: 2px solid var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
         overflow: hidden;
     }
     .tb-chart-card
@@ -459,7 +460,7 @@ export const heliosTimelineStyles = css`
     .tb-day-strip
     {
         position: relative;
-        height: 22px;
+        height: 18px;
         box-sizing: border-box;
         /*  Footer band of the chart stack: frame lives on .tb-chart-stack, so here we only draw the
             hairline separating labels from the chart above (like the HA timeline footer). */
@@ -484,8 +485,8 @@ export const heliosTimelineStyles = css`
         /*  Match an HA tile card's entity-value text (body font, --ha-font-size-s, normal weight) so the
             timeline's axis labels read as native HA chrome. */
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, Roboto, "Helvetica Neue", Arial, sans-serif));
-        font-size: var(--ha-font-size-s, 12px);
-        line-height: 18px;
+        font-size: var(--ha-font-size-xs, 11px);
+        line-height: 14px;
         letter-spacing: 0;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
@@ -505,17 +506,19 @@ export const heliosTimelineStyles = css`
     .tb-band
     {
         position: absolute;
-        bottom: 6px;
-        left: 8px;
-        right: 8px;
-        height: 36px;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 33px;
         z-index: 1000;
         box-sizing: border-box;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0 6px;
-        border: var(--ha-border-width-sm, 1px) solid
+        /*  The band stays full-width + flush; a small inner padding just gives the buttons some breathing room. */
+        padding: 3px 8px;
+        /*  Only a top divider (between the timeline above and the band); no side/bottom border. */
+        border-top: var(--ha-border-width-sm, 1px) solid
             var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
         pointer-events: auto;
         touch-action: none;
@@ -600,7 +603,7 @@ export const heliosTimelineStyles = css`
     {
         .tb-day-strip-date
         {
-            font-size: clamp(8px, 5.5cqw, var(--ha-font-size-s, 12px));
+            font-size: clamp(8px, 5.5cqw, var(--ha-font-size-xs, 11px));
         }
         .tb-hover-tooltip
         {
