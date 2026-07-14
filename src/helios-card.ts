@@ -765,39 +765,51 @@ export class HeliosCard extends LitElement
         }
 
 
-        if (!this.hass?.config || !this.config)
+        //Ensure the engine exists + reflects the current coords/config, and get the config signature the
+        //refresh gate needs. null means bail this pass (no hass/config/coords, or the engine was just spawned).
+        const sig = this._maybeBootstrapOrUpdateEngine();
+        if (sig === null)
         {
             return;
+        }
+        this._runRefreshChainIfNeeded(sig);
+    }
+
+    //Create the engine on first paint (then update it in place: setHome on a coord change, updateConfig on an
+    //option change), returning the current config signature for the refresh gate, or null when updated() should
+    //bail this pass (no hass/config/coords, engine just spawned, or the element is detached).
+    private _maybeBootstrapOrUpdateEngine(): string | null
+    {
+        if (!this.hass?.config || !this.config)
+        {
+            return null;
         }
 
         const coords = getHomeCoords(this.config, this.hass);
         if (!coords)
         {
-            return;
+            return null;
         }
 
         const { lat, lon } = coords;
-
         const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
         const identityChanged = homeKey !== this._lastHomeKey;
 
-        //Create the engine once, the first time the card paints. It is then updated in place: setHome() on a
-        //coordinate change, updateConfig() on an option change.
         if (!this._engine)
         {
             //Disconnected guard: edit-mode wrapping can fire updated() on a detached element.
             if (!this.isConnected)
             {
-                return;
+                return null;
             }
             if (this._initInflight)
             {
-                return;
+                return null;
             }
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
             initEngine(this);
-            return;
+            return null;
         }
 
         //Home moved: re-tile + re-fetch for the new coordinates.
@@ -815,13 +827,16 @@ export class HeliosCard extends LitElement
             this._lastConfigSig = sig;
             this._engine.updateConfig(this.config);
         }
+        return sig;
+    }
 
-        //Refresh chain gate: the per-entity helpers are pure functions of hass.states + config + time
-        //range. Lit calls updated() on every @state mutation (every HUD re-projection), so without this gate
-        //the chain re-runs at 60+ Hz for no new data. Config is compared by content SIGNATURE, not object
-        //reference: the dashboard editor hands the card a fresh-but-equivalent config object on every push,
-        //and a reference check would flip the gate every frame and spin the refresh chain (and its fetches)
-        //into a loop. Skip when none of these moved.
+    //Run the per-entity refresh chain, gated so it only fires when hass / config / time range / energy-defaults
+    //moved. Lit calls updated() on every @state mutation (every HUD re-projection), so without this gate the chain
+    //re-runs at 60+ Hz for no new data. Config is compared by content SIGNATURE, not object reference: the dashboard
+    //editor hands the card a fresh-but-equivalent config object on every push, and a reference check would flip the
+    //gate every frame and spin the refresh chain (and its fetches) into a loop.
+    private _runRefreshChainIfNeeded(sig: string): void
+    {
         if (this.hass === this._lastRefreshHassRef
             && sig === this._lastRefreshConfigSig
             && this._timeRange === this._lastRefreshTimeRangeRef
