@@ -186,6 +186,12 @@ export class SceneHudController
         //leads keep their normal shapes and dock on it exactly as they did on the pill, with the home visible
         //through the transparent centre.
         const homeHidden         = !chipVisible(cfg, 'chip-home-visible');
+        //Sun-only card: with the home chip hidden AND every other chip hidden too, there are no leaders to anchor,
+        //so even the hollow ring is dropped, leaving just the sun + location (a solar-position card for non-energy
+        //uses, e.g. a shutter/climate page keyed on the sun). Config-driven so it stays stable across scrubbing.
+        const anyOtherChipVisible = showChipIrradiance || showChipProduction || showChipGrid || showChipBattery
+            || activeGroups(this.host.config, this.host._energyDefaults).some(g => groupChipVisible(cfg, g));
+        const showHomeElement    = !homeHidden || anyOtherChipVisible;
 
         //PV production chip above the home, tied to it by an animated leader. Only renders when the HA
         //Energy dashboard exposes a solar source and the live read is a finite number.
@@ -1044,7 +1050,7 @@ export class SceneHudController
                       so every chip leader docks straight against it. Shown as the home pill (glyph + live
                       consumption) unless the home chip is hidden, in which case it collapses to a small hollow
                       ring: a bare contact point the leads converge on, the scene still visible through it.  -->
-                ${hasHomeCoords && layout !== null
+                ${hasHomeCoords && layout !== null && showHomeElement
                     ? (homeHidden
                         ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
                         : html`
