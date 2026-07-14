@@ -899,10 +899,16 @@ export class HeliosCard extends LitElement
         return isDark;
     }
 
+    //hass.themes read through the one narrowing cast, so themeIsDark() and render() don't each re-spell it.
+    private _themesObj(): { darkMode?: boolean } | undefined
+    {
+        return (this.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes;
+    }
+
     //Current theme polarity, used to seed a new engine at construction.
     public themeIsDark(): boolean
     {
-        return this._computeIsDark((this.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes);
+        return this._computeIsDark(this._themesObj());
     }
 
 
@@ -923,8 +929,7 @@ export class HeliosCard extends LitElement
 
         //Detect the active HA theme. Authoritative: hass.themes.darkMode (HA flips it on every theme swap).
         //A getComputedStyle luminance probe is the fallback for older HA builds that lack it.
-        const themesObj = (this.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes;
-        const isDark = this._computeIsDark(themesObj);
+        const isDark = this._computeIsDark(this._themesObj());
         const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
         //camera-locked swaps the grab cursor for the default arrow when drag-rotate is inert, so the open-hand cursor
@@ -1025,25 +1030,29 @@ export class HeliosCard extends LitElement
     //Map-background tap: anchor the move threshold that tells a tap from a drag-rotate.
     private _sceneTapStartX = 0;
     private _sceneTapStartY = 0;
-    private _onSceneTapStart = (e: PointerEvent): void =>
+    //Pointer position relative to the card's top-left, or null when the card element isn't mounted yet.
+    private _localPointerXY(e: PointerEvent): { x: number; y: number } | null
     {
         const card = this._haCard;
-        if (!card) { return; }
+        if (!card) { return null; }
         const rect = card.getBoundingClientRect();
-        this._sceneTapStartX = e.clientX - rect.left;
-        this._sceneTapStartY = e.clientY - rect.top;
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+    private _onSceneTapStart = (e: PointerEvent): void =>
+    {
+        const p = this._localPointerXY(e);
+        if (!p) { return; }
+        this._sceneTapStartX = p.x;
+        this._sceneTapStartY = p.y;
     };
     //Release: a tap (movement under ~10 px) on the map background closes the open detail panel, so a selected
     //chip can be dismissed by tapping empty space (touch has no click-outside otherwise). Chips / timeline /
     //buttons are separate overlays that never reach this handler. A real drag rotated the camera and is ignored.
     private _onSceneTapEnd = (e: PointerEvent): void =>
     {
-        const card = this._haCard;
-        if (!card) { return; }
-        const rect = card.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        if (Math.hypot(x - this._sceneTapStartX, y - this._sceneTapStartY) > 10) { return; }
+        const p = this._localPointerXY(e);
+        if (!p) { return; }
+        if (Math.hypot(p.x - this._sceneTapStartX, p.y - this._sceneTapStartY) > 10) { return; }
         if (this._infoPanelOpen) { this._infoPanelOpen = false; }
     };
 

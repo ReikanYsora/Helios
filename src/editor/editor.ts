@@ -285,7 +285,7 @@ export class HeliosCardEditor extends LitElement
     //HA has no per-family deep anchor). Shown once under the status section and under the groups hint.
     private _energyConfigLink()
     {
-        const t = pickTranslations(this.hass?.language);
+        const t = this._t();
         return html`
             <a class="live-status-link" href="/config/energy/dashboard" target="_blank" rel="noopener noreferrer">
                 <ha-icon icon="mdi:open-in-new"></ha-icon>
@@ -1164,7 +1164,7 @@ export class HeliosCardEditor extends LitElement
             window.dispatchEvent(new CustomEvent('helios-data-cache-reset'));
         }
         catch (_) { /* CustomEvent unsupported: skip the cross-card cache-reset broadcast */ }
-        const t = pickTranslations(this.hass?.language);
+        const t = this._t();
         this._resetFeedback = t.editor.resetCacheDone;
         if (this._resetFeedbackTimer !== undefined)
         {
@@ -1205,7 +1205,7 @@ export class HeliosCardEditor extends LitElement
         }
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
-        const t = pickTranslations(this.hass?.language);
+        const t = this._t();
         this._optionsResetFeedback = t.editor.resetOptionsDone ?? 'Options reset ✓';
         if (this._optionsResetFeedbackTimer !== undefined) { window.clearTimeout(this._optionsResetFeedbackTimer); }
         this._optionsResetFeedbackTimer = window.setTimeout(() =>

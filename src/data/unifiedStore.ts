@@ -132,6 +132,20 @@ function interpolateNullGaps(arr: (number | null)[]): void
     }
 }
 
+//Interpolate null gaps in the PAST portion of a store series only (buckets up to and including the one "now"
+//falls in), leaving future buckets untouched. Shared by the production/battery/grid change-series builders.
+function interpolatePastOnly(out: (number | null)[], storeStartMs: number, nowMs: number, stepMs: number, bucketsTotal: number): void
+{
+    const nowBucket = bucketForMs(storeStartMs, nowMs, stepMs, bucketsTotal);
+    const pastEnd   = Math.min(bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
+    if (pastEnd > 0)
+    {
+        const pastSlice = out.slice(0, pastEnd);
+        interpolateNullGaps(pastSlice);
+        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
+    }
+}
+
 
 //Local midnight of the first day in the window (today - daysPast), so every bucket lines up on calendar day boundaries.
 function storeOriginMs(daysPast: number): number
@@ -192,14 +206,7 @@ function buildProduction(host: UnifiedStoreHost, storeStartMs: number, nowMs: nu
         const v = out[i];
         if (v !== null && v < 0) { out[i] = 0; }
     }
-    const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
-    const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
-    if (pastEnd > 0)
-    {
-        const pastSlice = out.slice(0, pastEnd);
-        interpolateNullGaps(pastSlice);
-        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
-    }
+    interpolatePastOnly(out, storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     return out;
 }
 
@@ -243,14 +250,7 @@ function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: numbe
         if (c === null && d === null) { continue; }
         out[i] = Math.max(0, c ?? 0) - Math.max(0, d ?? 0);
     }
-    const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
-    const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
-    if (pastEnd > 0)
-    {
-        const pastSlice = out.slice(0, pastEnd);
-        interpolateNullGaps(pastSlice);
-        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
-    }
+    interpolatePastOnly(out, storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     return out;
 }
 
@@ -271,14 +271,7 @@ function buildGridChange(
         const v = out[i];
         if (v !== null && v < 0) { out[i] = 0; }
     }
-    const nowBucket = bucketForMs(storeStartMs, nowMs, stepMs, bucketsTotal);
-    const pastEnd   = Math.min(bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
-    if (pastEnd > 0)
-    {
-        const pastSlice = out.slice(0, pastEnd);
-        interpolateNullGaps(pastSlice);
-        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
-    }
+    interpolatePastOnly(out, storeStartMs, nowMs, stepMs, bucketsTotal);
     return out;
 }
 
