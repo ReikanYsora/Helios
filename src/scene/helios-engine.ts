@@ -484,11 +484,6 @@ export class HeliosEngine
     //Pending re-attempt after a total buildings-fetch outage (cleared on re-fetch and teardown).
     private _buildingsRetryTimer?: number;
 
-    //Debounce timer for the shadow/atmosphere refresh during rapid scrub: each setSelectedTime() resets it
-    //and the refresh runs once on expiry. Curves+chips still update every move; only the costly shadow
-    //raster paint is coalesced.
-    private _selectedTimeShadowTimer: number | null = null;
-
     //Cache of the 96 per-day sun-arc samples. Sun position + clear-sky irradiance depend only on the day
     //and cloud cover, not the map matrix, so the heavy trig recomputes only when those change; every
     //transform tick just re-projects the cached tuples. Invalidated on day-roll or >1% cloud shift.
@@ -1793,17 +1788,10 @@ export class HeliosEngine
             //Force atmosphere refresh: the user just scrubbed, so the "moved enough" guard would short-circuit.
             this._lastAtmosphereAlt = -999;
             this._renderForCurrentSelection();
-            //Coalesce rapid scrubs into one shadow paint every ~100 ms. The light visuals (arc, chips, disc)
-            //already updated above; only the costly shadow raster paint is deferred to the pause.
-            if (this._selectedTimeShadowTimer !== null)
-            {
-                window.clearTimeout(this._selectedTimeShadowTimer);
-            }
-            this._selectedTimeShadowTimer = window.setTimeout(() =>
-            {
-                this._selectedTimeShadowTimer = null;
-                this._refreshShadowsAndAtmosphere();
-            }, 100);
+            //Update shadows + atmosphere in lockstep with the scrub. setSun/setPalette schedule an rAF-coalesced
+            //redraw, so the costly shadow raster still runs at most once per frame, but the sky and shadows now
+            //follow the scrub continuously instead of snapping after a debounce.
+            this._refreshShadowsAndAtmosphere();
         }
     }
 
@@ -1929,11 +1917,6 @@ export class HeliosEngine
     public cleanup(): void
     {
         this._clearWeatherTimer();
-        if (this._selectedTimeShadowTimer !== null)
-        {
-            window.clearTimeout(this._selectedTimeShadowTimer);
-            this._selectedTimeShadowTimer = null;
-        }
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
