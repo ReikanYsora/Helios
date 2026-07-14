@@ -586,10 +586,11 @@ export class HeliosEngine
         //Bootstrap the basemap + initial scene asynchronously, then mark ready and feed sun/buildings.
         this._bootstrapRenderer();
 
-        //Custom drag-rotate (left-click / one-finger). Bound to the container (the renderer's host), whose
-        //touch-action is set to none so every gesture over the scene is a card interaction (dashboard scroll
-        //happens by touching outside the card, like Google Maps on mobile).
-        container.style.touchAction = 'none';
+        //Custom drag-rotate (left-click / one-finger). Bound to the container (the renderer's host). touch-action
+        //is pan-y so a vertical swipe still scrolls the dashboard page over the card; touch rotation arms only
+        //after a short press-hold (below), so a quick swipe scrolls while a deliberate hold-and-drag rotates. This
+        //replaces the old "lock the card to scroll past it" workaround.
+        container.style.touchAction = 'pan-y';
         //Firefox starts a native text/image drag on a left-mouse press over the canvas, which swallows the follow-up
         //pointermove stream so the scene never rotates (Chrome is lenient). Suppressing selection + the drag default
         //(preventDefault in onDown below) keeps the gesture ours. Touch is unaffected (touch-action already none).
@@ -600,10 +601,18 @@ export class HeliosEngine
         //Vertical drag drives pitch (down = flatter, up = bird's-eye). Bounds from the module CAMERA_PITCH_*
         //constants so this stays in sync with every other pitch entry point.
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
+        //Touch only: rotation arms after this press-hold with the finger roughly still; a swipe that moves further
+        //than the cancel threshold before then is treated as a page scroll and released to the browser.
+        const TOUCH_ROTATE_HOLD_MS   = 220;
+        const TOUCH_SCROLL_CANCEL_PX = 10;
         let dragRotating  = false;
         let lastPointerX  = 0;
         let lastPointerY  = 0;
+        let downX         = 0;
+        let downY         = 0;
         let activeId: number | null = null;
+        //Pending touch press-hold timer (set between pointerdown and rotation arming); cleared on move-cancel/up.
+        let holdTimer: number | undefined;
 
         const onDown = (e: PointerEvent) =>
         {
@@ -622,22 +631,58 @@ export class HeliosEngine
             {
                 return;
             }
-            //Claim the gesture: stop Firefox's native drag/selection so the pointermove stream keeps coming.
-            e.preventDefault();
-            dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
             lastPointerY = e.clientY;
+            downX        = e.clientX;
+            downY        = e.clientY;
             this._autoRotateLastUserAction = Date.now();
+
+            if (e.pointerType === 'touch')
+            {
+                //Defer rotation so a swipe still scrolls: arm only after a short hold. Don't preventDefault or
+                //capture yet, so the browser is free to scroll if the finger moves before the hold elapses.
+                dragRotating = false;
+                holdTimer = window.setTimeout(() =>
+                {
+                    holdTimer = undefined;
+                    if (activeId === null) { return; }
+                    dragRotating = true;
+                    try { container.setPointerCapture(activeId); }
+                    catch (_) { /* pointer capture unsupported on this element */ }
+                }, TOUCH_ROTATE_HOLD_MS);
+                return;
+            }
+
+            //Mouse / pen: rotate immediately. Claim the gesture: stop Firefox's native drag/selection so the
+            //pointermove stream keeps coming.
+            e.preventDefault();
+            dragRotating = true;
             try { container.setPointerCapture(e.pointerId); }
             catch (_) { /* pointer capture unsupported on this element */ }
         };
         const onMove = (e: PointerEvent) =>
         {
-            if (!dragRotating || !this._renderer || e.pointerId !== activeId)
+            if (e.pointerId !== activeId || !this._renderer)
             {
                 return;
             }
+            if (!dragRotating)
+            {
+                //Touch, hold not yet elapsed: a finger move past the threshold is a page scroll, not a rotate.
+                //Drop the pending rotation and release the gesture so the browser scrolls freely.
+                if (holdTimer !== undefined
+                    && (Math.abs(e.clientX - downX) > TOUCH_SCROLL_CANCEL_PX
+                        || Math.abs(e.clientY - downY) > TOUCH_SCROLL_CANCEL_PX))
+                {
+                    window.clearTimeout(holdTimer);
+                    holdTimer = undefined;
+                    activeId  = null;
+                }
+                return;
+            }
+            //Rotating: own the gesture so the browser doesn't also scroll (touch-action is pan-y).
+            e.preventDefault();
             const dx = e.clientX - lastPointerX;
             const dy = e.clientY - lastPointerY;
             lastPointerX = e.clientX;
@@ -656,12 +701,21 @@ export class HeliosEngine
             {
                 return;
             }
+            if (holdTimer !== undefined)
+            {
+                window.clearTimeout(holdTimer);
+                holdTimer = undefined;
+            }
+            const wasRotating = dragRotating;
             dragRotating = false;
             activeId     = null;
             try { container.releasePointerCapture(e.pointerId); }
             catch (_) { /* pointer capture may already be released */ }
-            //Persist the pose the user just dragged to, so a return restores the same view.
-            this.persistCameraPose();
+            //Persist the pose only if a rotation actually happened, so a tap or a scroll leaves storage untouched.
+            if (wasRotating)
+            {
+                this.persistCameraPose();
+            }
         };
         //Firefox starts a native drag on a left-mouse press over the canvas/SVG and, once it does, stops delivering
         //the pointermove stream, so the scene freezes mid-drag. preventDefault in onDown is not always enough there;
