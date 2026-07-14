@@ -459,7 +459,9 @@ export class SceneHudController
         const groupRow2Y   = layout?.groupLabels[1]?.y ?? 0;
         //Scrub-aware group value: at a past instant read each device's change series, else the live stat_rate sum.
         const groupScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
-        const activeGroupList = layout
+        //Group consumption has no forecast, so scrubbing into the future hides the group chips (and their leaders)
+        //entirely, the same way the PV chip drops out of a future scrub with no prediction (pvScrubFuture above).
+        const activeGroupList = (layout && !pvScrubFuture)
             ? activeGroups(this.host.config, this.host._energyDefaults).filter(g => groupChipVisible(cfg, g))
             : [];
         const groupCount      = activeGroupList.length;
