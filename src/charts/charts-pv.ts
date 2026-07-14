@@ -259,14 +259,17 @@ export function renderPvChart(host: ChartHost): TemplateResult
                         stroke="${pvColor}"
                     ></path>
                 ` : nothing}
-                ${predictedLine ? svg`
-                    <path
-                        class="hc-chart-line hc-chart-predicted"
-                        d="${predictedLine}"
-                        stroke="${predictedPvColor}"
-                    ></path>
-                ` : nothing}
             </g>
+            <!--  Forecast dashed line OUTSIDE the grow group: a dashed stroke under the group's animated CSS
+                  transform intermittently fails to repaint its future half until a re-render (the day separators,
+                  dashed + outside grow, never have the problem).  -->
+            ${predictedLine ? svg`
+                <path
+                    class="hc-chart-line hc-chart-predicted"
+                    d="${predictedLine}"
+                    stroke="${predictedPvColor}"
+                ></path>
+            ` : nothing}
             ${showHover ? svg`
                 <line
                     class="hc-hover-guide"

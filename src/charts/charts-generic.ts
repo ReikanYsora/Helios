@@ -482,18 +482,23 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 ${drawn.map(d => d.area ? svg`
                     <path d="${d.area}" fill="${d.color}" fill-opacity="0.22"></path>
                 ` : nothing)}
-                ${drawn.map(d => d.line ? svg`
-                    <path class="hc-chart-line" d="${d.line}" stroke="${d.color}" stroke-dasharray="${d.dashed ? '4 3' : 'none'}"></path>
+                ${drawn.map(d => (d.line && !d.dashed) ? svg`
+                    <path class="hc-chart-line" d="${d.line}" stroke="${d.color}"></path>
                 ` : nothing)}
                 ${overlays.map(o => svg`
                     <path d="${o.area}" fill="${o.color}" fill-opacity="0.35"></path>
                 `)}
-                <!--  Forecast silhouette drawn LAST so it reads as a ghosted reference on top of the target's
-                      own fill + the cloud overlay, instead of being buried under them.  -->
-                ${forecastLine ? svg`
-                    <path class="hc-chart-line hc-chart-predicted" d="${forecastLine}" stroke="${forecastColor}" stroke-width="2" fill="none"></path>
-                ` : nothing}
             </g>
+            <!--  Dashed lines (per-bank battery SoC + the forecast silhouette) render OUTSIDE the grow group. A
+                  dashed stroke under the group's animated CSS transform intermittently fails to repaint (it drew only
+                  up to "now" until a re-render); the day separators prove the point (dashed, outside grow, always
+                  fine). SoC is also a level, not a flow, so not growing it from the baseline is correct anyway.  -->
+            ${drawn.map(d => (d.line && d.dashed) ? svg`
+                <path class="hc-chart-line" d="${d.line}" stroke="${d.color}" stroke-dasharray="4 3"></path>
+            ` : nothing)}
+            ${forecastLine ? svg`
+                <path class="hc-chart-line hc-chart-predicted" d="${forecastLine}" stroke="${forecastColor}" stroke-width="2" fill="none"></path>
+            ` : nothing}
             ${showHover ? svg`
                 <line class="hc-hover-guide" x1="${hoverX.toFixed(2)}" y1="0" x2="${hoverX.toFixed(2)}" y2="${H}"></line>
             ` : nothing}
