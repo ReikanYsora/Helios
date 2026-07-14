@@ -1,14 +1,12 @@
-//Vector ground painter: rasterises the decoded OpenFreeMap ground features (ground-vector.ts) onto the basemap
-//canvas the renderer tilts, replacing the CARTO raster tiles. All colours come from a palette and every layer
-//can be hidden, so light/dark is two palettes (no CSS filter) and the whole thing is user-configurable. The
-//canvas caches its features + a repaint closure, so a theme/config change repaints from memory with no re-fetch.
-//
-//Projection: features are [lon, lat]; the canvas maps geography via Web Mercator at GROUND_ZOOM exactly like the
-//old raster path, so the home anchor + camera scale are unchanged. Line widths are metric (scaled by px/metre).
+//Paints the decoded OpenFreeMap ground features (ground-vector.ts) onto the basemap canvas the renderer tilts.
+//Colours come from a palette, any layer can be hidden, and the sun altitude grades the whole map, so a theme /
+//config / time change repaints from the cached features with no re-fetch. Features are [lon, lat], mapped via
+//Web Mercator at GROUND_ZOOM so the home anchor + camera scale match the overlays. Road widths are metric.
 
 import { pxPerMetreFor, lonLatToTile, type Ground } from './tiles';
 import { GROUND_RADIUS, GROUND_ZOOM, TILE_PX } from '../core/config/constants';
 import { fetchGroundVector, type GroundFeature } from './ground-vector';
+import { mixHex } from '../core/render-kit/hex';
 
 //One colour per map element. The keys are also the user-facing layer keys (config + editor blocks).
 export interface GroundPalette
@@ -105,6 +103,29 @@ function addPath(path: Path2D, f: GroundFeature, toPx: (lon: number, lat: number
     }
 }
 
+//Grade one colour by sun altitude - the scene's whole day/night atmosphere (there is no wash): cool +
+//dark-but-readable at night, violet twilight, warm golden hour, sunlit lift at midday. Milder than the buildings.
+function groundTint(base: string, altitude: number): string
+{
+    const night = mixHex(base, '#0e1420', 0.62);
+    const dusk  = mixHex(base, '#2a2445', 0.45);
+    const warm  = mixHex(base, '#7a3f1e', 0.28);
+    const sunny = mixHex(base, '#fff2d8', 0.16);
+    if (altitude < -8) { return night; }
+    if (altitude < 0)  { return mixHex(night, dusk, (altitude + 8) / 8); }
+    if (altitude < 6)  { return mixHex(dusk,  warm, altitude / 6); }
+    if (altitude < 25) { return mixHex(warm,  sunny, (altitude - 6) / 19); }
+    return sunny;
+}
+
+//Grade the whole palette by the sun altitude, so the map lives through the day/night cycle like the buildings.
+function tintPalette(palette: GroundPalette, altitude: number): GroundPalette
+{
+    const out = {} as GroundPalette;
+    for (const key of GROUND_LAYER_KEYS) { out[key] = groundTint(palette[key], altitude); }
+    return out;
+}
+
 function paint(
     ctx:        CanvasRenderingContext2D,
     size:       number,
@@ -112,9 +133,10 @@ function paint(
     toPx:       (lon: number, lat: number) => [number, number],
     pxPerMetre: number,
     style:      GroundStyle,
+    altitude:   number,
 ): void
 {
-    const p    = style.palette;
+    const p    = tintPalette(style.palette, altitude);
     const hide = (key: GroundLayerKey): boolean => style.hidden.has(key);
 
     ctx.clearRect(0, 0, size, size);
@@ -233,17 +255,17 @@ function paint(
 export interface VectorGround
 {
     ground:  Ground;
-    repaint: (style: GroundStyle) => void;
+    repaint: (style: GroundStyle, altitude: number) => void;
 }
 
-//Build the vector basemap for a home position: same canvas geometry + Ground contract as the old raster path, so
-//the renderer transform is unchanged. Never rejects: on a tile outage the ground is a blank themed fill (the
-//scene still shows the home + buildings). The caller's abort (a location change) propagates out of the fetch.
+//Build the basemap canvas for a home position. Never rejects: a tile outage yields a blank themed fill (the home
+//+ buildings still show). The caller's abort (a location change) propagates out of the fetch.
 export async function buildVectorGround(
-    lat:     number,
-    lng:     number,
-    style:   GroundStyle,
-    signal?: AbortSignal,
+    lat:      number,
+    lng:      number,
+    style:    GroundStyle,
+    altitude: number,
+    signal?:  AbortSignal,
 ): Promise<VectorGround>
 {
     const zoom   = GROUND_ZOOM;
@@ -271,11 +293,11 @@ export async function buildVectorGround(
         const [wx, wy] = lonLatToTile(lon, la, zoom);
         return [(wx - firstX) * TILE_PX, (wy - firstY) * TILE_PX];
     };
-    const repaint = (st: GroundStyle): void =>
+    const repaint = (st: GroundStyle, alt: number): void =>
     {
-        if (ctx) { paint(ctx, size, features, toPx, pxPerMetre, st); }
+        if (ctx) { paint(ctx, size, features, toPx, pxPerMetre, st, alt); }
     };
-    repaint(style);
+    repaint(style, altitude);
 
     const fade = document.createElement('div');
     fade.className    = 'ground-fade';

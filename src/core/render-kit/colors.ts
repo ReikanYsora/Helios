@@ -1,36 +1,6 @@
-//Time-of-day scene tints (night shade, building altitude tint, sun-arc colour) over the shared hex
-//primitives. Pure.
+//Time-of-day scene tints (building altitude tint, sun-arc colour) over the shared hex primitives. Pure.
 
-import { lerp, hexByte, mixHex } from './hex';
-
-//Full-frame night/twilight wash by sun altitude (deg): astronomical night -> deep navy, twilight -> blue,
-//dawn/dusk -> warm amber, daylight -> transparent. Interpolated through keyframes (the same palette as before)
-//so BOTH colour and opacity ease continuously across the day<->night change, with no stepped colour jumps.
-const NIGHT_STOPS: { alt: number; color: string; op: number }[] = [
-    { alt: -12, color: '#02040c', op: 0.68 }, //deep night
-    { alt: -6,  color: '#050a2c', op: 0.50 }, //astronomical -> nautical
-    { alt:  0,  color: '#0a1240', op: 0.30 }, //civil twilight, sun on the horizon
-    { alt:  4,  color: '#3a1408', op: 0.16 }, //warm ember eases in just above the horizon
-    { alt: 12,  color: '#3a1408', op: 0.05 },
-    { alt: 22,  color: '#3a1408', op: 0.0  }, //full daylight, transparent
-];
-
-export function nightShade(altitude: number): { color: string; opacity: number }
-{
-    const stops = NIGHT_STOPS;
-    if (altitude <= stops[0].alt) { return { color: stops[0].color, opacity: stops[0].op }; }
-    for (let i = 0; i < stops.length - 1; i++)
-    {
-        const a = stops[i];
-        const b = stops[i + 1];
-        if (altitude < b.alt)
-        {
-            const f = (altitude - a.alt) / (b.alt - a.alt);
-            return { color: mixHex(a.color, b.color, f), opacity: lerp(a.op, b.op, f) };
-        }
-    }
-    return { color: '#000000', opacity: 0 };
-}
+import { hexByte, mixHex } from './hex';
 
 //Altitude-tint a building base colour to match the sky: indigo at night, purple at dusk, warm near the
 //horizon, original colour in daylight.

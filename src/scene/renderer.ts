@@ -11,7 +11,6 @@ import { SceneCamera } from './projection';
 import { pxPerMetreFor, type Ground } from './tiles';
 import { buildVectorGround, type GroundStyle } from './ground-render';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
-import { nightShade } from '../core/render-kit/colors';
 import {
     SVG_NS,
     GROWTH_RISE_MS,
@@ -49,9 +48,12 @@ export class SceneRenderer
     private readonly _sceneSvg:     SVGSVGElement;
 
     private _ground?:     Ground;
-    //Repaints the current ground canvas from its cached vector features with a new style (theme flip / colour
-    //config), so a theme/config change never re-fetches tiles.
-    private _groundRepaint?: (style: GroundStyle) => void;
+    //Repaints the current ground canvas from its cached vector features with a new style + sun altitude (theme
+    //flip / colour config / day-night grade), so it never re-fetches tiles.
+    private _groundRepaint?: (style: GroundStyle, altitude: number) => void;
+    //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
+    private _groundStyleCur?: GroundStyle;
+    private _groundAltitude  = 45;
     //Increments per build so a slower in-flight tile fetch can't overwrite a newer one (guards a rapid
     //home-position change landing while the previous tile grid is still fetching).
     private _groundToken = 0;
@@ -134,10 +136,11 @@ export class SceneRenderer
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
         const token = ++this._groundToken;
-        const built = await buildVectorGround(lat, lon, style);
+        const built = await buildVectorGround(lat, lon, style, this._groundAltitude);
         if (!this._alive || token !== this._groundToken) { return; }
-        this._ground        = built.ground;
-        this._groundRepaint = built.repaint;
+        this._groundStyleCur = style;
+        this._ground         = built.ground;
+        this._groundRepaint  = built.repaint;
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
         this.scheduleRedraw();
     }
@@ -145,9 +148,21 @@ export class SceneRenderer
     //Repaint the ground with a new style (theme flip / colour config) from the cached vector features, no fetch.
     public setGroundStyle(style: GroundStyle): void
     {
+        this._groundStyleCur = style;
         if (this._groundRepaint)
         {
-            this._groundRepaint(style);
+            this._groundRepaint(style, this._groundAltitude);
+            this.scheduleRedraw();
+        }
+    }
+
+    //Repaint the ground for a new sun altitude (the day/night colour grade), from the cached features, no fetch.
+    public setGroundAltitude(altitude: number): void
+    {
+        this._groundAltitude = altitude;
+        if (this._groundRepaint && this._groundStyleCur)
+        {
+            this._groundRepaint(this._groundStyleCur, altitude);
             this.scheduleRedraw();
         }
     }
@@ -306,13 +321,9 @@ export class SceneRenderer
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
         const alt = this._sun.altitude;
         const drawn = this._buildings;
-        //Full-frame night/twilight wash for the current sun altitude (empty in daylight).
-        const shade = nightShade(alt);
-        const shadeSvg = shade.opacity > 0
-            ? `<rect width="${width}" height="${height}" fill="${shade.color}" opacity="${shade.opacity.toFixed(3)}"/>`
-            : '';
+        //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
+        //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
         this._sceneSvg.innerHTML =
-            shadeSvg +
             renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
             renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
 

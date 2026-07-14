@@ -17,7 +17,7 @@
 
 import type { SceneCamera} from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
-import { tintedRgba } from '../core/render-kit/colors';
+import { tintedRgba, buildingColor } from '../core/render-kit/colors';
 import { mixHex, hexByte } from '../core/render-kit/hex';
 import { pointsAttr, type Point } from '../core/render-kit/geometry';
 import { fetchOfmBuildingRings, type OfmRing } from './openfreemap';
@@ -434,7 +434,9 @@ export function renderShadows(
     }
     const away     = (sun.azimuth + 180) * DEG;
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
-    let inner = '';
+    let defs   = '';
+    let shapes = '';
+    let idx    = 0;
     for (const b of casters)
     {
         //Skip casters at/behind the camera (same near-plane cull as the buildings).
@@ -447,13 +449,37 @@ export function renderShadows(
         const on = Math.cos(away) * length;
         const base = b.footprint.map((p) => cam.project(p[0], p[1], 0));
         const cast = b.footprint.map((p) => cam.project(p[0] + oe, p[1] + on, 0));
-        inner += `<polygon points="${pointsAttr(convexHull([...base, ...cast]))}" fill="${shadowColor}"/>`;
+
+        //Distance fade, but anchored OUTSIDE the building. The screen-space shadow direction is base-centroid ->
+        //cast-centroid; the gradient is full at the base's FAR edge (where the shadow leaves the building, so its
+        //visible part starts fully opaque) and fades to 0 at the cast's far edge (the tip). The part under the
+        //building (before the far edge) reads the clamped full-opacity stop, but the prism covers it anyway.
+        let bcx = 0; let bcy = 0; for (const p of base) { bcx += p[0]; bcy += p[1]; }
+        let ccx = 0; let ccy = 0; for (const p of cast) { ccx += p[0]; ccy += p[1]; }
+        const n = base.length || 1;
+        let ax = ccx / n - bcx / n;
+        let ay = ccy / n - bcy / n;
+        const alen = Math.hypot(ax, ay) || 1;
+        ax /= alen; ay /= alen;
+
+        let start = base[0]; let sMax = -Infinity;
+        for (const p of base) { const d = p[0] * ax + p[1] * ay; if (d > sMax) { sMax = d; start = p; } }
+        let end = cast[0]; let eMax = -Infinity;
+        for (const p of cast) { const d = p[0] * ax + p[1] * ay; if (d > eMax) { eMax = d; end = p; } }
+
+        const id = `hsh${idx}`;
+        idx += 1;
+        defs += `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" `
+              + `x1="${start[0].toFixed(1)}" y1="${start[1].toFixed(1)}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}">`
+              + `<stop offset="0" stop-color="${shadowColor}" stop-opacity="1"/>`
+              + `<stop offset="1" stop-color="${shadowColor}" stop-opacity="0"/></linearGradient>`;
+        shapes += `<polygon points="${pointsAttr(convexHull([...base, ...cast]))}" fill="url(#${id})"/>`;
     }
-    if (!inner)
+    if (!shapes)
     {
         return '';
     }
-    return `<g opacity="${(shadowOpacity * fade).toFixed(3)}">${inner}</g>`;
+    return `<defs>${defs}</defs><g opacity="${(shadowOpacity * fade).toFixed(3)}">${shapes}</g>`;
 }
 
 //Extrude + paint the buildings far to near. `altitude` is the sun altitude (deg) for the time-of-day tint;
@@ -484,11 +510,11 @@ export function renderBuildings(
         .filter((o) => o.cameraZ < nearCull)
         .sort((a, b) => a.depth - b.depth);
 
-    //Neighbours use the raw colour (NOT altitude-tinted): night shading would darken them to near the
-    //dark-theme background and make them vanish. They paint OPAQUE (walls a touch darker than the roof for
-    //shading); the user-set neighborOpacity is applied ONCE to the whole neighbour group below, so back faces
+    //Neighbours are altitude-tinted like the home + the ground, so the whole scene grades through the day/night
+    //cycle together (there is no full-frame wash any more). They paint OPAQUE (walls a touch darker than the roof
+    //for shading); the user-set neighborOpacity is applied ONCE to the whole neighbour group below, so back faces
     //and stacked prisms never show through each other (only the visible silhouette reads, then fades as a unit).
-    const nb       = palette.neighbor;
+    const nb       = buildingColor(palette.neighbor, altitude);
     const nbWall   = mixHex(nb, '#000000', 0.18);
     const nbStroke = mixHex(nb, '#000000', 0.30);
 

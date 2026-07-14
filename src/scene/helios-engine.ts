@@ -114,6 +114,9 @@ export class HeliosEngine
 
     //Skip atmosphere repaint when the sun moved less than 0.5° since last call (~ 2 min).
     private _lastAtmosphereAlt = -999;
+    //Sun altitude at the last ground re-tint. Coarser step than the wash (the vector ground re-raster is heavier
+    //than the cheap full-frame wash), so the day/night grade on the map updates every few degrees.
+    private _lastGroundAlt = -999;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
@@ -1169,6 +1172,14 @@ export class HeliosEngine
             shadowOpacity: this._shadowsEnabled() ? this._shadowOpacity() : 0,
         });
         this._renderer.setSun(azimuth, altitude);
+
+        //Day/night colour grade on the vector ground, in coarser altitude steps than the wash above: re-tinting
+        //the whole basemap re-rasterises it, so it updates every few degrees while the cheap wash stays smooth.
+        if (Math.abs(altitude - this._lastGroundAlt) >= 4)
+        {
+            this._lastGroundAlt = altitude;
+            this._renderer.setGroundAltitude(altitude);
+        }
     }
 
     //Precision fixed to 'high' (multi-model median).
