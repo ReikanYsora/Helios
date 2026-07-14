@@ -73,54 +73,35 @@ export function chartAccentColor(host: ChartHost): string
 }
 
 
-//Generic chart for the non-production targets. Grid + battery draw two directional series each; irradiance one
-//curve on a fixed 0..1000 W/m² scale. Power stays in watts (tooltip formats to kW).
-function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'production'>): TemplateResult
+//`lineOnly` series draw a stroke with no area fill (the per-bank SoC overlays on the battery chart); `dashed`
+//marks them as levels rather than flows. `noHoverDot` suppresses the per-series hover dot (the SoC line is split
+//into many colour runs, which would otherwise stack a dot per run; one SoC dot per bank is added separately).
+interface ChartLine { pts: { t: number; v: number }[]; color: string; lineOnly?: boolean; dashed?: boolean; noHoverDot?: boolean }
+//Battery SoC hover source: one dot per bank at the cursor (not one per colour run). Full per-bank pts + the
+//flow-colour resolver, so the hover section can place a single SoC dot in the live flow colour.
+interface SocHover { banks: { t: number; v: number }[][]; flowColorAt: (aMs: number, bMs: number) => string }
+
+//Shared range/store context the per-target series builders read (window bounds + the store-to-visible-points mapper).
+interface TargetSeriesCtx
 {
-    const el = host as unknown as Element; //live HA theme-token colour resolution
-    const store = host._unifiedStore;
-    const range = host._timeRange;
-    const W = 1000;
-    const H = 100;
-    if (!store || !range)
-    {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
-    }
-    const startMs  = range.start.getTime();
-    const endMsAbs = range.end.getTime();
-    const rangeMs  = endMsAbs - startMs;
-    if (rangeMs <= 0)
-    {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
-    }
-    const xOf = (tMs: number): number => ((tMs - startMs) / rangeMs) * W;
+    el:       Element;
+    store:    NonNullable<ChartHost['_unifiedStore']>;
+    startMs:  number;
+    endMsAbs: number;
+    toPts:    (arr: readonly (number | null)[], map?: (v: number) => number) => { t: number; v: number }[];
+}
 
-    //Store series to visible-range points: drop nulls, clip to the window. Bucket centre matches sliceForRange so
-    //curves line up with the production chart's day separators.
-    const toPts =(arr: readonly (number | null)[], map?: (v: number) => number): { t: number; v: number }[] =>
-    {
-        const out: { t: number; v: number }[] = [];
-        for (let i = 0; i < arr.length; i++)
-        {
-            const raw = arr[i];
-            if (raw === null || !isFinite(raw)) { continue; }
-            const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-            if (tMs < startMs || tMs > endMsAbs) { continue; }
-            out.push({ t: tMs, v: map ? map(raw) : raw });
-        }
-        return out;
-    };
-    const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
-
-    //`lineOnly` series draw a stroke with no area fill (the per-bank SoC overlays on the battery chart); `dashed`
-    //marks them as levels rather than flows. `noHoverDot` suppresses the per-series hover dot (the SoC line is split
-    //into many colour runs, which would otherwise stack a dot per run; one SoC dot per bank is added separately).
-    interface Line { pts: { t: number; v: number }[]; color: string; lineOnly?: boolean; dashed?: boolean; noHoverDot?: boolean }
-    let series: Line[];
+//Build the drawable series (plus the SoC-hover source + a fixed Y max where the target pins one) for a chart
+//target. Split out of renderTargetChart so each target's branch stays independently readable; the caller owns
+//scaling, path building and hover.
+function buildTargetSeries(
+    host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
+): { series: ChartLine[]; fixedMax: number; socHover: SocHover | null }
+{
+    const { el, store, startMs, endMsAbs, toPts } = ctx;
+    let series: ChartLine[];
     let fixedMax = 0;
-    //Battery SoC hover source: one dot per bank at the cursor (not one per colour run). Full per-bank pts + the
-    //flow-colour resolver, captured so the hover section can place a single SoC dot in the live flow colour.
-    let socHover: { banks: { t: number; v: number }[][]; flowColorAt: (aMs: number, bMs: number) => string } | null = null;
+    let socHover: SocHover | null = null;
     if (target === 'consumption')
     {
         //Home consumption (load) per bucket: production + grid import - grid export - net battery (charge-positive),
@@ -260,6 +241,50 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         series   = [{ pts: toPts(store.irradiance), color: chipSlotColor(el, host.config, 'irradiance') }];
         fixedMax = 1000;
     }
+    return { series, fixedMax, socHover };
+}
+
+
+//Generic chart for the non-production targets. Grid + battery draw two directional series each; irradiance one
+//curve on a fixed 0..1000 W/m² scale. Power stays in watts (tooltip formats to kW).
+function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'production'>): TemplateResult
+{
+    const el = host as unknown as Element; //live HA theme-token colour resolution
+    const store = host._unifiedStore;
+    const range = host._timeRange;
+    const W = 1000;
+    const H = 100;
+    if (!store || !range)
+    {
+        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+    }
+    const startMs  = range.start.getTime();
+    const endMsAbs = range.end.getTime();
+    const rangeMs  = endMsAbs - startMs;
+    if (rangeMs <= 0)
+    {
+        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+    }
+    const xOf = (tMs: number): number => ((tMs - startMs) / rangeMs) * W;
+
+    //Store series to visible-range points: drop nulls, clip to the window. Bucket centre matches sliceForRange so
+    //curves line up with the production chart's day separators.
+    const toPts =(arr: readonly (number | null)[], map?: (v: number) => number): { t: number; v: number }[] =>
+    {
+        const out: { t: number; v: number }[] = [];
+        for (let i = 0; i < arr.length; i++)
+        {
+            const raw = arr[i];
+            if (raw === null || !isFinite(raw)) { continue; }
+            const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
+            if (tMs < startMs || tMs > endMsAbs) { continue; }
+            out.push({ t: tMs, v: map ? map(raw) : raw });
+        }
+        return out;
+    };
+    const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
+
+    const { series, fixedMax, socHover } = buildTargetSeries(host, target, { el, store, startMs, endMsAbs, toPts });
 
     //Y scale: fixed where set, else the per-series running max. No target stacks its own series; the cloud bands
     //are an overlay of the irradiance view, stacked in their own percent scale below.
