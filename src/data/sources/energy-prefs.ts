@@ -82,24 +82,30 @@ export function unionChangeMeters(d: EnergyDefaults): string[]
 }
 
 
-export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
+//A new EnergyDefaults literal each call. Array fields must not be aliased across callers, so this returns a
+//fresh object rather than a shared constant (see parseEnergyPrefs, which parses into its own copy).
+export function freshEnergyDefaults(): EnergyDefaults
 {
-    solarStatRates:         [],
-    solarStatEnergyFroms:   [],
-    gridStatRates:          [],
-    gridStatEnergyFroms:    [],
-    gridStatEnergyTos:      [],
-    batteryStatRates:       [],
-    batteryStatEnergyFroms: [],
-    batteryStatEnergyTos:   [],
-    batteryStatSocs:        [],
-    batterySourcesWithoutRate: 0,
-    invertedRateEntities:   [],
-    solarForecastEntryIds:  [],
-    gridName:               '',
-    batteryName:            '',
-    devices:                [],
-};
+    return {
+        solarStatRates:         [],
+        solarStatEnergyFroms:   [],
+        gridStatRates:          [],
+        gridStatEnergyFroms:    [],
+        gridStatEnergyTos:      [],
+        batteryStatRates:       [],
+        batteryStatEnergyFroms: [],
+        batteryStatEnergyTos:   [],
+        batteryStatSocs:        [],
+        batterySourcesWithoutRate: 0,
+        invertedRateEntities:   [],
+        solarForecastEntryIds:  [],
+        gridName:               '',
+        batteryName:            '',
+        devices:                [],
+    };
+}
+
+export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults = freshEnergyDefaults();
 
 
 export interface EnergyPrefsHost
@@ -300,24 +306,7 @@ export function parseEnergyPrefs(prefs: {
 {
     //Fresh literal (not `{ ...EMPTY_ENERGY_DEFAULTS }`) so array fields aren't aliased onto the shared empty default,
     //avoiding cross-call contamination when the subscription path parses while a previous parse is still settling.
-    const out: EnergyDefaults =
-    {
-        solarStatRates:         [],
-        solarStatEnergyFroms:   [],
-        gridStatRates:          [],
-        gridStatEnergyFroms:    [],
-        gridStatEnergyTos:      [],
-        batteryStatRates:       [],
-        batteryStatEnergyFroms: [],
-        batteryStatEnergyTos:   [],
-        batteryStatSocs:        [],
-        batterySourcesWithoutRate: 0,
-        invertedRateEntities:   [],
-        solarForecastEntryIds:  [],
-        gridName:               '',
-        batteryName:            '',
-        devices:                [],
-    };
+    const out: EnergyDefaults = freshEnergyDefaults();
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
     for (const src of sources)

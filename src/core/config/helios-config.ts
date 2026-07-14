@@ -10,6 +10,7 @@ import {
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
     DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
 } from './constants';
+import { clamp } from '../render-kit/math';
 
 export {
     DEFAULT_BUILDING_OPACITY,
@@ -160,30 +161,28 @@ export function cacheId(config: HeliosConfig | undefined): string
 }
 
 
+//Read an integer config value, rounding then clamping to [min, max], returning `def` when missing or non-numeric.
+//The single parse-round-clamp routine behind every numeric config resolver below.
+function resolveClampedInt(config: HeliosConfig | undefined, key: string, def: number, min: number, max: number): number
+{
+    const raw = config?.[key];
+    const parsed = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(parsed)) { return def; }
+    return clamp(Math.round(parsed), min, max);
+}
+
 //Resolve the bucket cadence (buckets/hour), clamped to range, defaulting on missing/invalid. Single source
 //for the store builder + every cadence consumer (path builders, chart aspect...).
 export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined): number
 {
-    const raw = config?.['display-update-frequency-per-hour'];
-    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(parsed)) { return DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
-    const rounded = Math.round(parsed);
-    if (rounded < MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
-    if (rounded > MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
-    return rounded;
+    return resolveClampedInt(config, 'display-update-frequency-per-hour', DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR);
 }
 
 
 //Resolve the decimal-place count from `value-decimals`, clamped [0,3], defaulting on missing/invalid.
 export function valueDecimals(config: HeliosConfig | undefined): number
 {
-    const raw = config?.['value-decimals'];
-    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(parsed)) { return DEFAULT_VALUE_DECIMALS; }
-    const rounded = Math.round(parsed);
-    if (rounded < MIN_VALUE_DECIMALS) { return MIN_VALUE_DECIMALS; }
-    if (rounded > MAX_VALUE_DECIMALS) { return MAX_VALUE_DECIMALS; }
-    return rounded;
+    return resolveClampedInt(config, 'value-decimals', DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS);
 }
 
 
@@ -379,26 +378,14 @@ export function mapLayerVisible(config: HeliosConfig | undefined, layer: string)
 //lowering it shrinks buildings and shadows in lockstep.
 export function displayRadiusM(config: HeliosConfig | undefined): number
 {
-    const raw = config?.['display-radius'];
-    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(parsed)) { return DEFAULT_DISPLAY_RADIUS_M; }
-    const rounded = Math.round(parsed);
-    if (rounded < MIN_DISPLAY_RADIUS_M) { return MIN_DISPLAY_RADIUS_M; }
-    if (rounded > MAX_DISPLAY_RADIUS_M) { return MAX_DISPLAY_RADIUS_M; }
-    return rounded;
+    return resolveClampedInt(config, 'display-radius', DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M);
 }
 
 
 //Resolve how many nearest buildings to keep from `building-count`, clamped [MIN,MAX], defaulting on invalid.
 export function buildingCount(config: HeliosConfig | undefined): number
 {
-    const raw = config?.['building-count'];
-    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(parsed)) { return DEFAULT_BUILDING_COUNT; }
-    const rounded = Math.round(parsed);
-    if (rounded < MIN_BUILDING_COUNT) { return MIN_BUILDING_COUNT; }
-    if (rounded > MAX_BUILDING_COUNT) { return MAX_BUILDING_COUNT; }
-    return rounded;
+    return resolveClampedInt(config, 'building-count', DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT);
 }
 
 
@@ -413,11 +400,5 @@ export function buildingRealSize(config: HeliosConfig | undefined): boolean
 //`building-real-size` is false.
 export function buildingFixedHeightM(config: HeliosConfig | undefined): number
 {
-    const raw = config?.['building-height'];
-    const parsed   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(parsed)) { return FIXED_BUILDING_HEIGHT_M; }
-    const rounded = Math.round(parsed);
-    if (rounded < MIN_BUILDING_HEIGHT_M) { return MIN_BUILDING_HEIGHT_M; }
-    if (rounded > MAX_BUILDING_HEIGHT_M) { return MAX_BUILDING_HEIGHT_M; }
-    return rounded;
+    return resolveClampedInt(config, 'building-height', FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M);
 }

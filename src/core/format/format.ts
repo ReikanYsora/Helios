@@ -2,7 +2,8 @@
 //dependency-free so any card-side module can pull them in without dragging Lit or engine symbols along.
 
 import { Xn, Yn, Zn, LAB_T0, LAB_T1, LAB_T2, LAB_T3, SUN_COLOR_HEX } from '../config/constants';
-import { mixHex } from '../render-kit/hex';
+import { mixHex, hexByte } from '../render-kit/hex';
+import { clamp } from '../render-kit/math';
 
 
 //Format a number with the user's locale (decimal mark, grouping). Falls back to locale-independent
@@ -66,20 +67,26 @@ function haUseAmPm(locale: { time_format?: string; language?: string } | undefin
     }
 }
 
-//Format a time like the HA frontend: hour + minute in the user's language, honouring their 12/24-hour setting. No
-//time-zone conversion: callers pass a local Date for wall-clock display, so the hour shown is the one meant.
-export function formatHaTime(hass: any, date: Date): string
+//Format a Date with the user's HA language + a caller-supplied options set, falling back to the runtime default
+//locale if the language tag is rejected. No time-zone conversion: callers pass a local Date for wall-clock display.
+function formatWithHaLocale(hass: any, date: Date, opts: Intl.DateTimeFormatOptions): string
 {
     const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
-    const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: haUseAmPm(locale) };
+    const withAmPm: Intl.DateTimeFormatOptions = { ...opts, hour12: haUseAmPm(locale) };
     try
     {
-        return new Intl.DateTimeFormat(locale?.language, opts).format(date);
+        return new Intl.DateTimeFormat(locale?.language, withAmPm).format(date);
     }
     catch (_)
     {
-        return new Intl.DateTimeFormat(undefined, opts).format(date);
+        return new Intl.DateTimeFormat(undefined, withAmPm).format(date);
     }
+}
+
+//Format a time like the HA frontend: hour + minute in the user's language, honouring their 12/24-hour setting.
+export function formatHaTime(hass: any, date: Date): string
+{
+    return formatWithHaLocale(hass, date, { hour: 'numeric', minute: '2-digit' });
 }
 
 
@@ -87,18 +94,7 @@ export function formatHaTime(hass: any, date: Date): string
 //where the coarse axis labels (months on a year window) don't pin the exact instant.
 export function formatHaDateTime(hass: any, date: Date): string
 {
-    const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
-    const opts: Intl.DateTimeFormatOptions = {
-        day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: haUseAmPm(locale),
-    };
-    try
-    {
-        return new Intl.DateTimeFormat(locale?.language, opts).format(date);
-    }
-    catch (_)
-    {
-        return new Intl.DateTimeFormat(undefined, opts).format(date);
-    }
+    return formatWithHaLocale(hass, date, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 }
 
 
@@ -231,12 +227,9 @@ export function formatEntityValue(hass: any, value: number, unit: string, decima
 //intact. Derives the darker sun-disc rim from the configured sun colour so the rim stays visible without a second config key.
 export function darkenHex(hex: string, factor: number): string
 {
-    const f = 1 - Math.max(0, Math.min(1, factor));
-    const r = Math.round(parseInt(hex.slice(1, 3), 16) * f);
-    const g = Math.round(parseInt(hex.slice(3, 5), 16) * f);
-    const b = Math.round(parseInt(hex.slice(5, 7), 16) * f);
-    const h = (n: number) => n.toString(16).padStart(2, '0');
-    return `#${h(r)}${h(g)}${h(b)}`;
+    const f = 1 - clamp(factor, 0, 1);
+    const h = (n: number) => Math.round(n * f).toString(16).padStart(2, '0');
+    return `#${h(hexByte(hex, 1))}${h(hexByte(hex, 3))}${h(hexByte(hex, 5))}`;
 }
 
 
@@ -244,7 +237,7 @@ export function darkenHex(hex: string, factor: number): string
 //disc uses it to derive light (low) and dark (high) band shades from one configured cloud colour.
 export function lerpHexToward(a: string, b: string, t: number): string
 {
-    return mixHex(a, b, Math.max(0, Math.min(1, t)));
+    return mixHex(a, b, clamp(t, 0, 1));
 }
 
 
@@ -280,7 +273,7 @@ export function batteryLevelIcon(soc: number | null, charging: boolean): string
     {
         return 'mdi:battery';
     }
-    const rounded = Math.max(0, Math.min(100, Math.round(soc / 10) * 10));
+    const rounded = clamp(Math.round(soc / 10) * 10, 0, 100);
     if (charging)
     {
         if (rounded >= 100) { return 'mdi:battery-charging-100'; }
@@ -332,28 +325,10 @@ export function isDarkFromCss(host: Element): boolean
 {
     try
     {
-        const bg = getComputedStyle(host).getPropertyValue('--primary-background-color').trim();
-        if (!bg)
-        {
-            return false;
-        }
-        const hexMatch = bg.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-        let r = 0; let g = 0; let b = 0;
-        if (hexMatch)
-        {
-            const hex = hexMatch[1].length === 3
-                ? hexMatch[1].split('').map(c => c + c).join('')
-                : hexMatch[1];
-            r = parseInt(hex.slice(0, 2), 16);
-            g = parseInt(hex.slice(2, 4), 16);
-            b = parseInt(hex.slice(4, 6), 16);
-        }
-        else
-        {
-            const rgbMatch = bg.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-            if (rgbMatch) { r = +rgbMatch[1]; g = +rgbMatch[2]; b = +rgbMatch[3]; }
-        }
-        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        //Resolve to #rrggbb via the shared parser (handles #rgb / #rrggbb / rgb()); an unset/unparseable token
+        //resolves to the white fallback, i.e. "not dark".
+        const hex = cssHex(host, '--primary-background-color', '#ffffff');
+        const lum = (0.299 * hexByte(hex, 1) + 0.587 * hexByte(hex, 3) + 0.114 * hexByte(hex, 5)) / 255;
         return lum < 0.5;
     }
     catch (_) { /* probe failed: fall through to the light-theme default */ }
@@ -369,9 +344,9 @@ const labXyz = (t: number): number => (t > LAB_T1 ? t * t * t : LAB_T2 * (t - LA
 function hexToRgb(hex: string): [number, number, number]
 {
     return [
-        parseInt(hex.slice(1, 3), 16),
-        parseInt(hex.slice(3, 5), 16),
-        parseInt(hex.slice(5, 7), 16),
+        hexByte(hex, 1),
+        hexByte(hex, 3),
+        hexByte(hex, 5),
     ];
 }
 
