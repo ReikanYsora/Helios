@@ -1,89 +1,196 @@
-import type { Translations } from '../index';
+import type { Translations } from "../index";
 
 //German locale.
 export const de: Translations = {
-    cardName:        'Helios',
-    cardDescription: '☀️ Eine 2.5D-Echtzeitansicht deines Zuhauses mit Sonne, Wetter, Solarproduktion, Batterie und Netz, dazu Schlagschatten und eine interaktive Zeitleiste',
+  cardName: "Helios",
+  cardDescription:
+    "☀️ Eine 2.5D-Echtzeitansicht deines Zuhauses mit Sonne, Wetter, Solarproduktion, Batterie und Netz, dazu Schlagschatten und eine interaktive Zeitleiste",
 
-    period:
-    {
-        rangeLabel: 'Zeitraum',
-        forecast: 'Prognose',
-        today: 'Heute',
-        week:  'Woche',
-        month: 'Monat',
-        year:  'Jahr',
-    },
+  period: {
+    rangeLabel: "Zeitraum",
+    forecast: "Prognose",
+    yesterday: "Gestern",
+    today: "Heute",
+    week: "Woche",
+    month: "Monat",
+    year: "Jahr",
+  },
 
-    cloudCover:
-    {
-        cloudLow:  'Tiefe Bewölkung',
-        cloudMid:  'Mittlere Bewölkung',
-        cloudHigh: 'Hohe Bewölkung',
-    },
+  cloudCover: {
+    cloudLow: "Tiefe Bewölkung",
+    cloudMid: "Mittlere Bewölkung",
+    cloudHigh: "Hohe Bewölkung",
+  },
 
-    editor:
-    {
-        locationSection:    'Standort',
-        homeLatitude:       'Breitengrad des Zuhauses',
-        homeLongitude:      'Längengrad des Zuhauses',
-        locationHint:       'Überschreibt die Adresse des Zuhauses, die als Mittelpunkt der Karte dient. Lass beide Felder leer, um das in Home Assistant konfigurierte Zuhause zu verwenden. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten.',
-        uiAndMapSection:    'UI',
-        autoRotate:         'Automatische Kameradrehung',
-        autoRotateHint:     'Nach ein paar Sekunden Inaktivität dreht sich die Kamera langsam um das Zuhause (etwa 1.5°/s, entgegen der scheinbaren Sonnenbewegung). Ein Wischen mit einem Finger pausiert sie sofort und sie läuft weiter, sobald du loslässt. Auf sehr alten Geräten besser vermeiden: die Autodrehung erzwingt jede Sekunde ein Rendern.',
-        autoRotateOn:       'An',
-        autoRotateOff:      'Aus',
-        dataDisplaySection:           'Entitäten und Datenanzeige',
-        displayUpdateFrequency:       'Diagrammdetail',
-        displayUpdateFrequencyHelp:   'Wie viele Punkte pro Stunde die Diagramme zeichnen. Die Daten selbst sind immer die 5-Minuten-Statistiken von Home Assistant; dies steuert nur, wie dicht die Kurve gezeichnet wird: 1 = ein Punkt pro Stunde (am glattesten, am leichtesten zu rendern), 6 = ein Punkt alle 10 Minuten (volles Detail, am schwersten). Standard 4 = ein Punkt alle 15 Minuten. Senke ihn auf älteren oder langsameren Geräten, um den Renderaufwand zu verringern. Die Prognosekurve folgt derselben Taktung, eine feinere Einstellung zeigt also auch kurze Schatteneinbrüche (ein Baum, der die Produktion eine halbe Stunde lang verdeckt), über die eine stündliche Kurve hinweggeht.',
-        valueDecimals:                'Dezimalstellen',
-        valueDecimalsHelp:            'Anzahl der Dezimalstellen, die bei jeder Wertanzeige gezeigt werden. Leistung wird immer in kW und Energie in kWh angezeigt; dies legt die Genauigkeit für alle fest, damit die Chips einheitlich lesbar sind. 0 bis 3, Standard 1.',
-        powerUnit:                    'Leistungseinheit',
-        powerUnitHelp:                'Einheit für jede Leistungsanzeige auf der Karte (Chips, Diagramm-Tooltips). Energie folgt ihr ebenfalls, damit die Karte konsistent bleibt: kW passt zu kWh, W zu Wh.',
-        irradianceUnit:               'Einheit der Solarkonstante',
-        irradianceUnitHelp:           'Einheit für die Anzeige der Solarkonstante (Bestrahlung) über der Sonne.',
-        batterySign:                  'Batterievorzeichen',
-        batterySignHelp:              'Vorzeichen, das auf dem Batterie-Chip angezeigt wird. Standard ist Minus beim Laden und Plus beim Entladen. Invertiert dreht es um. Ausgeblendet zeigt den Wert ohne Vorzeichen.',
-        batterySignDefault:           'Standard',
-        batterySignInverted:          'Invertiert',
-        batterySignHidden:            'Ausgeblendet',
-        noUiMode:                     'Kein-UI-Modus',
-        noUiModeHint:                 'Blendet die timeline und die Bedienelemente auf der Karte nach einigen Sekunden Inaktivität aus. Jedes Tippen oder Bewegen holt sie zurück. Ideal für ein wall display.',
-        solarIrradianceEntity:     'Sonneneinstrahlungs-Entität',
-        solarIrradianceEntityHelp: 'Wähle einen Sensor, der die globale kurzwellige Bestrahlung in W/m² meldet (typischerweise eine Ecowitt- / Davis- / private Wetterstation). Wenn gesetzt, ersetzen sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo für die Live- und Vergangenheitsbestrahlung überall, wo sie erscheint (Zahl auf dem Sonnen-Chip, Y-Achse des PV-Diagramms, Färbung des Sonnenbogens). Prognosestunden bleiben bei Open-Meteo, da ein Sensor keine Zukunftswerte liefern kann.',
-        buildingsSection:   'Zuhause & Gebäude',
-        buildingsHint:      'Damit die Karte in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des konfigurierten Radius um das Zuhause in 3D gerendert. Das Zuhause selbst bleibt voll deckend; nahe Gebäude werden mit der konfigurierten Deckkraft gerendert, sodass sie städtischen Kontext liefern, ohne mit den Datenoverlays zu konkurrieren. Der Cluster-Radius gruppiert angebaute Nebengebäude (Wintergärten, Garagen, Schuppen) in die "Zuhause"-Gruppe.',
-        displayRadius:         'Anzeigeradius',
-        displayRadiusHelp:     'Radius um das Zuhause, in dem Gebäude geladen und gezeichnet werden, bis zum Rand der ausgeblendeten Kartenscheibe. Senke ihn, um das Rendern auf einem langsamen Gerät zu erleichtern; 0 zeigt nur das Zuhause.',
-        buildingCount:         'Anzahl Gebäude',
-        buildingCountHelp:     'Maximale Anzahl naher Gebäude, die gezeichnet werden. Senke sie, um das Rendern auf einem langsamen Gerät zu erleichtern.',
-        buildingRealSize:      'Reale Gebäudehöhen',
-        buildingRealSizeOn:    'An',
-        buildingRealSizeOff:   'Aus',
-        buildingRealSizeHint:  'An: reale OpenStreetMap-Höhen verwenden (begrenzt, damit der Bildausschnitt lesbar bleibt). Aus: jedem Gebäude die gleiche feste Höhe unten geben.',
-        buildingHeight:        'Gebäudehöhe',
-        buildingClusterRadius: 'Cluster-Radius Zuhause',
-        buildingOpacity:       'Deckkraft der Umgebung',
-        buildingColor:         'Gebäudefarbe',
-        buildingColorHelp:     'Grundton, der auf die umliegenden Gebäude in der Szene angewendet wird.',
-        shadowsSection:        'Schatten',
-        shadowsEnabled:        'Schatten anzeigen',
-        shadowsEnabledOn:      'Angezeigt',
-        shadowsEnabledOff:     'Ausgeblendet',
-        shadowsEnabledHint:    'Schaltet die Bodenschatten ein oder aus, die die Gebäude werfen, während die Sonne wandert.',
-        shadowOpacity:         'Schattendeckkraft',
-        shadowOpacityHint:     'Deckkraft der geworfenen Bodenschatten.',
-        resetSection:          'Zurücksetzen',
-        resetSectionHint:      'Wartungswerkzeuge zum Löschen von Daten, die die Karte lokal zwischengespeichert hat.',
-        resetCacheButton:      'Datencache zurücksetzen',
-        resetCacheWarning:     'Achtung: dies löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für JEDE auf dieser Seite geöffnete Helios-Karte. Die verfeinerte Prognose verliert ihre 5 Tage Kalibrierung, bis sie erneut abgerufen sind (ein paar Minuten, je nach deinem HA-Server). Deine Daten in Home Assistant werden nie angetastet.',
-        resetCacheDone:        'Cache gelöscht ✓',
-        aboutSection:          'Über',
-        aboutVersionLabel:     'Version',
-        aboutRepoCard:         'Helios',
-        aboutCoffeeMessage:    'Helios wird von einem einzigen leidenschaftlichen Entwickler gebaut, mit viel Energie und sehr wenig Schlaf. Wenn dir meine Arbeit gefällt, hilft mir ein kleiner Stern auf GitHub schon enorm, und wenn du kannst, hält ein kleiner Kaffee das Projekt am Leben.',
-        aboutDeveloperLabel:    'Entwickler',
-        aboutDeveloperLinkedIn: 'LinkedIn',
-        aboutCoffeeLink:       'Buy me a coffee',
-    },
+  mapConfig: {
+    section: "Kartenkonfiguration",
+    intro:
+      "Die Basiskarte wird aus OpenStreetMap-Vektorkacheln gezeichnet. Auto folgt deinem Theme, Dark / Light erzwingt eines, und Custom lässt dich jede Farbe einstellen und jede Ebene ausblenden.",
+    modeAuto: "Auto",
+    modeDark: "Dunkel",
+    modeLight: "Hell",
+    modeCustom: "Benutzerdefiniert",
+    land: "Hintergrund",
+    water: "Wasser",
+    wood: "Wald",
+    grass: "Grünflächen",
+    sand: "Sand",
+    wetland: "Feuchtgebiet",
+    ice: "Eis & Schnee",
+    landuse: "Bebautes Land",
+    roadMajor: "Hauptstraßen",
+    roadMinor: "Nebenstraßen",
+    roadCasing: "Straßenumriss",
+    path: "Wege & Pfade",
+    rail: "Bahnlinien",
+    building: "Gebäude",
+    boundary: "Grenzen",
+  },
+
+  editor: {
+    locationSection: "Standort",
+    homeLatitude: "Breitengrad des Zuhauses",
+    homeLongitude: "Längengrad des Zuhauses",
+    locationHint:
+      "Überschreibt die Adresse des Zuhauses, die als Mittelpunkt der Karte dient. Lass beide Felder leer, um das in Home Assistant konfigurierte Zuhause zu verwenden. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten.",
+    uiAndMapSection: "UI",
+    autoRotate: "Automatische Kameradrehung",
+    autoRotateHint:
+      "Nach ein paar Sekunden Inaktivität dreht sich die Kamera langsam um das Zuhause (etwa 1.5°/s, entgegen der scheinbaren Sonnenbewegung). Ein Wischen mit einem Finger pausiert sie sofort und sie läuft weiter, sobald du loslässt. Auf sehr alten Geräten besser vermeiden: die Autodrehung erzwingt jede Sekunde ein Rendern.",
+    autoRotateOn: "An",
+    autoRotateOff: "Aus",
+    dataDisplaySection: "Datenanzeige",
+    displayUpdateFrequency: "Diagrammdetail",
+    displayUpdateFrequencyHelp:
+      "Wie viele Punkte pro Stunde die Diagramme zeichnen. Die Daten selbst sind immer die 5-Minuten-Statistiken von Home Assistant; dies steuert nur, wie dicht die Kurve gezeichnet wird: 1 = ein Punkt pro Stunde (am glattesten, am leichtesten zu rendern), 6 = ein Punkt alle 10 Minuten (volles Detail, am schwersten). Standard 4 = ein Punkt alle 15 Minuten. Senke ihn auf älteren oder langsameren Geräten, um den Renderaufwand zu verringern. Die Prognosekurve folgt derselben Taktung, eine feinere Einstellung zeigt also auch kurze Schatteneinbrüche (ein Baum, der die Produktion eine halbe Stunde lang verdeckt), über die eine stündliche Kurve hinweggeht.",
+    valueDecimals: "Dezimalstellen",
+    valueDecimalsHelp:
+      "Anzahl der Dezimalstellen, die bei jeder Wertanzeige gezeigt werden, damit die Chips einheitlich wirken. Gilt für kW-Werte (ganze Watt bleiben ganzzahlig) und für kWh. 0 bis 3, Standard 1.",
+    powerUnit: "Leistungseinheit",
+    powerUnitHelp:
+      "Einheit für jede Leistungsanzeige auf der Karte (Chips, Diagramm-Tooltips). Energie folgt ihr ebenfalls, damit die Karte konsistent bleibt: kW passt zu kWh, W zu Wh.",
+    irradianceUnit: "Einheit der Solarkonstante",
+    irradianceUnitHelp:
+      "Einheit für die Anzeige der Solarkonstante (Bestrahlungsstärke) über der Sonne.",
+    batterySign: "Batterievorzeichen",
+    batterySignHelp:
+      "Vorzeichen, das auf dem Batterie-Chip angezeigt wird. Standard ist Minus beim Laden und Plus beim Entladen. Invertiert dreht es um. Ausgeblendet zeigt den Wert ohne Vorzeichen.",
+    batterySignDefault: "Standard",
+    batterySignInverted: "Invertiert",
+    batterySignHidden: "Ausgeblendet",
+    noUiMode: "Kein-UI-Modus",
+    noUiModeHint:
+      "Blendet die Zeitleiste und die Bedienelemente auf der Karte nach einigen Sekunden Inaktivität aus. Jedes Tippen oder Bewegen holt sie zurück. Ideal für ein Wandbild-Display.",
+    noUiDelay: "Verzögerung bis zum Ausblenden",
+    noUiDelayHint:
+      "Sekunden der Inaktivität, bevor die Zeitleiste und die Bedienelemente im Kein-UI-Modus ausblenden. 0 hält die UI dauerhaft ausgeblendet. Wird nur verwendet, wenn der Kein-UI-Modus aktiv ist.",
+    showTimeline: "Zeitleiste anzeigen",
+    showTimelineHint:
+      "Zeigt die Zeitleiste und die Zeitraumauswahl unter der Szene an. Aus lässt nur die Szene übrig.",
+    showDetailPanel: "Zusätzliche Informationen anzeigen",
+    showDetailPanelHint:
+      "Erlaubt, dass das Mini-Panel pro Chip (aggregierte Kennzahlen) oben rechts erscheint, wenn ein Chip angetippt wird. Aus zeigt es nie an.",
+    showSunTimes: "Sonnenauf- / -untergangszeiten anzeigen",
+    showSunTimesHint:
+      "Zeigt die Zeiten für Sonnenauf- und -untergang sowie deren Markierungen an den Füßen des Sonnenbogens an.",
+    lockRotation: "Drehung sperren",
+    lockRotationHint:
+      "Stelle den Blickwinkel direkt in der Vorschau ein (ziehen zum Drehen und Neigen der Szene) und aktiviere dann die Sperre, um ihn einzufrieren: Ziehen-zum-Drehen und die automatische Ruhedrehung werden deaktiviert, sodass der eingestellte Winkel erhalten bleibt.",
+    chipsSection: "Entitätenanzeige",
+    chipsIntro:
+      "Blende jede Entität ein oder aus und wähle ihr Symbol und ihre Farbe. Das Zuhause folgt dem ausgewählten Chip oder standardmäßig deiner Primärfarbe.",
+    chipIrradiance: "Anzeige der Bestrahlungsstärke",
+    chipProduction: "Anzeige der Produktion",
+    chipGrid: "Anzeige des Netzes",
+    chipBattery: "Anzeige der Batterie",
+    chipHome: "Anzeige des Hausverbrauchs",
+    groupsConfigTitle: "Gruppenkonfiguration",
+    optionalSensors: "Optionale Sensoren",
+    solarIrradianceEntity: "Sonneneinstrahlungs-Entität",
+    solarIrradianceEntityHelp:
+      "Wähle einen Sensor, der die globale kurzwellige Bestrahlungsstärke in W/m² meldet (typischerweise eine Ecowitt- / Davis- / private Wetterstation). Wenn gesetzt, ersetzen sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo für die Live- und Vergangenheitsbestrahlung überall, wo sie erscheint (Zahl auf dem Sonnen-Chip, Y-Achse des PV-Diagramms, Färbung des Sonnenbogens). Prognosestunden bleiben bei Open-Meteo, da ein Sensor keine Zukunftswerte liefern kann.",
+    liveDataTitle: "Konfigurationsstatus",
+    liveDataIntro:
+      "Live-Chips zeigen ausschließlich gemessene Sensoren an. Jede Familie benötigt den optionalen Live-Leistungssensor ihrer Energie-Dashboard-Quelle; Kurven und Summen stammen immer von deinen Zählern.",
+    liveSolarOk: "Solar: Live-Leistungssensor erkannt.",
+    liveSolarMissing:
+      "Solar: kein Live-Leistungssensor, der Produktions-Chip bleibt ausgeblendet. Füge einen unter Einstellungen > Dashboards > Energie > Solarmodule hinzu.",
+    liveSolarAbsent:
+      "Solar: in deinem Energie-Dashboard nicht eingerichtet. Füge dort Solarmodule hinzu, um den Produktions-Chip zu erhalten.",
+    liveGridOk: "Netz: Live-Leistungssensor erkannt.",
+    liveGridMissing:
+      "Netz: kein Live-Leistungssensor, die Bezug/Einspeisung-Chips bleiben ausgeblendet. Füge einen unter Einstellungen > Dashboards > Energie > Netz hinzu.",
+    liveGridMiswired:
+      "Netz: der Live-Leistungssensor widerspricht deinen Zählern (er scheint nur eine Richtung zu messen). Die Chips bleiben ausgeblendet; konfiguriere einen vorzeichenbehafteten Sensor oder den Zwei-Sensoren-Modus.",
+    liveGridAbsent:
+      "Netz: in deinem Energie-Dashboard nicht eingerichtet. Füge dort das Netz hinzu, um die Bezugs- und Einspeisungs-Chips zu erhalten.",
+    liveBatteryOk: "Batterie: Live-Leistungssensoren decken jede Batterie ab.",
+    liveBatteryMissing:
+      "Batterie: bei mindestens einer Batterie fehlt die Live-Leistung, der Leistungs-Chip bleibt ausgeblendet. Füge den/die Leistungssensor(en) unter Einstellungen > Dashboards > Energie > Batterie hinzu.",
+    liveBatteryAbsent:
+      "Batterie: in deinem Energie-Dashboard nicht eingerichtet. Füge dort eine Batterie hinzu, um den Lade- und Entlade-Chip zu erhalten.",
+    liveHomeOk:
+      "Hausverbrauch: wird angezeigt, abgeleitet aus den obigen Live-Familien.",
+    liveHomeNote:
+      "Hausverbrauch: erscheint, sobald jede oben konfigurierte Familie ihren Live-Sensor hat.",
+    openEnergyConfig: "Energie-Konfiguration öffnen",
+    buildingsSection: "Zuhause & Gebäude",
+    buildingsHint:
+      'Damit die Karte in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des konfigurierten Radius um das Zuhause in 3D gerendert. Das Zuhause selbst bleibt voll deckend; nahe Gebäude werden mit der konfigurierten Deckkraft gerendert, sodass sie städtischen Kontext liefern, ohne mit den Datenoverlays zu konkurrieren. Der Cluster-Radius gruppiert angebaute Nebengebäude (Wintergärten, Garagen, Schuppen) in die "Zuhause"-Gruppe.',
+    displayRadius: "Anzeigeradius",
+    displayRadiusHelp:
+      "Radius um das Zuhause, in dem Gebäude geladen und gezeichnet werden, bis zum Rand der ausgeblendeten Kartenscheibe. Senke ihn, um das Rendern auf einem langsamen Gerät zu erleichtern; 0 zeigt nur das Zuhause.",
+    buildingCount: "Anzahl Gebäude",
+    buildingCountHelp:
+      "Maximale Anzahl naher Gebäude, die gezeichnet werden. Senke sie, um das Rendern auf einem langsamen Gerät zu erleichtern.",
+    buildingRealSize: "Reale Gebäudehöhen",
+    buildingRealSizeOn: "An",
+    buildingRealSizeOff: "Aus",
+    buildingRealSizeHint:
+      "An: reale OpenStreetMap-Höhen verwenden (begrenzt, damit der Bildausschnitt lesbar bleibt). Aus: jedem Gebäude die gleiche feste Höhe unten geben.",
+    buildingHeight: "Gebäudehöhe",
+    hiddenDevicesEmpty:
+      "In deinem Energie-Dashboard werden noch keine einzelnen Geräte erfasst. Füge dort den Geräteverbrauch hinzu, um sie hier zu steuern.",
+    deviceVisibilityLabel: "Gerät anzeigen",
+    deviceGroupLabel: "Überwachungsgruppe",
+    group: "Gruppe",
+    noGroup: "Keine Gruppe",
+    devicesEnergyNote:
+      "Dies sind die einzelnen Geräte, die aktuell in deinem Home Assistant Energie-Dashboard eingerichtet sind. Das Auge blendet jedes überall ein oder aus, und die Pille weist es einer Gruppe zu.",
+    buildingClusterRadius: "Cluster-Radius Zuhause",
+    buildingClusterRadiusHelp:
+      "Radius um das Zuhause, innerhalb dessen angebaute Nebengebäude (Wintergärten, Garagen, Schuppen) als Teil des Zuhauses behandelt werden: sie werden mit der vollen Deckkraft und Farbe des Zuhauses statt als ausgeblendete Nachbarn gerendert. 0 behält nur das Hauptgebäude.",
+    buildingOpacity: "Deckkraft der Umgebung",
+    buildingColor: "Gebäudefarbe",
+    buildingColorHelp:
+      "Grundton, der auf die umliegenden Gebäude in der Szene angewendet wird.",
+    shadowsSection: "Schatten",
+    shadowsEnabled: "Schatten anzeigen",
+    shadowsEnabledOn: "Angezeigt",
+    shadowsEnabledOff: "Ausgeblendet",
+    shadowsEnabledHint:
+      "Schaltet die Bodenschatten ein oder aus, die die Gebäude werfen, während die Sonne wandert.",
+    shadowOpacity: "Schattendeckkraft",
+    shadowOpacityHint: "Deckkraft der geworfenen Bodenschatten.",
+    resetSection: "Zurücksetzen",
+    resetSectionHint:
+      "Wartungswerkzeuge: die zwischengespeicherten Daten der Karte erneut abrufen, oder alle Optionen auf ihre Standardwerte zurücksetzen.",
+    resetCacheButton: "Datencache zurücksetzen",
+    resetCacheWarning:
+      "Achtung: dies ruft alles, was die Karte zwischengespeichert hat, erneut ab - das Open-Meteo-Wetter, jede Energiereihe im Speicher (Produktion, Netz, Batterie, Geräte, Bestrahlungsstärke), die Kalibrierung der verfeinerten Prognose und die OpenFreeMap-Gebäudeumrisse - für jede auf dieser Seite geöffnete Helios-Karte. Nutze es, um eine feststeckende Kalibrierung oder veraltete Wetter-/Kartendaten zu löschen; ein vollständiger Neuabruf dauert je nach deinem HA-Server einige Minuten. Deine Daten in Home Assistant werden nie angetastet.",
+    resetCacheDone: "Cache gelöscht ✓",
+    resetOptionsButton: "Optionen auf Standard zurücksetzen",
+    resetOptionsConfirm: "Zum Bestätigen erneut klicken",
+    resetOptionsWarning:
+      "Achtung: dies setzt ALLE Optionen dieser Karte auf ihre Standardwerte zurück - Chip-Sichtbarkeit, Farben und Symbole, Gruppennamen/-farben/-symbole, Gebäude, Schatten, Einheiten und jede andere Einstellung. Deine Home Assistant-Daten und dein Energie-Dashboard bleiben unangetastet, aber deine Anpassungen werden gelöscht und können nicht wiederhergestellt werden.",
+    resetOptionsDone: "Optionen zurückgesetzt ✓",
+    aboutSection: "Über",
+    aboutVersionLabel: "Version",
+    aboutRepoCard: "Helios",
+    aboutCoffeeMessage:
+      "Ich baue Helios allein, meistens nachts, und jage kleinen Details hinterher, bis die Sonne und deine Energie auf dem Bildschirm lebendig wirken. Wenn sie einen Platz auf deinem Dashboard gefunden hat, macht mich das schon glücklich - ein Stern auf GitHub noch mehr, und ein Kaffee hält alles am Laufen.",
+    aboutDeveloperLabel: "Entwickler",
+    aboutDeveloperLinkedIn: "LinkedIn",
+    aboutCoffeeLink: "Buy me a coffee",
+  },
 };
