@@ -4,14 +4,31 @@
 import { lerp, hexByte, mixHex } from './hex';
 
 //Full-frame night/twilight wash by sun altitude (deg): astronomical night -> deep navy, twilight -> blue,
-//dawn/dusk -> warm amber, daylight -> transparent.
+//dawn/dusk -> warm amber, daylight -> transparent. Interpolated through keyframes (the same palette as before)
+//so BOTH colour and opacity ease continuously across the day<->night change, with no stepped colour jumps.
+const NIGHT_STOPS: { alt: number; color: string; op: number }[] = [
+    { alt: -12, color: '#02040c', op: 0.68 }, //deep night
+    { alt: -6,  color: '#050a2c', op: 0.50 }, //astronomical -> nautical
+    { alt:  0,  color: '#0a1240', op: 0.30 }, //civil twilight, sun on the horizon
+    { alt:  4,  color: '#3a1408', op: 0.16 }, //warm ember eases in just above the horizon
+    { alt: 12,  color: '#3a1408', op: 0.05 },
+    { alt: 22,  color: '#3a1408', op: 0.0  }, //full daylight, transparent
+];
+
 export function nightShade(altitude: number): { color: string; opacity: number }
 {
-    if (altitude < -12) { return { color: '#02040c', opacity: 0.68 }; }
-    if (altitude < -6)  { return { color: '#040824', opacity: lerp(0.5, 0.68, (-altitude - 6) / 6) }; }
-    if (altitude < 0)   { return { color: '#0a1240', opacity: lerp(0.5, 0.3, (altitude + 6) / 6) }; }
-    if (altitude < 6)   { return { color: '#3a1408', opacity: lerp(0.3, 0.1, altitude / 6) }; }
-    if (altitude < 20)  { return { color: '#3a1408', opacity: lerp(0.1, 0, (altitude - 6) / 14) }; }
+    const stops = NIGHT_STOPS;
+    if (altitude <= stops[0].alt) { return { color: stops[0].color, opacity: stops[0].op }; }
+    for (let i = 0; i < stops.length - 1; i++)
+    {
+        const a = stops[i];
+        const b = stops[i + 1];
+        if (altitude < b.alt)
+        {
+            const f = (altitude - a.alt) / (b.alt - a.alt);
+            return { color: mixHex(a.color, b.color, f), opacity: lerp(a.op, b.op, f) };
+        }
+    }
     return { color: '#000000', opacity: 0 };
 }
 
