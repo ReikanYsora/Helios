@@ -8,6 +8,12 @@ import { localMidnightMinusDays } from '../core/time/timezone';
 import { callWS } from './ha-gateway';
 
 
+//The Forecast period shows +2 days. The fetch always reaches at least this far ahead, whatever the active period,
+//so a re-fetch while on a no-future period (Today/Week/Month/Year all have futureDays 0) can't overwrite the
+//cached future days the Forecast view needs. The forecast is period-independent, so caching extra is harmless.
+const FORECAST_HORIZON_DAYS = 2;
+
+
 //One forecast point. `w` holds the AVERAGE WATTS across the point's bucket: the fetch layer normalises each
 //provider bucket's energy by its duration, so consumers read watts directly regardless of the feed cadence.
 export interface SolarForecastPoint
@@ -100,10 +106,12 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     {
         return null;
     }
-    //Rolling window from the card's active period: local midnight minus daysPast to plus (daysFuture + 1), so a
-    //widened period still gets its whole forecast curve instead of a truncated fixed slice.
+    //Past extent follows the active period (a wider period gets its whole past curve); the future extent is fixed
+    //to at least the forecast horizon, independent of the period, so a re-fetch on a no-future period doesn't drop
+    //the future days the Forecast view needs (see FORECAST_HORIZON_DAYS).
+    const futureDays = Math.max(host._periodFutureDays, FORECAST_HORIZON_DAYS);
     const startIso = new Date(localMidnightMinusDays(host._periodPastDays)).toISOString();
-    const endIso   = new Date(localMidnightMinusDays(-(host._periodFutureDays + 1))).toISOString();
+    const endIso   = new Date(localMidnightMinusDays(-(futureDays + 1))).toISOString();
 
     //Fetch every entry in parallel, then sum the answering ones per timestamp. A rejecting entry (not the Helios
     //provider) resolves to null and drops out; an empty-but-valid answer counts as answered but adds nothing.
