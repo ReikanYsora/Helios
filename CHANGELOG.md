@@ -9,42 +9,48 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.8.0
 
-The biggest release yet. Devices you track in the Home Assistant energy dashboard
-become first-class citizens of the card, a new day view tells the story of your
-consumption against the sun, and the whole thing is lighter and faster.
-
-### Fixes
-
-- Scene: left-click drag-rotate now works on Firefox (#306).
-- Timeline: the irradiance tooltip shows the forecast value and its beam again (#305).
+The biggest release yet. The devices you track in the Home Assistant energy
+dashboard become first-class citizens of the card, the scene lives through the
+day/night cycle, the map is now yours to theme, and the whole thing is lighter and
+faster.
 
 ### New: monitoring groups replace the custom entity
 
 You can now bundle the devices tracked in your energy dashboard into up to **four
 monitoring groups**, each with its own name, colour and icon, set in the editor.
-A group follows you everywhere: its chip on the scene, its curve in the timeline,
-its ring in the day view and its slice in the clock. The old single "custom
-entity" is gone; groups do the same job for any number of devices and need no
-YAML. Each group is shown by a coloured pill (its number by default, its icon once
-you set one), consistent across the editor, the scene chip and both dials.
+A group shows up as its own chip on the scene and its own curve in the timeline.
+The old single "custom entity" is gone; groups do the same job for any number of
+devices and need no YAML. Each group is shown by a coloured pill (its number by
+default, its icon once you set one), consistent across the editor and the scene.
 
-### New: the Solar Day ring
+### New: your own map, fully themeable
 
-A day view built around a flat 24-hour dial: each of your devices (or groups)
-draws a ring, its width tracking how hard it ran through the day, coloured by
-whether that hour's load was met by solar, battery or the grid. Tap a group to
-flip into its member devices, tap a ring for a detail panel splitting its energy
-across the three sources. It reads across **every period**: Now, Week, Month and
-Year aggregate their days by hour-of-day (sums), so the ring shows your typical
-day shaped by the whole window; Today fills up to the current hour.
+The basemap is now drawn by Helios's own vector renderer, built on **OpenFreeMap**
+(open data, still no API key). A new **Map configuration** editor section lets you
+theme the ground itself: pick Auto (follows your Home Assistant theme), Dark, Light
+or **Custom**, and in Custom set the colour and visibility of every layer, ground,
+water, parks, roads, paths, railways, buildings and more. Make it match your
+dashboard, or make it your own.
 
-### New: richer clock and battery views
+### New: the scene follows the sun
 
-The energy clock gained a compact vertical filter band, slice selection (hover or
-tap an hour to pin it across every ring, tap the centre for the period total) and
-a cap that keeps the dial legible with many metrics. The battery timeline now
-draws one **state-of-charge line per battery bank**, each tinted by its live
-charge/discharge flow.
+The whole scene is now graded through the day/night cycle. The ground and buildings
+warm toward midday and cool through dusk into night, so a glance tells you roughly
+where the day is, no flat overlay, just light.
+
+### New: a sun-only card, and easier scrolling on mobile
+
+Hide every chip (including home consumption) and the card collapses to just the sun
+position and your location, a solar-position card you can drop on a non-energy
+dashboard, for shutters or climate control keyed on the sun. And on a phone you can
+now scroll the page straight past the card with a normal swipe; rotating the scene
+takes a short press-and-hold, so the card never traps your scroll (#308).
+
+### New: per-bank battery state of charge
+
+The battery timeline now draws one **state-of-charge line per battery bank**, each
+tinted by its live charge/discharge flow, so you can read each pack against the
+charge and discharge beams above it.
 
 ### Changed: a calmer scene
 
@@ -54,6 +60,13 @@ anywhere on the scene background to dismiss an open chip, which finally makes th
 detail panel easy to close on a phone. The sun arc uses the true -0.833 degree
 horizon so sunrise and sunset land where Home Assistant puts them.
 
+### Changed: a clearer default timeline
+
+The default in-card period is now **Forecast** (yesterday to two days ahead), a
+tighter window that reads better on a phone. The timeline and period-selector top
+borders take the active chip's colour, so the whole bar reads as one with the metric
+you are looking at.
+
 ### Changed: focused translations
 
 Helios now ships **27 European languages**, curated for the communities that use
@@ -62,15 +75,19 @@ languages kept; any other language falls back to English.
 
 ### Fixed
 
-- The day bar no longer freezes on the month and year periods (data-freshness fix).
+- Scene: left-click drag-rotate now works on Firefox (#306).
+- The irradiance tooltip shows the forecast value and its beam again (#305).
+- The dashed timeline lines (the solar forecast and the per-bank battery state of
+  charge) now always draw their full length instead of stopping short until you
+  scrubbed the timeline.
 - The battery timeline no longer stacks a cluster of markers on its charge line.
 - Assorted robustness: DST-safe day maths, a watchdog on slow map tiles, cleaner
   teardown of animations, and quieter, deduplicated data-layer warnings.
 
 ### Removed
 
-- The period-over-period **trend** view. Its story is better told by the day view
-  and the timeline's period selector.
+- The **clock** and period-over-period **trend** dials. The scene, the timeline and
+  its period selector now tell the same story more directly.
 
 ---
 

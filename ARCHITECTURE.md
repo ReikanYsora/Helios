@@ -1,13 +1,13 @@
 # HELIOS, Architecture
 
 This document describes how the Helios card is put together: the layering (card,
-view controllers, typed data layer, scene engine), the 2.5D rendering pipeline,
-the data flow, the view modes, and the conventions every subsystem follows. For
+the scene HUD controller, typed data layer, scene engine), the 2.5D rendering
+pipeline, the data flow, and the conventions every subsystem follows. For
 the user-facing feature list and configuration, see [README.md](./README.md); for
 per-release notes, see [CHANGELOG.md](./CHANGELOG.md).
 
 `src/` is organised **by feature**, not by class: `core/` (shared, pure), `data/`
-(the typed data layer), then one directory per view feature (`scene/`, `clock/`,
+(the typed data layer), then one directory per feature (`scene/`,
 `timeline/`, `charts/`, `hud/`, `editor/`), with the thin `helios-card.ts` at the
 root and a small `card/` for bootstrap.
 
@@ -17,8 +17,8 @@ root and a small `card/` for bootstrap.
 
 Helios is a single self-contained Lovelace card. There is no backend and no
 build-time data: everything runs in the browser, talking to Home Assistant over
-the WebSocket API and to a few public services (Open-Meteo for weather, CARTO
-for the basemap, OpenStreetMap via OpenFreeMap vector tiles for buildings).
+the WebSocket API and to a few public services (Open-Meteo for weather, and
+OpenFreeMap vector tiles, from OpenStreetMap data, for the basemap and buildings).
 
 The code is organised in layers:
 
@@ -27,12 +27,11 @@ The code is organised in layers:
   holds the reactive `@state`, runs the lifecycle, and coordinates the render. It
   delegates the two heavy view subsystems to controllers and the data fetching to
   the data layer; it decides *what* to show.
-* **The view controllers** (`src/clock/clock-controller.ts`,
-  `src/hud/scene-hud-controller.ts`), plain classes constructed with the card as
-  their `host`. Each owns one view's animation / hit-test / paint / render logic
-  and its scratch state, while the reactive data stays on the card; they reach it
-  through `this.host`. This is what keeps the card small: the clock and day dials
-  and the scene HUD are ~2000 lines that live in their controllers, not in the card.
+* **The scene HUD controller** (`src/hud/scene-hud-controller.ts`), a plain class
+  constructed with the card as its `host`. It owns the HUD's projection / paint /
+  render logic and its scratch state, while the reactive data stays on the card; it
+  reaches it through `this.host`. This is what keeps the card small: the scene HUD
+  is ~1000 lines that live in the controller, not in the card.
 * **The data layer** (`src/data/*`), a typed boundary over the HA WebSocket. Every
   recorder read flows through one gateway, one request cache, one durable last-good
   store, and the shared per-source fetch plumbing (`src/data/sources/*`).
@@ -55,13 +54,13 @@ callbacks (`onMapTransform`, `onWeatherUpdate`).
 ```
 hass -> data/ (gateway -> request-cache -> durable) -> card @state
             |                                              |
-            |                          clock-controller / scene-hud-controller
+            |                                    scene-hud-controller
             |                                              |
             +- setHome / setSun / setBuildings / setPeriod / setPalette
             v
-      scene/helios-engine.ts -> scene/* (renderer, projection, tiles, buildings)
+      scene/helios-engine.ts -> scene/* (renderer, projection, ground-render, buildings)
             |
-            +- onMapTransform() / onWeatherUpdate() -> card re-projects its HUD / dial
+            +- onMapTransform() / onWeatherUpdate() -> card re-projects its HUD
 ```
 
 ---
@@ -69,15 +68,16 @@ hass -> data/ (gateway -> request-cache -> durable) -> card @state
 ## 2. The 2.5D rendering engine (`src/scene/`)
 
 Helios renders a **2.5D** scene with **no WebGL**. The illusion is a
-tilted raster basemap with every overlay projected on top in SVG so it stays
+tilted vector basemap with every overlay projected on top in SVG so it stays
 glued to the rotating ground.
 
-### Ground plane, `scene/tiles.ts`, `scene/renderer.ts`
+### Ground plane, `scene/ground-render.ts`, `scene/renderer.ts`
 
-The basemap is a grid of **CARTO raster tiles**
-(`*.basemaps.cartocdn.com/rastertiles/{light,dark}_nolabels/...`) stitched onto
-an HTML `<canvas>`. The style follows the active Home Assistant theme (light vs
-dark), probed from `hass.themes.darkMode`. The canvas is then tilted and turned
+The basemap is rendered **in-house from OpenFreeMap vector tiles**
+(OpenMapTiles schema: water, landcover, landuse, parks, roads, rail, buildings,
+boundaries), painted layer by layer onto an HTML `<canvas>`. The palette follows
+the active Home Assistant theme (light vs dark), probed from `hass.themes.darkMode`,
+or a fully custom per-layer colour + visibility configuration. The canvas is then tilted and turned
 with a single CSS `rotateX(pitch) rotateZ(bearing)` transform about the home's
 pixel position, so the ground reads as a plane viewed from an angle.
 
@@ -96,10 +96,10 @@ painter's-algorithm sorting and label fading.
 
 `SceneRenderer` owns the DOM inside the card's map container: the ground canvas
 plus a screen-space `<svg>` it repaints each frame with the occluding geometry
-(the night-shade wash, the cast shadows, and the extruded buildings). It
+(the cast shadows and the extruded buildings). It
 coalesces redraws into one `requestAnimationFrame` pass, owns its own
 `ResizeObserver`, and fires `onAfterDraw` so the card can re-project its HUD in
-lock-step. Colour math (night shade, building tint, day / night blends) lives in
+lock-step. Colour math (building tint, day / night grading of the ground + buildings) lives in
 `core/render-kit/colors.ts`, over the shared hex primitives in
 `core/render-kit/hex.ts`; the shared 2D point type + SVG-points formatter live in
 `core/render-kit/geometry.ts`.
@@ -127,21 +127,19 @@ polygons by the renderer; they fade as the sun nears the horizon.
 
 ---
 
-## 3. View modes
+## 3. The view
 
-The card has three modes (`_viewMode`, one of `scene` / `clock` / `day`),
-switched from the top-left rail: Scene, Clock, and the "Solar Day" day ring. A CSS
-class on `<ha-card>` fades the layers that do not belong to the active mode. The
-scene HUD and the clock / day dials each live in their own controller; the card
-just holds the reactive data they read and inserts their render output.
+The card is a single live 2.5D scene with a re-targetable timeline below it. The
+scene HUD lives in its own controller (`SceneHudController`); the card holds the
+reactive data it reads and inserts its render output.
 
-### Scene (default), `src/hud/`
+### Scene, `src/hud/`
 
-The full live 2.5D view: tilted basemap, extruded buildings, cast shadows, night
-shade, the sun arc (a back pass of below-horizon dots and a front pass of the
-daylight arc + disc + ray + irradiance readout), the home pill and its orbiting
-chip cluster (PV, battery SoC + power, grid, and one chip per active monitoring
-group), and the timeline below.
+The full live 2.5D view: tilted vector basemap, extruded buildings, cast shadows,
+the whole scene graded through the day/night cycle, the sun arc (a back pass of
+below-horizon dots and a front pass of the daylight arc + disc + ray + irradiance
+readout), the home pill and its orbiting chip cluster (PV, battery SoC + power,
+grid, and one chip per active monitoring group), and the timeline below.
 
 The HUD is **projected, not laid out**: `hud/scene-hud-controller.ts`
 (`SceneHudController`, with `hud/hud.ts` / `hud/hud-geometry.ts`) asks the engine
@@ -161,53 +159,6 @@ bound to the active chip, so a single tap on another chip re-points the chart an
 closes it; a second tap re-opens it for the new metric. Every figure is
 recomputed from the very series the bottom chart draws, so panel and curve always
 agree.
-
-### Clock, `src/clock/`
-
-A 24-hour radial instrument. `clock/clock-controller.ts` (`ClockController`) owns
-the dial's animation engine (grow / slide / exit + slice-focus dim, three
-seq-guarded rAF loops), the pointer hit-testing, the per-frame projection +
-imperative paint, and the tooltips; `clock/energy-clock.ts` is the pure geometry +
-data build it drives, and `clock/clock-hourly.ts` the hour-of-day profile.
-
-Each selected metric is binned into 24 hours-of-day over the active period and
-drawn as a ring of bars (one per hour) projected flat on the same ground plane,
-around the flat **Helios mark** at the centre (a CSS-transform ground decal,
-`scene/helios-logo.ts`, laid on the tilted plane by the renderer under the bars so
-nearer bars occlude it; it rests at half opacity and fades to full on hover/tap,
-when it shows the window total). The right-hand rail is a **multi-select filter**:
-every active metric adds one **concentric ring** (outer = first selected, nesting
-inward on fixed slots so adding / removing a filter never re-spaces the others).
-Hovering or tapping a bar lights the whole hour slice across rings, dims the rest,
-and shows one tooltip row per metric. A soft **day / night ground wedge** (from
-`core/time/sun-zones.ts`, the per-hour fraction of the period the sun is below the
-horizon) and an N / S compass keep it legible as the dial rotates with the camera.
-The bars are built as a raw SVG string and injected imperatively each frame, the
-same trick the renderer uses for buildings, to stay cheap under rotation.
-
-### Solar Day, `src/clock/` + `clock/consumption-ring.ts`
-
-The day ring: a flat 24-hour dial of what the home consumed and where that energy
-came from. `clock/consumption-ring.ts` builds the data (`refreshDayRing`),
-`clock/energy-clock.ts` projects it (`projectDayRingFrame`), and
-`clock/clock-controller.ts` drives its animation, hit-testing and detail panel.
-
-Each tracked device or **monitoring group** draws its own concentric ring whose
-per-slot width tracks how hard it ran (a slot at the historical peak average power
-fills the ring; a lighter slot is a thinner ribbon). Every slot is coloured by how
-that hour's load was met, split across the three sources: local solar, battery
-discharge and grid import. Tapping a group ring flips (a CSS-transform card-flip)
-into its member devices, one ring each; the centre disc becomes the exit button
-while drilled in. Tapping a ring selects it and opens a top-right detail panel that
-splits the ring's day energy across those same three sources. The flat Helios mark
-sits at the centre and the same day / night ground wedge grounds the dial.
-
-The ring works across **every period**: the same Standard (Now), Yesterday, Today,
-Week, Month and Year selector drives it. A single-day window (Today) fills up to
-the current hour at the fine per-frequency cadence; a multi-day window aggregates
-its days by hour-of-day (each source's buckets summed into their hour-of-day slot)
-at hourly cadence, so a long span shows the summed daily profile without pulling
-sub-hour rows.
 
 ---
 
@@ -264,15 +215,14 @@ samples; the energy series are filled from the recorder `change` buckets (past
 only, null in the future); the forecast is a stepped hourly curve. A `dataVersion`
 hash lets consumers detect "same store as last frame" and skip the rebuild; it
 rolls over at midnight. Read-side accessors (`valueAt`, `sliceForRange`) give the
-charts, the clock and the day dial a consistent view regardless of cadence.
+charts and the timeline a consistent view regardless of cadence.
 
 ### Periods, `timeline/timeline-modes.ts`
 
 One spec per period drives the whole pipeline (store window, whether weather is
-available, the bucket cadence cap). The six periods are **Standard** (Now),
-**Yesterday**, **Today**, **Week**, **Month** and **Year**, and all six drive the
-day-ring view as well as the timeline (the ring aggregates multi-day periods by
-hour-of-day). Yesterday is exactly the previous day; Today / Week / Month / Year
+available, the bucket cadence cap). The six periods are **Forecast** (yesterday to
+two days ahead), **Yesterday**, **Today**, **Week**, **Month** and **Year**, and all
+six drive the timeline. Yesterday is exactly the previous day; Today / Week / Month / Year
 end on today; Month and Year resolve their length from the previous calendar month
 / year. The store cadence and the recorder fetch period derive from the user's
 data-detail setting, capped per period (long windows fall back to hourly, then
@@ -326,17 +276,16 @@ citizen and a stalled fetch never blanks the card:
 The devices tracked in the user's HA Energy dashboard can be bundled into up to
 four **monitoring groups**, each with a name, colour and icon. The assignment and
 its labels are flat config keys (`monitoring-groups`, `monitoring-group-names`,
-`monitoring-group-colors`, `monitoring-group-icons`), with `consumption-ring-hidden`
-listing meters to drop from the ring; the resolvers that clamp + default them
+`monitoring-group-colors`, `monitoring-group-icons`), with `hidden-devices`
+listing meters to hide everywhere; the resolvers that clamp + default them
 (`monitoringGroupName` / `monitoringGroupColor` / `monitoringGroupIcon`,
 `GROUP_COUNT`) live in `core/config/helios-config.ts`, and the device data
 (`activeGroups`, `groupDevices`, `deviceName`) in
 `data/sources/device-consumption.ts`.
 
-Each active group surfaces four ways: as a chip on the scene (with a leader + bead,
-like the source chips), a selectable curve in the timeline, a ring in the Solar Day
-view, and a slice in the clock. A group with no visible device renders nothing
-anywhere.
+Each active group surfaces two ways: as a chip on the scene (with a leader + bead,
+like the source chips) and a selectable curve in the timeline. A group with no
+visible device renders nothing anywhere.
 
 ---
 
@@ -345,9 +294,9 @@ anywhere.
 Two things survive a reload, both keyed per home (or per `cache-id` when set, so
 two cards on one home stay independent):
 
-* **The saved view**, the view mode, the selected period, the selected clock /
-  day-ring metrics, and the selected chip, written to `localStorage` by the card on
-  change and on teardown, restored once coordinates resolve.
+* **The saved view**, the selected period and the selected chip, written to
+  `localStorage` by the card on change and on teardown, restored once coordinates
+  resolve.
 * **The camera pose**, bearing, pitch and the lock flag, written by the engine on
   drag-end and on teardown (capturing an auto-rotated bearing too), and read back
   at boot so the scene reopens exactly as it was left.
@@ -365,17 +314,16 @@ configured, and a runtime registry (`card/registry.ts`) gives a pasted duplicate
 ## 7. Code organisation
 
 `src/` is grouped **by feature**: `core/` (shared, pure), `data/` (the typed data
-layer + `data/sources/`), `scene/`, `clock/`, `timeline/`, `charts/`, `hud/`,
+layer + `data/sources/`), `scene/`, `timeline/`, `charts/`, `hud/`,
 `editor/`, plus the root `helios-card.ts` and a small `card/` for bootstrap
 (`init`, `registry`, `diagnostics`).
 
-The card is a thin composition root. Two **view controllers** (`ClockController`
-in `clock/`, `SceneHudController` in `hud/`) own the dial and the scene HUD: each
-is a plain class holding its own scratch / animation state, constructed as
-`new XController(this)`, that reads the card's reactive `@state` and DOM refs
-through `this.host` (the reactive data stays on the card, so Lit reactivity is
-untouched). Public controller methods drop the leading underscore, per the repo's
-lint rule.
+The card is a thin composition root. One **view controller** (`SceneHudController`
+in `hud/`) owns the scene HUD: a plain class holding its own scratch state,
+constructed as `new SceneHudController(this)`, that reads the card's reactive
+`@state` and DOM refs through `this.host` (the reactive data stays on the card, so
+Lit reactivity is untouched). Public controller methods drop the leading
+underscore, per the repo's lint rule.
 
 Every other feature module exports **plain functions**. Subsystems do not import
 the card or the engine directly; instead each declares a small **structural host
@@ -408,14 +356,14 @@ fallback.
 1. `setConfig()` validates + stores the config; the editor auto-assigns a
    `cache-id` on first configure.
 2. On first paint with resolved home coordinates, the card constructs the engine
-   once (and its clock / scene-HUD controllers); later it updates the engine **in
+   once (and its scene-HUD controller); later it updates the engine **in
    place** (home move, option change) rather than respawning it.
 3. The engine boots the basemap, fetches buildings + weather, arms the atmosphere
    refresh and the optional auto-rotate loop, and starts firing `onMapTransform`
    per frame.
 4. The card subscribes to the Energy dashboard and, through the data layer,
    fetches the per-source live + history in one shared recorder call, builds the
-   unified store, and renders the HUD / charts / dial from it via the controllers.
+   unified store, and renders the HUD / charts from it via the controller.
    A short tick advances the live cursor and refreshes daily totals.
 5. On disconnect the engine teardown is deferred briefly (HA edit-mode churn fires
    disconnect + reconnect in one tick); a real removal tears down the renderer,

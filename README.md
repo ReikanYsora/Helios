@@ -9,7 +9,7 @@
 
 It reads your solar, grid and battery wiring straight from the **Home Assistant Energy dashboard**, pulls a multi-model weather forecast from **Open-Meteo** (no key), and stitches both onto a tilted, rotatable map of your home. The sun's daily arc, the live sun disc, the incidence ray, the production / battery / grid chips and the cast shadows all follow a timeline you can scrub days into the past or the future, watching every layer move with it.
 
-The scene is drawn by a self-contained **2.5D engine with no WebGL**: a tilted raster basemap with every overlay (buildings, shadows, sun arc, chips and leaders) projected on top in SVG, so the card stays light and fluid on any device, phone included. Basemap tiles come from **[CARTO](https://carto.com/basemaps/)** (free, no key), themed light or dark to match Home Assistant.
+The scene is drawn by a self-contained **2.5D engine with no WebGL**: a tilted vector basemap with every overlay (buildings, shadows, sun arc, chips and leaders) projected on top in SVG, so the card stays light and fluid on any device, phone included. The basemap is Helios's own vector renderer built on **[OpenFreeMap](https://openfreemap.org/)** (open data, no key), themed to match Home Assistant or fully customised per layer.
 
 > **Website + live demo:** explore the full card, the documentation and the public roadmap at **[helios-ha.org](https://helios-ha.org)**.
 
@@ -17,9 +17,9 @@ The scene is drawn by a self-contained **2.5D engine with no WebGL**: a tilted r
 
 ## At a glance
 
-Helios has **three view modes**, switched from the round buttons in the top-left corner.
+Helios is a single live **2.5D scene** with a re-targetable timeline below it.
 
-### Scene mode, the live 2.5D view
+### The live 2.5D scene
 
 * **Sun arc**, the sun's full daily trajectory projected with depth onto your home. The below-horizon portion renders as discreet dots behind the home so it reads as a calm background, while the daylight portion, the sun disc and the irradiance readout always stack on top.
 * **Live sun disc + irradiance halo**, pinned on the arc; the inner fill scales with the live W/m², a soft sun-coloured halo fades from the centre out.
@@ -36,14 +36,7 @@ Helios has **three view modes**, switched from the round buttons in the top-left
 * **Timeline**, the active period as a re-targetable chart below the scene: production (with dashed forecast and per-string breakdown), consumption, grid, battery, battery SoC, irradiance (with the cloud layers overlaid) or any monitoring group. Click or drag to scrub; the whole scene snaps to the selected instant.
 * **Detail panels**, double-tap (or double-click) any chip to open a compact readout top-right, tinted in that chip's colour: it aggregates the metric over the selected window as icon-only figures, all in your chosen unit. Production / consumption and each group show total, peak and per-day average; grid shows import, export and net; battery shows energy charged and discharged; battery SoC shows min / average / max; the sun shows peak and average irradiance plus the astronomy (sunrise, solar noon, sunset, max altitude, day length). Double-tap again to close.
 * **No UI mode** *(optional)*, fades the timeline and the on-card controls after a few seconds of inactivity and brings them back on any tap or move. Built for kiosks and wall displays.
-
-### Clock mode, the 24-hour dial
-
-A radial instrument that bins each metric into **24 hours of the day** and stands a ring of cylinders around the flat **Helios mark** at the centre, one bar per hour. The right-hand rail toggles metrics as **filters**: each active metric adds its own **concentric ring** (production, consumption, battery SoC, battery, grid, irradiance, and your monitoring groups). Hover or tap a slice to light up that hour across every ring and read each metric's value in the tooltip; hover or tap the centre mark for the period total. A soft **day / night wedge** on the ground shows when the sun is up over the period, and an N / S compass keeps the dial legible as it rotates with the scene.
-
-### Solar Day mode, the consumption ring
-
-A flat **24-hour dial** that tells the story of your consumption against the sun. Each device you track (or each monitoring group) draws a **ring**, its width tracking how hard it ran through the day, coloured by whether that hour's load was met by **solar, battery or the grid**. Tap a group to flip into its member devices; tap a ring for a detail panel splitting its energy across the three sources. It reads across **every period**: Now, Week, Month and Year aggregate their days by hour-of-day (sums), so the ring shows your typical day shaped by the whole window; Today fills up to the current hour.
+* **Sun-only card** *(optional)*, hide every chip (including home consumption) and the card collapses to just the sun position and your location, a solar-position card for a non-energy dashboard.
 
 ### Multilingual
 
@@ -105,7 +98,7 @@ If Helios does not appear in the picker, the resource is probably not loaded. Wi
 
 ## Configuration
 
-No API key required. The basemap is served by [CARTO](https://carto.com/basemaps/) (free, no key) and weather comes from Open-Meteo (also free, no key).
+No API key required. The basemap is rendered in-house from [OpenFreeMap](https://openfreemap.org/) vector tiles (open data, no key) and weather comes from Open-Meteo (also free, no key).
 
 Solar, grid and battery wiring is **not configured per-card**: Helios resolves every entity slot from the **HA Energy dashboard** (`Settings` then `Dashboards` then `Energy`), the same global config the official Energy card reads. Set the slots there once and Helios picks them up automatically. The options below cover only the visual and install-specific bits.
 
@@ -118,7 +111,7 @@ Helios follows the energy dashboard at 100% and **never estimates a value**:
   If a source has no live power sensor, its chip is simply not shown, and the
   editor's live-data panel tells you what to add. Nothing is ever derived from
   cumulative meters to fake a "now" value.
-* **Curves, scrub, energy clock and totals** read your **kWh meters** through
+* **Curves, scrub and totals** read your **kWh meters** through
   the recorder statistics, the exact data the energy dashboard's bars are made
   of. Where the dashboard has a number, Helios shows the same number.
 * **Home consumption** is the dashboard's own balance (solar + import - export
@@ -158,7 +151,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `camera-bearing-deg` | 0-359 | hemisphere | Optional fixed bearing at boot. |
 | `camera-locked` | boolean | `false` | Disable drag-rotate and the idle orbit; the camera stays at the configured pose. Also toggled live from the lock button on the card. |
 
-> The card also remembers the live camera pose, the active mode, the selected clock filters and the lock per home (or per `cache-id`), so reopening the dashboard restores exactly what you left.
+> The card also remembers the live camera pose, the selected period, the selected chip and the lock per home (or per `cache-id`), so reopening the dashboard restores exactly what you left.
 
 ### Interface
 
@@ -186,11 +179,11 @@ The visual editor exposes every option below. Direct YAML editing also works.
 |---|---|---|---|
 | `display-update-frequency-per-hour` | 1-6 | `4` | Storage + render cadence (buckets per hour) for the data store and every graph. `4` = 15-minute granularity (the HA Energy bucket size); raise for smoother curves, lower to save memory. Live numeric chips bypass this and stay on the direct `hass.states` path. |
 | `value-decimals` | 0-3 | `1` | Decimal places on every kW / kWh / % readout. |
-| `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips, dial). Energy follows it, so `kW` pairs with `kWh` and `W` with `Wh`. |
+| `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips). Energy follows it, so `kW` pairs with `kWh` and `W` with `Wh`. |
 | `irradiance-unit` | `W/m²` \| `kW/m²` | `W/m²` | Unit for the solar-constant (irradiance) readout above the sun. |
 | `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
 
-The rolling window itself is chosen live from the timeline's period selector (**Now**, **Yesterday**, **Today**, **Week**, **Month**, **Year**) and remembered per card; it needs no YAML key. Every period also drives the Solar Day ring, which aggregates a multi-day window by hour-of-day.
+The rolling window itself is chosen live from the timeline's period selector (**Forecast**, **Yesterday**, **Today**, **Week**, **Month**, **Year**) and remembered per card; it needs no YAML key.
 
 ### Sensors + colors
 
@@ -200,14 +193,14 @@ The rolling window itself is chosen live from the timeline's period selector (**
 | `monitoring-group-names` | map | none | Per-group display name (group number -> name). Set from the editor's monitoring-group section. |
 | `monitoring-group-colors` | map | `--graph-color-N` | Per-group colour (group number -> colour). Falls back to Home Assistant's graph colour for that group. |
 | `monitoring-group-icons` | map | none | Per-group icon (group number -> MDI icon). With no icon the group shows its number. |
-| `consumption-ring-hidden` | list | none | Device meters hidden from every view. Managed from the editor's device list (the eye toggle). |
+| `hidden-devices` | list | none | Device meters hidden from every view. Managed from the editor's device list (the eye toggle). |
 | `home-color` | color | theme | Optional colour for the home pill and its consumption readout. |
 
 ### Per-card cache
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `cache-id` | string | auto | A hidden, auto-generated id that keeps each card's saved view (mode, clock filters, camera, lock) independent, so two cards on the same home (for example one in scene mode, one in clock mode) do not share state. You normally never touch this. |
+| `cache-id` | string | auto | A hidden, auto-generated id that keeps each card's saved view (selected period, selected chip, camera, lock) independent, so two cards on the same home do not share state. You normally never touch this. |
 
 ---
 
@@ -230,8 +223,8 @@ Full algorithm + architecture details: see [ARCHITECTURE.md](./ARCHITECTURE.md).
 | Component | Technology |
 | :--- | :--- |
 | **Frontend** | [Lit](https://lit.dev/) 3, TypeScript (strict) |
-| **Rendering** | Self-contained 2.5D engine: tilted raster basemap (HTML canvas) + SVG overlays, no WebGL |
-| **Basemap** | [CARTO](https://carto.com/basemaps/) raster tiles (light / dark, no key) |
+| **Rendering** | Self-contained 2.5D engine: tilted vector basemap (HTML canvas) + SVG overlays, no WebGL |
+| **Basemap** | [OpenFreeMap](https://openfreemap.org/) vector tiles, rendered in-house (Auto / Dark / Light / Custom, no key) |
 | **Weather data** | [Open-Meteo API](https://open-meteo.com/) (free, no key, multi-model fusion) |
 | **Energy data** | Home Assistant Energy dashboard (recorder `change` metric + live states) |
 | **Buildings** | OpenStreetMap via [OpenFreeMap](https://openfreemap.org/) vector tiles |
@@ -255,7 +248,7 @@ Source layout:
 
 | Path | Purpose |
 | :--- | :--- |
-| `src/helios-card.ts`            | Top-level Lit element: render orchestrator + HA + Lit lifecycle + view modes |
+| `src/helios-card.ts`            | Top-level Lit element: render orchestrator + HA + Lit lifecycle |
 | `src/core/config/helios-config.ts` | `HeliosConfig` schema + resolver helpers (radius, monitoring groups, colours, ...) |
 | `src/core/config/constants.ts`  | Defaults / bounds, cache TTLs, camera limits, colour + math constants |
 | `src/core/format/format.ts`     | Locale-aware number / value formatting + energy colour tokens |
@@ -264,17 +257,14 @@ Source layout:
 | `src/core/i18n/`                | Strict-typed translations (`index.ts` + `locales/`, 27 languages) |
 | `src/core/energy.ts`            | Home-consumption balance (the energy dashboard's definition) |
 | `src/scene/helios-engine.ts`    | Engine lifecycle: weather / buildings fetch, sun + shadow refresh, camera + auto-rotate |
-| `src/scene/renderer.ts`         | Scene painter: ground tilt + buildings + shadows + night wash (canvas + SVG) |
+| `src/scene/renderer.ts`         | Scene painter: ground tilt + buildings + shadows, graded through the day/night cycle (canvas + SVG) |
 | `src/scene/projection.ts`       | 2.5D camera + bearing / pitch / perspective projection |
-| `src/scene/tiles.ts`            | CARTO basemap raster stitching + Web Mercator math |
+| `src/scene/ground-render.ts` `ground-vector.ts` `tiles.ts` | Vector ground renderer (OpenFreeMap layers, themeable) + Web Mercator math |
 | `src/scene/buildings.ts` `openfreemap.ts` `vector-tile.ts` | OpenFreeMap fetch + interpret (radius / count / height / cluster) |
 | `src/scene/sun-arc.ts`          | Sun-arc + irradiance geometry (Haurwitz / Kasten-Czeplak, PV math) |
 | `src/scene/helios-logo.ts` `hud-layout.ts` | Flat Helios mark + chip-cluster layout |
 | `src/hud/scene-hud-controller.ts` `hud.ts` `hud-geometry.ts` | Scene HUD projection (sun arc, chips, leaders) refreshed each frame |
 | `src/hud/detail-panel.ts`       | Per-chip detail panel: window aggregates (total / peak / avg, astro) as icon rows |
-| `src/clock/clock-controller.ts` | Clock + Solar Day dial controller: state, animations, hit-testing |
-| `src/clock/energy-clock.ts` `clock-hourly.ts` | Dial projection: hour-of-day rings, centre Helios mark, day-ring frame |
-| `src/clock/consumption-ring.ts` | Solar Day ring data: per-device / per-group hour-of-day shares + runs |
 | `src/data/unifiedStore.ts`      | Rolling-window data store: one bucketised source of truth for every graph |
 | `src/data/source-fetch.ts` `series-sample.ts` `request-cache.ts` `durable-cache.ts` `ha-gateway.ts` | Fetch orchestration, sampling, and caching layers |
 | `src/data/energy-forecast.ts`   | HA solar-forecast fetch + merge |
@@ -288,7 +278,7 @@ Source layout:
 | `src/timeline/timeline.ts` `timeline-model.ts` `timeline-modes.ts` | Scrub handlers, tick granularity, the rolling-window periods |
 | `src/timeline/timeline-overlays.ts` `timeline-tooltip.ts` | Timeline night-zone / future-mask shading + hover tooltip |
 | `src/editor/editor.ts`          | Visual editor (accordion sections, sliders, entity / icon / colour pickers, group setup) |
-| `src/css/`                      | Card + editor + clock + timeline style literals |
+| `src/css/`                      | Card + editor + timeline style literals |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the subsystem-by-subsystem walkthrough.
 
@@ -298,7 +288,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the subsystem-by-subsystem walkthro
 
 HELIOS depends on several open data services. None require an account or API key.
 
-* **[CARTO](https://carto.com/basemaps/)**, the free raster basemap tiles (light / dark, no labels) the scene is built on.
+* **[OpenFreeMap](https://openfreemap.org/)**, the free vector basemap tiles (open data, no key) the scene's ground is rendered from.
 * **[OpenStreetMap](https://www.openstreetmap.org/copyright)**, the map data behind the basemap and the building footprints (served as vector tiles by [OpenFreeMap](https://openfreemap.org/)). © OpenStreetMap contributors.
 * **[Open-Meteo](https://open-meteo.com/)**, weather forecasts (cloud cover, irradiance). Free, no key, multi-model fusion under the hood.
 * **Home Assistant Energy dashboard**, the single source of truth for solar / grid / battery wiring.
