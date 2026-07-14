@@ -52,13 +52,14 @@ export const heliosTimelineStyles = css`
     .tb-chart-stack
     {
         position: relative;
-        /*  border-box like .tb-band below: the 2 px border draws INSIDE so the chart stack and the period
+        /*  border-box like .tb-band below: the border draws INSIDE so the chart stack and the period
             band keep the exact same outer width (both span card - 16px). Without it the border adds outside
             and the stack reads wider than the band. */
         box-sizing: border-box;
-        /*  Only a top divider (neutral themed), no side/bottom border: the bar is flush full-width at the
-            bottom of the card. */
-        border-top: 2px solid var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
+        /*  Top divider tinted with the selected chip's accent (--tb-accent, set on the card), so the timeline
+            reads as an extension of the active metric; falls back to the neutral divider. Same 1 px weight as the
+            period band below. No side/bottom border: the bar is flush full-width at the bottom of the card. */
+        border-top: var(--ha-border-width-sm, 1px) solid var(--tb-accent, var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12))));
         overflow: hidden;
     }
     .tb-chart-card
@@ -517,9 +518,10 @@ export const heliosTimelineStyles = css`
         justify-content: center;
         /*  The band stays full-width + flush; a small inner padding just gives the buttons some breathing room. */
         padding: 3px 8px;
-        /*  Only a top divider (between the timeline above and the band); no side/bottom border. */
+        /*  Top divider tinted with the selected chip's accent (--tb-accent), matching the timeline's top border
+            above; falls back to the neutral divider. No side/bottom border. */
         border-top: var(--ha-border-width-sm, 1px) solid
-            var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
+            var(--tb-accent, var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12))));
         pointer-events: auto;
         touch-action: none;
     }

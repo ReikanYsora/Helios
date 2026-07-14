@@ -965,8 +965,9 @@ export class HeliosCard extends LitElement
             cameraLocked      ? 'camera-locked'  : '',
             this.preview      ? 'helios-edit'    : '',
         ].filter(Boolean).join(' ');
-        //The detail-panel accent (from the active chip) only when the panel is open.
-        const cardStyle = infoOpen ? `--detail-accent:${activeChipColor}` : '';
+        //Selected-chip accent for the timeline + period-selector top borders (always), plus the detail-panel
+        //accent (same colour) only when the panel is open.
+        const cardStyle = `--tb-accent:${activeChipColor}${infoOpen ? `; --detail-accent:${activeChipColor}` : ''}`;
 
         return html`
             <ha-card class=${cardClasses} style=${cardStyle}>
