@@ -3,6 +3,7 @@ import type { Building, RawBuilding } from './buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from '../core/time/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from '../data/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './buildings';
+import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
 import { resolveWeatherAtTime } from '../data/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './hud-layout';
 import { sunSpherePoint, daylightRamp } from './sun-arc';
@@ -22,8 +23,11 @@ import
     buildingRealSize,
     buildingFixedHeightM,
     buildingColorToken,
+    mapThemeMode,
+    mapLayerColor,
+    mapLayerVisible,
 } from '../core/config/helios-config';
-import { uiColorVar } from '../core/format/format';
+import { uiColorVar, isDarkFromCss } from '../core/format/format';
 
 
 //Module-scope cache for the RAW (option-independent) building footprints. HA re-creates the card element
@@ -684,7 +688,7 @@ export class HeliosEngine
         }
         try
         {
-            await renderer.setLocation(this.homeLat, this.homeLon);
+            await renderer.setLocation(this.homeLat, this.homeLon, this._groundStyle());
         }
         catch (_err)
         {
@@ -755,6 +759,36 @@ export class HeliosEngine
         return fallback;
     }
 
+    //Resolve a stored map colour (a ui_color token or a raw #hex / rgb()) to a paintable colour.
+    private _resolveMapColor(value: string, fallback: string): string
+    {
+        if (/^(#|rgb)/i.test(value)) { return value; }
+        return this._cssHex(`--${value}-color`, fallback);
+    }
+
+    //The vector basemap style for the active config: 'auto' follows the HA theme, 'dark'/'light' force a
+    //polarity, 'custom' takes the per-layer colours + visibility (seeded off the theme default for unset keys).
+    private _groundStyle(): GroundStyle
+    {
+        const isDark = this._container ? isDarkFromCss(this._container) : false;
+        const mode   = mapThemeMode(this.cfg);
+        if (mode === 'custom')
+        {
+            const base    = defaultGroundPalette(isDark);
+            const palette  = { ...base };
+            const hidden   = new Set<GroundLayerKey>();
+            for (const key of GROUND_LAYER_KEYS)
+            {
+                const raw = mapLayerColor(this.cfg, key);
+                if (raw) { palette[key] = this._resolveMapColor(raw, base[key]); }
+                if (!mapLayerVisible(this.cfg, key)) { hidden.add(key); }
+            }
+            return { palette, hidden };
+        }
+        const dark = mode === 'dark' ? true : mode === 'light' ? false : isDark;
+        return { palette: defaultGroundPalette(dark), hidden: new Set<GroundLayerKey>() };
+    }
+
     //Push the full scene palette to the renderer from the live HA theme tokens + the building-opacity
     //config. Re-run on init and on every theme flip.
     private _resolvePalette(): void
@@ -767,6 +801,8 @@ export class HeliosEngine
             shadowOpacity:   this._shadowsEnabled() ? this._shadowOpacity() : 0,
             neighborOpacity: this._buildingOpacity(),
         });
+        //Repaint the vector ground for the current theme (cached features, no re-fetch).
+        this._renderer?.setGroundStyle(this._groundStyle());
     }
 
     //Master shadow toggle. False = no cast shadows; true = shadows cast from building footprints.
@@ -1316,7 +1352,7 @@ export class HeliosEngine
         this.homeLon   = lon;
         this._fetchLat = lat;
         this._fetchLon = lon;
-        void this._renderer?.setLocation(lat, lon);
+        void this._renderer?.setLocation(lat, lon, this._groundStyle());
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();

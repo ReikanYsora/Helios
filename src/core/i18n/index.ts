@@ -211,6 +211,33 @@ export interface Translations
         aboutDeveloperLabel:      string;
         aboutDeveloperLinkedIn:   string;
     };
+
+    //Vector basemap "Map configuration" section. Optional; every field falls back to English. The layer fields
+    //are keyed by the GroundLayerKey names so the editor can look them up directly.
+    mapConfig?:
+    {
+        section:    string;
+        intro:      string;
+        modeAuto:   string;
+        modeDark:   string;
+        modeLight:  string;
+        modeCustom: string;
+        land:       string;
+        water:      string;
+        wood:       string;
+        grass:      string;
+        sand:       string;
+        wetland:    string;
+        ice:        string;
+        landuse:    string;
+        roadMajor:  string;
+        roadMinor:  string;
+        roadCasing: string;
+        path:       string;
+        rail:       string;
+        building:   string;
+        boundary:   string;
+    };
 }
 
 const LOCALES: Record<string, Translations> =

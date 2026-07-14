@@ -33,6 +33,31 @@ export const en: Translations = {
         cloudHigh: 'High cloud cover',
     },
 
+    mapConfig:
+    {
+        section:    'Map configuration',
+        intro:      'The basemap is drawn from OpenStreetMap vector tiles. Auto follows your theme, Dark / Light force one, and Custom lets you set every colour and hide any layer.',
+        modeAuto:   'Auto',
+        modeDark:   'Dark',
+        modeLight:  'Light',
+        modeCustom: 'Custom',
+        land:       'Background',
+        water:      'Water',
+        wood:       'Woodland',
+        grass:      'Greenery',
+        sand:       'Sand',
+        wetland:    'Wetland',
+        ice:        'Ice & snow',
+        landuse:    'Built-up land',
+        roadMajor:  'Major roads',
+        roadMinor:  'Minor roads',
+        roadCasing: 'Road outline',
+        path:       'Paths & tracks',
+        rail:       'Railways',
+        building:   'Buildings',
+        boundary:   'Boundaries',
+    },
+
     editor:
     {
         locationSection:    'Home location',

@@ -73,8 +73,10 @@ export const heliosCardStyles = css`
     }
 
     /*  Ground holder: tilted basemap canvas + edge fade, driven by a CSS 3D transform (rotateX = pitch,
-        rotateZ = bearing) written each frame. preserve-3d keeps the canvas in the parent's perspective
-        space. */
+        rotateZ = bearing) written each frame. preserve-3d is REQUIRED: without it, at some pitch angles the
+        3D-transformed ground canvas composites ABOVE the flat sibling scene-svg and hides the buildings. (An
+        earlier #304 attempt removed this and regressed desktop, so it stays; the A9X half-render needs another
+        approach.) */
     .scene-ground-holder
     {
         position: absolute;
@@ -82,23 +84,18 @@ export const heliosCardStyles = css`
         transform-style: preserve-3d;
         pointer-events: none;
     }
-    /*  Basemap tile canvas. Positioned by the renderer's transform-origin + transform; sized in JS to the
-        stitched tile grid. One light style is fetched for both themes. */
+    /*  Basemap canvas, painted from OpenFreeMap vector tiles (ground-render.ts). Positioned by the renderer's
+        transform-origin + transform; sized in JS. Light/dark is two painted palettes, so there is no CSS
+        filter: a theme flip repaints the canvas from its cached vector features. */
     .ground
     {
         position: absolute;
         top: 0;
         left: 0;
     }
-    /*  Dark theme tints the light basemap to a dark map purely in CSS: invert + hue-rotate keep it
-        legible, brightness + low saturation keep it calm under the HUD. */
-    ha-card.theme-dark .ground
-    {
-        filter: invert(0.9) hue-rotate(170deg) brightness(1.3) contrast(1) saturate(0.4);
-    }
-    /*  Edge fade: same size + transform as the ground, a radial gradient transparent out to
-        GROUND_FADE_START (90%) then dissolving to the card background, turning the square tile grid into a
-        soft disc. */
+    /*  Edge fade: same size + transform as the ground, a radial gradient transparent out to GROUND_FADE_START
+        (88%) then dissolving to the card background, turning the square canvas into a soft disc. How FAR the
+        ground reaches is set by GROUND_RADIUS (the canvas size); this only softens the rim. */
     .ground-fade
     {
         position: absolute;

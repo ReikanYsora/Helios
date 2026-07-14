@@ -141,9 +141,6 @@ export const OFM_TILEJSON_URL     = 'https://tiles.openfreemap.org/planet';
 export const OFM_TILE_ZOOM        = 14;
 //Per-tile watchdog: fetch has no native timeout, so a hung tile would otherwise stall the whole set.
 export const OFM_FETCH_TIMEOUT_MS = 10_000;
-//Per-image watchdog for the raster basemap: an <img> whose load/error never fires would otherwise leave the tile
-//promise pending forever and hang the renderer bootstrap (which awaits the tile set).
-export const RASTER_TILE_TIMEOUT_MS = 10_000;
 //Re-attempt delay after a total buildings-fetch outage: it heals without a page reload (the scene shows the
 //fallback house in the meantime).
 export const BUILDINGS_REFETCH_DELAY_MS = 5 * 60_000;
@@ -181,7 +178,7 @@ export const LAB_T3 = 0.008856452;
 //0 is the lowest tilt the pose clamp permits (fully top-down, no parallax); interactive drag stays floored at
 //CAMERA_PITCH_MIN_DEG, so the scene view is unaffected.
 export const PITCH_MIN      = 0;
-export const PITCH_MAX      = 75;
+export const PITCH_MAX      = 65;
 export const DEFAULT_BEARING = 180;
 export const DEFAULT_TILT    = 50;
 export const NEAR_PLANE      = 0.15;
@@ -191,9 +188,9 @@ export const PERSPECTIVE     = 1200;
 //Tile pixel size, ground-canvas radius/zoom, the edge-fade start (% of the closest side, consumed by the
 //card CSS), and the WGS84 Earth circumference used for the local-metre math.
 export const TILE_PX             = 256;
-export const GROUND_RADIUS       = 3;
+export const GROUND_RADIUS       = 5;
 export const GROUND_ZOOM         = 19;
-export const GROUND_FADE_START   = 90;
+export const GROUND_FADE_START   = 88;
 export const EARTH_CIRCUMFERENCE_M = 40075016.686;
 //Metres per degree of latitude (mean). Longitude scales this by cos(latitude). Used by every lon/lat<->metres
 //projection (engine chip cluster, sun arc, building footprints) instead of re-deriving the literal each time.

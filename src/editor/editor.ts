@@ -1,6 +1,7 @@
 import type { TemplateResult} from 'lit';
 import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { keyed } from 'lit/directives/keyed.js';
 import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
@@ -35,14 +36,29 @@ import
     groupChipVisible,
     chipVisible,
     GROUP_COUNT,
+    mapThemeMode,
+    mapLayerColor,
+    mapLayerVisible,
+    mapColorKey,
+    mapShowKey,
+    type MapThemeMode,
 } from '../core/config/helios-config';
 import { CHIP_SLOTS, chipSlotColor, chipSlotIcon, type ChipSlot } from '../core/config/chip-appearance';
-import { deviceColorByIndex } from '../core/format/format';
+import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundLayerKey } from '../scene/ground-render';
+import { deviceColorByIndex, isDarkFromCss } from '../core/format/format';
 import { pickTranslations, type Translations } from '../core/i18n';
 import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type DeviceConsumption, type EnergyPrefsHost } from '../data/sources/energy-prefs';
 import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from '../data/sources/grid-guard';
 import { batteryLiveIsBucketSourced } from '../data/sources/battery';
 
+
+// English fallback labels for the configurable basemap layers (localised via t.mapConfig when present).
+const MAP_LAYER_EN: Record<GroundLayerKey, string> = {
+    land: 'Background', water: 'Water', wood: 'Woodland', grass: 'Greenery', sand: 'Sand',
+    wetland: 'Wetland', ice: 'Ice & snow', landuse: 'Built-up land',
+    roadMajor: 'Major roads', roadMinor: 'Minor roads', roadCasing: 'Road outline', path: 'Paths & tracks',
+    rail: 'Railways', building: 'Buildings', boundary: 'Boundaries',
+};
 
 // Visual editor exposing every config option through native HA form controls.
 @customElement('helios-card-editor')
@@ -51,6 +67,9 @@ export class HeliosCardEditor extends LitElement
     @property({ attribute: false }) public hass?: any;
     @state()                        private _cfg: HeliosConfig = {};
     @state()                        private _pickerReady = false;
+    //Bumped whenever a colour picker is cleared with its X, to force that picker to be re-created (via keyed) so
+    //it re-reads its fallback default value even when the config key was already unset (a no-op edit).
+    @state()                        private _colorNonce = 0;
     // Accordion: at most one top-level section open at a time (a stack of expanded blocks got too tall to scan). Id
     // of the open section, or null when all collapsed. Defaults to null so a fresh card opens fully collapsed, keeping
     // the top-pinned "Configuration status" panel in view.
@@ -436,8 +455,12 @@ export class HeliosCardEditor extends LitElement
         //Empty/undefined is a real edit: an entity cleared, or a colour reset to the card default via the picker's
         //clear affordance (ui_color emits undefined when the chosen token equals its default). Store it as unset so
         //the resolver falls back to the default. The picker never emits on init, so there is no echo to filter.
-        const raw  = (e as CustomEvent<{ value?: unknown }>).detail.value;
-        const next = raw === undefined || raw === null || raw === '' ? undefined : raw;
+        const raw     = (e as CustomEvent<{ value?: unknown }>).detail.value;
+        const cleared = raw === undefined || raw === null || raw === '';
+        const next    = cleared ? undefined : raw;
+        //Clearing a picker (its X) must snap back to the default. When the key is already unset, storing undefined
+        //is a no-op that would leave the ha-selector blank, so bump the nonce to re-create it on its default.
+        if (cleared) { this._colorNonce++; }
         if ((this._cfg[key] ?? undefined) === (next ?? undefined)) { return; }
         this._update(key, next);
     };
@@ -662,6 +685,83 @@ export class HeliosCardEditor extends LitElement
     //Header = a colour+icon badge, the entity name, a show/hide toggle; body = one row per state, each an icon
     //picker + a colour picker at 50/50. Grid + battery carry two states (import/export, charge/discharge). Every
     //key + default comes from the shared CHIP_SLOTS table, so the editor and the card never drift.
+    //Map configuration section: the 4-way theme toggle, plus the per-layer colour + visibility blocks in Custom.
+    private _renderMapSection(t: Translations): TemplateResult
+    {
+        const mode = mapThemeMode(this._cfg);
+        const mc   = t.mapConfig;
+        const opt  = (val: MapThemeMode, label: string): TemplateResult => html`
+            <button type="button" class="seg-option ${mode === val ? 'active' : ''}" data-value=${val} @click=${this._onMapModeClick}>${label}</button>`;
+        return html`
+            <div class="field-help">${mc?.intro ?? 'The basemap is drawn from OpenStreetMap vector tiles. Auto follows your theme, Dark / Light force one, Custom lets you set every colour and hide any layer.'}</div>
+            <div class="segmented-toggle map-mode-toggle">
+                ${opt('auto', mc?.modeAuto ?? 'Auto')}
+                ${opt('dark', mc?.modeDark ?? 'Dark')}
+                ${opt('light', mc?.modeLight ?? 'Light')}
+                ${opt('custom', mc?.modeCustom ?? 'Custom')}
+            </div>
+            ${mode === 'custom' ? GROUND_LAYER_KEYS.map((key) => this._renderMapLayerBlock(t, key)) : nothing}`;
+    }
+
+    //Switch the map colour mode. Entering Custom seeds every unset layer colour from the current theme default so
+    //the user starts from a real palette, not a blank slate (one config-changed dispatch for the whole switch).
+    private _onMapModeClick = (e: Event): void =>
+    {
+        const val = (e.currentTarget as HTMLElement).dataset.value as MapThemeMode | undefined;
+        if (!val || val === mapThemeMode(this._cfg)) { return; }
+        const next = { ...this._cfg } as Record<string, unknown>;
+        if (val === 'auto') { delete next['map-theme-mode']; }
+        else                { next['map-theme-mode'] = val; }
+        if (val === 'custom')
+        {
+            const base = defaultGroundPalette(isDarkFromCss(this));
+            for (const key of GROUND_LAYER_KEYS)
+            {
+                const ck = mapColorKey(key);
+                if (!next[ck]) { next[ck] = base[key]; }
+            }
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+    };
+
+    private _mapLayerLabel(t: Translations, key: GroundLayerKey): string
+    {
+        return t.mapConfig?.[key] ?? MAP_LAYER_EN[key];
+    }
+
+    //One configurable map layer: colour pill + name + show/hide toggle + the HA ui_color picker.
+    private _renderMapLayerBlock(t: Translations, key: GroundLayerKey): TemplateResult
+    {
+        const on = mapLayerVisible(this._cfg, key);
+        //Effective colour: the stored value, else the current theme's default for this layer. So the picker
+        //always shows a colour, and clearing it with the X falls straight back to that default.
+        const colour = mapLayerColor(this._cfg, key) || defaultGroundPalette(isDarkFromCss(this))[key];
+        const pill   = /^(#|rgb)/i.test(colour) ? colour : `var(--${colour}-color, #888)`;
+        return html`
+                <div class="group-block">
+                    <div class="group-line">
+                        <span class="group-name-badge" style="--group-pill-color:${pill}"></span>
+                        <span class="chip-box-name">${this._mapLayerLabel(t, key)}</span>
+                        <div class="segmented-toggle">
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-key=${mapShowKey(key)} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-key=${mapShowKey(key)} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
+                        </div>
+                    </div>
+                    ${this._pickerReady ? html`
+                        <div class="group-line chip-body">
+                            ${keyed(this._colorNonce, html`<ha-selector
+                                class="chip-picker"
+                                .hass=${this.hass}
+                                .selector=${{ ui_color: {} }}
+                                .value=${colour}
+                                data-key=${mapColorKey(key)}
+                                @value-changed=${this._onEntityValueChanged}
+                            ></ha-selector>`)}
+                        </div>` : nothing}
+                </div>`;
+    }
+
     private _renderChipsSection(t: Translations): TemplateResult
     {
         return html`
@@ -707,14 +807,14 @@ export class HeliosCardEditor extends LitElement
                                 data-key=${def.iconKey}
                                 @value-changed=${this._onEntityValueChanged}
                             ></ha-selector>
-                            <ha-selector
+                            ${keyed(this._colorNonce, html`<ha-selector
                                 class="chip-picker"
                                 .hass=${this.hass}
                                 .selector=${{ ui_color: { default_color: def.uiColorDefault } }}
                                 .value=${String(c[def.colorKey as string] ?? def.uiColorDefault)}
                                 data-key=${def.colorKey}
                                 @value-changed=${this._onEntityValueChanged}
-                            ></ha-selector>
+                            ></ha-selector>`)}
                         </div>`;
                     }) : nothing}
                 </div>`;
@@ -754,14 +854,14 @@ export class HeliosCardEditor extends LitElement
                                 data-group=${String(g)}
                                 @value-changed=${this._onGroupIconChanged}
                             ></ha-selector>
-                            <ha-selector
+                            ${keyed(this._colorNonce, html`<ha-selector
                                 class="chip-picker"
                                 .hass=${this.hass}
                                 .selector=${{ ui_color: {} }}
-                                .value=${monitoringGroupColorToken(this._cfg, g) || undefined}
+                                .value=${monitoringGroupColorToken(this._cfg, g) || deviceColorByIndex(this, g - 1)}
                                 data-group=${String(g)}
                                 @value-changed=${this._onGroupColorChanged}
-                            ></ha-selector>
+                            ></ha-selector>`)}
                         </div>
                     ` : nothing}
                 </div>`;
@@ -787,7 +887,11 @@ export class HeliosCardEditor extends LitElement
     {
         e.stopPropagation();
         const g = (e.currentTarget as HTMLElement).dataset.group;
-        if (g) { this._updateGroupMap('monitoring-group-colors', g, typeof e.detail.value === 'string' ? e.detail.value : ''); }
+        if (!g) { return; }
+        const value = typeof e.detail.value === 'string' ? e.detail.value : '';
+        //X clear -> re-create the picker so it snaps back to the group's default colour even when already unset.
+        if (value === '') { this._colorNonce++; }
+        this._updateGroupMap('monitoring-group-colors', g, value);
     };
     private _onGroupIconChanged = (e: CustomEvent<{ value?: unknown }>): void =>
     {
@@ -914,6 +1018,11 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
                 ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set.')}
 
+                </details>
+
+                <details class="advanced-section" data-section="mapconfig" ?open=${this._openSection === 'mapconfig'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.mapConfig?.section ?? 'Map configuration'}</summary>
+                ${this._renderMapSection(t)}
                 </details>
 
                 <details class="advanced-section" data-section="chips" ?open=${this._openSection === 'chips'} @toggle=${this._onSectionToggleEvt}>

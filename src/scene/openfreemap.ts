@@ -23,7 +23,7 @@ let _template   = '';
 let _templateAt = 0;
 
 //fetch has no native timeout; a local controller carries both the caller's abort (location change) and a deadline.
-async function fetchWithWatchdog(url: string, signal?: AbortSignal): Promise<Response>
+export async function fetchWithWatchdog(url: string, signal?: AbortSignal): Promise<Response>
 {
     const controller = new AbortController();
     const onAbort = (): void => controller.abort();
@@ -41,7 +41,7 @@ async function fetchWithWatchdog(url: string, signal?: AbortSignal): Promise<Res
     }
 }
 
-async function resolveTemplate(signal?: AbortSignal): Promise<string | null>
+export async function resolveTemplate(signal?: AbortSignal): Promise<string | null>
 {
     if (_template && Date.now() - _templateAt < BUILDING_CACHE_TTL_MS)
     {
@@ -62,7 +62,7 @@ async function resolveTemplate(signal?: AbortSignal): Promise<string | null>
 
 
 //Longitude/latitude to fractional tile coordinates at zoom z (slippy-map forward transform).
-function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }
+export function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }
 {
     const n   = 2 ** z;
     const x   = ((lon + 180) / 360) * n;
@@ -73,7 +73,7 @@ function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: numb
 
 //Tile-local pixel (0..extent) in tile (tx, ty) back to lon/lat (slippy-map inverse). Buffered vertices sit slightly
 //outside [0, extent]; the maths still holds, they just resolve just past the tile edge.
-function tilePixelToLonLat(tx: number, ty: number, px: number, py: number, extent: number, z: number): { lon: number; lat: number }
+export function tilePixelToLonLat(tx: number, ty: number, px: number, py: number, extent: number, z: number): { lon: number; lat: number }
 {
     const n  = 2 ** z;
     const wx = tx + px / extent;

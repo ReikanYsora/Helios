@@ -8,7 +8,8 @@
 //above this one, projected through `camera`.
 
 import { SceneCamera } from './projection';
-import { buildGround, pxPerMetreFor, type Ground } from './tiles';
+import { pxPerMetreFor, type Ground } from './tiles';
+import { buildVectorGround, type GroundStyle } from './ground-render';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
 import { nightShade } from '../core/render-kit/colors';
 import {
@@ -48,6 +49,9 @@ export class SceneRenderer
     private readonly _sceneSvg:     SVGSVGElement;
 
     private _ground?:     Ground;
+    //Repaints the current ground canvas from its cached vector features with a new style (theme flip / colour
+    //config), so a theme/config change never re-fetches tiles.
+    private _groundRepaint?: (style: GroundStyle) => void;
     //Increments per build so a slower in-flight tile fetch can't overwrite a newer one (guards a rapid
     //home-position change landing while the previous tile grid is still fetching).
     private _groundToken = 0;
@@ -126,15 +130,26 @@ export class SceneRenderer
 
     //Build the CARTO basemap for a home position. One Voyager style serves both themes; dark mode is a CSS
     //filter on the canvas, so a theme flip never re-tiles.
-    public async setLocation(lat: number, lon: number): Promise<void>
+    public async setLocation(lat: number, lon: number, style: GroundStyle): Promise<void>
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
-        const token  = ++this._groundToken;
-        const ground = await buildGround(lat, lon);
+        const token = ++this._groundToken;
+        const built = await buildVectorGround(lat, lon, style);
         if (!this._alive || token !== this._groundToken) { return; }
-        this._ground = ground;
-        this._groundHolder.replaceChildren(ground.el, ground.fade);
+        this._ground        = built.ground;
+        this._groundRepaint = built.repaint;
+        this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
         this.scheduleRedraw();
+    }
+
+    //Repaint the ground with a new style (theme flip / colour config) from the cached vector features, no fetch.
+    public setGroundStyle(style: GroundStyle): void
+    {
+        if (this._groundRepaint)
+        {
+            this._groundRepaint(style);
+            this.scheduleRedraw();
+        }
     }
 
     public setBuildings(buildings: Building[]): void

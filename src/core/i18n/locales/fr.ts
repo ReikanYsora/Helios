@@ -22,6 +22,31 @@ export const fr: Translations = {
         cloudHigh: 'Couverture haute',
     },
 
+    mapConfig:
+    {
+        section:    'Configuration de la carte',
+        intro:      'Le fond de carte est dessiné à partir des tuiles vectorielles OpenStreetMap. Auto suit votre thème, Dark / Light en force un, et Custom vous laisse choisir chaque couleur et masquer les couches.',
+        modeAuto:   'Auto',
+        modeDark:   'Dark',
+        modeLight:  'Light',
+        modeCustom: 'Custom',
+        land:       'Fond de carte',
+        water:      'Eau',
+        wood:       'Forêts et bois',
+        grass:      'Espaces verts',
+        sand:       'Sable',
+        wetland:    'Zones humides',
+        ice:        'Glace',
+        landuse:    'Zones bâties',
+        roadMajor:  'Grandes routes',
+        roadMinor:  'Petites routes',
+        roadCasing: 'Contour des routes',
+        path:       'Chemins',
+        rail:       'Voies ferrées',
+        building:   'Bâtiments',
+        boundary:   'Limites',
+    },
+
     editor:
     {
         locationSection:    'Emplacement de la maison',

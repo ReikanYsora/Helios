@@ -344,6 +344,36 @@ export function chipVisible(config: HeliosConfig | undefined, key: string): bool
 }
 
 
+//=== Vector basemap (map) configuration ===
+export type MapThemeMode = 'auto' | 'dark' | 'light' | 'custom';
+
+//How the vector basemap picks its colours: auto follows the HA theme, dark/light force a polarity, custom uses
+//the per-layer colours + visibility below.
+export function mapThemeMode(config: HeliosConfig | undefined): MapThemeMode
+{
+    const v = (config as Record<string, unknown> | undefined)?.['map-theme-mode'];
+    return v === 'dark' || v === 'light' || v === 'custom' ? v : 'auto';
+}
+
+//Per-layer config keys for the custom colour + visibility.
+export function mapColorKey(layer: string): string { return `map-color-${layer}`; }
+export function mapShowKey(layer: string):  string { return `map-show-${layer}`; }
+
+//The stored custom colour for a layer ('' when unset): a ui_color token or a raw #hex / rgb(), resolved to a
+//paintable colour by the engine.
+export function mapLayerColor(config: HeliosConfig | undefined, layer: string): string
+{
+    const v = (config as Record<string, unknown> | undefined)?.[mapColorKey(layer)];
+    return typeof v === 'string' ? v.trim() : '';
+}
+
+//Whether a layer is drawn (custom mode only). Default true.
+export function mapLayerVisible(config: HeliosConfig | undefined, layer: string): boolean
+{
+    return (config as Record<string, unknown> | undefined)?.[mapShowKey(layer)] !== false;
+}
+
+
 //Resolve the global display radius (m), clamped to [MIN,MAX], defaulting on invalid. Single source so
 //lowering it shrinks buildings and shadows in lockstep.
 export function displayRadiusM(config: HeliosConfig | undefined): number

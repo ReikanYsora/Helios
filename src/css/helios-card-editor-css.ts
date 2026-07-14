@@ -241,6 +241,20 @@ export const editorStyles = css`
         color: var(--text-primary-color, #fff);
     }
 
+    /*  Map theme mode toggle: full width, the four options sharing the row equally, with a gap before the
+        per-layer blocks below. */
+    .map-mode-toggle
+    {
+        display: flex;
+        width: 100%;
+        margin-bottom: var(--ha-space-4, 16px);
+    }
+    .map-mode-toggle .seg-option
+    {
+        flex: 1;
+        text-align: center;
+    }
+
     /*  Slider variant for ranged values so an out-of-range number can't be entered. Value shown right of
         the track. */
     .slider-row
