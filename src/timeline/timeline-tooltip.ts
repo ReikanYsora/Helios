@@ -11,6 +11,7 @@ import { valueAt } from '../data/unifiedStore';
 import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
 import { groupDevices, deviceName, deviceIcon } from '../data/sources/device-consumption';
 import { pickTranslations } from '../core/i18n';
+import { resolveRangeMs } from './timeline-model';
 import {
     type ChartHost,
     chartIsDark,
@@ -33,21 +34,15 @@ import { DAY_MS } from '../core/config/constants';
 //cursor (snap logic in applyTimelinePointer, timeline.ts). The PV row is skipped when unavailable.
 export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | typeof nothing
 {
-    const range    = host._timeRange;
+    const rng      = resolveRangeMs(host._timeRange);
     const series   = host._chartSeries;
     //Tooltip stays available when _chartSeries is null (Open-Meteo unreachable): PV + per-entity rows read from the
     //recorder fine, irradiance + cloud cells fall back to NaN handled below.
-    if (!range)
+    if (!rng)
     {
         return nothing;
     }
-
-    const startMs = range.start.getTime();
-    const rangeMs = range.end.getTime() - startMs;
-    if (rangeMs <= 0)
-    {
-        return nothing;
-    }
+    const { startMs, rangeMs } = rng;
 
     //Shows only while the pointer is over the chart (or dragging the scrub). On gesture end _chartHoverPct goes null
     //and the tooltip disappears, leaving just the scrub line.

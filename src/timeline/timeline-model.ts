@@ -38,6 +38,19 @@ function addDays(d: Date, n: number): Date
     return r;
 }
 
+//Resolve a timeline range to millisecond bounds, or null when there is no range or its span is non-positive.
+//The single guard behind every "read _timeRange, bail on empty/zero-span" site (overlays, tooltip).
+export function resolveRangeMs(
+    range: { start: Date; end: Date } | null | undefined
+): { startMs: number; endMs: number; rangeMs: number } | null
+{
+    if (!range) { return null; }
+    const startMs = range.start.getTime();
+    const endMs   = range.end.getTime();
+    const rangeMs = endMs - startMs;
+    return rangeMs > 0 ? { startMs, endMs, rangeMs } : null;
+}
+
 function addWeeks(d: Date, n: number): Date
 {
     return addDays(d, n * 7);

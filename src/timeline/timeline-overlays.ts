@@ -5,6 +5,7 @@ import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { getHomeCoords } from '../card/init';
 import { getSunPosition } from '../core/time/sun';
+import { resolveRangeMs } from './timeline-model';
 import type { ChartHost } from '../charts/charts';
 
 
@@ -74,8 +75,8 @@ let _nightMemo: { key: string; out: { startPct: number; endPct: number }[] } | n
 
 function computeNightIntervals(host: ChartHost): { startPct: number; endPct: number }[]
 {
-    const range = host._timeRange;
-    if (!range)
+    const r = resolveRangeMs(host._timeRange);
+    if (!r)
     {
         return [];
     }
@@ -84,13 +85,7 @@ function computeNightIntervals(host: ChartHost): { startPct: number; endPct: num
     {
         return [];
     }
-    const startMs = range.start.getTime();
-    const endMs   = range.end.getTime();
-    const rangeMs = endMs - startMs;
-    if (rangeMs <= 0)
-    {
-        return [];
-    }
+    const { startMs, endMs, rangeMs } = r;
     const memoKey = `${startMs}|${endMs}|${coords.lat.toFixed(4)}|${coords.lon.toFixed(4)}`;
     if (_nightMemo && _nightMemo.key === memoKey)
     {
@@ -100,7 +95,7 @@ function computeNightIntervals(host: ChartHost): { startPct: number; endPct: num
     interface Crossing { ms: number; kind: 'sunrise' | 'sunset' }
     const crossings: Crossing[] = [];
 
-    const cursor = new Date(range.start);
+    const cursor = new Date(startMs);
     cursor.setHours(0, 0, 0, 0);
     cursor.setDate(cursor.getDate() - 1);
     const walkEndMs = endMs + 24 * 60 * 60 * 1000;
@@ -195,18 +190,12 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult | type
 //range, so the mask never shrinks to a sliver or fills the whole card.
 export function renderTimelineFutureMask(host: ChartHost): TemplateResult | typeof nothing
 {
-    const range = host._timeRange;
-    if (!range)
+    const r = resolveRangeMs(host._timeRange);
+    if (!r)
     {
         return nothing;
     }
-    const startMs = range.start.getTime();
-    const endMs   = range.end.getTime();
-    const rangeMs = endMs - startMs;
-    if (rangeMs <= 0)
-    {
-        return nothing;
-    }
+    const { startMs, endMs, rangeMs } = r;
     const nowMs = Date.now();
     if (nowMs <= startMs || nowMs >= endMs)
     {
