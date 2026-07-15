@@ -39,8 +39,10 @@ function daysInPrevYear(): number
 }
 
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
-    //Forecast: J-1 .. J+2 (yesterday, today, forecast) - the at-a-glance default. today/week/month/year all END today.
-    forecast:  { pastDays: 1,                           futureDays: 2, weather: true,  maxBucketsPerHour: 12   },
+    //Forecast: J .. J+2 (today + the two days ahead, so 3 days) - the at-a-glance default. It carried J-1 as well,
+    //which spent a quarter of the width on a day that is already its own mode next door. today/week/month/year all
+    //END today.
+    forecast:  { pastDays: 0,                           futureDays: 2, weather: true,  maxBucketsPerHour: 12   },
     //Yesterday: EXACTLY the previous day. futureDays -1 ends the window at today's midnight (start + storeDays =
     //past 1 + 1 - 1 = 1 day), so the timeline shows only J-1, not J-1..today.
     yesterday: { pastDays: 1,                           futureDays: -1, weather: true, maxBucketsPerHour: 12   },

@@ -15,6 +15,7 @@
 //Painters: buildings are extruded prisms drawn with a per-face painter's algorithm (depth-sorted,
 //screen-space back-face culled); shadows are each footprint's cast envelope flattened by one group-opacity.
 
+import * as polygonClipping from 'polygon-clipping';
 import type { SceneCamera} from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { tintedRgba, buildingColor } from '../core/render-kit/colors';
@@ -38,11 +39,16 @@ import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
 
 export interface Building
 {
-    footprint: Point[]; //metres east/north relative to the home
+    footprint: Point[]; //metres east/north relative to the home; the OUTER ring
     height:    number;
     isHome:    boolean;
     centerX:   number;  //centroid east, for the back-to-front draw order + shadow cull
     centerY:   number;  //centroid north
+    //Inner rings (courtyards). A merged block keeps its holes, or the union would fill the yard in.
+    holes?:    Point[][];
+    //Outlines of the ORIGINAL buildings this volume merged, drawn flat on the roof so a terrace still reads as
+    //separate houses. They live on the roof plane, so they carry no depth conflict of their own.
+    detail?:   Point[][];
 }
 
 //Subset renderShadows reads from a caster: footprint, height, and centroid (for the near-plane cull).
@@ -53,6 +59,9 @@ export interface ShadowCaster
     height:    number;
     centerX:   number;
     centerY:   number;
+    //Courtyards. They are not solid, so they cast nothing and must not be punched out of the shadow either: a
+    //yard DOES catch the shade of the walls around it.
+    holes?:    Point[][];
 }
 
 export interface ScenePalette
@@ -150,7 +159,8 @@ export function clearBuildingsLocationCache(lat: number, lng: number): void
 //Parse OpenFreeMap footprint rings into option-independent RawBuilding[]: each ring's lon/lat to local metres
 //east/north relative to the home, with centroid, distance-to-footprint, and raw render height. Buildings that a
 //tile buffer repeats across adjacent tiles are de-duplicated, and anything outside `radiusM` is dropped (a z14 tile
-//spans ~2.4 km, far past the display radius). Ranked by distance, nearest MAX_BUILDING_COUNT kept. No height cap,
+//spans ~2.4 km, and the fetch reaches a tile grid wide enough for the radius). Ranked by distance, nearest
+//MAX_BUILDING_COUNT kept. No height cap,
 //count slice, or home flag (interpret's job).
 export function parseOfmBuildings(
     rings:   OfmRing[],
@@ -349,6 +359,76 @@ export interface InterpretBuildingsOptions
 
 //Turn option-independent RawBuilding[] into render-ready Building[] per the options. Pure and cheap: filter
 //to radius, slice count, resolve per-building height, mark the home + its cluster.
+//Merge same-height footprints that touch into ONE volume, keeping each original outline for the roof.
+//
+//This is what breaks the deadlock. Two houses standing shoulder to shoulder are not two volumes, they are one
+//block: the wall between them exists only because two outlines get extruded apart. That wall is COPLANAR with its
+//neighbour's, so both faces carry the identical depth, the painter's sort meets a tie it cannot break, and the
+//internal face surfaces or vanishes with the camera angle. Merging deletes the face instead of trying to order it,
+//and it deletes the whole class of them at once: a merged block has no inside.
+//
+//The detail is not lost, which is what sank the first attempt at this: every original outline is kept and drawn
+//flat ON the roof, where it cannot conflict with anything. Home and neighbours merge separately, so the home keeps
+//its own prism, and only equal heights merge, so nothing ever loses its height.
+function mergeSameHeight(list: Building[]): Building[]
+{
+    const groups = new Map<string, Building[]>();
+    for (const b of list)
+    {
+        const key = `${b.height.toFixed(3)}|${b.isHome ? 'h' : 'n'}`;
+        const g = groups.get(key);
+        if (g) { g.push(b); } else { groups.set(key, [b]); }
+    }
+
+    const out: Building[] = [];
+    for (const group of groups.values())
+    {
+        if (group.length === 1)
+        {
+            out.push({ ...group[0], detail: [group[0].footprint] });
+            continue;
+        }
+        let merged: number[][][][];
+        try
+        {
+            const polys = group.map((b) => [[...b.footprint, b.footprint[0]] as [number, number][]]);
+            merged = polygonClipping.union(polys[0], ...polys.slice(1)) as unknown as number[][][][];
+        }
+        catch (_)
+        {
+            //Degenerate outline: keep the originals rather than lose the buildings.
+            for (const b of group) { out.push({ ...b, detail: [b.footprint] }); }
+            continue;
+        }
+
+        for (const poly of merged)
+        {
+            const rings = poly
+                //polygon-clipping closes its rings; the rest of the pipeline works on open ones.
+                .map((r) => r.slice(0, -1).map(([x, y]) => [x, y] as Point))
+                .filter((r) => r.length >= 3);
+            if (rings.length === 0) { continue; }
+            const outer = rings[0];
+            let cx = 0;
+            let cy = 0;
+            for (const p of outer) { cx += p[0]; cy += p[1]; }
+            const centerX = cx / outer.length;
+            const centerY = cy / outer.length;
+            out.push({
+                footprint: outer,
+                holes:     rings.slice(1),
+                //Only the originals that landed in THIS block: a group can merge into several blocks.
+                detail:    group.filter((b) => pointInPolygon(b.centerX, b.centerY, outer)).map((b) => b.footprint),
+                height:    group[0].height,
+                isHome:    group[0].isHome,
+                centerX,
+                centerY,
+            });
+        }
+    }
+    return out;
+}
+
 export function interpretBuildings(
     raw:  RawBuilding[],
     opts: InterpretBuildingsOptions
@@ -410,7 +490,8 @@ export function interpretBuildings(
         }
     }
 
-    return buildings;
+    //Touching same-height prisms become one block, so their coplanar internal walls stop existing.
+    return mergeSameHeight(buildings);
 }
 
 //---------------------------------------------------------------------------------------------------------
@@ -419,6 +500,26 @@ export function interpretBuildings(
 
 //Every footprint casts a shadow; one group-opacity flattens overlaps into a single even shade. `sun` is
 //{azimuth (deg from N, CW), altitude (deg)}. shadowOpacity is the peak alpha.
+//A closed sub-path through projected points, always wound the same way.
+//
+//Non-zero fill ADDS sub-paths wound alike and CANCELS ones wound against each other. The sweep's pieces overlap on
+//purpose, so a single stray winding punches holes straight through it: projection flips the winding (screen y runs
+//down), so the translated outline came out clockwise while the edge quads were counter-clockwise, they cancelled
+//where they met, and only the scraps that overlapped nothing survived. Normalising here means no caller can forget.
+function pathOf(pts: [number, number][], hole = false): string
+{
+    let area = 0;
+    for (let i = 0; i < pts.length; i++)
+    {
+        const j = (i + 1) % pts.length;
+        area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
+    }
+    const ccw  = area < 0 ? [...pts].reverse() : pts;
+    //`hole` turns the cancelling that bit us into the tool: a ring wound AGAINST the rest subtracts instead of adding.
+    const ring = hole ? [...ccw].reverse() : ccw;
+    return ring.map((q, k) => `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('') + 'Z';
+}
+
 export function renderShadows(
     cam:          SceneCamera,
     casters:      ShadowCaster[],
@@ -462,10 +563,19 @@ export function renderShadows(
         const alen = Math.hypot(ax, ay) || 1;
         ax /= alen; ay /= alen;
 
-        let start = base[0]; let sMax = -Infinity;
-        for (const p of base) { const d = p[0] * ax + p[1] * ay; if (d > sMax) { sMax = d; start = p; } }
-        let end = cast[0]; let eMax = -Infinity;
-        for (const p of cast) { const d = p[0] * ax + p[1] * ay; if (d > eMax) { eMax = d; end = p; } }
+        //Anchor the gradient ON the axis, at the FAR extent of each ring, never on a vertex. Taking the winning
+        //vertex made the gradient run from one corner to another, so its direction was `end - start` and depended
+        //on WHICH corners won: a tenth of a degree of rotation flipped the argmax to a neighbouring corner and the
+        //fade swung sideways. The max value itself is continuous even where the argmax jumps, so projecting it back
+        //onto the axis keeps the gradient parallel to the shadow and steady through any rotation.
+        const ox = bcx / n;
+        const oy = bcy / n;
+        let sMax = -Infinity;
+        for (const p of base) { const d = (p[0] - ox) * ax + (p[1] - oy) * ay; if (d > sMax) { sMax = d; } }
+        let eMax = -Infinity;
+        for (const p of cast) { const d = (p[0] - ox) * ax + (p[1] - oy) * ay; if (d > eMax) { eMax = d; } }
+        const start: [number, number] = [ox + ax * sMax, oy + ay * sMax];
+        const end:   [number, number] = [ox + ax * eMax, oy + ay * eMax];
 
         const id = `hsh${idx}`;
         idx += 1;
@@ -473,13 +583,200 @@ export function renderShadows(
               + `x1="${start[0].toFixed(1)}" y1="${start[1].toFixed(1)}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}">`
               + `<stop offset="0" stop-color="${shadowColor}" stop-opacity="1"/>`
               + `<stop offset="1" stop-color="${shadowColor}" stop-opacity="0"/></linearGradient>`;
-        shapes += `<polygon points="${pointsAttr(convexHull([...base, ...cast]))}" fill="url(#${id})"/>`;
+        //The EXACT swept envelope, not its convex hull. A hull was close enough while buildings were small and
+        //roughly convex, but a merged terrace is a big L, and the hull of an L FILLS its notch: the shade turned
+        //into shapeless blobs spilling across courtyards and neighbours. The true sweep is the outline translated
+        //to the shadow's tip, plus the quad every edge sweeps on its way there. Those pieces overlap, and that is
+        //the point: the group's single opacity already flattens overlaps, so they read as their union with no
+        //boolean work. One path per caster, exactly as before, so the shape count does not move.
+        let d = pathOf(cast);
+        for (const ring of [b.footprint, ...(b.holes ?? [])])
+        {
+            const rb = ring.map((p) => cam.project(p[0], p[1], 0));
+            const rc = ring.map((p) => cam.project(p[0] + oe, p[1] + on, 0));
+            for (let i = 0; i < rb.length; i++)
+            {
+                const j = (i + 1) % rb.length;
+                d += pathOf([rb[i], rb[j], rc[j], rc[i]]);
+            }
+        }
+        shapes += `<path d="${d}" fill="url(#${id})" fill-rule="nonzero"/>`;
     }
     if (!shapes)
     {
         return '';
     }
-    return `<defs>${defs}</defs><g opacity="${(shadowOpacity * fade).toFixed(3)}">${shapes}</g>`;
+    //Cut every building out of the whole shade layer at once.
+    //
+    //Shade cannot lie on ground a building stands on. It used to be left in and covered by the prisms drawn over
+    //it, which only held while blocks were convex AND opaque: turn building opacity down and the shade shows
+    //straight through them. Subtracting it per shape with a reversed ring does NOT work, and that was a real
+    //mistake: non-zero fill counts a WINDING NUMBER, not a boolean. The sweep's pieces overlap, most of all over
+    //the footprint (translated roof plus several edge quads), so the count there is +2 or +3 and a single -1 leaves
+    //it filled. Subtracting a constant from a varying sum cannot reach zero.
+    //
+    //A clip settles it in one operation for the layer: a binary stencil, unlike a mask, which blends alpha over the
+    //whole layer and was far too slow here. Even-odd does the rest for free: rect (1), a footprint makes 2 (even ->
+    //cut), a courtyard ring makes 3 (odd -> kept), so yards still catch the shade of the walls around them.
+    let clip = 'M-9999,-9999L9999,-9999L9999,9999L-9999,9999Z';
+    for (const b of casters)
+    {
+        for (const ring of [b.footprint, ...(b.holes ?? [])])
+        {
+            clip += pathOf(ring.map((p) => cam.project(p[0], p[1], 0)));
+        }
+    }
+    defs += `<clipPath id="hsh-clip" clipPathUnits="userSpaceOnUse">`
+          + `<path d="${clip}" clip-rule="evenodd"/></clipPath>`;
+    return `<defs>${defs}</defs>`
+         + `<g opacity="${(shadowOpacity * fade).toFixed(3)}" clip-path="url(#hsh-clip)">${shapes}</g>`;
+}
+
+//A vertical plane separating two prisms, as `n . p = c`, with prism i on the low side and j on the high side.
+interface SepPlane
+{
+    i:  number;
+    j:  number;
+    nx: number;
+    ny: number;
+    c:  number;
+}
+
+//Two outlines count as separated even when they MEET on the plane, and even when hand-drawn data laps them over it
+//by this much. Demanding a strict gap would reject every terraced pair (they touch, so maxA == minB), which is
+//exactly the pair that needs an order most.
+const SEP_TOL_M = 0.25;
+//Past this, a pair's depths are far enough apart that the depth key already orders them right, so testing them
+//would only cost time. Only NEIGHBOURS interleave.
+const SEP_RANGE_M = 150;
+
+//Separating axis between two outlines, normalised so A sits on `n . p <= c` and B on `n . p >= c`. Null when none
+//exists, which is the one case where no order can be right.
+//
+//Candidate axes come from the REAL outlines, not their convex hulls: a hull projects onto an axis exactly like the
+//polygon it wraps, so it adds nothing to the test and only offers fewer axes to try.
+function findSeparatingAxis(a: Point[], b: Point[]): { nx: number; ny: number; c: number } | null
+{
+    for (const ring of [a, b])
+    {
+        for (let k = 0; k < ring.length; k++)
+        {
+            const p0 = ring[k];
+            const p1 = ring[(k + 1) % ring.length];
+            let nx = -(p1[1] - p0[1]);
+            let ny = p1[0] - p0[0];
+            const len = Math.hypot(nx, ny);
+            if (len < 1e-9) { continue; }
+            nx /= len;
+            ny /= len;
+            let minA = Infinity; let maxA = -Infinity;
+            let minB = Infinity; let maxB = -Infinity;
+            for (const q of a) { const d = q[0] * nx + q[1] * ny; if (d < minA) { minA = d; } if (d > maxA) { maxA = d; } }
+            for (const q of b) { const d = q[0] * nx + q[1] * ny; if (d < minB) { minB = d; } if (d > maxB) { maxB = d; } }
+            if (maxA <= minB + SEP_TOL_M) { return { nx, ny, c: (maxA + minB) / 2 }; }
+            if (maxB <= minA + SEP_TOL_M) { return { nx: -nx, ny: -ny, c: -(minA + maxB) / 2 }; }
+        }
+    }
+    return null;
+}
+
+//Vertical planes separating each neighbouring pair of prisms.
+//
+//Ranking prisms by ONE number cannot be right: a long block pointing at the camera owns a very near vertex, so it
+//scores near AS A WHOLE and paints over a small building standing in front of its far end. No single key can say
+//"in front of that end, behind this one". But two prisms a vertical plane separates can never interleave: they
+//stand on one ground plane and rise straight up, so the one on the camera's side is in front, full stop.
+//
+//The plane depends only on the FOOTPRINTS, never on the camera, so it is found once and cached; each frame only
+//asks which side the eye falls on.
+const _sepCache = new WeakMap<Building[], SepPlane[]>();
+
+function separatingPlanes(buildings: Building[]): SepPlane[]
+{
+    const cached = _sepCache.get(buildings);
+    if (cached) { return cached; }
+    const out: SepPlane[] = [];
+    for (let i = 0; i < buildings.length; i++)
+    {
+        for (let j = i + 1; j < buildings.length; j++)
+        {
+            if (Math.hypot(buildings[i].centerX - buildings[j].centerX,
+                           buildings[i].centerY - buildings[j].centerY) > SEP_RANGE_M) { continue; }
+            const axis = findSeparatingAxis(buildings[i].footprint, buildings[j].footprint);
+            if (axis) { out.push({ i, j, nx: axis.nx, ny: axis.ny, c: axis.c }); }
+        }
+    }
+    _sepCache.set(buildings, out);
+    return out;
+}
+
+//The eye, dropped onto the ground, in local metres. project3 is a pinhole at cameraZ = PERSPECTIVE, so inverting
+//its bearing/tilt basis puts the eye back in world terms, which is all a plane needs to be asked about.
+function eyeGroundPoint(cam: SceneCamera): { e: number; n: number }
+{
+    const t = cam.tiltDeg * DEG;
+    const b = cam.bearingDeg * DEG;
+    const s = cam.pxPerMetre || 1;
+    return {
+        e:  (PERSPECTIVE * Math.sin(t) * Math.sin(b)) / s,
+        n: -(PERSPECTIVE * Math.sin(t) * Math.cos(b)) / s,
+    };
+}
+
+//Order the visible prisms far-to-near: a topological sort of "who must be painted before whom", seeded by the
+//separating planes and falling back to the depth key wherever they say nothing (or contradict each other, which a
+//ring of three prisms can still do). Order only: no geometry is touched, so the worst case is the old behaviour.
+export function paintOrder(cam: SceneCamera, buildings: Building[], visible: { index: number; depth: number }[]): { index: number }[]
+{
+    if (visible.length < 2) { return visible; }
+    const slot = new Map<number, number>();
+    visible.forEach((v, k) => slot.set(v.index, k));
+
+    const after: number[][] = visible.map(() => []);
+    const indeg: number[]   = visible.map(() => 0);
+    const eye = eyeGroundPoint(cam);
+
+    for (const plane of separatingPlanes(buildings))
+    {
+        const a = slot.get(plane.i);
+        const b = slot.get(plane.j);
+        if (a === undefined || b === undefined) { continue; }
+        //Whichever side the eye is on is in front, so it paints LAST.
+        const side = eye.e * plane.nx + eye.n * plane.ny;
+        const far  = side < plane.c ? b : a;
+        const near = side < plane.c ? a : b;
+        after[far].push(near);
+        indeg[near] += 1;
+    }
+
+    //Kahn, always taking the FARTHEST of the currently unblocked prisms, so the natural depth order survives
+    //wherever the planes leave a choice.
+    const out: { index: number }[] = [];
+    const done = visible.map(() => false);
+    while (out.length < visible.length)
+    {
+        let pick = -1;
+        for (let k = 0; k < visible.length; k++)
+        {
+            if (done[k] || indeg[k] > 0) { continue; }
+            if (pick < 0 || visible[k].depth < visible[pick].depth) { pick = k; }
+        }
+        if (pick < 0)
+        {
+            //A cycle: three prisms can each be in front of the next. Nothing can order them, so take the farthest
+            //still standing and carry on rather than dropping the rest.
+            for (let k = 0; k < visible.length; k++)
+            {
+                if (done[k]) { continue; }
+                if (pick < 0 || visible[k].depth < visible[pick].depth) { pick = k; }
+            }
+        }
+        if (pick < 0) { break; }
+        done[pick] = true;
+        out.push({ index: visible[pick].index });
+        for (const nx of after[pick]) { indeg[nx] -= 1; }
+    }
+    return out;
 }
 
 //Extrude + paint the buildings far to near. `altitude` is the sun altitude (deg) for the time-of-day tint;
@@ -492,11 +789,20 @@ export function renderBuildings(
     palette:         ScenePalette,
     growth:          number,
     neighborOpacity = 0.25,
-    home:            HomeAppearance = {}
+    home:            HomeAppearance = {},
+    //Degrees from north, clockwise. Without it a wall cannot know whether it faces the light, which is why every
+    //wall used to take one flat tint whatever way it pointed.
+    sunAzimuth       = 180
 ): string
 {
+    //Horizontal direction TOWARDS the sun, and how much sun there is to give. The fade tracks the shadows' own, so
+    //facades stop catching light exactly as the shade stops being cast: at dawn and dusk everything falls to
+    //ambient together instead of the walls staying lit over shadowless ground.
+    const sunE    = Math.sin(sunAzimuth * DEG);
+    const sunN    = Math.cos(sunAzimuth * DEG);
+    const sunFade = Math.max(0, Math.min(1, altitude / SHADOW_FADE_DEG));
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
-    const order = buildings
+    const visible = buildings
         .map((b, index) =>
         {
             const c = cam.project3(b.centerX, b.centerY, 0);
@@ -507,16 +813,22 @@ export function renderBuildings(
             return { index, depth: near, cameraZ: c.depth };
         })
         //Near-plane cull: skip buildings at/behind the camera, else their walls smear over the scene.
-        .filter((o) => o.cameraZ < nearCull)
-        .sort((a, b) => a.depth - b.depth);
+        .filter((o) => o.cameraZ < nearCull);
+
+    //Far-to-near, settled pairwise rather than by ranking each prism on one number (see separatingPlanes).
+    const order = paintOrder(cam, buildings, visible);
 
     //Neighbours are altitude-tinted like the home + the ground, so the whole scene grades through the day/night
     //cycle together (there is no full-frame wash any more). They paint OPAQUE (walls a touch darker than the roof
     //for shading); the user-set neighborOpacity is applied ONCE to the whole neighbour group below, so back faces
     //and stacked prisms never show through each other (only the visible silhouette reads, then fades as a unit).
     const nb       = buildingColor(palette.neighbor, altitude);
-    const nbWall   = mixHex(nb, '#000000', 0.18);
-    const nbStroke = mixHex(nb, '#000000', 0.30);
+    //A wall is no longer one tint: it reads between AMBIENT (turned away from the sun, lit only by the sky) and LIT
+    //(square on to it). Every wall took the ambient-ish middle before, so a block looked the same from every side
+    //and the scene had no direction to it, even with the sun sitting right there in the sky.
+    const nbAmbient = mixHex(nb, '#000000', 0.34);
+    const nbLit     = mixHex(nb, '#000000', 0.04);
+    const nbStroke  = mixHex(nb, '#000000', 0.30);
 
     //Faces split by group: neighbours (faded together) and the home (always full opacity, drawn on top). Each
     //group is painted far-to-near by nearest-corner depth, so within a group two touching prisms interleave
@@ -528,15 +840,16 @@ export function renderBuildings(
         const b  = buildings[index];
         const faces = b.isHome ? homeFaces : neighborFaces;
         const fp = simplifyFootprint(b.footprint);
+        //Every ring of the block: the outline plus any courtyard. A hole's walls face into the yard, and the cull
+        //below reads the PROJECTED quad, so their opposite winding sorts itself out.
+        const rings = [fp, ...(b.holes ?? []).map(simplifyFootprint)];
         //Home prism height carries the extra squash/grow multiplier.
         const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);
 
         //Single solid prism: one base ring and one roof ring, one full-height wall quad per edge.
-        const wallFill = b.isHome
-            ? tintedRgba(mixHex(home.color ?? palette.home, '#000000', 0.22), altitude, 0.9)
-            : nbWall;
-        const base     = fp.map((p) => cam.project(p[0], p[1], 0));
-        const roof     = fp.map((p) => cam.project(p[0], p[1], h));
+        const homeBase    = home.color ?? palette.home;
+        const wallAmbient = b.isHome ? mixHex(homeBase, '#000000', 0.38) : nbAmbient;
+        const wallLit     = b.isHome ? mixHex(homeBase, '#000000', 0.06) : nbLit;
         //Roof + edge stroke follow the solid colour; the home keeps a brightened edge so it reads as the focal building.
         const topColor = home.color ?? palette.home;
         const roofFill = b.isHome
@@ -550,14 +863,18 @@ export function renderBuildings(
         }
         const strokeW = b.isHome ? 1 : 0.4;
 
-        //Emit each visible wall into the shared face list (sorted globally below).
-        for (let i = 0; i < base.length; i++)
+        //Emit each visible wall into the shared face list (sorted globally below), for every ring of the block.
+        for (const ring of rings)
         {
-            const next = (i + 1) % base.length;
-            const p0 = base[i];
-            const p1 = base[next];
-            const p2 = roof[next];
-            const p3 = roof[i];
+        const rBase = ring.map((p) => cam.project(p[0], p[1], 0));
+        const rRoof = ring.map((p) => cam.project(p[0], p[1], h));
+        for (let i = 0; i < rBase.length; i++)
+        {
+            const next = (i + 1) % rBase.length;
+            const p0 = rBase[i];
+            const p1 = rBase[next];
+            const p2 = rRoof[next];
+            const p3 = rRoof[i];
             //Screen-space back-face cull: a wall facing the camera winds negative (shoelace) once projected.
             //Using the PROJECTED quad (not a global bearing) stays correct for buildings off to the sides,
             //where perspective makes the view angle differ from bearing.
@@ -570,26 +887,53 @@ export function renderBuildings(
             {
                 continue;
             }
+            //How square-on to the sun does this wall stand? The outward normal falls out of the winding: rings run
+            //counter-clockwise with the solid on their left (a courtyard runs the other way, and so its normal
+            //turns into the yard, which is exactly right). Lambert, clamped: a wall turned away gets no sun, never
+            //negative light.
+            const ex = ring[next][0] - ring[i][0];
+            const ey = ring[next][1] - ring[i][1];
+            const el = Math.hypot(ex, ey) || 1;
+            const lit = Math.max(0, (ey / el) * sunE + (-ex / el) * sunN) * sunFade;
+            const shade = mixHex(wallAmbient, wallLit, lit);
+            const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : shade;
             //One full-height wall quad per edge.
             const wall = `<polygon points="${pointsAttr([p0, p1, p2, p3])}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
             //Sort key = the wall's NEAREST corner (max cameraZ, larger = nearer). On a concave footprint an
             //edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
             const wallDepth = Math.max(
-                cam.project3(fp[i][0], fp[i][1], 0).depth,
-                cam.project3(fp[next][0], fp[next][1], 0).depth,
-                cam.project3(fp[i][0], fp[i][1], h).depth,
-                cam.project3(fp[next][0], fp[next][1], h).depth,
+                cam.project3(ring[i][0], ring[i][1], 0).depth,
+                cam.project3(ring[next][0], ring[next][1], 0).depth,
+                cam.project3(ring[i][0], ring[i][1], h).depth,
+                cam.project3(ring[next][0], ring[next][1], h).depth,
             );
             faces.push({ depth: wallDepth, svg: wall });
+        }
         }
         //Flat roof at its own nearest-corner depth. It sits at the top so in any above-horizon view it never
         //overlaps a wall in screen space, so its order against walls is cosmetic; depth-placing it just keeps a
         //nearer building's roof correctly over a farther one.
         let roofDepth = -Infinity;
         for (const p of fp) { const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth) { roofDepth = d; } }
+        //Roof as ONE path over every ring, even-odd, so a courtyard stays a hole instead of being filled in.
+        const roofPath = rings
+            .map((ring) => ring.map((p, k) => {
+                const q = cam.project(p[0], p[1], h);
+                return `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`;
+            }).join('') + 'Z')
+            .join('');
+        //The outlines of the buildings this block merged, laid flat ON the roof. They sit on the roof plane, so
+        //they can never fight it for depth: the terrace reads as separate houses at no cost.
+        const detailPath = (b.detail ?? [])
+            .map((ring) => ring.map((p, k) => {
+                const q = cam.project(p[0], p[1], h);
+                return `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`;
+            }).join('') + 'Z')
+            .join('');
         faces.push({
             depth: roofDepth,
-            svg:   `<polygon points="${pointsAttr(roof)}" fill="${roofFill}" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`,
+            svg:   `<path d="${roofPath}" fill="${roofFill}" fill-rule="evenodd" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`
+                 + (detailPath ? `<path d="${detailPath}" fill="none" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>` : ''),
         });
     }
     //Neighbours: opaque silhouette painted far-to-near, then faded as ONE group so layers never bleed through.
@@ -607,7 +951,6 @@ export function renderBuildings(
 
 //---------------------------------------------------------------------------------------------------------
 //Footprint geometry helpers. Kept local to the building painters, their only consumers.
-//---------------------------------------------------------------------------------------------------------
 
 //Drop only TRULY collinear vertices (common in OSM footprints) so a straight wall stays ONE quad with no
 //false vertical edge bisecting it. The 0.05 m threshold (perpendicular distance off the line through the
@@ -636,37 +979,3 @@ function simplifyFootprint(points: Point[]): Point[]
     return out.length >= 3 ? out : points;
 }
 
-//Andrew's monotone-chain convex hull, returning vertices CCW and NOT closed. Wraps a building's base +
-//cast-shadow points into one shadow envelope.
-export function convexHull(pts: Point[]): Point[]
-{
-    if (pts.length < 3)
-    {
-        return pts.slice();
-    }
-    const sorted = pts.slice().sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
-    const cross = (o: Point, a: Point, b: Point): number =>
-        (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-    const lower: Point[] = [];
-    for (const p of sorted)
-    {
-        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0)
-        {
-            lower.pop();
-        }
-        lower.push(p);
-    }
-    const upper: Point[] = [];
-    for (let i = sorted.length - 1; i >= 0; i--)
-    {
-        const p = sorted[i];
-        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0)
-        {
-            upper.pop();
-        }
-        upper.push(p);
-    }
-    lower.pop();
-    upper.pop();
-    return lower.concat(upper);
-}

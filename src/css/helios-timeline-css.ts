@@ -22,6 +22,19 @@ export const heliosTimelineStyles = css`
         /*  Own stacking layer at the top of the card so the sun arc, home glow and overlay chips never
             cross over it during auto-rotate. */
         z-index: 1000;
+        /*  Height as a share of the CARD, not of its width.
+            It used to be the chart below that carried the size, via clamp(36px, 8cqw, 72px): width only. On a phone
+            (~380 px wide) 8cqw lands at ~30 px, under its floor, so the bar pinned to its minimum and stopped
+            tracking anything at all -- it looked fixed because it WAS fixed, and it took no notice of the vertical
+            room it had. A tall phone card and a squat one got the exact same bar.
+            Being position:absolute inside the ha-card makes the CARD this element's containing block, so a
+            percentage here resolves against the card's own height. That is what cqh would have given, without
+            switching the card to container-type:size -- which applies size containment, and the card's height is
+            already documented as collapsing under layouts that give it none.
+            The range sits a notch above what the chart used to produce (it was 36+18 .. 72+18): the curves were
+            reading cramped at every size, so the floor, the share and the ceiling all move up together and the bar
+            is taller than before whatever room it is given, rather than only at one end of the range. */
+        height: clamp(60px, 20%, 100px);
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -52,6 +65,11 @@ export const heliosTimelineStyles = css`
     .tb-chart-stack
     {
         position: relative;
+        /*  Fill the bar and hand the room to the chart; min-height:0 so a flex item may shrink below its content. */
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
         /*  border-box like .tb-band below: the border draws INSIDE so the chart stack and the period
             band keep the exact same outer width (both span card - 16px). Without it the border adds outside
             and the stack reads wider than the band. */
@@ -65,13 +83,26 @@ export const heliosTimelineStyles = css`
     .tb-chart-card
     {
         position: relative;
-        /*  Height scales with container width (cqw): 36 px floor on a small tile, 72 px ceiling on a
-            kiosk. Both charts share this expression so they stay equal height. */
-        height: clamp(36px, 8cqw, 72px);
+        /*  Takes whatever the bar has left once the day strip below has its 18 px. The bar sizes itself off the
+            card (see .time-bar), so the chart follows the room available instead of guessing from the width. */
+        flex: 1 1 auto;
+        min-height: 36px;
         overflow: hidden;
     }
+    /*  Pinned to the chart card, not sized by percentage. A percentage height resolves against the PARENT's
+        height, and .tb-chart-card takes its height from flex without ever stating one, which is not a height a
+        percentage can resolve against: the SVG fell back to its intrinsic ratio instead (the viewBox is 10:1) and
+        took width/10, leaving the floor of the card bare until a re-render settled it (hovering the chart). That
+        is also why it showed up on a WINDOW resize for a bar sized off the card's height: the fallback tracks the
+        width. It only became reachable once the bar started tracking the card instead of a width clamp, since the
+        chart card had a stated height of its own until then. Absolute + inset resolves against the padding box of
+        the positioned parent, which is definite by construction, so there is no chain left to break. Same recipe
+        as .ground / .ground-fade. */
     .hc-chart-svg
     {
+        position: absolute;
+        top: 0;
+        left: 0;
         display: block;
         width: 100%;
         height: 100%;
@@ -461,6 +492,8 @@ export const heliosTimelineStyles = css`
     .tb-day-strip
     {
         position: relative;
+        /*  Fixed footer: it never stretches, so every pixel the bar gains goes to the chart.  */
+        flex: 0 0 auto;
         height: 18px;
         box-sizing: border-box;
         /*  Footer band of the chart stack: frame lives on .tb-chart-stack, so here we only draw the

@@ -44,7 +44,7 @@ Hide every chip (including home consumption) and the card collapses to just the 
 position and your location, a solar-position card you can drop on a non-energy
 dashboard, for shutters or climate control keyed on the sun. And on a phone you can
 now scroll the page straight past the card with a normal swipe; rotating the scene
-takes a short press-and-hold, so the card never traps your scroll (#308).
+takes two fingers, so the card never traps your scroll (#308).
 
 ### New: per-bank battery state of charge
 
@@ -60,12 +60,34 @@ anywhere on the scene background to dismiss an open chip, which finally makes th
 detail panel easy to close on a phone. The sun arc uses the true -0.833 degree
 horizon so sunrise and sunset land where Home Assistant puts them.
 
+### Changed: solid buildings, shadows that follow their walls
+
+The surroundings have been rebuilt. Buildings are no longer cut in half at the seams
+between map tiles, and faces no longer flicker in and out while you turn the scene:
+the order they are painted in is worked out from the buildings' real outlines. Rows
+of houses that touch at the same height are drawn as one block, roof lines and all,
+rather than a queue of overlapping boxes. Facades are lit by the sun's direction, so
+a wall facing it reads brighter than one turned away, and a wall in shade is lit by
+the sky alone.
+
+Shadows follow each building's true outline, including concave blocks and inner
+courtyards, and account for the roof rather than the walls alone. They no longer lie
+underneath the building casting them, they stop at the ground their neighbours stand
+on instead of running through them, and their fade no longer swings to the other
+side when you nudge the camera by a fraction of a degree.
+
+The display radius now tops out at **250 m**, which is as far as the ground beneath
+the buildings actually reaches. A card set higher than that settles at 250 m; before,
+the extra radius put buildings out past the edge of the map with nothing under them.
+
 ### Changed: a clearer default timeline
 
-The default in-card period is now **Forecast** (yesterday to two days ahead), a
-tighter window that reads better on a phone. The timeline and period-selector top
-borders take the active chip's colour, so the whole bar reads as one with the metric
-you are looking at.
+The default in-card period is now **Forecast** (today to two days ahead), a tighter
+window that reads better on a phone. The timeline and period-selector top borders
+take the active chip's colour, so the whole bar reads as one with the metric you are
+looking at. The timeline itself now sizes from the card's own height rather than its
+width, so it keeps its proportions whether the card is a squat tile on a dashboard
+or a tall one on a wall tablet, and it sits a little taller than before.
 
 ### Changed: focused translations
 
@@ -76,6 +98,13 @@ languages kept; any other language falls back to English.
 ### Fixed
 
 - Scene: left-click drag-rotate now works on Firefox (#306).
+- The basemap no longer vanishes after the card has sat in a background tab for a
+  while, leaving the buildings floating over nothing. It is repainted from memory
+  the moment the card comes back, which matters most on a wall tablet.
+- The building colour and the home colour now take a plain colour (`#ff0000`,
+  `rgb(...)`) as well as a Home Assistant colour name, like every other colour in
+  the editor. They previously accepted the name only, and silently ignored anything
+  else, leaving the buildings grey.
 - The irradiance tooltip shows the forecast value and its beam again (#305).
 - The dashed timeline lines (the solar forecast and the per-bank battery state of
   charge) now always draw their full length instead of stopping short until you

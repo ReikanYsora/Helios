@@ -6,7 +6,7 @@
 //(monitoringGroupColor / groupColorHex / monitoringGroupIcon) since they are dynamic (1..4, user-named).
 
 import type { HeliosConfig } from './helios-config';
-import { cssHex } from '../format/format';
+import { cssHex, resolveUiColor } from '../format/format';
 import { SUN_COLOR_HEX } from './constants';
 
 export type ChipSlot =
@@ -50,9 +50,7 @@ export function chipSlotColor(el: Element | null | undefined, config: HeliosConf
     const base = chipSlotBaseColor(el, slot);
     const raw  = (config as Record<string, unknown> | undefined)?.[CHIP_SLOTS[slot].colorKey as string];
     const token = typeof raw === 'string' ? raw.trim() : '';
-    if (!token) { return base; }
-    if (/^(#|rgb)/i.test(token)) { return token; }
-    return cssHex(el, `--${token}-color`, base);
+    return resolveUiColor(el, token, base);
 }
 
 //Resolve a slot's icon: the override when set, else `dynamicDefault` when the caller has a live-state glyph (grid

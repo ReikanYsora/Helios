@@ -92,6 +92,22 @@ function ringHeight(tags: Record<string, string | number>): number | null
     return typeof h === 'number' && Number.isFinite(h) && h > 0 ? h : null;
 }
 
+//Does this tile OWN the ring, i.e. does the ring's centroid fall inside the tile's own cell rather than in the
+//buffer? Tile-local coordinates run 0..extent across the cell, and buffered geometry sits outside that span.
+function tileOwnsRing(ring: number[][], extent: number): boolean
+{
+    let cx = 0;
+    let cy = 0;
+    for (const [px, py] of ring)
+    {
+        cx += px;
+        cy += py;
+    }
+    cx /= ring.length;
+    cy /= ring.length;
+    return cx >= 0 && cx < extent && cy >= 0 && cy < extent;
+}
+
 //Shoelace signed area of a ring in tile-local coordinates. Positive = exterior ring, negative = interior (hole).
 function ringSignedArea(ring: number[][]): number
 {
@@ -122,7 +138,8 @@ export async function fetchOfmBuildingRings(
     const perLon = METRES_PER_DEGREE * Math.cos(homeLat * DEG);
     const dLat   = radiusM / METRES_PER_DEGREE;
     const dLon   = radiusM / perLon;
-    //Tile index range spanning the home +/- radius bounding box (1-4 tiles at z14 for a 500 m radius).
+    //Tile index range spanning the home +/- radius bounding box. A z14 tile is ~2.4 km, so the 250 m maximum
+    //takes 1-4 tiles, fetched sequentially.
     const nw = lonLatToTile(homeLon - dLon, homeLat + dLat, z);
     const se = lonLatToTile(homeLon + dLon, homeLat - dLat, z);
     const x0 = Math.floor(nw.x);
@@ -158,6 +175,16 @@ export async function fetchOfmBuildingRings(
                             //signed area and an interior ring (a courtyard/atrium hole) a negative one; drawing the
                             //holes as prisms would litter the scene with phantom buildings.
                             if (ringSignedArea(ring) <= 0) { continue; }
+                            //Tile ownership. Every tile repeats its neighbours' geometry inside a ~37 m buffer, so
+                            //one building is delivered by up to four tiles: WHOLE by the tile it sits in, and CLIPPED
+                            //by the others (a straight cut along the buffer bound). Taking them all stacked a phantom
+                            //prism on top of the real building, which put a false wall across roofs at tile borders
+                            //and made faces flicker while the camera turned, since two coincident prisms have no
+                            //valid painter order. Keeping a ring only from the tile whose cell contains its centroid
+                            //delivers every building exactly once and whole, by construction. Measured on the real
+                            //tiles around the demo home: clipped footprints entering the scene 24 -> 0, overlapping
+                            //phantoms 40 -> 4. This is what tile renderers do; a buffer is for joins, not for drawing.
+                            if (!tileOwnsRing(ring, layer.extent)) { continue; }
                             rings.push({
                                 lonLat:  ring.map(([px, py]) =>
                                 {

@@ -81,6 +81,12 @@ or a fully custom per-layer colour + visibility configuration. The canvas is the
 with a single CSS `rotateX(pitch) rotateZ(bearing)` transform about the home's
 pixel position, so the ground reads as a plane viewed from an angle.
 
+The canvas is painted **once** and thereafter only transformed, never redrawn per
+frame. That is what makes it cheap, and also why the card repaints it from its
+cached features whenever it comes back from a pause: a browser is free to drop a
+canvas's backing store while a tab sits in the background, and nothing in the draw
+loop would ever put those pixels back.
+
 ### Camera + projection, `scene/projection.ts`
 
 `SceneCamera` is the keystone. All scene coordinates are **local metres relative
@@ -116,14 +122,45 @@ with no re-fetch. The home building(s) extrude opaque; the surroundings extrude 
 the configured opacity. Each footprint also casts a ground shadow from the current
 sun azimuth / altitude.
 
+Three passes turn raw tile rings into a scene that paints correctly:
+
+- **Tile ownership.** Every tile repeats its neighbours' geometry inside a ~37 m
+  buffer, so one building arrives from up to four tiles: whole from the tile it sits
+  in, clipped from the others. A ring is kept only by the tile whose cell contains
+  its centroid, which delivers each building exactly once and whole.
+- **Merge.** Touching blocks of equal height are unioned (`polygon-clipping`) into
+  one prism, keeping holes and inner roof lines, so a terrace is one solid block
+  rather than a row of overlapping boxes with party walls drawn between them.
+- **Paint order.** With no z-buffer, order is everything. For each pair of nearby
+  buildings a **separating plane** is sought between their real outlines; that plane
+  says which of the two is in front from the current eye point. The pairwise
+  relations are topologically sorted (Kahn) into the paint order. This is exact for
+  vertical prisms on a common ground plane, which is what the scene is.
+
+Walls are shaded by Lambert from the footprint's own winding: a face square on to
+the sun takes the lit tint, one turned away falls to the ambient (sky) tint.
+
 ### Sun + shadows, `core/time/sun.ts`, `scene/sun-arc.ts`
 
 `core/time/sun.ts` computes the solar position (altitude / azimuth) and the
 clear-sky irradiance (Haurwitz 1945 + Kasten-Czeplak 1980 cloud attenuation);
 `scene/sun-arc.ts` builds the arc geometry the card draws. The card uses these to
-drive the sun arc, the disc, and the shadow direction. Cast shadows are projected
-from the building footprints along the sun vector and painted as depth-sorted SVG
-polygons by the renderer; they fade as the sun nears the horizon.
+drive the sun arc, the disc, and the shadow direction. They fade as the sun nears
+the horizon.
+
+A cast shadow is the **exact swept envelope** of the footprint: the outline
+translated along the sun vector, plus one quad per edge (outer rings and courtyard
+rings alike), emitted as a single path per caster. Sweeping the real outline rather
+than hulling it matters as soon as blocks merge into concave shapes, since a hull
+fills the notch of an L. Every sub-path is wound the same way, because non-zero fill
+adds like windings and cancels opposing ones, and the projection flips winding.
+
+The shade layer is then clipped, in one operation, by a path holding the backdrop
+plus every building footprint under `clip-rule="evenodd"`, so no shadow lies on
+ground a building stands on (its own or a neighbour's) while courtyards still catch
+it. One clip, not a subtraction per shape: non-zero fill counts a winding NUMBER, and
+the sweep's pieces overlap most over the footprints, so a single reversed ring cannot
+bring the count to zero there.
 
 ---
 
@@ -220,8 +257,8 @@ charts and the timeline a consistent view regardless of cadence.
 ### Periods, `timeline/timeline-modes.ts`
 
 One spec per period drives the whole pipeline (store window, whether weather is
-available, the bucket cadence cap). The six periods are **Forecast** (yesterday to
-two days ahead), **Yesterday**, **Today**, **Week**, **Month** and **Year**, and all
+available, the bucket cadence cap). The six periods are **Forecast** (today to two
+days ahead), **Yesterday**, **Today**, **Week**, **Month** and **Year**, and all
 six drive the timeline. Yesterday is exactly the previous day; Today / Week / Month / Year
 end on today; Month and Year resolve their length from the previous calendar month
 / year. The store cadence and the recorder fetch period derive from the user's

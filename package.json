@@ -16,7 +16,8 @@
     "knip": "knip"
   },
   "dependencies": {
-    "lit": "^3.3.3"
+    "lit": "^3.3.3",
+    "polygon-clipping": "^0.15.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -27,7 +27,7 @@ import
     mapLayerColor,
     mapLayerVisible,
 } from '../core/config/helios-config';
-import { uiColorVar, isDarkFromCss, cssHex } from '../core/format/format';
+import { isDarkFromCss, cssHex, resolveUiColor } from '../core/format/format';
 
 
 //Module-scope cache for the RAW (option-independent) building footprints. HA re-creates the card element
@@ -586,14 +586,22 @@ export class HeliosEngine
         //Bootstrap the basemap + initial scene asynchronously, then mark ready and feed sun/buildings.
         this._bootstrapRenderer();
 
-        //Custom drag-rotate (left-click / one-finger). Bound to the container (the renderer's host). touch-action
-        //is pan-y so a vertical swipe still scrolls the dashboard page over the card; touch rotation arms only
-        //after a short press-hold (below), so a quick swipe scrolls while a deliberate hold-and-drag rotates. This
-        //replaces the old "lock the card to scroll past it" workaround.
+        //Custom drag-rotate. Bound to the container (the renderer's host). touch-action stays pan-y so a ONE-finger
+        //swipe still scrolls the dashboard page over the card, untouched and instant.
+        //
+        //Rotation is left-click on a pointer device, and TWO FINGERS on touch. Touch used to arm rotation after a
+        //press-hold, which fought the page for every gesture: hold too briefly and the card scrolled away under
+        //you, hold long enough and the scroll you actually wanted was swallowed. A timer cannot tell "rotate" from
+        //"scroll" because both start as one finger going down; the user has to say which, and two fingers say it
+        //instantly and unambiguously. Nothing else claims two fingers here (pan-y rules out pinch-zoom), so there
+        //is no delay, no threshold, and no gesture to steal back.
+        //
+        //Two fingers drive the scene by their MIDPOINT, so the maths below is the mouse's, unchanged: same
+        //direction, same sensitivity, same feel.
         container.style.touchAction = 'pan-y';
         //Firefox starts a native text/image drag on a left-mouse press over the canvas, which swallows the follow-up
         //pointermove stream so the scene never rotates (Chrome is lenient). Suppressing selection + the drag default
-        //(preventDefault in onDown below) keeps the gesture ours. Touch is unaffected (touch-action already none).
+        //(preventDefault in onDown below) keeps the gesture ours.
         container.style.userSelect = 'none';
         (container.style as unknown as { webkitUserSelect: string }).webkitUserSelect = 'none';
 
@@ -601,92 +609,33 @@ export class HeliosEngine
         //Vertical drag drives pitch (down = flatter, up = bird's-eye). Bounds from the module CAMERA_PITCH_*
         //constants so this stays in sync with every other pitch entry point.
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
-        //Touch only: rotation arms after this press-hold with the finger roughly still; a swipe that moves further
-        //than the cancel threshold before then is treated as a page scroll and released to the browser.
-        const TOUCH_ROTATE_HOLD_MS   = 220;
-        const TOUCH_SCROLL_CANCEL_PX = 10;
-        let dragRotating  = false;
-        let lastPointerX  = 0;
-        let lastPointerY  = 0;
-        let downX         = 0;
-        let downY         = 0;
+
+        let dragRotating = false;
+        let lastX        = 0;
+        let lastY        = 0;
+        //Pointer device (mouse / pen): the single pointer that owns the drag.
         let activeId: number | null = null;
-        //Pending touch press-hold timer (set between pointerdown and rotation arming); cleared on move-cancel/up.
-        let holdTimer: number | undefined;
+        //Touch: every finger currently down. Rotation runs while at least two are.
+        const fingers = new Map<number, { x: number; y: number }>();
 
-        const onDown = (e: PointerEvent) =>
+        const fingerMidpoint = (): { x: number; y: number } =>
         {
-            //Mouse: left button only. Touch / pen: always start.
-            if (e.pointerType === 'mouse' && e.button !== 0)
-            {
-                return;
-            }
-            //Single-pointer rotation; ignore additional touches.
-            if (activeId !== null)
-            {
-                return;
-            }
-            //The camera lock pins the scene pose. Re-checked per pointerdown so a toggle disengages immediately.
-            if (this.isCameraLocked())
-            {
-                return;
-            }
-            activeId     = e.pointerId;
-            lastPointerX = e.clientX;
-            lastPointerY = e.clientY;
-            downX        = e.clientX;
-            downY        = e.clientY;
-            this._autoRotateLastUserAction = Date.now();
-
-            if (e.pointerType === 'touch')
-            {
-                //Defer rotation so a swipe still scrolls: arm only after a short hold. Don't preventDefault or
-                //capture yet, so the browser is free to scroll if the finger moves before the hold elapses.
-                dragRotating = false;
-                holdTimer = window.setTimeout(() =>
-                {
-                    holdTimer = undefined;
-                    if (activeId === null) { return; }
-                    dragRotating = true;
-                    try { container.setPointerCapture(activeId); }
-                    catch (_) { /* pointer capture unsupported on this element */ }
-                }, TOUCH_ROTATE_HOLD_MS);
-                return;
-            }
-
-            //Mouse / pen: rotate immediately. Claim the gesture: stop Firefox's native drag/selection so the
-            //pointermove stream keeps coming.
-            e.preventDefault();
-            dragRotating = true;
-            try { container.setPointerCapture(e.pointerId); }
-            catch (_) { /* pointer capture unsupported on this element */ }
+            let sx = 0;
+            let sy = 0;
+            for (const f of fingers.values()) { sx += f.x; sy += f.y; }
+            const n = fingers.size || 1;
+            return { x: sx / n, y: sy / n };
         };
-        const onMove = (e: PointerEvent) =>
+
+        //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
+        //two can never drift apart in direction or sensitivity.
+        const applyDrag = (x: number, y: number): void =>
         {
-            if (e.pointerId !== activeId || !this._renderer)
-            {
-                return;
-            }
-            if (!dragRotating)
-            {
-                //Touch, hold not yet elapsed: a finger move past the threshold is a page scroll, not a rotate.
-                //Drop the pending rotation and release the gesture so the browser scrolls freely.
-                if (holdTimer !== undefined
-                    && (Math.abs(e.clientX - downX) > TOUCH_SCROLL_CANCEL_PX
-                        || Math.abs(e.clientY - downY) > TOUCH_SCROLL_CANCEL_PX))
-                {
-                    window.clearTimeout(holdTimer);
-                    holdTimer = undefined;
-                    activeId  = null;
-                }
-                return;
-            }
-            //Rotating: own the gesture so the browser doesn't also scroll (touch-action is pan-y).
-            e.preventDefault();
-            const dx = e.clientX - lastPointerX;
-            const dy = e.clientY - lastPointerY;
-            lastPointerX = e.clientX;
-            lastPointerY = e.clientY;
+            if (!this._renderer) { return; }
+            const dx = x - lastX;
+            const dy = y - lastY;
+            lastX = x;
+            lastY = y;
             this._autoRotateLastUserAction = Date.now();
             //Drag right turns the scene with the gesture (negate dx: +dx read inverted on the canvas plane).
             this._renderer.setCameraBearing(this._renderer.getCameraBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
@@ -695,28 +644,102 @@ export class HeliosEngine
                 this._renderer.getCameraPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
             this._renderer.setCameraPitch(nextPitch);
         };
-        const onEnd = (e: PointerEvent) =>
+
+        const onDown = (e: PointerEvent) =>
         {
-            if (e.pointerId !== activeId)
+            //The camera lock pins the scene pose. Re-checked per pointerdown so a toggle disengages immediately.
+            if (this.isCameraLocked())
             {
                 return;
             }
-            if (holdTimer !== undefined)
+            if (e.pointerType === 'touch')
             {
-                window.clearTimeout(holdTimer);
-                holdTimer = undefined;
+                fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                //A second finger means "rotate", said plainly. One finger is left entirely to the page.
+                if (fingers.size === 2)
+                {
+                    const m = fingerMidpoint();
+                    lastX = m.x;
+                    lastY = m.y;
+                    dragRotating = true;
+                    this._autoRotateLastUserAction = Date.now();
+                }
+                return;
             }
+            //Mouse: left button only.
+            if (e.pointerType === 'mouse' && e.button !== 0)
+            {
+                return;
+            }
+            if (activeId !== null)
+            {
+                return;
+            }
+            activeId = e.pointerId;
+            lastX    = e.clientX;
+            lastY    = e.clientY;
+            this._autoRotateLastUserAction = Date.now();
+            //Rotate immediately. Claim the gesture: stop Firefox's native drag/selection so the pointermove stream
+            //keeps coming.
+            e.preventDefault();
+            dragRotating = true;
+            try { container.setPointerCapture(e.pointerId); }
+            catch (_) { /* pointer capture unsupported on this element */ }
+        };
+
+        const onMove = (e: PointerEvent) =>
+        {
+            if (e.pointerType === 'touch')
+            {
+                const f = fingers.get(e.pointerId);
+                if (!f) { return; }
+                f.x = e.clientX;
+                f.y = e.clientY;
+                if (!dragRotating || fingers.size < 2) { return; }
+                //Own the gesture so the page does not scroll under a two-finger rotate.
+                e.preventDefault();
+                const m = fingerMidpoint();
+                applyDrag(m.x, m.y);
+                return;
+            }
+            if (e.pointerId !== activeId || !dragRotating) { return; }
+            e.preventDefault();
+            applyDrag(e.clientX, e.clientY);
+        };
+
+        const onEnd = (e: PointerEvent) =>
+        {
+            if (e.pointerType === 'touch')
+            {
+                if (!fingers.delete(e.pointerId)) { return; }
+                //Down to one finger: the rotation is over, but the remaining finger must NOT carry on rotating.
+                if (dragRotating && fingers.size < 2)
+                {
+                    dragRotating = false;
+                    this.persistCameraPose();
+                }
+                //Still two or more down: re-seat on the new midpoint, or losing a finger would jump the scene.
+                else if (dragRotating)
+                {
+                    const m = fingerMidpoint();
+                    lastX = m.x;
+                    lastY = m.y;
+                }
+                return;
+            }
+            if (e.pointerId !== activeId) { return; }
             const wasRotating = dragRotating;
             dragRotating = false;
             activeId     = null;
             try { container.releasePointerCapture(e.pointerId); }
             catch (_) { /* pointer capture may already be released */ }
-            //Persist the pose only if a rotation actually happened, so a tap or a scroll leaves storage untouched.
+            //Persist the pose only if a rotation actually happened, so a plain click leaves storage untouched.
             if (wasRotating)
             {
                 this.persistCameraPose();
             }
         };
+
         //Firefox starts a native drag on a left-mouse press over the canvas/SVG and, once it does, stops delivering
         //the pointermove stream, so the scene freezes mid-drag. preventDefault in onDown is not always enough there;
         //cancelling `dragstart` outright (it bubbles up from whatever child the press landed on) is what reliably
@@ -807,8 +830,7 @@ export class HeliosEngine
     //Resolve a stored map colour (a ui_color token or a raw #hex / rgb()) to a paintable colour.
     private _resolveMapColor(value: string, fallback: string): string
     {
-        if (/^(#|rgb)/i.test(value)) { return value; }
-        return cssHex(this._container, `--${value}-color`, fallback);
+        return resolveUiColor(this._container, value, fallback);
     }
 
     //The vector basemap style for the active config: 'auto' follows the HA theme, 'dark'/'light' force a
@@ -1013,7 +1035,7 @@ export class HeliosEngine
     //snapshot, so a building-colour change re-tints via _resolvePalette without a refetch.
     private _buildingColor(): string
     {
-        return cssHex(this._container, uiColorVar(buildingColorToken(this.cfg), 'grey'), '#9e9e9e');
+        return resolveUiColor(this._container, buildingColorToken(this.cfg), '#9e9e9e', 'grey');
     }
 
     //Location-keyed key for the raw fetch + shared cache. Options are deliberately absent: a building-option
@@ -1330,6 +1352,19 @@ export class HeliosEngine
     //IntersectionObserver gate: an off-screen/hidden-tab card calls setPaused(true) to stop the periodic
     //refresh and dome re-projection. Un-pause does one immediate refresh so the sun matches now, not where
     //it was when the card scrolled away.
+    //Repaint the vector ground from its cached features. No network, no re-tiling: the geometry is already in
+    //memory, this only re-runs the painter.
+    //
+    //Needed because the ground is a CANVAS painted ONCE, then only moved about by a CSS transform; the draw loop
+    //never touches its pixels. Browsers are free to drop a canvas's backing store while a tab sits in the
+    //background, and nothing here would ever put it back: the map came back blank while the SVG buildings, being
+    //DOM, survived untouched. That is the exact shape of the "left it on a wall tablet and the basemap vanished"
+    //report, and a wall tablet is precisely where a card sits idle for hours.
+    public repaintGround(): void
+    {
+        this._renderer?.setGroundStyle(this._groundStyle());
+    }
+
     public setPaused(paused: boolean): void
     {
         if (this._paused === paused)

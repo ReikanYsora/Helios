@@ -4,7 +4,7 @@
 
 import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, wattsAtFromChangeSeries, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
-import { cssHex } from '../../core/format/format';
+import { cssHex, resolveUiColor } from '../../core/format/format';
 import type { EnergyDefaults, DeviceConsumption } from './energy-prefs';
 import { monitoringGroups, hiddenDevices, monitoringGroupColorToken, GROUP_COUNT, GROUP_FALLBACK_COLORS, type HeliosConfig } from '../../core/config/helios-config';
 import { localMidnightMinusDays } from '../../core/time/timezone';
@@ -63,10 +63,7 @@ export function activeGroups(config: HeliosConfig | undefined, defaults: EnergyD
 export function groupColorHex(el: Element | null | undefined, config: HeliosConfig | undefined, group: number): string
 {
     const graphHex = cssHex(el, `--graph-color-${group}`, GROUP_FALLBACK_COLORS[(group - 1) % GROUP_FALLBACK_COLORS.length]);
-    const token = monitoringGroupColorToken(config, group);
-    if (!token)                  { return graphHex; }
-    if (/^(#|rgb)/i.test(token)) { return token; }
-    return cssHex(el, `--${token}-color`, graphHex);
+    return resolveUiColor(el, monitoringGroupColorToken(config, group), graphHex);
 }
 
 //Friendly name of a device: its dashboard name, else the entity's friendly name, else the stat id.

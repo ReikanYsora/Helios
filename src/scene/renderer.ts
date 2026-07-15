@@ -138,6 +138,17 @@ export class SceneRenderer
         this._ground         = built.ground;
         this._groundRepaint  = built.repaint;
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
+        //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
+        //pixels. A browser may drop a canvas's backing store while the page sits idle, and nothing here would put
+        //it back, so the basemap came back blank with the SVG buildings (being DOM) floating over nothing. The
+        //visibility hook covers a tab going away; this covers the case that has no visibility change at all, which
+        //is the wall-tablet one: the card stays "visible" while the screen sleeps. `contextrestored` is the
+        //browser saying exactly "I dropped your pixels, here is a fresh surface" -- repaint on the spot, from the
+        //cached features, no network.
+        built.ground.el.addEventListener('contextrestored', () =>
+        {
+            if (this._alive && this._groundStyleCur) { this.setGroundStyle(this._groundStyleCur); }
+        });
         this.scheduleRedraw();
     }
 
@@ -321,7 +332,7 @@ export class SceneRenderer
         //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
         this._sceneSvg.innerHTML =
             renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
-            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home);
+            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home, this._sun.azimuth);
 
         this.onAfterDraw?.();
     }

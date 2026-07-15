@@ -4,7 +4,7 @@
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
 import { homeColor, type HeliosConfig } from '../core/config/helios-config';
-import { cssHex, uiColorVar } from '../core/format/format';
+import { resolveUiColor } from '../core/format/format';
 import { HeliosEngine } from '../scene/helios-engine';
 import { refreshHud, setAnimationsPaused, type HudHost } from '../hud/hud';
 import type { ChartSeries } from '../charts/charts';
@@ -27,7 +27,7 @@ export function publishConsumptionColor(host: ConsumptionColorHost): void
     if (homeToken !== host._homeColorToken)
     {
         host._homeColorToken = homeToken;
-        host.style.setProperty('--helios-consumption-color', cssHex(host, uiColorVar(homeToken, 'green'), '#4caf50'));
+        host.style.setProperty('--helios-consumption-color', resolveUiColor(host, homeToken, '#4caf50', 'green'));
     }
 }
 
@@ -229,12 +229,22 @@ export function initVisibilityObserver(host: InitHost): void
     //Combined paused state: off-screen (IntersectionObserver) OR tab hidden (Page Visibility). Either kills the heavy work.
     let intersecting = true;
     let wasTabHidden = false;
+    let wasPaused    = false;
     const applyState = () =>
     {
         const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
         const paused    = !intersecting || tabHidden;
         setAnimationsPaused(host, paused);
         host._engine?.setPaused(paused);
+        //Coming back from ANY pause, not just a tab returning: put the basemap back. It is a canvas painted once
+        //and thereafter only CSS-transformed, so a backing store the browser dropped while we were away would stay
+        //blank forever, leaving the SVG buildings floating over nothing. Cheap (cached features, no network) and
+        //only on a real return.
+        if (wasPaused && !paused)
+        {
+            host._engine?.repaintGround();
+        }
+        wasPaused = paused;
         //Tab just became visible. While hidden, refreshGrid/Pv/Battery can clear live values to null if hass momentarily
         //disconnected (HA does this on focus loss in some setups), and the card's reference-equality refresh gate then
         //short-circuits the next refresh (unchanged pointers). Force-invalidate the cache refs so the next render runs

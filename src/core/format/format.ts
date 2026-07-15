@@ -295,6 +295,33 @@ export function uiColorVar(token: string | undefined, fallbackToken: string): st
     return `--${t || fallbackToken}-color`;
 }
 
+//Resolve a user-set colour to something paintable: a literal (#hex / rgb()) passes straight through, anything else
+//is an HA ui_color token read off the live theme, and an unset one falls back.
+//
+//ONE resolver on purpose. This test used to be copy-pasted at each call site, and the copies drifted: chips, map
+//layers and monitoring groups took a #hex, while the building tint and the home colour did not. Those two wrapped
+//the value in a var() name whatever it was, so a hex became `var(--#ff0000-color)` -- meaningless, silently
+//discarded, and the building just stayed grey. Same config, same look to a user, different answer.
+export function resolveUiColor(
+    el:            Element | null | undefined,
+    token:         string | undefined,
+    fallbackHex:   string,
+    fallbackToken  = '',
+): string
+{
+    const t = (token ?? '').trim();
+    if (/^(#|rgb)/i.test(t))
+    {
+        return t;
+    }
+    //Nothing set and no token-level default: the caller's hex IS the answer.
+    if (!t && !fallbackToken)
+    {
+        return fallbackHex;
+    }
+    return cssHex(el, uiColorVar(t, fallbackToken), fallbackHex);
+}
+
 //Theme colour resolution for the card. Wherever a colour must be a concrete string (canvas chart fills, inline SVG
 //attributes) rather than a CSS var(), we resolve the live HA theme token off a host element's computed style, so a
 //user's custom theme flows through and we don't hardcode hex. A literal fallback covers an unset token.

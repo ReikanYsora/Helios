@@ -163,7 +163,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `display-radius` | 50-500 m | `200` | Distance around the home within which buildings and shadows render. The main perf lever on older phones. |
+| `display-radius` | 0-250 m | `200` | Distance around the home within which buildings and shadows render. The main perf lever on older phones. 250 m is as far as the ground under them reaches; 0 draws none. |
 | `building-count` | 10-100 | `50` | How many of the nearest buildings to keep around the home. |
 | `building-real-size` | boolean | `true` | Extrude buildings to their real OSM heights (capped). When `false`, every building uses the fixed `building-height` prism. |
 | `building-height` | 3-10 m | `6` | Fixed prism height used when `building-real-size` is `false`. |
@@ -227,7 +227,7 @@ Full algorithm + architecture details: see [ARCHITECTURE.md](./ARCHITECTURE.md).
 | **Basemap** | [OpenFreeMap](https://openfreemap.org/) vector tiles, rendered in-house (Auto / Dark / Light / Custom, no key) |
 | **Weather data** | [Open-Meteo API](https://open-meteo.com/) (free, no key, multi-model fusion) |
 | **Energy data** | Home Assistant Energy dashboard (recorder `change` metric + live states) |
-| **Buildings** | OpenStreetMap via [OpenFreeMap](https://openfreemap.org/) vector tiles |
+| **Buildings** | OpenStreetMap via [OpenFreeMap](https://openfreemap.org/) vector tiles, merged with [polygon-clipping](https://github.com/mfogel/polygon-clipping) |
 | **Solar math** | NOAA-validated |
 | **Build** | Vite |
 
@@ -242,7 +242,7 @@ npm run typecheck  # strict TS
 npm run build      # produces dist/helios.js
 ```
 
-The card is TypeScript-first and fully self-contained, a single `helios.js` bundle with no runtime dependency beyond Lit.
+The card is TypeScript-first and fully self-contained, a single `helios.js` bundle whose only runtime dependencies are Lit and polygon-clipping, both bundled in.
 
 Source layout:
 
@@ -292,6 +292,10 @@ HELIOS depends on several open data services. None require an account or API key
 * **[OpenStreetMap](https://www.openstreetmap.org/copyright)**, the map data behind the basemap and the building footprints (served as vector tiles by [OpenFreeMap](https://openfreemap.org/)). © OpenStreetMap contributors.
 * **[Open-Meteo](https://open-meteo.com/)**, weather forecasts (cloud cover, irradiance). Free, no key, multi-model fusion under the hood.
 * **Home Assistant Energy dashboard**, the single source of truth for solar / grid / battery wiring.
+
+Bundled into `helios.js` alongside [Lit](https://lit.dev/):
+
+* **[polygon-clipping](https://github.com/mfogel/polygon-clipping)** by Mike Fogel (MIT), the boolean polygon operations behind merging touching buildings of equal height into a single block.
 
 A heartfelt thank you to every user who tried Helios, filed an issue, suggested an idea or simply shared a screenshot. Your feedback is what shaped the direction the card has taken.
 
