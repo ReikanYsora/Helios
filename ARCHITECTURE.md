@@ -186,16 +186,37 @@ absolutely-positioned chips + SVG leaders at those coordinates. Each chip has a
 leader to the home with an animated **bead** whose direction and speed encode the
 live flow. Clicking a chip points the timeline at that metric.
 
-**Double-tapping a chip** opens a compact **detail panel** top-right
+**Tapping a chip** opens a compact **detail panel** top-right
 (`hud/detail-panel.ts`), tinted in the active chip's live colour: it aggregates
 that metric over the selected window as icon-only rows (total, peak, per-day
 average; import / export / net for grid; charged / discharged for battery flux;
 min / avg / max for SoC and per monitoring group; peak + average irradiance plus
 the astro rows for the sun). Values print in the card's configured unit. The panel is
-bound to the active chip, so a single tap on another chip re-points the chart and
-closes it; a second tap re-opens it for the new metric. Every figure is
-recomputed from the very series the bottom chart draws, so panel and curve always
-agree.
+bound to the active chip, so tapping another chip re-points it rather than closing
+it; a tap on the scene background is what dismisses it. Every figure is recomputed
+from the very series the bottom chart draws, so panel and curve always agree.
+
+**Re-tapping the already-active PV chip** raises the **day curve**
+(`scene/day-curve.ts`, data in `data/period-totals/day-profile.ts`): the scrubbed
+day's production, drawn as a line standing on the sun's own ground track around the
+home. That track is the sun arc projected straight down, so it is not a circle - the
+sun sits at `R x cos(altitude)` from the home, which pulls the track in at noon and
+out to the arc's own feet at sunrise and sunset. Every ground point is where the sun
+really stood at that moment, so position on the track carries the hour with no clock
+convention to agree on, and the southern hemisphere needs no mirroring. Each sample
+rises vertically off its own ground point; a dashed leader drops from the sun to the
+curve beneath it, with a bead where it lands. The day writes itself on from its own
+midnight when the curve is raised, and the chips that have nothing to do with
+production stand down while it is up. On today the forecast carries the curve past
+the present moment, dashed: the same line, only its certainty gives way.
+
+The curve is projected by the engine but rendered as a **HUD layer**, not scene
+geometry, and deliberately: `#map-container` is its own stacking context, so
+anything the renderer draws is pinned below the chips. Like the sun arc it is
+layered in two depth passes around them (far behind at z 5, near over at z 11),
+which also puts it clear of the buildings it would otherwise cut through. The engine
+stamps the radius on because it owns the arc scale, so the card hands over everything
+but that.
 
 ---
 
@@ -257,13 +278,20 @@ charts and the timeline a consistent view regardless of cadence.
 ### Periods, `timeline/timeline-modes.ts`
 
 One spec per period drives the whole pipeline (store window, whether weather is
-available, the bucket cadence cap). The six periods are **Forecast** (today to two
-days ahead), **Yesterday**, **Today**, **Week**, **Month** and **Year**, and all
-six drive the timeline. Yesterday is exactly the previous day; Today / Week / Month / Year
-end on today; Month and Year resolve their length from the previous calendar month
-/ year. The store cadence and the recorder fetch period derive from the user's
-data-detail setting, capped per period (long windows fall back to hourly, then
-daily, so a year never pulls a year of 5-minute rows).
+available, the bucket cadence cap). The five periods are **Forecast** (today to two
+days ahead), **Yesterday**, **Today**, **Week** and **Month**. Yesterday is exactly
+the previous day; Today / Week / Month end on today; Month resolves its length from
+the previous calendar month. The store cadence and the recorder fetch period derive
+from the user's data-detail setting, capped per period, with Month capped at hourly
+so a 31-day window never pulls a month of 5-minute rows.
+
+Month is the longest view, and the last one the **scene** can still speak for: its
+store stays hourly, so any day of it can be scrubbed to and read under that day's own
+sun. A Year period sat past it on a daily store, which carried no shape of a day at
+all: nothing the arc, the shadows or the curve could illustrate, 365 bars two pixels
+wide for the eye, and a second data path of its own to fetch an hourly profile the
+store could not provide. It said less than the Energy dashboard already says better,
+so it is gone and that path with it.
 
 ### Charts, `src/charts/`
 

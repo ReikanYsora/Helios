@@ -43,13 +43,14 @@ export interface Translations
     period?:
     {
         rangeLabel?: string; //'Time range' (aria-label on the selector group)
-        forecast?:   string; //'Forecast' (the J-1..J+2 rolling window: yesterday, today, two forecast days)
+        forecast?:   string; //'Forecast' (the J..J+2 rolling window: today and the two days ahead)
         yesterday?:  string; //'Yesterday'
         today?:      string; //'Today'
         week?:       string; //'1 week'
         month?:      string; //'1 month'
         year?:       string; //'1 year'
     };
+
 
     //The three cloud-cover band names shown in the timeline tooltip.
     cloudCover:

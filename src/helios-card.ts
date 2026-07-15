@@ -1,5 +1,5 @@
 import type { PropertyValues, TemplateResult} from 'lit';
-import { LitElement, html, nothing } from 'lit';
+import { LitElement, html, svg, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import type { HeliosEngine } from './scene/helios-engine';
@@ -12,12 +12,14 @@ import
     showDetailPanel,
     cacheId,
 } from './core/config/helios-config';
-import { refreshPeriodHourly, type PeriodHourly } from './data/period-totals/period-hourly';
+import { buildDayProfile, daySlots } from './data/period-totals/day-profile';
+import { buildSunGroundTrack, slotOfMs, type DayCurveInput, type DayCurvePass, type DayCurveScene, type SunTrackPoint } from './scene/day-curve';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './timeline/timeline-modes';
 import { pickTranslations } from './core/i18n';
+import { DAY_CURVE_SWEEP_MS } from './core/config/constants';
 import { heliosCardStyles } from './css/helios-card-scene-css';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
-import { setServerTimeZone } from './core/time/timezone';
+import { setServerTimeZone, serverMsOfDay } from './core/time/timezone';
 import { isDarkFromCss } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
 import
@@ -41,6 +43,7 @@ import
     onChartHoverLeave
 } from './charts/charts';
 import { renderDetailPanel } from './hud/detail-panel';
+import { refreshHud } from './hud/hud';
 import type { ArcSegment, SunScene, LabelLayout } from './hud/hud';
 import
 {
@@ -161,10 +164,6 @@ export class HeliosCard extends LitElement
         times:  Date[];
         values: number[];
     }[] = [];
-    //Decoupled hourly period profile (hour-of-day averages), built only for the detail panel on a sub-hourly
-    //store (month/year). Null otherwise (buildPeriodData then reads the store). _periodHourlyKey dedupes refetches.
-    @state() _periodHourly: PeriodHourly | null = null;
-    _periodHourlyKey = '';
     _batteryFetchKey  = '';
     _batteryFetching  = false;
     //Recorder change series for battery charge (stat_energy_to) + discharge (stat_energy_from) meters:
@@ -186,6 +185,9 @@ export class HeliosCard extends LitElement
     //Screen-space layout of the solar arc, sun and incidence ray. Recomputed via engine.projectSunScene()
     //on every map transform and periodic tick (sun moves with time).
     @state() _sunScene: SunScene | null = null;
+    //Day curve, projected by the engine and refreshed with the rest of the HUD. Two depth passes so the card can
+    //put the far half behind its chips and the near half over them, the way the sun arc does.
+    @state() _dayCurveScene: DayCurveScene | null = null;
 
     //Energy dashboard preferences snapshot. Subscribed at connectedCallback, updated on every HA
     //energy_preferences_updated event. Chip refresh helpers read their fallback entity from here.
@@ -203,10 +205,36 @@ export class HeliosCard extends LitElement
     //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
     //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
     @state() _chartTarget: ChartTarget = 'production';
-    //Detail panel (scene mode): a compact top-right readout aggregating the selected metric over the window. Opens
-    //on a single chip tap (alongside re-pointing the chart); re-tapping the active chip toggles it shut. Bound to
-    //the active chip, not a target, so switching chips while open just re-points it.
+    //Detail panel (scene mode): a compact top-right readout aggregating the selected metric over the window. Any
+    //chip tap opens it (alongside re-pointing the chart) and a tap on the scene closes it. Bound to the active
+    //chip, not a target, so switching chips while open just re-points it.
     @state() _infoPanelOpen = false;
+    //The day curve is the PV chip's second notch: it is UP or it is not, said by the user, not derived from which
+    //chip happens to be selected. Derived, it could not be dismissed - the PV chip is the default target, so a tap
+    //on the scene closed the detail panel and left the curve standing with nothing left to close it.
+    @state() _dayCurveOpen = false;
+    //Progress of the curve writing itself on, 0 .. 1. See _setDayCurveOpen.
+    @state() _dayCurveT = 0;
+    private _dayCurveRaf = 0;
+    //The day curve's heavy half, kept until the day it describes actually changes. Plain field, not @state: it is
+    //a cache of what _buildDayCurve would return, never a thing to render off.
+    private _dayCurveMemo?: {
+        dayStartMs: number;
+        target:     ChartTarget;
+        store:      unknown;
+        pv:         unknown;
+        perEntity:  unknown;
+        defaults:   unknown;
+        range:      unknown;
+        nowMin:     number;
+        lat:        number;
+        lon:        number;
+        slots:      number;
+        values:     (number | null)[];
+        predicted:  boolean[];
+        peak:       number;
+        base:       SunTrackPoint[];
+    };
     //"No UI" mode: true once the idle timer fires, hiding (fading) the timeline + controls; any input clears it.
     @state() private _uiHidden = false;
     private _uiHideTimer: number | undefined;
@@ -360,20 +388,28 @@ export class HeliosCard extends LitElement
     };
 
     //Chip click delegate: the clicked element carries its metric in data-target. A tap points the chart at the
-    //chip AND opens its detail panel; re-tapping the active chip re-points/keeps it open (never toggles shut).
+    //chip AND opens its detail panel.
+    //
+    //Re-tapping the ALREADY ACTIVE PV chip is the day curve's toggle. That gesture was doing nothing at all, so it
+    //costs no pixel, no new control and no reduced hit target - the whole chip stays the target, which matters on a
+    //phone, where a knob inside a 22 px pill would be a coin toss. It reads as what it is: "I am on production...
+    //now show me more".
     onChartTargetClick = (e: Event): void =>
     {
         const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
         if (!target) { return; }
+        if (target === 'production' && this._chartTarget === 'production')
+        {
+            this._setDayCurveOpen(!this._dayCurveOpen);
+        }
+        else
+        {
+            //Any other chip takes the scene back: the curve only ever speaks for production.
+            this._setDayCurveOpen(false);
+        }
         this.setChartTarget(target);
         //Any chip tap opens (or keeps open) the panel on that chip; closing is done elsewhere, not by re-tapping.
         this._infoPanelOpen = true;
-        //Opening the panel on a coarse (month/year) window needs the hourly period profile, which the scene does
-        //not otherwise fetch: kick it now so the totals resolve instead of showing empty.
-        if (this._infoPanelOpen)
-        {
-            void refreshPeriodHourly(this);
-        }
     };
 
     //Last target the home prism was painted for, so updated() can tell a chip CHANGE (play the squash/grow)
@@ -395,8 +431,155 @@ export class HeliosCard extends LitElement
         this._engine.setHomeAppearance(color, play);
     }
 
+    //Raise or lower the curve, writing it on from midnight round to midnight as the day itself runs. The sweep is
+    //driven here rather than in CSS because the scene SVG is rebuilt on every camera frame, and a CSS animation on
+    //a fresh element restarts with it: under auto-rotation it would stutter forever instead of playing once.
+    private _setDayCurveOpen(open: boolean): void
+    {
+        if (open === this._dayCurveOpen) { return; }
+        this._dayCurveOpen = open;
+        if (this._dayCurveRaf) { cancelAnimationFrame(this._dayCurveRaf); this._dayCurveRaf = 0; }
+        const to = open ? 1 : 0;
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+        {
+            this._dayCurveT = to;
+            return;
+        }
+        const from  = this._dayCurveT;
+        const start = performance.now();
+        //`step`, not `tick`: the module already exports a timeline tick and shadowing it here would read as that.
+        const step = (now: number): void =>
+        {
+            const x = Math.min(1, (now - start) / DAY_CURVE_SWEEP_MS);
+            //Ease-out on the leg being travelled: it leaves briskly and settles, rather than crawling then snapping.
+            //Setting the state is the whole step: it runs the normal update, which hands the engine the new sweep
+            //and refreshes the HUD off it. Calling refreshHud from here instead would re-project the sweep the
+            //engine was last GIVEN, not the one just set.
+            this._dayCurveT = from + (to - from) * (1 - (1 - x) ** 3);
+            this._dayCurveRaf = x < 1 ? requestAnimationFrame(step) : 0;
+        };
+        this._dayCurveRaf = requestAnimationFrame(step);
+    }
 
-    //Timeline mode selector: Forecast / Yesterday / Today / Week / Month / Year. The active mode is highlighted. Every
+    //Curve data for the engine to project. null means the PV chip is not the one selected, and nothing else: a
+    //window with nothing to plot still returns a curve, carrying peak 0, because "no chip asked for me" and "the
+    //sun did not shine" are different answers and only the first should retire the whole thing.
+    //
+    //The metric is a parameter, not a decision baked in here: everything below reads `target`, so pointing the
+    //curve at another chip is a matter of what is passed in. Production is simply the only one wired up today.
+    private _buildDayCurve(target: ChartTarget = 'production'): DayCurveInput | null
+    {
+        if (!this._dayCurveOpen && this._dayCurveT <= 0) { return null; }
+        const coords = getHomeCoords(this.config, this.hass);
+        if (!coords) { return null; }
+        const shownMs = (this._selectedTime ?? new Date()).getTime();
+
+        //Everything below speaks for the day ON SHOW: the values, the sun track under them, and the sun's own
+        //position along it. A scrub into another day rebuilds all three together, so they can never describe
+        //different days.
+        //
+        //But NOT on every frame of that scrub. The profile walks the whole store and the track works out a sun
+        //position per slot, and dragging across an afternoon was rebuilding both sixty times a second to answer a
+        //question whose answer had not changed. Only the sun's own place along the track moves, so only that is
+        //recomputed below.
+        //
+        //The key is everything the two of them READ, and nothing less. `_now` is in it because today's profile is
+        //cut at the present moment (coverage stops there, the forecast starts there), so the boundary is not a
+        //property of the day alone. `_energyDefaults` is in it because the meters it names decide the layer split.
+        //`_timeRange` is in it because its absence makes the profile come back empty, and a memo of that emptiness
+        //would outlive the range's arrival.
+        const m = this._dayCurveMemo;
+        const fresh = m !== undefined
+            && m.dayStartMs === shownMs - serverMsOfDay(shownMs)
+            && m.target     === target
+            && m.store      === this._unifiedStore
+            && m.pv         === this._pvChangeSeries
+            && m.perEntity  === this._pvChangeSeriesPerEntity
+            && m.defaults   === this._energyDefaults
+            && m.range      === this._timeRange
+            && m.nowMin     === Math.floor(this._now.getTime() / 60_000)
+            && m.lat        === coords.lat
+            && m.lon        === coords.lon
+            && m.slots      === daySlots(this.config);
+        if (!fresh)
+        {
+            const profile = buildDayProfile(this, target, shownMs);
+            const slots   = profile.values.length;
+            this._dayCurveMemo = {
+                dayStartMs: shownMs - serverMsOfDay(shownMs),
+                target,
+                store:     this._unifiedStore,
+                pv:        this._pvChangeSeries,
+                perEntity: this._pvChangeSeriesPerEntity,
+                defaults:  this._energyDefaults,
+                range:     this._timeRange,
+                //The minute, not the millisecond: the profile is cut at `now`, and `_now` only ticks once a minute
+                //anyway. A raw timestamp would miss on every single call and the memo would be decoration.
+                nowMin:    Math.floor(this._now.getTime() / 60_000),
+                lat:       coords.lat,
+                lon:       coords.lon,
+                slots,
+                values:    profile.values,
+                predicted: profile.predicted,
+                peak:      profile.peak,
+                base:      buildSunGroundTrack(shownMs, coords.lat, coords.lon, slots),
+            };
+        }
+        const kept = this._dayCurveMemo!;
+        return {
+            values:    kept.values,
+            predicted: kept.predicted,
+            peak:      kept.peak,
+            //The card's one rule for a metric's colour, asked about `target` rather than the active chip. Cheap,
+            //and it must track a live theme flip, so it stays outside the memo.
+            colour:  chartAccentColor(this, target),
+            base:    kept.base,
+            sunSlot: slotOfMs(shownMs, kept.slots),
+            sweep:   this._dayCurveT,
+        };
+    }
+
+
+
+    //One depth pass of the day curve. Lit builds every element and sets every attribute, so the metric's colour
+    //lands in an attribute slot where it is a string and nothing else - and Lit diffs `d` and `stroke-width`
+    //against the DOM it already made, instead of an SVG string being re-parsed from scratch every camera frame.
+    //
+    //All the outlines before all the lines: an outline is a fatter stroke UNDER its own span, so interleaving them
+    //lets each one lie over its neighbour's line.
+    private _renderDayCurvePass(pass: DayCurvePass, colour: string): unknown
+    {
+        return svg`
+            ${pass.foot ? svg`<path class="helios-day-curve-foot" d=${pass.foot} fill="none"></path>` : nothing}
+            ${pass.risers ? svg`<path class="helios-day-curve-riser" d=${pass.risers} fill="none"></path>` : nothing}
+            ${pass.spans.map(s => svg`
+                <path class="helios-day-curve-outline" d=${s.d} fill="none" stroke-width=${s.w + 1.2}></path>
+            `)}
+            ${pass.spans.map(s => svg`
+                <path
+                    class="helios-day-curve-line ${s.predicted ? 'is-predicted' : ''}"
+                    d=${s.d}
+                    fill="none"
+                    stroke=${colour}
+                    stroke-width=${s.w}
+                ></path>
+            `)}
+            ${pass.leader ? svg`
+                <line
+                    class="helios-day-curve-leader"
+                    x1=${pass.leader.x1} y1=${pass.leader.y1}
+                    x2=${pass.leader.x2} y2=${pass.leader.y2}
+                    stroke=${colour}
+                ></line>
+            ` : nothing}
+            ${pass.bead ? svg`
+                <circle class="helios-day-curve-bead" cx=${pass.bead.x} cy=${pass.bead.y} r="3" fill=${colour}></circle>
+            ` : nothing}
+        `;
+    }
+
+
+    //Timeline mode selector: Forecast / Yesterday / Today / Week / Month. The active mode is highlighted. Every
     //mode is available (the detail panel aggregates a multi-day period by hour-of-day).
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
@@ -408,7 +591,6 @@ export class HeliosCard extends LitElement
             today:     t.period?.today     ?? 'Today',
             week:      t.period?.week      ?? 'Week',
             month:     t.period?.month     ?? 'Month',
-            year:      t.period?.year      ?? 'Year',
         };
         return html`
             <div
@@ -506,10 +688,8 @@ export class HeliosCard extends LitElement
         this._deviceChangeFetch.reset();
         this._irradianceHistory           = null;
         this._irradianceFetchKey          = '';
-        //Drop the derived period profile + unified store so the next paint rebuilds them from the refetched
-        //series rather than the data the user just cleared.
-        this._periodHourly                = null;
-        this._periodHourlyKey             = '';
+        //Drop the unified store so the next paint rebuilds it from the refetched series rather than from the data
+        //the user just cleared.
         this._unifiedStore                = null;
         //Drop the module-level caches too, else the next refresh rehydrates from the cross-mount cache with
         //the exact stale entry the user just cleared.
@@ -748,6 +928,34 @@ export class HeliosCard extends LitElement
             this.updateHomeAppearance(_changedProperties.has('_chartTarget'));
         }
 
+        //Day curve. One pass over the day's slots off data already in hand, so the gate below is only to keep it
+        //off the auto-rotate reprojection path, which touches none of these. `_selectedTime` is in it because the
+        //scrub moves the sun: its leader follows, and a scrub onto another day rebuilds the ground track under the
+        //new arc.
+        if (this._engine
+            && (_changedProperties.has('_dayCurveOpen')
+                //Everything the curve reads has to be able to wake it. `_now` carries the cut at the present
+                //moment, `_energyDefaults` the meters behind the layer split, `_timeRange` the window whose
+                //absence makes the profile empty.
+                || _changedProperties.has('_now')
+                || _changedProperties.has('_energyDefaults')
+                || _changedProperties.has('_timeRange')
+                //The sweep is CARRIED to the engine in the curve's data, so every step of it has to come back
+                //through here. Left out, the engine kept whichever sweep happened to be current the last time
+                //something else in this list moved - which was 0 the instant the animation started, so the curve
+                //never appeared, and 1 by the time it was switched off, so it appeared then instead. The states
+                //were not inverted: the sweep was one gate behind, permanently.
+                || _changedProperties.has('_dayCurveT')
+                || _changedProperties.has('_chartTarget')
+                || _changedProperties.has('_unifiedStore')
+                || _changedProperties.has('_timelineMode')
+                || _changedProperties.has('_selectedTime')
+                || _changedProperties.has('_engine')))
+        {
+            this._engine.setDayCurve(this._buildDayCurve());
+            refreshHud(this);
+        }
+
         //Lazy Energy WS subscribe: HA can attach hass after connectedCallback, where the connect-time call
         //bailed without callWS. The helper is idempotent (checks _energyPrefsUnsub), so re-calling is safe.
         if (this.hass && !this._energyPrefsUnsub)
@@ -856,9 +1064,6 @@ export class HeliosCard extends LitElement
         //Per-device consumption series for the monitoring groups (fire-and-forget; keyed so an unchanged id-set +
         //window is a no-op; clears itself when no device is grouped).
         refreshDeviceConsumption(this);
-        //Decoupled hourly period profile: only does work for the detail panel on a long (month/year) window;
-        //clears itself otherwise. Keyed so an unchanged window is a no-op.
-        void refreshPeriodHourly(this);
         //Solar forecast: read natively from HA's Energy dashboard (energy/solar_forecast). Non-fatal; with
         //no forecast source configured the call returns empty and the curve doesn't render. On the refresh
         //chain (which energy-prefs changes re-trip), so a freshly configured source lands next pass.
@@ -1020,6 +1225,18 @@ export class HeliosCard extends LitElement
 
                 ${hud}
 
+                <!--  Day curve, in two depth passes around the chip cluster, exactly as the solar arc is layered:
+                      the far half behind them (z 5), the near half over the top (z 11). Above the buildings either
+                      way, because it is a reading of the data and not a wall standing in the street.  -->
+                ${this._dayCurveScene ? html`
+                    <svg class="helios-day-curve-svg helios-day-curve-far">
+                        ${this._renderDayCurvePass(this._dayCurveScene.far, this._dayCurveScene.colour)}
+                    </svg>
+                    <svg class="helios-day-curve-svg helios-day-curve-near">
+                        ${this._renderDayCurvePass(this._dayCurveScene.near, this._dayCurveScene.colour)}
+                    </svg>
+                ` : nothing}
+
                 <!--  Per-chip detail panel: tapping a chip aggregates its metric over the window in a compact
                       top-right readout (icons only, values in the card's unit).  -->
                 ${infoOpen && hasHomeCoords && showDetailPanel(this.config) ? renderDetailPanel(this) : nothing}
@@ -1070,6 +1287,8 @@ export class HeliosCard extends LitElement
         if (!p) { return; }
         if (Math.hypot(p.x - this._sceneTapStartX, p.y - this._sceneTapStartY) > 10) { return; }
         if (this._infoPanelOpen) { this._infoPanelOpen = false; }
+        //One gesture, one rule: a tap on the scene puts away everything a chip tap put up.
+        this._setDayCurveOpen(false);
     };
 
     //Unified store refresh: short-circuits when the host store matches the current data version (hash

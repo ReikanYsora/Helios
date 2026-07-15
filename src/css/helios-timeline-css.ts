@@ -31,10 +31,10 @@ export const heliosTimelineStyles = css`
             percentage here resolves against the card's own height. That is what cqh would have given, without
             switching the card to container-type:size -- which applies size containment, and the card's height is
             already documented as collapsing under layouts that give it none.
-            The range sits a notch above what the chart used to produce (it was 36+18 .. 72+18): the curves were
-            reading cramped at every size, so the floor, the share and the ceiling all move up together and the bar
-            is taller than before whatever room it is given, rather than only at one end of the range. */
-        height: clamp(60px, 20%, 100px);
+            The range deliberately REPRODUCES what the chart used to produce (36+18 .. 72+18): the point of this
+            rule is that the bar tracks the card's height instead of ignoring it, not that it grew. It was tried a
+            notch taller and put back, because the scene needs the room more than the curves do. */
+        height: clamp(54px, 18%, 90px);
         display: flex;
         flex-direction: column;
         gap: 6px;

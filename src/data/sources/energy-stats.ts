@@ -148,19 +148,6 @@ export function mergeChangeSeries(byId: Record<string, ChangeBucket[]>, ids: str
 }
 
 
-//Fetch the summed `change` series for a set of statistic ids: one WS call via fetchChangeById, then merge.
-//Null on empty ids, no hass, or rejection so callers fall back to their previous series.
-export async function fetchChangeSeries(
-    hass:         any,
-    statisticIds: string[],
-    startMs:      number,
-    endMs:        number,
-    period:       StatPeriod = '5minute',
-): Promise<ChangeBucket[] | null>
-{
-    const byId = await fetchChangeById(hass, statisticIds, startMs, endMs, period);
-    return byId === null ? null : mergeChangeSeries(byId, statisticIds);
-}
 
 
 

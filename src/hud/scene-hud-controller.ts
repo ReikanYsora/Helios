@@ -176,10 +176,15 @@ export class SceneHudController
         //Per-chip visibility from the "Entity display" config (each defaults visible). Home visibility (the
         //neutral-ring swap) is handled separately at the home pill.
         const cfg = this.host.config;
-        const showChipIrradiance = chipVisible(cfg, 'chip-irradiance-visible');
+        //Day curve up: the chips that have nothing to do with production stand down, so the curve is read against
+        //the house rather than through a cluster of unrelated numbers. PV stays - it is the chip that raised the
+        //curve, and the toggle has to remain under the finger that pressed it - and so does the home, which the
+        //whole scene is anchored on.
+        const curveOn = this.host._dayCurveOpen;
+        const showChipIrradiance = !curveOn && chipVisible(cfg, 'chip-irradiance-visible');
         const showChipProduction = chipVisible(cfg, 'chip-production-visible');
-        const showChipGrid       = chipVisible(cfg, 'chip-grid-visible');
-        const showChipBattery    = chipVisible(cfg, 'chip-battery-visible');
+        const showChipGrid       = !curveOn && chipVisible(cfg, 'chip-grid-visible');
+        const showChipBattery    = !curveOn && chipVisible(cfg, 'chip-battery-visible');
         //Irradiance chip colour (the W/m² readout above the sun); overridable, resolved through the central table.
         const irradChipColor     = chipSlotColor(this.host, cfg, 'irradiance');
         //Home chip hidden: the central pill collapses to a hollow ring sized to the same docking outline, so the
@@ -190,7 +195,7 @@ export class SceneHudController
         //so even the hollow ring is dropped, leaving just the sun + location (a solar-position card for non-energy
         //uses, e.g. a shutter/climate page keyed on the sun). Config-driven so it stays stable across scrubbing.
         const anyOtherChipVisible = showChipIrradiance || showChipProduction || showChipGrid || showChipBattery
-            || activeGroups(this.host.config, this.host._energyDefaults).some(g => groupChipVisible(cfg, g));
+            || (!curveOn && activeGroups(this.host.config, this.host._energyDefaults).some(g => groupChipVisible(cfg, g)));
         const showHomeElement    = !homeHidden || anyOtherChipVisible;
 
         //PV production chip above the home, tied to it by an animated leader. Only renders when the HA
@@ -469,7 +474,7 @@ export class SceneHudController
         const groupScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
         //Group consumption has no forecast, so scrubbing into the future hides the group chips (and their leaders)
         //entirely, the same way the PV chip drops out of a future scrub with no prediction (pvScrubFuture above).
-        const activeGroupList = (layout && !pvScrubFuture)
+        const activeGroupList = (layout && !pvScrubFuture && !curveOn)
             ? activeGroups(this.host.config, this.host._energyDefaults).filter(g => groupChipVisible(cfg, g))
             : [];
         const groupCount      = activeGroupList.length;
@@ -711,8 +716,8 @@ export class SceneHudController
 
                 ${showPvLabel ? html`
                     <div
-                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${interactive && this.host._chartTarget === 'production' ? 'is-chart-active' : ''}"
-                        style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
+                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${interactive && this.host._chartTarget === 'production' ? 'is-chart-active' : ''} ${this.host._dayCurveOpen ? 'is-curve-on' : ''}"
+                        style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}; --chip-color:${pvColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="production"

@@ -198,6 +198,22 @@ export const METRES_PER_DEGREE   = 111_320;
 //SVG namespace for the scene's screen-space overlay.
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
+//=== Day curve ===
+//One scrubbed day of a metric, drawn round the home on the sun's own ground track for that day (see
+//scene/day-curve.ts). There is no radius constant: the track IS the sun arc projected down, so it already stands
+//on the arc's two ground crossings and closes in on the home as the sun climbs.
+//
+//The height is a fraction of that track's radius rather than a fixed metre count. The arc scale tracks the card's
+//size, so fixed metres would flatten the curve into a pancake on a large card and tower over it on a small one; a
+//fraction holds the shape at every size, which is what the arc already does for itself. Kept well under 1 so the
+//curve reads UNDER the sun's path instead of fighting it.
+export const DAY_CURVE_HEIGHT_FRAC = 0.58;
+//Shortest run of covered slots that still draws. A window that has only just opened (today, a minute after
+//midnight) covers one slot, and one point is a spike, not a curve.
+export const DAY_CURVE_MIN_RUN = 3;
+//How long the curve takes to write itself on when the PV chip's second notch is pressed.
+export const DAY_CURVE_SWEEP_MS = 700;
+
 //=== Renderer shadows ===
 //Shadows fade to full at SHADOW_FADE_DEG above the horizon; cast length is capped at MAX_SHADOW_M so a
 //low sun doesn't streak a shadow across the whole disc.

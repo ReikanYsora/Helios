@@ -6,36 +6,30 @@
 
 import type { StatPeriod } from '../data/sources/energy-stats';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../core/config/helios-config';
-import { DAY_MS } from '../core/config/constants';
 
-export type TimelineMode = 'forecast' | 'yesterday' | 'today' | 'week' | 'month' | 'year';
+export type TimelineMode = 'forecast' | 'yesterday' | 'today' | 'week' | 'month';
 
 export interface TimelineModeSpec
 {
-    //Days of history in the window. A function for month/year: the window length tracks the PREVIOUS calendar
-    //month/year (so a 31-day month shows 31 days), always ending today.
+    //Days of history in the window. A function for month: the window length tracks the PREVIOUS calendar month (so
+    //a 31-day month shows 31 days), always ending today.
     pastDays:    number | (() => number);
     futureDays:  number;       //days of forecast (forecast mode only; the "past" modes end today, no forecast)
     weather:     boolean;      //irradiance + cloud available (Open-Meteo forecast only reaches ~16 days)
-    //Cap on store buckets/hour for this window: short windows honour the user's setting fully; month is capped
-    //at hourly and year at daily so a long window can't pull a year of 5-min rows.
+    //Cap on store buckets/hour for this window: short windows honour the user's setting fully; month is capped at
+    //hourly so a 31-day window can't pull a month of 5-min rows.
     maxBucketsPerHour: number;
 }
 
 //Order shown in the selector, left -> right.
-export const TIMELINE_MODE_ORDER: TimelineMode[] = ['forecast', 'yesterday', 'today', 'week', 'month', 'year'];
+export const TIMELINE_MODE_ORDER: TimelineMode[] = ['forecast', 'yesterday', 'today', 'week', 'month'];
 
-//Day count of the calendar month / year BEFORE the current one, so the month/year windows match the previous
-//period's real length and end on today.
+//Day count of the calendar month BEFORE the current one, so the month window matches its real length and ends
+//on today.
 function daysInPrevMonth(): number
 {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 0).getDate();
-}
-function daysInPrevYear(): number
-{
-    const y = new Date().getFullYear() - 1;
-    return (Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1)) / DAY_MS;
 }
 
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
@@ -48,8 +42,12 @@ export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
     yesterday: { pastDays: 1,                           futureDays: -1, weather: true, maxBucketsPerHour: 12   },
     today:     { pastDays: 0,                           futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     week:     { pastDays: 6,                            futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
+    //Month is the long view, and the last one the SCENE can still speak for: its store stays hourly, so any day of
+    //it can be scrubbed to and read under that day's own sun. A year mode used to sit past it on a DAILY store,
+    //which carried no shape of a day at all - nothing the arc, the shadows or the curve could illustrate, and 365
+    //bars two pixels wide for the eye. It needed a whole second data path of its own to say less than the Energy
+    //dashboard already says better, so it is gone and the path with it.
     month:    { pastDays: () => daysInPrevMonth() - 1,  futureDays: 0, weather: false, maxBucketsPerHour: 1    },
-    year:     { pastDays: () => daysInPrevYear() - 1,   futureDays: 0, weather: false, maxBucketsPerHour: 1 / 24 },
 };
 
 //Resolved window lengths (resolves the month/year functions to a concrete day count for today).
@@ -71,7 +69,7 @@ export function modeBucketsPerHour(mode: TimelineMode, config: HeliosConfig | un
 }
 
 //Recorder period for the energy change-series, derived from the resolved cadence so each store bucket always
-//contains whole source buckets: sub-hourly cadence -> '5minute', hourly -> 'hour', daily -> 'day'.
+//contains whole source buckets: sub-hourly cadence -> '5minute', hourly -> 'hour'.
 export function modeFetchPeriod(mode: TimelineMode, config: HeliosConfig | undefined): StatPeriod
 {
     const bph = modeBucketsPerHour(mode, config);

@@ -64,21 +64,24 @@ function offsetMs(ms: number): number
     return off;
 }
 
-//Fractional hour-of-day [0, 24) of an instant, in the home zone (browser zone until one is set).
-export function serverHourFrac(ms: number): number
+//Integer millisecond-of-day [0, DAY_MS) of an instant, in the home zone (browser zone until one is set).
+//
+//Anything binning a day into slots must come through here rather than through the fractional hour below. Dividing
+//a whole day into an EXACT number of slots is integer arithmetic; going via hours makes it floating point, and a
+//slot that is not a binary-friendly fraction of an hour (20 min, 12 min, 10 min) then lands its boundaries just
+//under the integer they should be. floor() drops to the previous slot, which swallows two samples while its
+//neighbour gets none - a hole in whatever is being binned, at some slot counts and not others.
+export function serverMsOfDay(ms: number): number
 {
     if (!_fmt)
     {
         const d = new Date(ms);
-        return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+        return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
     }
     const wall = ms + offsetMs(ms);
-    return (((wall % DAY_MS) + DAY_MS) % DAY_MS) / HOUR_MS;
+    return ((wall % DAY_MS) + DAY_MS) % DAY_MS;
 }
 
-//Integer hour-of-day [0, 23] of an instant, in the home zone.
-export function serverHour(ms: number): number
-{
-    //serverHourFrac is already in [0, 24), so the floor is in [0, 23]; no wrap needed.
-    return Math.floor(serverHourFrac(ms));
-}
+
+
+

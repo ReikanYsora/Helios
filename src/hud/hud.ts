@@ -3,6 +3,7 @@
 //"flow duration" easing that ramps animation speed with the live production rate.
 
 import type { HeliosEngine } from '../scene/helios-engine';
+import type { DayCurveScene } from '../scene/day-curve';
 import { EQ_EPS_PX } from '../core/config/constants';
 import { arcColor } from '../core/render-kit/colors';
 
@@ -64,6 +65,8 @@ export interface HudHost
 
     _labelLayout:     LabelLayout | null;
     _sunScene:        SunScene | null;
+    //The day curve, already projected, as the two depth passes the card layers around its chips. null when off.
+    _dayCurveScene:   DayCurveScene | null;
 
     readonly shadowRoot: ShadowRoot | null;
     readonly classList:  DOMTokenList;
@@ -192,6 +195,10 @@ export function refreshHud(host: HudHost): void
     {
         host._sunScene = nextSun;
     }
+
+    //The day curve rides the same refresh as the rest of the HUD, for the same reason: it is projected through the
+    //camera, so it has to be redrawn on every map transform or it slides off the scene under it.
+    host._dayCurveScene = host._engine?.projectDayCurve(t) ?? null;
 }
 
 

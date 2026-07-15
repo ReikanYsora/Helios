@@ -240,13 +240,82 @@ export const heliosCardStyles = css`
         opacity: 1;
     }
 
-    /*  ============================================================
-        Per-chip detail panel (scene mode). Double-tapping the active
-        chip opens this compact, vertical readout top-right, tinted in
-        the selection colour (--detail-accent, set inline). Icons only,
-        values in the card's configured unit. Kept narrow so it never
-        crowds a small card.
-        ============================================================ */
+    /*  Day curve in two depth passes around the chip cluster, mirroring the solar arc's own layering: far half
+        behind the chips (z 5, same as .solar-svg-front-far), near half over them (z 11). Both sit above the scene
+        (z 1), so no building can cut through the curve: it is a reading of the data, like the arc, not something
+        standing in the street. */
+    .helios-day-curve-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+    }
+    .helios-day-curve-far  { z-index: 5;  }
+    .helios-day-curve-near { z-index: 11; }
+
+    /*  PV chip with the day curve up: its second notch, pressed. The chip is an outline in the metric's colour on
+        the card's background, so ON simply swaps the two - the universal switch language, outlined off / filled on.
+        A different LANGUAGE from the .is-chart-active halo, which says "this is the selected chip": the two states
+        stack without ever being mistaken for each other. No pixel added, no hit target shrunk. */
+    .pv-pct-label.is-curve-on
+    {
+        background: var(--chip-color, var(--primary-color, #ff9800));
+        color: var(--ha-card-background, var(--card-background-color, #fff));
+        transition: background ${unsafeCSS(HOME_GROW_MS)}ms ease, color ${unsafeCSS(HOME_GROW_MS)}ms ease;
+    }
+    /*  The icon rides the text colour, so it flips with it. */
+    .pv-pct-label.is-curve-on ha-icon
+    {
+        color: var(--ha-card-background, var(--card-background-color, #fff));
+    }
+
+    /*  Day curve. The scaffolding (the sun's ground track, and a riser under each hour) is dashed and in the text
+        colour: it is the frame the curve is read against, not data, so it must never compete with it for the eye.
+        With no fill under the curve any more, these are the only things saying how high a point stands and how far
+        away it is. */
+    .helios-day-curve-foot,
+    .helios-day-curve-riser
+    {
+        stroke: var(--primary-text-color, #212121);
+        stroke-opacity: 0.35;
+        stroke-width: 1;
+        stroke-dasharray: 2 3;
+        stroke-linecap: round;
+    }
+    /*  Dark outline under each span, same trick the solar arc uses to hold its line off the map. */
+    .helios-day-curve-outline
+    {
+        stroke: rgba(0, 0, 0, 0.35);
+        stroke-linecap: round;
+    }
+    .helios-day-curve-line
+    {
+        stroke-linecap: round;
+    }
+    /*  The drop from the sun to the curve beneath it. Its colour is the metric's, set per element; everything else
+        is the same for every one of them, so it lives here. */
+    .helios-day-curve-leader
+    {
+        stroke-width: 1.5;
+        stroke-dasharray: 3 4;
+        stroke-linecap: round;
+        opacity: 0.85;
+    }
+    /*  Forecast: same curve, same colour, dashed. What changes after the present moment is not the metric but its
+        certainty, so the line carries straight on and only its stroke gives way - the same language the timeline's
+        own predicted curve already speaks. */
+    .helios-day-curve-line.is-predicted
+    {
+        stroke-dasharray: 1 5;
+        stroke-opacity: 0.85;
+    }
+
+    /*  Per-chip detail panel: a compact vertical readout top-right, opened by any chip tap and closed by tapping
+        the scene. Tinted in the selection colour (--detail-accent, set inline). Icons only, values in the card's
+        configured unit, and kept narrow so it never crowds a small card. */
     .detail-panel
     {
         position: absolute;
@@ -261,7 +330,11 @@ export const heliosCardStyles = css`
         width: 160px;
         padding: 6px 10px;
         border: 2px solid var(--detail-accent, var(--primary-color, #03a9f4));
-        border-radius: var(--ha-card-border-radius, 12px);
+        /*  A floating readout, not a card: the generic radius token, not --ha-card-border-radius. A "single card"
+            panel view squares every card it holds (--ha-card-border-radius: 0) to make it full-bleed, and that
+            cascades into here, which squared the panel too. --ha-border-radius-lg is the same 12px and no view
+            overrides it. */
+        border-radius: var(--ha-border-radius-lg, 12px);
         background: var(--card-background-color, #ffffff);
         background-clip: padding-box;
         box-shadow: var(--helios-shadow-chip);
@@ -406,6 +479,7 @@ export const heliosCardStyles = css`
     .pv-home-leader-bead,
     .battery-leader-bead,
     .group-leader-bead,
+    .helios-day-curve-bead,
     .solar-svg .solar-ray-bead
     {
         opacity: 0.95;

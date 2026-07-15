@@ -1,4 +1,5 @@
 import { SceneRenderer } from './renderer';
+import { renderDayCurve, type DayCurveInput as CurveInput, type DayCurveScene } from './day-curve';
 import type { Building, RawBuilding } from './buildings';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from '../core/time/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from '../data/weather';
@@ -97,6 +98,8 @@ export class HeliosEngine
 {
     //Renderer: owns its own DOM inside #map-container and the SceneCamera every projection routes through.
     _renderer?: SceneRenderer;
+    //Last curve the card handed over, kept so a resize can restamp its radius without the card involved.
+    private _curveInput: CurveInput | null = null;
     homeLat:  number;
     homeLon:  number;
     //Home altitude (m above sea level), forwarded to Open-Meteo via &elevation= for sharper boundary
@@ -364,6 +367,28 @@ export class HeliosEngine
         });
     }
 
+    //Day curve, or null to hide it. The card owns the data and the renderer owns the projection, but the RADIUS is
+    //neither's: the curve stands on the sun arc projected down, and the arc scale lives here. So the card hands over
+    //everything but the radius, and this stamps it on.
+    public setDayCurve(curve: CurveInput | null): void
+    {
+        this._curveInput = curve;
+    }
+
+    //Screen-space curve for one instant, as the two depth passes the card layers around its chips. Projected here
+    //rather than in the renderer because the curve is a READING, not scene geometry: like the sun arc it has to
+    //reach above the chips, and nothing the renderer draws can - #map-container is its own stacking context, so its
+    //whole subtree is pinned below the HUD. Being a HUD layer also puts it clear of the buildings, which it used to
+    //cut straight through.
+    public projectDayCurve(t: Date): DayCurveScene | null
+    {
+        if (!this._curveInput || !this._renderer) { return null; }
+        const sun = getSunPosition(t, this.homeLat, this.homeLon);
+        //The radius is the arc's own, restamped every call, so a resize can never leave the track off the arc.
+        const curve = { ...this._curveInput, radiusM: SUN_ARC_RADIUS_M * this._sunArcScale() };
+        return renderDayCurve(this._renderer.camera, curve, sun);
+    }
+
     //Home prism colour, driven by the card's active chip: `color` is the chip's accent. `animate` plays the
     //squash/grow on a chip change; an instant set is used for same-chip scrubs.
     public setHomeAppearance(color: string, animate: boolean): void
@@ -589,15 +614,20 @@ export class HeliosEngine
         //Custom drag-rotate. Bound to the container (the renderer's host). touch-action stays pan-y so a ONE-finger
         //swipe still scrolls the dashboard page over the card, untouched and instant.
         //
-        //Rotation is left-click on a pointer device, and TWO FINGERS on touch. Touch used to arm rotation after a
-        //press-hold, which fought the page for every gesture: hold too briefly and the card scrolled away under
-        //you, hold long enough and the scroll you actually wanted was swallowed. A timer cannot tell "rotate" from
-        //"scroll" because both start as one finger going down; the user has to say which, and two fingers say it
-        //instantly and unambiguously. Nothing else claims two fingers here (pan-y rules out pinch-zoom), so there
-        //is no delay, no threshold, and no gesture to steal back.
+        //Rotation is left-click on a pointer device, and ONE finger on touch, locked to its direction.
         //
-        //Two fingers drive the scene by their MIDPOINT, so the maths below is the mouse's, unchanged: same
-        //direction, same sensitivity, same feel.
+        //A finger going down means nothing on its own: rotate and scroll start identically. Two earlier answers
+        //both failed on that. A press-hold timer could not tell them apart either - hold too briefly and the card
+        //scrolled away under you, hold long enough and the scroll you wanted was swallowed. Two fingers were
+        //unambiguous but asked for a gesture nobody makes over a dashboard.
+        //
+        //The finger already says which, by its DIRECTION: sideways is a turn, up and down is the page. So the
+        //first few pixels decide, and after that the gesture is committed and cannot flip. pan-y makes the
+        //browser the referee rather than us: it keeps vertical panning for itself and hands us the horizontal, so
+        //a scroll is instant and untouched, and a turn never has to be stolen back with preventDefault.
+        //
+        //Pitch goes with it on touch: up and down belongs to the page now. It stays on the mouse, and the editor's
+        //pose + lock set it for good on a phone.
         container.style.touchAction = 'pan-y';
         //Firefox starts a native text/image drag on a left-mouse press over the canvas, which swallows the follow-up
         //pointermove stream so the scene never rotates (Chrome is lenient). Suppressing selection + the drag default
@@ -610,26 +640,29 @@ export class HeliosEngine
         //constants so this stays in sync with every other pitch entry point.
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
 
+        //Pixels of travel before a touch gesture is judged. Long enough that a fingertip's wobble on touchdown
+        //cannot decide it, short enough that the turn starts before the movement reads as ignored.
+        const TOUCH_DIRECTION_LOCK_PX = 8;
+
         let dragRotating = false;
         let lastX        = 0;
         let lastY        = 0;
         //Pointer device (mouse / pen): the single pointer that owns the drag.
         let activeId: number | null = null;
-        //Touch: every finger currently down. Rotation runs while at least two are.
-        const fingers = new Map<number, { x: number; y: number }>();
-
-        const fingerMidpoint = (): { x: number; y: number } =>
-        {
-            let sx = 0;
-            let sy = 0;
-            for (const f of fingers.values()) { sx += f.x; sy += f.y; }
-            const n = fingers.size || 1;
-            return { x: sx / n, y: sy / n };
-        };
+        //Touch: the finger down and where it landed, until its direction is judged. `verdict` is null while still
+        //undecided; once it is in, it holds for the rest of the gesture - a turn that drifts upward must not stall,
+        //and a scroll that drifts sideways must not snatch the page back.
+        let touchId: number | null = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let verdict: 'rotate' | 'page' | null = null;
 
         //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
         //two can never drift apart in direction or sensitivity.
-        const applyDrag = (x: number, y: number): void =>
+        //One drag step, from wherever the gesture last was to where it is now. `pitch` is off for touch, where the
+        //vertical belongs to the page: a turn that drifts a few pixels upward would otherwise tilt the scene as a
+        //side effect of a gesture the user made sideways.
+        const applyDrag = (x: number, y: number, pitch: boolean): void =>
         {
             if (!this._renderer) { return; }
             const dx = x - lastX;
@@ -639,6 +672,7 @@ export class HeliosEngine
             this._autoRotateLastUserAction = Date.now();
             //Drag right turns the scene with the gesture (negate dx: +dx read inverted on the canvas plane).
             this._renderer.setCameraBearing(this._renderer.getCameraBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+            if (!pitch) { return; }
             //Subtract dy so drag up flattens pitch, drag down goes bird's-eye; clamped to session bounds.
             const nextPitch = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG,
                 this._renderer.getCameraPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
@@ -654,16 +688,16 @@ export class HeliosEngine
             }
             if (e.pointerType === 'touch')
             {
-                fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-                //A second finger means "rotate", said plainly. One finger is left entirely to the page.
-                if (fingers.size === 2)
-                {
-                    const m = fingerMidpoint();
-                    lastX = m.x;
-                    lastY = m.y;
-                    dragRotating = true;
-                    this._autoRotateLastUserAction = Date.now();
-                }
+                //A second finger is not ours: leave the first one's verdict alone rather than fight over it.
+                if (touchId !== null) { return; }
+                touchId     = e.pointerId;
+                touchStartX = e.clientX;
+                touchStartY = e.clientY;
+                lastX       = e.clientX;
+                lastY       = e.clientY;
+                //Nothing is claimed yet, and no preventDefault: the page keeps its scroll until the direction says
+                //otherwise.
+                verdict = null;
                 return;
             }
             //Mouse: left button only.
@@ -691,39 +725,50 @@ export class HeliosEngine
         {
             if (e.pointerType === 'touch')
             {
-                const f = fingers.get(e.pointerId);
-                if (!f) { return; }
-                f.x = e.clientX;
-                f.y = e.clientY;
-                if (!dragRotating || fingers.size < 2) { return; }
-                //Own the gesture so the page does not scroll under a two-finger rotate.
-                e.preventDefault();
-                const m = fingerMidpoint();
-                applyDrag(m.x, m.y);
+                if (e.pointerId !== touchId) { return; }
+                if (verdict === null)
+                {
+                    const dx = e.clientX - touchStartX;
+                    const dy = e.clientY - touchStartY;
+                    if (Math.hypot(dx, dy) < TOUCH_DIRECTION_LOCK_PX) { return; }
+                    verdict = Math.abs(dx) > Math.abs(dy) ? 'rotate' : 'page';
+                    if (verdict === 'page')
+                    {
+                        //The page's gesture. Stand down for the rest of it, and let pan-y scroll as if the card
+                        //were not interactive at all.
+                        touchId = null;
+                        return;
+                    }
+                    //Seat the drag on the point the verdict was reached, not on the touchdown: the lock distance
+                    //has already been travelled and replaying it would jump the scene.
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                    dragRotating = true;
+                    this._autoRotateLastUserAction = Date.now();
+                    return;
+                }
+                if (!dragRotating) { return; }
+                applyDrag(e.clientX, e.clientY, false);
                 return;
             }
             if (e.pointerId !== activeId || !dragRotating) { return; }
             e.preventDefault();
-            applyDrag(e.clientX, e.clientY);
+            applyDrag(e.clientX, e.clientY, true);
         };
 
         const onEnd = (e: PointerEvent) =>
         {
             if (e.pointerType === 'touch')
             {
-                if (!fingers.delete(e.pointerId)) { return; }
-                //Down to one finger: the rotation is over, but the remaining finger must NOT carry on rotating.
-                if (dragRotating && fingers.size < 2)
+                if (e.pointerId !== touchId) { return; }
+                touchId = null;
+                verdict = null;
+                //Also covers pointercancel, which is how the browser tells us it has taken the gesture for its own
+                //scroll: the finger is no longer ours either way.
+                if (dragRotating)
                 {
                     dragRotating = false;
                     this.persistCameraPose();
-                }
-                //Still two or more down: re-seat on the new midpoint, or losing a finger would jump the scene.
-                else if (dragRotating)
-                {
-                    const m = fingerMidpoint();
-                    lastX = m.x;
-                    lastY = m.y;
                 }
                 return;
             }

@@ -18,7 +18,7 @@ import html from "@html-eslint/eslint-plugin";
 import importX from "eslint-plugin-import-x";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "node_modules/**", "tests/**", "*.config.*"] },
+  { ignores: ["dist/**", "node_modules/**", "*.config.*"] },
   js.configs.recommended,
   eslintConfigPrettier,
   litConfigs["flat/all"],

@@ -42,9 +42,10 @@ where the day is, no flat overlay, just light.
 
 Hide every chip (including home consumption) and the card collapses to just the sun
 position and your location, a solar-position card you can drop on a non-energy
-dashboard, for shutters or climate control keyed on the sun. And on a phone you can
-now scroll the page straight past the card with a normal swipe; rotating the scene
-takes two fingers, so the card never traps your scroll (#308).
+dashboard, for shutters or climate control keyed on the sun. And on a phone the card
+no longer traps your scroll: swipe up or down and the page moves as it should, swipe
+sideways and the scene turns. Your finger's direction decides, so neither gesture has
+to wait for the other (#308).
 
 ### New: per-bank battery state of charge
 
@@ -52,13 +53,36 @@ The battery timeline now draws one **state-of-charge line per battery bank**, ea
 tinted by its live charge/discharge flow, so you can read each pack against the
 charge and discharge beams above it.
 
+### New: the day curve
+
+Click the solar chip a second time, once it is the active one, and the day you are
+looking at rises around your house as a curve.
+
+It does not stand on a ring. It stands on the sun's own path, projected straight
+down onto the ground: the track closes in on the house at midday, when the sun is
+overhead, and reaches out to the exact spots where the arc meets the ground at
+sunrise and sunset. So where a point sits on that track IS the hour it happened, and
+a dashed line drops from the sun to the curve right beneath it. Scrub the timeline
+and the whole thing follows: another day means that day's sun, that day's track and
+that day's production, never an average of the week around it.
+
+Today's remaining hours carry on from your solar forecast, dashed, so the shape of
+the day runs unbroken from this morning to tonight and only its certainty gives way
+at the present moment.
+
+The curve writes itself on as it is raised, from its own midnight, and the chips
+that have nothing to say about production step aside while it is up. Click the chip
+again to put it away. It follows your **Graph detail** setting like every other
+curve, so it smooths out at one point an hour and resolves every cloud at six.
+
 ### Changed: a calmer scene
 
 The home now simply takes the active chip's colour (keeping the squash-and-grow
-animation when you switch chips). The camera lock is a scene-only setting. Tap
-anywhere on the scene background to dismiss an open chip, which finally makes the
-detail panel easy to close on a phone. The sun arc uses the true -0.833 degree
-horizon so sunrise and sunset land where Home Assistant puts them.
+animation when you switch chips). The camera lock is a scene-only setting. A single
+tap on a chip now opens its detail panel (it used to want a double-tap), and a tap
+anywhere on the scene background dismisses it, which finally makes it easy to close
+on a phone. The sun arc uses the true -0.833 degree horizon so sunrise and sunset
+land where Home Assistant puts them.
 
 ### Changed: solid buildings, shadows that follow their walls
 
@@ -87,7 +111,8 @@ window that reads better on a phone. The timeline and period-selector top border
 take the active chip's colour, so the whole bar reads as one with the metric you are
 looking at. The timeline itself now sizes from the card's own height rather than its
 width, so it keeps its proportions whether the card is a squat tile on a dashboard
-or a tall one on a wall tablet, and it sits a little taller than before.
+or a tall one on a wall tablet. On a phone it used to pin to its minimum and take no
+notice of the vertical room it had, so a tall card and a squat one got the same bar.
 
 ### Changed: focused translations
 
@@ -117,6 +142,12 @@ languages kept; any other language falls back to English.
 
 - The **clock** and period-over-period **trend** dials. The scene, the timeline and
   its period selector now tell the same story more directly.
+- The **Year** period. Month is now the longest view, and the last one the scene can
+  still speak for: any day of it can be scrubbed to and read under that day's own
+  sun. A year sat on a daily store that carried no shape of a day at all, so the arc,
+  the shadows and the curve had nothing to say about it, and 365 bars two pixels wide
+  had nothing to say to the eye. Your energy dashboard already tells that story
+  better. Cards saved on Year fall back to the default period.
 
 ---
 
