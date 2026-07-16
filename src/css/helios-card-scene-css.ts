@@ -57,15 +57,14 @@ export const heliosCardStyles = css`
     {
         /*  Absolute + inset so the container fills the ha-card via containing-block dimensions (which
             respect min-height); a percentage height collapses to 0 under Masonry. Hosts the renderer's
-            ground holder + scene SVG. overflow:hidden clips the tilted basemap canvas (which extends past
-            the frame at low pitch). No CSS perspective property here: the ground carries its own perspective() in
+            ground holder + scene SVG. No CSS perspective property here: the ground carries its own perspective() in
             its transform (see SceneCamera.groundTransform), so it projects EXACTLY like the overlays' project3, and
-            the flat scene SVG stays out of any 3D context (keeps the buildings aligned with the basemap). */
+            the flat scene SVG stays out of any 3D context (keeps the buildings aligned with the basemap).
+            No overflow:hidden: ha-card already clips, to its rounded box, a pixel tighter than this one. It also
+            sat over a preserve-3d subtree, which old WebKit clips badly - the suspected cause of #304, unverified. */
         position: absolute;
-        /*  Bleed 1 px under the border (re-clipped by overflow:hidden) to cover the anti-alias seam at
-            the rounded corners. */
+        /*  Bleed 1 px under the border to cover the anti-alias seam at the corners; ha-card clips it back. */
         inset: -1px;
-        overflow: hidden;
         /*  z-index 1 keeps the container (and home prism) above the ground guide layer (z 0) yet below every
             HUD overlay (z 4+). */
         z-index: 1;

@@ -626,8 +626,8 @@ export class HeliosEngine
         //browser the referee rather than us: it keeps vertical panning for itself and hands us the horizontal, so
         //a scroll is instant and untouched, and a turn never has to be stolen back with preventDefault.
         //
-        //Pitch goes with it on touch: up and down belongs to the page now. It stays on the mouse, and the editor's
-        //pose + lock set it for good on a phone.
+        //The lock says who OWNS the gesture, not which axis may move. Once a turn has won it, dy tilts as it does
+        //on the mouse: the vertical was only ever ambiguous at the first pixel.
         container.style.touchAction = 'pan-y';
         //Firefox starts a native text/image drag on a left-mouse press over the canvas, which swallows the follow-up
         //pointermove stream so the scene never rotates (Chrome is lenient). Suppressing selection + the drag default
@@ -659,9 +659,9 @@ export class HeliosEngine
 
         //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
         //two can never drift apart in direction or sensitivity.
-        //One drag step, from wherever the gesture last was to where it is now. `pitch` is off for touch, where the
-        //vertical belongs to the page: a turn that drifts a few pixels upward would otherwise tilt the scene as a
-        //side effect of a gesture the user made sideways.
+        //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
+        //two can never drift apart in direction or sensitivity. `pitch` is off only while a touch gesture is still
+        //being judged.
         const applyDrag = (x: number, y: number, pitch: boolean): void =>
         {
             if (!this._renderer) { return; }
@@ -748,7 +748,11 @@ export class HeliosEngine
                     return;
                 }
                 if (!dragRotating) { return; }
-                applyDrag(e.clientX, e.clientY, false);
+                //Both axes, now that the verdict is in. The vertical is only ambiguous at the START of a gesture,
+                //where a turn and a scroll look alike; past the lock the browser has passed on this one and it is
+                //ours, so there is nothing left for dy to fight over. It it changes its mind, pointercancel lands
+                //on onEnd and we stand down.
+                applyDrag(e.clientX, e.clientY, true);
                 return;
             }
             if (e.pointerId !== activeId || !dragRotating) { return; }

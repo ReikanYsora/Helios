@@ -472,7 +472,16 @@ export class HeliosCard extends LitElement
         if (!this._dayCurveOpen && this._dayCurveT <= 0) { return null; }
         const coords = getHomeCoords(this.config, this.hass);
         if (!coords) { return null; }
-        const shownMs = (this._selectedTime ?? new Date()).getTime();
+        //Clamped INTO the window, because the curve reads the store and can only speak for a day the store holds.
+        //Every period but Yesterday ends on today, so "now" is inside one and is the right default. Yesterday ends
+        //at this morning's midnight, which puts now OUTSIDE its own window: the curve was then built for today
+        //against a store that only has yesterday, found nothing, and drew nothing until a scrub landed a selection
+        //back inside.
+        const range = this._timeRange;
+        const live  = (this._selectedTime ?? new Date()).getTime();
+        const shownMs = range
+            ? Math.min(Math.max(live, range.start.getTime()), range.end.getTime() - 1)
+            : live;
 
         //Everything below speaks for the day ON SHOW: the values, the sun track under them, and the sun's own
         //position along it. A scrub into another day rebuilds all three together, so they can never describe
@@ -534,7 +543,11 @@ export class HeliosCard extends LitElement
             //and it must track a live theme flip, so it stays outside the memo.
             colour:  chartAccentColor(this, target),
             base:    kept.base,
-            sunSlot: slotOfMs(shownMs, kept.slots),
+            //The leader ties the sun to what it made, so it only exists when the sun ON SCREEN belongs to the day
+            //the curve describes. The clamp above having moved the instant is exactly the test: it only moves when
+            //now falls outside the window, which is Yesterday showing a live sun over yesterday's curve. Two days,
+            //nothing to tie, no leader.
+            sunSlot: live === shownMs ? slotOfMs(shownMs, kept.slots) : null,
             sweep:   this._dayCurveT,
         };
     }

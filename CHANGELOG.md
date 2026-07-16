@@ -45,7 +45,8 @@ position and your location, a solar-position card you can drop on a non-energy
 dashboard, for shutters or climate control keyed on the sun. And on a phone the card
 no longer traps your scroll: swipe up or down and the page moves as it should, swipe
 sideways and the scene turns. Your finger's direction decides, so neither gesture has
-to wait for the other (#308).
+to wait for the other. Once a turn is under way, drifting up or down tilts the scene
+as it always did on a mouse (#308).
 
 ### New: per-bank battery state of charge
 
