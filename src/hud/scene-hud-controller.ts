@@ -176,15 +176,18 @@ export class SceneHudController
         //Per-chip visibility from the "Entity display" config (each defaults visible). Home visibility (the
         //neutral-ring swap) is handled separately at the home pill.
         const cfg = this.host.config;
-        //Day curve up: the chips that have nothing to do with production stand down, so the curve is read against
-        //the house rather than through a cluster of unrelated numbers. PV stays - it is the chip that raised the
-        //curve, and the toggle has to remain under the finger that pressed it - and so does the home, which the
-        //whole scene is anchored on.
+        //Day curve up: the chips that have nothing to do with the curve stand down, so it is read against the house
+        //rather than through a cluster of unrelated numbers. The chip whose metric raised the curve STAYS - the
+        //toggle has to remain under the finger that pressed it - and so does the home, the anchor of the whole
+        //scene. The curve follows the active target, so "the chip that raised it" is simply the active one.
         const curveOn = this.host._dayCurveOpen;
-        const showChipIrradiance = !curveOn && chipVisible(cfg, 'chip-irradiance-visible');
-        const showChipProduction = chipVisible(cfg, 'chip-production-visible');
-        const showChipGrid       = !curveOn && chipVisible(cfg, 'chip-grid-visible');
-        const showChipBattery    = !curveOn && chipVisible(cfg, 'chip-battery-visible');
+        const active  = this.host._chartTarget;
+        //Down when the curve is up unless this is the metric on show.
+        const keeps = (t: string): boolean => !curveOn || active === t;
+        const showChipIrradiance = keeps('irradiance') && chipVisible(cfg, 'chip-irradiance-visible');
+        const showChipProduction = keeps('production') && chipVisible(cfg, 'chip-production-visible');
+        const showChipGrid       = keeps('grid')       && chipVisible(cfg, 'chip-grid-visible');
+        const showChipBattery    = keeps('battery')    && chipVisible(cfg, 'chip-battery-visible');
         //Irradiance chip colour (the W/m² readout above the sun); overridable, resolved through the central table.
         const irradChipColor     = chipSlotColor(this.host, cfg, 'irradiance');
         //Home chip hidden: the central pill collapses to a hollow ring sized to the same docking outline, so the
@@ -195,7 +198,7 @@ export class SceneHudController
         //so even the hollow ring is dropped, leaving just the sun + location (a solar-position card for non-energy
         //uses, e.g. a shutter/climate page keyed on the sun). Config-driven so it stays stable across scrubbing.
         const anyOtherChipVisible = showChipIrradiance || showChipProduction || showChipGrid || showChipBattery
-            || (!curveOn && activeGroups(this.host.config, this.host._energyDefaults).some(g => groupChipVisible(cfg, g)));
+            || activeGroups(this.host.config, this.host._energyDefaults).some(g => groupChipVisible(cfg, g) && keeps(groupTarget(g)));
         const showHomeElement    = !homeHidden || anyOtherChipVisible;
 
         //PV production chip above the home, tied to it by an animated leader. Only renders when the HA
@@ -474,8 +477,8 @@ export class SceneHudController
         const groupScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
         //Group consumption has no forecast, so scrubbing into the future hides the group chips (and their leaders)
         //entirely, the same way the PV chip drops out of a future scrub with no prediction (pvScrubFuture above).
-        const activeGroupList = (layout && !pvScrubFuture && !curveOn)
-            ? activeGroups(this.host.config, this.host._energyDefaults).filter(g => groupChipVisible(cfg, g))
+        const activeGroupList = (layout && !pvScrubFuture)
+            ? activeGroups(this.host.config, this.host._energyDefaults).filter(g => groupChipVisible(cfg, g) && keeps(groupTarget(g)))
             : [];
         const groupCount      = activeGroupList.length;
         const groupChips = layout
@@ -786,7 +789,7 @@ export class SceneHudController
                         ` : nothing}
                     </svg>
                     <div
-                        class="battery-pct-label ${interactive && this.host._chartTarget === 'battery' ? 'is-chart-active' : ''}"
+                        class="battery-pct-label ${interactive && this.host._chartTarget === 'battery' ? 'is-chart-active' : ''} ${curveOn && active === 'battery' ? 'is-curve-on' : ''}"
                         style="left:${batteryChipX}px; top:${batteryChipY}px; --battery-leader-color:${batteryLeaderColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
@@ -823,7 +826,7 @@ export class SceneHudController
                         `) : nothing}
                     </svg>
                     <div
-                        class="grid-label ${interactive && this.host._chartTarget === 'grid' ? 'is-chart-active' : ''}"
+                        class="grid-label ${interactive && this.host._chartTarget === 'grid' ? 'is-chart-active' : ''} ${curveOn && active === 'grid' ? 'is-curve-on' : ''}"
                         style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
@@ -850,7 +853,7 @@ export class SceneHudController
                         ` : nothing}
                     </svg>
                     <div
-                        class="group-label ${interactive && this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''}"
+                        class="group-label ${interactive && this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''} ${curveOn && active === groupTarget(gc.g) ? 'is-curve-on' : ''}"
                         style="left:${gc.anchor.x}px; top:${gc.anchor.y}px; --group-color:${gc.color}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
@@ -1030,7 +1033,7 @@ export class SceneHudController
                       view, where the cloud layers overlay the curve.  -->
                 ${showSunLabel ? html`
                     <div
-                        class="solar-pct-label ${interactive && this.host._chartTarget === 'irradiance' ? 'is-chart-active' : ''}"
+                        class="solar-pct-label ${interactive && this.host._chartTarget === 'irradiance' ? 'is-chart-active' : ''} ${curveOn && active === 'irradiance' ? 'is-curve-on' : ''}"
                         style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px; --solar-color:${irradChipColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
@@ -1060,7 +1063,7 @@ export class SceneHudController
                         ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
                         : html`
                     <div
-                        class="home-pill ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''}"
+                        class="home-pill ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''} ${curveOn && active === 'consumption' ? 'is-curve-on' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}

@@ -3,6 +3,7 @@
 //state mutations live elsewhere.
 
 import { type HeliosConfig, monitoringGroupName } from '../core/config/helios-config';
+import type { ChipSlot } from '../core/config/chip-appearance';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import type { UnifiedDataStore } from '../data/unifiedStore';
 import type { ChangeBucket } from '../data/sources/energy-stats';
@@ -25,8 +26,18 @@ export type GroupTarget = typeof GROUP_TARGETS[number];
 
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (default) adds
 //the dashed forecast + per-source breakdown; 'grid'/'battery' draw two-direction flows (accent = dominant side);
-//'irradiance' draws W/m² on a fixed 0..1000 scale; 'group-N' draws the group's per-device consumption curves.
+//'irradiance' draws W/m2 on a fixed 0..1000 scale; 'group-N' draws the group's per-device consumption curves.
 export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | GroupTarget;
+
+//How a day-curve strand takes its colour, resolved live against the theme by resolveStrandColour so a theme flip
+//is never baked into the data memo. `token` is a fixed chip-slot colour (production, grid import/export, ...);
+//`device` a group device's dashboard colour by index; `flow` a per-slot battery tint (charge / discharge / idle).
+export type StrandFlowDir = 'charge' | 'discharge' | 'idle';
+export type StrandColour =
+    | { kind: 'token';  token: ChipSlot }
+    | { kind: 'device'; index: number }
+    | { kind: 'solar';  index: number }
+    | { kind: 'flow';   dir: (StrandFlowDir | null)[] };
 
 //Group target helpers: build a target from a group number, test one, and read its group number (0 when not a group).
 export function groupTarget(n: number): GroupTarget { return `group-${n}` as GroupTarget; }
@@ -135,6 +146,7 @@ export {
 export {
     renderBottomChart,
     chartAccentColor,
+    resolveStrandColour,
     renderTimelineTicks,
     renderTimelineDayLabels,
 } from './charts-generic';

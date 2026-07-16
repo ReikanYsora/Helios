@@ -69,7 +69,7 @@ function fillGaps(v: number[]): number[]
 //the slots it covers, so a coarse store (e.g. hourly buckets in month mode) fills every slot evenly instead of
 //dumping a whole hour into one slot (the sawtooth). Summing kWh directly (not watts/duration) keeps DST-folded
 //buckets from inflating. This is the "total per period".
-function binSlotSum(store: UnifiedDataStore, series: (number | null)[], slots: number, win?: PeriodWindow): number[]
+export function binSlotSum(store: UnifiedDataStore, series: (number | null)[], slots: number, win?: PeriodWindow): number[]
 {
     const sum   = new Array<number>(slots).fill(0);
     const stepH = store.stepMs / HOUR_MS;

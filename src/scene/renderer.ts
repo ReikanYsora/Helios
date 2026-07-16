@@ -330,9 +330,15 @@ export class SceneRenderer
         const drawn = this._buildings;
         //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
         //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
+        //Each pass in its own group. A <g> changes nothing about the picture, and it makes the two passes
+        //addressable from a stylesheet - which is the only way to hold one of them off, since this innerHTML is
+        //rebuilt on every frame and anything done to the nodes themselves is gone by the next one.
         this._sceneSvg.innerHTML =
-            renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity) +
-            renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home, this._sun.azimuth);
+            `<g class="scene-shadows">`
+            + renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity)
+            + `</g><g class="scene-buildings">`
+            + renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home, this._sun.azimuth)
+            + `</g>`;
 
         this.onAfterDraw?.();
     }

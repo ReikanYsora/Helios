@@ -35,19 +35,36 @@ export interface SunTrackPoint
 const CURVE_WIDTH_FAR  = 1.0;
 const CURVE_WIDTH_NEAR = 4.0;
 
+//One drawn line of the day: its own values, normalisation and style. The geometry it stands on - the sun's ground
+//track, the radius, the sun's place along it and the sweep - is shared by every strand of the same chip and lives
+//on DayCurveData, not here. A chip draws one strand (production) or several (grid import + export, battery power +
+//SoC, a group's devices).
+export interface DayStrand
+{
+    //One value per slot in the strand's OWN unit; null breaks the line (a slot nothing covered).
+    values:    (number | null)[];
+    //Which slots are a forecast rather than a reading. PV alone fills this; every other strand is all false.
+    predicted: boolean[];
+    //This strand's own 100%: the value that rises to full height. Each day passes its OWN peak, so a dull December
+    //day reads as clearly as a bright June one and only the SHAPE carries meaning. Shared across a chip's strands
+    //where they must be comparable (grid import vs export, a group's devices), and set to 100 for the battery SoC,
+    //whose percent then reaches the same top the power peak does.
+    peak:      number;
+    //Solid colour, or the fallback where segColours leaves a slot null.
+    colour:    string;
+    //Drawn dashed: the battery SoC, a level rather than a flow.
+    dashed?:   boolean;
+    //Per-slot colour, for a strand that changes hue along its length (the battery power + SoC, tinted by charge /
+    //discharge / idle at each slot). null at a slot falls back to `colour`.
+    segColours?: (string | null)[];
+}
+
 export interface DayCurveData
 {
-    //One value per hour-of-day slot, in the metric's own unit; null breaks the curve (a slot nothing covered).
-    values:   (number | null)[];
-    //Which slots are a forecast rather than a reading. The same curve carries both: only the stroke changes, so
-    //the day's shape runs unbroken and only its certainty gives way at `now`.
-    predicted: boolean[];
-    //Normalisation target: this value rises to the curve's full height. Each day passes its OWN peak, so a dull
-    //December day reads as clearly as a bright June one and only the SHAPE carries meaning.
-    peak:     number;
-    colour:   string;
-    //The sun's ground track for the day on show, one unit vector per slot. Rebuilt as the scrub moves to another
-    //day, so the base always stands under the arc actually drawn.
+    //The strands to draw, all standing on the one shared track below. Empty draws nothing.
+    strands:  DayStrand[];
+    //The sun's ground track for the day on show, one unit vector per slot. Shared by every strand: they all stand
+    //on the same day's sun path, only at different heights. Rebuilt as the scrub moves to another day.
     base:     SunTrackPoint[];
     //Fractional slot of the instant on show (live or scrubbed), for the leader down from the sun. null when there
     //is nothing to point at.
@@ -55,7 +72,7 @@ export interface DayCurveData
     //The sun arc's ground radius, so the track lands exactly under the arc. Comes from the engine (it owns the arc
     //scale) and moves with the card's size, which is why it travels with the data.
     radiusM:  number;
-    //0 .. 1 of the curve written on. The day writes itself round from its own midnight, so the sweep IS the day
+    //0 .. 1 of the day written on. The day writes itself round from its own midnight, so the sweep IS the day
     //running, not an effect laid over it.
     sweep:    number;
 }
@@ -69,22 +86,6 @@ export interface CurveSun
 {
     azimuth:  number;
     altitude: number;
-}
-
-export interface CurvePoint
-{
-    //Screen-space top of the curve and the ground point right below it.
-    topX:  number;
-    topY:  number;
-    botX:  number;
-    botY:  number;
-    //Is there a reading (or a forecast) here at all? The TRACK is the sun's real path and runs unbroken through
-    //the day whatever happened on it, but the CURVE must not: a slot nothing covered has no height to draw, and
-    //drawing it at zero would put a flat line along the ground and call it a measurement of nothing.
-    has:   boolean;
-    //Camera-space depth of the GROUND point (height excluded, which would tilt the test): > 0 is nearer than the
-    //home, and that is where the track passes in front of it.
-    depth: number;
 }
 
 //The sun's ground track for the day containing `shownMs`: one unit vector per slot, the sun's position at that
@@ -130,7 +131,7 @@ export function slotOfMs(ms: number, slots: number): number
 //curve's job is to say WHEN, so it may not drift off its own samples.
 //`ok` marks which points exist. A Catmull-Rom span takes its tangents from the points either SIDE of it, so at the
 //edge of a run the neighbour is a slot with no reading, sitting on the ground - and the tangent would haul the
-//line down towards it. The curve would hook into the earth just before it stops, which reads as production
+//line down towards it. The curve would hook into the earth just before it stops, which reads as the metric
 //collapsing rather than as data running out. Clamping the missing neighbour onto the span's own end lets the line
 //leave flat, at the height it really had.
 function splineSpan(pts: [number, number][], i: number, closed: boolean, ok?: (k: number) => boolean): string
@@ -158,23 +159,32 @@ function splineSpan(pts: [number, number][], i: number, closed: boolean, ok?: (k
          + ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
 }
 
-//Project every slot of the ground track. The track itself has no gaps - the sun stood somewhere at every moment
-//of the day - so it is projected whole. `has` is what says whether a CURVE exists above a given slot.
-function projectSlots(camera: SceneCamera, curve: DayCurveData): CurvePoint[]
+//The shared ground track, projected once: every strand stands on it, and the near/far split is computed from its
+//depth alone. Height is excluded here on purpose - it would tilt the near/far test and cut the track off its own
+//crossing with the house.
+interface GroundPoint { x: number; y: number; depth: number; }
+function projectGround(camera: SceneCamera, base: SunTrackPoint[], radiusM: number): GroundPoint[]
 {
-    const rise = curve.radiusM * DAY_CURVE_HEIGHT_FRAC;
-    return curve.base.map((b, s) =>
+    return base.map((b) =>
     {
-        const east  = curve.radiusM * b.e;
-        const north = curve.radiusM * b.n;
-        const v     = curve.values[s];
-        const has   = v !== null && isFinite(v);
-        const up    = has ? Math.max(0, Math.min(1, (v as number) / curve.peak)) * rise : 0;
-        const top   = camera.project3(east, north, up);
-        //Depth from the GROUND point: the height would tilt the near/far test and cut the track off its own
-        //crossing.
-        const bot   = camera.project3(east, north, 0);
-        return { topX: top.x, topY: top.y, botX: bot.x, botY: bot.y, depth: bot.depth, has };
+        const g = camera.project3(radiusM * b.e, radiusM * b.n, 0);
+        return { x: g.x, y: g.y, depth: g.depth };
+    });
+}
+
+//One strand's tops, rising off the shared ground points. `has` says whether a line exists above a slot: the TRACK
+//runs unbroken through the day whatever happened on it, but a slot the strand never covered has no height to draw,
+//and drawing it at zero would put a flat line along the ground and call it a measurement of nothing.
+interface TopPoint { x: number; y: number; has: boolean; up: number; }
+function projectStrandTops(camera: SceneCamera, strand: DayStrand, base: SunTrackPoint[], radiusM: number, rise: number): TopPoint[]
+{
+    return base.map((b, s) =>
+    {
+        const v   = strand.values[s];
+        const has = v !== null && isFinite(v);
+        const up  = has ? Math.max(0, Math.min(1, (v as number) / strand.peak)) * rise : 0;
+        const t   = camera.project3(radiusM * b.e, radiusM * b.n, up);
+        return { x: t.x, y: t.y, has, up };
     });
 }
 
@@ -225,27 +235,27 @@ export function splitLoopBySide(n: number, side: (i: number) => boolean): { idx:
     return out.filter((p) => p.idx.length >= 2);
 }
 
-//Split the projected track by which side of the house each point falls on.
-function splitByDepth(pts: CurvePoint[]): { idx: number[]; near: boolean }[]
+//Split the shared ground track by which side of the house each point falls on. One split serves every strand.
+function splitByDepth(ground: GroundPoint[]): { idx: number[]; near: boolean }[]
 {
-    return splitLoopBySide(pts.length, (i) => pts[i].depth > 0);
+    return splitLoopBySide(ground.length, (i) => ground[i].depth > 0);
 }
 
 //Nearness of every point, 0 (furthest of this track) .. 1 (nearest), normalised over the track's OWN depth range,
 //exactly as the sun arc normalises its own. It drives stroke width, which is the whole depth cue now that there is
-//no fill to carry one.
-function nearnessOf(pts: CurvePoint[]): number[]
+//no fill to carry one. Off the shared ground depths, so every strand reads the same near/far ramp.
+function nearnessOf(depths: number[]): number[]
 {
     let dMin = Infinity;
     let dMax = -Infinity;
-    for (const p of pts)
+    for (const d of depths)
     {
-        if (p.depth < dMin) { dMin = p.depth; }
-        if (p.depth > dMax) { dMax = p.depth; }
+        if (d < dMin) { dMin = d; }
+        if (d > dMax) { dMax = d; }
     }
     const range = (dMax - dMin) || 1;
     //project3 returns depth = cameraZ, where LARGER is nearer, so nearness peaks at dMax with no inversion.
-    return pts.map((p) => (p.depth - dMin) / range);
+    return depths.map((d) => (d - dMin) / range);
 }
 
 //The point at fractional index `f` on the very curve splineSpan emits: the same Catmull-Rom cubic, evaluated
@@ -280,6 +290,14 @@ export function splineAt(pts: [number, number][], f: number, closed: boolean): [
     ];
 }
 
+//One strand within a depth pass: its spans (each carrying its own width AND colour, so a strand may change hue
+//along its length) and whether it draws dashed.
+export interface DayCurveStrandPass
+{
+    spans:  { d: string; w: number; predicted: boolean; colour: string }[];
+    dashed: boolean;
+}
+
 //One depth pass of the curve: everything that goes behind the house, or everything that goes in front.
 //
 //DATA, not markup. The card turns this into elements itself, so Lit sets every attribute and there is nothing to
@@ -290,125 +308,161 @@ export interface DayCurvePass
 {
     //The sun's ground track and the risers under each hour: ONE path each, subpaths joined. They carry no
     //per-element attribute - stroke, width, dash and opacity all come from CSS - so there is nothing to vary and
-    //no reason to spend an element per span on them. Empty string when there is none.
-    foot:   string;
-    risers: string;
-    //The curve, span by span, because each DOES vary: its width is its depth, and one path can only carry one.
-    spans:  { d: string; w: number; predicted: boolean }[];
-    //The dashed drop from the sun to the curve, and the bead where it lands. null when the sun is down.
-    leader: { x1: number; y1: number; x2: number; y2: number } | null;
-    bead:   { x: number; y: number } | null;
+    //no reason to spend an element per span on them. The riser at each hour rises to the TALLEST strand there, all
+    //strands weighed together. Empty string when there is none.
+    foot:    string;
+    risers:  string;
+    //The strands, in the order the data handed them over. Aligned by index across the far and near passes.
+    strands: DayCurveStrandPass[];
+    //The drop from the sun to the topmost strand beneath it, in that strand's colour, and one bead per strand where
+    //the sun's slot lands on it. null / empty when the sun is down or points at no covered strand.
+    leader:  { x1: number; y1: number; x2: number; y2: number; stroke: string } | null;
+    beads:   { x: number; y: number; colour: string }[];
 }
 
 export interface DayCurveScene
 {
-    far:    DayCurvePass;
-    near:   DayCurvePass;
-    colour: string;
+    far:  DayCurvePass;
+    near: DayCurvePass;
 }
 
-const emptyPass = (): DayCurvePass => ({ foot: '', risers: '', spans: [], leader: null, bead: null });
+const emptyPass = (): DayCurvePass => ({ foot: '', risers: '', strands: [], leader: null, beads: [] });
 
-//The leader from the sun down to the curve beneath it, and the bead where it lands. The sun end is the sun's own
-//position, continuous with the scrub; the curve end is evaluated on the drawn spline, so the bead rides the line
-//instead of hovering near it.
-function sunLeader(camera: SceneCamera, curve: DayCurveData, sun: CurveSun, pts: CurvePoint[], tops: [number, number][]):
-    { near: boolean; x1: number; y1: number; x2: number; y2: number } | null
+//The leader from the sun down to the strands beneath it, and one bead per strand where the sun's slot lands on it.
+//The sun end is the sun's own position, continuous with the scrub; each curve end is evaluated on that strand's
+//drawn spline, so a bead rides its line instead of hovering near it. Every strand shares the ground point, so the
+//beads stack up one vertical and the leader runs to the topmost of them, in that strand's colour.
+function addSunBeads(scene: DayCurveScene, camera: SceneCamera, curve: DayCurveData, sun: CurveSun,
+    strands: DayStrand[], stTops: TopPoint[][]): void
 {
-    if (curve.sunSlot === null) { return null; }
-    //Sun under the horizon: nothing was produced and there is nothing to point at.
-    if (sun.altitude <= 0) { return null; }
-    const slots = curve.values.length;
+    //Sun under the horizon, or nothing to point at: no leader, no beads.
+    if (curve.sunSlot === null || sun.altitude <= 0) { return; }
+    const slots = curve.base.length;
     const f  = ((curve.sunSlot % slots) + slots) % slots;
     const i0 = Math.floor(f);
     const i1 = (i0 + 1) % slots;
-    //The curve does not exist across this pair, so neither does the reading.
-    if (!pts[i0].has || !pts[i1].has) { return null; }
 
-    //The sun's own ground point, from the live sun rather than the slot: it moves continuously with the scrub,
-    //while the slots are a fixed grid.
+    //The sun's own ground + sky points, from the live sun rather than the slot: they move continuously with the
+    //scrub, while the slots are a fixed grid.
     const alt = sun.altitude * DEG;
     const az  = sun.azimuth  * DEG;
     const east  = curve.radiusM * Math.cos(alt) * Math.sin(az);
     const north = curve.radiusM * Math.cos(alt) * Math.cos(az);
     const sunP   = camera.project3(east, north, curve.radiusM * Math.sin(alt));
     const ground = camera.project3(east, north, 0);
+    const pass = ground.depth > 0 ? scene.near : scene.far;
 
-    //Land on the drawn line, at the same fraction, off the same spline. Closed: the track is a loop, so the
-    //fraction either side of midnight has real neighbours rather than a clamped end.
-    const hit = splineAt(tops, f, true);
-    return { near: ground.depth > 0, x1: sunP.x, y1: sunP.y, x2: hit[0], y2: hit[1] };
+    const beads: { x: number; y: number; colour: string }[] = [];
+    let topX = 0;
+    let topY = Infinity;
+    let topColour = '';
+    for (let s = 0; s < strands.length; s++)
+    {
+        const tops = stTops[s];
+        //The strand does not exist across this pair, so there is nothing on it to mark.
+        if (!tops[i0].has || !tops[i1].has) { continue; }
+        //Land on the drawn line, at the same fraction, off the same spline. Closed: the track is a loop.
+        const hit    = splineAt(tops.map((t) => [t.x, t.y] as [number, number]), f, true);
+        const colour = strands[s].segColours?.[i0] ?? strands[s].colour;
+        beads.push({ x: hit[0], y: hit[1], colour });
+        if (hit[1] < topY) { topY = hit[1]; topX = hit[0]; topColour = colour; }
+    }
+    if (beads.length === 0) { return; }
+    pass.beads  = beads;
+    pass.leader = { x1: sunP.x, y1: sunP.y, x2: topX, y2: topY, stroke: topColour };
 }
 
-//Build the curve for one frame, as the two depth passes the card layers around its chips.
+//Build the curve for one frame, as the two depth passes the card layers around its chips. Every strand stands on
+//the one shared ground track, so the near/far split, the foot and the risers are worked out once and each strand
+//is filed into the passes by that single split.
 export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: CurveSun): DayCurveScene
 {
-    const scene: DayCurveScene = { far: emptyPass(), near: emptyPass(), colour: curve.colour };
-    //The values and the track have to be the same grid; the count itself is the data's to choose.
-    if (!camera.hasViewport || curve.peak <= 0 || curve.values.length < 2
-        || curve.base.length !== curve.values.length || !(curve.radiusM > 0) || curve.sweep <= 0)
+    if (!camera.hasViewport || !(curve.radiusM > 0) || curve.sweep <= 0 || curve.base.length < 2)
     {
-        return scene;
+        return { far: emptyPass(), near: emptyPass() };
     }
-    //How far round the day the sweep has reached. Slots past it are not drawn at all, so the curve arrives by
-    //being written rather than by fading up: the line, its scaffolding and its risers all appear together, in the
-    //order the day happened.
-    const reached = curve.sweep >= 1 ? curve.values.length : curve.sweep * curve.values.length;
-    const pts    = projectSlots(camera, curve);
-    const near01 = nearnessOf(pts);
-    const tops   = pts.map((p) => [p.topX, p.topY] as [number, number]);
-    const bots   = pts.map((p) => [p.botX, p.botY] as [number, number]);
+    //A strand with no peak has nothing to normalise against; one off the shared grid cannot be projected on it.
+    const strands = curve.strands.filter((st) => st.peak > 0 && st.values.length === curve.base.length);
+    if (strands.length === 0) { return { far: emptyPass(), near: emptyPass() }; }
+
+    const slots = curve.base.length;
+    //Each pass carries one strand-pass per strand, aligned by index, so a strand keeps its slot in both halves.
+    const mkPass = (): DayCurvePass =>
+        ({ foot: '', risers: '', strands: strands.map((st) => ({ spans: [], dashed: st.dashed ?? false })), leader: null, beads: [] });
+    const scene: DayCurveScene = { far: mkPass(), near: mkPass() };
+
+    const rise    = curve.radiusM * DAY_CURVE_HEIGHT_FRAC;
+    const ground  = projectGround(camera, curve.base, curve.radiusM);
+    const near01  = nearnessOf(ground.map((g) => g.depth));
+    const bots    = ground.map((g) => [g.x, g.y] as [number, number]);
+    const stTops  = strands.map((st) => projectStrandTops(camera, st, curve.base, curve.radiusM, rise));
+    //How far round the day the sweep has reached. Slots past it are not drawn at all, so the curve arrives by being
+    //written rather than by fading up: the lines, the scaffolding and the risers all appear together, in order.
+    const reached = curve.sweep >= 1 ? slots : curve.sweep * slots;
     //An hour's worth of slots: the risers stand on the HOURS, not on every sample, or a fine graph-detail setting
     //would fence the whole track in.
-    const perHour = Math.max(1, Math.round(curve.values.length / 24));
+    const perHour = Math.max(1, Math.round(slots / 24));
 
-    for (const piece of splitByDepth(pts))
+    for (const piece of splitByDepth(ground))
     {
         const pass  = piece.near ? scene.near : scene.far;
         const drawn = piece.idx.filter((i) => i <= reached);
         if (drawn.length < 2) { continue; }
 
-        //The scaffolding, in the text colour and dashed: the sun's ground track, and a riser under each hour.
-        //Neutral and behind, so the eye reads them as the frame the curve is measured against rather than as data.
-        //With no fill there is nothing else to say how high a point stands or how far away it is, and a curve
-        //floating over a map is unreadable in perspective; these give it something to stand on.
+        //The scaffolding, in the text colour and dashed: the sun's ground track, and a riser under each hour rising
+        //to the TALLEST strand there. Neutral and behind, so the eye reads them as the frame the strands are
+        //measured against. The riser weighs every strand together (the universal rule): one vertical per hour, up
+        //to whichever line stands highest.
         const foot: string[]   = [];
         const risers: string[] = [];
         for (let k = 1; k < drawn.length; k++) { foot.push(splineSpan(bots, drawn[k - 1], true)); }
         for (const i of drawn)
         {
-            if (i % perHour !== 0 || !pts[i].has) { continue; }
-            const p = pts[i];
-            risers.push(`M ${p.botX.toFixed(2)} ${p.botY.toFixed(2)} L ${p.topX.toFixed(2)} ${p.topY.toFixed(2)}`);
+            if (i % perHour !== 0) { continue; }
+            let best   = -1;
+            let bestUp = -Infinity;
+            for (let s = 0; s < strands.length; s++)
+            {
+                const t = stTops[s][i];
+                if (t.has && t.up > bestUp) { bestUp = t.up; best = s; }
+            }
+            if (best < 0) { continue; }
+            const t = stTops[best][i];
+            risers.push(`M ${ground[i].x.toFixed(2)} ${ground[i].y.toFixed(2)} L ${t.x.toFixed(2)} ${t.y.toFixed(2)}`);
         }
         pass.foot   = pass.foot   ? `${pass.foot} ${foot.join(' ')}`     : foot.join(' ');
         pass.risers = pass.risers ? `${pass.risers} ${risers.join(' ')}` : risers.join(' ');
 
-        //The curve itself, span by span so each takes its own width from its own depth: the same thin-far /
-        //thick-near ribbon the sun arc uses.
-        for (let k = 1; k < drawn.length; k++)
+        //Each strand's own line, span by span so each takes its width from its depth: the same thin-far / thick-near
+        //ribbon the sun arc uses, and its colour from its slot (a flow strand changes hue along its length).
+        for (let s = 0; s < strands.length; s++)
         {
-            const i = drawn[k - 1];
-            //No reading either side means no curve to draw between them. This is what stops today at now instead
-            //of trailing a flat line along the ground to midnight.
-            if (!pts[i].has || !pts[drawn[k]].has) { continue; }
-            const n = 0.5 * (near01[i] + near01[drawn[k]]);
-            pass.spans.push({
-                d: splineSpan(tops, i, true, (j) => pts[j].has),
-                w: CURVE_WIDTH_FAR + (CURVE_WIDTH_NEAR - CURVE_WIDTH_FAR) * n,
-                //A span is a prediction if either end is: the changeover then lands ON a sample rather than
-                //between two, so solid meets dashed exactly where the readings stop.
-                predicted: curve.predicted[i] || curve.predicted[drawn[k]],
-            });
+            const st     = strands[s];
+            const tops   = stTops[s];
+            const topPts = tops.map((t) => [t.x, t.y] as [number, number]);
+            const hasAt  = (j: number): boolean => tops[j].has;
+            const out    = pass.strands[s];
+            for (let k = 1; k < drawn.length; k++)
+            {
+                const i = drawn[k - 1];
+                const j = drawn[k];
+                //No reading either side means no line to draw between them. This is what stops today at now instead
+                //of trailing a flat line along the ground to midnight.
+                if (!tops[i].has || !tops[j].has) { continue; }
+                const n = 0.5 * (near01[i] + near01[j]);
+                out.spans.push({
+                    d: splineSpan(topPts, i, true, hasAt),
+                    w: CURVE_WIDTH_FAR + (CURVE_WIDTH_NEAR - CURVE_WIDTH_FAR) * n,
+                    //A span is a prediction if either end is: the changeover then lands ON a sample rather than
+                    //between two, so solid meets dashed exactly where the readings stop.
+                    predicted: st.predicted[i] || st.predicted[j],
+                    //Per-slot colour where the strand carries one (battery flow), else its solid colour.
+                    colour: st.segColours?.[i] ?? st.colour,
+                });
+            }
         }
     }
 
-    const leader = sunLeader(camera, curve, sun, pts, tops);
-    if (leader)
-    {
-        const pass = leader.near ? scene.near : scene.far;
-        pass.leader = { x1: leader.x1, y1: leader.y1, x2: leader.x2, y2: leader.y2 };
-        pass.bead   = { x: leader.x2, y: leader.y2 };
-    }
+    addSunBeads(scene, camera, curve, sun, strands, stTops);
     return scene;
 }

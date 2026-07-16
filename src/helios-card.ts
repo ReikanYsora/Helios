@@ -12,8 +12,8 @@ import
     showDetailPanel,
     cacheId,
 } from './core/config/helios-config';
-import { buildDayProfile, daySlots } from './data/period-totals/day-profile';
-import { buildSunGroundTrack, slotOfMs, type DayCurveInput, type DayCurvePass, type DayCurveScene, type SunTrackPoint } from './scene/day-curve';
+import { buildDayProfile, daySlots, type ProfileStrand } from './data/period-totals/day-profile';
+import { buildSunGroundTrack, slotOfMs, type DayCurveInput, type DayStrand, type DayCurvePass, type DayCurveScene, type SunTrackPoint } from './scene/day-curve';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './timeline/timeline-modes';
 import { pickTranslations } from './core/i18n';
 import { DAY_CURVE_SWEEP_MS } from './core/config/constants';
@@ -32,6 +32,7 @@ import
 {
     renderBottomChart,
     chartAccentColor,
+    resolveStrandColour,
     type ChartTarget,
     GROUP_TARGETS,
     renderTimelineTicks,
@@ -209,9 +210,9 @@ export class HeliosCard extends LitElement
     //chip tap opens it (alongside re-pointing the chart) and a tap on the scene closes it. Bound to the active
     //chip, not a target, so switching chips while open just re-points it.
     @state() _infoPanelOpen = false;
-    //The day curve is the PV chip's second notch: it is UP or it is not, said by the user, not derived from which
-    //chip happens to be selected. Derived, it could not be dismissed - the PV chip is the default target, so a tap
-    //on the scene closed the detail panel and left the curve standing with nothing left to close it.
+    //The day curve is the active chip's second notch: it is UP or it is not, said by the user, not derived from
+    //which chip happens to be selected. Derived, it could not be dismissed - production is the default target, so a
+    //tap on the scene closed the detail panel and left the curve standing with nothing left to close it.
     @state() _dayCurveOpen = false;
     //Progress of the curve writing itself on, 0 .. 1. See _setDayCurveOpen.
     @state() _dayCurveT = 0;
@@ -224,15 +225,18 @@ export class HeliosCard extends LitElement
         store:      unknown;
         pv:         unknown;
         perEntity:  unknown;
+        devices:    unknown;
+        soc:        unknown;
+        socBank:    unknown;
         defaults:   unknown;
         range:      unknown;
         nowMin:     number;
         lat:        number;
         lon:        number;
         slots:      number;
-        values:     (number | null)[];
-        predicted:  boolean[];
-        peak:       number;
+        //The heavy part: the strands (values / peak / forecast / colour DESCRIPTOR) and the ground track they stand
+        //on. Colours are resolved off the descriptor each call, outside this memo, so a theme flip is never frozen.
+        strands:    ProfileStrand[];
         base:       SunTrackPoint[];
     };
     //"No UI" mode: true once the idle timer fires, hiding (fading) the timeline + controls; any input clears it.
@@ -390,24 +394,26 @@ export class HeliosCard extends LitElement
     //Chip click delegate: the clicked element carries its metric in data-target. A tap points the chart at the
     //chip AND opens its detail panel.
     //
-    //Re-tapping the ALREADY ACTIVE PV chip is the day curve's toggle. That gesture was doing nothing at all, so it
-    //costs no pixel, no new control and no reduced hit target - the whole chip stays the target, which matters on a
-    //phone, where a knob inside a 22 px pill would be a coin toss. It reads as what it is: "I am on production...
-    //now show me more".
+    //Re-tapping the ALREADY ACTIVE chip is the day curve's toggle, for EVERY chip now, not just PV. That gesture was
+    //doing nothing at all, so it costs no pixel, no new control and no reduced hit target - the whole chip stays the
+    //target, which matters on a phone, where a knob inside a 22 px pill would be a coin toss. It reads as what it is:
+    //"I am on this metric... now show me its day".
+    //
+    //Switching to a DIFFERENT chip while the curve is up re-points it and leaves it up: the curve follows the active
+    //target (see _buildDayCurve), so tapping across the chips walks the same day through each metric. Closing is the
+    //re-tap, or a tap on the scene.
     onChartTargetClick = (e: Event): void =>
     {
         const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
         if (!target) { return; }
-        if (target === 'production' && this._chartTarget === 'production')
+        if (target === this._chartTarget)
         {
             this._setDayCurveOpen(!this._dayCurveOpen);
         }
         else
         {
-            //Any other chip takes the scene back: the curve only ever speaks for production.
-            this._setDayCurveOpen(false);
+            this.setChartTarget(target);
         }
-        this.setChartTarget(target);
         //Any chip tap opens (or keeps open) the panel on that chip; closing is done elsewhere, not by re-tapping.
         this._infoPanelOpen = true;
     };
@@ -461,15 +467,14 @@ export class HeliosCard extends LitElement
         this._dayCurveRaf = requestAnimationFrame(step);
     }
 
-    //Curve data for the engine to project. null means the PV chip is not the one selected, and nothing else: a
-    //window with nothing to plot still returns a curve, carrying peak 0, because "no chip asked for me" and "the
-    //sun did not shine" are different answers and only the first should retire the whole thing.
-    //
-    //The metric is a parameter, not a decision baked in here: everything below reads `target`, so pointing the
-    //curve at another chip is a matter of what is passed in. Production is simply the only one wired up today.
-    private _buildDayCurve(target: ChartTarget = 'production'): DayCurveInput | null
+    //Curve data for the engine to project. null means no chip's curve is raised at all: the day curve follows the
+    //ACTIVE chart target, so re-pointing it at another chip is nothing more than the target moving under it. Each
+    //target builds its own strands (PV one, grid two, battery two, a group one per device); an empty strand list is
+    //still a valid answer ("the sun did not shine", "no import today"), distinct from null ("nothing is raised").
+    private _buildDayCurve(): DayCurveInput | null
     {
         if (!this._dayCurveOpen && this._dayCurveT <= 0) { return null; }
+        const target = this._chartTarget;
         const coords = getHomeCoords(this.config, this.hass);
         if (!coords) { return null; }
         //Clamped INTO the window, because the curve reads the store and can only speak for a day the store holds.
@@ -497,6 +502,10 @@ export class HeliosCard extends LitElement
         //property of the day alone. `_energyDefaults` is in it because the meters it names decide the layer split.
         //`_timeRange` is in it because its absence makes the profile come back empty, and a memo of that emptiness
         //would outlive the range's arrival.
+        //The key is everything the strands READ. `_deviceChangeSeries` feeds the group curves, `_batterySocHistory`
+        //and `_batterySocPerBankHistory` the battery SoC, so a scrub to those targets or a late data arrival has to
+        //miss the memo.
+        const slots = daySlots(this.config);
         const m = this._dayCurveMemo;
         const fresh = m !== undefined
             && m.dayStartMs === shownMs - serverMsOfDay(shownMs)
@@ -504,22 +513,26 @@ export class HeliosCard extends LitElement
             && m.store      === this._unifiedStore
             && m.pv         === this._pvChangeSeries
             && m.perEntity  === this._pvChangeSeriesPerEntity
+            && m.devices    === this._deviceChangeSeries
+            && m.soc        === this._batterySocHistory
+            && m.socBank    === this._batterySocPerBankHistory
             && m.defaults   === this._energyDefaults
             && m.range      === this._timeRange
             && m.nowMin     === Math.floor(this._now.getTime() / 60_000)
             && m.lat        === coords.lat
             && m.lon        === coords.lon
-            && m.slots      === daySlots(this.config);
+            && m.slots      === slots;
         if (!fresh)
         {
-            const profile = buildDayProfile(this, target, shownMs);
-            const slots   = profile.values.length;
             this._dayCurveMemo = {
                 dayStartMs: shownMs - serverMsOfDay(shownMs),
                 target,
                 store:     this._unifiedStore,
                 pv:        this._pvChangeSeries,
                 perEntity: this._pvChangeSeriesPerEntity,
+                devices:   this._deviceChangeSeries,
+                soc:       this._batterySocHistory,
+                socBank:   this._batterySocPerBankHistory,
                 defaults:  this._energyDefaults,
                 range:     this._timeRange,
                 //The minute, not the millisecond: the profile is cut at `now`, and `_now` only ticks once a minute
@@ -528,21 +541,28 @@ export class HeliosCard extends LitElement
                 lat:       coords.lat,
                 lon:       coords.lon,
                 slots,
-                values:    profile.values,
-                predicted: profile.predicted,
-                peak:      profile.peak,
+                strands:   buildDayProfile(this, target, shownMs),
                 base:      buildSunGroundTrack(shownMs, coords.lat, coords.lon, slots),
             };
         }
         const kept = this._dayCurveMemo!;
+        //Resolve each strand's colour DESCRIPTOR to live theme hex here, outside the memo, so a theme flip repaints
+        //without rebuilding the whole profile. Everything else rides straight off the memo.
+        const strands: DayStrand[] = kept.strands.map((ps) =>
+        {
+            const resolved = resolveStrandColour(this, ps.colour);
+            return {
+                values:     ps.values,
+                predicted:  ps.predicted,
+                peak:       ps.peak,
+                dashed:     ps.dashed,
+                colour:     resolved.colour,
+                segColours: resolved.segColours,
+            };
+        });
         return {
-            values:    kept.values,
-            predicted: kept.predicted,
-            peak:      kept.peak,
-            //The card's one rule for a metric's colour, asked about `target` rather than the active chip. Cheap,
-            //and it must track a live theme flip, so it stays outside the memo.
-            colour:  chartAccentColor(this, target),
-            base:    kept.base,
+            strands,
+            base: kept.base,
             //The leader ties the sun to what it made, so it only exists when the sun ON SCREEN belongs to the day
             //the curve describes. The clamp above having moved the instant is exactly the test: it only moves when
             //now falls outside the window, which is Yesterday showing a live sun over yesterday's curve. Two days,
@@ -554,40 +574,37 @@ export class HeliosCard extends LitElement
 
 
 
-    //One depth pass of the day curve. Lit builds every element and sets every attribute, so the metric's colour
-    //lands in an attribute slot where it is a string and nothing else - and Lit diffs `d` and `stroke-width`
+    //One depth pass of the day curve, all its strands. Lit builds every element and sets every attribute, so a
+    //colour lands in an attribute slot where it is a string and nothing else - and Lit diffs `d` and `stroke-width`
     //against the DOM it already made, instead of an SVG string being re-parsed from scratch every camera frame.
     //
-    //All the outlines before all the lines: an outline is a fatter stroke UNDER its own span, so interleaving them
-    //lets each one lie over its neighbour's line.
-    private _renderDayCurvePass(pass: DayCurvePass, colour: string): unknown
+    //One depth pass's strands, drawn line by line. Each span carries its own width (its depth) and colour (a flow
+    //strand changes hue along its length).
+    private _renderDayCurvePass(pass: DayCurvePass): unknown
     {
         return svg`
             ${pass.foot ? svg`<path class="helios-day-curve-foot" d=${pass.foot} fill="none"></path>` : nothing}
             ${pass.risers ? svg`<path class="helios-day-curve-riser" d=${pass.risers} fill="none"></path>` : nothing}
-            ${pass.spans.map(s => svg`
-                <path class="helios-day-curve-outline" d=${s.d} fill="none" stroke-width=${s.w + 1.2}></path>
-            `)}
-            ${pass.spans.map(s => svg`
+            ${pass.strands.map(st => st.spans.map(s => svg`
                 <path
-                    class="helios-day-curve-line ${s.predicted ? 'is-predicted' : ''}"
+                    class="helios-day-curve-line ${st.dashed ? 'is-dashed' : ''} ${s.predicted ? 'is-predicted' : ''}"
                     d=${s.d}
                     fill="none"
-                    stroke=${colour}
+                    stroke=${s.colour}
                     stroke-width=${s.w}
                 ></path>
-            `)}
+            `))}
             ${pass.leader ? svg`
                 <line
                     class="helios-day-curve-leader"
                     x1=${pass.leader.x1} y1=${pass.leader.y1}
                     x2=${pass.leader.x2} y2=${pass.leader.y2}
-                    stroke=${colour}
+                    stroke=${pass.leader.stroke}
                 ></line>
             ` : nothing}
-            ${pass.bead ? svg`
-                <circle class="helios-day-curve-bead" cx=${pass.bead.x} cy=${pass.bead.y} r="3" fill=${colour}></circle>
-            ` : nothing}
+            ${pass.beads.map(b => svg`
+                <circle class="helios-day-curve-bead" cx=${b.x} cy=${b.y} r="3" fill=${b.colour}></circle>
+            `)}
         `;
     }
 
@@ -961,6 +978,10 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_dayCurveT')
                 || _changedProperties.has('_chartTarget')
                 || _changedProperties.has('_unifiedStore')
+                //The group and battery curves read these; a late data arrival on the active target has to wake it.
+                || _changedProperties.has('_deviceChangeSeries')
+                || _changedProperties.has('_batterySocHistory')
+                || _changedProperties.has('_batterySocPerBankHistory')
                 || _changedProperties.has('_timelineMode')
                 || _changedProperties.has('_selectedTime')
                 || _changedProperties.has('_engine')))
@@ -1243,10 +1264,10 @@ export class HeliosCard extends LitElement
                       way, because it is a reading of the data and not a wall standing in the street.  -->
                 ${this._dayCurveScene ? html`
                     <svg class="helios-day-curve-svg helios-day-curve-far">
-                        ${this._renderDayCurvePass(this._dayCurveScene.far, this._dayCurveScene.colour)}
+                        ${this._renderDayCurvePass(this._dayCurveScene.far)}
                     </svg>
                     <svg class="helios-day-curve-svg helios-day-curve-near">
-                        ${this._renderDayCurvePass(this._dayCurveScene.near, this._dayCurveScene.colour)}
+                        ${this._renderDayCurvePass(this._dayCurveScene.near)}
                     </svg>
                 ` : nothing}
 

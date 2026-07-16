@@ -1,34 +1,40 @@
-//ONE day of a metric, as one value per hour-of-day slot: the data behind the day curve. Metric-agnostic, so any
-//chip with a period aggregation can be drawn round the home.
+//ONE day of a metric, as strands: one drawn line, or several. Each strand is one value per hour-of-day slot in its
+//own unit, ready for the day curve to stand round the home. Metric-agnostic below the per-target split, so any
+//chip with a period aggregation is drawn the same way whatever it measures: PV draws one strand (+ forecast), grid
+//two (import / export), battery two (power + SoC), a monitoring group one per device.
 //
 //The day is the one being scrubbed, whatever the period. It used to be the period AVERAGED - seven days of a week
 //folded onto one - and that was incoherent with its own base: the curve stands on the sun's ground track for a
 //SINGLE day, so laying a seven-day average on it made one piece of geometry describe two different things. One
-//scrubbed day, one sun track, one curve.
+//scrubbed day, one sun track, one set of strands.
 //
 //Each slot divides by the hours of data that actually landed IN IT (kWh / h = kW), so a partial day, a DST fold or
-//a store grid that does not line up with midnight need no special case. And coverage says where the curve STOPS: a
+//a store grid that does not line up with midnight need no special case. And coverage says where a strand STOPS: a
 //slot no data reached is null, not zero, so today runs from midnight to now rather than diving to the floor.
+//
+//Colours are DESCRIPTORS, not hex (StrandColour): the card resolves them live against the theme, so a theme flip
+//is never frozen into the memo the card keeps of this result.
 
 import { HOUR_MS, DAY_MS, DAY_CURVE_MIN_RUN } from '../../core/config/constants';
 import { serverMsOfDay } from '../../core/time/timezone';
 import { forEachBucketSlot } from './slot-walk';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../../core/config/helios-config';
-import type { ChartTarget } from '../../charts/charts';
-import { buildPeriodData, type PeriodHost, type PeriodData } from './period-totals';
+import { type ChartTarget, type StrandColour, type StrandFlowDir, isGroupTarget, groupOfTarget } from '../../charts/charts';
+import { TIMELINE_MODES } from '../../timeline/timeline-modes';
+import { buildPeriodData, binSlotSum, type PeriodHost } from './period-totals';
+import { changeSeriesToWatts } from '../sources/energy-stats';
+import { groupDevices } from '../sources/device-consumption';
 import type { PeriodWindow } from './slot-walk';
 
-export interface DayProfile
+//One drawn line of the day, unit-agnostic. `colour` is a descriptor the card resolves; everything else is the data
+//the geometry normalises and draws. This is exactly a DayStrand minus the resolved colour.
+export interface ProfileStrand
 {
-    //One value per hour-of-day slot, in the metric's OWN unit; null where nothing covered the slot, which breaks
-    //the curve. The geometry normalises against `peak`, so the unit never has to leave this module.
     values:    (number | null)[];
-    //Which slots are a FORECAST rather than something that happened. Same curve, drawn dashed: the shape of the
-    //day should run unbroken from the morning into the evening, and only its certainty changes at `now`.
     predicted: boolean[];
-    //The day's own peak, which the geometry normalises against. Forecast included, or an afternoon predicted higher
-    //than the morning delivered would be clipped flat at the top. 0 when there is nothing to draw.
     peak:      number;
+    dashed?:   boolean;
+    colour:    StrandColour;
 }
 
 //Slots per day = the card's "graph detail" setting, the same knob that sets how densely every other curve is
@@ -68,15 +74,6 @@ function forecastKw(host: PeriodHost, slots: number, win: PeriodWindow, nowMs: n
     return out;
 }
 
-//Metrics whose stacked layers simply add up to the one curve a day shows: production splits per solar source, and
-//consumption is single-layer.
-//
-//Grid and battery are deliberately absent. Their layers are OPPOSING (import/export, charge/discharge), so adding
-//them would sum a kilowatt going out to a kilowatt coming in and call it a reading. What their curve should SAY is
-//a design question, not an arithmetic one, so it is left open rather than guessed at. Irradiance and the
-//monitoring groups have no layers in the period aggregation at all, and would each need their own source.
-const ADDITIVE: readonly ChartTarget[] = ['production', 'consumption'];
-
 //Hours of real data each slot received, spread across the slots a bucket covers exactly as the aggregation spreads
 //its energy, so coverage and value always describe the same buckets. Only the day asked for counts, and only up to
 //`now`: buckets beyond it never happened, which is what leaves today's later slots null.
@@ -86,7 +83,7 @@ function coverageHours(host: PeriodHost, nowMs: number, slots: number, win: Peri
     const cov   = new Array<number>(slots).fill(0);
     if (!store) { return cov; }
     //Clamped at now: buckets beyond it never happened, and that is what leaves today's later slots with nothing,
-    //which is what lets the curve stop there instead of lying flat along the ground to midnight.
+    //which is what lets a strand stop there instead of lying flat along the ground to midnight.
     forEachBucketSlot(store, slots, win, nowMs, (_i, slot, segMs) => { cov[slot] += segMs / HOUR_MS; });
     return cov;
 }
@@ -109,62 +106,292 @@ function dropShortRuns(values: (number | null)[]): void
 }
 
 //Stack a metric's layers into one per-slot series. The aggregation binned them onto THIS curve's grid, so there
-//is nothing to move across: they are simply added up.
-function stackLayers(data: PeriodData, slots: number): number[]
+//is nothing to move across: they are simply added up. Consumption is single-layer today; this stays the one place
+//that would fold a multi-layer metric into a single curve.
+function stackLayers(values: readonly { values: number[] }[], slots: number): number[]
 {
     const out = new Array<number>(slots).fill(0);
-    for (const layer of data.layers)
+    for (const layer of values)
     {
         for (let s = 0; s < slots; s++) { out[s] += Math.max(0, layer.values[s] ?? 0); }
     }
     return out;
 }
 
-//One scrubbed day of a metric. `dayMs` is any instant of the day wanted; its own local midnight is derived here,
-//from the same integer clock the slots are cut with, so the day the values are read from and the day the slots
-//describe are the same day by construction.
-export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: number, nowMs: number = Date.now()): DayProfile
+//A strand's own peak (its 100%), ignoring nulls. 0 when there is nothing to draw.
+function peakOf(values: (number | null)[]): number
+{
+    let p = 0;
+    for (const v of values) { if (v !== null && isFinite(v) && v > p) { p = v; } }
+    return p;
+}
+
+//Does a strand carry any reading at all? An all-null strand is dropped rather than handed on as an empty line.
+function anyValue(values: (number | null)[]): boolean
+{
+    return values.some((v) => v !== null);
+}
+
+//The scrubbed day's battery state of charge, one value per slot, linearly interpolated from the SoC history at
+//each slot's centre. null outside the history's coverage, so a slot with no bracketing samples breaks the line
+//rather than inventing a level. Percent (0..100); the strand normalises against 100, so 100 % reaches the same top
+//the power peak does. Day-scoped on purpose: the period aggregation's own SoC path folds every day together, which
+//is wrong for a curve that stands on one day's sun track.
+function socDay(hist: { times: Date[]; values: number[] } | null, slots: number, dayStartMs: number): (number | null)[]
+{
+    const out = new Array<number | null>(slots).fill(null);
+    const n = hist ? hist.times.length : 0;
+    if (!hist || n === 0) { return out; }
+    const slotMs = DAY_MS / slots;
+    const first  = hist.times[0].getTime();
+    const last   = hist.times[n - 1].getTime();
+    let lo = 0;
+    for (let s = 0; s < slots; s++)
+    {
+        const t = dayStartMs + (s + 0.5) * slotMs;
+        //Outside the history: no reading, so the line breaks rather than clamping to an end sample.
+        if (t < first || t > last) { continue; }
+        //Advance the bracket forward with the slots (both ascending), so the walk stays linear overall.
+        while (lo + 1 < n && hist.times[lo + 1].getTime() <= t) { lo++; }
+        const a = hist.times[lo].getTime();
+        const b = hist.times[Math.min(lo + 1, n - 1)].getTime();
+        const va = hist.values[lo];
+        const vb = hist.values[Math.min(lo + 1, n - 1)];
+        if (!isFinite(va) || !isFinite(vb)) { continue; }
+        out[s] = b > a ? va + (vb - va) * ((t - a) / (b - a)) : va;
+    }
+    return out;
+}
+
+//Average a store series per slot, weighted by how much of each bucket lands in the slot. For an INTENSITY (W/m2),
+//not an energy: a slot reads the mean over its own span, so there is no kWh-then-back-to-kW round trip. NOT clamped
+//at now - irradiance is a weather-model series that runs on into the forecast, so the day curve shows the rest of
+//the day ahead too, exactly as the timeline does. null where nothing covered the slot.
+function binSlotAvg(store: NonNullable<PeriodHost['_unifiedStore']>, series: (number | null)[], slots: number, win: PeriodWindow): (number | null)[]
+{
+    const sum = new Array<number>(slots).fill(0);
+    const cov = new Array<number>(slots).fill(0);
+    forEachBucketSlot(store, slots, win, undefined, (i, slot, segMs) =>
+    {
+        const v = series[i];
+        if (v === null || !isFinite(v)) { return; }
+        sum[slot] += v * segMs;
+        cov[slot] += segMs;
+    });
+    return sum.map((s, k) => (cov[k] > 0 ? s / cov[k] : null));
+}
+
+//Per-slot battery flow direction from the store's signed net power, for tinting a strand when no power strand was
+//built to hand its own direction over (an SoC-only install). +/-5 W deadband so recorder noise reads as idle.
+function socFlow(host: PeriodHost, slots: number, win: PeriodWindow): (StrandFlowDir | null)[]
+{
+    const store = host._unifiedStore;
+    const dir   = new Array<StrandFlowDir | null>(slots).fill(null);
+    if (!store) { return dir; }
+    const net = new Array<number>(slots).fill(0);
+    const cov = new Array<number>(slots).fill(0);
+    forEachBucketSlot(store, slots, win, undefined, (i, slot, segMs) =>
+    {
+        const v = store.battery[i];
+        if (v === null || !isFinite(v)) { return; }
+        net[slot] += v * segMs;
+        cov[slot] += segMs;
+    });
+    for (let s = 0; s < slots; s++)
+    {
+        if (cov[s] <= 0) { continue; }
+        const a = net[s] / cov[s];
+        dir[s] = Math.abs(a) < 5 ? 'idle' : (a > 0 ? 'charge' : 'discharge');
+    }
+    return dir;
+}
+
+//One scrubbed day of a metric, as its strands. `dayMs` is any instant of the day wanted; its own local midnight is
+//derived here, from the same integer clock the slots are cut with, so the day the values are read from and the day
+//the slots describe are the same day by construction. Empty array = nothing to draw (unconfigured, pre-fetch, or a
+//target that builds no strands).
+export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: number, nowMs: number = Date.now()): ProfileStrand[]
 {
     const slots = daySlots(host.config);
-    const empty: DayProfile = { values: new Array<number | null>(slots).fill(null), predicted: new Array<boolean>(slots).fill(false), peak: 0 };
-    if (!host._timeRange || !ADDITIVE.includes(target)) { return empty; }
+    if (!host._timeRange) { return []; }
 
     const dayStartMs = dayMs - serverMsOfDay(dayMs);
     const win: PeriodWindow = { fromMs: dayStartMs, toMs: dayStartMs + DAY_MS };
-    //Binned straight onto this curve's own grid. It used to come back on the aggregation's fixed 4-slots-an-hour
-    //grid and be re-gridded here, so the data was binned TWICE: at 5 or 6 points an hour the second pass was
-    //interpolating a 15-minute quantisation, not resolving anything. The graph-detail setting promises to resolve
-    //every cloud at 6, and only asking for 6 in the first place makes that true.
-    const data = buildPeriodData(host, target, win, slots);
-    if (!data.layers.length) { return empty; }
-    const stacked = stackLayers(data, slots);
+    //Binned straight onto this curve's own grid (see the notes in period-totals: at 5 or 6 points an hour a second
+    //re-grid would interpolate a 15-minute quantisation instead of resolving anything).
+    const cov    = coverageHours(host, nowMs, slots, win);
+    //kWh over the hours that really landed in the slot: kW, the metric's own unit. null where nothing covered it.
+    const toKw   = (energy: number[]): (number | null)[] => energy.map((e, s) => (cov[s] > 0 ? e / cov[s] : null));
+    const noPred = (): boolean[] => new Array<boolean>(slots).fill(false);
 
-    //kWh over the hours that really landed in the slot: kW, and the metric's own unit rather than merely the right
-    //SHAPE. The normalisation cancels a uniform scale error, so a wrong unit here would draw a perfectly correct
-    //curve and stay invisible until something read the values as an absolute. `peak` is exactly that reading.
-    const values: (number | null)[] = coverageHours(host, nowMs, slots, win)
-        .map((h, s) => (h > 0 ? stacked[s] / h : null));
-
-    //Where the day has not happened yet, the forecast carries the curve on. It fills only what the meters left
-    //null, so a recorded slot is never overwritten by a prediction of itself.
-    const predicted = new Array<boolean>(slots).fill(false);
     if (target === 'production')
     {
+        const data = buildPeriodData(host, 'production', win, slots);
+        if (!data.layers.length) { return []; }
+        //Per-source when the aggregation split the meters (2+ configured, each with its own recorder series); one
+        //aggregate strand otherwise (single source, or pre-fetch when the split has nothing to work from).
+        const perSource = data.layers.length >= 2;
+        //The aggregate forecast, future only (store.forecast is a total, never split per source). null before now.
         const fc = forecastKw(host, slots, win, nowMs);
-        for (let s = 0; s < slots; s++)
+
+        if (!perSource)
         {
-            if (values[s] !== null || fc[s] === null) { continue; }
-            values[s]    = fc[s];
-            predicted[s] = true;
+            //Single source: the aggregate strand, its future carried on by the forecast, exactly as before. It fills
+            //only what the meters left null, so a recorded slot is never overwritten by a prediction of itself.
+            const values    = toKw(data.layers[0].values);
+            const predicted = noPred();
+            for (let s = 0; s < slots; s++)
+            {
+                if (values[s] !== null || fc[s] === null) { continue; }
+                values[s]    = fc[s];
+                predicted[s] = true;
+            }
+            dropShortRuns(values);
+            //A run the floor swept away takes its forecast flag with it, or a span could read dashed with nothing under it.
+            for (let s = 0; s < slots; s++) { if (values[s] === null) { predicted[s] = false; } }
+            const peak = peakOf(values);
+            if (peak <= 0) { return []; }
+            return [{ values, predicted, peak, colour: { kind: 'token', token: 'production' } }];
         }
+
+        //One strand per source, each in its HA Energy dashboard colour (energySolarColor by source index), like the
+        //timeline. The actuals stop at now; the aggregate forecast carries on as its OWN dashed strand, exactly as
+        //the timeline draws per-source areas up to now and one aggregate forecast line beyond. Shared peak over every
+        //source AND the forecast, so the sources and the total prediction all read on one kW scale (a source is
+        //shorter than the total because it IS a part of it - the honest height, once the lines are no longer stacked).
+        const sourceValues = data.layers.map((L) => toKw(L.values));
+        let peak = peakOf(fc);
+        for (const v of sourceValues) { peak = Math.max(peak, peakOf(v)); }
+        if (peak <= 0) { return []; }
+
+        const out: ProfileStrand[] = [];
+        sourceValues.forEach((v, s) =>
+        {
+            dropShortRuns(v);
+            if (anyValue(v)) { out.push({ values: v, predicted: noPred(), peak, colour: { kind: 'solar', index: s } }); }
+        });
+        const fcVals = fc.slice();
+        dropShortRuns(fcVals);
+        if (anyValue(fcVals)) { out.push({ values: fcVals, predicted: new Array<boolean>(slots).fill(true), peak, colour: { kind: 'token', token: 'production' } }); }
+        return out;
     }
 
-    dropShortRuns(values);
-    //A run the floor swept away takes its forecast flag with it, or a span could read dashed with nothing under it.
-    for (let s = 0; s < slots; s++) { if (values[s] === null) { predicted[s] = false; } }
+    if (target === 'consumption')
+    {
+        const data = buildPeriodData(host, 'consumption', win, slots);
+        if (!data.layers.length) { return []; }
+        const values = toKw(stackLayers(data.layers, slots));
+        dropShortRuns(values);
+        const peak = peakOf(values);
+        if (peak <= 0) { return []; }
+        return [{ values, predicted: noPred(), peak, colour: { kind: 'token', token: 'home' } }];
+    }
 
-    let peak = 0;
-    for (const v of values) { if (v !== null && isFinite(v) && v > peak) { peak = v; } }
-    if (peak <= 0) { return empty; }
-    return { values, predicted, peak };
+    if (target === 'grid')
+    {
+        const data = buildPeriodData(host, 'grid', win, slots);
+        if (data.layers.length < 2) { return []; }
+        const imp = toKw(data.layers[0].values);
+        const exp = toKw(data.layers[1].values);
+        dropShortRuns(imp);
+        dropShortRuns(exp);
+        //Shared peak so import and export are read on one scale: the flow that dominated the day stands tallest and
+        //the other is proportional, rather than each filling its own height and losing the comparison.
+        const peak = Math.max(peakOf(imp), peakOf(exp));
+        if (peak <= 0) { return []; }
+        const out: ProfileStrand[] = [];
+        if (anyValue(imp)) { out.push({ values: imp, predicted: noPred(), peak, colour: { kind: 'token', token: 'gridImport' } }); }
+        if (anyValue(exp)) { out.push({ values: exp, predicted: noPred(), peak, colour: { kind: 'token', token: 'gridExport' } }); }
+        return out;
+    }
+
+    if (target === 'battery')
+    {
+        const data = buildPeriodData(host, 'battery', win, slots); //layers[0] = discharge, layers[1] = charge (kWh)
+        const dis  = data.layers[0]?.values;
+        const chg  = data.layers[1]?.values;
+        let power: (number | null)[] | null = null;
+        //The power line's own per-slot tint: charge where the charge energy leads, discharge where it trails, idle
+        //where they match. It comes free from the two layers, cut to the power line's own drawn slots.
+        let dir: (StrandFlowDir | null)[] = [];
+        if (dis && chg)
+        {
+            power = toKw(dis.map((d, s) => d + chg[s]));
+            dir   = power.map((v, s) => (v === null ? null : (chg[s] > dis[s] ? 'charge' : (dis[s] > chg[s] ? 'discharge' : 'idle'))));
+            dropShortRuns(power);
+            for (let s = 0; s < slots; s++) { if (power[s] === null) { dir[s] = null; } }
+        }
+
+        const out: ProfileStrand[] = [];
+        if (power)
+        {
+            const peak = peakOf(power);
+            if (peak > 0 && anyValue(power)) { out.push({ values: power, predicted: noPred(), peak, colour: { kind: 'flow', dir } }); }
+        }
+        //SoC on its own 0..100 scale, dashed, so its 100 % reaches the same top the power peak does (that is what
+        //"leans on the power curve's max for its 100 %" means once both fill their own height at their own peak). One
+        //strand PER BANK, like the timeline: the banks are told apart by their level, not their colour, so every SoC
+        //line takes the SAME tint - the store's signed net flow over the WHOLE day (socFlow). That whole-day flow,
+        //not the power strand's own dir, because the SoC line is continuous where the power one is cut into short
+        //runs, and the power dir would leave those stretches uncoloured, dropping them onto the discharge fallback.
+        //Falls back to the merged SoC when the install has a single bank (perBank is empty there).
+        const socDir = socFlow(host, slots, win);
+        const banks  = host._batterySocPerBankHistory.length > 0
+            ? host._batterySocPerBankHistory
+            : (host._batterySocHistory ? [host._batterySocHistory] : []);
+        for (const bank of banks)
+        {
+            const soc = socDay(bank, slots, dayStartMs);
+            if (anyValue(soc)) { out.push({ values: soc, predicted: noPred(), peak: 100, dashed: true, colour: { kind: 'flow', dir: socDir } }); }
+        }
+        return out;
+    }
+
+    if (isGroupTarget(target))
+    {
+        const store = host._unifiedStore;
+        if (!store) { return []; }
+        const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
+        if (!devs.length) { return []; }
+        //One strand per device, its recorder `change` series mapped onto the store grid as watts (magnitude), binned
+        //to slot energy then back to average kW. Each device keeps its dashboard graph colour (by index).
+        const built = devs.map((dev) =>
+        {
+            const watts = changeSeriesToWatts(
+                host._deviceChangeSeries.get(dev.statConsumption) ?? null,
+                store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs);
+            const values = toKw(binSlotSum(store, watts, slots, win));
+            dropShortRuns(values);
+            return { index: dev.index, values };
+        });
+        //Shared peak across the group's devices, so a device that drew more stands taller than one that drew less,
+        //on one scale rather than each filling its own height.
+        let peak = 0;
+        for (const b of built) { const p = peakOf(b.values); if (p > peak) { peak = p; } }
+        if (peak <= 0) { return []; }
+        return built
+            .filter((b) => anyValue(b.values))
+            .map((b) => ({ values: b.values, predicted: noPred(), peak, colour: { kind: 'device', index: b.index } as StrandColour }));
+    }
+
+    if (target === 'irradiance')
+    {
+        const store = host._unifiedStore;
+        if (!store) { return []; }
+        //Only where the weather model reaches. Open-Meteo runs out around 16 days, and the month window is longer
+        //and capped to hourly, so it carries no irradiance to draw - the same limit the irradiance chip honours by
+        //dropping out of month mode. Gated on the mode's weather flag so the curve and the chip agree exactly.
+        if (!TIMELINE_MODES[host._timelineMode].weather) { return []; }
+        //Average W/m2 per slot, forecast included (binSlotAvg is not clamped at now), on the strand's own peak like
+        //every other day curve: a cloudy day fills its height and reads by SHAPE, rather than crawling along the
+        //ground under a fixed 0..1000 scale the way the flat chart uses.
+        const values = binSlotAvg(store, store.irradiance, slots, win);
+        dropShortRuns(values);
+        const peak = peakOf(values);
+        if (peak <= 0) { return []; }
+        return [{ values, predicted: noPred(), peak, colour: { kind: 'token', token: 'irradiance' } }];
+    }
+
+    //Anything else: no day curve yet.
+    return [];
 }

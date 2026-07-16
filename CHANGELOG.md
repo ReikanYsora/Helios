@@ -56,8 +56,8 @@ charge and discharge beams above it.
 
 ### New: the day curve
 
-Click the solar chip a second time, once it is the active one, and the day you are
-looking at rises around your house as a curve.
+Click any chip a second time, once it is the active one, and the day you are looking
+at rises around your house as a curve.
 
 It does not stand on a ring. It stands on the sun's own path, projected straight
 down onto the ground: the track closes in on the house at midday, when the sun is
@@ -65,16 +65,24 @@ overhead, and reaches out to the exact spots where the arc meets the ground at
 sunrise and sunset. So where a point sits on that track IS the hour it happened, and
 a dashed line drops from the sun to the curve right beneath it. Scrub the timeline
 and the whole thing follows: another day means that day's sun, that day's track and
-that day's production, never an average of the week around it.
+that day's readings, never an average of the week around it.
 
-Today's remaining hours carry on from your solar forecast, dashed, so the shape of
-the day runs unbroken from this morning to tonight and only its certainty gives way
-at the present moment.
+Every metric draws itself its own way. **Production** splits into one curve per solar
+source, each in its energy-dashboard colour, like the timeline; today's remaining
+hours carry on from your forecast, dashed, so the shape of the day runs unbroken from
+this morning to tonight and only its certainty gives way at the present moment.
+**Grid** draws import and export together. **Battery** draws its power, tinted by
+charge and discharge, alongside a dashed state-of-charge curve for each pack.
+A **monitoring group** draws one curve per device, in each device's colour.
+**Irradiance** draws one too, on every period but Month, which reaches back further
+than the weather model does.
 
-The curve writes itself on as it is raised, from its own midnight, and the chips
-that have nothing to say about production step aside while it is up. Click the chip
-again to put it away. It follows your **Graph detail** setting like every other
-curve, so it smooths out at one point an hour and resolves every cloud at six.
+Switch chips and the curve re-points and stays up, so you can walk one day through
+each metric. The curve writes itself on as it is raised, from its own midnight, and
+the chips that have nothing to say about the metric on show step aside while it is
+up. Click the active chip again to put it away. It follows your **Graph detail**
+setting like every other curve, so it smooths out at one point an hour and resolves
+every cloud at six.
 
 ### Changed: a calmer scene
 

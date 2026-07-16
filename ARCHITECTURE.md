@@ -196,19 +196,31 @@ bound to the active chip, so tapping another chip re-points it rather than closi
 it; a tap on the scene background is what dismisses it. Every figure is recomputed
 from the very series the bottom chart draws, so panel and curve always agree.
 
-**Re-tapping the already-active PV chip** raises the **day curve**
+**Re-tapping any already-active chip** raises the **day curve**
 (`scene/day-curve.ts`, data in `data/period-totals/day-profile.ts`): the scrubbed
-day's production, drawn as a line standing on the sun's own ground track around the
-home. That track is the sun arc projected straight down, so it is not a circle - the
-sun sits at `R x cos(altitude)` from the home, which pulls the track in at noon and
-out to the arc's own feet at sunrise and sunset. Every ground point is where the sun
-really stood at that moment, so position on the track carries the hour with no clock
-convention to agree on, and the southern hemisphere needs no mirroring. Each sample
-rises vertically off its own ground point; a dashed leader drops from the sun to the
-curve beneath it, with a bead where it lands. The day writes itself on from its own
-midnight when the curve is raised, and the chips that have nothing to do with
-production stand down while it is up. On today the forecast carries the curve past
-the present moment, dashed: the same line, only its certainty gives way.
+day for that metric, drawn as one or more lines standing on the sun's own ground
+track around the home. That track is the sun arc projected straight down, so it is
+not a circle - the sun sits at `R x cos(altitude)` from the home, which pulls the
+track in at noon and out to the arc's own feet at sunrise and sunset. Every ground
+point is where the sun really stood at that moment, so position on the track carries
+the hour with no clock convention to agree on, and the southern hemisphere needs no
+mirroring. The gesture is generic; a few metrics draw more than one line and are the
+only per-metric branch in `day-profile.ts`: production splits one line per PV source
+(each in its energy-dashboard colour); grid draws import and export; battery draws
+its power, tinted by charge/discharge flow, plus a dashed state-of-charge line per
+bank; a monitoring group draws one line per device; irradiance draws one, except in
+Month, where the weather model does not reach. Switching chips re-points the curve
+and leaves it up, so tapping across the cluster walks one day through each metric.
+
+Geometry is shared and computed once (the ground track, the near/far depth split,
+the per-hour risers rising to the tallest line of the moment); each line - a
+`DayStrand` - carries only its own values, peak, colour and dash. A dashed leader
+drops from the sun to the topmost line, with one bead where the sun's slot lands on
+each. Colours are DESCRIPTORS resolved live against the theme, never frozen into the
+one-day profile the card memoises. The day writes itself on from its own midnight
+when raised, and the chips with nothing to say about the active metric stand down
+while it is up. On today the production forecast carries the curve past the present
+moment, dashed, as its own line: the same shape, only its certainty gives way.
 
 The curve is projected by the engine but rendered as a **HUD layer**, not scene
 geometry, and deliberately: `#map-container` is its own stacking context, so

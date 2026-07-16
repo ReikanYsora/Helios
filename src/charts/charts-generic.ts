@@ -3,13 +3,13 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex } from '../core/format/format';
+import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarColor } from '../core/format/format';
 import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts } from '../data/sources/energy-stats';
-import { type ChartHost, type ChartTarget, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
+import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -72,6 +72,24 @@ export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): stri
     return sumArr(store.battery, v => Math.max(0, v)) >= sumArr(store.battery, v => Math.max(0, -v))
         ? chipSlotColor(el, host.config, 'batteryCharge')
         : chipSlotColor(el, host.config, 'batteryDischarge');
+}
+
+
+//Resolve a day-curve strand's colour descriptor to live theme hex, off the SAME one rule the chart accents use so
+//a curve never keeps a private palette that drifts from its chip. Called on every build (cheap) rather than memoed,
+//so a theme flip repaints the curve. `flow` returns a per-slot array (charge / discharge / idle) plus a solid
+//fallback for any slot the direction left null.
+export function resolveStrandColour(host: ChartHost, sc: StrandColour): { colour: string; segColours?: (string | null)[] }
+{
+    const el = host as unknown as Element; //live HA theme-token colour resolution
+    if (sc.kind === 'token')  { return { colour: chipSlotColor(el, host.config, sc.token) }; }
+    if (sc.kind === 'device') { return { colour: deviceColorByIndex(el, sc.index) }; }
+    if (sc.kind === 'solar')  { return { colour: energySolarColor(el, chartIsDark(host), sc.index) }; }
+    const chg  = chipSlotColor(el, host.config, 'batteryCharge');
+    const dis  = chipSlotColor(el, host.config, 'batteryDischarge');
+    const idle = cssHex(el, '--secondary-text-color', '#9e9e9e');
+    const seg  = sc.dir.map((d) => (d === 'charge' ? chg : d === 'discharge' ? dis : d === 'idle' ? idle : null));
+    return { colour: dis, segColours: seg };
 }
 
 
@@ -248,7 +266,7 @@ function buildTargetSeries(
 
 
 //Generic chart for the non-production targets. Grid + battery draw two directional series each; irradiance one
-//curve on a fixed 0..1000 W/m² scale. Power stays in watts (tooltip formats to kW).
+//curve on a fixed 0..1000 W/m2 scale. Power stays in watts (tooltip formats to kW).
 function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'production'>): TemplateResult
 {
     const el = host as unknown as Element; //live HA theme-token colour resolution

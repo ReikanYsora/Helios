@@ -61,7 +61,8 @@ export const heliosCardStyles = css`
             its transform (see SceneCamera.groundTransform), so it projects EXACTLY like the overlays' project3, and
             the flat scene SVG stays out of any 3D context (keeps the buildings aligned with the basemap).
             No overflow:hidden: ha-card already clips, to its rounded box, a pixel tighter than this one. It also
-            sat over a preserve-3d subtree, which old WebKit clips badly - the suspected cause of #304, unverified. */
+            sat over a preserve-3d subtree, which old WebKit clips badly, the suspected cause of the top-half-only
+            render on some old iPads (unverified). */
         position: absolute;
         /*  Bleed 1 px under the border to cover the anti-alias seam at the corners; ha-card clips it back. */
         inset: -1px;
@@ -255,18 +256,29 @@ export const heliosCardStyles = css`
     .helios-day-curve-far  { z-index: 5;  }
     .helios-day-curve-near { z-index: 11; }
 
-    /*  PV chip with the day curve up: its second notch, pressed. The chip is an outline in the metric's colour on
+    /*  Any chip with its day curve up: its second notch, pressed. The chip is an outline in the metric's colour on
         the card's background, so ON simply swaps the two - the universal switch language, outlined off / filled on.
         A different LANGUAGE from the .is-chart-active halo, which says "this is the selected chip": the two states
-        stack without ever being mistaken for each other. No pixel added, no hit target shrunk. */
-    .pv-pct-label.is-curve-on
+        stack without ever being mistaken for each other. No pixel added, no hit target shrunk. --chip-glow is each
+        chip's own accent, so every chip fills with its own colour. */
+    .pv-pct-label.is-curve-on,
+    .battery-pct-label.is-curve-on,
+    .grid-label.is-curve-on,
+    .group-label.is-curve-on,
+    .solar-pct-label.is-curve-on,
+    .home-pill.is-curve-on
     {
-        background: var(--chip-color, var(--primary-color, #ff9800));
+        background: var(--chip-glow, var(--primary-color, #ff9800));
         color: var(--ha-card-background, var(--card-background-color, #fff));
         transition: background ${unsafeCSS(HOME_GROW_MS)}ms ease, color ${unsafeCSS(HOME_GROW_MS)}ms ease;
     }
     /*  The icon rides the text colour, so it flips with it. */
-    .pv-pct-label.is-curve-on ha-icon
+    .pv-pct-label.is-curve-on ha-icon,
+    .battery-pct-label.is-curve-on ha-icon,
+    .grid-label.is-curve-on ha-icon,
+    .group-label.is-curve-on ha-icon,
+    .solar-pct-label.is-curve-on ha-icon,
+    .home-pill.is-curve-on ha-icon
     {
         color: var(--ha-card-background, var(--card-background-color, #fff));
     }
@@ -282,12 +294,6 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.35;
         stroke-width: 1;
         stroke-dasharray: 2 3;
-        stroke-linecap: round;
-    }
-    /*  Dark outline under each span, same trick the solar arc uses to hold its line off the map. */
-    .helios-day-curve-outline
-    {
-        stroke: rgba(0, 0, 0, 0.35);
         stroke-linecap: round;
     }
     .helios-day-curve-line
@@ -310,6 +316,13 @@ export const heliosCardStyles = css`
     {
         stroke-dasharray: 1 5;
         stroke-opacity: 0.85;
+    }
+    /*  A level rather than a flow (the battery state of charge): dashed the whole way. Longer dashes than the
+        forecast pattern so a state of charge and a solar forecast never read as the same thing. */
+    .helios-day-curve-line.is-dashed
+    {
+        stroke-dasharray: 5 4;
+        stroke-opacity: 0.9;
     }
 
     /*  Per-chip detail panel: a compact vertical readout top-right, opened by any chip tap and closed by tapping
