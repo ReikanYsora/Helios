@@ -3,8 +3,9 @@
 //
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
-import { homeColor, type HeliosConfig } from '../core/config/helios-config';
+import { homeColor, mapColorKey, mapShowKey, type HeliosConfig } from '../core/config/helios-config';
 import { resolveUiColor } from '../core/format/format';
+import { GROUND_LAYER_KEYS } from '../scene/ground-render';
 import { HeliosEngine } from '../scene/helios-engine';
 import { refreshHud, setAnimationsPaused, type HudHost } from '../hud/hud';
 import type { ChartSeries } from '../charts/charts';
@@ -32,10 +33,8 @@ export function publishConsumptionColor(host: ConsumptionColorHost): void
 }
 
 
-//Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine in place.
-//Exhaustive on purpose: a missing key would leave a slider-dragged value stale until the next engine creation. Card-only
-//state and identity inputs (home coords) are out.
-export const VISUAL_CONFIG_KEYS = [
+//The fixed part of the visual-config key list (the per-layer basemap keys are appended below).
+const STATIC_VISUAL_CONFIG_KEYS = [
     //When set, feeds the engine sensor samples that override the weather model for live + past irradiance; a change must
     //refresh so the override (or its absence) is picked up immediately.
     'solar-irradiance-entity',
@@ -51,7 +50,21 @@ export const VISUAL_CONFIG_KEYS = [
     //Lock toggle: a change triggers updateConfig, which freezes/frees the camera at its current (drag-set) pose and
     //resyncs the stored pose. The buildings re-interpret updateConfig also runs is cheap (cached footprints, no refetch).
     'camera-locked',
+    //Basemap style: the theme mode and the surrounding-building tint. A change re-resolves the scene palette and
+    //repaints the vector ground from its cached features (no re-fetch), so an edit previews live instead of waiting
+    //for the next engine creation.
+    'building-color',
+    'map-theme-mode',
 ] as const;
+
+//The per-layer basemap colour + visibility keys, generated from the canonical layer list so they can never drift
+//from it. Same live-repaint path as the two keys above.
+const MAP_LAYER_CONFIG_KEYS = GROUND_LAYER_KEYS.flatMap((layer) => [mapColorKey(layer), mapShowKey(layer)]);
+
+//Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine in
+//place. Exhaustive on purpose: a missing key would leave a slider-dragged value stale until the next engine creation.
+//Card-only state and identity inputs (home coords) are out.
+export const VISUAL_CONFIG_KEYS: readonly string[] = [...STATIC_VISUAL_CONFIG_KEYS, ...MAP_LAYER_CONFIG_KEYS];
 
 
 //Defensive parser for `home-latitude`/`home-longitude` raw config values (typed `unknown`). Bare Number() is unsafe: Number(''),
