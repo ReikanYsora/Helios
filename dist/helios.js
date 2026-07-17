@@ -370,7 +370,12 @@ return new Date((d+u)/2)}var pt=null;function renderTimelineNightZones(e){const 
         );
     }
     /*  Screen-space scene SVG: cast shadows + extruded buildings repainted every frame.
-        Full-size overlay above the ground, click-transparent (the HUD SVGs own their pointer events). */
+        Full-size overlay above the ground, click-transparent (the HUD SVGs own their pointer events).
+        The building/shadow paths extend far past the card (a whole neighbourhood projected), so this element's
+        painted content is much larger than its box. On old iOS (issue #304) the compositor then sized this
+        layer's backing store to that content, blew the OS layer-size cap and painted only its top half. contain:
+        paint + overflow:hidden bound the layer to the card box (what we actually see), so the backing store stays
+        card-sized and the whole scene paints. No visible change elsewhere: off-card paint was already clipped. */
     .scene-svg
     {
         position: absolute;
@@ -379,6 +384,8 @@ return new Date((d+u)/2)}var pt=null;function renderTimelineNightZones(e){const 
         height: 100%;
         pointer-events: none;
         z-index: 1;
+        overflow: hidden;
+        contain: paint;
     }
     /*  Camera-locked cursor: default cursor when rotation is disabled, so the scene doesn't advertise an
         interaction that doesn't exist. */
