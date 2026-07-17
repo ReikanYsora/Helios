@@ -10,7 +10,7 @@ import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
-import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeById, mergeChangeSeries, extractPerEntity, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, quantizedAnchorMs, type KeyedFetch } from '../source-fetch';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
 import { localMidnightMinusDays } from '../../core/time/timezone';
@@ -97,6 +97,8 @@ export interface BatteryHost
     //keeps charging from reading as 0 W. Null until first fetch.
     _batteryChargeChangeSeries:    ChangeBucket[] | null;
     _batteryDischargeChangeSeries: ChangeBucket[] | null;
+    _batteryChargeChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
+    _batteryDischargeChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
     _batteryChangeFetch:           KeyedFetch;
 }
 
@@ -268,6 +270,17 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
                 const discharge = dischargeIds.length > 0 ? mergeChangeSeries(byId, dischargeIds) : null;
                 if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
                 if (discharge !== null) { host._batteryDischargeChangeSeries = discharge; }
+                //Per-source split for the stacked breakdown (multi-source only), from the same result, config order.
+                if (chargeIds.length >= 2)
+                {
+                    const pe = extractPerEntity(byId, chargeIds);
+                    if (pe.size > 0) { host._batteryChargeChangeSeriesPerEntity = pe; }
+                }
+                if (dischargeIds.length >= 2)
+                {
+                    const pe = extractPerEntity(byId, dischargeIds);
+                    if (pe.size > 0) { host._batteryDischargeChangeSeriesPerEntity = pe; }
+                }
                 host.requestUpdate();
             }));
 }

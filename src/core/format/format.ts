@@ -410,26 +410,48 @@ function labToHex([l, a, b]: [number, number, number]): string
 //always match the energy dashboard.
 //Memo for the deterministic LAB ramp step, keyed by base+dark+idx: per-source colours are recomputed every
 //chart/tooltip render, but the conversion only depends on those three.
-const _solarRampMemo = new Map<string, string>();
+const _energyRampMemo = new Map<string, string>();
 
-export function energySolarColor(host: Element | null | undefined, dark: boolean, idx: number): string
+//HA's getEnergyColor logic, ported: a source's colour is the theme override --<var>-<idx> when set, else the base
+//--<var> shifted in LAB lightness by 18 per index (brighten in dark, darken in light). Shared by solar/grid/battery
+//so multi-source curves read exactly like the HA Energy dashboard.
+export function energyRampColor(host: Element | null | undefined, dark: boolean, idx: number, propertyVar: string, fallback: string): string
 {
     if (host)
     {
-        const override = getComputedStyle(host).getPropertyValue(`--energy-solar-color-${idx}`).trim();
-        if (override) { return cssHex(host, `--energy-solar-color-${idx}`, '#ff9800'); }
+        const override = getComputedStyle(host).getPropertyValue(`${propertyVar}-${idx}`).trim();
+        if (override) { return cssHex(host, `${propertyVar}-${idx}`, fallback); }
     }
-    const base = cssHex(host, '--energy-solar-color', '#ff9800');
+    const base = cssHex(host, propertyVar, fallback);
     if (!idx) { return base; }
-    const key = `${base}|${dark}|${idx}`;
-    let out = _solarRampMemo.get(key);
+    const key = `${propertyVar}|${base}|${dark}|${idx}`;
+    let out = _energyRampMemo.get(key);
     if (out === undefined)
     {
         const lab = rgbToLab(hexToRgb(base));
         out = labToHex([lab[0] + (dark ? 18 : -18) * idx, lab[1], lab[2]]);
-        _solarRampMemo.set(key, out);
+        _energyRampMemo.set(key, out);
     }
     return out;
+}
+
+export function energySolarColor(host: Element | null | undefined, dark: boolean, idx: number): string
+{
+    return energyRampColor(host, dark, idx, '--energy-solar-color', '#ff9800');
+}
+
+export function energyGridColor(host: Element | null | undefined, dark: boolean, idx: number, dir: 'import' | 'export'): string
+{
+    return dir === 'import'
+        ? energyRampColor(host, dark, idx, '--energy-grid-consumption-color', '#488fc2')
+        : energyRampColor(host, dark, idx, '--energy-grid-return-color', '#8353d1');
+}
+
+export function energyBatteryColor(host: Element | null | undefined, dark: boolean, idx: number, dir: 'charge' | 'discharge'): string
+{
+    return dir === 'charge'
+        ? energyRampColor(host, dark, idx, '--energy-battery-in-color', '#f06292')
+        : energyRampColor(host, dark, idx, '--energy-battery-out-color', '#4db6ac');
 }
 
 //Colour HA gives an individual device by its position in the Energy dashboard's device list: the theme's

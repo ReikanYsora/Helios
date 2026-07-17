@@ -21,7 +21,7 @@ import { forEachBucketSlot } from './slot-walk';
 import { displayUpdateFrequencyPerHour, type HeliosConfig } from '../../core/config/helios-config';
 import { type ChartTarget, type StrandColour, type StrandFlowDir, isGroupTarget, groupOfTarget } from '../../charts/charts';
 import { TIMELINE_MODES } from '../../timeline/timeline-modes';
-import { buildPeriodData, binSlotSum, type PeriodHost } from './period-totals';
+import { buildPeriodData, binSlotSum, type PeriodHost, type PeriodLayer } from './period-totals';
 import { changeSeriesToWatts } from '../sources/energy-stats';
 import { groupDevices } from '../sources/device-consumption';
 import type { PeriodWindow } from './slot-walk';
@@ -116,6 +116,28 @@ function stackLayers(values: readonly { values: number[] }[], slots: number): nu
         for (let s = 0; s < slots; s++) { out[s] += Math.max(0, layer.values[s] ?? 0); }
     }
     return out;
+}
+
+//Cumulative per-source strands for a set of layers (source 0 alone, then source 0+1, ...), each converted to kW, so
+//the outermost line tops the stack at the direction total - the same stacked reading the timeline draws as areas.
+//Uncovered slots stay null (they add nothing and carry no line). Returns bottom-source-first, each with its config
+//index for colouring. Consumes buildPeriodData layers, so the arc, panel and timeline all split identically.
+function cumulativeStrands(layers: PeriodLayer[], toKw: (energy: number[]) => (number | null)[], slots: number): { values: (number | null)[]; sourceIdx: number }[]
+{
+    const running = new Array<number>(slots).fill(0);
+    return layers.map((layer, i) =>
+    {
+        const kw   = toKw(layer.values);
+        const vals = new Array<number | null>(slots).fill(null);
+        for (let s = 0; s < slots; s++)
+        {
+            const v = kw[s];
+            if (v === null) { continue; }
+            running[s] += v;
+            vals[s]     = running[s];
+        }
+        return { values: vals, sourceIdx: layer.sourceIdx ?? i };
+    });
 }
 
 //A strand's own peak (its 100%), ignoring nulls. 0 when there is nothing to draw.
@@ -254,21 +276,20 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
             return [{ values, predicted, peak, colour: { kind: 'token', token: 'production' } }];
         }
 
-        //One strand per source, each in its HA Energy dashboard colour (energySolarColor by source index), like the
-        //timeline. The actuals stop at now; the aggregate forecast carries on as its OWN dashed strand, exactly as
-        //the timeline draws per-source areas up to now and one aggregate forecast line beyond. Shared peak over every
-        //source AND the forecast, so the sources and the total prediction all read on one kW scale (a source is
-        //shorter than the total because it IS a part of it - the honest height, once the lines are no longer stacked).
-        const sourceValues = data.layers.map((L) => toKw(L.values));
+        //One strand per source, CUMULATIVE (source 0 alone, then source 0+1, ...) so the outermost line tops the stack
+        //at the total, exactly as the timeline stacks the per-source areas up to now. Each in its HA Energy dashboard
+        //colour (energySolarColor by source index). The aggregate forecast carries on beyond now as its OWN dashed
+        //strand. Shared peak over the stack top AND the forecast, so both read on one kW scale.
+        const stacked = cumulativeStrands(data.layers, toKw, slots);
         let peak = peakOf(fc);
-        for (const v of sourceValues) { peak = Math.max(peak, peakOf(v)); }
+        for (const st of stacked) { peak = Math.max(peak, peakOf(st.values)); }
         if (peak <= 0) { return []; }
 
         const out: ProfileStrand[] = [];
-        sourceValues.forEach((v, s) =>
+        stacked.forEach((st) =>
         {
-            dropShortRuns(v);
-            if (anyValue(v)) { out.push({ values: v, predicted: noPred(), peak, colour: { kind: 'solar', index: s } }); }
+            dropShortRuns(st.values);
+            if (anyValue(st.values)) { out.push({ values: st.values, predicted: noPred(), peak, colour: { kind: 'solar', index: st.sourceIdx } }); }
         });
         const fcVals = fc.slice();
         dropShortRuns(fcVals);
@@ -289,44 +310,65 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
 
     if (target === 'grid')
     {
+        //Import and export each stacked per source (cumulative), exactly as the timeline stacks them. Shared peak so
+        //both flows read on one scale. Single-source keeps its chip colour (token); multi-source takes the HA energy
+        //ramp by index (energyGridColor).
         const data = buildPeriodData(host, 'grid', win, slots);
-        if (data.layers.length < 2) { return []; }
-        const imp = toKw(data.layers[0].values);
-        const exp = toKw(data.layers[1].values);
-        dropShortRuns(imp);
-        dropShortRuns(exp);
-        //Shared peak so import and export are read on one scale: the flow that dominated the day stands tallest and
-        //the other is proportional, rather than each filling its own height and losing the comparison.
-        const peak = Math.max(peakOf(imp), peakOf(exp));
+        const imp  = data.layers.filter((L) => L.dir === 'import');
+        const exp  = data.layers.filter((L) => L.dir === 'export');
+        const impStacked = cumulativeStrands(imp, toKw, slots);
+        const expStacked = cumulativeStrands(exp, toKw, slots);
+        let peak = 0;
+        for (const st of [...impStacked, ...expStacked]) { peak = Math.max(peak, peakOf(st.values)); }
         if (peak <= 0) { return []; }
         const out: ProfileStrand[] = [];
-        if (anyValue(imp)) { out.push({ values: imp, predicted: noPred(), peak, colour: { kind: 'token', token: 'gridImport' } }); }
-        if (anyValue(exp)) { out.push({ values: exp, predicted: noPred(), peak, colour: { kind: 'token', token: 'gridExport' } }); }
+        const pushGrid = (stacked: { values: (number | null)[]; sourceIdx: number }[], layers: PeriodLayer[], dir: 'import' | 'export'): void =>
+        {
+            const perSource = layers.length > 0 && layers[0].sourceIdx !== undefined;
+            const token     = dir === 'import' ? 'gridImport' as const : 'gridExport' as const;
+            for (const st of stacked)
+            {
+                dropShortRuns(st.values);
+                if (!anyValue(st.values)) { continue; }
+                const colour: StrandColour = perSource ? { kind: 'grid', index: st.sourceIdx, dir } : { kind: 'token', token };
+                out.push({ values: st.values, predicted: noPred(), peak, colour });
+            }
+        };
+        pushGrid(impStacked, imp, 'import');
+        pushGrid(expStacked, exp, 'export');
         return out;
     }
 
     if (target === 'battery')
     {
-        const data = buildPeriodData(host, 'battery', win, slots); //layers[0] = discharge, layers[1] = charge (kWh)
-        const dis  = data.layers[0]?.values;
-        const chg  = data.layers[1]?.values;
-        let power: (number | null)[] | null = null;
-        //The power line's own per-slot tint: charge where the charge energy leads, discharge where it trails, idle
-        //where they match. It comes free from the two layers, cut to the power line's own drawn slots.
-        let dir: (StrandFlowDir | null)[] = [];
-        if (dis && chg)
-        {
-            power = toKw(dis.map((d, s) => d + chg[s]));
-            dir   = power.map((v, s) => (v === null ? null : (chg[s] > dis[s] ? 'charge' : (dis[s] > chg[s] ? 'discharge' : 'idle'))));
-            dropShortRuns(power);
-            for (let s = 0; s < slots; s++) { if (power[s] === null) { dir[s] = null; } }
-        }
+        //Discharge and charge each stacked per source (cumulative), matching the timeline's two directional areas.
+        //Single-source keeps its chip colour; multi-source takes the HA energy ramp by index. SoC stays a separate
+        //per-bank dashed overlay below.
+        const data = buildPeriodData(host, 'battery', win, slots);
+        const dis  = data.layers.filter((L) => L.dir === 'discharge');
+        const chg  = data.layers.filter((L) => L.dir === 'charge');
+        const disStacked = cumulativeStrands(dis, toKw, slots);
+        const chgStacked = cumulativeStrands(chg, toKw, slots);
+        let peak = 0;
+        for (const st of [...disStacked, ...chgStacked]) { peak = Math.max(peak, peakOf(st.values)); }
 
         const out: ProfileStrand[] = [];
-        if (power)
+        if (peak > 0)
         {
-            const peak = peakOf(power);
-            if (peak > 0 && anyValue(power)) { out.push({ values: power, predicted: noPred(), peak, colour: { kind: 'flow', dir } }); }
+            const pushBatt = (stacked: { values: (number | null)[]; sourceIdx: number }[], layers: PeriodLayer[], dir: 'charge' | 'discharge'): void =>
+            {
+                const perSource = layers.length > 0 && layers[0].sourceIdx !== undefined;
+                const token     = dir === 'charge' ? 'batteryCharge' as const : 'batteryDischarge' as const;
+                for (const st of stacked)
+                {
+                    dropShortRuns(st.values);
+                    if (!anyValue(st.values)) { continue; }
+                    const colour: StrandColour = perSource ? { kind: 'battery', index: st.sourceIdx, dir } : { kind: 'token', token };
+                    out.push({ values: st.values, predicted: noPred(), peak, colour });
+                }
+            };
+            pushBatt(disStacked, dis, 'discharge');
+            pushBatt(chgStacked, chg, 'charge');
         }
         //SoC on its own 0..100 scale, dashed, so its 100 % reaches the same top the power peak does (that is what
         //"leans on the power curve's max for its 100 %" means once both fill their own height at their own peak). One

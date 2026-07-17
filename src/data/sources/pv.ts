@@ -6,7 +6,7 @@
 import type { HeliosConfig } from '../../core/config/helios-config';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { formatEntityValue, parseNumericState, type PowerUnit } from '../../core/format/format';
-import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeById, mergeChangeSeries, extractPerEntity, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { localMidnightMinusDays } from '../../core/time/timezone';
 //Re-export so battery/grid/charts/helios-card can import pvNormalizeToWatts from './pv'.
@@ -182,12 +182,7 @@ export function refreshPv(host: PvHost): void
                     //buckets from the same per-id result, no extra call. Only meaningful with 2+ sources.
                     if (changeIds.length >= 2)
                     {
-                        const next = new Map<string, ChangeBucket[]>();
-                        for (const meter of changeIds)
-                        {
-                            const b = byId[meter];
-                            if (b) { next.set(meter, b); }
-                        }
+                        const next = extractPerEntity(byId, changeIds);
                         if (next.size > 0) { host._pvChangeSeriesPerEntity = next; }
                     }
                     host.requestUpdate();

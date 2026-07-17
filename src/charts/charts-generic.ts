@@ -3,12 +3,12 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarColor } from '../core/format/format';
+import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarColor, energyGridColor, energyBatteryColor } from '../core/format/format';
 import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
-import { sumChangeForDay, changeSeriesToWatts } from '../data/sources/energy-stats';
+import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
 import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
@@ -85,6 +85,8 @@ export function resolveStrandColour(host: ChartHost, sc: StrandColour): { colour
     if (sc.kind === 'token')  { return { colour: chipSlotColor(el, host.config, sc.token) }; }
     if (sc.kind === 'device') { return { colour: deviceColorByIndex(el, sc.index) }; }
     if (sc.kind === 'solar')  { return { colour: energySolarColor(el, chartIsDark(host), sc.index) }; }
+    if (sc.kind === 'grid')    { return { colour: energyGridColor(el, chartIsDark(host), sc.index, sc.dir) }; }
+    if (sc.kind === 'battery') { return { colour: energyBatteryColor(el, chartIsDark(host), sc.index, sc.dir) }; }
     const chg  = chipSlotColor(el, host.config, 'batteryCharge');
     const dis  = chipSlotColor(el, host.config, 'batteryDischarge');
     const idle = cssHex(el, '--secondary-text-color', '#9e9e9e');
@@ -109,6 +111,36 @@ interface TargetSeriesCtx
     startMs:  number;
     endMsAbs: number;
     toPts:    (arr: readonly (number | null)[], map?: (v: number) => number) => { t: number; v: number }[];
+}
+
+//Cumulative per-source areas for one flow direction (grid import/export, battery charge/discharge): each source's
+//running-sum watts on the store grid, LARGEST-FIRST so the smaller source paints on top and each band shows its own
+//colour - the same stacked reading the arc draws. Returns null (fall back to the aggregate) unless 2+ sources each
+//carry their own recorder series. Config order + HA energy colours, so the timeline and arc match exactly.
+function stackedLines(
+    store: NonNullable<ChartHost['_unifiedStore']>,
+    toPts: (arr: readonly (number | null)[], map?: (v: number) => number) => { t: number; v: number }[],
+    ids: string[],
+    map: Map<string, ChangeBucket[]>,
+    colour: (idx: number) => string
+): ChartLine[] | null
+{
+    if (ids.length < 2 || !ids.every((id) => map.has(id))) { return null; }
+    const nowMs   = Date.now();
+    const running = new Array<number | null>(store.bucketsTotal).fill(null);
+    const lines: ChartLine[] = [];
+    ids.forEach((id, s) =>
+    {
+        const w = changeSeriesToWatts(map.get(id) ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs);
+        for (let i = 0; i < store.bucketsTotal; i++)
+        {
+            const v = w[i];
+            if (v === null) { continue; }
+            running[i] = (running[i] ?? 0) + Math.max(0, v);
+        }
+        lines.push({ pts: toPts(running.slice()), color: colour(s) });
+    });
+    return lines.reverse();
 }
 
 //Build the drawable series (plus the SoC-hover source + a fixed Y max where the target pins one) for a chart
@@ -144,22 +176,25 @@ function buildTargetSeries(
     }
     else if (target === 'grid')
     {
-        const imp = toPts(store.gridImport);
-        const exp = toPts(store.gridExport);
+        const ed = host._energyDefaults;
         series = [
-            { pts: imp, color: chipSlotColor(el, host.config, 'gridImport') },
-            { pts: exp, color: chipSlotColor(el, host.config, 'gridExport') },
+            ...(stackedLines(store, toPts,ed.gridStatEnergyFroms, host._gridImportChangeSeriesPerEntity, (s) => energyGridColor(el, chartIsDark(host), s, 'import'))
+                ?? [{ pts: toPts(store.gridImport), color: chipSlotColor(el, host.config, 'gridImport') }]),
+            ...(stackedLines(store, toPts,ed.gridStatEnergyTos, host._gridExportChangeSeriesPerEntity, (s) => energyGridColor(el, chartIsDark(host), s, 'export'))
+                ?? [{ pts: toPts(store.gridExport), color: chipSlotColor(el, host.config, 'gridExport') }]),
         ];
     }
     else if (target === 'battery')
     {
         //Store battery is signed net power (charge - discharge); split into two non-negative curves so each flow
-        //reads distinctly, each zero while the other is active.
-        const charge    = toPts(store.battery, v => Math.max(0, v));
-        const discharge = toPts(store.battery, v => Math.max(0, -v));
+        //reads distinctly, each zero while the other is active. Multi-source stacks each flow per source (the same
+        //cumulative reading the arc draws), else the aggregate split.
+        const ed = host._energyDefaults;
         series = [
-            { pts: charge,    color: chipSlotColor(el, host.config, 'batteryCharge') },
-            { pts: discharge, color: chipSlotColor(el, host.config, 'batteryDischarge') },
+            ...(stackedLines(store, toPts,ed.batteryStatEnergyTos, host._batteryChargeChangeSeriesPerEntity, (s) => energyBatteryColor(el, chartIsDark(host), s, 'charge'))
+                ?? [{ pts: toPts(store.battery, v => Math.max(0, v)), color: chipSlotColor(el, host.config, 'batteryCharge') }]),
+            ...(stackedLines(store, toPts,ed.batteryStatEnergyFroms, host._batteryDischargeChangeSeriesPerEntity, (s) => energyBatteryColor(el, chartIsDark(host), s, 'discharge'))
+                ?? [{ pts: toPts(store.battery, v => Math.max(0, -v)), color: chipSlotColor(el, host.config, 'batteryDischarge') }]),
         ];
         //Per-bank SoC overlays the flows: one dashed line-only curve per bank, its 0..100 % scaled onto the power
         //peak (100 % = peak) so both share one axis and a sagging bank reads against the charge/discharge areas.

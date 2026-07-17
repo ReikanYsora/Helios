@@ -143,11 +143,14 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
     //profile lands) -> nothing to show.
     if (!data.layers.length) { return []; }
 
+    //Sum all layers of a flow direction: one layer on a single-source install, several once split per source.
+    const dirTotal = (dir: string): number =>
+        data.layers.filter((l) => l.dir === dir).reduce((acc, l) => acc + layerPeriodTotal(l, data), 0);
+
     if (target === 'grid')
     {
-        //Layer order from buildPeriodData: [import, export].
-        const imp = layerPeriodTotal(data.layers[0], data);
-        const exp = data.layers[1] ? layerPeriodTotal(data.layers[1], data) : 0;
+        const imp = dirTotal('import');
+        const exp = dirTotal('export');
         const net = imp - exp;
         const netStr = `${net < 0 ? '-' : ''}${energy(Math.abs(net))}`;
         return [
@@ -160,9 +163,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 
     if (target === 'battery')
     {
-        //Layer order from buildPeriodData: [discharge, charge].
-        const discharged = layerPeriodTotal(data.layers[0], data);
-        const charged    = data.layers[1] ? layerPeriodTotal(data.layers[1], data) : 0;
+        const discharged = dirTotal('discharge');
+        const charged    = dirTotal('charge');
         return [
             { icon: chipSlotIcon(host.config, 'batteryCharge', 'mdi:battery-arrow-down'), value: energy(charged) },
             { icon: chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-up'),   value: energy(discharged) },

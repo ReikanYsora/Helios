@@ -34,10 +34,12 @@ export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'b
 //`device` a group device's dashboard colour by index; `flow` a per-slot battery tint (charge / discharge / idle).
 export type StrandFlowDir = 'charge' | 'discharge' | 'idle';
 export type StrandColour =
-    | { kind: 'token';  token: ChipSlot }
-    | { kind: 'device'; index: number }
-    | { kind: 'solar';  index: number }
-    | { kind: 'flow';   dir: (StrandFlowDir | null)[] };
+    | { kind: 'token';   token: ChipSlot }
+    | { kind: 'device';  index: number }
+    | { kind: 'solar';   index: number }
+    | { kind: 'grid';    index: number; dir: 'import' | 'export' }
+    | { kind: 'battery'; index: number; dir: 'charge' | 'discharge' }
+    | { kind: 'flow';    dir: (StrandFlowDir | null)[] };
 
 //Group target helpers: build a target from a group number, test one, and read its group number (0 when not a group).
 export function groupTarget(n: number): GroupTarget { return `group-${n}` as GroupTarget; }
@@ -123,6 +125,12 @@ export interface ChartHost
     //Per-device recorder `change` series (statConsumption id -> buckets) for the grouped + visible devices, feeding
     //the monitoring-group chart curves. Empty when no device is grouped.
     readonly _deviceChangeSeries: Map<string, ChangeBucket[]>;
+    //Per-source recorder `change` series for grid (import/export) and battery (charge/discharge), keyed by energy
+    //meter (config order), for the multi-source stacked breakdown. Empty on single-source installs.
+    readonly _gridImportChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
+    readonly _gridExportChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
+    readonly _batteryChargeChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
+    readonly _batteryDischargeChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
     //Active bottom-chart target. Drives which series renderBottomChart draws; defaults to 'production'.
     readonly _chartTarget?: ChartTarget;
 }

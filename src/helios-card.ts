@@ -148,6 +148,10 @@ export class HeliosCard extends LitElement
     //unified store + scrub. Reset-corrected kWh per 5-min bucket, same as the HA Energy dashboard.
     @state() _gridImportChangeSeries: ChangeBucket[] | null = null;
     @state() _gridExportChangeSeries: ChangeBucket[] | null = null;
+    //Per-source split of the same change fetch, for the multi-source stacked breakdown (arc + timeline). Empty on a
+    //single-source install; config (meter) order, matching the aggregate above.
+    @state() _gridImportChangeSeriesPerEntity = new Map<string, ChangeBucket[]>();
+    @state() _gridExportChangeSeriesPerEntity = new Map<string, ChangeBucket[]>();
     _gridImportFetch = new KeyedFetch();
     _gridExportFetch = new KeyedFetch();
     //Mis-scope guard for the live grid sensor (grid-guard.ts). Plain field: transitions are pushed through
@@ -172,6 +176,9 @@ export class HeliosCard extends LitElement
     //structural sign so charging is never lost.
     @state() _batteryChargeChangeSeries:    ChangeBucket[] | null = null;
     @state() _batteryDischargeChangeSeries: ChangeBucket[] | null = null;
+    //Per-source split for the multi-source stacked breakdown (arc + timeline). Empty on a single-source install.
+    @state() _batteryChargeChangeSeriesPerEntity    = new Map<string, ChangeBucket[]>();
+    @state() _batteryDischargeChangeSeriesPerEntity = new Map<string, ChangeBucket[]>();
     _batteryChangeFetch = new KeyedFetch();
     //Per-device recorder `change` series (statConsumption id -> buckets) for the grouped + visible devices, feeding
     //the monitoring-group chips. Empty until the first fetch / when no device is grouped.
@@ -225,6 +232,10 @@ export class HeliosCard extends LitElement
         store:      unknown;
         pv:         unknown;
         perEntity:  unknown;
+        gridImpPE:  unknown;
+        gridExpPE:  unknown;
+        battChgPE:  unknown;
+        battDisPE:  unknown;
         devices:    unknown;
         soc:        unknown;
         socBank:    unknown;
@@ -513,6 +524,10 @@ export class HeliosCard extends LitElement
             && m.store      === this._unifiedStore
             && m.pv         === this._pvChangeSeries
             && m.perEntity  === this._pvChangeSeriesPerEntity
+            && m.gridImpPE  === this._gridImportChangeSeriesPerEntity
+            && m.gridExpPE  === this._gridExportChangeSeriesPerEntity
+            && m.battChgPE  === this._batteryChargeChangeSeriesPerEntity
+            && m.battDisPE  === this._batteryDischargeChangeSeriesPerEntity
             && m.devices    === this._deviceChangeSeries
             && m.soc        === this._batterySocHistory
             && m.socBank    === this._batterySocPerBankHistory
@@ -530,6 +545,10 @@ export class HeliosCard extends LitElement
                 store:     this._unifiedStore,
                 pv:        this._pvChangeSeries,
                 perEntity: this._pvChangeSeriesPerEntity,
+                gridImpPE: this._gridImportChangeSeriesPerEntity,
+                gridExpPE: this._gridExportChangeSeriesPerEntity,
+                battChgPE: this._batteryChargeChangeSeriesPerEntity,
+                battDisPE: this._batteryDischargeChangeSeriesPerEntity,
                 devices:   this._deviceChangeSeries,
                 soc:       this._batterySocHistory,
                 socBank:   this._batterySocPerBankHistory,
@@ -706,6 +725,8 @@ export class HeliosCard extends LitElement
         this._haSolarForecastFetchedAt    = 0;
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;
+        this._gridImportChangeSeriesPerEntity = new Map();
+        this._gridExportChangeSeriesPerEntity = new Map();
         this._gridImportFetch.reset();
         this._gridExportFetch.reset();
         this._gridGuard                   = createGridGuard();
@@ -713,6 +734,8 @@ export class HeliosCard extends LitElement
         this._batteryFetchKey             = '';
         this._batteryChargeChangeSeries   = null;
         this._batteryDischargeChangeSeries = null;
+        this._batteryChargeChangeSeriesPerEntity    = new Map();
+        this._batteryDischargeChangeSeriesPerEntity = new Map();
         this._batteryChangeFetch.reset();
         this._deviceChangeSeries          = new Map();
         this._deviceChangeFetch.reset();

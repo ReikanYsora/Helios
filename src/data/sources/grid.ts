@@ -15,7 +15,7 @@
 
 import { formatEntityValue, type PowerUnit } from '../../core/format/format';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
-import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeById, mergeChangeSeries, extractPerEntity, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { refreshGridGuard, type GridGuardState } from './grid-guard';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { localMidnightMinusDays } from '../../core/time/timezone';
@@ -43,6 +43,8 @@ export interface GridHost
     //Consumer converts to average watts (kWh * 1000 / bucket-hours). Null until first fetch lands.
     _gridImportChangeSeries: ChangeBucket[] | null;
     _gridExportChangeSeries: ChangeBucket[] | null;
+    _gridImportChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
+    _gridExportChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
     _gridImportFetch: KeyedFetch;
     _gridExportFetch: KeyedFetch;
 
@@ -160,6 +162,16 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
                 {
                     if (slot === 'import') { host._gridImportChangeSeries = series; }
                     else                   { host._gridExportChangeSeries = series; }
+                }
+                //Per-source split for the stacked breakdown (multi-source only), from the same result, config order.
+                if (ids.length >= 2)
+                {
+                    const pe = extractPerEntity(byId, ids);
+                    if (pe.size > 0)
+                    {
+                        if (slot === 'import') { host._gridImportChangeSeriesPerEntity = pe; }
+                        else                   { host._gridExportChangeSeriesPerEntity = pe; }
+                    }
                 }
                 host.requestUpdate();
             }));

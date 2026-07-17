@@ -8,7 +8,7 @@
 import { HOUR_MS, HOURS_PER_DAY } from '../../core/config/constants';
 import { forEachBucketSlot, slotOf, type PeriodWindow } from './slot-walk';
 import type { ChartTarget, ChartHost } from '../../charts/charts';
-import { changeSeriesToWatts } from '../sources/energy-stats';
+import { changeSeriesToWatts, type ChangeBucket } from '../sources/energy-stats';
 import { consumptionLoad } from '../../core/energy';
 import type { UnifiedDataStore } from '../unifiedStore';
 import type { TimelineMode } from '../../timeline/timeline-modes';
@@ -23,11 +23,16 @@ export type PeriodHost = ChartHost & {
     _energyDefaults: EnergyDefaults;
 };
 
+//Flow direction a grid/battery layer belongs to, for grouping the per-source split and picking its colour.
+export type LayerDir = 'import' | 'export' | 'charge' | 'discharge';
+
 //One stacked layer of a metric: a per-slot series over the day, at whatever resolution the caller asked
 //buildPeriodData for. Layers stack cumulatively.
 export interface PeriodLayer
 {
     values:     number[];     //TOTAL_SLOTS per-slot magnitudes (W or %)
+    dir?:       LayerDir;     //grid/battery flow the layer belongs to; absent for production/consumption
+    sourceIdx?: number;       //per-source index within its direction (config order); absent on the aggregate fallback
 }
 
 export interface PeriodData
@@ -149,21 +154,44 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
         return data('percent', [{ values: fillGaps(sum.map((v, i) => (cnt[i] ? v / cnt[i] : NaN))) }]);
     }
 
-    //Remaining metrics (grid, battery, consumption) are single- or dual-layer store series, binned by
-    //hour-of-day as energy totals.
+    //Remaining metrics (grid, battery, consumption), binned by hour-of-day as energy totals. Grid and battery split
+    //into direction layers, EACH further split per source when 2+ sources carry their own recorder series (for the
+    //stacked breakdown); consumption is one layer. Every grid/battery layer carries its `dir` so the arc, panel and
+    //timeline group + colour it identically. Single-source falls back to the aggregate store series, exactly as before.
     if (!store) { return data('energy', []); }
 
-    let specs: { series: (number | null)[] }[];
+    const nowMs = Date.now();
+    const sourceWatts = (m: Map<string, ChangeBucket[]>, id: string): (number | null)[] =>
+        changeSeriesToWatts(m.get(id) ?? null, store.storeStartMs, store.stepMs, store.bucketsTotal, nowMs);
+    const perSource = (ids: string[], m: Map<string, ChangeBucket[]>): boolean => ids.length >= 2 && ids.every(id => m.has(id));
+
+    let specs: { series: (number | null)[]; dir?: LayerDir; sourceIdx?: number }[];
     if (target === 'grid')
     {
-        specs = [{ series: store.gridImport }, { series: store.gridExport }];
+        const ed = host._energyDefaults;
+        specs = [
+            ...(perSource(ed.gridStatEnergyFroms, host._gridImportChangeSeriesPerEntity)
+                ? ed.gridStatEnergyFroms.map((id, s) => ({ series: sourceWatts(host._gridImportChangeSeriesPerEntity, id), dir: 'import' as LayerDir, sourceIdx: s }))
+                : [{ series: store.gridImport, dir: 'import' as LayerDir }]),
+            ...(perSource(ed.gridStatEnergyTos, host._gridExportChangeSeriesPerEntity)
+                ? ed.gridStatEnergyTos.map((id, s) => ({ series: sourceWatts(host._gridExportChangeSeriesPerEntity, id), dir: 'export' as LayerDir, sourceIdx: s }))
+                : [{ series: store.gridExport, dir: 'export' as LayerDir }]),
+        ];
     }
     else if (target === 'battery')
     {
-        //Signed net power (positive = charging), split into two non-negative layers.
-        const charge:    (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, v)));
-        const discharge: (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, -v)));
-        specs = [{ series: discharge }, { series: charge }];
+        //Signed net power (positive = charging). Discharge first (layers[0]) to match the aggregate fallback order.
+        const ed = host._energyDefaults;
+        const aggCharge:    (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, v)));
+        const aggDischarge: (number | null)[] = store.battery.map(v => (v === null ? null : Math.max(0, -v)));
+        specs = [
+            ...(perSource(ed.batteryStatEnergyFroms, host._batteryDischargeChangeSeriesPerEntity)
+                ? ed.batteryStatEnergyFroms.map((id, s) => ({ series: sourceWatts(host._batteryDischargeChangeSeriesPerEntity, id), dir: 'discharge' as LayerDir, sourceIdx: s }))
+                : [{ series: aggDischarge, dir: 'discharge' as LayerDir }]),
+            ...(perSource(ed.batteryStatEnergyTos, host._batteryChargeChangeSeriesPerEntity)
+                ? ed.batteryStatEnergyTos.map((id, s) => ({ series: sourceWatts(host._batteryChargeChangeSeriesPerEntity, id), dir: 'charge' as LayerDir, sourceIdx: s }))
+                : [{ series: aggCharge, dir: 'charge' as LayerDir }]),
+        ];
     }
     else
     {
@@ -179,7 +207,7 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
         specs = [{ series: cons }];
     }
 
-    return data('energy', specs.map(s => ({ values: binSlotSum(store, s.series, slots, win) })));
+    return data('energy', specs.map(s => ({ values: binSlotSum(store, s.series, slots, win), dir: s.dir, sourceIdx: s.sourceIdx })));
 }
 
 

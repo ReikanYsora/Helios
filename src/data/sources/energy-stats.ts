@@ -147,6 +147,20 @@ export function mergeChangeSeries(byId: Record<string, ChangeBucket[]>, ids: str
     return [...merged.values()].sort((a, b) => a.startMs - b.startMs);
 }
 
+//Per-source view of the same fetched result: each id's own buckets, in the given ids order (config order). Only the
+//ids the recorder returned buckets for land in the map, so a source with no data drops out instead of a null curve.
+//Shared by pv/grid/battery to split their aggregate into per-source curves without a second fetch.
+export function extractPerEntity(byId: Record<string, ChangeBucket[]>, ids: string[]): Map<string, ChangeBucket[]>
+{
+    const out = new Map<string, ChangeBucket[]>();
+    for (const id of ids)
+    {
+        const buckets = byId[id];
+        if (buckets) { out.set(id, buckets); }
+    }
+    return out;
+}
+
 
 
 
