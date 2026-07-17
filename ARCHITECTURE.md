@@ -105,7 +105,11 @@ plus a screen-space `<svg>` it repaints each frame with the occluding geometry
 (the cast shadows and the extruded buildings). It
 coalesces redraws into one `requestAnimationFrame` pass, owns its own
 `ResizeObserver`, and fires `onAfterDraw` so the card can re-project its HUD in
-lock-step. Colour math (building tint, day / night grading of the ground + buildings) lives in
+lock-step. The `<svg>` is bound to the card box (`contain: paint`): its building
+paths reach a whole neighbourhood past the card, and without that bound an old iOS
+compositor sized the layer's backing store to that content, capped it and painted
+only the top half (#304); binding it also trims the off-card raster on every frame.
+Colour math (building tint, day / night grading of the ground + buildings) lives in
 `core/render-kit/colors.ts`, over the shared hex primitives in
 `core/render-kit/hex.ts`; the shared 2D point type + SVG-points formatter live in
 `core/render-kit/geometry.ts`.
@@ -205,11 +209,15 @@ track in at noon and out to the arc's own feet at sunrise and sunset. Every grou
 point is where the sun really stood at that moment, so position on the track carries
 the hour with no clock convention to agree on, and the southern hemisphere needs no
 mirroring. The gesture is generic; a few metrics draw more than one line and are the
-only per-metric branch in `day-profile.ts`: production splits one line per PV source
-(each in its energy-dashboard colour); grid draws import and export; battery draws
-its power, tinted by charge/discharge flow, plus a dashed state-of-charge line per
-bank; a monitoring group draws one line per device; irradiance draws one, except in
-Month, where the weather model does not reach. Switching chips re-points the curve
+only per-metric branch in `day-profile.ts`: production splits one stacked band per PV
+source (each in its energy-dashboard colour); grid and battery split the same way, one
+stacked band per source per direction (import/export, charge/discharge), so a
+multi-meter grid or multi-pack battery reads each source rather than one lumped flow;
+the battery keeps a dashed state-of-charge line per bank; a monitoring group draws one
+line per device; irradiance draws one, except in Month, where the weather model does
+not reach. The arc and the timeline read the same per-source split (the layers come
+from `period-totals.ts`, coloured by the HA-energy ramp in `core/format`), so a metric
+never shows two different readings of the same day. Switching chips re-points the curve
 and leaves it up, so tapping across the cluster walks one day through each metric.
 
 Geometry is shared and computed once (the ground track, the near/far depth split,
@@ -308,9 +316,10 @@ so it is gone and that path with it.
 ### Charts, `src/charts/`
 
 The timeline is a re-targetable SVG chart over the store. `_chartTarget` selects
-the series-set: production (with dashed forecast and a per-string stacked
-breakdown, in `charts/charts-pv.ts`), consumption, grid, battery, battery SoC,
-irradiance, cloud or a monitoring group (the generic single-series path lives in
+the series-set: production (with dashed forecast and a per-source stacked
+breakdown, in `charts/charts-pv.ts`), consumption, grid and battery (each stacked
+per source when several are wired), battery SoC, irradiance, cloud or a monitoring
+group (the generic path, and the grid/battery per-source stacking, live in
 `charts/charts-generic.ts`). It draws day separators, night-zone hatching
 (`timeline/timeline-overlays.ts`), a future mask, the live + the scrub cursors, and a
 hover tooltip (`timeline/timeline-tooltip.ts`) whose icons take each series'

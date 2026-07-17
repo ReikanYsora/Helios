@@ -71,9 +71,13 @@ Every metric draws itself its own way. **Production** splits into one curve per 
 source, each in its energy-dashboard colour, like the timeline; today's remaining
 hours carry on from your forecast, dashed, so the shape of the day runs unbroken from
 this morning to tonight and only its certainty gives way at the present moment.
-**Grid** draws import and export together. **Battery** draws its power, tinted by
-charge and discharge, alongside a dashed state-of-charge curve for each pack.
-A **monitoring group** draws one curve per device, in each device's colour.
+**Grid** and **Battery** now split the same way: one stacked band per source, every
+grid meter's import and export and every battery's charge and discharge, in the Home
+Assistant energy colours, so a multi-meter grid or a multi-pack battery reads each
+source instead of one lumped flow. The battery keeps its dashed state-of-charge curve
+per pack. The curve on the house and the timeline below it draw the exact same split,
+so there is never a second reading of the same day. A single grid meter or battery is
+unchanged. A **monitoring group** draws one curve per device, in each device's colour.
 **Irradiance** draws one too, on every period but Month, which reaches back further
 than the weather model does.
 
@@ -131,6 +135,13 @@ languages kept; any other language falls back to English.
 
 ### Fixed
 
+- The scene now renders in full on older iPads. The buildings-and-shadows layer draws
+  a whole neighbourhood, well past the card, and on those devices the browser capped
+  that layer's size and painted only its top half. It is now bound to the card, so the
+  whole scene draws, and as a bonus every device now paints far less off-card area on
+  each frame (#304).
+- Map and building colours repaint live as you change them in the editor, instead of
+  waiting for the next data refresh.
 - Scene: left-click drag-rotate now works on Firefox (#306).
 - The basemap no longer vanishes after the card has sat in a background tab for a
   while, leaving the buildings floating over nothing. It is repainted from memory
