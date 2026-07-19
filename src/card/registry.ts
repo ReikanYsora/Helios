@@ -1,7 +1,7 @@
 //Custom-card registration for the HA card picker. Runs once at import: overwrites (not insert-if-missing) the entry
 //so the freshly-loaded bundle's metadata always wins. Card name/description show before any hass exists, so language
 //comes from navigator.
-import { pickTranslations } from '../i18n';
+import { pickTranslations } from '../core/i18n';
 
 declare global
 {

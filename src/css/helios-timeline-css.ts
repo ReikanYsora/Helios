@@ -12,16 +12,29 @@ export const heliosTimelineStyles = css`
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
         position: absolute;
-        /*  Sits above the period-mode band (which is pinned at bottom: 6px). */
-        bottom: calc(36px + 12px);
-        /*  Centred via left/right gutters, not translateX(-50%): that transform promotes the bar into a
+        /*  Flush on top of the period-mode band (pinned at the bottom, 33px tall), no gap. */
+        bottom: 33px;
+        /*  Full width, flush to the card edges. Not translateX(-50%): that transform promotes the bar into a
             compositor layer and rasterises the inner SVG charts at fractional resolution (blur). */
-        left: 8px;
-        right: 8px;
+        left: 0;
+        right: 0;
         width: auto;
         /*  Own stacking layer at the top of the card so the sun arc, home glow and overlay chips never
             cross over it during auto-rotate. */
         z-index: 1000;
+        /*  Height as a share of the CARD, not of its width.
+            It used to be the chart below that carried the size, via clamp(36px, 8cqw, 72px): width only. On a phone
+            (~380 px wide) 8cqw lands at ~30 px, under its floor, so the bar pinned to its minimum and stopped
+            tracking anything at all -- it looked fixed because it WAS fixed, and it took no notice of the vertical
+            room it had. A tall phone card and a squat one got the exact same bar.
+            Being position:absolute inside the ha-card makes the CARD this element's containing block, so a
+            percentage here resolves against the card's own height. That is what cqh would have given, without
+            switching the card to container-type:size -- which applies size containment, and the card's height is
+            already documented as collapsing under layouts that give it none.
+            The range deliberately REPRODUCES what the chart used to produce (36+18 .. 72+18): the point of this
+            rule is that the bar tracks the card's height instead of ignoring it, not that it grew. It was tried a
+            notch taller and put back, because the scene needs the room more than the curves do. */
+        height: clamp(54px, 18%, 90px);
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -37,13 +50,13 @@ export const heliosTimelineStyles = css`
         cursor: grabbing;
     }
 
-    /*  Shared themed-plate surface for the chart stack and the period band: same background, radius and
-        drop shadow; each adds its own border + layout below. */
+    /*  Shared themed-plate surface for the chart stack and the period band: same background + drop shadow. No
+        border-radius: both are full-width and flush at the bottom of the card, forming one continuous bar. */
     .tb-chart-stack,
     .tb-band
     {
         background: var(--card-background-color, #ffffff);
-        border-radius: var(--ha-border-radius-lg, 8px);
+        border-radius: 0;
         box-shadow: var(--helios-shadow-chip);
     }
 
@@ -52,22 +65,44 @@ export const heliosTimelineStyles = css`
     .tb-chart-stack
     {
         position: relative;
-        /*  Neutral hairline frame, same as the period band below (the curve colour already signals the metric,
-            so the border stays a fixed divider rather than tinting per mode). */
-        border: var(--ha-border-width-sm, 1px) solid
-            var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
+        /*  Fill the bar and hand the room to the chart; min-height:0 so a flex item may shrink below its content. */
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        /*  border-box like .tb-band below: the border draws INSIDE so the chart stack and the period
+            band keep the exact same outer width (both span card - 16px). Without it the border adds outside
+            and the stack reads wider than the band. */
+        box-sizing: border-box;
+        /*  Top divider tinted with the selected chip's accent (--tb-accent, set on the card), so the timeline
+            reads as an extension of the active metric; falls back to the neutral divider. Same 1 px weight as the
+            period band below. No side/bottom border: the bar is flush full-width at the bottom of the card. */
+        border-top: var(--ha-border-width-sm, 1px) solid var(--tb-accent, var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12))));
         overflow: hidden;
     }
     .tb-chart-card
     {
         position: relative;
-        /*  Height scales with container width (cqw): 36 px floor on a small tile, 72 px ceiling on a
-            kiosk. Both charts share this expression so they stay equal height. */
-        height: clamp(36px, 8cqw, 72px);
+        /*  Takes whatever the bar has left once the day strip below has its 18 px. The bar sizes itself off the
+            card (see .time-bar), so the chart follows the room available instead of guessing from the width. */
+        flex: 1 1 auto;
+        min-height: 36px;
         overflow: hidden;
     }
+    /*  Pinned to the chart card, not sized by percentage. A percentage height resolves against the PARENT's
+        height, and .tb-chart-card takes its height from flex without ever stating one, which is not a height a
+        percentage can resolve against: the SVG fell back to its intrinsic ratio instead (the viewBox is 10:1) and
+        took width/10, leaving the floor of the card bare until a re-render settled it (hovering the chart). That
+        is also why it showed up on a WINDOW resize for a bar sized off the card's height: the fallback tracks the
+        width. It only became reachable once the bar started tracking the card instead of a width clamp, since the
+        chart card had a stated height of its own until then. Absolute + inset resolves against the padding box of
+        the positioned parent, which is definite by construction, so there is no chain left to break. Same recipe
+        as .ground / .ground-fade. */
     .hc-chart-svg
     {
+        position: absolute;
+        top: 0;
+        left: 0;
         display: block;
         width: 100%;
         height: 100%;
@@ -457,7 +492,9 @@ export const heliosTimelineStyles = css`
     .tb-day-strip
     {
         position: relative;
-        height: 22px;
+        /*  Fixed footer: it never stretches, so every pixel the bar gains goes to the chart.  */
+        flex: 0 0 auto;
+        height: 18px;
         box-sizing: border-box;
         /*  Footer band of the chart stack: frame lives on .tb-chart-stack, so here we only draw the
             hairline separating labels from the chart above (like the HA timeline footer). */
@@ -482,8 +519,8 @@ export const heliosTimelineStyles = css`
         /*  Match an HA tile card's entity-value text (body font, --ha-font-size-s, normal weight) so the
             timeline's axis labels read as native HA chrome. */
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, Roboto, "Helvetica Neue", Arial, sans-serif));
-        font-size: var(--ha-font-size-s, 12px);
-        line-height: 18px;
+        font-size: var(--ha-font-size-xs, 11px);
+        line-height: 14px;
         letter-spacing: 0;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
@@ -498,24 +535,26 @@ export const heliosTimelineStyles = css`
     }
 
     /*  Period-mode band: a separate strip below the timeline with its own card frame (same 8 px gutters,
-        radius and themed border as the timeline card). Pinned to the bottom; the timeline sits above it
-        and stays visible in clock mode. pointer-events: auto, but the band stays transparent to map
-        rotation. */
+        radius and themed border as the timeline card). Pinned to the bottom; the timeline sits above it.
+        pointer-events: auto, but the band stays transparent to map rotation. */
     .tb-band
     {
         position: absolute;
-        bottom: 6px;
-        left: 8px;
-        right: 8px;
-        height: 36px;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 33px;
         z-index: 1000;
         box-sizing: border-box;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0 6px;
-        border: var(--ha-border-width-sm, 1px) solid
-            var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12)));
+        /*  The band stays full-width + flush; a small inner padding just gives the buttons some breathing room. */
+        padding: 3px 8px;
+        /*  Top divider tinted with the selected chip's accent (--tb-accent), matching the timeline's top border
+            above; falls back to the neutral divider. No side/bottom border. */
+        border-top: var(--ha-border-width-sm, 1px) solid
+            var(--tb-accent, var(--divider-color, var(--ha-card-border-color, rgba(0, 0, 0, 0.12))));
         pointer-events: auto;
         touch-action: none;
     }
@@ -591,7 +630,7 @@ export const heliosTimelineStyles = css`
         stroke: rgba(255, 255, 255, 0.55);
     }
 
-    /*  Kiosk breakpoint (issue #33): above 900 px card width the text bumps one size step up so the chips,
+    /*  Kiosk breakpoint: above 900 px card width the text bumps one size step up so the chips,
         day-strip and W/m² readout stay legible from across the room. On-map geometry is scaled separately
         by the engine. Keyed on the container query so it flips on the card's own width, not the
         viewport's. */
@@ -599,7 +638,7 @@ export const heliosTimelineStyles = css`
     {
         .tb-day-strip-date
         {
-            font-size: clamp(8px, 5.5cqw, var(--ha-font-size-s, 12px));
+            font-size: clamp(8px, 5.5cqw, var(--ha-font-size-xs, 11px));
         }
         .tb-hover-tooltip
         {

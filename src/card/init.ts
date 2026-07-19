@@ -3,16 +3,38 @@
 //
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
-import type { HeliosConfig } from '../helios-config';
-import { HeliosEngine } from '../helios-engine';
-import { refreshHud, setAnimationsPaused, type HudHost } from './hud';
-import type { ChartSeries } from './charts';
+import { homeColor, mapColorKey, mapShowKey, type HeliosConfig } from '../core/config/helios-config';
+import { resolveUiColor } from '../core/format/format';
+import { GROUND_LAYER_KEYS } from '../scene/ground-render';
+import { HeliosEngine } from '../scene/helios-engine';
+import { refreshHud, setAnimationsPaused, type HudHost } from '../hud/hud';
+import type { ChartSeries } from '../charts/charts';
 
 
-//Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine in place.
-//Exhaustive on purpose: a missing key would leave a slider-dragged value stale until the next engine creation. Card-only
-//state and identity inputs (home coords) are out.
-export const VISUAL_CONFIG_KEYS = [
+//A card that publishes the home colour as a CSS var and memoises the last-resolved token.
+interface ConsumptionColorHost extends HTMLElement
+{
+    readonly config: HeliosConfig | undefined;
+    _homeColorToken: string;
+}
+
+
+//Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it. Resolves the
+//configured ui_color token to a hex once per token change (getComputedStyle forces a reflow), so it no-ops while
+//the token is unchanged. The card calls this from updated().
+export function publishConsumptionColor(host: ConsumptionColorHost): void
+{
+    const homeToken = homeColor(host.config);
+    if (homeToken !== host._homeColorToken)
+    {
+        host._homeColorToken = homeToken;
+        host.style.setProperty('--helios-consumption-color', resolveUiColor(host, homeToken, '#4caf50', 'green'));
+    }
+}
+
+
+//The fixed part of the visual-config key list (the per-layer basemap keys are appended below).
+const STATIC_VISUAL_CONFIG_KEYS = [
     //When set, feeds the engine sensor samples that override the weather model for live + past irradiance; a change must
     //refresh so the override (or its absence) is picked up immediately.
     'solar-irradiance-entity',
@@ -25,9 +47,24 @@ export const VISUAL_CONFIG_KEYS = [
     'building-height',
     'building-opacity',
     'auto-rotate-enabled',
-    //camera-pitch-deg/bearing-deg/locked are deliberately NOT here: the editor pushes live previews through engine.setCamera* and
-    //bakes the values into config; a fresh engine reads them from _initialBearing / _initialPitch.
+    //Lock toggle: a change triggers updateConfig, which freezes/frees the camera at its current (drag-set) pose and
+    //resyncs the stored pose. The buildings re-interpret updateConfig also runs is cheap (cached footprints, no refetch).
+    'camera-locked',
+    //Basemap style: the theme mode and the surrounding-building tint. A change re-resolves the scene palette and
+    //repaints the vector ground from its cached features (no re-fetch), so an edit previews live instead of waiting
+    //for the next engine creation.
+    'building-color',
+    'map-theme-mode',
 ] as const;
+
+//The per-layer basemap colour + visibility keys, generated from the canonical layer list so they can never drift
+//from it. Same live-repaint path as the two keys above.
+const MAP_LAYER_CONFIG_KEYS = GROUND_LAYER_KEYS.flatMap((layer) => [mapColorKey(layer), mapShowKey(layer)]);
+
+//Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine in
+//place. Exhaustive on purpose: a missing key would leave a slider-dragged value stale until the next engine creation.
+//Card-only state and identity inputs (home coords) are out.
+export const VISUAL_CONFIG_KEYS: readonly string[] = [...STATIC_VISUAL_CONFIG_KEYS, ...MAP_LAYER_CONFIG_KEYS];
 
 
 //Defensive parser for `home-latitude`/`home-longitude` raw config values (typed `unknown`). Bare Number() is unsafe: Number(''),
@@ -190,10 +227,6 @@ export interface InitHost extends HudHost
     requestUpdate(): void;
     //Per-card storage discriminator (cache id + any duplicate suffix), fed to the engine for its pose key.
     effectiveCacheId?: (() => string) | undefined;
-
-    //Energy-clock mode: when active, each transform frame also re-projects the hour cylinders.
-    _viewMode?: 'scene' | 'clock' | 'trend';
-    paintClock?: (() => void) | undefined;
 }
 
 
@@ -209,12 +242,22 @@ export function initVisibilityObserver(host: InitHost): void
     //Combined paused state: off-screen (IntersectionObserver) OR tab hidden (Page Visibility). Either kills the heavy work.
     let intersecting = true;
     let wasTabHidden = false;
+    let wasPaused    = false;
     const applyState = () =>
     {
         const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
         const paused    = !intersecting || tabHidden;
         setAnimationsPaused(host, paused);
         host._engine?.setPaused(paused);
+        //Coming back from ANY pause, not just a tab returning: put the basemap back. It is a canvas painted once
+        //and thereafter only CSS-transformed, so a backing store the browser dropped while we were away would stay
+        //blank forever, leaving the SVG buildings floating over nothing. Cheap (cached features, no network) and
+        //only on a real return.
+        if (wasPaused && !paused)
+        {
+            host._engine?.repaintGround();
+        }
+        wasPaused = paused;
         //Tab just became visible. While hidden, refreshGrid/Pv/Battery can clear live values to null if hass momentarily
         //disconnected (HA does this on focus loss in some setups), and the card's reference-equality refresh gate then
         //short-circuits the next refresh (unchanged pointers). Force-invalidate the cache refs so the next render runs
@@ -259,13 +302,13 @@ export function initVisibilityObserver(host: InitHost): void
 export function initEngine(host: InitHost): void
 {
     host._initInflight = true;
-    initEngineNow(host);
+    scheduleEngineInit(host);
 }
 
 
-//Build the engine + wire its callbacks back into card state. Bails (clearing the inflight flag so the caller
-//retries next Lit cycle) if the card detached or the container / hass.config / coords aren't ready yet.
-export function initEngineNow(host: InitHost): void
+//Build the engine on the next frame + wire its callbacks back into card state. Bails (clearing the inflight flag
+//so the caller retries next Lit cycle) if the card detached or the container / hass.config / coords aren't ready yet.
+function scheduleEngineInit(host: InitHost): void
 {
     requestAnimationFrame(() =>
     {
@@ -300,8 +343,6 @@ export function initEngineNow(host: InitHost): void
         //Seed the engine with the active (possibly restored) window before getTimelineRange(), so a card that
         //loads straight into week/month/year frames the right span from the first paint.
         host._engine.setPeriodDays(host._periodPastDays, host._periodFutureDays);
-        //Restored straight into a dial mode: keep the engine basemap-only (the overlay paints the dial).
-        if (host._viewMode === 'clock' || host._viewMode === 'trend') { host._engine.setHomeOnly(true); }
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
         //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).
         if (!host._timeRange)
@@ -321,7 +362,7 @@ function wireEngineCallbacks(host: InitHost): void
         return;
     }
 
-    //Ping Lit so engine-readiness-gated chrome enables as soon as the engine lands instead of on the next clock tick.
+    //Ping Lit so engine-readiness-gated chrome enables as soon as the engine lands instead of on the next periodic tick.
     //The engine isn't a @state property, so this nudge is the only signal Lit gets that it became truthy.
     host.requestUpdate();
 
@@ -337,7 +378,6 @@ function wireEngineCallbacks(host: InitHost): void
         //matrix is available. Subsequent transforms refresh via onMapTransform.
         refreshHud(host);
     };
-    //Cloud-disc hover is wired directly on the SVG via @mousemove/@mouseleave (render path's solar-svg), so no engine callback for it.
     //rAF-coalesced overlay refresh: the engine fires transform events in bursts during inertial pan; without coalescing, refreshHud
     //+ dome re-projection ran several times per frame (heavy: sun arc, home silhouettes, dome cells + ribbon). The gate caps it at
     //one full pass per frame.
@@ -357,16 +397,7 @@ function wireEngineCallbacks(host: InitHost): void
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;
-            if (host._viewMode === 'clock' || host._viewMode === 'trend')
-            {
-                //Clock + trend ride the same camera: re-project the dial on every transform so it stays glued
-                //to the rotating basemap. The scene HUD is hidden here, so skip its per-frame refresh entirely.
-                host.paintClock?.();
-            }
-            else
-            {
-                refreshHud(host);
-            }
+            refreshHud(host);
         });
     };
 }

@@ -7,6 +7,170 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.8.0
+
+The biggest release yet. The devices you track in the Home Assistant energy
+dashboard become first-class citizens of the card, the scene lives through the
+day/night cycle, the map is now yours to theme, and the whole thing is lighter and
+faster.
+
+### New: monitoring groups replace the custom entity
+
+You can now bundle the devices tracked in your energy dashboard into up to **four
+monitoring groups**, each with its own name, colour and icon, set in the editor.
+A group shows up as its own chip on the scene and its own curve in the timeline.
+The old single "custom entity" is gone; groups do the same job for any number of
+devices and need no YAML. Each group is shown by a coloured pill (its number by
+default, its icon once you set one), consistent across the editor and the scene.
+
+### New: your own map, fully themeable
+
+The basemap is now drawn by Helios's own vector renderer, built on **OpenFreeMap**
+(open data, still no API key). A new **Map configuration** editor section lets you
+theme the ground itself: pick Auto (follows your Home Assistant theme), Dark, Light
+or **Custom**, and in Custom set the colour and visibility of every layer, ground,
+water, parks, roads, paths, railways, buildings and more. Make it match your
+dashboard, or make it your own.
+
+### New: the scene follows the sun
+
+The whole scene is now graded through the day/night cycle. The ground and buildings
+warm toward midday and cool through dusk into night, so a glance tells you roughly
+where the day is, no flat overlay, just light.
+
+### New: a sun-only card, and easier scrolling on mobile
+
+Hide every chip (including home consumption) and the card collapses to just the sun
+position and your location, a solar-position card you can drop on a non-energy
+dashboard, for shutters or climate control keyed on the sun. And on a phone the card
+no longer traps your scroll: swipe up or down and the page moves as it should, swipe
+sideways and the scene turns. Your finger's direction decides, so neither gesture has
+to wait for the other. Once a turn is under way, drifting up or down tilts the scene
+as it always did on a mouse (#308).
+
+### New: per-bank battery state of charge
+
+The battery timeline now draws one **state-of-charge line per battery bank**, each
+tinted by its live charge/discharge flow, so you can read each pack against the
+charge and discharge beams above it.
+
+### New: the day curve
+
+Click any chip a second time, once it is the active one, and the day you are looking
+at rises around your house as a curve.
+
+It does not stand on a ring. It stands on the sun's own path, projected straight
+down onto the ground: the track closes in on the house at midday, when the sun is
+overhead, and reaches out to the exact spots where the arc meets the ground at
+sunrise and sunset. So where a point sits on that track IS the hour it happened, and
+a dashed line drops from the sun to the curve right beneath it. Scrub the timeline
+and the whole thing follows: another day means that day's sun, that day's track and
+that day's readings, never an average of the week around it.
+
+Every metric draws itself its own way. **Production** splits into one curve per solar
+source, each in its energy-dashboard colour, like the timeline; today's remaining
+hours carry on from your forecast, dashed, so the shape of the day runs unbroken from
+this morning to tonight and only its certainty gives way at the present moment.
+**Grid** and **Battery** now split the same way: one stacked band per source, every
+grid meter's import and export and every battery's charge and discharge, in the Home
+Assistant energy colours, so a multi-meter grid or a multi-pack battery reads each
+source instead of one lumped flow. The battery keeps its dashed state-of-charge curve
+per pack. The curve on the house and the timeline below it draw the exact same split,
+so there is never a second reading of the same day. A single grid meter or battery is
+unchanged. A **monitoring group** draws one curve per device, in each device's colour.
+**Irradiance** draws one too, on every period but Month, which reaches back further
+than the weather model does.
+
+Switch chips and the curve re-points and stays up, so you can walk one day through
+each metric. The curve writes itself on as it is raised, from its own midnight, and
+the chips that have nothing to say about the metric on show step aside while it is
+up. Click the active chip again to put it away. It follows your **Graph detail**
+setting like every other curve, so it smooths out at one point an hour and resolves
+every cloud at six.
+
+### Changed: a calmer scene
+
+The home now simply takes the active chip's colour (keeping the squash-and-grow
+animation when you switch chips). The camera lock is a scene-only setting. A single
+tap on a chip now opens its detail panel (it used to want a double-tap), and a tap
+anywhere on the scene background dismisses it, which finally makes it easy to close
+on a phone. The sun arc uses the true -0.833 degree horizon so sunrise and sunset
+land where Home Assistant puts them.
+
+### Changed: solid buildings, shadows that follow their walls
+
+The surroundings have been rebuilt. Buildings are no longer cut in half at the seams
+between map tiles, and faces no longer flicker in and out while you turn the scene:
+the order they are painted in is worked out from the buildings' real outlines. Rows
+of houses that touch at the same height are drawn as one block, roof lines and all,
+rather than a queue of overlapping boxes. Facades are lit by the sun's direction, so
+a wall facing it reads brighter than one turned away, and a wall in shade is lit by
+the sky alone.
+
+Shadows follow each building's true outline, including concave blocks and inner
+courtyards, and account for the roof rather than the walls alone. They no longer lie
+underneath the building casting them, they stop at the ground their neighbours stand
+on instead of running through them, and their fade no longer swings to the other
+side when you nudge the camera by a fraction of a degree.
+
+The display radius now tops out at **250 m**, which is as far as the ground beneath
+the buildings actually reaches. A card set higher than that settles at 250 m; before,
+the extra radius put buildings out past the edge of the map with nothing under them.
+
+### Changed: a clearer default timeline
+
+The default in-card period is now **Forecast** (today to two days ahead), a tighter
+window that reads better on a phone. The timeline and period-selector top borders
+take the active chip's colour, so the whole bar reads as one with the metric you are
+looking at. The timeline itself now sizes from the card's own height rather than its
+width, so it keeps its proportions whether the card is a squat tile on a dashboard
+or a tall one on a wall tablet. On a phone it used to pin to its minimum and take no
+notice of the vertical room it had, so a tall card and a squat one got the same bar.
+
+### Changed: focused translations
+
+Helios now ships **27 European languages**, curated for the communities that use
+the card most. This cuts the download size substantially with no change to the
+languages kept; any other language falls back to English.
+
+### Fixed
+
+- The scene now renders in full on older iPads. The buildings-and-shadows layer draws
+  a whole neighbourhood, well past the card, and on those devices the browser capped
+  that layer's size and painted only its top half. It is now bound to the card, so the
+  whole scene draws, and as a bonus every device now paints far less off-card area on
+  each frame (#304).
+- Map and building colours repaint live as you change them in the editor, instead of
+  waiting for the next data refresh.
+- Scene: left-click drag-rotate now works on Firefox (#306).
+- The basemap no longer vanishes after the card has sat in a background tab for a
+  while, leaving the buildings floating over nothing. It is repainted from memory
+  the moment the card comes back, which matters most on a wall tablet.
+- The building colour and the home colour now take a plain colour (`#ff0000`,
+  `rgb(...)`) as well as a Home Assistant colour name, like every other colour in
+  the editor. They previously accepted the name only, and silently ignored anything
+  else, leaving the buildings grey.
+- The irradiance tooltip shows the forecast value and its beam again (#305).
+- The dashed timeline lines (the solar forecast and the per-bank battery state of
+  charge) now always draw their full length instead of stopping short until you
+  scrubbed the timeline.
+- The battery timeline no longer stacks a cluster of markers on its charge line.
+- Assorted robustness: DST-safe day maths, a watchdog on slow map tiles, cleaner
+  teardown of animations, and quieter, deduplicated data-layer warnings.
+
+### Removed
+
+- The **clock** and period-over-period **trend** dials. The scene, the timeline and
+  its period selector now tell the same story more directly.
+- The **Year** period. Month is now the longest view, and the last one the scene can
+  still speak for: any day of it can be scrubbed to and read under that day's own
+  sun. A year sat on a daily store that carried no shape of a day at all, so the arc,
+  the shadows and the curve had nothing to say about it, and 365 bars two pixels wide
+  had nothing to say to the eye. Your energy dashboard already tells that story
+  better. Cards saved on Year fall back to the default period.
+
+---
+
 ## 2026.7.4
 
 A quick corrective release. Apologies: 2026.7.3 shipped a detail-panel bug, and I
@@ -171,7 +335,7 @@ onto a zero reading; it disappears only where the entity has no history at all.
   a flat line. Its threshold now uses the 90th percentile instead of the
   median: genuine peaks always pass, meter-reset spikes are still rejected.
 
-### Fixed: 3D buildings are back, from a more reliable source
+### Fixed: 2.5D buildings are back, from a more reliable source
 
 * The buildings were fetched from the OpenStreetMap Overpass API, which had
   started refusing the card by waves. Helios now reads the same OpenStreetMap
@@ -217,7 +381,7 @@ and unit options, and a batch of accuracy fixes for specific setups.
 * An optional **astronomical readout** (a toggle in the editor, shown only when
   the panel is on) that adds the sun's altitude and azimuth, sunrise, solar noon,
   sunset and day length, each labelled with an icon to keep the panel compact.
-* The wind-direction arrow is **projected onto the tilted 3D ground**, so it
+* The wind-direction arrow is **projected onto the tilted 2.5D ground**, so it
   keeps pointing at the true compass direction as you orbit the camera.
 * The panel stays visible in **No UI mode**, so a wall display keeps its ambient
   weather even once the timeline and controls have faded away.
@@ -265,12 +429,12 @@ and unit options, and a batch of accuracy fixes for specific setups.
 
 A new chapter for Helios. This release describes the card as it is **today**:
 a single, self-contained Lovelace card that gives your solar setup a living,
-real-time 3D presence on your dashboard. Everything below is what `2026.7.1`
+real-time 2.5D presence on your dashboard. Everything below is what `2026.7.1`
 does, here and now.
 
 ### The scene
 
-* A faux-3D ("2.5D") view of your home drawn entirely **without WebGL**: a
+* A 2.5D view of your home drawn entirely **without WebGL**: a
   tilted raster basemap from CARTO (free, no key, themed to match Home
   Assistant light / dark) with every overlay projected on top in SVG, so the
   card stays fluid on any device, phones included.
@@ -313,7 +477,7 @@ does, here and now.
 
 ### Three view modes
 
-* **Scene**, the live 3D view with the timeline below.
+* **Scene**, the live 2.5D view with the timeline below.
 * **Clock**, a 24-hour dial that bins each metric into hours of the day as
   concentric rings around a central column; tap an hour to read every metric,
   with a day / night ground wedge and an N / S compass.

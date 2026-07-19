@@ -1,0 +1,196 @@
+import type { Translations } from "../index";
+
+//Polish locale.
+export const pl: Translations = {
+  cardName: "Helios",
+  cardDescription:
+    "☀️ Widok 2.5D Twojego domu w czasie rzeczywistym ze słońcem, pogodą, produkcją solarną, baterią i siecią, a do tego rzucane cienie i interaktywna oś czasu",
+
+  period: {
+    rangeLabel: "Zakres czasu",
+    forecast: "Prognoza",
+    yesterday: "Wczoraj",
+    today: "Dzisiaj",
+    week: "Tydzień",
+    month: "Miesiąc",
+    year: "Rok",
+  },
+
+  cloudCover: {
+    cloudLow: "Niskie zachmurzenie",
+    cloudMid: "Średnie zachmurzenie",
+    cloudHigh: "Wysokie zachmurzenie",
+  },
+
+  mapConfig: {
+    section: "Konfiguracja mapy",
+    intro:
+      "Mapa bazowa jest rysowana na podstawie kafelków wektorowych OpenStreetMap. Auto podąża za Twoim motywem, Ciemny / Jasny wymusza jeden z nich, a Niestandardowy pozwala ustawić każdy kolor i ukryć dowolną warstwę.",
+    modeAuto: "Auto",
+    modeDark: "Ciemny",
+    modeLight: "Jasny",
+    modeCustom: "Niestandardowy",
+    land: "Tło",
+    water: "Woda",
+    wood: "Lasy",
+    grass: "Zieleń",
+    sand: "Piasek",
+    wetland: "Tereny podmokłe",
+    ice: "Lód i śnieg",
+    landuse: "Tereny zabudowane",
+    roadMajor: "Główne drogi",
+    roadMinor: "Drogi lokalne",
+    roadCasing: "Obrys dróg",
+    path: "Ścieżki i szlaki",
+    rail: "Koleje",
+    building: "Budynki",
+    boundary: "Granice",
+  },
+
+  editor: {
+    locationSection: "Lokalizacja domu",
+    homeLatitude: "Szerokość geograficzna domu",
+    homeLongitude: "Długość geograficzna domu",
+    locationHint:
+      "Zastępuje adres domu używany jako środek karty. Zostaw oba pola puste, aby użyć domu skonfigurowanego w Home Assistant. Zastąpienie jest stosowane tylko wtedy, gdy OBA pola mają ustawione prawidłowe współrzędne.",
+    uiAndMapSection: "UI",
+    autoRotate: "Automatyczny obrót kamery",
+    autoRotateHint:
+      "Po kilku sekundach bezczynności kamera powoli obraca się wokół domu (około 1,5°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją wstrzymuje, a wznawia się, gdy puścisz. Unikaj na bardzo starych urządzeniach: automatyczny obrót wymusza renderowanie co sekundę.",
+    autoRotateOn: "Włączony",
+    autoRotateOff: "Wyłączony",
+    dataDisplaySection: "Wyświetlanie danych",
+    displayUpdateFrequency: "Szczegółowość wykresu",
+    displayUpdateFrequencyHelp:
+      "Ile punktów na godzinę rysują wykresy. Same dane to zawsze 5-minutowe statystyki Home Assistant - to ustawienie kontroluje jedynie, jak gęsto rysowana jest krzywa: 1 = jeden punkt na godzinę (najgładsze, najlżejsze do renderowania), 6 = jeden punkt co 10 minut (pełen szczegół, najcięższe). Domyślnie 4 = punkt co 15 minut. Zmniejsz na starszych lub wolniejszych urządzeniach, aby obniżyć koszt renderowania. Krzywa prognozy podąża za tym samym rytmem, więc drobniejsze ustawienie pozwala też uchwycić krótkie spadki od cienia (drzewo zasłaniające produkcję przez pół godziny), które krzywa godzinowa pomija.",
+    valueDecimals: "Miejsca dziesiętne",
+    valueDecimalsHelp:
+      "Liczba miejsc dziesiętnych pokazywanych przy każdej wartości, aby chipy wyglądały jednolicie. Dotyczy wartości w kW (pełne waty pozostają liczbami całkowitymi) oraz kWh. Od 0 do 3, domyślnie 1.",
+    powerUnit: "Jednostka mocy",
+    powerUnitHelp:
+      "Jednostka dla każdego odczytu mocy na karcie (chipy, dymki wykresu). Energia też za nią podąża, aby karta pozostała spójna: kW łączy się z kWh, W z Wh.",
+    irradianceUnit: "Jednostka stałej słonecznej",
+    irradianceUnitHelp:
+      "Jednostka odczytu stałej słonecznej (nasłonecznienia) nad słońcem.",
+    batterySign: "Znak baterii",
+    batterySignHelp:
+      "Znak pokazywany na chipie baterii. Domyślnie minus podczas ładowania i plus podczas rozładowywania. Odwrócony zamienia je miejscami. Ukryty pokazuje wartość bez znaku.",
+    batterySignDefault: "Domyślny",
+    batterySignInverted: "Odwrócony",
+    batterySignHidden: "Ukryty",
+    noUiMode: "Tryb bez interfejsu",
+    noUiModeHint:
+      "Wygasza oś czasu i elementy sterujące na karcie po kilku sekundach bezczynności. Dowolne dotknięcie lub ruch przywraca je z powrotem. Idealne do ekranu naściennego.",
+    noUiDelay: "Opóźnienie ukrycia przy bezczynności",
+    noUiDelayHint:
+      "Liczba sekund bezczynności, po których oś czasu i elementy sterujące znikają w trybie bez interfejsu. 0 utrzymuje interfejs ukryty na stałe. Używane tylko, gdy tryb bez interfejsu jest włączony.",
+    showTimeline: "Pokaż oś czasu",
+    showTimelineHint:
+      "Pokazuje oś czasu i selektor okresu pod sceną. Wyłączenie pozostawia tylko scenę.",
+    showDetailPanel: "Pokaż dodatkowe informacje",
+    showDetailPanelHint:
+      "Pozwala, aby mini-panel danego chipa (zagregowane metryki) otwierał się w prawym górnym rogu po dotknięciu chipa. Wyłączenie nigdy go nie pokazuje.",
+    showSunTimes: "Pokaż godziny wschodu / zachodu słońca",
+    showSunTimesHint:
+      "Pokazuje godziny wschodu i zachodu słońca oraz ich znaczniki u podstawy łuku słonecznego.",
+    lockRotation: "Zablokuj obrót",
+    lockRotationHint:
+      "Ustaw kąt widoku bezpośrednio w podglądzie (przeciągnij, aby obracać i pochylać scenę), a następnie włącz blokadę, aby go zamrozić: przeciąganie w celu obrotu oraz automatyczny obrót przy bezczynności zostają wyłączone, zachowując ustawiony kąt.",
+    chipsSection: "Wyświetlanie encji",
+    chipsIntro:
+      "Pokaż lub ukryj każdą encję i wybierz jej ikonę oraz kolor. Dom podąża za wybranym chipem lub domyślnie za Twoim kolorem podstawowym.",
+    chipIrradiance: "Wyświetlanie nasłonecznienia",
+    chipProduction: "Wyświetlanie produkcji",
+    chipGrid: "Wyświetlanie sieci",
+    chipBattery: "Wyświetlanie baterii",
+    chipHome: "Wyświetlanie zużycia domu",
+    groupsConfigTitle: "Konfiguracja grup",
+    optionalSensors: "Czujniki opcjonalne",
+    solarIrradianceEntity: "Encja nasłonecznienia solarnego",
+    solarIrradianceEntityHelp:
+      "Wybierz czujnik raportujący globalne nasłonecznienie krótkofalowe w W/m² (typowo Ecowitt / Davis / własna stacja pogodowa). Po ustawieniu jego bieżący stan i historia z rejestratora zastępują Open-Meteo dla bieżącego i przeszłego nasłonecznienia wszędzie tam, gdzie się pojawia (liczba na chipie słońca, oś Y wykresu PV, kolorowanie łuku słonecznego). Godziny prognozy pozostają na Open-Meteo, ponieważ czujnik nie może mieć wartości z przyszłości.",
+    liveDataTitle: "Status konfiguracji",
+    liveDataIntro:
+      "Chipy na żywo pokazują wyłącznie zmierzone czujniki. Każda rodzina potrzebuje opcjonalnego czujnika mocy na żywo ze swojego źródła w panelu Energia - krzywe i sumy zawsze pochodzą z Twoich liczników.",
+    liveSolarOk: "Solar: wykryto czujnik mocy na żywo.",
+    liveSolarMissing:
+      "Solar: brak czujnika mocy na żywo, chip produkcji pozostaje ukryty. Dodaj go w Ustawienia > Panele > Energia > Panele słoneczne.",
+    liveSolarAbsent:
+      "Solar: nie skonfigurowano w panelu Energia. Dodaj tam panele słoneczne, aby uzyskać chip produkcji.",
+    liveGridOk: "Sieć: wykryto czujnik mocy na żywo.",
+    liveGridMissing:
+      "Sieć: brak czujnika mocy na żywo, chipy importu/eksportu pozostają ukryte. Dodaj go w Ustawienia > Panele > Energia > Sieć.",
+    liveGridMiswired:
+      "Sieć: czujnik mocy na żywo jest sprzeczny z Twoimi licznikami (wygląda na to, że mierzy tylko jeden kierunek). Chipy pozostają ukryte - skonfiguruj czujnik ze znakiem lub tryb Dwóch czujników.",
+    liveGridAbsent:
+      "Sieć: nie skonfigurowano w panelu Energia. Dodaj tam sieć, aby uzyskać chipy importu i eksportu.",
+    liveBatteryOk: "Bateria: czujniki mocy na żywo obejmują każdą baterię.",
+    liveBatteryMissing:
+      "Bateria: brakuje mocy na żywo dla co najmniej jednej baterii, chip mocy pozostaje ukryty. Dodaj czujnik(i) mocy w Ustawienia > Panele > Energia > Bateria.",
+    liveBatteryAbsent:
+      "Bateria: nie skonfigurowana w panelu Energia. Dodaj tam baterię, aby uzyskać chip ładowania i rozładowania.",
+    liveHomeOk:
+      "Zużycie domu: pokazane, wyliczone z powyższych rodzin na żywo.",
+    liveHomeNote:
+      "Zużycie domu pojawia się, gdy każda skonfigurowana powyżej rodzina ma swój czujnik na żywo.",
+    openEnergyConfig: "Otwórz konfigurację Energii",
+    buildingsSection: "Dom i budynki",
+    buildingsHint:
+      'Aby karta działała płynnie w gęsto zabudowanych terenach miejskich, w 3D renderowane są tylko budynki w skonfigurowanym promieniu wokół domu. Sam dom pozostaje w pełnej nieprzezroczystości - pobliskie budynki są renderowane ze skonfigurowaną przezroczystością, aby dawały kontekst miejski bez konkurowania z nakładkami danych. Promień grupowania łączy przylegające zabudowania (werandy, garaże, szopy) w zbiór "domu".',
+    displayRadius: "Promień wyświetlania",
+    displayRadiusHelp:
+      "Promień wokół domu, w którym budynki są pobierane i rysowane, aż do krawędzi przygaszonego dysku mapy. Zmniejsz, aby odciążyć renderowanie na wolnym urządzeniu - 0 pokazuje tylko dom.",
+    buildingCount: "Liczba budynków",
+    buildingCountHelp:
+      "Maksymalna liczba pobliskich budynków do narysowania. Zmniejsz, aby odciążyć renderowanie na wolnym urządzeniu.",
+    buildingRealSize: "Rzeczywiste wysokości budynków",
+    buildingRealSizeOn: "Włączone",
+    buildingRealSizeOff: "Wyłączone",
+    buildingRealSizeHint:
+      "Włączone: użyj rzeczywistych wysokości OpenStreetMap (ograniczonych, aby kadr pozostał czytelny). Wyłączone: nadaj każdemu budynkowi tę samą stałą wysokość poniżej.",
+    buildingHeight: "Wysokość budynku",
+    hiddenDevicesEmpty:
+      "W panelu Energia nie są jeszcze śledzone żadne pojedyncze urządzenia. Dodaj tam zużycie urządzeń, aby zarządzać nimi tutaj.",
+    deviceVisibilityLabel: "Pokaż urządzenie",
+    deviceGroupLabel: "Grupa monitorowania",
+    group: "Grupa",
+    noGroup: "Brak grupy",
+    devicesEnergyNote:
+      "To pojedyncze urządzenia obecnie skonfigurowane w panelu Energia Twojego Home Assistant. Oko pokazuje lub ukrywa każde z nich wszędzie, a pigułka przypisuje je do grupy.",
+    buildingClusterRadius: "Promień grupowania domu",
+    buildingClusterRadiusHelp:
+      "Promień wokół domu, w którym przylegające zabudowania (werandy, garaże, szopy) są traktowane jako część domu: są renderowane z pełną nieprzezroczystością i kolorem domu zamiast jako przygaszeni sąsiedzi. 0 zachowuje tylko budynek główny.",
+    buildingOpacity: "Przezroczystość otoczenia",
+    buildingColor: "Kolor budynków",
+    buildingColorHelp:
+      "Bazowy odcień stosowany do okolicznych budynków w scenie.",
+    shadowsSection: "Cienie",
+    shadowsEnabled: "Pokaż cienie",
+    shadowsEnabledOn: "Pokazane",
+    shadowsEnabledOff: "Ukryte",
+    shadowsEnabledHint:
+      "Przełącza cienie rzucane na ziemię przez budynki w miarę ruchu słońca.",
+    shadowOpacity: "Przezroczystość cieni",
+    shadowOpacityHint: "Przezroczystość rzucanych cieni na ziemi.",
+    resetSection: "Reset",
+    resetSectionHint:
+      "Narzędzia konserwacyjne: ponowne pobranie danych zapisanych przez kartę w pamięci podręcznej lub przywrócenie wszystkich opcji do wartości domyślnych.",
+    resetCacheButton: "Resetuj pamięć podręczną danych",
+    resetCacheWarning:
+      "Uwaga: to ponownie pobiera wszystko, co karta zapisała w pamięci podręcznej - pogodę Open-Meteo, każdą serię energii w pamięci (produkcja, sieć, bateria, urządzenia, nasłonecznienie), kalibrację dopracowanej prognozy oraz zarysy budynków OpenFreeMap - dla każdej otwartej na tej stronie karty Helios. Użyj tego, aby usunąć zablokowaną kalibrację lub nieaktualne dane pogody/mapy - pełne ponowne pobranie zajmuje kilka minut, zależnie od Twojego serwera HA. Twoje dane wewnątrz Home Assistant nigdy nie są naruszane.",
+    resetCacheDone: "Pamięć podręczna wyczyszczona ✓",
+    resetOptionsButton: "Przywróć domyślne opcje",
+    resetOptionsConfirm: "Kliknij ponownie, aby potwierdzić",
+    resetOptionsWarning:
+      "Uwaga: to przywraca WSZYSTKIE opcje tej karty do wartości domyślnych - widoczność, kolory i ikony chipów, nazwy/kolory/ikony grup, budynki, cienie, jednostki i wszystkie inne ustawienia. Twoje dane Home Assistant i panel Energia pozostają nietknięte, ale Twoje dostosowania zostają wyczyszczone i nie da się ich cofnąć.",
+    resetOptionsDone: "Opcje przywrócone do domyślnych ✓",
+    aboutSection: "O karcie",
+    aboutVersionLabel: "Wersja",
+    aboutRepoCard: "Helios",
+    aboutCoffeeMessage:
+      "Tworzę Heliosa samodzielnie, głównie nocami, tropiąc drobne szczegóły, aż słońce i Twoja energia ożyją na ekranie. Jeśli karta znalazła miejsce na Twoim pulpicie, to już mnie cieszy - gwiazdka na GitHubie cieszy jeszcze bardziej, a kawa napędza dalszą pracę.",
+    aboutDeveloperLabel: "Deweloper",
+    aboutDeveloperLinkedIn: "LinkedIn",
+    aboutCoffeeLink: "Postaw mi kawę",
+  },
+};

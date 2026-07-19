@@ -1,0 +1,195 @@
+import type { Translations } from "../index";
+
+//Slovenian locale.
+export const sl: Translations = {
+  cardName: "Helios",
+  cardDescription:
+    "☀️ 2.5D pogled na tvoj dom v realnem času s soncem, vremenom, solarno proizvodnjo, baterijo in omrežjem, poleg tega vržene sence in interaktivna časovnica",
+
+  period: {
+    rangeLabel: "Časovni razpon",
+    forecast: "Napoved",
+    yesterday: "Včeraj",
+    today: "Danes",
+    week: "Teden",
+    month: "Mesec",
+    year: "Leto",
+  },
+
+  cloudCover: {
+    cloudLow: "Nizka oblačnost",
+    cloudMid: "Srednja oblačnost",
+    cloudHigh: "Visoka oblačnost",
+  },
+
+  mapConfig: {
+    section: "Nastavitve zemljevida",
+    intro:
+      "Podlaga zemljevida je izrisana iz vektorskih ploščic OpenStreetMap. Samodejno sledi tvoji temi, Temno / Svetlo vsili eno od njiju, Po meri pa ti omogoči nastaviti vsako barvo in skriti poljubno plast.",
+    modeAuto: "Samodejno",
+    modeDark: "Temno",
+    modeLight: "Svetlo",
+    modeCustom: "Po meri",
+    land: "Ozadje",
+    water: "Voda",
+    wood: "Gozd",
+    grass: "Zelenje",
+    sand: "Pesek",
+    wetland: "Mokrišče",
+    ice: "Led in sneg",
+    landuse: "Pozidano zemljišče",
+    roadMajor: "Glavne ceste",
+    roadMinor: "Stranske ceste",
+    roadCasing: "Obris cest",
+    path: "Poti in steze",
+    rail: "Železnice",
+    building: "Stavbe",
+    boundary: "Meje",
+  },
+
+  editor: {
+    locationSection: "Lokacija doma",
+    homeLatitude: "Zemljepisna širina doma",
+    homeLongitude: "Zemljepisna dolžina doma",
+    locationHint:
+      "Prepiše naslov doma, ki se uporablja kot središče kartice. Pusti obe polji prazni, da se uporabi dom, nastavljen v Home Assistant. Prepis se uporabi le, kadar sta OBE polji nastavljeni na veljavne koordinate.",
+    uiAndMapSection: "UI",
+    autoRotate: "Samodejno vrtenje kamere",
+    autoRotateHint:
+      "Po nekaj sekundah nedejavnosti kamera počasi kroži okoli doma (približno 1,5°/s, nasprotno navideznemu gibanju sonca). Poteg z enim prstom jo takoj zaustavi in se nadaljuje, ko spustiš. Izogibaj se mu na zelo starih napravah: samodejno vrtenje vsako sekundo prisili izris.",
+    autoRotateOn: "Vklopljeno",
+    autoRotateOff: "Izklopljeno",
+    dataDisplaySection: "Prikaz podatkov",
+    displayUpdateFrequency: "Podrobnost grafa",
+    displayUpdateFrequencyHelp:
+      "Koliko točk na uro izrišejo grafi. Sami podatki so vedno 5-minutne statistike Home Assistant; to nadzira le, kako gosto je narisana krivulja: 1 = ena točka na uro (najbolj gladko, najlažje za izris), 6 = ena točka vsakih 10 minut (polna podrobnost, najtežje). Privzeto 4 = točka vsakih 15 minut. Zniži na starejših ali počasnejših napravah, da zmanjšaš stroške izrisa. Krivulja napovedi sledi istemu ritmu, zato finejša nastavitev razloči tudi kratke padce zaradi sence (drevo, ki za pol ure zakrije proizvodnjo), ki jih urna krivulja preskoči.",
+    valueDecimals: "Decimalna mesta",
+    valueDecimalsHelp:
+      "Število decimalnih mest, prikazanih pri vsaki vrednosti, da so čipi videti enotni. Velja za vrednosti v kW (cele vatne vrednosti ostanejo cela števila) in za kWh. 0 do 3, privzeto 1.",
+    powerUnit: "Enota moči",
+    powerUnitHelp:
+      "Enota za vsak prikaz moči na kartici (čipi, namigi grafa). Energija ji tudi sledi, da kartica ostane usklajena: kW se ujema s kWh, W z Wh.",
+    irradianceUnit: "Enota sončne konstante",
+    irradianceUnitHelp:
+      "Enota za prikaz sončne konstante (obsevanja) nad soncem.",
+    batterySign: "Predznak baterije",
+    batterySignHelp:
+      "Predznak, prikazan na čipu baterije. Privzeto je minus med polnjenjem in plus med praznjenjem. Obrnjeno ju zamenja. Skrito prikaže vrednost brez predznaka.",
+    batterySignDefault: "Privzeto",
+    batterySignInverted: "Obrnjeno",
+    batterySignHidden: "Skrito",
+    noUiMode: "Način brez vmesnika",
+    noUiModeHint:
+      "Po nekaj sekundah nedejavnosti zbledi časovnica in kontrolniki na kartici. Vsak dotik ali premik ju prikliče nazaj. Odlično za stenski zaslon.",
+    noUiDelay: "Zakasnitev pred skritjem",
+    noUiDelayHint:
+      "Sekunde nedejavnosti, preden v načinu brez vmesnika zbledita časovnica in kontrolniki. 0 ohrani vmesnik trajno skrit. Uporabljeno le, kadar je način brez vmesnika vklopljen.",
+    showTimeline: "Pokaži časovnico",
+    showTimelineHint:
+      "Pokaže časovnico in izbirnik obdobja pod prizorom. Izklopljeno pusti le prizor.",
+    showDetailPanel: "Pokaži dodatne informacije",
+    showDetailPanelHint:
+      "Dovoli, da se ob dotiku čipa zgoraj desno odpre mini plošča (združeni podatki) za posamezen čip. Izklopljeno je nikoli ne prikaže.",
+    showSunTimes: "Pokaži čas sončnega vzhoda / zahoda",
+    showSunTimesHint:
+      "Pokaže čas sončnega vzhoda in zahoda ter njuni oznaki ob vznožju sončnega loka.",
+    lockRotation: "Zakleni vrtenje",
+    lockRotationHint:
+      "Nastavi kot pogleda neposredno v predogledu (povleci za vrtenje in nagib prizora), nato vklopi zaklep, da ga zamrzneš: vlečenje za vrtenje in samodejno kroženje ob nedejavnosti sta onemogočena, nastavljeni kot pa ostane.",
+    chipsSection: "Prikaz entitet",
+    chipsIntro:
+      "Pokaži ali skrij vsako entiteto ter izberi njeno ikono in barvo. Dom sledi izbranemu čipu ali privzeto tvoji primarni barvi.",
+    chipIrradiance: "Prikaz obsevanja",
+    chipProduction: "Prikaz proizvodnje",
+    chipGrid: "Prikaz omrežja",
+    chipBattery: "Prikaz baterije",
+    chipHome: "Prikaz porabe doma",
+    groupsConfigTitle: "Nastavitve skupin",
+    optionalSensors: "Neobvezni senzorji",
+    solarIrradianceEntity: "Entiteta sončnega obsevanja",
+    solarIrradianceEntityHelp:
+      "Izberi senzor, ki poroča globalno kratkovalovno obsevanje v W/m² (običajno Ecowitt / Davis / osebna vremenska postaja). Ko je nastavljen, njegovo trenutno stanje in zgodovina iz snemalnika nadomestita Open-Meteo za živo in pretekto obsevanje povsod, kjer se pojavi (število na čipu sonca, os Y grafa PV, obarvanje sončnega loka). Ure napovedi ostanejo na Open-Meteo, saj senzor ne more nositi prihodnjih vrednosti.",
+    liveDataTitle: "Stanje nastavitev",
+    liveDataIntro:
+      "Živi čipi prikazujejo le izmerjene senzorje. Vsaka družina potrebuje neobvezni senzor žive moči svojega vira v nadzorni plošči Energija; krivulje in vsote vedno prihajajo iz tvojih merilnikov.",
+    liveSolarOk: "Sonce: zaznan senzor žive moči.",
+    liveSolarMissing:
+      "Sonce: brez senzorja žive moči, čip proizvodnje ostane skrit. Dodaj ga pod Nastavitve > Nadzorne plošče > Energija > Sončni paneli.",
+    liveSolarAbsent:
+      "Sonce: ni nastavljeno v tvoji nadzorni plošči Energija. Tam dodaj sončne panele, da dobiš čip proizvodnje.",
+    liveGridOk: "Omrežje: zaznan senzor žive moči.",
+    liveGridMissing:
+      "Omrežje: brez senzorja žive moči, čipa uvoza/izvoza ostaneta skrita. Dodaj ga pod Nastavitve > Nadzorne plošče > Energija > Omrežje.",
+    liveGridMiswired:
+      "Omrežje: senzor žive moči nasprotuje tvojim merilnikom (kaže, da meri le eno smer). Čipa ostaneta skrita; nastavi senzor s predznakom ali način Dva senzorja.",
+    liveGridAbsent:
+      "Omrežje: ni nastavljeno v tvoji nadzorni plošči Energija. Tam dodaj omrežje, da dobiš čipa uvoza in izvoza.",
+    liveBatteryOk: "Baterija: senzorji žive moči pokrivajo vsako baterijo.",
+    liveBatteryMissing:
+      "Baterija: manjka živa moč vsaj pri eni bateriji, čip moči ostane skrit. Dodaj senzor(je) moči pod Nastavitve > Nadzorne plošče > Energija > Baterija.",
+    liveBatteryAbsent:
+      "Baterija: ni nastavljena v tvoji nadzorni plošči Energija. Tam dodaj baterijo, da dobiš čip polnjenja in praznjenja.",
+    liveHomeOk: "Poraba doma: prikazana, izpeljana iz zgornjih živih družin.",
+    liveHomeNote:
+      "Poraba doma se prikaže, ko ima vsaka zgoraj nastavljena družina svoj živi senzor.",
+    openEnergyConfig: "Odpri nastavitve Energije",
+    buildingsSection: "Dom in stavbe",
+    buildingsHint:
+      'Da kartica ostane tekoča v gosto pozidanih mestnih območjih, se v 3D izrišejo le stavbe v nastavljenem polmeru okoli doma. Sam dom ostane pri polni neprosojnosti; bližnje stavbe se izrišejo z nastavljeno prosojnostjo, tako da dajejo mestni kontekst, ne da bi tekmovale s podatkovnimi prekrivami. Polmer združevanja združi prizidane pomožne stavbe (verande, garaže, lope) v skupino "doma".',
+    displayRadius: "Polmer prikaza",
+    displayRadiusHelp:
+      "Polmer okoli doma, v katerem se stavbe pridobijo in narišejo, do roba zatemnjene plošče zemljevida. Zniži ga, da olajšaš izris na počasni napravi; 0 prikaže le dom.",
+    buildingCount: "Število stavb",
+    buildingCountHelp:
+      "Največje število bližnjih stavb za izris. Zniži ga, da olajšaš izris na počasni napravi.",
+    buildingRealSize: "Resnične višine stavb",
+    buildingRealSizeOn: "Vklopljeno",
+    buildingRealSizeOff: "Izklopljeno",
+    buildingRealSizeHint:
+      "Vklopljeno: uporabi resnične višine iz OpenStreetMap (omejene, da kadriranje ostane berljivo). Izklopljeno: vsaki stavbi daj enako fiksno višino spodaj.",
+    buildingHeight: "Višina stavbe",
+    hiddenDevicesEmpty:
+      "V tvoji nadzorni plošči Energija še ni sledenih posameznih naprav. Tam dodaj porabo naprav, da jih lahko upravljaš tukaj.",
+    deviceVisibilityLabel: "Pokaži napravo",
+    deviceGroupLabel: "Nadzorna skupina",
+    group: "Skupina",
+    noGroup: "Brez skupine",
+    devicesEnergyNote:
+      "To so posamezne naprave, ki so trenutno nastavljene v tvoji nadzorni plošči Energija v Home Assistant. Oko povsod pokaže ali skrije vsako od njih, ploščica pa jo dodeli skupini.",
+    buildingClusterRadius: "Polmer združevanja doma",
+    buildingClusterRadiusHelp:
+      "Polmer okoli doma, znotraj katerega se prizidane pomožne stavbe (verande, garaže, lope) obravnavajo kot del doma: izrišejo se s polno neprosojnostjo in barvo doma namesto kot zatemnjeni sosedi. 0 ohrani le glavno stavbo.",
+    buildingOpacity: "Prosojnost okolice",
+    buildingColor: "Barva stavb",
+    buildingColorHelp:
+      "Osnovni odtenek, uporabljen za okoliške stavbe v prizoru.",
+    shadowsSection: "Sence",
+    shadowsEnabled: "Pokaži sence",
+    shadowsEnabledOn: "Prikazano",
+    shadowsEnabledOff: "Skrito",
+    shadowsEnabledHint:
+      "Preklaplja talne sence, ki jih stavbe mečejo, ko se sonce premika.",
+    shadowOpacity: "Prosojnost senc",
+    shadowOpacityHint: "Prosojnost vrženih senc na tleh.",
+    resetSection: "Ponastavitev",
+    resetSectionHint:
+      "Vzdrževalna orodja: ponovno pridobi predpomnjene podatke kartice ali ponastavi vse možnosti na privzete vrednosti.",
+    resetCacheButton: "Ponastavi predpomnilnik podatkov",
+    resetCacheWarning:
+      "Opozorilo: to ponovno pridobi vse, kar je kartica shranila v predpomnilnik - vreme Open-Meteo, vsako energijsko vrsto v pomnilniku (proizvodnja, omrežje, baterija, naprave, obsevanje), umerjanje izboljšane napovedi in obrise stavb OpenFreeMap - za vsako odprto kartico Helios na tej strani. Uporabi to za odpravo zataknjenega umerjanja ali zastarelih podatkov o vremenu/zemljevidu; celotna ponovna pridobitev traja nekaj minut, odvisno od tvojega strežnika HA. Tvojih podatkov v Home Assistant se to nikoli ne dotakne.",
+    resetCacheDone: "Predpomnilnik počiščen ✓",
+    resetOptionsButton: "Ponastavi možnosti na privzete",
+    resetOptionsConfirm: "Za potrditev klikni ponovno",
+    resetOptionsWarning:
+      "Opozorilo: to ponastavi VSE možnosti te kartice na privzete vrednosti - vidnost, barve in ikone čipov, imena/barve/ikone skupin, stavbe, sence, enote in vse druge nastavitve. Tvojih podatkov Home Assistant in nadzorne plošče Energija se to ne dotakne, tvoje prilagoditve pa bodo izbrisane in jih ni mogoče obnoviti.",
+    resetOptionsDone: "Možnosti ponastavljene ✓",
+    aboutSection: "O kartici",
+    aboutVersionLabel: "Različica",
+    aboutRepoCard: "Helios",
+    aboutCoffeeMessage:
+      "Helios gradim sam, večinoma ponoči, in lovim majhne podrobnosti, dokler sonce in tvoja energija na zaslonu ne zaživita. Če je našel svoje mesto na tvoji nadzorni plošči, me to že osrečuje - zvezdica na GitHub še bolj, kava pa vse skupaj poganja naprej.",
+    aboutDeveloperLabel: "Razvijalec",
+    aboutDeveloperLinkedIn: "LinkedIn",
+    aboutCoffeeLink: "Plačaj mi kavo",
+  },
+};

@@ -101,6 +101,40 @@ export const editorStyles = css`
     .live-status.is-ok ha-icon   { color: var(--success-color, #4caf50); }
     .live-status.is-warn ha-icon { color: var(--warning-color, #ff9800); }
     .live-status.is-info ha-icon { color: var(--secondary-text-color, #727272); }
+    /*  Standalone jump to Home Assistant's Energy config: shown once under the status section and under the
+        groups hint, on its own line with a little breathing room above. */
+    .live-config-link-row
+    {
+        margin-top: 10px;
+    }
+    .live-status-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-color, #03a9f4);
+        text-decoration: none;
+    }
+    .live-status-link:hover { text-decoration: underline; }
+    .live-status-link ha-icon
+    {
+        --mdc-icon-size: 15px;
+        color: var(--primary-color, #03a9f4);
+    }
+
+    /*  Always-visible live-data status, pinned above the collapsible sections (its own title, no <details>).
+        Its title matches the collapsible sections' flex row so the icon centres on the text (a bare
+        .section-title block would baseline-align the icon and sit it too high). */
+    .live-data-panel { margin-bottom: 4px; }
+    .live-data-panel > .section-title
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 0;
+    }
 
     .field-help,
     .hint
@@ -207,6 +241,20 @@ export const editorStyles = css`
         color: var(--text-primary-color, #fff);
     }
 
+    /*  Map theme mode toggle: full width, the four options sharing the row equally, with a gap before the
+        per-layer blocks below. */
+    .map-mode-toggle
+    {
+        display: flex;
+        width: 100%;
+        margin-bottom: var(--ha-space-4, 16px);
+    }
+    .map-mode-toggle .seg-option
+    {
+        flex: 1;
+        text-align: center;
+    }
+
     /*  Slider variant for ranged values so an out-of-range number can't be entered. Value shown right of
         the track. */
     .slider-row
@@ -244,30 +292,63 @@ export const editorStyles = css`
         opacity: 0.85;
         margin-bottom: 8px;
     }
-    .reset-btn
+    /*  Shared action button (reset cache / reset options / …): icon + label, tinted by --btn-color (set inline),
+        full width so every action button reads as one consistent row. The filled variant inverts to a solid fill
+        for a destructive confirm. */
+    .action-btn
     {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        /*  Fixed width (fits the longest label), right-aligned so every action button lines up on the right edge. */
+        width: 260px;
+        max-width: 100%;
+        margin-left: auto;
+        margin-right: 0;
+        box-sizing: border-box;
+        white-space: nowrap;
+        text-decoration: none;
         background: transparent;
-        border: var(--ha-border-width-sm, 1px) solid var(--error-color, #ef4444);
-        color: var(--error-color, #ef4444);
+        border: var(--ha-border-width-sm, 1px) solid var(--btn-color, var(--error-color, #ef4444));
+        color: var(--btn-color, var(--error-color, #ef4444));
         border-radius: var(--ha-border-radius-sm, 4px);
-        padding: 4px 10px;
+        padding: 8px 12px;
         font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         font-family: inherit;
         cursor: pointer;
-        display: block;
-        margin-left: auto;
         margin-top: 8px;
-        width: fit-content;
     }
-    .reset-btn:hover
+    .action-btn ha-icon
     {
-        background: color-mix(in srgb, var(--error-color, #ef4444) 8%, transparent);
+        --mdc-icon-size: 18px;
+        flex: 0 0 auto;
     }
-    .reset-btn:focus-visible
+    .action-btn:hover
     {
-        outline: 2px solid var(--error-color, #ef4444);
+        background: color-mix(in srgb, var(--btn-color, #ef4444) 8%, transparent);
+    }
+    .action-btn:focus-visible
+    {
+        outline: 2px solid var(--btn-color, #ef4444);
         outline-offset: 2px;
+    }
+    /*  Filled state (e.g. an armed destructive confirm): solid --btn-color fill so it reads clearly. */
+    .action-btn-filled,
+    .action-btn-filled:hover
+    {
+        background: var(--btn-color, var(--error-color, #ef4444));
+        color: var(--text-primary-color, #fff);
+    }
+    /*  Disabled field (a dependent control kept visible but inert, e.g. the No-UI delay when the mode is off). */
+    .field-disabled
+    {
+        opacity: 0.45;
+    }
+    .field-disabled input
+    {
+        cursor: not-allowed;
     }
 
     /*  About section pinned at the editor bottom. Compact rows styled as a soft credits footer, not a
@@ -315,14 +396,6 @@ export const editorStyles = css`
         --mdc-icon-size: 18px;
         color: inherit;
     }
-    /*  X brand mark: inline SVG (mdi:twitter mis-labels the platform). Sized to match adjacent ha-icon
-        glyphs. */
-    .about-row-svg
-    {
-        width:  18px;
-        height: 18px;
-        flex-shrink: 0;
-    }
     /*  Version chip styled as a link to the matching GitHub release page. */
     .about-version-link
     {
@@ -337,23 +410,6 @@ export const editorStyles = css`
         flex-direction: column;
         gap: 6px;
     }
-    .about-link
-    {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        text-decoration: none;
-        color: var(--primary-color, #3b82f6);
-        font-size: var(--ha-font-size-m, 14px);
-        font-weight: var(--ha-font-weight-medium, 500);
-        padding: 6px 0;
-    }
-    .about-link:hover { text-decoration: underline; }
-    .about-link ha-icon
-    {
-        --mdc-icon-size: 18px;
-        color: inherit;
-    }
     .about-paragraph
     {
         margin: 0;
@@ -367,34 +423,214 @@ export const editorStyles = css`
         padding-top: 14px;
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  BMC button: same outline shape and hover bloom as reset-btn, in Buy Me a Coffee brand yellow
-        (kept literal: it's an external brand colour, not a themeable surface). */
-    .about-coffee-link
+    /*  Device list: one row per dashboard-tracked device, colour dot + name on the left, the group pill and the
+        show/hide toggle on the right. Framed as a soft card so the list reads as a distinct block within the
+        section. */
+    .device-list
     {
+        display: flex;
+        flex-direction: column;
         margin-top: 8px;
-        background: transparent;
-        border: var(--ha-border-width-sm, 1px) solid #ffcc00;
-        color: #ffcc00;
-        border-radius: var(--ha-border-radius-sm, 4px);
-        padding: 4px 10px;
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
+        margin-bottom: 16px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: var(--ha-border-radius-md, 6px);
+        overflow: hidden;
+    }
+    .device-row
+    {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+    }
+    .device-row + .device-row
+    {
+        border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.08));
+    }
+    /*  Device icon tinted in the entity's dashboard colour (set inline), standing in for the old colour dot. */
+    .device-icon
+    {
+        flex: none;
+        --mdc-icon-size: 20px;
+    }
+    .device-row.is-hidden .device-icon,
+    .device-row.is-hidden .device-group
+    {
+        opacity: 0.5;
+    }
+    .device-name
+    {
+        flex: 1;
+        min-width: 0;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-text-color, #212121);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /*  When a device is hidden, its row dims. */
+    .device-row.is-hidden .device-name
+    {
+        opacity: 0.5;
+    }
+    /*  Icon-only state toggles, HA-style: no button chrome. The icon carries the state through colour alone: normal
+        text colour when active, the dimmed "disabled" colour when inactive. */
+    .device-toggle
+    {
+        flex: none;
         display: inline-flex;
         align-items: center;
-        align-self: flex-end;
-        margin-left: auto;
-        width: fit-content;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--disabled-text-color, #bdbdbd);
+        cursor: pointer;
+        transition: color 0.15s, opacity 0.15s;
+        --mdc-icon-size: 22px;
     }
-    .about-coffee-link:hover
+    .device-toggle.active
     {
-        background: rgba(255, 204, 0, 0.08);
-        text-decoration: none;
+        color: var(--primary-text-color, #212121);
     }
-    .about-coffee-link:focus-visible
+    .device-toggle:hover:not(:disabled)
     {
-        outline: 2px solid #ffcc00;
+        color: var(--primary-color, #03a9f4);
+    }
+    .device-toggle:disabled
+    {
+        opacity: 0.4;
+        cursor: default;
+    }
+    .device-toggle:focus-visible
+    {
+        outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
+        border-radius: var(--ha-border-radius-sm, 4px);
+    }
+    /*  Monitoring-group pill: a small circle showing the group number (1..4) filled in the group's colour, or an
+        X in a dim outlined circle for "No group". Click cycles No group -> 1 -> ... -> 4 -> No group. */
+    .device-group
+    {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border-radius: 50%;
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
+        background: none;
+        color: var(--disabled-text-color, #bdbdbd);
+        font-size: var(--ha-font-size-xs, 12px);
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s, border-color 0.15s;
+        --mdc-icon-size: 16px;
+    }
+    .device-group.active
+    {
+        color: #fff;
+        border-color: transparent;
+        background: var(--group-pill-color, var(--primary-color, #03a9f4));
+    }
+    .device-group:hover
+    {
+        border-color: var(--primary-color, #03a9f4);
+    }
+    .device-group:focus-visible
+    {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+    }
+    /*  One group's identity in a framed block: line 1 = badge + name, line 2 = colour + icon pickers (each half). */
+    .group-block
+    {
+        margin-bottom: 8px;
+        padding: 8px 10px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: var(--ha-border-radius-md, 6px);
+    }
+    /*  Breathing room after the last group block before the next field (solar-irradiance entity). */
+    .group-block:last-of-type
+    {
+        margin-bottom: 16px;
+    }
+    .group-line
+    {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .group-line + .group-line
+    {
+        margin-top: 8px;
+    }
+    .group-name-badge
+    {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        color: #fff;
+        font-size: var(--ha-font-size-xs, 12px);
+        font-weight: 700;
+        line-height: 1;
+        background: var(--group-pill-color, var(--primary-color, #03a9f4));
+    }
+    .group-name-badge ha-icon
+    {
+        --mdc-icon-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .group-name-input
+    {
+        flex: 1 1 auto;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.2));
+        border-radius: var(--ha-border-radius-sm, 4px);
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        font-size: var(--ha-font-size-s, 13px);
+        font-family: inherit;
+    }
+    .group-name-input:focus
+    {
+        outline: none;
+        border-color: var(--primary-color, #03a9f4);
+    }
+    /*  Chip box (Chips & colours): the chip's name grows to push the on/off toggle to the right edge; the small
+        direction label sits before grid/battery's two colour pickers. */
+    .chip-box-name
+    {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: var(--ha-font-size-s, 13px);
+        color: var(--primary-text-color, #212121);
+    }
+    /*  Chip box body row: an icon picker + a colour picker sharing the width 50/50 (each state gets its own row
+        for grid/battery). flex-basis 0 + equal grow makes them the same width regardless of intrinsic content. */
+    .chip-body .chip-picker
+    {
+        flex: 1 1 0;
+        min-width: 0;
+        width: 0;
+    }
+    .device-empty
+    {
+        font-size: var(--ha-font-size-xs, 11px);
+        color: var(--secondary-text-color, #727272);
+        padding: 4px 0;
     }
 `;

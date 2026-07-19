@@ -56,7 +56,6 @@ interface HeliosWin extends Window
                 || lat < -90  || lat > 90
                 || lon < -180 || lon > 180)
             {
-                //Out-of-range or non-numeric input: ignore the override request.
                 return;
             }
             w.__heliosLocationOverride = { lat, lon };
@@ -73,7 +72,6 @@ interface HeliosWin extends Window
         {
             if (!w.__heliosLocationOverride)
             {
-                //No override active: nothing to revert.
                 return;
             }
             w.__heliosLocationOverride = undefined;
