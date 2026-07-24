@@ -7,6 +7,36 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.8.1
+
+A hotfix on top of 2026.8.0.
+
+### Changed: assign devices to groups by drag-and-drop
+
+Putting a device into a monitoring group is now a matter of dragging its chip into
+a group zone in the editor, instead of the small cycle button whose "no group"
+state showed an X that read as a delete button. Four group zones plus a "No group"
+pool; it works with a mouse and on touch. Existing group settings are unchanged.
+
+### Fixed: multi-meter grid and battery bands were impossible to tell apart
+
+On a setup with several grid or battery meters, the timeline already split each
+flow into one band per source, but every band carried the first source's name. The
+timeline tooltip now names each band by its own source, so a multi-tariff grid or a
+multi-bank battery reads clearly. Single-meter setups are unchanged.
+
+### New: a Live button on the timeline
+
+After scrubbing the lower graph, a small Live button jumps straight back to the
+present, instead of nudging the slider back by hand.
+
+### New: state of charge in the battery detail panel
+
+The battery detail panel gains a state-of-charge line (its average over the shown
+period). Thanks to @SBergers for the contribution.
+
+---
+
 ## 2026.8.0
 
 The biggest release yet. The devices you track in the Home Assistant energy

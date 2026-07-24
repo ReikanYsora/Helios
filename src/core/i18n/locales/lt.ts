@@ -156,6 +156,10 @@ export const lt: Translations = {
     deviceGroupLabel: "Stebėjimo grupė",
     group: "Grupė",
     noGroup: "Be grupės",
+    groupAssignHint:
+      "Vilkite savo įrenginius į grupę. Kas lieka apačioje, nepriklauso jokiai grupei.",
+    groupDropHere: "Vilkite įrenginį čia",
+    backToLive: "Grįžti į tiesioginį",
     devicesEnergyNote:
       "Tai pavieniai prietaisai, šiuo metu sukonfigūruoti tavo Home Assistant Energijos skydelyje. Akis rodo arba slepia kiekvieną iš jų visur, o žymeklis priskiria jį grupei.",
     buildingClusterRadius: "Namų sankaupos spindulys",

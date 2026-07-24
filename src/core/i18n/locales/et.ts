@@ -155,6 +155,10 @@ export const et: Translations = {
     deviceGroupLabel: "Jälgimisrühm",
     group: "Rühm",
     noGroup: "Rühm puudub",
+    groupAssignHint:
+      "Lohistage oma seadmed rühma. See, mis jääb alla, ei kuulu ühtegi rühma.",
+    groupDropHere: "Lohistage seade siia",
+    backToLive: "Tagasi reaalaega",
     devicesEnergyNote:
       "Need on hetkel sinu Home Assistanti energiapaneelis seadistatud üksikud seadmed. Silm näitab või peidab iga seadme kõikjal, pill määrab selle rühma.",
     buildingClusterRadius: "Kodu klastri raadius",

@@ -51,7 +51,8 @@ import
     tick,
     onTimelinePointerDown,
     onTimelinePointerMove,
-    onTimelinePointerUp
+    onTimelinePointerUp,
+    returnTimelineToLive
 } from './timeline/timeline';
 import { refreshGrid } from './data/sources/grid';
 import { refreshDeviceConsumption } from './data/sources/device-consumption';
@@ -1155,6 +1156,15 @@ export class HeliosCard extends LitElement
     private _onChartHoverMove      = (e: PointerEvent): void => onChartHoverMove(this, e);
     private _onChartHoverLeave     = (): void => onChartHoverLeave(this);
 
+    //Explicit "back to live" button (#324): jump straight from a scrubbed instant to the live cursor, no fiddling
+    //with the slider. Its pointerdown is swallowed so pressing it never scrubs the track underneath.
+    private _onReturnToLive = (e: Event): void => { e.stopPropagation(); returnTimelineToLive(this); };
+    private _stopPointer    = (e: Event): void => { e.stopPropagation(); };
+    private get _backToLiveLabel(): string
+    {
+        return pickTranslations(this.hass?.language).editor.backToLive ?? 'Back to live';
+    }
+
 
     //Resolve the active theme polarity, used to drive the `theme-dark` / `theme-light` class on the card. The
     //basemap's dark tint and every theme colour follow that class in CSS, so this pushes nothing to the engine.
@@ -1246,6 +1256,20 @@ export class HeliosCard extends LitElement
                         @pointerdown=${this._onTimelinePointerDown}
                     >
                         ${renderTimelineHoverTooltip(this)}
+
+                        ${!this._isLiveMode && this._selectedTime !== null ? html`
+                            <button
+                                class="tb-live-btn"
+                                type="button"
+                                title=${this._backToLiveLabel}
+                                aria-label=${this._backToLiveLabel}
+                                @pointerdown=${this._stopPointer}
+                                @click=${this._onReturnToLive}
+                            >
+                                <ha-icon icon="mdi:skip-forward"></ha-icon>
+                                <span>Live</span>
+                            </button>
+                        ` : nothing}
 
                         <!--  Single re-targetable bottom chart: the active _chartTarget picks the series
                               (production + dashed forecast + per-source breakdown by default; grid /

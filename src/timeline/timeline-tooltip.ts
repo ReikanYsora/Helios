@@ -5,10 +5,10 @@ import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, irradianceUnit } from '../core/config/helios-config';
 import { consumptionLoad } from '../core/energy';
-import { ENERGY_COLOR, energySolarColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
+import { ENERGY_COLOR, energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { valueAt } from '../data/unifiedStore';
-import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
+import { wattsAtFromChangeSeries, type ChangeBucket } from '../data/sources/energy-stats';
 import { groupDevices, deviceName, deviceIcon } from '../data/sources/device-consumption';
 import { pickTranslations } from '../core/i18n';
 import { resolveRangeMs } from './timeline-model';
@@ -21,6 +21,8 @@ import {
     gridExportName,
     batteryChargeName,
     batteryDischargeName,
+    gridSourceName,
+    batterySourceName,
     isGroupTarget,
     groupOfTarget,
 } from '../charts/charts';
@@ -146,6 +148,36 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const forecastColor  = chartIsDark(host)
         ? lerpHexToward(irradColor, '#ffffff', 0.75)
         : lerpHexToward(irradColor, '#000000', 0.55);
+
+    //Multi-source breakdown rows for grid / battery, mirroring the solar perEntity rows: one row per configured meter,
+    //but only once 2+ sources each carry their own recorder series (the same guard stackedLines uses), so a
+    //single-source install stays exactly as before. Index and colour follow the source order the bands are painted in,
+    //so each row lines up with its own stacked band.
+    const dark = chartIsDark(host);
+    const ed   = host._energyDefaults;
+    const breakdown = (
+        ids:      readonly string[],
+        map:      Map<string, ChangeBucket[]>,
+        nameFor:  (i: number) => string,
+        colorFor: (i: number) => string
+    ): { label: string; valueText: string; color: string }[] =>
+    {
+        if (ids.length < 2 || !ids.every((id) => map.has(id))) { return []; }
+        const rows: { label: string; valueText: string; color: string }[] = [];
+        for (let s = 0; s < ids.length; s++)
+        {
+            const w = wattsAtFromChangeSeries(map.get(ids[s]) ?? null, atMs);
+            //Skip a source idle at this instant (same 1 W floor as the aggregate rows); this also drops the whole set
+            //for the flow that is not active right now, so import and export never both list their sources at once.
+            if (w === null || !isFinite(w) || Math.abs(w) < 1) { continue; }
+            rows.push({ label: nameFor(s), valueText: formatPower(host.hass, Math.abs(w), dec, powerU), color: colorFor(s) });
+        }
+        return rows;
+    };
+    const gridImpRows = breakdown(ed.gridStatEnergyFroms, host._gridImportChangeSeriesPerEntity, (s) => gridSourceName(host, s, 'import'), (s) => energyGridColor(el, dark, s, 'import'));
+    const gridExpRows = breakdown(ed.gridStatEnergyTos,   host._gridExportChangeSeriesPerEntity, (s) => gridSourceName(host, s, 'export'), (s) => energyGridColor(el, dark, s, 'export'));
+    const battChgRows = breakdown(ed.batteryStatEnergyTos,   host._batteryChargeChangeSeriesPerEntity,    (s) => batterySourceName(host, s, 'charge'),    (s) => energyBatteryColor(el, dark, s, 'charge'));
+    const battDisRows = breakdown(ed.batteryStatEnergyFroms, host._batteryDischargeChangeSeriesPerEntity, (s) => batterySourceName(host, s, 'discharge'), (s) => energyBatteryColor(el, dark, s, 'discharge'));
 
     //Fused battery view: per-bank SoC at the cursor, to list each bank's level under the power rows (matching the
     //chart's per-bank SoC lines and their hover beams). Falls back to the aggregated mean when no per-bank series.
@@ -279,6 +311,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                             <span class="tb-hover-tooltip-value">${kw(gridImpW)}</span>
                         </div>
                     ` : nothing}
+                    ${gridImpRows.map(r => html`
+                        <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                            <span class="tb-hover-tooltip-dot" style="background:${r.color}"></span>
+                            <span class="tb-hover-tooltip-sublabel">${r.label}</span>
+                            <span class="tb-hover-tooltip-value">${r.valueText}</span>
+                        </div>
+                    `)}
                     ${isFinite(gridExpW) && gridExpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'gridExport')}" icon=${chipSlotIcon(host.config, 'gridExport', 'mdi:transmission-tower-import')}></ha-icon>
@@ -286,6 +325,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                             <span class="tb-hover-tooltip-value">${kw(gridExpW)}</span>
                         </div>
                     ` : nothing}
+                    ${gridExpRows.map(r => html`
+                        <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                            <span class="tb-hover-tooltip-dot" style="background:${r.color}"></span>
+                            <span class="tb-hover-tooltip-sublabel">${r.label}</span>
+                            <span class="tb-hover-tooltip-value">${r.valueText}</span>
+                        </div>
+                    `)}
                 ` : nothing}
                 ${target === 'battery' ? html`
                     ${isFinite(battW) && battW >= 1 ? html`
@@ -295,6 +341,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                             <span class="tb-hover-tooltip-value">${kw(battW)}</span>
                         </div>
                     ` : nothing}
+                    ${battChgRows.map(r => html`
+                        <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                            <span class="tb-hover-tooltip-dot" style="background:${r.color}"></span>
+                            <span class="tb-hover-tooltip-sublabel">${r.label}</span>
+                            <span class="tb-hover-tooltip-value">${r.valueText}</span>
+                        </div>
+                    `)}
                     ${isFinite(battW) && battW <= -1 ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'batteryDischarge')}" icon=${chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-down')}></ha-icon>
@@ -302,6 +355,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                             <span class="tb-hover-tooltip-value">${kw(-battW)}</span>
                         </div>
                     ` : nothing}
+                    ${battDisRows.map(r => html`
+                        <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                            <span class="tb-hover-tooltip-dot" style="background:${r.color}"></span>
+                            <span class="tb-hover-tooltip-sublabel">${r.label}</span>
+                            <span class="tb-hover-tooltip-value">${r.valueText}</span>
+                        </div>
+                    `)}
                     ${socBankVals.map((v, i) => isFinite(v) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${socBeamColor}" icon="mdi:battery"></ha-icon>

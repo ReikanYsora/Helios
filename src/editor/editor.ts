@@ -2,6 +2,7 @@ import type { TemplateResult} from 'lit';
 import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
@@ -481,19 +482,33 @@ export class HeliosCardEditor extends LitElement
         const next = list.includes(stat) ? list.filter(v => v !== stat) : [...list, stat];
         this._update('hidden-devices', next.length ? next : undefined);
     };
-    //Cycle a device's monitoring group: No group -> 1 -> 2 -> ... -> GROUP_COUNT -> No group. Stored as an object
-    //map (id -> 1..GROUP_COUNT); No group drops the key, and an empty map drops the whole option.
-    private _onDeviceGroupClick = (e: Event): void =>
+    //Drag-and-drop is delegated to HA's own <ha-sortable> (sortablejs under the hood), which HA registers at runtime
+    //like ha-icon, so it works with a mouse AND a finger without bundling anything. Each zone is a sortable sharing one
+    //group name, so a chip can be dragged between them; preventOnFilter keeps a tap on the eye from being swallowed.
+    private readonly _sortOptions = { preventOnFilter: false };
+
+    //Assign one device to a group (1..GROUP_COUNT), or drop it out of every group with 0. Same object shape the
+    //config already stores (id -> 1..GROUP_COUNT), so existing setups round-trip unchanged; an empty map drops the
+    //option entirely.
+    private _assignDeviceToGroup(stat: string, group: number): void
     {
-        const stat = (e.currentTarget as HTMLElement).dataset.stat;
-        if (!stat) { return; }
-        const cur  = monitoringGroups(this._cfg);
-        const step = (cur.get(stat) ?? 0) + 1;
-        const val  = step > GROUP_COUNT ? 0 : step;
+        const cur = monitoringGroups(this._cfg);
         const map: Record<string, number> = {};
         for (const [k, g] of cur) { if (k !== stat) { map[k] = g; } }
-        if (val >= 1) { map[stat] = val; }
+        if (group >= 1) { map[stat] = group; }
         this._update('monitoring-groups', Object.keys(map).length ? map : undefined);
+    }
+
+    //A chip was dropped into a zone: ha-sortable fires item-added on the destination, carrying the chip's sortableData
+    //(the device id). The zone's group is its data-group (0 = the No-group pool). A device has exactly one group, so
+    //assigning it to the new one implicitly removes it from the old.
+    private _onZoneItemAdded = (e: CustomEvent<{ data: unknown }>): void =>
+    {
+        const stat = e.detail?.data;
+        if (typeof stat !== 'string' || stat === '') { return; }
+        const group = Number((e.currentTarget as HTMLElement).dataset.group);
+        if (!Number.isInteger(group) || group < 0 || group > GROUP_COUNT) { return; }
+        this._assignDeviceToGroup(stat, group);
     };
 
     private _fmtNum(v: number, step: number): string
@@ -664,20 +679,101 @@ export class HeliosCardEditor extends LitElement
             || this._deviceName(a).localeCompare(this._deviceName(b), undefined, { sensitivity: 'base' }));
     }
 
-    private _renderDeviceList(t: Translations): TemplateResult
+    private _renderGroupAssignment(t: Translations): TemplateResult
     {
+        const hint = t.editor.groupAssignHint
+            ?? 'Drag your devices into a group. Anything left below belongs to no group.';
         const devices = this._orderedDevices();
         const hidden  = hiddenDevices(this._cfg);
+
+        if (devices.length === 0)
+        {
+            return html`
+                <div class="hint">${hint}</div>
+                <div class="live-config-link-row">${this._energyConfigLink()}</div>
+                <div class="device-empty">${t.editor.hiddenDevicesEmpty ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`;
+        }
+
         const groups  = monitoringGroups(this._cfg);
+        const inGroup = (g: number): DeviceConsumption[] =>
+            devices.filter(d => (groups.get(d.statConsumption) ?? 0) === g);
+
         return html`
-            <div class="hint">${t.editor.devicesEnergyNote ?? 'These are the individual devices currently set up in your Home Assistant Energy dashboard. The eye shows or hides each one everywhere, and the pill assigns it to a group.'}</div>
+            <div class="hint">${hint}</div>
             <div class="live-config-link-row">${this._energyConfigLink()}</div>
-            ${devices.length === 0
-                ? html`<div class="device-empty">${t.editor.hiddenDevicesEmpty ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`
-                : html`<div class="device-list">
-                    ${devices.map(dev => this._renderDeviceRow(dev, hidden, groups, t))}
-                </div>`}
+            <div class="group-zones">
+                ${Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1)
+                    .map(g => this._renderGroupZone(t, g, inGroup(g), hidden))}
+            </div>
+            ${this._renderGroupZone(t, 0, inGroup(0), hidden)}
         `;
+    }
+
+    //One drop zone: groups 1..GROUP_COUNT carry the group's badge/name/colour; group 0 is the "No group" pool at the
+    //bottom. Devices are draggable chips; an empty group keeps a "drop here" placeholder so it still reads as a target.
+    private _renderGroupZone(t: Translations, group: number, devs: DeviceConsumption[], hidden: Set<string>): TemplateResult
+    {
+        const isNone = group === 0;
+        const name   = isNone
+            ? (t.editor.noGroup ?? 'No group')
+            : (monitoringGroupName(this._cfg, group) || `${t.editor.group ?? 'Group'} ${group}`);
+        const icon   = isNone ? '' : monitoringGroupIcon(this._cfg, group);
+        const color  = isNone ? '' : monitoringGroupColor(this._cfg, group);
+        return html`
+            <div
+                class="group-zone ${isNone ? 'group-zone-none' : ''}"
+                style=${isNone ? '' : `--group-pill-color:${color}`}
+            >
+                <div class="group-zone-head">
+                    <span class="group-name-badge ${isNone ? 'group-name-badge-none' : ''}">
+                        ${isNone
+                            ? html`<ha-icon icon="mdi:tray-remove"></ha-icon>`
+                            : (icon ? html`<ha-icon icon=${icon}></ha-icon>` : html`${group}`)}
+                    </span>
+                    <span class="group-zone-name">${name}</span>
+                    <span class="group-zone-count">${devs.length}</span>
+                </div>
+                <ha-sortable
+                    group="helios-monitoring-groups"
+                    draggable-selector=".dev-chip"
+                    filter=".device-toggle"
+                    data-group=${String(group)}
+                    .options=${this._sortOptions}
+                    @item-added=${this._onZoneItemAdded}
+                >
+                    <div class="group-zone-body">
+                        ${devs.length
+                            ? repeat(devs, d => d.statConsumption, d => this._renderDeviceChip(d, hidden, t))
+                            : html`<div class="group-zone-empty">${t.editor.groupDropHere ?? 'Drop a device here'}</div>`}
+                    </div>
+                </ha-sortable>
+            </div>`;
+    }
+
+    //A draggable device chip: dashboard-tinted icon + name + the show/hide eye. Grabbing anywhere but the eye starts
+    //a pointer drag; the eye keeps its own click.
+    private _renderDeviceChip(dev: DeviceConsumption, hidden: Set<string>, t: Translations): TemplateResult
+    {
+        const stat  = dev.statConsumption;
+        const name  = this._deviceName(dev);
+        const color = deviceColorByIndex(this, dev.index);
+        const shown = !hidden.has(stat);
+        //`sortableData` is what ha-sortable hands back in item-added, so a dropped chip is known by its device id.
+        return html`
+            <div class="dev-chip ${shown ? '' : 'is-hidden'}" .sortableData=${stat}>
+                <ha-icon class="device-icon" icon=${this._deviceIcon(dev)} style="color:${color}"></ha-icon>
+                <span class="device-name">${name}</span>
+                <button
+                    type="button"
+                    class="device-toggle ${shown ? 'active' : ''}"
+                    data-stat=${stat}
+                    aria-pressed=${shown ? 'true' : 'false'}
+                    aria-label=${t.editor.deviceVisibilityLabel ?? 'Show device'}
+                    @click=${this._onDeviceToggleClick}
+                >
+                    <ha-icon icon=${shown ? 'mdi:eye' : 'mdi:eye-off'}></ha-icon>
+                </button>
+            </div>`;
     }
 
 
@@ -910,47 +1006,6 @@ export class HeliosCardEditor extends LitElement
         this._update('monitoring-group-hidden', Object.keys(map).length ? map : undefined);
     };
 
-    private _renderDeviceRow(dev: DeviceConsumption, hidden: Set<string>, groups: Map<string, number>, t: Translations): TemplateResult
-    {
-        const stat  = dev.statConsumption;
-        const name  = this._deviceName(dev);
-        const color = deviceColorByIndex(this, dev.index);
-        const shown = !hidden.has(stat);
-        const group = groups.get(stat) ?? 0;
-        return html`
-            <div class="device-row ${shown ? '' : 'is-hidden'}">
-                <ha-icon class="device-icon" icon=${this._deviceIcon(dev)} style="color:${color}"></ha-icon>
-                <span class="device-name">${name}</span>
-                <button
-                    type="button"
-                    class="device-group ${group ? 'active' : ''}"
-                    style=${group ? `--group-pill-color:${monitoringGroupColor(this._cfg, group)}` : ''}
-                    data-stat=${stat}
-                    aria-label=${t.editor.deviceGroupLabel ?? 'Monitoring group'}
-                    title=${group ? `${t.editor.group ?? 'Group'} ${group}` : (t.editor.noGroup ?? 'No group')}
-                    @click=${this._onDeviceGroupClick}
-                >
-                    ${group
-                        ? (() => {
-                            const gi = monitoringGroupIcon(this._cfg, group);
-                            return gi ? html`<ha-icon icon=${gi}></ha-icon>` : html`<span class="device-group-num">${group}</span>`;
-                        })()
-                        : html`<ha-icon icon="mdi:close"></ha-icon>`}
-                </button>
-                <button
-                    type="button"
-                    class="device-toggle ${shown ? 'active' : ''}"
-                    data-stat=${stat}
-                    aria-pressed=${shown ? 'true' : 'false'}
-                    aria-label=${t.editor.deviceVisibilityLabel ?? 'Show device'}
-                    @click=${this._onDeviceToggleClick}
-                >
-                    <ha-icon icon=${shown ? 'mdi:eye' : 'mdi:eye-off'}></ha-icon>
-                </button>
-            </div>
-        `;
-    }
-
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -1028,7 +1083,7 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="groups" ?open=${this._openSection === 'groups'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:select-group"></ha-icon>${t.editor.groupsConfigTitle ?? 'Group configuration'}</summary>
-                ${this._renderDeviceList(t)}
+                ${this._renderGroupAssignment(t)}
                 </details>
 
                 <details class="advanced-section" data-section="sensors" ?open=${this._openSection === 'sensors'} @toggle=${this._onSectionToggleEvt}>

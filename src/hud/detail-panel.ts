@@ -165,10 +165,18 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
     {
         const discharged = dirTotal('discharge');
         const charged    = dirTotal('charge');
-        return [
+        const rows: DetailMetric[] = [
             { icon: chipSlotIcon(host.config, 'batteryCharge', 'mdi:battery-arrow-down'), value: energy(charged) },
             { icon: chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-up'),   value: energy(discharged) },
         ];
+    
+        // Third line (issue #323): state of charge over the window...
+        const soc = socStats(buildPeriodData(host, 'battery-soc'));
+        if (soc)
+        {
+            rows.push({ icon: 'mdi:battery-charging', value: `${Math.round(soc.avg)} %` });
+        }
+        return rows;
     }
 
     //production, consumption: one grand total (all layers) + its per-day average.

@@ -351,6 +351,50 @@ export const heliosTimelineStyles = css`
     /*  LIVE chip at the top-right of the scrub tooltip. Outline recipe (transparent backdrop + primary
         border + glyph) so it reads on both themes without clashing with the tooltip background. The dot
         pulses, mirroring HA Energy's live-data vocabulary. */
+    /*  Explicit "back to live" button (#324): a floating accent pill at the top-right of the timeline, shown only
+        while a past instant is scrubbed. One tap jumps straight back to the live cursor. */
+    .tb-live-btn
+    {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        z-index: 40;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        height: 22px;
+        padding: 0 8px 0 5px;
+        box-sizing: border-box;
+        background: var(--card-background-color, #ffffff);
+        color: var(--tb-accent, var(--primary-color, #03a9f4));
+        border: 1px solid var(--tb-accent, var(--primary-color, #03a9f4));
+        border-radius: 999px;
+        font: inherit;
+        font-size: var(--ha-font-size-xs, 12px);
+        font-weight: var(--ha-font-weight-bold, 700);
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+        transition: background 0.14s, color 0.14s;
+        --mdc-icon-size: 16px;
+    }
+    .tb-live-btn:hover
+    {
+        background: var(--tb-accent, var(--primary-color, #03a9f4));
+        color: var(--card-background-color, #ffffff);
+    }
+    .tb-live-btn:focus-visible
+    {
+        outline: 2px solid var(--tb-accent, var(--primary-color, #03a9f4));
+        outline-offset: 2px;
+    }
+    .tb-live-btn ha-icon
+    {
+        display: inline-flex;
+        line-height: 0;
+    }
     .tb-hover-tooltip-live-chip
     {
         /*  Last flex child of the time row, pushed right via margin-left: auto; the parent's

@@ -165,6 +165,10 @@ export const en: Translations = {
     deviceGroupLabel: "Monitoring group",
     group: "Group",
     noGroup: "No group",
+    groupAssignHint:
+      "Drag your devices into a group. Anything left below belongs to no group.",
+    groupDropHere: "Drop a device here",
+    backToLive: "Back to live",
     devicesEnergyNote:
       "These are the individual devices currently set up in your Home Assistant Energy dashboard. The eye shows or hides each one everywhere, and the pill assigns it to a group.",
     buildingClusterRadius: "Home cluster radius",

@@ -155,6 +155,10 @@ export const nl: Translations = {
     deviceGroupLabel: "Bewakingsgroep",
     group: "Groep",
     noGroup: "Geen groep",
+    groupAssignHint:
+      "Sleep je apparaten naar een groep. Wat onderaan overblijft, hoort bij geen enkele groep.",
+    groupDropHere: "Sleep hier een apparaat naartoe",
+    backToLive: "Terug naar live",
     devicesEnergyNote:
       "Dit zijn de individuele apparaten die momenteel zijn ingesteld in je Home Assistant Energiedashboard. Het oog toont of verbergt elk apparaat overal, en de pil wijst het aan een groep toe.",
     buildingClusterRadius: "Clusterstraal huis",

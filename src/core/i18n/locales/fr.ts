@@ -155,6 +155,10 @@ export const fr: Translations = {
     deviceGroupLabel: "Groupe de suivi",
     group: "Groupe",
     noGroup: "Aucun groupe",
+    groupAssignHint:
+      "Glissez vos appareils dans un groupe. Ce qui reste en bas n'appartient à aucun groupe.",
+    groupDropHere: "Déposez un appareil ici",
+    backToLive: "Retour au live",
     devicesEnergyNote:
       "Voici les appareils individuels actuellement configurés dans votre tableau de bord Énergie Home Assistant. L'œil affiche ou masque chacun partout, et la pastille l'assigne à un groupe.",
     buildingClusterRadius: "Rayon de regroupement maison",

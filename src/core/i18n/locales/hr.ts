@@ -155,6 +155,10 @@ export const hr: Translations = {
     deviceGroupLabel: "Skupina praćenja",
     group: "Skupina",
     noGroup: "Bez skupine",
+    groupAssignHint:
+      "Povucite svoje uređaje u grupu. Ono što ostane ispod ne pripada nijednoj grupi.",
+    groupDropHere: "Ovdje ispustite uređaj",
+    backToLive: "Natrag na uživo",
     devicesEnergyNote:
       "Ovo su pojedinačni uređaji trenutno postavljeni u tvojoj energetskoj nadzornoj ploči Home Assistant. Oko prikazuje ili skriva svaki od njih posvuda, a pločica ga dodjeljuje skupini.",
     buildingClusterRadius: "Radijus grupiranja doma",

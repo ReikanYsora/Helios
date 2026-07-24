@@ -156,6 +156,10 @@ export const sk: Translations = {
     deviceGroupLabel: "Sledovacia skupina",
     group: "Skupina",
     noGroup: "Bez skupiny",
+    groupAssignHint:
+      "Presuňte svoje zariadenia do skupiny. Čo zostane dole, nepatrí do žiadnej skupiny.",
+    groupDropHere: "Sem presuňte zariadenie",
+    backToLive: "Späť na naživo",
     devicesEnergyNote:
       "Toto sú jednotlivé zariadenia aktuálne nastavené v tvojom Energy dashboarde Home Assistant. Oko zobrazí alebo skryje každé z nich všade a štítok ho priradí do skupiny.",
     buildingClusterRadius: "Polomer zoskupovania domova",

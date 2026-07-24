@@ -155,6 +155,10 @@ export const fi: Translations = {
     deviceGroupLabel: "Seurantaryhmä",
     group: "Ryhmä",
     noGroup: "Ei ryhmää",
+    groupAssignHint:
+      "Vedä laitteesi ryhmään. Alle jäävät eivät kuulu mihinkään ryhmään.",
+    groupDropHere: "Pudota laite tähän",
+    backToLive: "Takaisin reaaliaikaan",
     devicesEnergyNote:
       "Nämä ovat Home Assistantin Energia-kojelaudassasi tällä hetkellä määritetyt yksittäiset laitteet. Silmäkuvake näyttää tai piilottaa kunkin kaikkialla, ja pilleri määrittää sen ryhmään.",
     buildingClusterRadius: "Kodin klusterisäde",
