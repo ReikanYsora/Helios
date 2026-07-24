@@ -71,6 +71,22 @@ export function gridExportName(host: ChartHost):      string { return host._ener
 export function batteryChargeName(host: ChartHost):   string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyTos); }
 export function batteryDischargeName(host: ChartHost): string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyFroms); }
 
+//Per-source grid / battery name, resolved by index the same way solarSourceName is: the meter's HA friendly name for
+//that source and direction, falling back to the statistic id, then a generic label. Only the multi-source breakdown
+//rows use these, so a single-source install (which still reads gridName / batteryName above) is untouched.
+export function gridSourceName(host: ChartHost, index: number, dir: 'import' | 'export'): string
+{
+    const ed = host._energyDefaults;
+    const id = (dir === 'import' ? ed.gridStatEnergyFroms : ed.gridStatEnergyTos)[index];
+    return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `Grid ${index + 1}`;
+}
+export function batterySourceName(host: ChartHost, index: number, dir: 'charge' | 'discharge'): string
+{
+    const ed = host._energyDefaults;
+    const id = (dir === 'charge' ? ed.batteryStatEnergyTos : ed.batteryStatEnergyFroms)[index];
+    return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `Battery ${index + 1}`;
+}
+
 //Metric name for a tooltip row / rail title. en + fr; other locales fall back to en. Group targets take their
 //editable name (or "Group N"); everything else comes from here or from statFriendly.
 const TARGET_LABELS_EN: Record<Exclude<ChartTarget, GroupTarget>, string> = {
