@@ -155,6 +155,10 @@ export const isLocale: Translations = {
     deviceGroupLabel: "Vöktunarhópur",
     group: "Hópur",
     noGroup: "Enginn hópur",
+    groupAssignHint:
+      "Dragðu tækin þín í hóp. Það sem eftir verður neðar tilheyrir engum hópi.",
+    groupDropHere: "Slepptu tæki hér",
+    backToLive: "Til baka í beina útsendingu",
     devicesEnergyNote:
       "Þetta eru einstök tæki sem nú eru sett upp í orkumælaborði Home Assistant. Augað sýnir eða felur hvert tæki alls staðar, og hnappurinn úthlutar því í hóp.",
     buildingClusterRadius: "Klasaradíus heimilis",

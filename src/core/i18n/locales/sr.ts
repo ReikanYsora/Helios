@@ -155,6 +155,10 @@ export const sr: Translations = {
     deviceGroupLabel: "Група праћења",
     group: "Група",
     noGroup: "Без групе",
+    groupAssignHint:
+      "Превуците своје уређаје у групу. Оно што остане испод не припада ниједној групи.",
+    groupDropHere: "Овде отпустите уређај",
+    backToLive: "Назад на уживо",
     devicesEnergyNote:
       "Ово су појединачни уређаји тренутно подешени на твојој Home Assistant енергетској контролној табли. Око приказује или скрива сваки свуда, а пилула га додељује групи.",
     buildingClusterRadius: "Радијус груписања дома",

@@ -139,6 +139,7 @@ export interface Translations
         noGroup?:                       string;
         groupAssignHint?:               string;
         groupDropHere?:                 string;
+        backToLive?:                    string;
         //Note above the device list clarifying these are the entities set up in the HA Energy dashboard.
         devicesEnergyNote?:             string;
         //Solar-irradiance override entity (W/m² sensor). When wired, preferred over the model for live + past

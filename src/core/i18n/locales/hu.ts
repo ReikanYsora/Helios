@@ -156,6 +156,10 @@ export const hu: Translations = {
     deviceGroupLabel: "Felügyeleti csoport",
     group: "Csoport",
     noGroup: "Nincs csoport",
+    groupAssignHint:
+      "Húzza az eszközeit egy csoportba. Ami alul marad, egyik csoporthoz sem tartozik.",
+    groupDropHere: "Húzzon ide egy eszközt",
+    backToLive: "Vissza az élőhöz",
     devicesEnergyNote:
       "Ezek a jelenleg a Home Assistant energia irányítópultodon beállított egyedi eszközök. A szem ikon mindenhol megjeleníti vagy elrejti az adott eszközt, a jelölő pedig egy csoporthoz rendeli.",
     buildingClusterRadius: "Otthon csoportosítási sugara",

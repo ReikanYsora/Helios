@@ -156,6 +156,10 @@ export const lv: Translations = {
     deviceGroupLabel: "Uzraudzības grupa",
     group: "Grupa",
     noGroup: "Bez grupas",
+    groupAssignHint:
+      "Velciet savas ierīces grupā. Tas, kas paliek zemāk, nepieder nevienai grupai.",
+    groupDropHere: "Nometiet ierīci šeit",
+    backToLive: "Atpakaļ uz tiešraidi",
     devicesEnergyNote:
       "Šīs ir atsevišķās ierīces, kas pašlaik iestatītas tavā Home Assistant enerģijas panelī. Acs ikona rāda vai slēpj katru no tām visur, bet zīmīte piešķir to grupai.",
     buildingClusterRadius: "Mājas klastera rādiuss",

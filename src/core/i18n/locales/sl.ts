@@ -154,6 +154,10 @@ export const sl: Translations = {
     deviceGroupLabel: "Nadzorna skupina",
     group: "Skupina",
     noGroup: "Brez skupine",
+    groupAssignHint:
+      "Povlecite svoje naprave v skupino. Kar ostane spodaj, ne pripada nobeni skupini.",
+    groupDropHere: "Sem spustite napravo",
+    backToLive: "Nazaj na v živo",
     devicesEnergyNote:
       "To so posamezne naprave, ki so trenutno nastavljene v tvoji nadzorni plošči Energija v Home Assistant. Oko povsod pokaže ali skrije vsako od njih, ploščica pa jo dodeli skupini.",
     buildingClusterRadius: "Polmer združevanja doma",

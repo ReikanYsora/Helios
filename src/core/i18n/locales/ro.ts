@@ -154,6 +154,10 @@ export const ro: Translations = {
     deviceGroupLabel: "Grup de monitorizare",
     group: "Grup",
     noGroup: "Fara grup",
+    groupAssignHint:
+      "Trageți dispozitivele într-un grup. Ce rămâne mai jos nu aparține niciunui grup.",
+    groupDropHere: "Trageți un dispozitiv aici",
+    backToLive: "Înapoi la live",
     devicesEnergyNote:
       "Acestea sunt dispozitivele individuale configurate momentan in tabloul tau de bord Energie din Home Assistant. Ochiul arata sau ascunde fiecare dispozitiv peste tot, iar eticheta il atribuie unui grup.",
     buildingClusterRadius: "Raza de grupare a casei",

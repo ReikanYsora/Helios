@@ -1162,7 +1162,7 @@ export class HeliosCard extends LitElement
     private _stopPointer    = (e: Event): void => { e.stopPropagation(); };
     private get _backToLiveLabel(): string
     {
-        return String(this.hass?.language ?? '').toLowerCase().startsWith('fr') ? 'Retour au live' : 'Back to live';
+        return pickTranslations(this.hass?.language).editor.backToLive ?? 'Back to live';
     }
 
 

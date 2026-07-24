@@ -156,6 +156,10 @@ export const cs: Translations = {
     deviceGroupLabel: "Sledovací skupina",
     group: "Skupina",
     noGroup: "Bez skupiny",
+    groupAssignHint:
+      "Přetáhněte svá zařízení do skupiny. Co zůstane dole, nepatří do žádné skupiny.",
+    groupDropHere: "Sem přetáhněte zařízení",
+    backToLive: "Zpět na živě",
     devicesEnergyNote:
       "Toto jsou jednotlivá zařízení aktuálně nastavená v tvém energetickém přehledu Home Assistant. Oko zobrazí nebo skryje každé z nich všude a pilulka jej zařadí do skupiny.",
     buildingClusterRadius: "Poloměr shlukování domova",

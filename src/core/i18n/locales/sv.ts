@@ -154,6 +154,10 @@ export const sv: Translations = {
     deviceGroupLabel: "Övervakningsgrupp",
     group: "Grupp",
     noGroup: "Ingen grupp",
+    groupAssignHint:
+      "Dra dina enheter till en grupp. Det som blir kvar nedanför tillhör ingen grupp.",
+    groupDropHere: "Släpp en enhet här",
+    backToLive: "Tillbaka till live",
     devicesEnergyNote:
       "Detta är de enskilda enheter som för närvarande är konfigurerade i din Home Assistant-energidashboard. Ögat visar eller döljer varje enhet överallt, och pillen tilldelar den till en grupp.",
     buildingClusterRadius: "Hemmets klusterradie",

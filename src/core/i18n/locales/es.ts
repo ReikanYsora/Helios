@@ -156,6 +156,10 @@ export const es: Translations = {
     deviceGroupLabel: "Grupo de monitorización",
     group: "Grupo",
     noGroup: "Sin grupo",
+    groupAssignHint:
+      "Arrastra tus dispositivos a un grupo. Lo que quede abajo no pertenece a ningún grupo.",
+    groupDropHere: "Suelta un dispositivo aquí",
+    backToLive: "Volver al directo",
     devicesEnergyNote:
       "Estos son los dispositivos individuales configurados actualmente en tu panel de Energía de Home Assistant. El ojo muestra u oculta cada uno en todas partes, y la píldora lo asigna a un grupo.",
     buildingClusterRadius: "Radio de agrupación de la casa",
