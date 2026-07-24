@@ -137,6 +137,17 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
 //hour-snap on the selected time: snapping to the nearest hour made the sun arc and cloud dome jerk forward in 1 h
 //jumps while dragging. Sub-hour timestamps still resolve to the right hourly weather bucket via nearest-hour lookup
 //in the engine, so accuracy is kept where it matters and the sun animates smoothly where it doesn't.
+//Snap the timeline back to live: drop the scrub selection, re-enter live mode, and let the scene engine follow "now"
+//again. Shared by the magnet snap and the explicit Live button (#324).
+export function returnTimelineToLive(host: TimelineHost): void
+{
+    host._selectedTime  = null;
+    host._isLiveMode    = true;
+    host._chartHoverPct = null;
+    host._engine?.setSelectedTime(null);
+}
+
+
 export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
 {
     if (!host._timeRange)
@@ -165,10 +176,7 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
         {
             if (!host._isLiveMode || host._selectedTime !== null)
             {
-                host._selectedTime  = null;
-                host._isLiveMode    = true;
-                host._chartHoverPct = null;
-                host._engine?.setSelectedTime(null);
+                returnTimelineToLive(host);
             }
             return;
         }
