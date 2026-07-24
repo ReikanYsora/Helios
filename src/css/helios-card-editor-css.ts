@@ -592,6 +592,105 @@ export const editorStyles = css`
         align-items: center;
         justify-content: center;
     }
+    /*  Group ASSIGNMENT (drag-and-drop): the four groups sit in a grid of drop zones, with a "No group" pool below.
+        A device is assigned by dragging its chip into a zone, replacing the old per-row cycle pill. */
+    .group-zones
+    {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+    }
+    @media (max-width: 480px)
+    {
+        .group-zones { grid-template-columns: 1fr; }
+    }
+    .group-zone
+    {
+        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: var(--ha-border-radius-md, 6px);
+        padding: 8px;
+        background: var(--card-background-color, #fff);
+        transition: border-color 0.12s, background 0.12s;
+    }
+    /*  The pool of ungrouped devices spans the full width under the four group zones. */
+    .group-zone.group-zone-none
+    {
+        margin-top: 8px;
+        margin-bottom: 16px;
+    }
+    .group-zone-head
+    {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+    .group-name-badge-none
+    {
+        background: var(--disabled-text-color, #bdbdbd);
+    }
+    .group-zone-name
+    {
+        flex: 1;
+        min-width: 0;
+        font-size: var(--ha-font-size-s, 13px);
+        font-weight: 600;
+        color: var(--primary-text-color, #212121);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .group-zone-count
+    {
+        flex: none;
+        font-size: var(--ha-font-size-xs, 12px);
+        color: var(--secondary-text-color, #727272);
+        font-variant-numeric: tabular-nums;
+    }
+    .group-zone-body
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 40px;
+    }
+    .group-zone-empty
+    {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 4px 8px;
+        border: 1px dashed var(--divider-color, rgba(0, 0, 0, 0.2));
+        border-radius: var(--ha-border-radius-sm, 4px);
+        font-size: var(--ha-font-size-xs, 12px);
+        color: var(--secondary-text-color, #727272);
+        text-align: center;
+    }
+    .dev-chip
+    {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: var(--ha-border-radius-sm, 4px);
+        background: var(--secondary-background-color, rgba(0, 0, 0, 0.04));
+        cursor: grab;
+        /*  So a touch drag turns the chip instead of scrolling the editor. */
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    .dev-chip:active
+    {
+        cursor: grabbing;
+    }
+    .dev-chip.is-hidden .device-icon,
+    .dev-chip.is-hidden .device-name
+    {
+        opacity: 0.5;
+    }
     .group-name-input
     {
         flex: 1 1 auto;
