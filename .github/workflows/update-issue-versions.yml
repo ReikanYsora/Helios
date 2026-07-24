@@ -17,6 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        # On a release event the default checkout lands on the tag (detached HEAD), so the push
+        # below fails. Check out the default branch instead, for both triggers.
+        with:
+          ref: ${{ github.event.repository.default_branch }}
 
       - name: Regenerate version options
         env:
@@ -71,4 +75,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/ISSUE_TEMPLATE
           git commit -m "Sync issue-form version dropdowns with the latest release"
-          git push
+          git push origin HEAD:${{ github.event.repository.default_branch }}
