@@ -189,10 +189,6 @@ export const TILE_PX             = 256;
 export const GROUND_RADIUS       = 5;
 export const GROUND_ZOOM         = 19;
 export const GROUND_FADE_START   = 88;
-//Compatibility path for issue #304. When true the basemap is painted already projected, so its canvas
-//carries no CSS 3D transform: old iOS WebKit halves any flat layer composited over a 3D-transformed one,
-//which drops the bottom half of everything drawn above the map. Costs a ground repaint per camera move.
-export const PROJECTED_GROUND    = false;
 export const EARTH_CIRCUMFERENCE_M = 40075016.686;
 //Metres per degree of latitude (mean). Longitude scales this by cos(latitude). Used by every lon/lat<->metres
 //projection (engine chip cluster, sun arc, building footprints) instead of re-deriving the literal each time.

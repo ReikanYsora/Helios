@@ -16,8 +16,25 @@ import {
     GROWTH_RISE_MS,
     HOME_SQUASH_MS,
     HOME_GROW_MS,
-    PROJECTED_GROUND,
 } from '../core/config/constants';
+
+//Old iOS/iPadOS WebKit half-composites a flat layer over a CSS 3D-transformed one, clipping the whole scene to
+//its top half (issue #304). Those devices render the ground on the projected compat path instead of a 3D
+//transform. It cannot be feature-detected (no API reads composited pixels), so we sniff: an Apple touch device
+//(including iPadOS masquerading as macOS Safari) on Safari <= 16, the WebKit generation that carries the bug and
+//the ceiling for the old hardware it runs on. A miss on a newer device keeps the (perfect) normal path; a false
+//positive only swaps in the near-equivalent compat render, so erring is cheap.
+function needsProjectedGround(): boolean
+{
+    if (typeof navigator === 'undefined') { return false; }
+    const ua = navigator.userAgent || '';
+    const appleTouch = /iPad|iPhone|iPod/.test(ua)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!appleTouch) { return false; }
+    const m = ua.match(/Version\/(\d+)/);
+    const major = m ? parseInt(m[1], 10) : 0;
+    return major > 0 && major <= 16;
+}
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
 const prefersReducedMotion = (): boolean =>
@@ -56,9 +73,9 @@ export class SceneRenderer
         camera: SceneCamera, w: number, h: number, style: GroundStyle, altitude: number,
     ) => void;
     private _projectedPose = '';
-    //Ground render path: false = normal CSS-3D transform, true = projected compat path (issue #304). Seeded from
-    //the constant; the auto-detection will set it per device. The temporary in-card toggle flips it at runtime.
-    private _projectedGround = PROJECTED_GROUND;
+    //Ground render path, decided once per device: false = normal CSS-3D transform, true = projected compat path
+    //for the old iOS/iPadOS WebKit that would otherwise clip the scene to its top half (issue #304).
+    private _projectedGround = needsProjectedGround();
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;
     private _groundAltitude  = 45;
@@ -102,23 +119,6 @@ export class SceneRenderer
         this._sceneSvg.setAttribute('class', 'scene-svg');
         container.appendChild(this._groundHolder);
         container.appendChild(this._sceneSvg);
-
-        //TEMPORARY (#304 parity test): a toggle to flip the ground between the normal CSS-3D path and the projected
-        //compat path at runtime, to compare both modes on one machine. Mounted on document.body (fixed, bottom-
-        //right) so it escapes the card's nested shadow DOM and stacking contexts that were swallowing the click,
-        //and also exposed as window.__heliosGround() for the console. Removed with the auto-detection.
-        const gndBtn = document.createElement('button');
-        gndBtn.type = 'button';
-        const gndLabel = (): void => { gndBtn.textContent = this._projectedGround ? 'GND: compat' : 'GND: normal'; };
-        gndLabel();
-        gndBtn.style.cssText =
-            'position:fixed;bottom:16px;right:16px;z-index:2147483647;pointer-events:auto;'
-            + 'font:13px/1 system-ui,sans-serif;padding:8px 12px;border-radius:8px;'
-            + 'border:1px solid rgba(255,255,255,0.5);background:rgba(20,20,20,0.9);color:#fff;cursor:pointer;';
-        const gndToggle = (): void => { this.setProjectedGround(!this._projectedGround); gndLabel(); };
-        gndBtn.addEventListener('click', gndToggle);
-        document.body.appendChild(gndBtn);
-        Reflect.set(window, '__heliosGround', gndToggle);
 
         //The camera centres on width/2 x height/2, so a draw taken before the container has its final size
         //lands the whole scene in the top-left. The container often starts at 0x0 (the first draw bails) or a
@@ -348,24 +348,6 @@ export class SceneRenderer
         this._ground.fade.style.display = 'none';
     }
 
-    //TEMPORARY (#304 parity test): flip the ground between the normal transform path and the projected compat
-    //path at runtime, so both can be A/B compared on one machine. Going back to normal restores the size-native
-    //basemap (the compat path repaints the canvas at card size). Removed with the auto-detection.
-    public setProjectedGround(on: boolean): void
-    {
-        if (this._projectedGround === on) { return; }
-        this._projectedGround = on;
-        this._projectedPose = '';
-        if (!on && this._ground && this._groundRepaint && this._groundStyleCur)
-        {
-            this._ground.el.width  = this._ground.size;
-            this._ground.el.height = this._ground.size;
-            this._groundRepaint(this._groundStyleCur, this._groundAltitude);
-        }
-        this.scheduleRedraw();
-    }
-
-    public get projectedGround(): boolean { return this._projectedGround; }
 
     private _draw(): void
     {
