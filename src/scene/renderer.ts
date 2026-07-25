@@ -16,6 +16,7 @@ import {
     GROWTH_RISE_MS,
     HOME_SQUASH_MS,
     HOME_GROW_MS,
+    PROJECTED_GROUND,
 } from '../core/config/constants';
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
@@ -49,6 +50,15 @@ export class SceneRenderer
     //Repaints the current ground canvas from its cached vector features with a new style + sun altitude (theme
     //flip / colour config / day-night grade), so it never re-fetches tiles.
     private _groundRepaint?: (style: GroundStyle, altitude: number) => void;
+    //Compat path (issue #304): repaint the ground already projected, so its canvas carries no CSS 3D
+    //transform. Memoised on the pose so it only repaints when the camera (or size/altitude) actually moved.
+    private _groundRepaintProjected?: (
+        camera: SceneCamera, w: number, h: number, style: GroundStyle, altitude: number,
+    ) => void;
+    private _projectedPose = '';
+    //Ground render path: false = normal CSS-3D transform, true = projected compat path (issue #304). Seeded from
+    //the constant; the auto-detection will set it per device. The temporary in-card toggle flips it at runtime.
+    private _projectedGround = PROJECTED_GROUND;
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;
     private _groundAltitude  = 45;
@@ -92,6 +102,23 @@ export class SceneRenderer
         this._sceneSvg.setAttribute('class', 'scene-svg');
         container.appendChild(this._groundHolder);
         container.appendChild(this._sceneSvg);
+
+        //TEMPORARY (#304 parity test): a toggle to flip the ground between the normal CSS-3D path and the projected
+        //compat path at runtime, to compare both modes on one machine. Mounted on document.body (fixed, bottom-
+        //right) so it escapes the card's nested shadow DOM and stacking contexts that were swallowing the click,
+        //and also exposed as window.__heliosGround() for the console. Removed with the auto-detection.
+        const gndBtn = document.createElement('button');
+        gndBtn.type = 'button';
+        const gndLabel = (): void => { gndBtn.textContent = this._projectedGround ? 'GND: compat' : 'GND: normal'; };
+        gndLabel();
+        gndBtn.style.cssText =
+            'position:fixed;bottom:16px;right:16px;z-index:2147483647;pointer-events:auto;'
+            + 'font:13px/1 system-ui,sans-serif;padding:8px 12px;border-radius:8px;'
+            + 'border:1px solid rgba(255,255,255,0.5);background:rgba(20,20,20,0.9);color:#fff;cursor:pointer;';
+        const gndToggle = (): void => { this.setProjectedGround(!this._projectedGround); gndLabel(); };
+        gndBtn.addEventListener('click', gndToggle);
+        document.body.appendChild(gndBtn);
+        Reflect.set(window, '__heliosGround', gndToggle);
 
         //The camera centres on width/2 x height/2, so a draw taken before the container has its final size
         //lands the whole scene in the top-left. The container often starts at 0x0 (the first draw bails) or a
@@ -137,6 +164,8 @@ export class SceneRenderer
         this._groundStyleCur = style;
         this._ground         = built.ground;
         this._groundRepaint  = built.repaint;
+        this._groundRepaintProjected = built.repaintProjected;
+        this._projectedPose = '';
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
         //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
         //pixels. A browser may drop a canvas's backing store while the page sits idle, and nothing here would put
@@ -302,6 +331,42 @@ export class SceneRenderer
         });
     }
 
+    //Compat path: paint the basemap in screen space, sized to the card, with no transform on the element.
+    //Skipped unless the pose actually changed, so a static scene costs nothing.
+    private _paintProjectedGround(w: number, h: number): void
+    {
+        if (!this._ground || !this._groundRepaintProjected || !this._groundStyleCur) { return; }
+        const pose = `${w}x${h}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}`;
+        if (pose === this._projectedPose) { return; }
+        this._projectedPose = pose;
+        this._groundRepaintProjected(this.camera, w, h, this._groundStyleCur, this._groundAltitude);
+        //Compat path carries no CSS transform; clear any left over from the normal path (matters when toggling).
+        this._ground.el.style.transform = '';
+        this._ground.el.style.transformOrigin = '';
+        //The edge fade is baked into the projected canvas (in the plane), so the face-on .ground-fade disc that
+        //would otherwise sit flat against the camera stays hidden on this path.
+        this._ground.fade.style.display = 'none';
+    }
+
+    //TEMPORARY (#304 parity test): flip the ground between the normal transform path and the projected compat
+    //path at runtime, so both can be A/B compared on one machine. Going back to normal restores the size-native
+    //basemap (the compat path repaints the canvas at card size). Removed with the auto-detection.
+    public setProjectedGround(on: boolean): void
+    {
+        if (this._projectedGround === on) { return; }
+        this._projectedGround = on;
+        this._projectedPose = '';
+        if (!on && this._ground && this._groundRepaint && this._groundStyleCur)
+        {
+            this._ground.el.width  = this._ground.size;
+            this._ground.el.height = this._ground.size;
+            this._groundRepaint(this._groundStyleCur, this._groundAltitude);
+        }
+        this.scheduleRedraw();
+    }
+
+    public get projectedGround(): boolean { return this._projectedGround; }
+
     private _draw(): void
     {
         if (!this._alive) { return; }
@@ -316,13 +381,21 @@ export class SceneRenderer
         this.camera.setViewport(width, height);
 
         //Tilt + turn the basemap about the home, then translate the home onto the screen-space centre.
+        //On the compat path there is no transform at all: the ground is repainted already projected.
         if (this._ground)
         {
-            const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
-            this._ground.el.style.transformOrigin = transformOrigin;
-            this._ground.el.style.transform = transform;
-            this._ground.fade.style.transformOrigin = transformOrigin;
-            this._ground.fade.style.transform = transform;
+            if (this._projectedGround) { this._paintProjectedGround(width, height); }
+            else
+            {
+                const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
+                this._ground.el.style.transformOrigin = transformOrigin;
+                this._ground.el.style.transform = transform;
+                this._ground.fade.style.display = '';
+                this._ground.fade.style.width  = `${this._ground.size}px`;
+                this._ground.fade.style.height = `${this._ground.size}px`;
+                this._ground.fade.style.transformOrigin = transformOrigin;
+                this._ground.fade.style.transform = transform;
+            }
         }
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);

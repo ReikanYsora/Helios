@@ -18,6 +18,7 @@
 //track is not convex, so it may cross that plane more than twice; the split makes no assumption about how many.
 
 import type { SceneCamera } from './projection';
+import { cardClipRect, clipSegment, type ClipRect } from '../core/render-kit/geometry';
 import { DEG, HOUR_MS, DAY_CURVE_HEIGHT_FRAC } from '../core/config/constants';
 import { getSunPosition } from '../core/time/sun';
 import { serverMsOfDay } from '../core/time/timezone';
@@ -333,7 +334,7 @@ const emptyPass = (): DayCurvePass => ({ foot: '', risers: '', strands: [], lead
 //drawn spline, so a bead rides its line instead of hovering near it. Every strand shares the ground point, so the
 //beads stack up one vertical and the leader runs to the topmost of them, in that strand's colour.
 function addSunBeads(scene: DayCurveScene, camera: SceneCamera, curve: DayCurveData, sun: CurveSun,
-    strands: DayStrand[], stTops: TopPoint[][]): void
+    strands: DayStrand[], stTops: TopPoint[][], rect: ClipRect): void
 {
     //Sun under the horizon, or nothing to point at: no leader, no beads.
     if (curve.sunSlot === null || sun.altitude <= 0) { return; }
@@ -369,7 +370,9 @@ function addSunBeads(scene: DayCurveScene, camera: SceneCamera, curve: DayCurveD
     }
     if (beads.length === 0) { return; }
     pass.beads  = beads;
-    pass.leader = { x1: sunP.x, y1: sunP.y, x2: topX, y2: topY, stroke: topColour };
+    //Trim the sun-to-curve leader to the card box; a sun far off-card would otherwise stretch this layer (issue #304).
+    const lc = clipSegment([sunP.x, sunP.y], [topX, topY], rect);
+    pass.leader = lc === null ? null : { x1: lc[0][0], y1: lc[0][1], x2: lc[1][0], y2: lc[1][1], stroke: topColour };
 }
 
 //Build the curve for one frame, as the two depth passes the card layers around its chips. Every strand stands on
@@ -385,6 +388,10 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
     const strands = curve.strands.filter((st) => st.peak > 0 && st.values.length === curve.base.length);
     if (strands.length === 0) { return { far: emptyPass(), near: emptyPass() }; }
 
+    //The curve is a ring around the home; at low zoom its far side runs well past the card. On old iOS that
+    //off-card ink oversizes the day-curve SVG layer past the compositor cap and drops its lower half (issue #304).
+    //A span whose chord misses the card box is dropped whole, so on-card spans keep their exact shape.
+    const rect = cardClipRect(camera.width, camera.height);
     const slots = curve.base.length;
     //Each pass carries one strand-pass per strand, aligned by index, so a strand keeps its slot in both halves.
     const mkPass = (): DayCurvePass =>
@@ -415,7 +422,11 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
         //to whichever line stands highest.
         const foot: string[]   = [];
         const risers: string[] = [];
-        for (let k = 1; k < drawn.length; k++) { foot.push(splineSpan(bots, drawn[k - 1], true)); }
+        for (let k = 1; k < drawn.length; k++)
+        {
+            if (clipSegment(bots[drawn[k - 1]], bots[drawn[k]], rect) === null) { continue; }
+            foot.push(splineSpan(bots, drawn[k - 1], true));
+        }
         for (const i of drawn)
         {
             if (i % perHour !== 0) { continue; }
@@ -428,7 +439,9 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
             }
             if (best < 0) { continue; }
             const t = stTops[best][i];
-            risers.push(`M ${ground[i].x.toFixed(2)} ${ground[i].y.toFixed(2)} L ${t.x.toFixed(2)} ${t.y.toFixed(2)}`);
+            const rc = clipSegment([ground[i].x, ground[i].y], [t.x, t.y], rect);
+            if (rc === null) { continue; }
+            risers.push(`M ${rc[0][0].toFixed(2)} ${rc[0][1].toFixed(2)} L ${rc[1][0].toFixed(2)} ${rc[1][1].toFixed(2)}`);
         }
         pass.foot   = pass.foot   ? `${pass.foot} ${foot.join(' ')}`     : foot.join(' ');
         pass.risers = pass.risers ? `${pass.risers} ${risers.join(' ')}` : risers.join(' ');
@@ -449,6 +462,9 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
                 //No reading either side means no line to draw between them. This is what stops today at now instead
                 //of trailing a flat line along the ground to midnight.
                 if (!tops[i].has || !tops[j].has) { continue; }
+                //Drop the span whole when its chord misses the card box (issue #304): the cubic hugs its chord, so
+                //an off-card chord means an off-card span, and the on-card spans keep their exact shape.
+                if (clipSegment(topPts[i], topPts[j], rect) === null) { continue; }
                 const n = 0.5 * (near01[i] + near01[j]);
                 out.spans.push({
                     d: splineSpan(topPts, i, true, hasAt),
@@ -463,6 +479,6 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
         }
     }
 
-    addSunBeads(scene, camera, curve, sun, strands, stTops);
+    addSunBeads(scene, camera, curve, sun, strands, stTops, rect);
     return scene;
 }

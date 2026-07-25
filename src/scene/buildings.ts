@@ -20,7 +20,7 @@ import type { SceneCamera} from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { tintedRgba, buildingColor } from '../core/render-kit/colors';
 import { mixHex, hexByte } from '../core/render-kit/hex';
-import { pointsAttr, type Point } from '../core/render-kit/geometry';
+import { pointsAttr, clipPolygon, cardClipRect, type Point, type ClipRect } from '../core/render-kit/geometry';
 import { fetchOfmBuildingRings, type OfmRing } from './openfreemap';
 import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
     FIXED_BUILDING_HEIGHT_M,
@@ -520,6 +520,23 @@ function pathOf(pts: [number, number][], hole = false): string
     return ring.map((q, k) => `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('') + 'Z';
 }
 
+//Build an even-odd path (`M…L…Z` per ring) from projected rings, each clipped to the card box. Rings that fall
+//fully off-card are dropped; returns '' when nothing survives.
+function ringsPath(rings: Point[][], r: ClipRect): string
+{
+    let d = '';
+    for (const ring of rings)
+    {
+        const c = clipPolygon(ring, r);
+        if (c.length < 3)
+        {
+            continue;
+        }
+        d += c.map((q, k) => `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('') + 'Z';
+    }
+    return d;
+}
+
 export function renderShadows(
     cam:          SceneCamera,
     casters:      ShadowCaster[],
@@ -535,6 +552,7 @@ export function renderShadows(
     }
     const away     = (sun.azimuth + 180) * DEG;
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
+    const rect     = cardClipRect(cam.width, cam.height);
     let defs   = '';
     let shapes = '';
     let idx    = 0;
@@ -577,19 +595,19 @@ export function renderShadows(
         const start: [number, number] = [ox + ax * sMax, oy + ay * sMax];
         const end:   [number, number] = [ox + ax * eMax, oy + ay * eMax];
 
-        const id = `hsh${idx}`;
-        idx += 1;
-        defs += `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" `
-              + `x1="${start[0].toFixed(1)}" y1="${start[1].toFixed(1)}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}">`
-              + `<stop offset="0" stop-color="${shadowColor}" stop-opacity="1"/>`
-              + `<stop offset="1" stop-color="${shadowColor}" stop-opacity="0"/></linearGradient>`;
         //The EXACT swept envelope, not its convex hull. A hull was close enough while buildings were small and
         //roughly convex, but a merged terrace is a big L, and the hull of an L FILLS its notch: the shade turned
         //into shapeless blobs spilling across courtyards and neighbours. The true sweep is the outline translated
         //to the shadow's tip, plus the quad every edge sweeps on its way there. Those pieces overlap, and that is
         //the point: the group's single opacity already flattens overlaps, so they read as their union with no
         //boolean work. One path per caster, exactly as before, so the shape count does not move.
-        let d = pathOf(cast);
+        //Each piece is clipped to the card box first: the sweep runs the length of the shadow across the whole
+        //neighbourhood, and on old iOS the compositor sizes this layer to that painted ink, overflowing the layer
+        //cap and dropping its lower half (issue #304). Clipping only removes ink the card already hid, and the
+        //non-zero union still reads the same within the card (a clip cannot change an interior point's winding).
+        let d = '';
+        const cc = clipPolygon(cast, rect);
+        if (cc.length >= 3) { d += pathOf(cc); }
         for (const ring of [b.footprint, ...(b.holes ?? [])])
         {
             const rb = ring.map((p) => cam.project(p[0], p[1], 0));
@@ -597,9 +615,21 @@ export function renderShadows(
             for (let i = 0; i < rb.length; i++)
             {
                 const j = (i + 1) % rb.length;
-                d += pathOf([rb[i], rb[j], rc[j], rc[i]]);
+                const q = clipPolygon([rb[i], rb[j], rc[j], rc[i]], rect);
+                if (q.length >= 3) { d += pathOf(q); }
             }
         }
+        //Whole shadow off-card: emit neither the sweep nor its gradient def, and do not burn an id.
+        if (!d)
+        {
+            continue;
+        }
+        const id = `hsh${idx}`;
+        idx += 1;
+        defs += `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" `
+              + `x1="${start[0].toFixed(1)}" y1="${start[1].toFixed(1)}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}">`
+              + `<stop offset="0" stop-color="${shadowColor}" stop-opacity="1"/>`
+              + `<stop offset="1" stop-color="${shadowColor}" stop-opacity="0"/></linearGradient>`;
         shapes += `<path d="${d}" fill="url(#${id})" fill-rule="nonzero"/>`;
     }
     if (!shapes)
@@ -802,6 +832,7 @@ export function renderBuildings(
     const sunN    = Math.cos(sunAzimuth * DEG);
     const sunFade = Math.max(0, Math.min(1, altitude / SHADOW_FADE_DEG));
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
+    const rect     = cardClipRect(cam.width, cam.height);
     const visible = buildings
         .map((b, index) =>
         {
@@ -897,8 +928,14 @@ export function renderBuildings(
             const lit = Math.max(0, (ey / el) * sunE + (-ex / el) * sunN) * sunFade;
             const shade = mixHex(wallAmbient, wallLit, lit);
             const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : shade;
-            //One full-height wall quad per edge.
-            const wall = `<polygon points="${pointsAttr([p0, p1, p2, p3])}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+            //One full-height wall quad per edge, clipped to the card box so an off-card wall never enlarges the
+            //scene layer past the old-iOS compositor cap (issue #304). The back-face cull above reads the true quad.
+            const wq = clipPolygon([p0, p1, p2, p3], rect);
+            if (wq.length < 3)
+            {
+                continue;
+            }
+            const wall = `<polygon points="${pointsAttr(wq)}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
             //Sort key = the wall's NEAREST corner (max cameraZ, larger = nearer). On a concave footprint an
             //edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
             const wallDepth = Math.max(
@@ -916,25 +953,21 @@ export function renderBuildings(
         let roofDepth = -Infinity;
         for (const p of fp) { const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth) { roofDepth = d; } }
         //Roof as ONE path over every ring, even-odd, so a courtyard stays a hole instead of being filled in.
-        const roofPath = rings
-            .map((ring) => ring.map((p, k) => {
-                const q = cam.project(p[0], p[1], h);
-                return `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`;
-            }).join('') + 'Z')
-            .join('');
+        //Rings are clipped to the card box (issue #304); even-odd keeps the same parity for any point within it.
+        const roofPath = ringsPath(rings.map((ring) => ring.map((p) => cam.project(p[0], p[1], h))), rect);
         //The outlines of the buildings this block merged, laid flat ON the roof. They sit on the roof plane, so
         //they can never fight it for depth: the terrace reads as separate houses at no cost.
-        const detailPath = (b.detail ?? [])
-            .map((ring) => ring.map((p, k) => {
-                const q = cam.project(p[0], p[1], h);
-                return `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`;
-            }).join('') + 'Z')
-            .join('');
-        faces.push({
-            depth: roofDepth,
-            svg:   `<path d="${roofPath}" fill="${roofFill}" fill-rule="evenodd" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`
-                 + (detailPath ? `<path d="${detailPath}" fill="none" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>` : ''),
-        });
+        const detailPath = ringsPath((b.detail ?? []).map((ring) => ring.map((p) => cam.project(p[0], p[1], h))), rect);
+        const roofSvg = roofPath
+            ? `<path d="${roofPath}" fill="${roofFill}" fill-rule="evenodd" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`
+            : '';
+        const detailSvg = detailPath
+            ? `<path d="${detailPath}" fill="none" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`
+            : '';
+        if (roofSvg || detailSvg)
+        {
+            faces.push({ depth: roofDepth, svg: roofSvg + detailSvg });
+        }
     }
     //Neighbours: opaque silhouette painted far-to-near, then faded as ONE group so layers never bleed through.
     neighborFaces.sort((a, c) => a.depth - c.depth);

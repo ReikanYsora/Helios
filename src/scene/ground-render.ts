@@ -4,7 +4,8 @@
 //Web Mercator at GROUND_ZOOM so the home anchor + camera scale match the overlays. Road widths are metric.
 
 import { pxPerMetreFor, lonLatToTile, type Ground } from './tiles';
-import { GROUND_RADIUS, GROUND_ZOOM, TILE_PX } from '../core/config/constants';
+import type { SceneCamera } from './projection';
+import { GROUND_FADE_START, GROUND_RADIUS, GROUND_ZOOM, TILE_PX } from '../core/config/constants';
 import { fetchGroundVector, type GroundFeature } from './ground-vector';
 import { mixHex } from '../core/render-kit/hex';
 
@@ -128,22 +129,27 @@ function tintPalette(palette: GroundPalette, altitude: number): GroundPalette
 
 function paint(
     ctx:        CanvasRenderingContext2D,
-    size:       number,
+    cw:         number,
+    ch:         number,
     features:   GroundFeature[],
     toPx:       (lon: number, lat: number) => [number, number],
     pxPerMetre: number,
     style:      GroundStyle,
     altitude:   number,
+    //Screen-space outline of the ground when painting already-projected (the compat path). Without it the
+    //land colour would flood the whole canvas, including the sky above the horizon.
+    landPath?:  Path2D,
 ): void
 {
     const p    = tintPalette(style.palette, altitude);
     const hide = (key: GroundLayerKey): boolean => style.hidden.has(key);
 
-    ctx.clearRect(0, 0, size, size);
+    ctx.clearRect(0, 0, cw, ch);
     if (!hide('land'))
     {
         ctx.fillStyle = p.land;
-        ctx.fillRect(0, 0, size, size);
+        if (landPath) { ctx.fill(landPath); }
+        else { ctx.fillRect(0, 0, cw, ch); }
     }
     ctx.lineJoin = 'round';
     ctx.lineCap  = 'round';
@@ -256,6 +262,18 @@ export interface VectorGround
 {
     ground:  Ground;
     repaint: (style: GroundStyle, altitude: number) => void;
+    //Compatibility path (issue #304). Paints the ground ALREADY PROJECTED into a card-sized canvas, so the
+    //element carries no CSS 3D transform at all. Old iOS WebKit gives any flat layer composited over a
+    //3D-transformed one a half-height backing store, dropping the bottom half of everything drawn above the
+    //basemap; with the transform gone the whole scene composites correctly. Costs a repaint per camera move,
+    //which is why it is not the default path.
+    repaintProjected: (
+        camera: SceneCamera,
+        w: number,
+        h: number,
+        style: GroundStyle,
+        altitude: number,
+    ) => void;
 }
 
 //Build the basemap canvas for a home position. Never rejects: a tile outage yields a blank themed fill (the home
@@ -295,14 +313,99 @@ export async function buildVectorGround(
     };
     const repaint = (st: GroundStyle, alt: number): void =>
     {
-        if (ctx) { paint(ctx, size, features, toPx, pxPerMetre, st, alt); }
+        if (ctx) { paint(ctx, size, size, features, toPx, pxPerMetre, st, alt); }
     };
     repaint(style, altitude);
+
+    //Compat path: same features, but every vertex goes through the camera's own projection (the one the
+    //buildings use), so the canvas is already in screen space and needs no transform to sit under them.
+    const toMetres = (tx: number, ty: number): [number, number] =>
+        [(tx - tileX) * TILE_PX / pxPerMetre, -(ty - tileY) * TILE_PX / pxPerMetre];
+
+    const repaintProjected = (
+        camera: SceneCamera,
+        w: number,
+        h: number,
+        st: GroundStyle,
+        alt: number,
+    ): void =>
+    {
+        if (!ctx) { return; }
+        if (el.width !== w || el.height !== h) { el.width = w; el.height = h; }
+
+        const toScreen = (lon: number, la: number): [number, number] =>
+        {
+            const [wx, wy] = lonLatToTile(lon, la, zoom);
+            const [e, n]   = toMetres(wx, wy);
+            return camera.project(e, n, 0);
+        };
+
+        //The ground's own outline, so the land colour stops at the horizon instead of flooding the sky.
+        //Edges are walked in steps: the projection clamps at the near plane, so a far edge is not reliably
+        //straight once it approaches the horizon.
+        const landPath = new Path2D();
+        const x0 = firstX; const y0 = firstY; const x1 = firstX + across; const y1 = firstY + across;
+        const corners: [number, number][] = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+        const STEPS = 24;
+        for (let c = 0; c < 4; c++)
+        {
+            const [ax, ay] = corners[c];
+            const [bx, by] = corners[(c + 1) % 4];
+            for (let s = 0; s < STEPS; s++)
+            {
+                const t = s / STEPS;
+                const [e, n] = toMetres(ax + (bx - ax) * t, ay + (by - ay) * t);
+                const q = camera.project(e, n, 0);
+                if (c === 0 && s === 0) { landPath.moveTo(q[0], q[1]); }
+                else { landPath.lineTo(q[0], q[1]); }
+            }
+        }
+        landPath.closePath();
+
+        paint(ctx, w, h, features, toScreen, pxPerMetre, st, alt, landPath);
+
+        //Edge fade, baked into the projected canvas instead of the face-on .ground-fade disc (issue #304). The
+        //ground-space fade circle (radius = the basemap's closest-side, transparent until GROUND_FADE_START%,
+        //dissolving by the rim) is drawn through the SAME projection as the scene, so it lies flat in the plane,
+        //tilted AND turned with it, rather than a disc facing the camera. We map the unit circle onto the ellipse
+        //via the projected +east / +north basis vectors, and erase to transparent (destination-out) so the real
+        //card background shows through in either theme, nothing to plumb.
+        const rM    = (size / 2) / pxPerMetre;
+        const home  = camera.project(0, 0, 0);
+        const east  = camera.project(rM, 0, 0);
+        const north = camera.project(0, rM, 0);
+        const ux = east[0]  - home[0]; const uy = east[1]  - home[1];   //+east, one semi-diameter
+        const vx = north[0] - home[0]; const vy = north[1] - home[1];   //+north, the conjugate semi-diameter
+        const det = ux * vy - uy * vx;                                   //~0 only if the plane is edge-on
+        if (Number.isFinite(det) && Math.abs(det) > 1)
+        {
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            //Unit circle -> projected fade ellipse: (1,0)->+east, (0,1)->+north, (0,0)->home.
+            ctx.transform(ux, uy, vx, vy, home[0], home[1]);
+            const g = ctx.createRadialGradient(0, 0, GROUND_FADE_START / 100, 0, 0, 1);
+            g.addColorStop(0, 'rgba(0,0,0,0)');   //keep the ground untouched inside the fade start
+            g.addColorStop(1, 'rgba(0,0,0,1)');   //erase to transparent by the rim and beyond
+            ctx.fillStyle = g;
+            //Cover the whole canvas in this transformed space: inverse-map the four corners, bound them.
+            const inv = 1 / det;
+            let m = 1.5;
+            for (const [px, py] of [[0, 0], [w, 0], [0, h], [w, h]] as [number, number][])
+            {
+                const dx = px - home[0]; const dy = py - home[1];
+                const lx = (vy * dx - vx * dy) * inv;
+                const ly = (-uy * dx + ux * dy) * inv;
+                m = Math.max(m, Math.abs(lx) + 1, Math.abs(ly) + 1);
+            }
+            ctx.fillRect(-m, -m, 2 * m, 2 * m);
+            ctx.restore();
+        }
+    };
 
     const fade = document.createElement('div');
     fade.className    = 'ground-fade';
     fade.style.width  = `${size}px`;
     fade.style.height = `${size}px`;
 
-    return { ground: { el, fade, homeX, homeY, size }, repaint };
+    return { ground: { el, fade, homeX, homeY, size }, repaint, repaintProjected };
 }
