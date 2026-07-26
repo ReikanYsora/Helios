@@ -743,6 +743,94 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
+    /*  SPIKE ("Your real sky" de-risk): throwaway weather overlay driven by ONE continuous index. The scene is
+        graded by a filter on #map-container (--wx-map-filter); the overlay layers fade by --wx-sun / --wx-grey /
+        --wx-cloud / --wx-rain, all set by JS from the weather index. UNDER the chips (z 8). Remove before release.  */
+    :host([data-wx-on]) #map-container { filter: var(--wx-map-filter, none); transition: filter 0.18s linear; }
+
+    .helios-wx { position: absolute; inset: 0; z-index: 6; pointer-events: none; border-radius: inherit; overflow: hidden; display: none; }
+    :host([data-wx-on]) .helios-wx { display: block; }
+    .helios-wx-warm, .helios-wx-shafts, .helios-wx-veil-grey, .helios-wx-veil-dark, .helios-wx-clouds, .helios-wx-wet, .helios-wx-rain
+    {
+        position: absolute;
+        inset: 0;
+    }
+    .helios-wx-rain { z-index: 7; width: 100%; height: 100%; }
+
+    /*  CLEAR: a broad warm wash over the WHOLE card (not one patch) + a bloom that breathes + faint warm shafts.  */
+    .helios-wx-warm
+    {
+        opacity: var(--wx-sun, 0);
+        background:
+            radial-gradient(150% 140% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%),
+                rgba(255, 206, 130, 0.36),
+                rgba(255, 184, 96, 0.20) 45%,
+                rgba(255, 170, 80, 0.10) 100%);
+    }
+    .helios-wx-shafts
+    {
+        opacity: calc(var(--wx-sun, 0) * 0.45);
+        background: repeating-conic-gradient(from 200deg at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%),
+            rgba(255, 232, 170, 0.14) 0deg, rgba(255, 232, 170, 0) 5deg 13deg);
+        -webkit-mask-image: radial-gradient(120% 120% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%), #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 80%);
+        mask-image: radial-gradient(120% 120% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%), #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 80%);
+    }
+    .helios-wx-sunbloom
+    {
+        position: absolute;
+        left: var(--wx-sun-x, 40%);
+        top: var(--wx-sun-y, 14%);
+        width: 46%;
+        height: 46%;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        opacity: var(--wx-sun, 0);
+        background: radial-gradient(circle, rgba(255, 236, 175, 0.7), rgba(255, 205, 120, 0.22) 42%, transparent 68%);
+        animation: helios-wx-breathe 5s ease-in-out infinite;
+    }
+    @keyframes helios-wx-breathe { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.08); } }
+
+    /*  GREY (overcast) + DARK (rain) veils, stacked, each faded by its own amount.  */
+    .helios-wx-veil-grey { opacity: calc(var(--wx-grey, 0) * 0.5); background: linear-gradient(180deg, rgb(200, 205, 212), rgb(170, 176, 184)); }
+    .helios-wx-veil-dark { opacity: calc(var(--wx-rain, 0) * 0.55); background: linear-gradient(180deg, rgb(66, 74, 86), rgb(40, 47, 58)); }
+
+    .helios-wx-clouds { opacity: var(--wx-cloud, 0); }
+    .helios-wx-cloud
+    {
+        position: absolute;
+        border-radius: 50%;
+        will-change: transform;
+        background: radial-gradient(circle, rgba(30, 35, 42, 0.45), rgba(30, 35, 42, 0) 68%);
+    }
+    .helios-wx-cloud.k1 { width: 55%; height: 70%; left: -30%; top: -10%; animation: helios-wx-sweep 22s linear infinite; }
+    .helios-wx-cloud.k2 { width: 42%; height: 60%; left: -30%; top: 20%; animation: helios-wx-sweep 30s linear infinite; animation-delay: -8s; }
+    .helios-wx-cloud.k3 { width: 66%; height: 80%; left: -45%; top: -20%; animation: helios-wx-sweep 40s linear infinite; animation-delay: -16s; }
+    @keyframes helios-wx-sweep { from { transform: translate(0, 0); } to { transform: translate(230%, 18%); } }
+
+    .helios-wx-wet
+    {
+        opacity: var(--wx-rain, 0);
+        background:
+            radial-gradient(40% 30% at 30% 60%, rgba(150, 180, 215, 0.16), transparent 70%),
+            radial-gradient(35% 25% at 70% 78%, rgba(150, 180, 215, 0.14), transparent 70%);
+    }
+
+    .helios-wx-debug { position: absolute; left: 10px; top: 10px; z-index: 60; display: flex; align-items: center; gap: 8px; }
+    .helios-wx-debug button, .helios-wx-debug .helios-wx-read
+    {
+        pointer-events: auto;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(8, 11, 18, 0.72);
+        color: #cfd6e0;
+        font: 700 12px/1 sans-serif;
+        padding: 8px 10px;
+        border-radius: 8px;
+    }
+    .helios-wx-debug button { cursor: pointer; }
+    .helios-wx-debug button.on { background: #f2a63a; color: #2a1c00; border-color: #f2a63a; }
+    .helios-wx-slider { pointer-events: auto; width: 180px; }
+    .helios-wx-read { min-width: 104px; text-align: center; }
+
 
 
 `;

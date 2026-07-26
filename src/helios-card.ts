@@ -18,6 +18,7 @@ import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod
 import { pickTranslations } from './core/i18n';
 import { DAY_CURVE_SWEEP_MS } from './core/config/constants';
 import { heliosCardStyles } from './css/helios-card-scene-css';
+import { weatherOverlay, WeatherRain, wxParams } from './scene/weather-fx';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { setServerTimeZone, serverMsOfDay } from './core/time/timezone';
 import { isDarkFromCss } from './core/format/format';
@@ -255,6 +256,15 @@ export class HeliosCard extends LitElement
     @state() private _uiHidden = false;
     private _uiHideTimer: number | undefined;
     @query('ha-card') _haCard?: HTMLElement;
+
+    //SPIKE ("Your real sky" de-risk): throwaway on-card weather driven by ONE continuous index (0 clear → 1 ultra
+    //rain), set by a slider now, a real weather index later. Remove before release.
+    @state() private _wx = 0;
+    @state() private _wxOn = false;
+    @query('.helios-wx-rain') private _wxCanvas?: HTMLCanvasElement;
+    private readonly _wxRainCtl = new WeatherRain((): HTMLCanvasElement | undefined => this._wxCanvas);
+    private readonly _wxToggle = (): void => { this._wxOn = !this._wxOn; };
+    private readonly _wxSlide  = (e: Event): void => { this._wx = (e.target as HTMLInputElement).valueAsNumber; };
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -871,6 +881,7 @@ export class HeliosCard extends LitElement
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
+        this._wxRainCtl.stop();
         liveCards.delete(this);
         window.clearInterval(this._timer);
         this.removeEventListener('pointerdown', this._onUiActivity);
@@ -942,6 +953,34 @@ export class HeliosCard extends LitElement
     {
         //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
         this.toggleAttribute('data-ui-hidden', this._uiHidden);
+
+        //SPIKE: push the weather index onto the host as --wx-* vars (scene grade + overlay strengths), anchor the sun
+        //glow on the real sun position, gate it on daylight, and set the rain intensity. Recompute as the sun moves.
+        if (_changedProperties.has('_wx') || _changedProperties.has('_wxOn') || _changedProperties.has('_sunScene'))
+        {
+            this.toggleAttribute('data-wx-on', this._wxOn);
+            if (this._wxOn)
+            {
+                const p = wxParams(this._wx);
+                const sun = this._sunScene?.sun;
+                const daytime = sun ? sun.altitude > 0 : true;
+                this.style.setProperty('--wx-sun', (daytime ? p.sun : 0).toFixed(3));
+                if (sun)
+                {
+                    this.style.setProperty('--wx-sun-x', `${sun.x.toFixed(1)}px`);
+                    this.style.setProperty('--wx-sun-y', `${sun.y.toFixed(1)}px`);
+                }
+                this.style.setProperty('--wx-grey', p.grey.toFixed(3));
+                this.style.setProperty('--wx-cloud', p.cloud.toFixed(3));
+                this.style.setProperty('--wx-rain', p.rain.toFixed(3));
+                this.style.setProperty('--wx-map-filter', `saturate(${p.sat.toFixed(3)}) brightness(${p.bright.toFixed(3)})`);
+                this._wxRainCtl.setIntensity(p.rain);
+            }
+            else
+            {
+                this._wxRainCtl.setIntensity(0);
+            }
+        }
 
         //With the timeline hidden there's no period selector or scrub: pin the mode to Today so the scene reads
         //as "right now", and snap any active scrub back to live (a frozen past instant would otherwise stick).
@@ -1249,6 +1288,21 @@ export class HeliosCard extends LitElement
                     @pointerdown=${this._onSceneTapStart}
                     @pointerup=${this._onSceneTapEnd}
                 ></div>
+
+                <!--  SPIKE ("Your real sky"): throwaway weather overlay + slider (0 clear → 1 ultra rain). Remove before release.  -->
+                ${weatherOverlay()}
+                <div class="helios-wx-debug">
+                    <button class=${this._wxOn ? 'on' : ''} type="button" @pointerdown=${this._stopPointer} @click=${this._wxToggle}>Weather</button>
+                    <input
+                        class="helios-wx-slider"
+                        type="range" min="0" max="1" step="0.01"
+                        .value=${this._wx.toString()}
+                        ?disabled=${!this._wxOn}
+                        @pointerdown=${this._stopPointer}
+                        @input=${this._wxSlide}
+                    />
+                    <span class="helios-wx-read">${this._wxOn ? `${wxParams(this._wx).label} · ${this._wx.toFixed(2)}` : 'off'}</span>
+                </div>
 
                 ${hasHomeCoords && this._timeRange && showTimeline(this.config) ? html`
                     <div
