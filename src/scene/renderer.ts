@@ -31,8 +31,13 @@ function needsProjectedGround(): boolean
     const appleTouch = /iPad|iPhone|iPod/.test(ua)
         || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (!appleTouch) { return false; }
-    const m = ua.match(/Version\/(\d+)/);
-    const major = m ? parseInt(m[1], 10) : 0;
+    //Safari carries "Version/NN"; an in-app WKWebView (the Home Assistant app, the Kiosk app) usually does NOT,
+    //but still carries the OS token "CPU OS 16_x". Read whichever is present, so the compat path also reaches the
+    //HA apps on old hardware and not just Safari (issue #304: Spaniard85's 1st-gen iPad Pro on iOS 16.7, where the
+    //b0 fix never fired inside the apps because only "Version/" was checked).
+    const safari = ua.match(/Version\/(\d+)/);
+    const os     = ua.match(/(?:CPU|iPhone) OS (\d+)/);
+    const major  = (safari ? parseInt(safari[1], 10) : 0) || (os ? parseInt(os[1], 10) : 0);
     return major > 0 && major <= 16;
 }
 
@@ -45,6 +50,9 @@ export interface SceneRendererOptions
     //Shadow colour/opacity for the painted geometry, merged into the palette.
     shadow?:        string;
     shadowOpacity?: number;
+    //Ground render path override (YAML `scene-render-mode`): 'auto' sniffs old iOS/iPadOS (issue #304), 'projected'
+    //forces the compat path, 'normal' forces the CSS-3D path. An escape hatch for edge devices the sniff misses.
+    renderMode?:    'auto' | 'projected' | 'normal';
 }
 
 export interface ScenePaletteFull extends ScenePalette
@@ -112,6 +120,9 @@ export class SceneRenderer
         this._container = container;
         if (opts.shadow)        { this._palette.shadow = opts.shadow; }
         if (opts.shadowOpacity != null) { this._palette.shadowOpacity = opts.shadowOpacity; }
+        //YAML override of the auto-sniffed ground path (issue #304 escape hatch).
+        if (opts.renderMode === 'projected') { this._projectedGround = true; }
+        else if (opts.renderMode === 'normal') { this._projectedGround = false; }
 
         this._groundHolder = document.createElement('div');
         this._groundHolder.className = 'scene-ground-holder';

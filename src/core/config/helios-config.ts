@@ -44,6 +44,9 @@ export interface HeliosConfig
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.
     'camera-locked'?:          unknown;
+    //Ground render path (issue #304 escape hatch, YAML-only): 'auto' (default) sniffs old iOS/iPadOS and swaps in the
+    //projected compat path; 'projected' forces it; 'normal' forces the CSS-3D path. For edge devices the sniff misses.
+    'scene-render-mode'?:      unknown;
     //Global display radius (m) around the home within which buildings and shadows render. Clamped [0,500],
     //default 200. Lowering it is the main perf lever on weak hardware.
     'display-radius'?:         unknown;
@@ -191,6 +194,14 @@ export function valueDecimals(config: HeliosConfig | undefined): number
 export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 {
     return config?.['power-unit'] === 'W' ? 'W' : 'kW';
+}
+
+//Ground render path override (issue #304). 'auto' (default) lets the renderer sniff old iOS/iPadOS; 'projected' and
+//'normal' force the compat and CSS-3D paths respectively. YAML-only for now, an escape hatch for edge devices.
+export function sceneRenderMode(config: HeliosConfig | undefined): 'auto' | 'projected' | 'normal'
+{
+    const v = config?.['scene-render-mode'];
+    return v === 'projected' ? 'projected' : v === 'normal' ? 'normal' : 'auto';
 }
 
 

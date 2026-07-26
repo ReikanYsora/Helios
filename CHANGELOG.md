@@ -13,12 +13,14 @@ A corrective release on top of 2026.8.1.
 
 ### Fixed: the card rendered only in half 3D on some older iPads
 
-On older iPads, older Safari could composite the flat basemap over the 3D scene
-incorrectly, leaving the card looking cut in half. Helios now detects those devices
-automatically and paints the ground already projected into the scene, so the whole
-card renders. The perspective on the map's vector elements is very slightly
-different on that path, but the scene is whole again. Every other device is
-unchanged.
+On older iPads, older WebKit could composite the flat basemap over the 3D scene
+incorrectly, leaving the card looking cut in half. Helios now detects those devices,
+including inside the Home Assistant and Kiosk apps, not just Safari, and paints the
+ground already projected into the scene, so the whole card renders. The perspective
+on the map's vector elements is very slightly different on that path, but the scene
+is whole again. Every other device is unchanged. If an edge device is still missed,
+a new `scene-render-mode` option (`auto`, `projected` or `normal`) lets you force the
+path from the card YAML.
 
 ---
 
