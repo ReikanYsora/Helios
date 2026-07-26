@@ -1,1 +1,11 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Question or help with your setup
+    url: https://github.com/ReikanYsora/Helios/discussions/categories/q-a
+    about: For anything that is not a bug (setup, configuration, "how do I..."), ask in Q&A Discussions. You will usually get a faster answer there.
+  - name: Idea or feature request
+    url: https://github.com/ReikanYsora/Helios/discussions/categories/ideas
+    about: Share and discuss ideas in Discussions before they become tracked issues.
+  - name: Show off your dashboard
+    url: https://github.com/ReikanYsora/Helios/discussions
+    about: Share your Helios setup and see what others have built.
