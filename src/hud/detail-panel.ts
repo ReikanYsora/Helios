@@ -170,11 +170,12 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
             { icon: chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-up'),   value: energy(discharged) },
         ];
     
-        // Third line (issue #323): state of charge over the window...
+        // Third line (#323): the AVERAGE state of charge over the window. Marked with the same approximately-equal
+        // icon the SoC detail panel uses for its mean, so it never reads as the live level (#331, @stalakerob's idea).
         const soc = socStats(buildPeriodData(host, 'battery-soc'));
         if (soc)
         {
-            rows.push({ icon: 'mdi:battery-charging', value: `${Math.round(soc.avg)} %` });
+            rows.push({ icon: 'mdi:approximately-equal', value: `${Math.round(soc.avg)} %` });
         }
         return rows;
     }
