@@ -22,6 +22,13 @@ is whole again. Every other device is unchanged. If an edge device is still miss
 a new `scene-render-mode` option (`auto`, `projected` or `normal`) lets you force the
 path from the card YAML.
 
+### Changed: the battery detail panel marks its state of charge as an average
+
+The state-of-charge line in the battery detail panel is the average over the shown
+period, not the live level. It now carries the same approximately-equal marker the
+panel already uses elsewhere, so it no longer reads as the current charge. Thanks to
+@stalakerob for the suggestion.
+
 ---
 
 ## 2026.8.1

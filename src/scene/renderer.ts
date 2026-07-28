@@ -38,7 +38,13 @@ function needsProjectedGround(): boolean
     const safari = ua.match(/Version\/(\d+)/);
     const os     = ua.match(/(?:CPU|iPhone) OS (\d+)/);
     const major  = (safari ? parseInt(safari[1], 10) : 0) || (os ? parseInt(os[1], 10) : 0);
-    return major > 0 && major <= 16;
+    if (major > 0) { return major <= 16; }
+    //No readable version at all on an Apple touch device: a stripped in-app WebView UA. The HAkiosk app reports a
+    //truncated desktop-Safari UA ("Macintosh; Intel Mac OS X 10_15_7", no Version/, no "CPU OS"), so both reads
+    //above come up empty. We cannot tell the iOS version, so err toward the compat path: it is near-equivalent and
+    //fixes the old devices that land here, while Safari, the HA app and iOS Chrome all expose a version and decide
+    //precisely (issue #304, @Spaniard85's HAkiosk on a 1st-gen iPad Pro).
+    return true;
 }
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
