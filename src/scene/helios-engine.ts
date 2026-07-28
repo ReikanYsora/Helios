@@ -27,7 +27,6 @@ import
     mapThemeMode,
     mapLayerColor,
     mapLayerVisible,
-    sceneRenderMode,
 } from '../core/config/helios-config';
 import { isDarkFromCss, cssHex, resolveUiColor } from '../core/format/format';
 
@@ -575,7 +574,6 @@ export class HeliosEngine
         this._renderer = new SceneRenderer(container, {
             shadow:        '#000000',
             shadowOpacity: this._shadowOpacity(),
-            renderMode:    sceneRenderMode(this.cfg),
         });
         this._renderer.setCameraBearing(this._initialBearing());
         this._renderer.setCameraPitch(this._initialPitch());

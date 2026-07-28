@@ -18,9 +18,7 @@ incorrectly, leaving the card looking cut in half. Helios now detects those devi
 including inside the Home Assistant and Kiosk apps, not just Safari, and paints the
 ground already projected into the scene, so the whole card renders. The perspective
 on the map's vector elements is very slightly different on that path, but the scene
-is whole again. Every other device is unchanged. If an edge device is still missed,
-a new `scene-render-mode` option (`auto`, `projected` or `normal`) lets you force the
-path from the card YAML.
+is whole again. Every other device is unchanged.
 
 ### Changed: the battery detail panel marks its state of charge as an average
 

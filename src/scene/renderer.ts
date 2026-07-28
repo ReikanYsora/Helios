@@ -56,9 +56,6 @@ export interface SceneRendererOptions
     //Shadow colour/opacity for the painted geometry, merged into the palette.
     shadow?:        string;
     shadowOpacity?: number;
-    //Ground render path override (YAML `scene-render-mode`): 'auto' sniffs old iOS/iPadOS (issue #304), 'projected'
-    //forces the compat path, 'normal' forces the CSS-3D path. An escape hatch for edge devices the sniff misses.
-    renderMode?:    'auto' | 'projected' | 'normal';
 }
 
 export interface ScenePaletteFull extends ScenePalette
@@ -126,9 +123,6 @@ export class SceneRenderer
         this._container = container;
         if (opts.shadow)        { this._palette.shadow = opts.shadow; }
         if (opts.shadowOpacity != null) { this._palette.shadowOpacity = opts.shadowOpacity; }
-        //YAML override of the auto-sniffed ground path (issue #304 escape hatch).
-        if (opts.renderMode === 'projected') { this._projectedGround = true; }
-        else if (opts.renderMode === 'normal') { this._projectedGround = false; }
 
         this._groundHolder = document.createElement('div');
         this._groundHolder.className = 'scene-ground-holder';
