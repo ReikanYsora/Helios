@@ -14,18 +14,20 @@ A corrective release on top of 2026.8.1.
 ### Fixed: the card rendered only in half 3D on some older iPads
 
 On older iPads, older WebKit could composite the flat basemap over the 3D scene
-incorrectly, leaving the card looking cut in half. Helios now detects those devices,
+incorrectly, leaving the card looking cut in half (#304). Helios now detects those devices,
 including inside the Home Assistant and Kiosk apps, not just Safari, and paints the
 ground already projected into the scene, so the whole card renders. The perspective
 on the map's vector elements is very slightly different on that path, but the scene
-is whole again. Every other device is unchanged.
+is whole again. Every other device is unchanged. Thanks to @Spaniard85 for testing
+the fix on the affected hardware.
 
-### Changed: the battery detail panel marks its state of charge as an average
+### Changed: the detail panel now names its period, and marks averages with Ø
 
-The state-of-charge line in the battery detail panel is the average over the shown
-period, not the live level. It now carries the same approximately-equal marker the
-panel already uses elsewhere, so it no longer reads as the current charge. Thanks to
-@stalakerob for the suggestion.
+The detail panel shows the selected period as its title, so every figure reads as a
+total or average over that window, not a live value. Averages (including the battery
+state of charge) now carry a Ø mean symbol instead of the old approximately-equal
+sign, which wrongly suggested a rough value. Thanks to @stalakerob for the nudge on
+the battery line (#331).
 
 ---
 

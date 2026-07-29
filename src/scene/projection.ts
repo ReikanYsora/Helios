@@ -36,7 +36,7 @@ export class SceneCamera
     public centreX = 0;
     public centreY = 0;
     //Card size in px, from the last setViewport. The scene SVG's viewBox is `0 0 width height`, so these
-    //also bound the clip rectangle the painters trim their geometry to (issue #304).
+    //also bound the clip rectangle the painters trim their geometry to.
     public width  = 0;
     public height = 0;
     //False until the first setViewport with a real size. Consumers gate on it so nothing projects against

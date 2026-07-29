@@ -577,7 +577,7 @@ export class SceneHudController
 
         //Clip rectangle for the HUD overlays, in the same card-px space they project into (the camera's viewport).
         //Off-card ink on old iOS oversizes each composited SVG layer past the compositor cap and drops its lower
-        //half (issue #304); the arc loops well past the card and the sun can sit far off it below the horizon.
+        //half; the arc loops well past the card and the sun can sit far off it below the horizon.
         const cam       = this.host._engine?._renderer?.camera;
         const clipRect: ClipRect | null = cam?.hasViewport ? cardClipRect(cam.width, cam.height) : null;
 
@@ -600,7 +600,7 @@ export class SceneHudController
         //nearness midpoint.
         for (const s of arcSegments)
         {
-            //Trim each segment to the card box (issue #304). The segments are fresh this frame, so writing the
+            //Trim each segment to the card box. The segments are fresh this frame, so writing the
             //clipped endpoints back is safe; a segment that misses the card entirely is dropped.
             if (clipRect)
             {
@@ -665,7 +665,7 @@ export class SceneHudController
             sunRayTargetY = target.y;
         }
 
-        //Clip the incidence ray to the card box (issue #304); the line and the bead's motion path both read these
+        //Clip the incidence ray to the card box; the line and the bead's motion path both read these
         //trimmed endpoints so they stay in lockstep. A ray that misses the card entirely is dropped.
         let rayX1 = sunScene?.sun.x ?? 0;
         let rayY1 = sunScene?.sun.y ?? 0;

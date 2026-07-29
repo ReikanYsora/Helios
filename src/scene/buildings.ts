@@ -603,7 +603,7 @@ export function renderShadows(
         //boolean work. One path per caster, exactly as before, so the shape count does not move.
         //Each piece is clipped to the card box first: the sweep runs the length of the shadow across the whole
         //neighbourhood, and on old iOS the compositor sizes this layer to that painted ink, overflowing the layer
-        //cap and dropping its lower half (issue #304). Clipping only removes ink the card already hid, and the
+        //cap and dropping its lower half. Clipping only removes ink the card already hid, and the
         //non-zero union still reads the same within the card (a clip cannot change an interior point's winding).
         let d = '';
         const cc = clipPolygon(cast, rect);
@@ -929,7 +929,7 @@ export function renderBuildings(
             const shade = mixHex(wallAmbient, wallLit, lit);
             const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : shade;
             //One full-height wall quad per edge, clipped to the card box so an off-card wall never enlarges the
-            //scene layer past the old-iOS compositor cap (issue #304). The back-face cull above reads the true quad.
+            //scene layer past the old-iOS compositor cap. The back-face cull above reads the true quad.
             const wq = clipPolygon([p0, p1, p2, p3], rect);
             if (wq.length < 3)
             {
@@ -953,7 +953,7 @@ export function renderBuildings(
         let roofDepth = -Infinity;
         for (const p of fp) { const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth) { roofDepth = d; } }
         //Roof as ONE path over every ring, even-odd, so a courtyard stays a hole instead of being filled in.
-        //Rings are clipped to the card box (issue #304); even-odd keeps the same parity for any point within it.
+        //Rings are clipped to the card box; even-odd keeps the same parity for any point within it.
         const roofPath = ringsPath(rings.map((ring) => ring.map((p) => cam.project(p[0], p[1], h))), rect);
         //The outlines of the buildings this block merged, laid flat ON the roof. They sit on the roof plane, so
         //they can never fight it for depth: the terrace reads as separate houses at no cost.

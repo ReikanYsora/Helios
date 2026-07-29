@@ -262,7 +262,7 @@ export interface VectorGround
 {
     ground:  Ground;
     repaint: (style: GroundStyle, altitude: number) => void;
-    //Compatibility path (issue #304). Paints the ground ALREADY PROJECTED into a card-sized canvas, so the
+    //Compatibility path. Paints the ground ALREADY PROJECTED into a card-sized canvas, so the
     //element carries no CSS 3D transform at all. Old iOS WebKit gives any flat layer composited over a
     //3D-transformed one a half-height backing store, dropping the bottom half of everything drawn above the
     //basemap; with the transform gone the whole scene composites correctly. Costs a repaint per camera move,
@@ -364,7 +364,7 @@ export async function buildVectorGround(
 
         paint(ctx, w, h, features, toScreen, pxPerMetre, st, alt, landPath);
 
-        //Edge fade, baked into the projected canvas instead of the face-on .ground-fade disc (issue #304). The
+        //Edge fade, baked into the projected canvas instead of the face-on .ground-fade disc. The
         //ground-space fade circle (radius = the basemap's closest-side, transparent until GROUND_FADE_START%,
         //dissolving by the rim) is drawn through the SAME projection as the scene, so it lies flat in the plane,
         //tilted AND turned with it, rather than a disc facing the camera. We map the unit circle onto the ellipse

@@ -21,8 +21,8 @@ export interface ClipRect
 //The card box grown by a margin. The margin keeps a clipped edge (and its stroke) off the visible
 //card, which ha-card already hides, while still bounding the painted ink to near the card box. On
 //old iOS WebKit the composited SVG layer's backing store is sized to its painted ink: unclipped it
-//spans the whole projected neighbourhood, overflows the layer-size cap and paints only its top half
-//(issue #304). Trimming the geometry also shrinks the per-frame SVG string on every device.
+//spans the whole projected neighbourhood, overflows the layer-size cap and paints only its top half.
+//Trimming the geometry also shrinks the per-frame SVG string on every device.
 const CLIP_MARGIN = 32;
 
 export function cardClipRect(width: number, height: number): ClipRect

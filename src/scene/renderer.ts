@@ -19,7 +19,7 @@ import {
 } from '../core/config/constants';
 
 //Old iOS/iPadOS WebKit half-composites a flat layer over a CSS 3D-transformed one, clipping the whole scene to
-//its top half (issue #304). Those devices render the ground on the projected compat path instead of a 3D
+//its top half. Those devices render the ground on the projected compat path instead of a 3D
 //transform. It cannot be feature-detected (no API reads composited pixels), so we sniff: an Apple touch device
 //(including iPadOS masquerading as macOS Safari) on Safari <= 16, the WebKit generation that carries the bug and
 //the ceiling for the old hardware it runs on. A miss on a newer device keeps the (perfect) normal path; a false
@@ -33,8 +33,8 @@ function needsProjectedGround(): boolean
     if (!appleTouch) { return false; }
     //Safari carries "Version/NN"; an in-app WKWebView (the Home Assistant app, the Kiosk app) usually does NOT,
     //but still carries the OS token "CPU OS 16_x". Read whichever is present, so the compat path also reaches the
-    //HA apps on old hardware and not just Safari (issue #304: Spaniard85's 1st-gen iPad Pro on iOS 16.7, where the
-    //b0 fix never fired inside the apps because only "Version/" was checked).
+    //HA apps on old hardware and not just Safari (the earlier fix only checked "Version/", so it never
+    //fired inside the in-app WebViews).
     const safari = ua.match(/Version\/(\d+)/);
     const os     = ua.match(/(?:CPU|iPhone) OS (\d+)/);
     const major  = (safari ? parseInt(safari[1], 10) : 0) || (os ? parseInt(os[1], 10) : 0);
@@ -43,7 +43,7 @@ function needsProjectedGround(): boolean
     //truncated desktop-Safari UA ("Macintosh; Intel Mac OS X 10_15_7", no Version/, no "CPU OS"), so both reads
     //above come up empty. We cannot tell the iOS version, so err toward the compat path: it is near-equivalent and
     //fixes the old devices that land here, while Safari, the HA app and iOS Chrome all expose a version and decide
-    //precisely (issue #304, @Spaniard85's HAkiosk on a 1st-gen iPad Pro).
+    //precisely.
     return true;
 }
 
@@ -78,14 +78,14 @@ export class SceneRenderer
     //Repaints the current ground canvas from its cached vector features with a new style + sun altitude (theme
     //flip / colour config / day-night grade), so it never re-fetches tiles.
     private _groundRepaint?: (style: GroundStyle, altitude: number) => void;
-    //Compat path (issue #304): repaint the ground already projected, so its canvas carries no CSS 3D
+    //Compat path: repaint the ground already projected, so its canvas carries no CSS 3D
     //transform. Memoised on the pose so it only repaints when the camera (or size/altitude) actually moved.
     private _groundRepaintProjected?: (
         camera: SceneCamera, w: number, h: number, style: GroundStyle, altitude: number,
     ) => void;
     private _projectedPose = '';
     //Ground render path, decided once per device: false = normal CSS-3D transform, true = projected compat path
-    //for the old iOS/iPadOS WebKit that would otherwise clip the scene to its top half (issue #304).
+    //for the old iOS/iPadOS WebKit that would otherwise clip the scene to its top half.
     private _projectedGround = needsProjectedGround();
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;

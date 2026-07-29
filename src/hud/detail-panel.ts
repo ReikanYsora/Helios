@@ -13,20 +13,31 @@ import { type ChartTarget, isGroupTarget, groupOfTarget } from '../charts/charts
 import { groupDevices, deviceName, deviceWindowKwh } from '../data/sources/device-consumption';
 import type { SunScene } from './hud';
 import { DAY_MS } from '../core/config/constants';
+import { pickTranslations } from '../core/i18n';
+import type { TimelineMode } from '../timeline/timeline-modes';
 
 //The panel reads exactly what the period aggregation reads (PeriodHost) plus the sun scene for the astro rows.
 export interface DetailHost extends PeriodHost
 {
     readonly _sunScene: SunScene | null;
+    //The active rolling-period mode, shown as the panel title so the aggregates read as "over this period".
+    readonly _timelineMode: TimelineMode;
 }
 
 interface DetailMetric
 {
     value: string;
-    //Astro / energy rows carry a leading glyph; per-device (group) rows drop the icon and just show the name.
+    //Energy / astro rows carry a leading MDI icon; averages use the Ø text glyph; per-device (group) rows drop
+    //both and just show the name.
     icon?:  string;
+    glyph?: string;
     label?: string;
 }
+
+//English fallbacks for the period title, mirroring the selector: a locale may omit some period strings.
+const PERIOD_FALLBACK: Record<TimelineMode, string> = {
+    forecast: 'Forecast', yesterday: 'Yesterday', today: 'Today', week: 'Week', month: 'Month',
+};
 
 //Number of whole days the window spans, for the per-day averages. At least 1 so a same-day window never divides
 //by zero.
@@ -107,8 +118,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         {
             const a = aggWatts(store, store.irradiance, startMs, endMs);
             rows.push(
-                { icon: 'mdi:trending-up',         value: irr(a.peak) },
-                { icon: 'mdi:approximately-equal', value: irr(a.avg) },
+                { icon: 'mdi:trending-up', value: irr(a.peak) },
+                { glyph: 'Ø',              value: irr(a.avg) },
             );
         }
         return rows;
@@ -133,9 +144,9 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         if (!s) { return []; }
         const pct = (v: number): string => `${Math.round(v)} %`;
         return [
-            { icon: 'mdi:arrow-down',          value: pct(s.min) },
-            { icon: 'mdi:approximately-equal', value: pct(s.avg) },
-            { icon: 'mdi:arrow-up',            value: pct(s.max) },
+            { icon: 'mdi:arrow-down', value: pct(s.min) },
+            { glyph: 'Ø',             value: pct(s.avg) },
+            { icon: 'mdi:arrow-up',   value: pct(s.max) },
         ];
     }
 
@@ -170,12 +181,12 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
             { icon: chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-up'),   value: energy(discharged) },
         ];
     
-        // Third line (#323): the AVERAGE state of charge over the window. Marked with the same approximately-equal
-        // icon the SoC detail panel uses for its mean, so it never reads as the live level (#331, @stalakerob's idea).
+        // Third line: the AVERAGE state of charge over the window. Marked with the same Ø mean glyph the SoC
+        // detail panel uses, so it never reads as the live level (@stalakerob's idea).
         const soc = socStats(buildPeriodData(host, 'battery-soc'));
         if (soc)
         {
-            rows.push({ icon: 'mdi:approximately-equal', value: `${Math.round(soc.avg)} %` });
+            rows.push({ glyph: 'Ø', value: `${Math.round(soc.avg)} %` });
         }
         return rows;
     }
@@ -198,13 +209,19 @@ export function renderDetailPanel(host: DetailHost): TemplateResult | typeof not
     {
         return nothing;
     }
+    //Title = the selected rolling period, so the aggregates below read as "over this period", not a live value.
+    const t = pickTranslations(host.hass?.language);
+    const periodLabel = t.period?.[host._timelineMode] ?? PERIOD_FALLBACK[host._timelineMode] ?? '';
     return html`
         <div class="detail-panel">
+            ${periodLabel ? html`<div class="dp-title">${periodLabel}</div>` : nothing}
             ${metrics.map(m => html`
                 <div class="dp-row ${m.label ? 'dp-row-device' : ''}">
                     ${m.label
                         ? html`<span class="dp-label">${m.label}</span>`
-                        : html`<ha-icon icon=${m.icon}></ha-icon>`}
+                        : m.glyph
+                            ? html`<span class="dp-glyph">${m.glyph}</span>`
+                            : html`<ha-icon icon=${m.icon}></ha-icon>`}
                     <span class="dp-value">${m.value}</span>
                 </div>
             `)}

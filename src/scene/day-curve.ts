@@ -370,7 +370,7 @@ function addSunBeads(scene: DayCurveScene, camera: SceneCamera, curve: DayCurveD
     }
     if (beads.length === 0) { return; }
     pass.beads  = beads;
-    //Trim the sun-to-curve leader to the card box; a sun far off-card would otherwise stretch this layer (issue #304).
+    //Trim the sun-to-curve leader to the card box; a sun far off-card would otherwise stretch this layer.
     const lc = clipSegment([sunP.x, sunP.y], [topX, topY], rect);
     pass.leader = lc === null ? null : { x1: lc[0][0], y1: lc[0][1], x2: lc[1][0], y2: lc[1][1], stroke: topColour };
 }
@@ -389,7 +389,7 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
     if (strands.length === 0) { return { far: emptyPass(), near: emptyPass() }; }
 
     //The curve is a ring around the home; at low zoom its far side runs well past the card. On old iOS that
-    //off-card ink oversizes the day-curve SVG layer past the compositor cap and drops its lower half (issue #304).
+    //off-card ink oversizes the day-curve SVG layer past the compositor cap and drops its lower half.
     //A span whose chord misses the card box is dropped whole, so on-card spans keep their exact shape.
     const rect = cardClipRect(camera.width, camera.height);
     const slots = curve.base.length;
@@ -462,7 +462,7 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
                 //No reading either side means no line to draw between them. This is what stops today at now instead
                 //of trailing a flat line along the ground to midnight.
                 if (!tops[i].has || !tops[j].has) { continue; }
-                //Drop the span whole when its chord misses the card box (issue #304): the cubic hugs its chord, so
+                //Drop the span whole when its chord misses the card box: the cubic hugs its chord, so
                 //an off-card chord means an off-card span, and the on-card spans keep their exact shape.
                 if (clipSegment(topPts[i], topPts[j], rect) === null) { continue; }
                 const n = 0.5 * (near01[i] + near01[j]);
