@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/helios-logo.svg" alt="" width="84">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/helios-logo.svg" alt="" width="84">
 
 # HELIOS
 
@@ -9,7 +9,7 @@
 A Home Assistant card that turns your Energy dashboard into a living scene:
 what your home produces, stores and consumes, as the sun crosses your sky.
 
-<img src="images/preview_01.png" alt="The Helios card: the day's production curve arcing over the home along the sun's path, with the live production and consumption chips and the timeline below." width="880">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/helios-preview.gif" alt="The Helios card: the sun crossing its arc over a home, the day's production curve rising around the house, and the live production and consumption chips following along." width="880">
 
 [**Live demo**](https://helios-ha.org/helios/) &nbsp;&nbsp; [**Documentation**](https://helios-ha.org/help/) &nbsp;&nbsp; [**Roadmap**](https://helios-ha.org/roadmap/)
 
@@ -131,9 +131,11 @@ against.
 
 <br>
 
-<img src="images/preview_02.png" alt="Helios: the live flow with the production, battery, grid, home and device chips around the house, and the sun's irradiance.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.png" alt="Helios: the day's production curve arcing over the home along the sun's path, with the live chips and the timeline.">
 
-<img src="images/preview_03.png" alt="Helios: a custom-themed scene with the chip cluster and the timeline below.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png" alt="Helios: the live flow with the production, battery, grid, home and device chips around the house, and the sun's irradiance.">
+
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.png" alt="Helios: a custom-themed scene with the chip cluster and the timeline below.">
 
 An interactive live demo is at [helios-ha.org](https://helios-ha.org/helios/).
 
