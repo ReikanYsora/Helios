@@ -9,14 +9,17 @@
 A Home Assistant card that turns your Energy dashboard into a living scene:
 what your home produces, stores and consumes, as the sun crosses your sky.
 
-<img src="images/helios-preview.gif" alt="The Helios card: the sun crossing its arc over a home, the day's production curve rising around the house, live production and consumption chips following along." width="880">
+<img src="images/preview_01.png" alt="The Helios card: the day's production curve arcing over the home along the sun's path, with the live production and consumption chips and the timeline below." width="880">
 
 [**Live demo**](https://helios-ha.org/helios/) &nbsp;&nbsp; [**Documentation**](https://helios-ha.org/help/) &nbsp;&nbsp; [**Roadmap**](https://helios-ha.org/roadmap/)
 
-[![HACS default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz/)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Stars](https://img.shields.io/github/stars/ReikanYsora/Helios?style=flat&color=e0a106)](https://github.com/ReikanYsora/Helios/stargazers)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/reikanysora)
+[![Release](https://img.shields.io/github/v/release/ReikanYsora/Helios?display_name=tag&style=for-the-badge&color=e0a106)](https://github.com/ReikanYsora/Helios/releases)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-e0a106.svg?style=for-the-badge)](https://github.com/hacs/default)
+[![License](https://img.shields.io/github/license/ReikanYsora/Helios?style=for-the-badge&color=blue)](https://www.gnu.org/licenses/gpl-3.0)
+[![Stars](https://img.shields.io/github/stars/ReikanYsora/Helios?style=for-the-badge&color=e0a106)](https://github.com/ReikanYsora/Helios/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/ReikanYsora/Helios/total?style=for-the-badge&color=e0a106&label=downloads)](https://github.com/ReikanYsora/Helios/releases)
+[![Community: Discussions](https://img.shields.io/badge/community-discussions-e0a106?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ReikanYsora/Helios/discussions)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/reikanysora)
 
 </div>
 
@@ -128,11 +131,9 @@ against.
 
 <br>
 
-<img src="images/preview_01.png" alt="Helios: the live 2.5D scene with the sun's arc, the production and consumption chips and the timeline below.">
+<img src="images/preview_02.png" alt="Helios: the live flow with the production, battery, grid, home and device chips around the house, and the sun's irradiance.">
 
-<img src="images/preview_02.png" alt="Helios: the day's curve standing on the sun's ground track around the home, with a per-source breakdown.">
-
-<img src="images/preview_03.png" alt="Helios: the scene with cast building shadows and the detail panel open on a chip.">
+<img src="images/preview_03.png" alt="Helios: a custom-themed scene with the chip cluster and the timeline below.">
 
 An interactive live demo is at [helios-ha.org](https://helios-ha.org/helios/).
 

@@ -8,6 +8,7 @@ import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolve
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
 import { buildArcSegments, flowDuration, type LabelLayout } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
+import { clipSegment, cardClipRect, pointOutside, type ClipRect } from '../core/render-kit/geometry';
 import { formatGridValue } from '../data/sources/grid';
 import { activeGroups, groupLivePowerW, groupPowerWAt } from '../data/sources/device-consumption';
 import { groupTarget } from '../charts/charts';
@@ -574,6 +575,12 @@ export class SceneHudController
         const sunScene  = this.host._sunScene;
         const showSun   = hasHomeCoords && sunScene !== null && sunScene.arc.length >= 2;
 
+        //Clip rectangle for the HUD overlays, in the same card-px space they project into (the camera's viewport).
+        //Off-card ink on old iOS oversizes each composited SVG layer past the compositor cap and drops its lower
+        //half; the arc loops well past the card and the sun can sit far off it below the horizon.
+        const cam       = this.host._engine?._renderer?.camera;
+        const clipRect: ClipRect | null = cam?.hasViewport ? cardClipRect(cam.width, cam.height) : null;
+
         //Fixed colour design system. The sun colour paints the arc, the disc rim and the irradiance fill.
         //The on-ground cloud disc is painted engine-side, so no cloud hex is needed here.
         const sunColor      = ENERGY_COLOR.sun(this.host);
@@ -593,6 +600,18 @@ export class SceneHudController
         //nearness midpoint.
         for (const s of arcSegments)
         {
+            //Trim each segment to the card box. The segments are fresh this frame, so writing the
+            //clipped endpoints back is safe; a segment that misses the card entirely is dropped.
+            if (clipRect)
+            {
+                const c = clipSegment([s.x1, s.y1], [s.x2, s.y2], clipRect);
+                if (!c)
+                {
+                    continue;
+                }
+                s.x1 = c[0][0]; s.y1 = c[0][1];
+                s.x2 = c[1][0]; s.y2 = c[1][1];
+            }
             if (s.belowHorizon)
             {
                 arcSegmentsBack.push(s);
@@ -645,6 +664,34 @@ export class SceneHudController
             sunRayTargetX = target.x;
             sunRayTargetY = target.y;
         }
+
+        //Clip the incidence ray to the card box; the line and the bead's motion path both read these
+        //trimmed endpoints so they stay in lockstep. A ray that misses the card entirely is dropped.
+        let rayX1 = sunScene?.sun.x ?? 0;
+        let rayY1 = sunScene?.sun.y ?? 0;
+        let rayX2 = sunRayTargetX;
+        let rayY2 = sunRayTargetY;
+        let rayVisible = showRay;
+        if (clipRect && showRay)
+        {
+            const c = clipSegment([rayX1, rayY1], [rayX2, rayY2], clipRect);
+            if (c)
+            {
+                rayX1 = c[0][0]; rayY1 = c[0][1];
+                rayX2 = c[1][0]; rayY2 = c[1][1];
+            }
+            else
+            {
+                rayVisible = false;
+            }
+        }
+        //Cull the sun disc + halo when the sun sits far off the card (near or below the horizon), so its layer never
+        //balloons past the card box. 80 px clears the largest halo (disc r <= 22, halo = 3r).
+        const sunDiscVisible = clipRect === null
+            || !pointOutside(
+                [sunScene?.sun.x ?? 0, sunScene?.sun.y ?? 0],
+                { minX: clipRect.minX - 80, minY: clipRect.minY - 80, maxX: clipRect.maxX + 80, maxY: clipRect.maxY + 80 },
+            );
 
         return html`
                 <!--  Solar arc, BACK pass: only the dotted below-horizon segments (the sun's path under the
@@ -931,14 +978,14 @@ export class SceneHudController
                       chip occludes the ray endpoint at its border. The sun disc stays in the depth-split SVG
                       below (in front of / behind the home cluster by camera bearing), so the ray never rides
                       over the production chip.  -->
-                ${showSun && showRay ? html`
+                ${showSun && rayVisible ? html`
                     <svg class="solar-svg solar-ray-svg"
                          style="--solar-daylight:${sunScene!.daylight}">
                         <line
                             class="solar-ray"
                             style="--sun-flow-duration:${sunFlowDuration}s"
-                            x1=${sunScene!.sun.x}  y1=${sunScene!.sun.y}
-                            x2=${sunRayTargetX}    y2=${sunRayTargetY}
+                            x1=${rayX1}  y1=${rayY1}
+                            x2=${rayX2}  y2=${rayY2}
                             stroke=${sunColor}
                         ></line>
                         <!--  Bead rides an absolute-coordinate path with cx / cy at the default 0 origin.
@@ -951,13 +998,13 @@ export class SceneHudController
                             <animateMotion
                                 dur="${sunFlowDuration}s"
                                 repeatCount="indefinite"
-                                path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
+                                path="M ${rayX1},${rayY1} L ${rayX2},${rayY2}"
                             ></animateMotion>
                         </circle>
                     </svg>
                 ` : nothing}
 
-                ${showSun ? html`
+                ${showSun && sunDiscVisible ? html`
                     <svg
                         class="solar-svg solar-svg-sun ${sunScene!.sun.nearness >= 0.50 ? 'solar-svg-sun-near' : 'solar-svg-sun-far'}"
                         style="--solar-daylight:${sunScene!.daylight}"

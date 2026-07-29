@@ -351,7 +351,7 @@ export const heliosTimelineStyles = css`
     /*  LIVE chip at the top-right of the scrub tooltip. Outline recipe (transparent backdrop + primary
         border + glyph) so it reads on both themes without clashing with the tooltip background. The dot
         pulses, mirroring HA Energy's live-data vocabulary. */
-    /*  Explicit "back to live" button (#324): a floating accent pill at the top-right of the timeline, shown only
+    /*  Explicit "back to live" button: a floating accent pill at the top-right of the timeline, shown only
         while a past instant is scrubbed. One tap jumps straight back to the live cursor. */
     .tb-live-btn
     {

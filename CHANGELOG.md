@@ -7,6 +7,30 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.8.2
+
+A corrective release on top of 2026.8.1.
+
+### Fixed: the card rendered only in half 3D on some older iPads
+
+On older iPads, older WebKit could composite the flat basemap over the 3D scene
+incorrectly, leaving the card looking cut in half (#304). Helios now detects those devices,
+including inside the Home Assistant and Kiosk apps, not just Safari, and paints the
+ground already projected into the scene, so the whole card renders. The perspective
+on the map's vector elements is very slightly different on that path, but the scene
+is whole again. Every other device is unchanged. Thanks to @Spaniard85 for testing
+the fix on the affected hardware.
+
+### Changed: the detail panel now names its period, and marks averages with Ø
+
+The detail panel shows the selected period as its title, so every figure reads as a
+total or average over that window, not a live value. Averages (including the battery
+state of charge) now carry a Ø mean symbol instead of the old approximately-equal
+sign, which wrongly suggested a rough value. Thanks to @stalakerob for the nudge on
+the battery line (#331).
+
+---
+
 ## 2026.8.1
 
 A hotfix on top of 2026.8.0.

@@ -35,6 +35,10 @@ export class SceneCamera
     //Screen-space anchor of the home (local origin), recomputed by setViewport each frame.
     public centreX = 0;
     public centreY = 0;
+    //Card size in px, from the last setViewport. The scene SVG's viewBox is `0 0 width height`, so these
+    //also bound the clip rectangle the painters trim their geometry to.
+    public width  = 0;
+    public height = 0;
     //False until the first setViewport with a real size. Consumers gate on it so nothing projects against
     //the seed centre (0,0), which would briefly throw the whole HUD into the top-left corner.
     public hasViewport = false;
@@ -61,6 +65,8 @@ export class SceneCamera
         const bearing = this.bearingDeg * DEG;
         this.centreX = width / 2;
         this.centreY = height / 2;
+        this.width  = width;
+        this.height = height;
         this.hasViewport = true;
         this._cosB = Math.cos(bearing);
         this._sinB = Math.sin(bearing);

@@ -1195,7 +1195,7 @@ export class HeliosCard extends LitElement
     private _onChartHoverMove      = (e: PointerEvent): void => onChartHoverMove(this, e);
     private _onChartHoverLeave     = (): void => onChartHoverLeave(this);
 
-    //Explicit "back to live" button (#324): jump straight from a scrubbed instant to the live cursor, no fiddling
+    //Explicit "back to live" button: jump straight from a scrubbed instant to the live cursor, no fiddling
     //with the slider. Its pointerdown is swallowed so pressing it never scrubs the track underneath.
     private _onReturnToLive = (e: Event): void => { e.stopPropagation(); returnTimelineToLive(this); };
     private _stopPointer    = (e: Event): void => { e.stopPropagation(); };

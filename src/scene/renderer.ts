@@ -18,6 +18,35 @@ import {
     HOME_GROW_MS,
 } from '../core/config/constants';
 
+//Old iOS/iPadOS WebKit half-composites a flat layer over a CSS 3D-transformed one, clipping the whole scene to
+//its top half. Those devices render the ground on the projected compat path instead of a 3D
+//transform. It cannot be feature-detected (no API reads composited pixels), so we sniff: an Apple touch device
+//(including iPadOS masquerading as macOS Safari) on Safari <= 16, the WebKit generation that carries the bug and
+//the ceiling for the old hardware it runs on. A miss on a newer device keeps the (perfect) normal path; a false
+//positive only swaps in the near-equivalent compat render, so erring is cheap.
+function needsProjectedGround(): boolean
+{
+    if (typeof navigator === 'undefined') { return false; }
+    const ua = navigator.userAgent || '';
+    const appleTouch = /iPad|iPhone|iPod/.test(ua)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!appleTouch) { return false; }
+    //Safari carries "Version/NN"; an in-app WKWebView (the Home Assistant app, the Kiosk app) usually does NOT,
+    //but still carries the OS token "CPU OS 16_x". Read whichever is present, so the compat path also reaches the
+    //HA apps on old hardware and not just Safari (the earlier fix only checked "Version/", so it never
+    //fired inside the in-app WebViews).
+    const safari = ua.match(/Version\/(\d+)/);
+    const os     = ua.match(/(?:CPU|iPhone) OS (\d+)/);
+    const major  = (safari ? parseInt(safari[1], 10) : 0) || (os ? parseInt(os[1], 10) : 0);
+    if (major > 0) { return major <= 16; }
+    //No readable version at all on an Apple touch device: a stripped in-app WebView UA. The HAkiosk app reports a
+    //truncated desktop-Safari UA ("Macintosh; Intel Mac OS X 10_15_7", no Version/, no "CPU OS"), so both reads
+    //above come up empty. We cannot tell the iOS version, so err toward the compat path: it is near-equivalent and
+    //fixes the old devices that land here, while Safari, the HA app and iOS Chrome all expose a version and decide
+    //precisely.
+    return true;
+}
+
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
 const prefersReducedMotion = (): boolean =>
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -49,6 +78,15 @@ export class SceneRenderer
     //Repaints the current ground canvas from its cached vector features with a new style + sun altitude (theme
     //flip / colour config / day-night grade), so it never re-fetches tiles.
     private _groundRepaint?: (style: GroundStyle, altitude: number) => void;
+    //Compat path: repaint the ground already projected, so its canvas carries no CSS 3D
+    //transform. Memoised on the pose so it only repaints when the camera (or size/altitude) actually moved.
+    private _groundRepaintProjected?: (
+        camera: SceneCamera, w: number, h: number, style: GroundStyle, altitude: number,
+    ) => void;
+    private _projectedPose = '';
+    //Ground render path, decided once per device: false = normal CSS-3D transform, true = projected compat path
+    //for the old iOS/iPadOS WebKit that would otherwise clip the scene to its top half.
+    private _projectedGround = needsProjectedGround();
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;
     private _groundAltitude  = 45;
@@ -137,6 +175,8 @@ export class SceneRenderer
         this._groundStyleCur = style;
         this._ground         = built.ground;
         this._groundRepaint  = built.repaint;
+        this._groundRepaintProjected = built.repaintProjected;
+        this._projectedPose = '';
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
         //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
         //pixels. A browser may drop a canvas's backing store while the page sits idle, and nothing here would put
@@ -302,6 +342,24 @@ export class SceneRenderer
         });
     }
 
+    //Compat path: paint the basemap in screen space, sized to the card, with no transform on the element.
+    //Skipped unless the pose actually changed, so a static scene costs nothing.
+    private _paintProjectedGround(w: number, h: number): void
+    {
+        if (!this._ground || !this._groundRepaintProjected || !this._groundStyleCur) { return; }
+        const pose = `${w}x${h}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}`;
+        if (pose === this._projectedPose) { return; }
+        this._projectedPose = pose;
+        this._groundRepaintProjected(this.camera, w, h, this._groundStyleCur, this._groundAltitude);
+        //Compat path carries no CSS transform; clear any left over from the normal path (matters when toggling).
+        this._ground.el.style.transform = '';
+        this._ground.el.style.transformOrigin = '';
+        //The edge fade is baked into the projected canvas (in the plane), so the face-on .ground-fade disc that
+        //would otherwise sit flat against the camera stays hidden on this path.
+        this._ground.fade.style.display = 'none';
+    }
+
+
     private _draw(): void
     {
         if (!this._alive) { return; }
@@ -316,13 +374,21 @@ export class SceneRenderer
         this.camera.setViewport(width, height);
 
         //Tilt + turn the basemap about the home, then translate the home onto the screen-space centre.
+        //On the compat path there is no transform at all: the ground is repainted already projected.
         if (this._ground)
         {
-            const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
-            this._ground.el.style.transformOrigin = transformOrigin;
-            this._ground.el.style.transform = transform;
-            this._ground.fade.style.transformOrigin = transformOrigin;
-            this._ground.fade.style.transform = transform;
+            if (this._projectedGround) { this._paintProjectedGround(width, height); }
+            else
+            {
+                const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
+                this._ground.el.style.transformOrigin = transformOrigin;
+                this._ground.el.style.transform = transform;
+                this._ground.fade.style.display = '';
+                this._ground.fade.style.width  = `${this._ground.size}px`;
+                this._ground.fade.style.height = `${this._ground.size}px`;
+                this._ground.fade.style.transformOrigin = transformOrigin;
+                this._ground.fade.style.transform = transform;
+            }
         }
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);

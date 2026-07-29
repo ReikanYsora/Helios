@@ -108,7 +108,7 @@ coalesces redraws into one `requestAnimationFrame` pass, owns its own
 lock-step. The `<svg>` is bound to the card box (`contain: paint`): its building
 paths reach a whole neighbourhood past the card, and without that bound an old iOS
 compositor sized the layer's backing store to that content, capped it and painted
-only the top half (#304); binding it also trims the off-card raster on every frame.
+only the top half; binding it also trims the off-card raster on every frame.
 Colour math (building tint, day / night grading of the ground + buildings) lives in
 `core/render-kit/colors.ts`, over the shared hex primitives in
 `core/render-kit/hex.ts`; the shared 2D point type + SVG-points formatter live in
