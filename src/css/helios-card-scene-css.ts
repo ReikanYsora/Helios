@@ -110,7 +110,7 @@ export const heliosCardStyles = css`
     /*  Screen-space scene SVG: cast shadows + extruded buildings repainted every frame.
         Full-size overlay above the ground, click-transparent (the HUD SVGs own their pointer events).
         The building/shadow paths extend far past the card (a whole neighbourhood projected), so this element's
-        painted content is much larger than its box. On old iOS (issue #304) the compositor then sized this
+        painted content is much larger than its box. On old iOS the compositor then sized this
         layer's backing store to that content, blew the OS layer-size cap and painted only its top half. contain:
         paint + overflow:hidden bound the layer to the card box (what we actually see), so the backing store stays
         card-sized and the whole scene paints. No visible change elsewhere: off-card paint was already clipped. */
@@ -364,6 +364,23 @@ export const heliosCardStyles = css`
         pointer-events: none;
         -webkit-font-smoothing: antialiased;
     }
+    /*  Panel title: the selected rolling period, so the figures below never read as a live value. */
+    .detail-panel .dp-title
+    {
+        align-self: stretch;
+        text-align: center;
+        font-size: var(--ha-font-size-xs, 10px);
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--detail-accent, var(--primary-color, #03a9f4));
+        padding-bottom: 4px;
+        margin-bottom: 2px;
+        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .detail-panel .dp-row
     {
         display: flex;
@@ -375,6 +392,17 @@ export const heliosCardStyles = css`
     {
         --mdc-icon-size: 16px;
         flex: 0 0 auto;
+        color: var(--detail-accent, var(--primary-color, #03a9f4));
+    }
+    /*  The Ø average marker, held to the same 16px column as the icons so the min / avg / max rows line up. */
+    .detail-panel .dp-row .dp-glyph
+    {
+        flex: 0 0 auto;
+        width: 16px;
+        text-align: center;
+        font-size: 15px;
+        line-height: 1;
+        font-weight: 700;
         color: var(--detail-accent, var(--primary-color, #03a9f4));
     }
     .detail-panel .dp-row span
