@@ -81,6 +81,9 @@ export interface Translations
         //Decimal-precision slider (0-3) for value readouts. Optional; falls back to inline English.
         valueDecimals?:               string;
         valueDecimalsHelp?:           string;
+        //Flow-animation reference power (W). Optional; falls back to inline English.
+        maxExpectedPower?:            string;
+        maxExpectedPowerHelp?:        string;
         //Power unit selector (W / kW) and solar-constant unit selector (W/m2 / kW/m2). Optional; fall back to English.
         powerUnit?:                   string;
         powerUnitHelp?:               string;

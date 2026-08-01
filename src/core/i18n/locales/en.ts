@@ -76,6 +76,9 @@ export const en: Translations = {
     valueDecimals: "Decimals",
     valueDecimalsHelp:
       "Number of decimals shown on every value readout, so the chips read uniform. Applies to kW values (whole watts stay integers) and to kWh. 0 to 3, default 1.",
+    maxExpectedPower: "Max expected power",
+    maxExpectedPowerHelp:
+      "The power at which a flow animates at full speed. Every flow is paced against this single reference, so a bigger flow always reads as faster than a smaller one, whichever direction it runs. Raise it for a large installation, lower it for a small one. Default 5000 W.",
     powerUnit: "Power unit",
     powerUnitHelp:
       "Unit for every power readout on the card (chips, graph tooltips). Energy follows it too, so the card stays consistent: kW pairs with kWh, W with Wh.",

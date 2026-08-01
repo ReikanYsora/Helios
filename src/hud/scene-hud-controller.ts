@@ -1,7 +1,7 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes } from '../core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
@@ -177,6 +177,9 @@ export class SceneHudController
         //Per-chip visibility from the "Entity display" config (each defaults visible). Home visibility (the
         //neutral-ring swap) is handled separately at the home pill.
         const cfg = this.host.config;
+        //Shared flow-animation reference: every power flow (PV, grid, battery, device groups) is paced against
+        //this single figure, so the largest live flow always reads as the fastest. Configurable per install.
+        const flowRefW = maxExpectedPowerW(cfg);
         //Day curve up: the chips that have nothing to do with the curve stand down, so it is read against the house
         //rather than through a cluster of unrelated numbers. The chip whose metric raised the curve STAYS - the
         //toggle has to remain under the finger that pressed it - and so does the home, the anchor of the whole
@@ -257,13 +260,12 @@ export class SceneHudController
             ? (isPvPredicted ? '~ ' : '') + formatPvValue(this.host.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec, powerU)
             : '';
 
-        //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against a 5 kW
-        //reference. Idle (no flow/arrow) when current production is <= 0.
+        //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against the shared
+        //flow reference. Idle (no flow/arrow) when current production is <= 0.
         const pvWattsNow = (pvRate !== null)
             ? pvNormalizeToWatts(pvRate.value, pvRate.unit)
             : 0;
-        //PV leader flow saturates at a fixed 5 kW reference.
-        const pvPeakRefW  = 5000;
+        const pvPeakRefW  = flowRefW;
         const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
         const pvIdle         = !(pvWattsNow > 0);
         //Battery overlay: two chips flanking the PV chip (SoC % left, signed Power right), each wired to it
@@ -393,7 +395,7 @@ export class SceneHudController
         //spatial relationship) but the dash flow is frozen and the arrow hidden, since any motion would
         //be misleading.
         const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
-        const batteryFlowDuration = flowDuration(batteryWattsForFlow, 5000);
+        const batteryFlowDuration = flowDuration(batteryWattsForFlow, flowRefW);
 
         //PV_HALF_HEIGHT_PX places the top of a leader's vertical leg flush against PV's bottom edge so the
         //line emerges from the chip, not inside it.
@@ -455,8 +457,8 @@ export class SceneHudController
         //carries the group id. Every lead's bead runs home -> chip (power leaving to the group's devices).
         const HOME_PILL_WIDTH_PX  = 96;
         const GROUP_CHIP_HALF_W   = 48;
-        //Bead cadence: fastest at ~5 kW, dropped below ~5 W (recorder noise), like the grid/battery beads.
-        const GROUP_BEAD_CAP_W    = 5000;
+        //Bead cadence: fastest at the shared flow reference, dropped below ~5 W (recorder noise), like the grid/battery beads.
+        const GROUP_BEAD_CAP_W    = flowRefW;
         const GROUP_BEAD_IDLE_W   = 5;
         //Four-corner fan-out (4 groups only): each lead docks the home pill's bottom edge at 32/44/56/68 % of its
         //width, symmetric around the centre and mirrored left/right, so the four leads fan out without crossing.
@@ -532,15 +534,12 @@ export class SceneHudController
             })
             : [];
 
-        //Grid bead cadence: frequency (= 1/dur) is proportional to live power so bead speed tracks the chip
-        //value linearly, via dur = MIN_DUR * CAP / watts (MIN_DUR at cap, 2x at half, 4x at a quarter),
-        //clamped to MAX_DUR_S. Below ~5 W the chip is idle (recorder noise) and the bead is dropped. Caps
-        //are round residential thresholds: 5 kW import, 1 kW export.
-        const GRID_BEAD_IMPORT_CAP_W = 5000;
-        const GRID_BEAD_EXPORT_CAP_W = 1000;
-        const GRID_BEAD_MIN_DUR_S = 1.2;
-        const GRID_BEAD_MAX_DUR_S = 8.0;
-        const GRID_BEAD_IDLE_W    = 5;
+        //Grid beads use the shared flow curve (flowDuration): fastest at the flow reference, easing to a crawl
+        //toward zero, exactly like the PV, battery and device flows. Below ~5 W the chip is idle (recorder
+        //noise) and the bead is dropped. Import and export share the same reference, so a larger flow always
+        //reads as faster than a smaller one, whichever direction it runs.
+        const GRID_BEAD_CAP_W  = flowRefW;
+        const GRID_BEAD_IDLE_W = 5;
         //Scrub-aware like the chip values above, so the bead's cadence always matches the instant the
         //chip displays (never today's live pace on yesterday's scrub).
         const importWattsAbs = gridImportDisplayWatts !== null
@@ -549,15 +548,10 @@ export class SceneHudController
         const exportWattsAbs = gridExportDisplayWatts !== null
             ? Math.abs(pvNormalizeToWatts(gridExportDisplayWatts, gridExportDisplayUnit))
             : 0;
-        const proportionalBeadDur = (watts: number, capW: number): number =>
-        {
-            const w = Math.max(watts, 1);
-            return Math.min(GRID_BEAD_MAX_DUR_S, Math.max(GRID_BEAD_MIN_DUR_S, GRID_BEAD_MIN_DUR_S * capW / w));
-        };
         const gridImportBeadDur = importWattsAbs < GRID_BEAD_IDLE_W ? null
-            : proportionalBeadDur(importWattsAbs, GRID_BEAD_IMPORT_CAP_W);
+            : flowDuration(importWattsAbs, GRID_BEAD_CAP_W);
         const gridExportBeadDur = exportWattsAbs < GRID_BEAD_IDLE_W ? null
-            : proportionalBeadDur(exportWattsAbs, GRID_BEAD_EXPORT_CAP_W);
+            : flowDuration(exportWattsAbs, GRID_BEAD_CAP_W);
         //Single grid chip shows the ACTIVE flow only: the larger display value wins and drives colour,
         //value, icon and bead direction. Scrub-aware watts feed the choice so it tracks the timeline. Ties
         //(including idle 0/0) fall to import, a neutral consumption-blue resting state.
@@ -880,7 +874,7 @@ export class SceneHudController
                         data-target="grid"
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
-                        <ha-icon icon=${gridImporting ? chipSlotIcon(cfg, 'gridImport', 'mdi:transmission-tower-export') : chipSlotIcon(cfg, 'gridExport', 'mdi:transmission-tower-import')}></ha-icon>
+                        <ha-icon icon=${gridImporting ? chipSlotIcon(cfg, 'gridImport') : chipSlotIcon(cfg, 'gridExport')}></ha-icon>
                         <span>${formatGridValue(this.host.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
                     </div>
                 ` : nothing}

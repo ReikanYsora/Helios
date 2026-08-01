@@ -25,6 +25,9 @@ import
     DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS,
     MAX_VALUE_DECIMALS,
+    DEFAULT_MAX_EXPECTED_POWER_W,
+    MIN_MAX_EXPECTED_POWER_W,
+    MAX_MAX_EXPECTED_POWER_W,
     DEFAULT_NO_UI_DELAY_S,
     MIN_NO_UI_DELAY_S,
     MAX_NO_UI_DELAY_S,
@@ -1111,6 +1114,8 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
                 ${this._renderSlider('value-decimals', t.editor.valueDecimals ?? 'Value decimals', MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}
                 <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
+                ${this._renderSlider('max-expected-power', t.editor.maxExpectedPower ?? 'Max expected power', MIN_MAX_EXPECTED_POWER_W, MAX_MAX_EXPECTED_POWER_W, 500, DEFAULT_MAX_EXPECTED_POWER_W, ' W')}
+                <div class="field-help">${t.editor.maxExpectedPowerHelp ?? 'The power at which a flow animates at full speed, so a bigger flow always reads as faster. Raise it for a large installation, lower it for a small one.'}</div>
                 ${this._renderSelect('power-unit', t.editor.powerUnit ?? 'Power unit',
                     [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }], 'kW',
                     t.editor.powerUnitHelp ?? 'Unit for every power readout on the card. Energy always stays in kWh.')}

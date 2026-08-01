@@ -7,6 +7,31 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.8.3
+
+A corrective release on top of 2026.8.2.
+
+### Fixed: the grid import and export icons were the wrong way round
+
+In the grid chip, its detail panel and the timeline tooltip, the import and export
+tower icons were swapped, so the arrow pointed the wrong way for the direction it
+labelled (#352). The icons now match their flow, and each one is defined in a single
+place so the two can no longer drift apart. Thanks to @wasabi216 for the report.
+
+### Changed: flow animation now paces every flow against one configurable reference
+
+Every flow's animation speed is scaled so a bigger flow reads as faster, but the
+flows didn't all share the same scale: grid export used a reference five times
+smaller than the rest, so a small export could look quicker than a much larger
+production (#351). Production, grid import and export, battery and device flows now
+animate on one shared curve and one shared reference, so their relative pace is honest
+across the whole card. That
+reference is a new **Max expected power** setting (default 5000 W) in the editor's
+data display section: the power at which a flow animates at full speed, so you can
+raise it for a large installation or lower it for a small one. Thanks to @wasabi216.
+
+---
+
 ## 2026.8.2
 
 A corrective release on top of 2026.8.1.
