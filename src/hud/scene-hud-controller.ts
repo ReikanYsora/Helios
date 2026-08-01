@@ -648,14 +648,11 @@ export class SceneHudController
         const sunAz           = sunScene?.sun.azimuth ?? 0;
         const sunPositionText = formatSunPosition(sunAz, sunAlt, pickTranslations(this.host.hass?.language).compass ?? 'N,NE,E,SE,S,SW,W,NW');
         //Irradiance (and its cloud chip) are weather; hidden when weather is off (month/year). Sun position
-        //is pure geometry and needs none, so the position/both modes stay visible without it. The sun
-        //disc/arc (also pure geometry) stays regardless.
+        //is pure geometry and needs none, so position mode stays visible without it. The sun disc/arc (also
+        //pure geometry) stays regardless.
         const showSunLabel    = showSun && showChipIrradiance && sunAlt > 0
-            && (chipMode === 'irradiance' ? this.host._weatherAvailable : true);
-        //Both mode pairs irradiance with position when weather is present, else shows position alone.
-        const sunChipText     = chipMode === 'position' ? sunPositionText
-            : chipMode === 'both' ? (this.host._weatherAvailable ? `${sunIrradText}, ${sunPositionText}` : sunPositionText)
-            : sunIrradText;
+            && (chipMode === 'position' || this.host._weatherAvailable);
+        const sunChipText     = chipMode === 'position' ? sunPositionText : sunIrradText;
         //Position mode drops the cloud-cover glyph (irrelevant to geometry) for a plain sun.
         const sunChipIconFallback = chipMode === 'position'
             ? 'mdi:white-balance-sunny'

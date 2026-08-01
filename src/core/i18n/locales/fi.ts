@@ -67,10 +67,9 @@ export const fi: Translations = {
       "Teho, jolla virtaus liikkuu täydellä nopeudella. Jokaista virtausta tahditetaan tätä yhtä viitearvoa vasten, joten suurempi virtaus näkyy aina nopeampana kuin pienempi, riippumatta siitä mihin suuntaan se kulkee. Nosta sitä suureen asennukseen, laske pieneen. Oletus 5000 W.",
     sunChipMode: "Aurinkosirun lukema",
     sunChipModeHelp:
-      "Mitä aurinkosiru näyttää: reaaliaikaisen aurinkoirradianssin (oletus), auringon sijainnin (atsimuutti ja korkeus) tai molemmat. Sijainti ei tarvitse anturia, se tulee kortin omista aurinkolaskelmista.",
+      "Mitä aurinkosiru näyttää: reaaliaikaisen aurinkoirradianssin (oletus) tai auringon sijainnin (atsimuutti ja korkeus). Sijainti ei tarvitse anturia, se tulee kortin omista aurinkolaskelmista.",
     sunChipModeIrradiance: "Irradianssi",
     sunChipModePosition: "Auringon sijainti",
-    sunChipModeBoth: "Molemmat",
     displayUpdateFrequency: "Kaavion tarkkuus",
     displayUpdateFrequencyHelp:
       "Kuinka monta pistettä tunnissa kaaviot piirtävät. Itse data on aina Home Assistantin 5 minuutin tilastoa; tämä ohjaa vain, kuinka tiheästi käyrä piirretään: 1 = yksi piste tunnissa (tasaisin, kevyin renderöidä), 6 = yksi piste 10 minuutin välein (täysi tarkkuus, raskain). Oletus 4 = piste 15 minuutin välein. Laske sitä vanhemmilla tai hitaammilla laitteilla renderöintikustannusten vähentämiseksi. Ennustekäyrä noudattaa samaa tahtia, joten hienompi asetus tuo esiin myös lyhyet varjonotkahdukset (puu, joka varjostaa tuotantoa puoli tuntia), jotka tuntikäyrä ylittää.",

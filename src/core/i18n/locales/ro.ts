@@ -67,10 +67,9 @@ export const ro: Translations = {
       "Puterea la care un flux se animeaza la viteza maxima. Fiecare flux este masurat fata de aceasta referinta unica, asa ca un flux mai mare pare mereu mai rapid decat unul mai mic, indiferent de directia in care curge. Ridic-o pentru o instalatie mare, coboar-o pentru una mica. Implicit 5000 W.",
     sunChipMode: "Citirea cipului soarelui",
     sunChipModeHelp:
-      "Ce afiseaza cipul soarelui: iradianta solara live (implicit), pozitia soarelui (azimut si altitudine), sau ambele. Pozitia nu are nevoie de senzor, provine din propriile calcule solare ale cardului.",
+      "Ce afiseaza cipul soarelui: iradianta solara live (implicit) sau pozitia soarelui (azimut si altitudine). Pozitia nu are nevoie de senzor, provine din propriile calcule solare ale cardului.",
     sunChipModeIrradiance: "Iradianta",
     sunChipModePosition: "Pozitia soarelui",
-    sunChipModeBoth: "Ambele",
     displayUpdateFrequency: "Detaliul graficului",
     displayUpdateFrequencyHelp:
       "Cate puncte pe ora deseneaza graficele. Datele in sine sunt intotdeauna statisticile de 5 minute ale Home Assistant; aceasta controleaza doar cat de dens este trasata curba: 1 = un punct pe ora (cel mai neted, cel mai usor de redat), 6 = un punct la fiecare 10 minute (detaliu complet, cel mai greu). Implicit 4 = un punct la fiecare 15 minute. Coboara-l pe dispozitive mai vechi sau mai lente pentru a reduce costul redarii. Curba de prognoza urmeaza aceeasi cadenta, asa ca o setare mai fina rezolva si scaderile scurte de umbra (un copac care taie productia o jumatate de ora) pe care o curba orara le sare.",

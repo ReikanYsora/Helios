@@ -67,10 +67,9 @@ export const sv: Translations = {
       "Effekten vid vilken ett flöde animeras med full hastighet. Varje flöde avvägs mot denna enda referens, så ett större flöde läses alltid som snabbare än ett mindre, oavsett vilken riktning det går. Höj den för en stor anläggning, sänk den för en liten. Standard 5000 W.",
     sunChipMode: "Solchippets utläsning",
     sunChipModeHelp:
-      "Vad solchippet visar: solirradians i realtid (standard), solens position (azimut och höjd) eller båda. Positionen behöver ingen sensor, den kommer från kortets egen solberäkning.",
+      "Vad solchippet visar: solirradians i realtid (standard) eller solens position (azimut och höjd). Positionen behöver ingen sensor, den kommer från kortets egen solberäkning.",
     sunChipModeIrradiance: "Irradians",
     sunChipModePosition: "Solposition",
-    sunChipModeBoth: "Båda",
     displayUpdateFrequency: "Grafdetaljer",
     displayUpdateFrequencyHelp:
       "Hur många punkter per timme graferna ritar. Själva datan är alltid Home Assistants 5-minuters statistik; detta styr bara hur tätt kurvan plottas: 1 = en punkt per timme (mjukast, lättast att rendera), 6 = en punkt var 10:e minut (full detalj, tyngst). Standard 4 = en punkt var 15:e minut. Sänk det på äldre eller långsammare enheter för att minska renderingskostnaden. Prognoskurvan följer samma takt, så en finare inställning visar även korta skuggdippar (ett träd som skuggar produktionen i en halvtimme) som en timkurva hoppar över.",

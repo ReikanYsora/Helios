@@ -83,10 +83,9 @@ export const en: Translations = {
       "The power at which a flow animates at full speed. Every flow is paced against this single reference, so a bigger flow always reads as faster than a smaller one, whichever direction it runs. Raise it for a large installation, lower it for a small one. Default 5000 W.",
     sunChipMode: "Sun chip readout",
     sunChipModeHelp:
-      "What the sun chip shows: live solar irradiance (default), the sun's position (azimuth and elevation), or both. The position needs no sensor, it comes from the card's own sun maths.",
+      "What the sun chip shows: live solar irradiance (default) or the sun's position (azimuth and elevation). The position needs no sensor, it comes from the card's own sun maths.",
     sunChipModeIrradiance: "Irradiance",
     sunChipModePosition: "Sun position",
-    sunChipModeBoth: "Both",
     powerUnit: "Power unit",
     powerUnitHelp:
       "Unit for every power readout on the card (chips, graph tooltips). Energy follows it too, so the card stays consistent: kW pairs with kWh, W with Wh.",

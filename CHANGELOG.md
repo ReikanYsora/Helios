@@ -33,9 +33,15 @@ raise it for a large installation or lower it for a small one. Thanks to @wasabi
 ### Added: the sun chip can read out the sun's position
 
 A new **Sun chip readout** option (in the data display section) switches the sun chip
-between solar irradiance (the default), the sun's position as azimuth and elevation,
-or both (#310). The position comes from the card's own sun maths, so it needs no extra
-sensor. Idea from @ferreto1978, and thanks to @thomluther for the push.
+between solar irradiance (the default) and the sun's position as azimuth and elevation
+(#310). The position comes from the card's own sun maths, so it needs no extra sensor.
+Idea from @ferreto1978, and thanks to @thomluther for the push.
+
+### Fixed: the grid flow bead now matches the other beads
+
+The grid import and export bead was the only flow bead without the thin outline every
+other bead carries, so it read slightly differently. It now has the same outline, and
+the beads are consistent across the whole scene.
 
 ---
 

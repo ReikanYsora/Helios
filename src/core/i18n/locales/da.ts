@@ -67,10 +67,9 @@ export const da: Translations = {
       "Den effekt, hvor et flow animeres ved fuld hastighed. Hvert flow måles mod denne ene reference, så et større flow altid ser hurtigere ud end et mindre, uanset hvilken retning det løber. Hæv den for et stort anlæg, sænk den for et lille. Standard 5000 W.",
     sunChipMode: "Solchip-aflæsning",
     sunChipModeHelp:
-      "Hvad solchippen viser: live solirradians (standard), solens position (azimut og højde), eller begge. Positionen kræver ingen sensor, den kommer fra kortets egne solberegninger.",
+      "Hvad solchippen viser: live solirradians (standard) eller solens position (azimut og højde). Positionen kræver ingen sensor, den kommer fra kortets egne solberegninger.",
     sunChipModeIrradiance: "Irradians",
     sunChipModePosition: "Solens position",
-    sunChipModeBoth: "Begge",
     displayUpdateFrequency: "Grafdetaljer",
     displayUpdateFrequencyHelp:
       "Hvor mange punkter pr. time graferne tegner. Selve dataene er altid Home Assistants 5-minutters statistik; dette styrer kun, hvor tæt kurven plottes: 1 = ét punkt pr. time (mest jævn, lettest at gengive), 6 = ét punkt hvert 10. minut (fuld detalje, tungest). Standard 4 = et punkt hvert 15. minut. Sænk den på ældre eller langsommere enheder for at reducere gengivelsesomkostningen. Prognosekurven følger samme kadence, så en finere indstilling viser også korte skyggedyk (et træ, der skygger for produktionen i en halv time), som en timekurve springer over.",

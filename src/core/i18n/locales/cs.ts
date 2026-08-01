@@ -67,10 +67,9 @@ export const cs: Translations = {
       "Výkon, při kterém se tok animuje plnou rychlostí. Každý tok se poměřuje vůči této jediné referenci, takže větší tok se vždy jeví rychlejší než menší, ať teče kterýmkoli směrem. Zvyš ji pro velkou instalaci, sniž ji pro malou. Výchozí 5000 W.",
     sunChipMode: "Údaj slunečního čipu",
     sunChipModeHelp:
-      "Co ukazuje sluneční čip: živé sluneční ozáření (výchozí), polohu slunce (azimut a výšku), nebo obojí. Poloha nepotřebuje senzor, vychází z vlastních slunečních výpočtů karty.",
+      "Co ukazuje sluneční čip: živé sluneční ozáření (výchozí) nebo polohu slunce (azimut a výšku). Poloha nepotřebuje senzor, vychází z vlastních slunečních výpočtů karty.",
     sunChipModeIrradiance: "Ozáření",
     sunChipModePosition: "Poloha slunce",
-    sunChipModeBoth: "Obojí",
     displayUpdateFrequency: "Detail grafu",
     displayUpdateFrequencyHelp:
       "Kolik bodů za hodinu grafy vykreslí. Samotná data jsou vždy 5minutové statistiky Home Assistant; tohle řídí jen to, jak hustě je křivka vykreslena: 1 = jeden bod za hodinu (nejhladší, nejlehčí na vykreslení), 6 = jeden bod každých 10 minut (plný detail, nejnáročnější). Výchozí 4 = bod každých 15 minut. Sniž to na starších nebo pomalejších zařízeních, abys snížil náročnost vykreslování. Křivka předpovědi sleduje stejný rytmus, takže jemnější nastavení rozliší i krátké poklesy stínem (strom zastiňující výrobu na půl hodiny), které hodinová křivka přeskočí.",

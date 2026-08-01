@@ -94,7 +94,6 @@ export interface Translations
         sunChipModeHelp?:             string;
         sunChipModeIrradiance?:       string;
         sunChipModePosition?:         string;
-        sunChipModeBoth?:             string;
         //Power unit selector (W / kW) and solar-constant unit selector (W/m2 / kW/m2). Optional; fall back to English.
         powerUnit?:                   string;
         powerUnitHelp?:               string;

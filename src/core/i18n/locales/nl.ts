@@ -67,10 +67,9 @@ export const nl: Translations = {
       "Het vermogen waarbij een stroom op volle snelheid animeert. Elke stroom wordt afgezet tegen deze ene referentie, zodat een grotere stroom altijd sneller oogt dan een kleinere, in welke richting hij ook loopt. Verhoog het voor een grote installatie, verlaag het voor een kleine. Standaard 5000 W.",
     sunChipMode: "Weergave zonchip",
     sunChipModeHelp:
-      "Wat de zonchip toont: de live zonne-instraling (standaard), de positie van de zon (azimut en hoogte), of beide. De positie heeft geen sensor nodig, ze komt uit de eigen zonneberekening van de kaart.",
+      "Wat de zonchip toont: de live zonne-instraling (standaard) of de positie van de zon (azimut en hoogte). De positie heeft geen sensor nodig, ze komt uit de eigen zonneberekening van de kaart.",
     sunChipModeIrradiance: "Instraling",
     sunChipModePosition: "Zonpositie",
-    sunChipModeBoth: "Beide",
     displayUpdateFrequency: "Grafiekdetail",
     displayUpdateFrequencyHelp:
       "Hoeveel punten per uur de grafieken tekenen. De gegevens zelf zijn altijd de 5-minutenstatistieken van Home Assistant; dit bepaalt alleen hoe dicht de curve wordt getekend: 1 = één punt per uur (het vloeiendst, het lichtst om te renderen), 6 = één punt per 10 minuten (volledig detail, het zwaarst). Standaard 4 = één punt per 15 minuten. Verlaag het op oudere of tragere apparaten om de renderkosten te beperken. De voorspellingscurve volgt hetzelfde tempo, dus een fijnere instelling laat ook de korte schaduwdips zien (een boom die de productie een half uur onderbreekt) waar een uurcurve overheen stapt.",

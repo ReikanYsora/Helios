@@ -67,10 +67,9 @@ export const es: Translations = {
       "La potencia a la que un flujo se anima a máxima velocidad. Cada flujo se acompasa contra esta única referencia, así que un flujo más grande siempre se lee como más rápido que uno más pequeño, sea cual sea la dirección en que corre. Súbela para una instalación grande, bájala para una pequeña. Por defecto 5000 W.",
     sunChipMode: "Lectura del chip del sol",
     sunChipModeHelp:
-      "Lo que muestra el chip del sol: la irradiancia solar en directo (por defecto), la posición del sol (acimut y elevación), o ambas. La posición no necesita ningún sensor, proviene de los propios cálculos solares de la tarjeta.",
+      "Lo que muestra el chip del sol: la irradiancia solar en directo (por defecto) o la posición del sol (acimut y elevación). La posición no necesita ningún sensor, proviene de los propios cálculos solares de la tarjeta.",
     sunChipModeIrradiance: "Irradiancia",
     sunChipModePosition: "Posición del sol",
-    sunChipModeBoth: "Ambas",
     displayUpdateFrequency: "Detalle del gráfico",
     displayUpdateFrequencyHelp:
       "Cuántos puntos por hora dibujan los gráficos. Los datos en sí siempre son las estadísticas de 5 minutos de Home Assistant; esto solo controla la densidad del trazado de la curva: 1 = un punto por hora (lo más suave, lo más ligero de renderizar), 6 = un punto cada 10 minutos (detalle máximo, lo más pesado). Por defecto 4 = un punto cada 15 minutos. Bájalo en dispositivos antiguos o lentos para reducir el coste de renderizado. La curva de previsión sigue la misma cadencia, así que un ajuste más fino también revela las bajadas cortas por sombra (un árbol que corta la producción media hora) que una curva horaria pasa por alto.",

@@ -67,10 +67,9 @@ export const hr: Translations = {
       "Snaga pri kojoj se tok animira punom brzinom. Svaki tok mjeri se prema toj jednoj referenci, pa se veći tok uvijek doima bržim od manjeg, u kojem god smjeru tekao. Povećaj je za veliku instalaciju, smanji za malu. Zadano 5000 W.",
     sunChipMode: "Očitanje čipa sunca",
     sunChipModeHelp:
-      "Što čip sunca prikazuje: solarno ozračenje uživo (zadano), položaj sunca (azimut i visina) ili oboje. Položaj ne treba senzor, dolazi iz vlastitih sunčevih izračuna kartice.",
+      "Što čip sunca prikazuje: solarno ozračenje uživo (zadano) ili položaj sunca (azimut i visina). Položaj ne treba senzor, dolazi iz vlastitih sunčevih izračuna kartice.",
     sunChipModeIrradiance: "Ozračenje",
     sunChipModePosition: "Položaj sunca",
-    sunChipModeBoth: "Oboje",
     displayUpdateFrequency: "Detalji grafa",
     displayUpdateFrequencyHelp:
       "Koliko točaka po satu grafovi iscrtavaju. Sami podaci su uvijek 5-minutne statistike Home Assistant; ovo kontrolira samo koliko gusto se crta krivulja: 1 = jedna točka po satu (najglađe, najlakše za iscrtavanje), 6 = jedna točka svakih 10 minuta (puni detalj, najteže). Zadano 4 = točka svakih 15 minuta. Smanji na starijim ili sporijim uređajima da smanjiš trošak iscrtavanja. Krivulja prognoze prati isti ritam, pa finija postavka razlučuje i kratke padove zbog sjene (stablo koje na pola sata zaklanja proizvodnju) koje satna krivulja preskoči.",

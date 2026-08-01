@@ -241,13 +241,12 @@ export function showSunTimes(config: HeliosConfig | undefined): boolean
     return config?.['show-sun-times'] !== false;
 }
 
-export type SunChipMode = 'irradiance' | 'position' | 'both';
-//What the sun chip reads out: live irradiance (default), the sun's position (azimuth + elevation, for
-//non-energy uses like shutter automation), or both. Position is pure engine maths, needs no entity.
+export type SunChipMode = 'irradiance' | 'position';
+//What the sun chip reads out: live irradiance (default) or the sun's position (azimuth + elevation).
+//Position is pure engine maths, needs no entity.
 export function sunChipMode(config: HeliosConfig | undefined): SunChipMode
 {
-    const v = config?.['sun-chip-mode'];
-    return v === 'position' || v === 'both' ? v : 'irradiance';
+    return config?.['sun-chip-mode'] === 'position' ? 'position' : 'irradiance';
 }
 
 

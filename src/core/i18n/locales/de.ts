@@ -67,10 +67,9 @@ export const de: Translations = {
       "Die Leistung, bei der ein Fluss mit voller Geschwindigkeit animiert wird. Jeder Fluss wird an dieser einen Referenz gemessen, sodass ein größerer Fluss immer schneller wirkt als ein kleinerer, in welche Richtung er auch läuft. Erhöhe sie für eine große Anlage, senke sie für eine kleine. Standard 5000 W.",
     sunChipMode: "Sonnen-Chip-Anzeige",
     sunChipModeHelp:
-      "Was der Sonnen-Chip zeigt: die Live-Bestrahlungsstärke (Standard), die Position der Sonne (Azimut und Höhe), oder beides. Die Position braucht keinen Sensor, sie stammt aus den eigenen Sonnenberechnungen der Karte.",
+      "Was der Sonnen-Chip zeigt: die Live-Bestrahlungsstärke (Standard) oder die Position der Sonne (Azimut und Höhe). Die Position braucht keinen Sensor, sie stammt aus den eigenen Sonnenberechnungen der Karte.",
     sunChipModeIrradiance: "Bestrahlungsstärke",
     sunChipModePosition: "Sonnenposition",
-    sunChipModeBoth: "Beides",
     displayUpdateFrequency: "Diagrammdetail",
     displayUpdateFrequencyHelp:
       "Wie viele Punkte pro Stunde die Diagramme zeichnen. Die Daten selbst sind immer die 5-Minuten-Statistiken von Home Assistant; dies steuert nur, wie dicht die Kurve gezeichnet wird: 1 = ein Punkt pro Stunde (am glattesten, am leichtesten zu rendern), 6 = ein Punkt alle 10 Minuten (volles Detail, am schwersten). Standard 4 = ein Punkt alle 15 Minuten. Senke ihn auf älteren oder langsameren Geräten, um den Renderaufwand zu verringern. Die Prognosekurve folgt derselben Taktung, eine feinere Einstellung zeigt also auch kurze Schatteneinbrüche (ein Baum, der die Produktion eine halbe Stunde lang verdeckt), über die eine stündliche Kurve hinweggeht.",
