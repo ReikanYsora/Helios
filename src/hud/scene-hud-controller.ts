@@ -1,8 +1,9 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode } from '../core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
+import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
@@ -15,6 +16,17 @@ import { groupTarget } from '../charts/charts';
 import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
 import { valueAt } from '../data/unifiedStore';
 import { getHomeCoords } from '../card/init';
+
+
+//Sun-position readout: compass point + azimuth + elevation, e.g. "SW 228°, 12°". The compass point makes
+//the azimuth self-evident, so the lone second figure reads as elevation. Points are localised (N first,
+//clockwise), and azimuth is normalised so any degree maps cleanly onto them.
+function formatSunPosition(azimuth: number, altitude: number, compassStr: string): string
+{
+    const pts   = compassStr.split(',');
+    const index = ((Math.round(azimuth / (360 / pts.length)) % pts.length) + pts.length) % pts.length;
+    return `${pts[index]} ${Math.round(azimuth)}°, ${Math.round(altitude)}°`;
+}
 
 
 //Depth-modulation bounds for the solar overlay: each pair is the FAR (back of the loop) and NEAR
@@ -630,9 +642,24 @@ export class SceneHudController
         const sunWm2          = sunScene?.sun.irradiance ?? 0;
         const sunIrradText    = formatIrradiance(this.host.hass, sunWm2, valueDec, irradU);
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
-        //The W/m² readout + cloud chip are weather; hidden in modes without it (month/year). The sun
-        //disc/arc (pure geometry) stays.
-        const showSunLabel    = showSun && showChipIrradiance && sunScene!.sun.altitude > 0 && this.host._weatherAvailable;
+        //What the sun chip reads out: irradiance (default), sun position (azimuth + elevation), or both.
+        const chipMode        = sunChipMode(cfg);
+        const sunAlt          = sunScene?.sun.altitude ?? 0;
+        const sunAz           = sunScene?.sun.azimuth ?? 0;
+        const sunPositionText = formatSunPosition(sunAz, sunAlt, pickTranslations(this.host.hass?.language).compass ?? 'N,NE,E,SE,S,SW,W,NW');
+        //Irradiance (and its cloud chip) are weather; hidden when weather is off (month/year). Sun position
+        //is pure geometry and needs none, so the position/both modes stay visible without it. The sun
+        //disc/arc (also pure geometry) stays regardless.
+        const showSunLabel    = showSun && showChipIrradiance && sunAlt > 0
+            && (chipMode === 'irradiance' ? this.host._weatherAvailable : true);
+        //Both mode pairs irradiance with position when weather is present, else shows position alone.
+        const sunChipText     = chipMode === 'position' ? sunPositionText
+            : chipMode === 'both' ? (this.host._weatherAvailable ? `${sunIrradText}, ${sunPositionText}` : sunPositionText)
+            : sunIrradText;
+        //Position mode drops the cloud-cover glyph (irrelevant to geometry) for a plain sun.
+        const sunChipIconFallback = chipMode === 'position'
+            ? 'mdi:white-balance-sunny'
+            : (this.host._cloudCover >= 0 ? cloudCoverIcon(this.host._cloudCover) : 'mdi:white-balance-sunny');
         //Solar-ray dash-flow duration, same scale as the PV leader so both streams pulse coherently;
         //saturates at 1000 W/m². The ray spans the whole card, so its saturated pace is a touch slower than
         //the PV leader (0.8 s) to stay readable at peak irradiance.
@@ -1081,8 +1108,8 @@ export class SceneHudController
                         data-target="irradiance"
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
-                        <ha-icon icon=${chipSlotIcon(cfg, 'irradiance', this.host._cloudCover >= 0 ? cloudCoverIcon(this.host._cloudCover) : 'mdi:white-balance-sunny')}></ha-icon>
-                        <span>${sunIrradText}</span>
+                        <ha-icon icon=${chipSlotIcon(cfg, 'irradiance', sunChipIconFallback)}></ha-icon>
+                        <span>${sunChipText}</span>
                     </div>
                 ` : nothing}
 

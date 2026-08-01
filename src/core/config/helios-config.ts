@@ -112,6 +112,7 @@ export interface HeliosConfig
     'show-timeline'?:           unknown;
     'show-detail-panel'?:       unknown;
     'show-sun-times'?:          unknown;
+    'sun-chip-mode'?:           unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
@@ -238,6 +239,15 @@ export function showDetailPanel(config: HeliosConfig | undefined): boolean
 export function showSunTimes(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-sun-times'] !== false;
+}
+
+export type SunChipMode = 'irradiance' | 'position' | 'both';
+//What the sun chip reads out: live irradiance (default), the sun's position (azimuth + elevation, for
+//non-energy uses like shutter automation), or both. Position is pure engine maths, needs no entity.
+export function sunChipMode(config: HeliosConfig | undefined): SunChipMode
+{
+    const v = config?.['sun-chip-mode'];
+    return v === 'position' || v === 'both' ? v : 'irradiance';
 }
 
 

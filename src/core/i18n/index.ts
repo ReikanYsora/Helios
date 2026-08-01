@@ -52,6 +52,11 @@ export interface Translations
     };
 
 
+    //Eight-point compass abbreviations for the sun-position chip, N first and clockwise, comma-joined.
+    //Optional; falls back to the English set.
+    compass?: string;
+
+
     //The three cloud-cover band names shown in the timeline tooltip.
     cloudCover:
     {
@@ -84,6 +89,12 @@ export interface Translations
         //Flow-animation reference power (W). Optional; falls back to inline English.
         maxExpectedPower?:            string;
         maxExpectedPowerHelp?:        string;
+        //Sun-chip readout mode (irradiance / sun position / both) and its option labels. Optional; fall back to English.
+        sunChipMode?:                 string;
+        sunChipModeHelp?:             string;
+        sunChipModeIrradiance?:       string;
+        sunChipModePosition?:         string;
+        sunChipModeBoth?:             string;
         //Power unit selector (W / kW) and solar-constant unit selector (W/m2 / kW/m2). Optional; fall back to English.
         powerUnit?:                   string;
         powerUnitHelp?:               string;

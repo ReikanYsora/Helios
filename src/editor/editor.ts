@@ -1122,6 +1122,11 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderSelect('irradiance-unit', t.editor.irradianceUnit ?? 'Solar constant unit',
                     [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }], 'W/m²',
                     t.editor.irradianceUnitHelp ?? 'Unit for the solar constant (irradiance) readout.')}
+                ${this._renderSelect('sun-chip-mode', t.editor.sunChipMode ?? 'Sun chip readout',
+                    [{ value: 'irradiance', label: t.editor.sunChipModeIrradiance ?? 'Irradiance' },
+                     { value: 'position', label: t.editor.sunChipModePosition ?? 'Sun position' },
+                     { value: 'both', label: t.editor.sunChipModeBoth ?? 'Both' }], 'irradiance',
+                    t.editor.sunChipModeHelp ?? "What the sun chip shows: irradiance (default), the sun's position (azimuth and elevation), or both. Position needs no sensor.")}
                 ${this._renderSelect('battery-sign', t.editor.batterySign ?? 'Battery sign', [
                         { value: 'default',  label: t.editor.batterySignDefault ?? 'Default' },
                         { value: 'inverted', label: t.editor.batterySignInverted ?? 'Inverted' },

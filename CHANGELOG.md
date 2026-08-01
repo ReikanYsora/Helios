@@ -30,6 +30,13 @@ reference is a new **Max expected power** setting (default 5000 W) in the editor
 data display section: the power at which a flow animates at full speed, so you can
 raise it for a large installation or lower it for a small one. Thanks to @wasabi216.
 
+### Added: the sun chip can read out the sun's position
+
+A new **Sun chip readout** option (in the data display section) switches the sun chip
+between solar irradiance (the default), the sun's position as azimuth and elevation,
+or both (#310). The position comes from the card's own sun maths, so it needs no extra
+sensor. Idea from @ferreto1978, and thanks to @thomluther for the push.
+
 ---
 
 ## 2026.8.2
