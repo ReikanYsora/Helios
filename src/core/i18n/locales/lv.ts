@@ -16,6 +16,8 @@ export const lv: Translations = {
     year: "Gads",
   },
 
+  compass: "Z,ZA,A,DA,D,DR,R,ZR",
+
   cloudCover: {
     cloudLow: "Zems mākoņu segums",
     cloudMid: "Vidējs mākoņu segums",
@@ -60,6 +62,15 @@ export const lv: Translations = {
     autoRotateOn: "Ieslēgts",
     autoRotateOff: "Izslēgts",
     dataDisplaySection: "Datu attēlojums",
+    maxExpectedPower: "Maksimālā gaidāmā jauda",
+    maxExpectedPowerHelp:
+      "Jauda, pie kuras plūsma kustas ar pilnu ātrumu. Katra plūsma tiek pieskaņota šai vienai atsaucei, tāpēc lielāka plūsma vienmēr izskatās ātrāka nekā mazāka, lai kurā virzienā tā plūstu. Palielini to lielai iekārtai, samazini mazai. Noklusējums 5000 W.",
+    sunChipMode: "Saules mikroshēmas rādījums",
+    sunChipModeHelp:
+      "Ko rāda saules mikroshēma: dzīvo saules apstarojumu (noklusējums), saules stāvokli (azimutu un augstumu) vai abus. Stāvoklim nav vajadzīgs sensors, tas nāk no pašas kartītes saules aprēķiniem.",
+    sunChipModeIrradiance: "Apstarojums",
+    sunChipModePosition: "Saules stāvoklis",
+    sunChipModeBoth: "Abi",
     displayUpdateFrequency: "Grafika detalizācija",
     displayUpdateFrequencyHelp:
       "Cik punktu stundā grafiki zīmē. Paši dati vienmēr ir Home Assistant 5 minūšu statistika, tas tikai kontrolē, cik blīvi līkne tiek zīmēta: 1 = viens punkts stundā (gludākais, vieglākais renderēšanai), 6 = viens punkts ik pēc 10 minūtēm (pilna detalizācija, smagākais). Noklusējums 4 = punkts ik pēc 15 minūtēm. Samazini to vecākās vai lēnākās ierīcēs, lai samazinātu renderēšanas izmaksas. Prognozes līkne seko tam pašam tempam, tāpēc smalkāks iestatījums atklāj arī īsus ēnu kritumus (koks, kas pusstundu aizēno ražošanu), kuriem stundas līkne pāriet pāri.",

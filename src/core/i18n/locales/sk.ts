@@ -16,6 +16,8 @@ export const sk: Translations = {
     year: "Rok",
   },
 
+  compass: "S,SV,V,JV,J,JZ,Z,SZ",
+
   cloudCover: {
     cloudLow: "Nízka oblačnosť",
     cloudMid: "Stredná oblačnosť",
@@ -60,6 +62,15 @@ export const sk: Translations = {
     autoRotateOn: "Zapnuté",
     autoRotateOff: "Vypnuté",
     dataDisplaySection: "Zobrazenie údajov",
+    maxExpectedPower: "Maximálny očakávaný výkon",
+    maxExpectedPowerHelp:
+      "Výkon, pri ktorom sa tok animuje plnou rýchlosťou. Každý tok je vztiahnutý k tejto jednej referencii, takže väčší tok vždy pôsobí rýchlejšie než menší, bez ohľadu na smer. Zvýš ho pri veľkej inštalácii, zníž pri malej. Predvolené 5000 W.",
+    sunChipMode: "Zobrazenie čipu slnka",
+    sunChipModeHelp:
+      "Čo zobrazuje čip slnka: živé slnečné ožiarenie (predvolené), polohu slnka (azimut a výšku) alebo oboje. Poloha nepotrebuje senzor, pochádza z vlastných slnečných výpočtov karty.",
+    sunChipModeIrradiance: "Ožiarenie",
+    sunChipModePosition: "Poloha slnka",
+    sunChipModeBoth: "Oboje",
     displayUpdateFrequency: "Detail grafu",
     displayUpdateFrequencyHelp:
       "Koľko bodov za hodinu grafy vykreslia. Samotné údaje sú vždy 5-minútové štatistiky Home Assistant; toto riadi len to, ako husto je krivka vykreslená: 1 = jeden bod za hodinu (najhladšie, najľahšie na vykreslenie), 6 = jeden bod každých 10 minút (plný detail, najnáročnejšie). Predvolené 4 = bod každých 15 minút. Zníž to na starších alebo pomalších zariadeniach, aby si znížil náročnosť vykresľovania. Krivka predpovede sleduje rovnaký rytmus, takže jemnejšie nastavenie rozlíši aj krátke poklesy tieňom (strom zatieňujúci výrobu na pol hodiny), ktoré hodinová krivka preskočí.",

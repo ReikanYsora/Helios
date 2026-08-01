@@ -16,6 +16,8 @@ export const nb: Translations = {
     year: "År",
   },
 
+  compass: "N,NØ,Ø,SØ,S,SV,V,NV",
+
   cloudCover: {
     cloudLow: "Lavt skydekke",
     cloudMid: "Middels skydekke",
@@ -60,6 +62,15 @@ export const nb: Translations = {
     autoRotateOn: "På",
     autoRotateOff: "Av",
     dataDisplaySection: "Datavisning",
+    maxExpectedPower: "Maks forventet effekt",
+    maxExpectedPowerHelp:
+      "Effekten der en flyt animeres i full fart. Hver flyt måles mot denne ene referansen, så en større flyt leses alltid som raskere enn en mindre, uansett hvilken retning den går. Øk den for et stort anlegg, senk den for et lite. Standard 5000 W.",
+    sunChipMode: "Avlesning på solchipen",
+    sunChipModeHelp:
+      "Hva solchipen viser: live solinnstråling (standard), solens posisjon (asimut og høyde), eller begge. Posisjonen trenger ingen sensor, den kommer fra kortets egne solberegninger.",
+    sunChipModeIrradiance: "Solinnstråling",
+    sunChipModePosition: "Solens posisjon",
+    sunChipModeBoth: "Begge",
     displayUpdateFrequency: "Grafdetalj",
     displayUpdateFrequencyHelp:
       "Hvor mange punkter per time grafene tegner. Selve dataene er alltid Home Assistants 5-minutters statistikk, dette styrer bare hvor tett kurven plottes: 1 = ett punkt per time (jevnest, lettest å gjengi), 6 = ett punkt hvert 10. minutt (full detalj, tyngst). Standard 4 = ett punkt hvert 15. minutt. Senk den på eldre eller tregere enheter for å redusere gjengivelseskostnaden. Prognosekurven følger samme takt, så en finere innstilling viser også korte skyggedupp (et tre som skygger for produksjonen i en halvtime) som en timekurve hopper over.",

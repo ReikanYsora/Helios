@@ -16,6 +16,8 @@ export const lt: Translations = {
     year: "Metai",
   },
 
+  compass: "Š,ŠR,R,PR,P,PV,V,ŠV",
+
   cloudCover: {
     cloudLow: "Žemas debesuotumas",
     cloudMid: "Vidutinis debesuotumas",
@@ -60,6 +62,15 @@ export const lt: Translations = {
     autoRotateOn: "Įjungta",
     autoRotateOff: "Išjungta",
     dataDisplaySection: "Duomenų rodymas",
+    maxExpectedPower: "Didžiausia numatoma galia",
+    maxExpectedPowerHelp:
+      "Galia, ties kuria srautas juda visu greičiu. Kiekvienas srautas derinamas pagal šią vieną nuorodą, todėl didesnis srautas visada atrodo greitesnis nei mažesnis, kad ir kuria kryptimi jis tekėtų. Padidink ją didelei sistemai, sumažink mažai. Numatytoji 5000 W.",
+    sunChipMode: "Saulės lusto rodmuo",
+    sunChipModeHelp:
+      "Ką rodo saulės lustas: gyvą saulės apšvitą (numatytoji), saulės padėtį (azimutą ir aukštį) arba abu. Padėčiai nereikia jokio jutiklio, ji gaunama iš pačios kortelės saulės skaičiavimų.",
+    sunChipModeIrradiance: "Apšvita",
+    sunChipModePosition: "Saulės padėtis",
+    sunChipModeBoth: "Abu",
     displayUpdateFrequency: "Grafiko detalumas",
     displayUpdateFrequencyHelp:
       "Kiek taškų per valandą piešia grafikai. Patys duomenys visada yra Home Assistant 5 minučių statistika; tai valdo tik tai, kaip tankiai braižoma kreivė: 1 = vienas taškas per valandą (lygiausia, lengviausia atvaizduoti), 6 = vienas taškas kas 10 minučių (visas detalumas, sunkiausia). Numatytasis 4 = taškas kas 15 minučių. Sumažink jį senesniuose ar lėtesniuose įrenginiuose, kad sumažintum atvaizdavimo sąnaudas. Prognozės kreivė laikosi to paties tempo, todėl smulkesnis nustatymas taip pat atskleidžia trumpus šešėlių kritimus (medis, pusvalandį temdantis gamybą), kuriuos valandinė kreivė peršoka.",

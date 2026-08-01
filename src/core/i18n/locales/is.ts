@@ -16,6 +16,8 @@ export const isLocale: Translations = {
     year: "Ár",
   },
 
+  compass: "N,NA,A,SA,S,SV,V,NV",
+
   cloudCover: {
     cloudLow: "Lág skýjahula",
     cloudMid: "Miðlungs skýjahula",
@@ -60,6 +62,15 @@ export const isLocale: Translations = {
     autoRotateOn: "Kveikt",
     autoRotateOff: "Slökkt",
     dataDisplaySection: "Birting gagna",
+    maxExpectedPower: "Hámarksafl sem búist er við",
+    maxExpectedPowerHelp:
+      "Aflið sem streymi hreyfist á fullum hraða við. Sérhvert streymi er stillt gagnvart þessari einu viðmiðun, svo stærra streymi les alltaf sem hraðara en minna, í hvora átt sem það rennur. Hækkaðu það fyrir stóra uppsetningu, lækkaðu það fyrir litla. Sjálfgefið 5000 W.",
+    sunChipMode: "Lestur sólarflögu",
+    sunChipModeHelp:
+      "Hvað sólarflagan sýnir: lifandi sólgeislun (sjálfgefið), stöðu sólarinnar (áttarhorn og hæð), eða hvort tveggja. Staðan þarf engan skynjara, hún kemur frá sólarreikningum kortsins sjálfs.",
+    sunChipModeIrradiance: "Sólgeislun",
+    sunChipModePosition: "Staða sólar",
+    sunChipModeBoth: "Hvort tveggja",
     displayUpdateFrequency: "Nákvæmni grafs",
     displayUpdateFrequencyHelp:
       "Hversu marga punkta á klukkustund gröfin teikna. Gögnin sjálf eru alltaf 5 mínútna tölfræði Home Assistant; þetta stýrir aðeins hversu þétt ferillinn er teiknaður: 1 = einn punktur á klukkustund (sléttast, léttast að myndgera), 6 = einn punktur á 10 mínútna fresti (full nákvæmni, þyngst). Sjálfgefið 4 = punktur á 15 mínútna fresti. Lækkaðu hann á eldri eða hægari tækjum til að minnka myndgerðarkostnað. Spáferillinn fylgir sama takti, svo fínni stilling sýnir einnig stuttar skuggadýfur (tré sem skyggir á framleiðsluna í hálftíma) sem klukkustundarferill stígur yfir.",

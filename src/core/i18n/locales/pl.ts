@@ -16,6 +16,8 @@ export const pl: Translations = {
     year: "Rok",
   },
 
+  compass: "N,NE,E,SE,S,SW,W,NW",
+
   cloudCover: {
     cloudLow: "Niskie zachmurzenie",
     cloudMid: "Średnie zachmurzenie",
@@ -60,6 +62,15 @@ export const pl: Translations = {
     autoRotateOn: "Włączony",
     autoRotateOff: "Wyłączony",
     dataDisplaySection: "Wyświetlanie danych",
+    maxExpectedPower: "Maks. oczekiwana moc",
+    maxExpectedPowerHelp:
+      "Moc, przy której przepływ animuje się z pełną prędkością. Każdy przepływ jest odmierzany względem tego jednego punktu odniesienia, więc większy przepływ zawsze wygląda na szybszy niż mniejszy, niezależnie od kierunku, w którym płynie. Zwiększ ją dla dużej instalacji, zmniejsz dla małej. Domyślnie 5000 W.",
+    sunChipMode: "Odczyt chipa słońca",
+    sunChipModeHelp:
+      "Co pokazuje chip słońca: nasłonecznienie solarne na żywo (domyślnie), pozycję słońca (azymut i wysokość) lub oba. Pozycja nie potrzebuje czujnika, pochodzi z własnych obliczeń słonecznych karty.",
+    sunChipModeIrradiance: "Nasłonecznienie",
+    sunChipModePosition: "Pozycja słońca",
+    sunChipModeBoth: "Oba",
     displayUpdateFrequency: "Szczegółowość wykresu",
     displayUpdateFrequencyHelp:
       "Ile punktów na godzinę rysują wykresy. Same dane to zawsze 5-minutowe statystyki Home Assistant - to ustawienie kontroluje jedynie, jak gęsto rysowana jest krzywa: 1 = jeden punkt na godzinę (najgładsze, najlżejsze do renderowania), 6 = jeden punkt co 10 minut (pełen szczegół, najcięższe). Domyślnie 4 = punkt co 15 minut. Zmniejsz na starszych lub wolniejszych urządzeniach, aby obniżyć koszt renderowania. Krzywa prognozy podąża za tym samym rytmem, więc drobniejsze ustawienie pozwala też uchwycić krótkie spadki od cienia (drzewo zasłaniające produkcję przez pół godziny), które krzywa godzinowa pomija.",

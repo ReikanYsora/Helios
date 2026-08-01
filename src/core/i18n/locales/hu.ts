@@ -16,6 +16,8 @@ export const hu: Translations = {
     year: "Év",
   },
 
+  compass: "É,ÉK,K,DK,D,DNy,Ny,ÉNy",
+
   cloudCover: {
     cloudLow: "Alacsony felhőzet",
     cloudMid: "Közepes felhőzet",
@@ -60,6 +62,15 @@ export const hu: Translations = {
     autoRotateOn: "Be",
     autoRotateOff: "Ki",
     dataDisplaySection: "Adatmegjelenítés",
+    maxExpectedPower: "Maximális várható teljesítmény",
+    maxExpectedPowerHelp:
+      "Az a teljesítmény, amelynél egy áramlás teljes sebességgel mozog. Minden áramlás ehhez az egyetlen referenciához igazodik, így egy nagyobb áramlás mindig gyorsabbnak látszik, mint egy kisebb, bármelyik irányba is fusson. Növeld nagy rendszerhez, csökkentsd kicsihez. Alapértelmezett 5000 W.",
+    sunChipMode: "Nap chip kijelzése",
+    sunChipModeHelp:
+      "Mit mutat a nap chip: az élő napsugárzást (alapértelmezett), a nap helyzetét (azimut és magasság), vagy mindkettőt. A helyzethez nem kell érzékelő, a kártya saját napszámításaiból származik.",
+    sunChipModeIrradiance: "Besugárzás",
+    sunChipModePosition: "Nap helyzete",
+    sunChipModeBoth: "Mindkettő",
     displayUpdateFrequency: "Grafikon részletessége",
     displayUpdateFrequencyHelp:
       "Hány pontot rajzolnak a grafikonok óránként. Maguk az adatok mindig a Home Assistant 5 perces statisztikái; ez csak azt szabályozza, milyen sűrűn van kirajzolva a görbe: 1 = egy pont óránként (a legsimább, a legkönnyebb kirajzolni), 6 = egy pont 10 percenként (teljes részletesség, a legnehezebb). Alapértelmezett 4 = egy pont 15 percenként. Csökkentsd régebbi vagy lassabb eszközökön a kirajzolási költség mérséklésére. Az előrejelzési görbe ugyanazt a ritmust követi, így a finomabb beállítás feloldja a rövid árnyékeséseket is (egy fa, ami fél órára eltakarja a termelést), amelyeket egy óránkénti görbe átlép.",
