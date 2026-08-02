@@ -43,6 +43,13 @@ The grid import and export bead was the only flow bead without the thin outline 
 other bead carries, so it read slightly differently. It now has the same outline, and
 the beads are consistent across the whole scene.
 
+### Fixed: a sun-position card showed an empty home chip
+
+On a card set to show the sun's position with the home hidden and no energy chips, an
+empty home ring appeared: the sun chip was counted as holding the home anchor, even
+though it has no leader to the home. Such a card now drops the ring, leaving just the
+sun and the location. Thanks to @ferreto1978.
+
 ---
 
 ## 2026.8.2
