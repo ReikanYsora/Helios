@@ -1667,7 +1667,7 @@ export class HeliosEngine
             x: number; y: number;
             altitude: number; nearness: number; belowHorizon: boolean;
         }[];
-        sun:      { x: number; y: number; irradiance: number; altitude: number; nearness: number };
+        sun:      { x: number; y: number; irradiance: number; altitude: number; azimuth: number; nearness: number };
         home:     { x: number; y: number };
         daylight: number;
         //Horizon crossings on the day's arc, with local tangent angle (rad) so the card draws a ring
@@ -1785,7 +1785,8 @@ export class HeliosEngine
 
         //Sun at "now", same spherical projection as the arc points.
         const sunNow3D = this._sunSpherePoint(now);
-        const sunNowAlt = getSunPosition(now, this.homeLat, this.homeLon).altitude;
+        const sunNowPos = getSunPosition(now, this.homeLat, this.homeLon);
+        const sunNowAlt = sunNowPos.altitude;
         const sunNowSensor = this._sensorIrradianceAt(now);
         const sunNowWm2 = sunNowSensor !== null
             ? sunNowSensor
@@ -1895,6 +1896,7 @@ export class HeliosEngine
                 x: sunScreen.x, y: sunScreen.y,
                 irradiance: sunNowWm2,
                 altitude:   sunNowAlt,
+                azimuth:    sunNowPos.azimuth,
                 nearness:   nearnessOf(sunScreen.depth)
             },
             home:     { x: homeScreen.x, y: homeScreen.y },

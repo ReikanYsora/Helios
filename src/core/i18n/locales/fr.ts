@@ -15,6 +15,8 @@ export const fr: Translations = {
     year: "Année",
   },
 
+  compass: "N,NE,E,SE,S,SO,O,NO",
+
   cloudCover: {
     cloudLow: "Couverture basse",
     cloudMid: "Couverture moyenne",
@@ -65,6 +67,14 @@ export const fr: Translations = {
     valueDecimals: "Décimales",
     valueDecimalsHelp:
       "Nombre de décimales affichées sur chaque valeur, pour que les chips restent uniformes. S'applique aux valeurs en kW (les watts entiers restent sans décimale) et aux kWh. De 0 à 3, par défaut 1.",
+    maxExpectedPower: "Puissance max attendue",
+    maxExpectedPowerHelp:
+      "La puissance à laquelle un flux s'anime à pleine vitesse. Tous les flux sont cadencés sur cette référence unique, donc un flux plus important paraît toujours plus rapide qu'un plus faible, quel que soit son sens. Montez-la pour une grosse installation, baissez-la pour une petite. Par défaut 5000 W.",
+    sunChipMode: "Contenu de la puce soleil",
+    sunChipModeHelp:
+      "Ce qu'affiche la puce soleil : l'irradiance solaire en direct (par défaut) ou la position du soleil (azimut et élévation). La position ne nécessite aucun capteur, elle vient des calculs solaires de la carte.",
+    sunChipModeIrradiance: "Irradiance",
+    sunChipModePosition: "Position du soleil",
     powerUnit: "Unité de puissance",
     powerUnitHelp:
       "Unité de tous les affichages de puissance de la carte (chips, infobulles du graphe). L'énergie suit aussi, pour que la carte reste cohérente : kW va avec kWh, W avec Wh.",

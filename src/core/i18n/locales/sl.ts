@@ -16,6 +16,8 @@ export const sl: Translations = {
     year: "Leto",
   },
 
+  compass: "S,SV,V,JV,J,JZ,Z,SZ",
+
   cloudCover: {
     cloudLow: "Nizka oblačnost",
     cloudMid: "Srednja oblačnost",
@@ -60,6 +62,14 @@ export const sl: Translations = {
     autoRotateOn: "Vklopljeno",
     autoRotateOff: "Izklopljeno",
     dataDisplaySection: "Prikaz podatkov",
+    maxExpectedPower: "Največja pričakovana moč",
+    maxExpectedPowerHelp:
+      "Moč, pri kateri se tok animira s polno hitrostjo. Vsak tok je odmerjen glede na to eno referenco, zato večji tok vedno deluje hitreje kot manjši, ne glede na smer. Zvišaj jo za veliko napeljavo, znižaj za majhno. Privzeto 5000 W.",
+    sunChipMode: "Prikaz čipa sonca",
+    sunChipModeHelp:
+      "Kaj prikazuje čip sonca: živo sončno obsevanje (privzeto) ali položaj sonca (azimut in višino). Položaj ne potrebuje senzorja, izhaja iz lastnih sončnih izračunov kartice.",
+    sunChipModeIrradiance: "Obsevanje",
+    sunChipModePosition: "Položaj sonca",
     displayUpdateFrequency: "Podrobnost grafa",
     displayUpdateFrequencyHelp:
       "Koliko točk na uro izrišejo grafi. Sami podatki so vedno 5-minutne statistike Home Assistant; to nadzira le, kako gosto je narisana krivulja: 1 = ena točka na uro (najbolj gladko, najlažje za izris), 6 = ena točka vsakih 10 minut (polna podrobnost, najtežje). Privzeto 4 = točka vsakih 15 minut. Zniži na starejših ali počasnejših napravah, da zmanjšaš stroške izrisa. Krivulja napovedi sledi istemu ritmu, zato finejša nastavitev razloči tudi kratke padce zaradi sence (drevo, ki za pol ure zakrije proizvodnjo), ki jih urna krivulja preskoči.",

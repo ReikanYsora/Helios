@@ -306,7 +306,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                 ${target === 'grid' ? html`
                     ${isFinite(gridImpW) && gridImpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'gridImport')}" icon=${chipSlotIcon(host.config, 'gridImport', 'mdi:transmission-tower-export')}></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'gridImport')}" icon=${chipSlotIcon(host.config, 'gridImport')}></ha-icon>
                             <span class="tb-hover-tooltip-name">${gridFromName}</span>
                             <span class="tb-hover-tooltip-value">${kw(gridImpW)}</span>
                         </div>
@@ -320,7 +320,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     `)}
                     ${isFinite(gridExpW) && gridExpW >= 1 ? html`
                         <div class="tb-hover-tooltip-row">
-                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'gridExport')}" icon=${chipSlotIcon(host.config, 'gridExport', 'mdi:transmission-tower-import')}></ha-icon>
+                            <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'gridExport')}" icon=${chipSlotIcon(host.config, 'gridExport')}></ha-icon>
                             <span class="tb-hover-tooltip-name">${gridToName}</span>
                             <span class="tb-hover-tooltip-value">${kw(gridExpW)}</span>
                         </div>

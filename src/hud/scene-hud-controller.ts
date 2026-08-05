@@ -1,8 +1,9 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode } from '../core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
+import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
@@ -15,6 +16,17 @@ import { groupTarget } from '../charts/charts';
 import { wattsAtFromChangeSeries } from '../data/sources/energy-stats';
 import { valueAt } from '../data/unifiedStore';
 import { getHomeCoords } from '../card/init';
+
+
+//Sun-position readout: compass point + azimuth + elevation, e.g. "SW 228°, 12°". The compass point makes
+//the azimuth self-evident, so the lone second figure reads as elevation. Points are localised (N first,
+//clockwise), and azimuth is normalised so any degree maps cleanly onto them.
+function formatSunPosition(azimuth: number, altitude: number, compassStr: string): string
+{
+    const pts   = compassStr.split(',');
+    const index = ((Math.round(azimuth / (360 / pts.length)) % pts.length) + pts.length) % pts.length;
+    return `${pts[index]} ${Math.round(azimuth)}°, ${Math.round(altitude)}°`;
+}
 
 
 //Depth-modulation bounds for the solar overlay: each pair is the FAR (back of the loop) and NEAR
@@ -177,6 +189,9 @@ export class SceneHudController
         //Per-chip visibility from the "Entity display" config (each defaults visible). Home visibility (the
         //neutral-ring swap) is handled separately at the home pill.
         const cfg = this.host.config;
+        //Shared flow-animation reference: every power flow (PV, grid, battery, device groups) is paced against
+        //this single figure, so the largest live flow always reads as the fastest. Configurable per install.
+        const flowRefW = maxExpectedPowerW(cfg);
         //Day curve up: the chips that have nothing to do with the curve stand down, so it is read against the house
         //rather than through a cluster of unrelated numbers. The chip whose metric raised the curve STAYS - the
         //toggle has to remain under the finger that pressed it - and so does the home, the anchor of the whole
@@ -195,12 +210,14 @@ export class SceneHudController
         //leads keep their normal shapes and dock on it exactly as they did on the pill, with the home visible
         //through the transparent centre.
         const homeHidden         = !chipVisible(cfg, 'chip-home-visible');
-        //Sun-only card: with the home chip hidden AND every other chip hidden too, there are no leaders to anchor,
-        //so even the hollow ring is dropped, leaving just the sun + location (a solar-position card for non-energy
-        //uses, e.g. a shutter/climate page keyed on the sun). Config-driven so it stays stable across scrubbing.
-        const anyOtherChipVisible = showChipIrradiance || showChipProduction || showChipGrid || showChipBattery
+        //Home anchor: the hollow ring stays while a chip that DOCKS A LEADER on it is visible (production, grid,
+        //battery, device groups). The sun/irradiance chip sits by the sun disc with no leader to the home, so it
+        //does NOT hold the ring: a sun-position card (home hidden, only the sun chip) drops the ring and leaves
+        //just the sun + location, e.g. a shutter/climate page keyed on the sun (#310). Config-driven so it stays
+        //stable across scrubbing.
+        const anyHomeLeaderChipVisible = showChipProduction || showChipGrid || showChipBattery
             || activeGroups(this.host.config, this.host._energyDefaults).some(g => groupChipVisible(cfg, g) && keeps(groupTarget(g)));
-        const showHomeElement    = !homeHidden || anyOtherChipVisible;
+        const showHomeElement    = !homeHidden || anyHomeLeaderChipVisible;
 
         //PV production chip above the home, tied to it by an animated leader. Only renders when the HA
         //Energy dashboard exposes a solar source and the live read is a finite number.
@@ -257,13 +274,12 @@ export class SceneHudController
             ? (isPvPredicted ? '~ ' : '') + formatPvValue(this.host.hass, pvActiveRate!.value, pvActiveRate!.unit, valueDec, powerU)
             : '';
 
-        //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against a 5 kW
-        //reference. Idle (no flow/arrow) when current production is <= 0.
+        //PV -> home animated leader (dashed line + arrow, PV colour). Flow speed normalised against the shared
+        //flow reference. Idle (no flow/arrow) when current production is <= 0.
         const pvWattsNow = (pvRate !== null)
             ? pvNormalizeToWatts(pvRate.value, pvRate.unit)
             : 0;
-        //PV leader flow saturates at a fixed 5 kW reference.
-        const pvPeakRefW  = 5000;
+        const pvPeakRefW  = flowRefW;
         const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
         const pvIdle         = !(pvWattsNow > 0);
         //Battery overlay: two chips flanking the PV chip (SoC % left, signed Power right), each wired to it
@@ -393,7 +409,7 @@ export class SceneHudController
         //spatial relationship) but the dash flow is frozen and the arrow hidden, since any motion would
         //be misleading.
         const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
-        const batteryFlowDuration = flowDuration(batteryWattsForFlow, 5000);
+        const batteryFlowDuration = flowDuration(batteryWattsForFlow, flowRefW);
 
         //PV_HALF_HEIGHT_PX places the top of a leader's vertical leg flush against PV's bottom edge so the
         //line emerges from the chip, not inside it.
@@ -455,8 +471,8 @@ export class SceneHudController
         //carries the group id. Every lead's bead runs home -> chip (power leaving to the group's devices).
         const HOME_PILL_WIDTH_PX  = 96;
         const GROUP_CHIP_HALF_W   = 48;
-        //Bead cadence: fastest at ~5 kW, dropped below ~5 W (recorder noise), like the grid/battery beads.
-        const GROUP_BEAD_CAP_W    = 5000;
+        //Bead cadence: fastest at the shared flow reference, dropped below ~5 W (recorder noise), like the grid/battery beads.
+        const GROUP_BEAD_CAP_W    = flowRefW;
         const GROUP_BEAD_IDLE_W   = 5;
         //Four-corner fan-out (4 groups only): each lead docks the home pill's bottom edge at 32/44/56/68 % of its
         //width, symmetric around the centre and mirrored left/right, so the four leads fan out without crossing.
@@ -532,15 +548,12 @@ export class SceneHudController
             })
             : [];
 
-        //Grid bead cadence: frequency (= 1/dur) is proportional to live power so bead speed tracks the chip
-        //value linearly, via dur = MIN_DUR * CAP / watts (MIN_DUR at cap, 2x at half, 4x at a quarter),
-        //clamped to MAX_DUR_S. Below ~5 W the chip is idle (recorder noise) and the bead is dropped. Caps
-        //are round residential thresholds: 5 kW import, 1 kW export.
-        const GRID_BEAD_IMPORT_CAP_W = 5000;
-        const GRID_BEAD_EXPORT_CAP_W = 1000;
-        const GRID_BEAD_MIN_DUR_S = 1.2;
-        const GRID_BEAD_MAX_DUR_S = 8.0;
-        const GRID_BEAD_IDLE_W    = 5;
+        //Grid beads use the shared flow curve (flowDuration): fastest at the flow reference, easing to a crawl
+        //toward zero, exactly like the PV, battery and device flows. Below ~5 W the chip is idle (recorder
+        //noise) and the bead is dropped. Import and export share the same reference, so a larger flow always
+        //reads as faster than a smaller one, whichever direction it runs.
+        const GRID_BEAD_CAP_W  = flowRefW;
+        const GRID_BEAD_IDLE_W = 5;
         //Scrub-aware like the chip values above, so the bead's cadence always matches the instant the
         //chip displays (never today's live pace on yesterday's scrub).
         const importWattsAbs = gridImportDisplayWatts !== null
@@ -549,15 +562,10 @@ export class SceneHudController
         const exportWattsAbs = gridExportDisplayWatts !== null
             ? Math.abs(pvNormalizeToWatts(gridExportDisplayWatts, gridExportDisplayUnit))
             : 0;
-        const proportionalBeadDur = (watts: number, capW: number): number =>
-        {
-            const w = Math.max(watts, 1);
-            return Math.min(GRID_BEAD_MAX_DUR_S, Math.max(GRID_BEAD_MIN_DUR_S, GRID_BEAD_MIN_DUR_S * capW / w));
-        };
         const gridImportBeadDur = importWattsAbs < GRID_BEAD_IDLE_W ? null
-            : proportionalBeadDur(importWattsAbs, GRID_BEAD_IMPORT_CAP_W);
+            : flowDuration(importWattsAbs, GRID_BEAD_CAP_W);
         const gridExportBeadDur = exportWattsAbs < GRID_BEAD_IDLE_W ? null
-            : proportionalBeadDur(exportWattsAbs, GRID_BEAD_EXPORT_CAP_W);
+            : flowDuration(exportWattsAbs, GRID_BEAD_CAP_W);
         //Single grid chip shows the ACTIVE flow only: the larger display value wins and drives colour,
         //value, icon and bead direction. Scrub-aware watts feed the choice so it tracks the timeline. Ties
         //(including idle 0/0) fall to import, a neutral consumption-blue resting state.
@@ -636,9 +644,21 @@ export class SceneHudController
         const sunWm2          = sunScene?.sun.irradiance ?? 0;
         const sunIrradText    = formatIrradiance(this.host.hass, sunWm2, valueDec, irradU);
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
-        //The W/m² readout + cloud chip are weather; hidden in modes without it (month/year). The sun
-        //disc/arc (pure geometry) stays.
-        const showSunLabel    = showSun && showChipIrradiance && sunScene!.sun.altitude > 0 && this.host._weatherAvailable;
+        //What the sun chip reads out: irradiance (default), sun position (azimuth + elevation), or both.
+        const chipMode        = sunChipMode(cfg);
+        const sunAlt          = sunScene?.sun.altitude ?? 0;
+        const sunAz           = sunScene?.sun.azimuth ?? 0;
+        const sunPositionText = formatSunPosition(sunAz, sunAlt, pickTranslations(this.host.hass?.language).compass ?? 'N,NE,E,SE,S,SW,W,NW');
+        //Irradiance (and its cloud chip) are weather; hidden when weather is off (month/year). Sun position
+        //is pure geometry and needs none, so position mode stays visible without it. The sun disc/arc (also
+        //pure geometry) stays regardless.
+        const showSunLabel    = showSun && showChipIrradiance && sunAlt > 0
+            && (chipMode === 'position' || this.host._weatherAvailable);
+        const sunChipText     = chipMode === 'position' ? sunPositionText : sunIrradText;
+        //Position mode drops the cloud-cover glyph (irrelevant to geometry) for a plain sun.
+        const sunChipIconFallback = chipMode === 'position'
+            ? 'mdi:white-balance-sunny'
+            : (this.host._cloudCover >= 0 ? cloudCoverIcon(this.host._cloudCover) : 'mdi:white-balance-sunny');
         //Solar-ray dash-flow duration, same scale as the PV leader so both streams pulse coherently;
         //saturates at 1000 W/m². The ray spans the whole card, so its saturated pace is a touch slower than
         //the PV leader (0.8 s) to stay readable at peak irradiance.
@@ -880,7 +900,7 @@ export class SceneHudController
                         data-target="grid"
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
-                        <ha-icon icon=${gridImporting ? chipSlotIcon(cfg, 'gridImport', 'mdi:transmission-tower-export') : chipSlotIcon(cfg, 'gridExport', 'mdi:transmission-tower-import')}></ha-icon>
+                        <ha-icon icon=${gridImporting ? chipSlotIcon(cfg, 'gridImport') : chipSlotIcon(cfg, 'gridExport')}></ha-icon>
                         <span>${formatGridValue(this.host.hass, gridImporting ? (gridImportDisplayWatts ?? 0) : (gridExportDisplayWatts ?? 0), gridImporting ? gridImportDisplayUnit : gridExportDisplayUnit, valueDec, powerU)}</span>
                     </div>
                 ` : nothing}
@@ -1087,8 +1107,8 @@ export class SceneHudController
                         data-target="irradiance"
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
-                        <ha-icon icon=${chipSlotIcon(cfg, 'irradiance', this.host._cloudCover >= 0 ? cloudCoverIcon(this.host._cloudCover) : 'mdi:white-balance-sunny')}></ha-icon>
-                        <span>${sunIrradText}</span>
+                        <ha-icon icon=${chipSlotIcon(cfg, 'irradiance', sunChipIconFallback)}></ha-icon>
+                        <span>${sunChipText}</span>
                     </div>
                 ` : nothing}
 
