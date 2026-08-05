@@ -9,7 +9,8 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.8.3
 
-A corrective release on top of 2026.8.2.
+A small release on top of 2026.8.2: a new sun-chip readout, a fairer flow
+animation, and a handful of fixes.
 
 ### Fixed: the grid import and export icons were the wrong way round
 

@@ -57,8 +57,8 @@ home and your consumption; the production layers simply do not appear.
 ## What you get
 
 * **The sun's real arc** over your own address, with the live sun disc, the
-  incidence ray and the irradiance reading, sunrise and sunset placed where the
-  arc meets your horizon.
+  incidence ray and the irradiance reading (or the sun's azimuth and elevation,
+  if you prefer), sunrise and sunset placed where the arc meets your horizon.
 * **Live flows**, production, grid and battery, each with a bead that travels to
   the home at the speed of the power it carries.
 * **A timeline you can scrub**, two days back and two days forward. The whole
