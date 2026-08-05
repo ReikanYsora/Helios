@@ -7,6 +7,52 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.8.3
+
+A small release on top of 2026.8.2: a new sun-chip readout, a fairer flow
+animation, and a handful of fixes.
+
+### Fixed: the grid import and export icons were the wrong way round
+
+In the grid chip, its detail panel and the timeline tooltip, the import and export
+tower icons were swapped, so the arrow pointed the wrong way for the direction it
+labelled (#352). The icons now match their flow, and each one is defined in a single
+place so the two can no longer drift apart. Thanks to @wasabi216 for the report.
+
+### Changed: flow animation now paces every flow against one configurable reference
+
+Every flow's animation speed is scaled so a bigger flow reads as faster, but the
+flows didn't all share the same scale: grid export used a reference five times
+smaller than the rest, so a small export could look quicker than a much larger
+production (#351). Production, grid import and export, battery and device flows now
+animate on one shared curve and one shared reference, so their relative pace is honest
+across the whole card. That
+reference is a new **Max expected power** setting (default 5000 W) in the editor's
+data display section: the power at which a flow animates at full speed, so you can
+raise it for a large installation or lower it for a small one. Thanks to @wasabi216.
+
+### Added: the sun chip can read out the sun's position
+
+A new **Sun chip readout** option (in the data display section) switches the sun chip
+between solar irradiance (the default) and the sun's position as azimuth and elevation
+(#310). The position comes from the card's own sun maths, so it needs no extra sensor.
+Idea from @ferreto1978, and thanks to @thomluther for the push.
+
+### Fixed: the grid flow bead now matches the other beads
+
+The grid import and export bead was the only flow bead without the thin outline every
+other bead carries, so it read slightly differently. It now has the same outline, and
+the beads are consistent across the whole scene.
+
+### Fixed: a sun-position card showed an empty home chip
+
+On a card set to show the sun's position with the home hidden and no energy chips, an
+empty home ring appeared: the sun chip was counted as holding the home anchor, even
+though it has no leader to the home. Such a card now drops the ring, leaving just the
+sun and the location. Thanks to @ferreto1978.
+
+---
+
 ## 2026.8.2
 
 A corrective release on top of 2026.8.1.

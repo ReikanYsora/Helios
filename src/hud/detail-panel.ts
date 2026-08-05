@@ -165,8 +165,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         const net = imp - exp;
         const netStr = `${net < 0 ? '-' : ''}${energy(Math.abs(net))}`;
         return [
-            { icon: chipSlotIcon(host.config, 'gridImport', 'mdi:transmission-tower-import'), value: energy(imp) },
-            { icon: chipSlotIcon(host.config, 'gridExport', 'mdi:transmission-tower-export'), value: energy(exp) },
+            { icon: chipSlotIcon(host.config, 'gridImport'), value: energy(imp) },
+            { icon: chipSlotIcon(host.config, 'gridExport'), value: energy(exp) },
             { icon: 'mdi:scale-balance',             value: netStr },
             { icon: 'mdi:calendar-today',            value: energy(imp / days) },
         ];

@@ -16,6 +16,8 @@ export const et: Translations = {
     year: "Aasta",
   },
 
+  compass: "P,KI,I,KA,L,EL,LÄ,LO",
+
   cloudCover: {
     cloudLow: "Madal pilvkate",
     cloudMid: "Keskmine pilvkate",
@@ -60,6 +62,14 @@ export const et: Translations = {
     autoRotateOn: "Sees",
     autoRotateOff: "Väljas",
     dataDisplaySection: "Andmete kuvamine",
+    maxExpectedPower: "Maksimaalne oodatav võimsus",
+    maxExpectedPowerHelp:
+      "Võimsus, mille juures voog liigub täiskiirusel. Iga voogu võrreldakse selle ühe võrdlusväärtusega, nii et suurem voog näib alati kiirem kui väiksem, olenemata suunast, kuhu see liigub. Tõsta seda suure paigalduse jaoks, langeta väikese jaoks. Vaikimisi 5000 W.",
+    sunChipMode: "Päikesekiibi näit",
+    sunChipModeHelp:
+      "Mida päikesekiip näitab: otsest päikesekiirgust (vaikimisi) või päikese asendit (asimuut ja kõrgus). Asend ei vaja andurit, see tuleb kaardi enda päikesearvutustest.",
+    sunChipModeIrradiance: "Kiirgustugevus",
+    sunChipModePosition: "Päikese asend",
     displayUpdateFrequency: "Graafiku detailsus",
     displayUpdateFrequencyHelp:
       "Mitu punkti tunnis graafikud joonistavad. Andmed ise on alati Home Assistanti 5-minutiline statistika; see juhib ainult, kui tihedalt kõver joonistatakse: 1 = üks punkt tunnis (sujuvaim, kergeim renderdada), 6 = üks punkt iga 10 minuti järel (täisdetailsus, raskeim). Vaikimisi 4 = punkt iga 15 minuti järel. Vähenda seda vanematel või aeglasematel seadmetel renderduskulu vähendamiseks. Prognoosikõver järgib sama tempot, nii et peenem säte toob esile ka lühikesed varjulohud (puu, mis varjab tootmist pool tundi), millest tunnikõver üle astub.",

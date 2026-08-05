@@ -16,6 +16,8 @@ export const pt: Translations = {
     year: "Ano",
   },
 
+  compass: "N,NE,E,SE,S,SO,O,NO",
+
   cloudCover: {
     cloudLow: "Nebulosidade baixa",
     cloudMid: "Nebulosidade média",
@@ -60,6 +62,14 @@ export const pt: Translations = {
     autoRotateOn: "Ativada",
     autoRotateOff: "Desativada",
     dataDisplaySection: "Apresentação de dados",
+    maxExpectedPower: "Potência máxima esperada",
+    maxExpectedPowerHelp:
+      "A potência à qual um fluxo anima à velocidade máxima. Cada fluxo é medido face a esta única referência, por isso um fluxo maior aparece sempre mais rápido do que um menor, seja qual for o sentido em que corre. Aumenta-a para uma instalação grande, baixa-a para uma pequena. Predefinição 5000 W.",
+    sunChipMode: "Leitura do chip do sol",
+    sunChipModeHelp:
+      "O que o chip do sol mostra: a irradiância solar ao vivo (predefinição) ou a posição do sol (azimute e elevação). A posição não precisa de sensor, vem dos próprios cálculos solares do cartão.",
+    sunChipModeIrradiance: "Irradiância",
+    sunChipModePosition: "Posição do sol",
     displayUpdateFrequency: "Detalhe do gráfico",
     displayUpdateFrequencyHelp:
       "Quantos pontos por hora os gráficos desenham. Os dados em si são sempre as estatísticas de 5 minutos do Home Assistant; isto só controla a densidade com que a curva é traçada: 1 = um ponto por hora (a mais suave, a mais leve de renderizar), 6 = um ponto a cada 10 minutos (detalhe máximo, a mais pesada). Predefinição 4 = um ponto a cada 15 minutos. Baixa-o em dispositivos antigos ou lentos para reduzir o custo de renderização. A curva de previsão segue a mesma cadência, por isso uma definição mais fina também revela as quedas curtas de sombra (uma árvore que corta a produção durante meia hora) que uma curva horária ignora.",

@@ -32,6 +32,13 @@ export const DEFAULT_VALUE_DECIMALS = 1;
 export const MIN_VALUE_DECIMALS     = 0;
 export const MAX_VALUE_DECIMALS     = 3;
 
+//Flow-animation reference (W): the power at which a flow animates at full speed. Every flow's pace is
+//normalised against it, so the largest live flow always reads as the fastest. Tunable per install, from a
+//balcony panel to a large rooftop.
+export const DEFAULT_MAX_EXPECTED_POWER_W = 5000;
+export const MIN_MAX_EXPECTED_POWER_W     = 500;
+export const MAX_MAX_EXPECTED_POWER_W     = 30000;
+
 
 //=== Colours ===
 //Fixed amber for the sun identity (disc, halo, arc apex, irradiance chart): a stable warm yellow, not

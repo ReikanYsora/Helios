@@ -155,7 +155,7 @@ export const heliosCardStyles = css`
         gap: 4px;
         box-sizing: border-box;
         /*  Fixed width so every chip is identical; content centres within it. */
-        width: 96px;
+        width: 106px;
         padding: 3px 10px;
         border: 2px solid;
         border-radius: 999px;
@@ -522,8 +522,9 @@ export const heliosCardStyles = css`
     }
 
     /*  Moving bead riding a leader at a speed proportional to live flow, like HA's energy-distribution
-        card. Shared by the PV to home, battery, monitoring-group and sun to PV ray beads. */
+        card. Shared by the PV to home, grid, battery, monitoring-group and sun to PV ray beads. */
     .pv-home-leader-bead,
+    .grid-leader-bead,
     .battery-leader-bead,
     .group-leader-bead,
     .helios-day-curve-bead,

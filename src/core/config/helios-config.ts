@@ -6,6 +6,7 @@ import {
     DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M,
     DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
+    DEFAULT_MAX_EXPECTED_POWER_W, MIN_MAX_EXPECTED_POWER_W, MAX_MAX_EXPECTED_POWER_W,
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
     DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
@@ -18,6 +19,7 @@ export {
     MAX_DISPLAY_RADIUS_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
+    DEFAULT_MAX_EXPECTED_POWER_W, MIN_MAX_EXPECTED_POWER_W, MAX_MAX_EXPECTED_POWER_W,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
@@ -110,6 +112,7 @@ export interface HeliosConfig
     'show-timeline'?:           unknown;
     'show-detail-panel'?:       unknown;
     'show-sun-times'?:          unknown;
+    'sun-chip-mode'?:           unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
@@ -185,6 +188,13 @@ export function valueDecimals(config: HeliosConfig | undefined): number
     return resolveClampedInt(config, 'value-decimals', DEFAULT_VALUE_DECIMALS, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS);
 }
 
+//The power (W) at which any flow animates at full speed. Every flow's pace is normalised against it, so the
+//largest live flow always reads as the fastest. Defaults to DEFAULT_MAX_EXPECTED_POWER_W.
+export function maxExpectedPowerW(config: HeliosConfig | undefined): number
+{
+    return resolveClampedInt(config, 'max-expected-power', DEFAULT_MAX_EXPECTED_POWER_W, MIN_MAX_EXPECTED_POWER_W, MAX_MAX_EXPECTED_POWER_W);
+}
+
 
 //Resolved power readout unit ('W' or 'kW') for every power value on the card. Default 'kW' so existing cards
 //are unchanged; energy readouts always stay kWh regardless.
@@ -229,6 +239,14 @@ export function showDetailPanel(config: HeliosConfig | undefined): boolean
 export function showSunTimes(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-sun-times'] !== false;
+}
+
+export type SunChipMode = 'irradiance' | 'position';
+//What the sun chip reads out: live irradiance (default) or the sun's position (azimuth + elevation).
+//Position is pure engine maths, needs no entity.
+export function sunChipMode(config: HeliosConfig | undefined): SunChipMode
+{
+    return config?.['sun-chip-mode'] === 'position' ? 'position' : 'irradiance';
 }
 
 

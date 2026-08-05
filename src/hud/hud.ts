@@ -23,7 +23,7 @@ export interface SunArcSample
 export interface SunScene
 {
     arc:      SunArcSample[];
-    sun:      { x: number; y: number; irradiance: number; altitude: number; nearness: number };
+    sun:      { x: number; y: number; irradiance: number; altitude: number; azimuth: number; nearness: number };
     home:     { x: number; y: number };
     daylight: number;
     sunrise:  { x: number; y: number; angleRad: number; time: Date } | null;
@@ -133,7 +133,8 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
         return false;
     }
     if (!nearlyEq(a.sun.x, b.sun.x) || !nearlyEq(a.sun.y, b.sun.y)
-        || !nearlyEq(a.sun.altitude, b.sun.altitude)) return false;
+        || !nearlyEq(a.sun.altitude, b.sun.altitude)
+        || !nearlyEq(a.sun.azimuth, b.sun.azimuth)) return false;
     if (a.arc.length !== b.arc.length)
     {
         return false;
