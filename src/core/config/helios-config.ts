@@ -123,6 +123,10 @@ export interface HeliosConfig
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
+    //"Your real sky" weather effects (cloud grade + rain / snow / thunderstorm), driven by the real weather at the
+    //live/scrub time. Default true. 'weather-console' shows the dev preview panel (default false).
+    'weather-enabled'?:        unknown;
+    'weather-console'?:        unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. Idle delay set via 'no-ui-delay'.
     'auto-hide-ui'?:           unknown;
@@ -223,6 +227,17 @@ export function batterySign(config: HeliosConfig | undefined): 'default' | 'inve
 export function autoHideUi(config: HeliosConfig | undefined): boolean
 {
     return config?.['auto-hide-ui'] === true;
+}
+
+
+//"Your real sky" weather effects. Default on (explicit false disables). The dev console is opt-in (default off).
+export function weatherEnabled(config: HeliosConfig | undefined): boolean
+{
+    return config?.['weather-enabled'] !== false;
+}
+export function weatherConsole(config: HeliosConfig | undefined): boolean
+{
+    return config?.['weather-console'] === true;
 }
 
 

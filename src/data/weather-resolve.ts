@@ -41,6 +41,10 @@ interface WeatherAtTime
     cloudMid:       number;
     cloudHigh:      number;
     shortwave:      number;
+    //"Your real sky" layers: precipitation (mm), snowfall (cm) and the WMO weather code at this hour.
+    precip:         number;
+    snowfall:       number;
+    weatherCode:    number;
 }
 
 //Resolve weather variables at `t` from an hourly forecast. `home` null (initial/failed/in-flight) returns
@@ -54,6 +58,9 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
         cloudMid:       0,
         cloudHigh:      0,
         shortwave:      -1,
+        precip:         0,
+        snowfall:       0,
+        weatherCode:    0,
     };
 
     if (!home || !home.times.length)
@@ -68,10 +75,13 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
     }
 
     return {
-        cloudCover:     home.cloudCover[idx] ?? 0,
-        cloudLow:       home.cloudLow[idx]   ?? 0,
-        cloudMid:       home.cloudMid[idx]   ?? 0,
-        cloudHigh:      home.cloudHigh[idx]  ?? 0,
-        shortwave:      home.shortwave[idx]  ?? -1,
+        cloudCover:     home.cloudCover[idx]  ?? 0,
+        cloudLow:       home.cloudLow[idx]    ?? 0,
+        cloudMid:       home.cloudMid[idx]    ?? 0,
+        cloudHigh:      home.cloudHigh[idx]   ?? 0,
+        shortwave:      home.shortwave[idx]   ?? -1,
+        precip:         home.precip[idx]      ?? 0,
+        snowfall:       home.snowfall[idx]    ?? 0,
+        weatherCode:    home.weatherCode[idx] ?? 0,
     };
 }

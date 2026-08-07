@@ -772,19 +772,20 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  SPIKE ("Your real sky" de-risk): throwaway weather overlay driven by ONE continuous index. The scene is
-        graded by a filter on #map-container (--wx-map-filter); the overlay layers fade by --wx-sun / --wx-grey /
-        --wx-cloud / --wx-rain, all set by JS from the weather index. UNDER the chips (z 8). Remove before release.  */
+    /*  "Your real sky" weather overlay. The scene is graded by a filter on #map-container (--wx-map-filter); the
+        overlay layers fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain / --wx-snow / --wx-flash, all set from
+        JS by the resolved weather. Sits UNDER the chips (z 8).  */
     :host([data-wx-on]) #map-container { filter: var(--wx-map-filter, none); transition: filter 0.18s linear; }
 
     .helios-wx { position: absolute; inset: 0; z-index: 6; pointer-events: none; border-radius: inherit; overflow: hidden; display: none; }
     :host([data-wx-on]) .helios-wx { display: block; }
-    .helios-wx-warm, .helios-wx-shafts, .helios-wx-veil-grey, .helios-wx-veil-dark, .helios-wx-clouds, .helios-wx-wet, .helios-wx-rain
+    .helios-wx-warm, .helios-wx-shafts, .helios-wx-veil-grey, .helios-wx-veil-dark, .helios-wx-clouds, .helios-wx-wet, .helios-wx-rain, .helios-wx-snow, .helios-wx-flash
     {
         position: absolute;
         inset: 0;
     }
-    .helios-wx-rain { z-index: 7; width: 100%; height: 100%; }
+    .helios-wx-rain, .helios-wx-snow { z-index: 7; width: 100%; height: 100%; }
+    .helios-wx-snow { opacity: var(--wx-snow, 0); }
 
     /*  CLEAR: a broad warm wash over the WHOLE card (not one patch) + a bloom that breathes + faint warm shafts.  */
     .helios-wx-warm
@@ -844,21 +845,43 @@ export const heliosCardStyles = css`
             radial-gradient(35% 25% at 70% 78%, rgba(150, 180, 215, 0.14), transparent 70%);
     }
 
-    .helios-wx-debug { position: absolute; left: 10px; top: 10px; z-index: 60; display: flex; align-items: center; gap: 8px; }
+    /*  THUNDERSTORM lightning: a top-weighted blue-white flash pushed by the storm controller via --wx-flash.  */
+    .helios-wx-flash
+    {
+        z-index: 7;
+        opacity: var(--wx-flash, 0);
+        mix-blend-mode: screen;
+        background:
+            radial-gradient(120% 80% at 50% -10%, rgba(226, 236, 255, 0.9), rgba(200, 216, 255, 0.35) 40%, transparent 75%);
+    }
+
+    /*  Dev weather console: force any condition to preview its render. Opt-in via the weather-console config, which sets [data-wx-console].  */
+    .helios-wx-debug
+    {
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        z-index: 60;
+        display: none;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        max-width: min(420px, calc(100% - 20px));
+    }
+    :host([data-wx-console]) .helios-wx-debug { display: flex; }
     .helios-wx-debug button, .helios-wx-debug .helios-wx-read
     {
         pointer-events: auto;
         border: 1px solid rgba(255, 255, 255, 0.2);
         background: rgba(8, 11, 18, 0.72);
         color: #cfd6e0;
-        font: 700 12px/1 sans-serif;
-        padding: 8px 10px;
-        border-radius: 8px;
+        font: 700 11px/1 sans-serif;
+        padding: 6px 8px;
+        border-radius: 7px;
     }
     .helios-wx-debug button { cursor: pointer; }
     .helios-wx-debug button.on { background: #f2a63a; color: #2a1c00; border-color: #f2a63a; }
-    .helios-wx-slider { pointer-events: auto; width: 180px; }
-    .helios-wx-read { min-width: 104px; text-align: center; }
+    .helios-wx-read { width: 100%; text-align: left; font-weight: 600; color: #9fb0c4; }
 
 
 

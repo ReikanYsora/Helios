@@ -81,6 +81,9 @@ export interface WeatherData
     cloudLow:       number;        //%, low-level clouds (<= 3 km)
     cloudMid:       number;        //%, mid-level clouds (3 to 8 km)
     cloudHigh:      number;        //%, high-level clouds (>= 8 km)
+    precip:         number;        //mm of precipitation this hour ("Your real sky" rain layer)
+    snowfall:       number;        //cm of snowfall this hour (snow layer)
+    weatherCode:    number;        //WMO weather code (thunderstorm 95/96/99 drives the storm layer)
     timeRange:      { start: Date; end: Date } | null;
     isLiveTime:     boolean;
     pvPower:        number;        //primary value, normalised 0..100 (~ GHI/10 W/m²)
@@ -946,6 +949,9 @@ export class HeliosEngine
         cloudMid:       number;
         cloudHigh:      number;
         shortwave:      number;
+        precip:         number;
+        snowfall:       number;
+        weatherCode:    number;
     }
     {
         return resolveWeatherAtTime(this._homeHourlyData, t);
@@ -1039,6 +1045,9 @@ export class HeliosEngine
             cloudLow:         w.cloudLow,
             cloudMid:         w.cloudMid,
             cloudHigh:        w.cloudHigh,
+            precip:           w.precip,
+            snowfall:         w.snowfall,
+            weatherCode:      w.weatherCode,
             timeRange:        this._getTimeRange(),
             isLiveTime:       this._selectedTime === null,
             pvPower,
@@ -1346,6 +1355,9 @@ export class HeliosEngine
                 cloudLow:         0,
                 cloudMid:         0,
                 cloudHigh:        0,
+                precip:           0,
+                snowfall:         0,
+                weatherCode:      0,
                 timeRange:        this._getTimeRange(),
                 isLiveTime:       this._selectedTime === null,
                 pvPower:          0,

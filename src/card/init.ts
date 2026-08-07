@@ -208,6 +208,10 @@ export interface InitHost extends HudHost
 
     _engine?:            HeliosEngine;
     _cloudCover:         number;
+    //"Your real sky" weather layers, resolved at the current live/scrub time (precip mm, snowfall cm, WMO code).
+    _precip:             number;
+    _snowfall:           number;
+    _weatherCode:        number;
     //Active rolling window (days), so a fresh engine is seeded with the restored mode's span before its first
     //getTimelineRange().
     readonly _periodPastDays:   number;
@@ -371,6 +375,9 @@ function wireEngineCallbacks(host: InitHost): void
         //Per-layer cloud breakdown is owned by the engine (it stashes low/mid/high and projectCloudScene reads them back to size the
         //three bands); the card only needs the aggregate for the cloud chip label.
         host._cloudCover         = data.cloudCover;
+        host._precip             = data.precip;
+        host._snowfall           = data.snowfall;
+        host._weatherCode        = data.weatherCode;
         host._timeRange          = data.timeRange;
         host._isLiveMode         = data.isLiveTime;
         host._chartSeries        = host._engine?.getTimelineSeries() ?? null; //hourly series the chart canvas plots

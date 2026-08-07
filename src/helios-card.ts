@@ -11,6 +11,8 @@ import
     showTimeline,
     showDetailPanel,
     cacheId,
+    weatherEnabled,
+    weatherConsole,
 } from './core/config/helios-config';
 import { buildDayProfile, daySlots, type ProfileStrand } from './data/period-totals/day-profile';
 import { buildSunGroundTrack, slotOfMs, type DayCurveInput, type DayStrand, type DayCurvePass, type DayCurveScene, type SunTrackPoint } from './scene/day-curve';
@@ -18,7 +20,7 @@ import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod
 import { pickTranslations } from './core/i18n';
 import { DAY_CURVE_SWEEP_MS } from './core/config/constants';
 import { heliosCardStyles } from './css/helios-card-scene-css';
-import { weatherOverlay, WeatherRain, wxParams } from './scene/weather-fx';
+import { weatherOverlay, WeatherRain, WeatherSnow, WeatherStorm, weatherLayers, type WxInput, type WxLayers } from './scene/weather-fx';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { setServerTimeZone, serverMsOfDay } from './core/time/timezone';
 import { isDarkFromCss } from './core/format/format';
@@ -115,6 +117,11 @@ export class HeliosCard extends LitElement
     @state() _now             = new Date();
     //Cloud-cover values shown in the on-ground disc hover popup.
     @state() _cloudCover      = -1;
+    //"Your real sky" weather layers, resolved at the current live/scrub time and pushed by the engine:
+    //precipitation (mm), snowfall (cm) and the WMO weather code (drives rain / snow / thunderstorm).
+    @state() _precip          = 0;
+    @state() _snowfall        = 0;
+    @state() _weatherCode     = 0;
     //Screen-space layout of the always-visible labels + leaders, recomputed via
     //engine.projectHomeLabelLayout() on every map transform. null while the map is loading.
     @state() _labelLayout: LabelLayout | null = null;
@@ -257,14 +264,53 @@ export class HeliosCard extends LitElement
     private _uiHideTimer: number | undefined;
     @query('ha-card') _haCard?: HTMLElement;
 
-    //SPIKE ("Your real sky" de-risk): throwaway on-card weather driven by ONE continuous index (0 clear → 1 ultra
-    //rain), set by a slider now, a real weather index later. Remove before release.
-    @state() private _wx = 0;
-    @state() private _wxOn = false;
-    @query('.helios-wx-rain') private _wxCanvas?: HTMLCanvasElement;
-    private readonly _wxRainCtl = new WeatherRain((): HTMLCanvasElement | undefined => this._wxCanvas);
-    private readonly _wxToggle = (): void => { this._wxOn = !this._wxOn; };
-    private readonly _wxSlide  = (e: Event): void => { this._wx = (e.target as HTMLInputElement).valueAsNumber; };
+    //"Your real sky": on-card weather driven by the real weather resolved at the live/scrub time. Independent
+    //layers stack (cloud grade + rain / snow / thunderstorm), each fed by weatherLayers() and rendered by the
+    //CSS overlay + the rain/snow canvases + the lightning controller.
+    @state() private _wxOn = true;
+    @query('.helios-wx-rain') private _wxRainCanvas?: HTMLCanvasElement;
+    @query('.helios-wx-snow') private _wxSnowCanvas?: HTMLCanvasElement;
+    private readonly _wxRainCtl  = new WeatherRain((): HTMLCanvasElement | undefined => this._wxRainCanvas);
+    private readonly _wxSnowCtl  = new WeatherSnow((): HTMLCanvasElement | undefined => this._wxSnowCanvas);
+    private readonly _wxStormCtl = new WeatherStorm((v: number): void => this.style.setProperty('--wx-flash', v.toFixed(3)));
+    //Dev console (config `weather-console`): force any condition to preview its render. When `_wxDebug` is set the
+    //layers use it instead of the resolved live/scrub weather; null = follow the real sky.
+    @state() private _wxDebug: WxInput | null = null;
+    private readonly _wxForce = (input: WxInput | null): void => { this._wxDebug = input; };
+    //Console button handler: force the preset at the button's data-wx-idx (bound field, passed directly so the
+    //lit/no-template-arrow rule is satisfied).
+    private readonly _onWxPreset = (e: Event): void =>
+    {
+        const idx = Number((e.currentTarget as HTMLElement).dataset.wxIdx);
+        this._wxForce(this._wxPresets[idx]?.input ?? null);
+    };
+    //Layer strengths for the weather currently driving the scene (used by the console readout).
+    private get _wxLayers(): WxLayers { return weatherLayers(this._wxInput); }
+    //Weather driving the layers right now: the console override when set, else the resolved live/scrub weather.
+    private get _wxInput(): WxInput
+    {
+        if (this._wxDebug) { return this._wxDebug; }
+        const sun = this._sunScene?.sun;
+        return {
+            cloud:       Math.max(0, this._cloudCover),
+            precip:      this._precip,
+            snowfall:    this._snowfall,
+            code:        this._weatherCode,
+            sunAltitude: sun ? sun.altitude : 45,
+        };
+    }
+    private readonly _wxPresets: readonly { label: string; input: WxInput | null }[] = [
+        { label: 'Live',      input: null },
+        { label: 'Clear',     input: { cloud: 0,   precip: 0,   snowfall: 0,   code: 0,  sunAltitude: 45 } },
+        { label: 'Partly',    input: { cloud: 45,  precip: 0,   snowfall: 0,   code: 2,  sunAltitude: 45 } },
+        { label: 'Overcast',  input: { cloud: 100, precip: 0,   snowfall: 0,   code: 3,  sunAltitude: 45 } },
+        { label: 'Drizzle',   input: { cloud: 85,  precip: 0.4, snowfall: 0,   code: 61, sunAltitude: 45 } },
+        { label: 'Rain',      input: { cloud: 95,  precip: 4,   snowfall: 0,   code: 63, sunAltitude: 45 } },
+        { label: 'Snow',      input: { cloud: 95,  precip: 0,   snowfall: 1.4, code: 73, sunAltitude: 45 } },
+        { label: 'Storm',     input: { cloud: 100, precip: 6,   snowfall: 0,   code: 95, sunAltitude: 45 } },
+        { label: 'Dawn',      input: { cloud: 10,  precip: 0,   snowfall: 0,   code: 0,  sunAltitude: 4  } },
+        { label: 'Night',     input: { cloud: 10,  precip: 0,   snowfall: 0,   code: 0,  sunAltitude: -10 } },
+    ];
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -340,6 +386,8 @@ export class HeliosCard extends LitElement
         this.config = { ...config };
         //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, so
         //setConfig doesn't seed it.
+        //"Your real sky" master switch follows the config (default on); the layers re-apply via updated().
+        this._wxOn = weatherEnabled(this.config);
         //Re-arm (or stop) the "No UI" idle fade when the option changes.
         this._scheduleUiHide();
     }
@@ -882,6 +930,8 @@ export class HeliosCard extends LitElement
     {
         super.disconnectedCallback();
         this._wxRainCtl.stop();
+        this._wxSnowCtl.stop();
+        this._wxStormCtl.stop();
         liveCards.delete(this);
         window.clearInterval(this._timer);
         this.removeEventListener('pointerdown', this._onUiActivity);
@@ -949,37 +999,54 @@ export class HeliosCard extends LitElement
         }
     }
 
+    //Push the resolved weather onto the host as --wx-* vars (scene grade + overlay strengths) and drive the
+    //rain/snow/storm controllers. Source is the live/scrub weather, or the dev-console override when set. The sun
+    //glow is anchored on the real sun position and gated on daylight.
+    private _applyWeather(): void
+    {
+        this.toggleAttribute('data-wx-on', this._wxOn);
+        //Dev preview console: opt-in via `weather-console: true` in the card config.
+        this.toggleAttribute('data-wx-console', weatherConsole(this.config));
+
+        if (!this._wxOn)
+        {
+            this._wxRainCtl.setIntensity(0);
+            this._wxSnowCtl.setIntensity(0);
+            this._wxStormCtl.setStrength(0);
+            return;
+        }
+
+        const sun = this._sunScene?.sun;
+        const p = weatherLayers(this._wxInput);
+        this.style.setProperty('--wx-sun', p.sun.toFixed(3));
+        if (sun)
+        {
+            this.style.setProperty('--wx-sun-x', `${sun.x.toFixed(1)}px`);
+            this.style.setProperty('--wx-sun-y', `${sun.y.toFixed(1)}px`);
+        }
+        this.style.setProperty('--wx-grey',  p.grey.toFixed(3));
+        this.style.setProperty('--wx-cloud', p.cloud.toFixed(3));
+        this.style.setProperty('--wx-rain',  p.rain.toFixed(3));
+        this.style.setProperty('--wx-snow',  p.snow.toFixed(3));
+        this.style.setProperty('--wx-map-filter', `saturate(${p.sat.toFixed(3)}) brightness(${p.bright.toFixed(3)})`);
+        this._wxRainCtl.setIntensity(p.rain);
+        this._wxSnowCtl.setIntensity(p.snow);
+        this._wxStormCtl.setStrength(p.storm);
+    }
+
     protected updated(_changedProperties: PropertyValues): void
     {
         //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
         this.toggleAttribute('data-ui-hidden', this._uiHidden);
 
-        //SPIKE: push the weather index onto the host as --wx-* vars (scene grade + overlay strengths), anchor the sun
-        //glow on the real sun position, gate it on daylight, and set the rain intensity. Recompute as the sun moves.
-        if (_changedProperties.has('_wx') || _changedProperties.has('_wxOn') || _changedProperties.has('_sunScene'))
+        //"Your real sky": recompute the weather layers whenever the resolved weather, the master switch, the sun
+        //(glow anchor + day/night) or the dev-console override changes.
+        if (_changedProperties.has('_cloudCover') || _changedProperties.has('_precip')
+            || _changedProperties.has('_snowfall') || _changedProperties.has('_weatherCode')
+            || _changedProperties.has('_wxOn') || _changedProperties.has('_sunScene')
+            || _changedProperties.has('_wxDebug') || _changedProperties.has('config'))
         {
-            this.toggleAttribute('data-wx-on', this._wxOn);
-            if (this._wxOn)
-            {
-                const p = wxParams(this._wx);
-                const sun = this._sunScene?.sun;
-                const daytime = sun ? sun.altitude > 0 : true;
-                this.style.setProperty('--wx-sun', (daytime ? p.sun : 0).toFixed(3));
-                if (sun)
-                {
-                    this.style.setProperty('--wx-sun-x', `${sun.x.toFixed(1)}px`);
-                    this.style.setProperty('--wx-sun-y', `${sun.y.toFixed(1)}px`);
-                }
-                this.style.setProperty('--wx-grey', p.grey.toFixed(3));
-                this.style.setProperty('--wx-cloud', p.cloud.toFixed(3));
-                this.style.setProperty('--wx-rain', p.rain.toFixed(3));
-                this.style.setProperty('--wx-map-filter', `saturate(${p.sat.toFixed(3)}) brightness(${p.bright.toFixed(3)})`);
-                this._wxRainCtl.setIntensity(p.rain);
-            }
-            else
-            {
-                this._wxRainCtl.setIntensity(0);
-            }
+            this._applyWeather();
         }
 
         //With the timeline hidden there's no period selector or scrub: pin the mode to Today so the scene reads
@@ -1289,19 +1356,22 @@ export class HeliosCard extends LitElement
                     @pointerup=${this._onSceneTapEnd}
                 ></div>
 
-                <!--  SPIKE ("Your real sky"): throwaway weather overlay + slider (0 clear → 1 ultra rain). Remove before release.  -->
+                <!--  "Your real sky": weather overlay layers + the opt-in dev preview console (weather-console).  -->
                 ${weatherOverlay()}
                 <div class="helios-wx-debug">
-                    <button class=${this._wxOn ? 'on' : ''} type="button" @pointerdown=${this._stopPointer} @click=${this._wxToggle}>Weather</button>
-                    <input
-                        class="helios-wx-slider"
-                        type="range" min="0" max="1" step="0.01"
-                        .value=${this._wx.toString()}
-                        ?disabled=${!this._wxOn}
-                        @pointerdown=${this._stopPointer}
-                        @input=${this._wxSlide}
-                    />
-                    <span class="helios-wx-read">${this._wxOn ? `${wxParams(this._wx).label} · ${this._wx.toFixed(2)}` : 'off'}</span>
+                    ${this._wxPresets.map((preset, i) => html`
+                        <button
+                            class=${(preset.input === null ? this._wxDebug === null : this._wxDebug === preset.input) ? 'on' : ''}
+                            type="button"
+                            data-wx-idx=${i}
+                            @pointerdown=${this._stopPointer}
+                            @click=${this._onWxPreset}
+                        >${preset.label}</button>`)}
+                    <span class="helios-wx-read">
+                        ${this._wxDebug ? 'forced' : 'live'} · ${this._wxLayers.label}
+                        · sun ${this._wxLayers.sun.toFixed(2)} grey ${this._wxLayers.grey.toFixed(2)} cloud ${this._wxLayers.cloud.toFixed(2)}
+                        · rain ${this._wxLayers.rain.toFixed(2)} snow ${this._wxLayers.snow.toFixed(2)} storm ${this._wxLayers.storm.toFixed(2)}
+                    </span>
                 </div>
 
                 ${hasHomeCoords && this._timeRange && showTimeline(this.config) ? html`

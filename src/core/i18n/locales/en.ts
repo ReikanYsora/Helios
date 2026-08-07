@@ -98,6 +98,9 @@ export const en: Translations = {
     batterySignDefault: "Default",
     batterySignInverted: "Inverted",
     batterySignHidden: "Hidden",
+    weatherEnabled: "Weather effects",
+    weatherEnabledHint:
+      "Paint the real sky over the scene: sunshine, clouds, rain, snow and thunderstorms from your local weather, following the timeline as you scrub. Off keeps a clear scene.",
     noUiMode: "No UI mode",
     noUiModeHint:
       "Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.",

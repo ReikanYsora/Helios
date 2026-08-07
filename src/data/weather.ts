@@ -24,6 +24,11 @@ export interface SampleHourly
     cloudMid:    number[];
     cloudHigh:   number[];
     shortwave:   number[];
+    //Precipitation total (mm) and snowfall (cm) per hour, plus the WMO weather code, for the "Your real sky"
+    //weather layers (rain / snow / thunderstorm). All gap-fill to 0 (missing = dry / clear).
+    precip:      number[];
+    snowfall:    number[];
+    weatherCode: number[];
 }
 export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../core/config/constants';
 
@@ -132,6 +137,9 @@ interface CachedPayload
         cloudMid:    number[];
         cloudHigh:   number[];
         shortwave:   number[];
+        precip:      number[];
+        snowfall:    number[];
+        weatherCode: number[];
     };
 }
 
@@ -203,6 +211,9 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudMid:    p.cloudMid    ?? [],
             cloudHigh:   p.cloudHigh   ?? [],
             shortwave:   p.shortwave   ?? [],
+            precip:      p.precip      ?? [],
+            snowfall:    p.snowfall    ?? [],
+            weatherCode: p.weatherCode ?? [],
         };
     }
     catch
@@ -227,6 +238,9 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 cloudMid:    data.cloudMid,
                 cloudHigh:   data.cloudHigh,
                 shortwave:   data.shortwave,
+                precip:      data.precip,
+                snowfall:    data.snowfall,
+                weatherCode: data.weatherCode,
             }
         };
         window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -241,13 +255,17 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //Variables requested from Open-Meteo. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged
 //over the preceding one), matching the visual time cursor; it powers the live irradiance chip and sun-arc colouring.
 //The low/mid/high cloud layers are combined client-side into cloudEffective for rendering (and let us detect the
-//low-layer "fog spike" failure mode); the API's raw total cloud_cover is not used. Only the irradiance (shortwave)
-//+ split cloud series are requested; the PV forecast is read natively from Home Assistant.
+//low-layer "fog spike" failure mode); the API's raw total cloud_cover is not used. precipitation (mm), snowfall
+//(cm) and weather_code (WMO) drive the "Your real sky" weather layers (rain / snow / thunderstorm). The PV
+//forecast is read natively from Home Assistant.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover_low',
     'cloud_cover_mid',
     'cloud_cover_high',
+    'precipitation',
+    'snowfall',
+    'weather_code',
 ];
 
 //Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_<model>);
@@ -285,6 +303,10 @@ function readSeries(row: any, varName: string, models: string[]): (number | null
 //Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value).
 const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
 const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
+//Precip (mm) / snowfall (cm) -> 0 (missing = dry). Weather code -> 0 (clear); rounded since a cross-model median
+//of WMO codes can land between two integer codes.
+const fillZero      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.max(0, v));
+const fillCode      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.round(v));
 
 
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
@@ -385,6 +407,9 @@ export async function fetchHomePointData(
                 cloudMid:    midSeries,
                 cloudHigh:   highSeries,
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
+                precip:      fillZero(readSeries(row, 'precipitation', models)),
+                snowfall:    fillZero(readSeries(row, 'snowfall',      models)),
+                weatherCode: fillCode(readSeries(row, 'weather_code',  models)),
             };
 
             writeCache(fLat, fLon, precision, data);

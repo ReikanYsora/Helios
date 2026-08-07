@@ -1,36 +1,77 @@
-//SPIKE (2026.9.0 "Your real sky" de-risk): a THROWAWAY on-card weather overlay driven by ONE continuous index
-//w in [0,1] (0 = clear & sunny, 1 = ultra rain). A slider sets it now; later a real weather index (WMO code +
-//cloud cover + precipitation) will position the same axis. NOT wired to real weather yet. Remove before release.
+//"Your real sky" (2026.9.0): the on-card weather overlay, driven by the real weather resolved at the current
+//live/scrub time (cloud cover, precipitation, snowfall, WMO weather code). Independent layers stack: the cloud
+//cover sets the sun/grey grade, and rain, snow and thunderstorm add on top of it.
 //
 //The overlay sits between the scene (z 1) and the chips (z 8): weather tints the map/buildings, never the data.
 import { html, type TemplateResult } from 'lit';
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
-//Derived effect strengths for a given index. `sat`/`bright` grade the real scene (#map-container); `sun`/`grey`/
-//`cloud`/`rain` fade the overlay layers; `label` is the human condition name (previews the future real index).
-export interface WxParams { sun: number; grey: number; cloud: number; rain: number; sat: number; bright: number; label: string; }
+//Raw weather resolved at a time, the input to the layer model. cloud in %, precip in mm, snowfall in cm, code is
+//the WMO weather code, sunAltitude is the sun's elevation in degrees (drives the sun-glow fade near the horizon
+//and to zero at night).
+export interface WxInput { cloud: number; precip: number; snowfall: number; code: number; sunAltitude: number; }
 
-export function wxParams(w: number): WxParams
+//Derived per-layer strengths. `sat`/`bright` grade the real scene (#map-container); `sun`/`grey`/`cloud` fade the
+//CSS overlay layers; `rain`/`snow`/`storm` drive the particle canvases + lightning; `label` is the condition name.
+export interface WxLayers
 {
-    const x = clamp01(w);
+    sun:    number;
+    grey:   number;
+    cloud:  number;
+    sat:    number;
+    bright: number;
+    rain:   number;
+    snow:   number;
+    storm:  number;
+    label:  string;
+}
+
+//WMO weather-code groups (https://open-meteo.com/en/docs). Snow: 71-77 (snowfall) + 85/86 (snow showers).
+//Thunderstorm: 95 (slight/moderate) + 96/99 (with hail).
+const isSnowCode  = (c: number): boolean => (c >= 71 && c <= 77) || c === 85 || c === 86;
+const isStormCode = (c: number): boolean => c === 95 || c === 96 || c === 99;
+
+//Map real weather to layer strengths. The sun's brightness derives from the cloud cover; precipitation falls as
+//rain unless it's snowing (snowfall or a snow code), in which case the snow layer takes over; thunderstorm codes
+//add the storm/lightning layer on top of whatever precipitation is falling.
+export function weatherLayers(w: WxInput): WxLayers
+{
+    const cloud01 = clamp01(w.cloud / 100);
+    const snowing = w.snowfall > 0 || isSnowCode(w.code);
+    const storm   = isStormCode(w.code) ? (w.code === 95 ? 0.7 : 1) : 0;
+
+    //sqrt gives low-amount sensitivity (a light drizzle/flurry still shows) while saturating at heavy rates.
+    const rain = snowing ? 0 : clamp01(Math.sqrt(Math.max(0, w.precip)) / 2);      //0.25mm→0.25, 1mm→0.5, 4mm→1
+    const snow = snowing ? clamp01(Math.sqrt(Math.max(0, w.snowfall)) / 1.3) : 0;  //0.1cm→0.24, 0.5cm→0.54, 1.7cm→1
+
+    //Day factor fades the sun glow out as the sun nears the horizon (0 at/below horizon, full by ~18°) so sunrise
+    //and sunset don't paint a full midday bloom, and night is dark.
+    const dayFactor = clamp01(w.sunAltitude / 18);
+
     return {
-        sun:    clamp01(1 - x / 0.35),        //full sun at 0, gone by ~0.35
-        grey:   clamp01((x - 0.12) / 0.40),   //greys in from ~0.12
-        cloud:  clamp01((x - 0.18) / 0.35),   //cloud shadows in from ~0.18
-        rain:   clamp01((x - 0.50) / 0.50),   //rain from 0.5 → 1
-        sat:    1.12 - 0.72 * x,               //scene saturation: 1.12 → 0.40
-        bright: 1.06 - 0.42 * x,               //scene brightness: 1.06 → 0.64
+        sun:    dayFactor * clamp01(1 - cloud01 / 0.85),   //full sun in a clear high sky, gone under cloud or near the horizon
+        grey:   clamp01((cloud01 - 0.25) / 0.60),            //grey veil builds in from ~25% cloud
+        cloud:  clamp01((cloud01 - 0.30) / 0.55),            //moving cloud shadows from ~30%
+        sat:    1.10 - 0.60 * cloud01,                        //scene saturation: 1.10 → 0.50
+        bright: 1.05 - 0.33 * cloud01,                        //scene brightness: 1.05 → 0.72
+        rain,
+        snow,
+        storm,
         label:
-            x < 0.10 ? 'Clear' :
-            x < 0.25 ? 'Fair' :
-            x < 0.45 ? 'Partly cloudy' :
-            x < 0.62 ? 'Overcast' :
-            x < 0.82 ? 'Rain' : 'Heavy rain',
+            storm > 0            ? 'Thunderstorm' :
+            snow  > 0.5          ? 'Snow' :
+            snow  > 0            ? 'Light snow' :
+            rain  > 0.5          ? 'Rain' :
+            rain  > 0            ? 'Light rain' :
+            cloud01 > 0.75       ? 'Overcast' :
+            cloud01 > 0.40       ? 'Cloudy' :
+            cloud01 > 0.15       ? 'Partly cloudy' : 'Clear',
     };
 }
 
-//Pure markup (no handlers): the CSS-driven layers + the rain canvas. Strengths come from the host's --wx-* vars.
+//Pure markup (no handlers): the CSS-driven layers + the particle canvases + the lightning flash. Strengths come
+//from the host's --wx-* vars.
 export function weatherOverlay(): TemplateResult
 {
     return html`
@@ -47,6 +88,8 @@ export function weatherOverlay(): TemplateResult
             </div>
             <div class="helios-wx-wet"></div>
             <canvas class="helios-wx-rain"></canvas>
+            <canvas class="helios-wx-snow"></canvas>
+            <div class="helios-wx-flash"></div>
         </div>`;
 }
 
@@ -76,7 +119,10 @@ export class WeatherRain
         this._intensity = clamp01(amt);
         const target = Math.round(this._intensity * this._max);
         if (target <= 0) { this.stop(); return; }
-        this._resize();
+        //Resize only when (re)starting the loop, never on every call: a caller that drives setIntensity every
+        //animation frame would otherwise clear the canvas (c.width reset) each frame and wipe the rain. The loop
+        //itself re-resizes when the canvas size actually changes.
+        if (!this._raf) { this._resize(); }
         while (this._drops.length < target) { this._drops.push(this._newDrop(true)); }
         if (this._drops.length > target) { this._drops.length = target; }
         if (!this._raf) { this._last = 0; this._raf = requestAnimationFrame(this._loop); }
@@ -168,6 +214,165 @@ export class WeatherRain
         }
         ctx.globalAlpha = 1;
 
+        this._raf = requestAnimationFrame(this._loop);
+    };
+}
+
+interface Flake { x: number; y: number; r: number; spd: number; amp: number; phase: number; sway: number; }
+
+//Snow particle loop, sibling to WeatherRain: soft round flakes drift down slowly with a horizontal sway, batched
+//into one fill. `setIntensity(0..1)` scales the flake count and starts/stops the loop.
+export class WeatherSnow
+{
+    private _raf = 0;
+    private _flakes: Flake[] = [];
+    private _w = 0;
+    private _h = 0;
+    private _dpr = 1;
+    private _last = 0;
+    private _intensity = 0;
+    private readonly _max = 340;
+
+    constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined) {}
+
+    setIntensity(amt: number): void
+    {
+        this._intensity = clamp01(amt);
+        const target = Math.round(this._intensity * this._max);
+        if (target <= 0) { this.stop(); return; }
+        if (!this._raf) { this._resize(); }
+        while (this._flakes.length < target) { this._flakes.push(this._newFlake(true)); }
+        if (this._flakes.length > target) { this._flakes.length = target; }
+        if (!this._raf) { this._last = 0; this._raf = requestAnimationFrame(this._loop); }
+    }
+
+    stop(): void
+    {
+        if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+        const c = this._getCanvas();
+        const ctx = c?.getContext('2d');
+        if (c && ctx) { ctx.clearRect(0, 0, c.width, c.height); }
+    }
+
+    private _resize(): void
+    {
+        const c = this._getCanvas();
+        if (!c) { return; }
+        const r = c.getBoundingClientRect();
+        this._dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        this._w = r.width;
+        this._h = r.height;
+        c.width = Math.round(this._w * this._dpr);
+        c.height = Math.round(this._h * this._dpr);
+        const ctx = c.getContext('2d');
+        if (ctx) { ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0); }
+    }
+
+    private _newFlake(anywhere: boolean): Flake
+    {
+        return {
+            x:     Math.random() * (this._w + 40) - 20,
+            y:     anywhere ? Math.random() * this._h : -10,
+            r:     1 + Math.random() * 2.4,
+            spd:   26 + Math.random() * 46,       //much slower than rain
+            amp:   8 + Math.random() * 20,        //horizontal sway amplitude
+            phase: Math.random() * Math.PI * 2,
+            sway:  0.6 + Math.random() * 0.9,     //sway angular speed
+        };
+    }
+
+    private readonly _loop = (ts: number): void =>
+    {
+        const c = this._getCanvas();
+        const ctx = c?.getContext('2d');
+        if (!c || !ctx) { this._raf = 0; return; }
+        if (Math.round(c.getBoundingClientRect().width) !== Math.round(this._w)) { this._resize(); }
+
+        if (!this._last) { this._last = ts; }
+        let dt = (ts - this._last) / 1000;
+        this._last = ts;
+        if (dt > 0.1) { dt = 0.1; }
+
+        ctx.clearRect(0, 0, this._w, this._h);
+        ctx.fillStyle = `rgba(248,250,255,${0.6 + this._intensity * 0.3})`;
+        ctx.beginPath();
+        for (let i = 0; i < this._flakes.length; i++)
+        {
+            const f = this._flakes[i];
+            f.y += f.spd * dt;
+            f.phase += f.sway * dt;
+            const x = f.x + Math.sin(f.phase) * f.amp;
+            if (f.y > this._h + 10) { this._flakes[i] = this._newFlake(false); continue; }
+            ctx.moveTo(x + f.r, f.y);
+            ctx.arc(x, f.y, f.r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+
+        this._raf = requestAnimationFrame(this._loop);
+    };
+}
+
+//Thunderstorm lightning: no canvas, just a scripted flash envelope pushed to the host's --wx-flash var. When
+//active it schedules strikes at random intervals (more frequent at higher strength), each a fast double-flash
+//that decays over ~350 ms. `setStrength(0..1)` starts/stops it.
+export class WeatherStorm
+{
+    private _raf = 0;
+    private _strength = 0;
+    private _last = 0;
+    private _nextAt = 0;    //timestamp of the next strike (RAF clock)
+    private _strikeT0 = -1; //start time of the strike in progress, -1 when idle between strikes
+
+    constructor(private readonly _set: (flash: number) => void) {}
+
+    setStrength(s: number): void
+    {
+        this._strength = clamp01(s);
+        if (this._strength <= 0) { this.stop(); return; }
+        if (!this._raf) { this._last = 0; this._nextAt = 0; this._strikeT0 = -1; this._raf = requestAnimationFrame(this._loop); }
+    }
+
+    stop(): void
+    {
+        if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+        this._set(0);
+    }
+
+    //Random gap to the next strike, shorter at higher strength (~3-7 s at full, ~7-15 s when faint).
+    private _gap(): number
+    {
+        const base = 7000 - this._strength * 4000;
+        return base + Math.random() * base;
+    }
+
+    //Flash envelope for a strike, τ in ms since it began: sharp flash, brief dip, second flash, then decay.
+    private static _envelope(tau: number): number
+    {
+        if (tau < 45)  { return 1; }
+        if (tau < 95)  { return 0.28; }
+        if (tau < 150) { return 0.85; }
+        if (tau < 360) { return 0.85 * (1 - (tau - 150) / 210); }
+        return 0;
+    }
+
+    private readonly _loop = (ts: number): void =>
+    {
+        if (!this._last) { this._last = ts; this._nextAt = ts + this._gap(); }
+
+        if (this._strikeT0 < 0)
+        {
+            //Between strikes: dark, waiting for the scheduled time.
+            this._set(0);
+            if (ts >= this._nextAt) { this._strikeT0 = ts; }
+        }
+        else
+        {
+            const tau = ts - this._strikeT0;
+            this._set(WeatherStorm._envelope(tau) * (0.7 + this._strength * 0.3));
+            if (tau >= 360) { this._strikeT0 = -1; this._nextAt = ts + this._gap(); }
+        }
+
+        this._last = ts;
         this._raf = requestAnimationFrame(this._loop);
     };
 }
