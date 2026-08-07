@@ -29,8 +29,12 @@ interface SlotDef
 export const CHIP_SLOTS: Record<ChipSlot, SlotDef> = {
     irradiance:       { colorKey: 'chip-irradiance-color',        iconKey: 'chip-irradiance-icon',        uiColorDefault: 'amber',       colorVar: '',                                fallbackHex: SUN_COLOR_HEX, defaultIcon: 'mdi:weather-sunny' },
     production:       { colorKey: 'chip-production-color',        iconKey: 'chip-production-icon',        uiColorDefault: 'orange',      colorVar: '--energy-solar-color',            fallbackHex: '#ff9800',     defaultIcon: 'mdi:solar-power' },
-    gridImport:       { colorKey: 'chip-grid-import-color',       iconKey: 'chip-grid-import-icon',       uiColorDefault: 'blue',        colorVar: '--energy-grid-consumption-color', fallbackHex: '#488fc2',     defaultIcon: 'mdi:transmission-tower-import' },
-    gridExport:       { colorKey: 'chip-grid-export-color',       iconKey: 'chip-grid-export-icon',       uiColorDefault: 'deep-purple', colorVar: '--energy-grid-return-color',      fallbackHex: '#8353d1',     defaultIcon: 'mdi:transmission-tower-export' },
+    //The MDI names are inverted vs what they draw: `transmission-tower-import` points the arrow INTO the tower
+    //(energy to the grid = export), `transmission-tower-export` points it AWAY from the tower (energy from the
+    //grid = import). So import uses the "export" glyph and export uses the "import" glyph, on purpose - the arrow
+    //must follow the real flow. Do not "correct" these back to matching names.
+    gridImport:       { colorKey: 'chip-grid-import-color',       iconKey: 'chip-grid-import-icon',       uiColorDefault: 'blue',        colorVar: '--energy-grid-consumption-color', fallbackHex: '#488fc2',     defaultIcon: 'mdi:transmission-tower-export' },
+    gridExport:       { colorKey: 'chip-grid-export-color',       iconKey: 'chip-grid-export-icon',       uiColorDefault: 'deep-purple', colorVar: '--energy-grid-return-color',      fallbackHex: '#8353d1',     defaultIcon: 'mdi:transmission-tower-import' },
     batteryCharge:    { colorKey: 'chip-battery-charge-color',    iconKey: 'chip-battery-charge-icon',    uiColorDefault: 'pink',        colorVar: '--energy-battery-in-color',       fallbackHex: '#f06292',     defaultIcon: 'mdi:battery-charging' },
     batteryDischarge: { colorKey: 'chip-battery-discharge-color', iconKey: 'chip-battery-discharge-icon', uiColorDefault: 'teal',        colorVar: '--energy-battery-out-color',      fallbackHex: '#4db6ac',     defaultIcon: 'mdi:battery' },
     home:             { colorKey: 'chip-home-color',              iconKey: 'chip-home-icon',              uiColorDefault: 'primary',     colorVar: '--primary-color',                 fallbackHex: '#4caf50',     defaultIcon: 'mdi:home' },
