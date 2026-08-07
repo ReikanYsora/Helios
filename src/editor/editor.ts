@@ -567,6 +567,28 @@ export class HeliosCardEditor extends LitElement
                 ${hint ? html`<div class="hint">${hint}</div>` : nothing}`;
     }
 
+    //One entity-picker field (label + ha-entity-picker + help). Used for the optional local weather-override
+    //sensors; `domains` defaults to the numeric sensor domains, overridden for the `weather` entity picker.
+    private _renderSensorPicker(key: string, label: string, help: string, domains: string[] = ['sensor', 'input_number']): TemplateResult
+    {
+        const c = this._cfg as Record<string, unknown>;
+        return html`
+                <div class="field field-block">
+                    <span class="label">${label}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c[key] ?? '')}
+                            .includeDomains=${domains}
+                            data-key=${key}
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                ${help ? html`<div class="field-help">${help}</div>` : nothing}`;
+    }
+
     //One ui_color picker field (label + ha-selector + help). Same markup for every colour config key.
     private _renderColorPicker(key: string, label: string, help: string, defaultColor: string): TemplateResult
     {
@@ -866,6 +888,8 @@ export class HeliosCardEditor extends LitElement
             ${this._renderChipBox(t.editor.chipGrid ?? 'Grid display', 'chip-grid-visible', ['gridImport', 'gridExport'])}
             ${this._renderChipBox(t.editor.chipBattery ?? 'Battery display', 'chip-battery-visible', ['batteryCharge', 'batteryDischarge'])}
             ${this._renderChipBox(t.editor.chipHome ?? 'Home consumption display', 'chip-home-visible', ['home'])}
+            ${this._renderChipBox(t.editor.chipTemperature ?? 'Temperature display', 'show-temperature', ['temperature'])}
+            ${this._renderChipBox(t.editor.chipHumidity ?? 'Humidity display', 'show-humidity', ['humidity'])}
             ${Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1).map(g => this._renderGroupChipBox(t, g))}
         `;
     }
@@ -1107,6 +1131,12 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.solarIrradianceEntityHelp}</div>
+                ${this._renderSensorPicker('temperature-entity',   t.editor.temperatureEntity   ?? 'Temperature sensor',   t.editor.temperatureEntityHelp   ?? 'Optional. Use a local outdoor temperature sensor instead of the Open-Meteo value for the temperature chip. The forecast still comes from the model.')}
+                ${this._renderSensorPicker('humidity-entity',      t.editor.humidityEntity      ?? 'Humidity sensor',      t.editor.humidityEntityHelp      ?? 'Optional. Use a local relative-humidity sensor (%) instead of the Open-Meteo value.')}
+                ${this._renderSensorPicker('cloud-cover-entity',   t.editor.cloudCoverEntity    ?? 'Cloud cover sensor',   t.editor.cloudCoverEntityHelp    ?? 'Optional. Use a local cloud-cover sensor (%) to drive the sky grade instead of the Open-Meteo value.')}
+                ${this._renderSensorPicker('precipitation-entity', t.editor.precipitationEntity ?? 'Precipitation sensor', t.editor.precipitationEntityHelp ?? 'Optional. Use a local precipitation sensor (mm) to drive the rain layer instead of the Open-Meteo value.')}
+                ${this._renderSensorPicker('snowfall-entity',      t.editor.snowfallEntity      ?? 'Snowfall sensor',      t.editor.snowfallEntityHelp      ?? 'Optional. Use a local snowfall sensor (cm) to drive the snow layer instead of the Open-Meteo value.')}
+                ${this._renderSensorPicker('weather-entity',       t.editor.weatherEntity       ?? 'Weather entity',       t.editor.weatherEntityHelp       ?? 'Optional. Use a Home Assistant weather entity to drive the condition (rain / snow / thunderstorm) instead of the Open-Meteo value, for the live + past.', ['weather'])}
                 </details>
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>

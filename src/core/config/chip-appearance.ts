@@ -11,7 +11,7 @@ import { SUN_COLOR_HEX } from './constants';
 
 export type ChipSlot =
     | 'irradiance' | 'production' | 'gridImport' | 'gridExport'
-    | 'batteryCharge' | 'batteryDischarge' | 'home';
+    | 'batteryCharge' | 'batteryDischarge' | 'home' | 'temperature' | 'humidity';
 
 interface SlotDef
 {
@@ -34,6 +34,8 @@ export const CHIP_SLOTS: Record<ChipSlot, SlotDef> = {
     batteryCharge:    { colorKey: 'chip-battery-charge-color',    iconKey: 'chip-battery-charge-icon',    uiColorDefault: 'pink',        colorVar: '--energy-battery-in-color',       fallbackHex: '#f06292',     defaultIcon: 'mdi:battery-charging' },
     batteryDischarge: { colorKey: 'chip-battery-discharge-color', iconKey: 'chip-battery-discharge-icon', uiColorDefault: 'teal',        colorVar: '--energy-battery-out-color',      fallbackHex: '#4db6ac',     defaultIcon: 'mdi:battery' },
     home:             { colorKey: 'chip-home-color',              iconKey: 'chip-home-icon',              uiColorDefault: 'primary',     colorVar: '--primary-color',                 fallbackHex: '#4caf50',     defaultIcon: 'mdi:home' },
+    temperature:      { colorKey: 'chip-temperature-color',      iconKey: 'chip-temperature-icon',      uiColorDefault: 'red',         colorVar: '',                                fallbackHex: '#e53935',     defaultIcon: 'mdi:thermometer' },
+    humidity:         { colorKey: 'chip-humidity-color',         iconKey: 'chip-humidity-icon',         uiColorDefault: 'light-blue',  colorVar: '',                                fallbackHex: '#29b6f6',     defaultIcon: 'mdi:water-percent' },
 };
 
 //A slot's built-in colour (no override): its theme var resolved to hex, else the fixed fallback hex.

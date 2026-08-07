@@ -40,6 +40,8 @@ export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): stri
     if (target === 'production') { return chipSlotColor(el, host.config, 'production'); }
     if (target === 'consumption'){ return chipSlotColor(el, host.config, 'home'); }
     if (target === 'irradiance') { return chipSlotColor(el, host.config, 'irradiance'); }
+    if (target === 'temperature'){ return chipSlotColor(el, host.config, 'temperature'); }
+    if (target === 'humidity')   { return chipSlotColor(el, host.config, 'humidity'); }
     if (target === 'battery-soc'){ return chipSlotColor(el, host.config, 'batteryDischarge'); }
     if (isGroupTarget(target)) { return groupColorHex(el, host.config, groupOfTarget(target)); }
     const store = host._unifiedStore;
@@ -148,11 +150,14 @@ function stackedLines(
 //scaling, path building and hover.
 function buildTargetSeries(
     host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
-): { series: ChartLine[]; fixedMax: number; socHover: SocHover | null }
+): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
 {
     const { el, store, startMs, endMsAbs, toPts } = ctx;
     let series: ChartLine[];
     let fixedMax = 0;
+    //Bottom of the Y scale. 0 for every magnitude metric; temperature overrides it to the window's min so a
+    //signed, narrow-range curve reads by shape instead of crawling along the floor.
+    let fixedMin = 0;
     let socHover: SocHover | null = null;
     if (target === 'consumption')
     {
@@ -291,12 +296,32 @@ function buildTargetSeries(
             return { pts: toPts(watts, v => Math.abs(v)), color: deviceColorByIndex(el, dev.index) };
         });
     }
+    else if (target === 'temperature')
+    {
+        //Signed, narrow-range metric: scale to the window's own min..max (with a small pad) so the shape reads,
+        //rather than the fixed 0-based scale the magnitude metrics use.
+        const pts = toPts(store.temperature);
+        series = [{ pts, color: chipSlotColor(el, host.config, 'temperature') }];
+        let mn = Infinity;
+        let mx = -Infinity;
+        for (const p of pts) { if (p.v < mn) { mn = p.v; } if (p.v > mx) { mx = p.v; } }
+        if (!isFinite(mn) || !isFinite(mx)) { mn = 0; mx = 1; }
+        const pad = Math.max(1, (mx - mn) * 0.1);
+        fixedMin = mn - pad;
+        fixedMax = mx + pad;
+    }
+    else if (target === 'humidity')
+    {
+        series   = [{ pts: toPts(store.humidity), color: chipSlotColor(el, host.config, 'humidity') }];
+        fixedMin = 0;
+        fixedMax = 100;
+    }
     else
     {
         series   = [{ pts: toPts(store.irradiance), color: chipSlotColor(el, host.config, 'irradiance') }];
         fixedMax = 1000;
     }
-    return { series, fixedMax, socHover };
+    return { series, fixedMax, fixedMin, socHover };
 }
 
 
@@ -339,19 +364,21 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     };
     const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
 
-    const { series, fixedMax, socHover } = buildTargetSeries(host, target, { el, store, startMs, endMsAbs, toPts });
+    const { series, fixedMax, fixedMin, socHover } = buildTargetSeries(host, target, { el, store, startMs, endMsAbs, toPts });
 
     //Y scale: fixed where set, else the per-series running max. No target stacks its own series; the cloud bands
-    //are an overlay of the irradiance view, stacked in their own percent scale below.
+    //are an overlay of the irradiance view, stacked in their own percent scale below. fixedMin is 0 for every
+    //magnitude metric; temperature sets it to the window's floor so its signed, narrow-range curve reads by shape.
+    const yMin = fixedMin;
     let yMax = fixedMax;
-    if (yMax <= 0)
+    if (yMax <= yMin)
     {
-        yMax = 1;
+        yMax = yMin + 1;
         for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
     }
     //Headroom at the top so a curve's peak never kisses the top edge.
     const TOP_HEADROOM_PX = 10;
-    const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
+    const yOf = (v: number): number => H - Math.max(0, Math.min(1, (v - yMin) / (yMax - yMin))) * (H - TOP_HEADROOM_PX);
 
     const drawn = series.map(s =>
     {

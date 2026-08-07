@@ -434,6 +434,36 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         return [{ values, predicted: noPred(), peak, colour: { kind: 'token', token: 'irradiance' } }];
     }
 
+    if (target === 'temperature')
+    {
+        const store = host._unifiedStore;
+        if (!store) { return []; }
+        if (!TIMELINE_MODES[host._timelineMode].weather) { return []; }
+        //Signed, narrow-range metric: normalise the slot averages to the window's own min..max (peak 1) so the
+        //strand reads by SHAPE, the same way the flat chart scales temperature. Flat/absent range -> no curve.
+        const raw = binSlotAvg(store, store.temperature, slots, win);
+        let mn = Infinity;
+        let mx = -Infinity;
+        for (const v of raw) { if (v !== null && isFinite(v)) { if (v < mn) { mn = v; } if (v > mx) { mx = v; } } }
+        if (!isFinite(mn) || mx <= mn) { return []; }
+        const values = raw.map(v => (v === null || !isFinite(v)) ? null : (v - mn) / (mx - mn));
+        dropShortRuns(values);
+        return [{ values, predicted: noPred(), peak: 1, colour: { kind: 'token', token: 'temperature' } }];
+    }
+
+    if (target === 'humidity')
+    {
+        const store = host._unifiedStore;
+        if (!store) { return []; }
+        if (!TIMELINE_MODES[host._timelineMode].weather) { return []; }
+        //Fixed 0..100 % scale (peak 1 = 100 %), so a humid day sits high and a dry one low on one honest axis.
+        const raw = binSlotAvg(store, store.humidity, slots, win);
+        const values = raw.map(v => (v === null || !isFinite(v)) ? null : Math.max(0, Math.min(1, v / 100)));
+        dropShortRuns(values);
+        if (peakOf(values) <= 0) { return []; }
+        return [{ values, predicted: noPred(), peak: 1, colour: { kind: 'token', token: 'humidity' } }];
+    }
+
     //Anything else: no day curve yet.
     return [];
 }

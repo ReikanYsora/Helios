@@ -132,6 +132,8 @@ export interface Translations
         chipGrid?:                    string;
         chipBattery?:                 string;
         chipHome?:                    string;
+        chipTemperature?:             string;
+        chipHumidity?:                string;
         //Sections split out of "Entity display": group definitions and optional sensors.
         groupsConfigTitle?:           string;
         optionalSensors?:             string;
@@ -162,6 +164,19 @@ export interface Translations
         //irradiance; forecast hours always fall through to the model.
         solarIrradianceEntity:     string;
         solarIrradianceEntityHelp: string;
+        //Local weather-override sensors. Optional; fall back to English.
+        temperatureEntity?:        string;
+        temperatureEntityHelp?:    string;
+        humidityEntity?:           string;
+        humidityEntityHelp?:       string;
+        cloudCoverEntity?:         string;
+        cloudCoverEntityHelp?:     string;
+        precipitationEntity?:      string;
+        precipitationEntityHelp?:  string;
+        snowfallEntity?:           string;
+        snowfallEntityHelp?:       string;
+        weatherEntity?:            string;
+        weatherEntityHelp?:        string;
         //Measured-only status lines (live chip readiness per energy family, configured or not). Optional; fall back to English.
         liveDataTitle?:            string;
         liveDataIntro?:            string;

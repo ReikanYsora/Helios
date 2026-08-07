@@ -805,21 +805,6 @@ export const heliosCardStyles = css`
         -webkit-mask-image: radial-gradient(120% 120% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%), #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 80%);
         mask-image: radial-gradient(120% 120% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%), #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 80%);
     }
-    .helios-wx-sunbloom
-    {
-        position: absolute;
-        left: var(--wx-sun-x, 40%);
-        top: var(--wx-sun-y, 14%);
-        width: 46%;
-        height: 46%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        opacity: var(--wx-sun, 0);
-        background: radial-gradient(circle, rgba(255, 236, 175, 0.7), rgba(255, 205, 120, 0.22) 42%, transparent 68%);
-        animation: helios-wx-breathe 5s ease-in-out infinite;
-    }
-    @keyframes helios-wx-breathe { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.08); } }
-
     /*  GREY (overcast) + DARK (rain) veils, stacked, each faded by its own amount.  */
     .helios-wx-veil-grey { opacity: calc(var(--wx-grey, 0) * 0.5); background: linear-gradient(180deg, rgb(200, 205, 212), rgb(170, 176, 184)); }
     .helios-wx-veil-dark { opacity: calc(var(--wx-rain, 0) * 0.55); background: linear-gradient(180deg, rgb(66, 74, 86), rgb(40, 47, 58)); }
@@ -845,6 +830,75 @@ export const heliosCardStyles = css`
             radial-gradient(35% 25% at 70% 78%, rgba(150, 180, 215, 0.14), transparent 70%);
     }
 
+    /*  Corner weather chips (top-left column): temperature, then humidity. Each icon is tinted by --chip-color.  */
+    .helios-corner-chips
+    {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 8;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        pointer-events: none;
+    }
+    /*  Same shared pill recipe as the HUD chips: fixed width, 2px border in the chip's colour, card-background fill,
+        icon + text in --primary-text-color. Only the border colour differs per chip (via --chip-color).  */
+    .helios-corner-chip
+    {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        box-sizing: border-box;
+        width: 106px;
+        padding: 3px 10px;
+        border: 2px solid var(--chip-color, #e53935);
+        border-radius: 999px;
+        background: var(--card-background-color, #ffffff);
+        background-clip: padding-box;
+        color: var(--primary-text-color, #212121);
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        box-shadow: var(--helios-shadow-chip);
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+        /*  Glow accent for the active-target halo below (same language as the scene chips).  */
+        --chip-glow: var(--chip-color, #e53935);
+    }
+    .helios-corner-chip ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    /*  Clickable + active states, mirroring the scene chips: [role=button] re-enables events (the column is
+        pointer-events:none), .is-chart-active raises the halo, .is-curve-on fills the pill with the metric colour.  */
+    .helios-corner-chip[role="button"] { pointer-events: auto; cursor: pointer; }
+    .helios-corner-chip::after
+    {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: 0 0 12px 1px color-mix(in srgb, var(--chip-glow, transparent) 90%, transparent);
+        opacity: 0;
+    }
+    .helios-corner-chip.is-chart-active::after { opacity: 1; }
+    .helios-corner-chip.is-curve-on
+    {
+        background: var(--chip-glow, var(--primary-color, #ff9800));
+        color: var(--ha-card-background, var(--card-background-color, #fff));
+    }
+    .helios-corner-chip.is-curve-on ha-icon { color: var(--ha-card-background, var(--card-background-color, #fff)); }
+
     /*  THUNDERSTORM lightning: a top-weighted blue-white flash pushed by the storm controller via --wx-flash.  */
     .helios-wx-flash
     {
@@ -854,35 +908,5 @@ export const heliosCardStyles = css`
         background:
             radial-gradient(120% 80% at 50% -10%, rgba(226, 236, 255, 0.9), rgba(200, 216, 255, 0.35) 40%, transparent 75%);
     }
-
-    /*  Dev weather console: force any condition to preview its render. Opt-in via the weather-console config, which sets [data-wx-console].  */
-    .helios-wx-debug
-    {
-        position: absolute;
-        left: 10px;
-        top: 10px;
-        z-index: 60;
-        display: none;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        max-width: min(420px, calc(100% - 20px));
-    }
-    :host([data-wx-console]) .helios-wx-debug { display: flex; }
-    .helios-wx-debug button, .helios-wx-debug .helios-wx-read
-    {
-        pointer-events: auto;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: rgba(8, 11, 18, 0.72);
-        color: #cfd6e0;
-        font: 700 11px/1 sans-serif;
-        padding: 6px 8px;
-        border-radius: 7px;
-    }
-    .helios-wx-debug button { cursor: pointer; }
-    .helios-wx-debug button.on { background: #f2a63a; color: #2a1c00; border-color: #f2a63a; }
-    .helios-wx-read { width: 100%; text-align: left; font-weight: 600; color: #9fb0c4; }
-
-
 
 `;

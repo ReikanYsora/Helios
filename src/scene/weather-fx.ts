@@ -78,7 +78,6 @@ export function weatherOverlay(): TemplateResult
         <div class="helios-wx">
             <div class="helios-wx-warm"></div>
             <div class="helios-wx-shafts"></div>
-            <div class="helios-wx-sunbloom"></div>
             <div class="helios-wx-veil-grey"></div>
             <div class="helios-wx-veil-dark"></div>
             <div class="helios-wx-clouds">

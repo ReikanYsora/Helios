@@ -49,6 +49,8 @@ export interface UnifiedDataStore
     dataVersion:  string;
 
     irradiance:   (number | null)[];   //W/m2, weather model interpolated hourly
+    temperature:  (number | null)[];    //°C, weather model / sensor override, interpolated hourly (can be negative)
+    humidity:     (number | null)[];    //%, weather model / sensor override, interpolated hourly
     production:   (number | null)[];    //W, recorder history (no forecast)
     //W, HA Energy solar forecast (energy/solar_forecast), hourly stepped. All-null when no forecast source is configured.
     forecast:     (number | null)[];
@@ -188,6 +190,56 @@ function buildIrradiance(host: UnifiedStoreHost, storeStartMs: number, storeEndM
 }
 
 
+//Temperature (°C) bucketised from the weather series. Same shape as buildIrradiance but keeps negative values
+//(sub-zero temperatures are real), so only non-finite samples are dropped.
+function buildTemperature(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
+{
+    const out = new Array<number | null>(p.bucketsTotal).fill(null);
+    const series = host._chartSeries;
+    if (!series || series.times.length === 0) { return out; }
+    const sums   = new Array<number>(p.bucketsTotal).fill(0);
+    const counts = new Array<number>(p.bucketsTotal).fill(0);
+    for (let i = 0; i < series.times.length; i++)
+    {
+        const t = series.times[i].getTime();
+        if (t < storeStartMs || t >= storeEndMs) { continue; }
+        const v = series.temperature?.[i];
+        if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
+        const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
+        if (h < 0) { continue; }
+        sums[h]   += v;
+        counts[h] += 1;
+    }
+    for (let h = 0; h < p.bucketsTotal; h++) { if (counts[h] > 0) { out[h] = sums[h] / counts[h]; } }
+    interpolateNullGaps(out);
+    return out;
+}
+
+//Humidity (%) bucketised from the weather series, clamped to 0..100.
+function buildHumidity(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
+{
+    const out = new Array<number | null>(p.bucketsTotal).fill(null);
+    const series = host._chartSeries;
+    if (!series || series.times.length === 0) { return out; }
+    const sums   = new Array<number>(p.bucketsTotal).fill(0);
+    const counts = new Array<number>(p.bucketsTotal).fill(0);
+    for (let i = 0; i < series.times.length; i++)
+    {
+        const t = series.times[i].getTime();
+        if (t < storeStartMs || t >= storeEndMs) { continue; }
+        const v = series.humidity?.[i];
+        if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
+        const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
+        if (h < 0) { continue; }
+        sums[h]   += Math.max(0, Math.min(100, v));
+        counts[h] += 1;
+    }
+    for (let h = 0; h < p.bucketsTotal; h++) { if (counts[h] > 0) { out[h] = sums[h] / counts[h]; } }
+    interpolateNullGaps(out);
+    return out;
+}
+
+
 
 //Production = past actual only, no model fallback. From the recorder `change` metric on the solar meter(s)
 //(_pvChangeSeries), the data the HA Energy dashboard consumes: each 5-min bucket's reset-corrected, unit-normalised
@@ -300,7 +352,7 @@ function computeDataVersion(host: UnifiedStoreHost): string
     //Weather series signature: its length + last time + last irradiance.
     const chart    = host._chartSeries;
     const chartN   = chart?.times.length ?? 0;
-    const chartSig = chartN === 0 ? '0' : `${chartN}.${chart!.times[chartN - 1].getTime()}.${chart!.irradiance[chartN - 1] ?? 0}`;
+    const chartSig = chartN === 0 ? '0' : `${chartN}.${chart!.times[chartN - 1].getTime()}.${chart!.irradiance[chartN - 1] ?? 0}.${chart!.temperature?.[chartN - 1] ?? 0}`;
     //Battery charge + discharge kept SEPARATE (summing their lengths could collide, e.g. 3+5 == 5+3).
     return `d${todayKey}|w${window}|c${cadence}|s${chartSig}`
         + `|pv${changeSig(host._pvChangeSeries)}`
@@ -328,6 +380,8 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const storeEndMs   = storeStartMs + storeDays * DAY_MS;
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
+    const temperature  = buildTemperature(host, storeStartMs, storeEndMs, p);
+    const humidity     = buildHumidity(host, storeStartMs, storeEndMs, p);
     //Production reads ONLY real sensor samples and interpolates; forecast reads the HA Energy forecast at store cadence.
     const production   = buildProduction(host, storeStartMs, nowMs, p);
     const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
@@ -344,6 +398,8 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
         builtAtMs:   nowMs,
         dataVersion: computeDataVersion(host),
         irradiance,
+        temperature,
+        humidity,
         production,
         forecast,
         battery,

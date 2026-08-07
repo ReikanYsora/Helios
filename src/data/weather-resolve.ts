@@ -45,6 +45,9 @@ interface WeatherAtTime
     precip:         number;
     snowfall:       number;
     weatherCode:    number;
+    //Temperature (°C) and humidity (%); NaN when the model gave no value this hour.
+    temperature:    number;
+    humidity:       number;
 }
 
 //Resolve weather variables at `t` from an hourly forecast. `home` null (initial/failed/in-flight) returns
@@ -61,6 +64,8 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
         precip:         0,
         snowfall:       0,
         weatherCode:    0,
+        temperature:    NaN,
+        humidity:       NaN,
     };
 
     if (!home || !home.times.length)
@@ -83,5 +88,7 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
         precip:         home.precip[idx]      ?? 0,
         snowfall:       home.snowfall[idx]    ?? 0,
         weatherCode:    home.weatherCode[idx] ?? 0,
+        temperature:    home.temperature[idx] ?? NaN,
+        humidity:       home.humidity[idx]    ?? NaN,
     };
 }

@@ -75,6 +75,11 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 //              it wins, but only in live mode (scrubbing past/forecast falls back to shortwave/haurwitz).
 export type IrradianceSource = 'haurwitz' | 'shortwave' | 'sensor';
 
+//Weather variables a local sensor can override (keys match the resolved-weather fields). A configured sensor beats
+//the Open-Meteo model for the live + past portions; the forecast (future) always falls back to the model, since a
+//sensor has no future data (the nearest-neighbour window below returns null past its reach).
+export type WeatherOverrideVar = 'cloudCover' | 'precip' | 'snowfall' | 'temperature' | 'humidity' | 'code';
+
 export interface WeatherData
 {
     cloudCover:     number;
@@ -84,6 +89,8 @@ export interface WeatherData
     precip:         number;        //mm of precipitation this hour ("Your real sky" rain layer)
     snowfall:       number;        //cm of snowfall this hour (snow layer)
     weatherCode:    number;        //WMO weather code (thunderstorm 95/96/99 drives the storm layer)
+    temperature:    number;        //°C outdoor temperature (temperature chip); NaN when unavailable
+    humidity:       number;        //% relative humidity; NaN when unavailable
     timeRange:      { start: Date; end: Date } | null;
     isLiveTime:     boolean;
     pvPower:        number;        //primary value, normalised 0..100 (~ GHI/10 W/m²)
@@ -270,6 +277,75 @@ export class HeliosEngine
         }
         return samples[bestIdx].wm2;
     }
+
+    //Local-sensor weather overrides: per-variable sample series (sorted ascending), pushed by the card from a
+    //configured entity's history + live state. Nearest-neighbour within the window replaces the model value at
+    //resolve time; empty/absent = model unchanged.
+    private _weatherOverrideSamples = new Map<WeatherOverrideVar, { tMs: number; v: number }[]>();
+    private static readonly SENSOR_WEATHER_WINDOW_MS = 30 * 60 * 1000;
+
+    public setWeatherOverrideSamples(
+        variable: WeatherOverrideVar,
+        samples: { time: Date; value: number }[] | null
+    ): void
+    {
+        const prev = this._weatherOverrideSamples.get(variable) ?? null;
+        let next: { tMs: number; v: number }[] | null = null;
+        if (samples && samples.length > 0)
+        {
+            const cleaned: { tMs: number; v: number }[] = [];
+            for (const s of samples)
+            {
+                const ms = s.time.getTime();
+                if (isFinite(ms) && isFinite(s.value)) { cleaned.push({ tMs: ms, v: s.value }); }
+            }
+            cleaned.sort((a, b) => a.tMs - b.tMs);
+            if (cleaned.length > 0) { next = cleaned; }
+        }
+
+        //Skip the re-render when unchanged: the card pushes every Lit cycle, and an unconditional re-render would
+        //loop (render -> onWeatherUpdate -> updated() -> push -> render) the moment an override entity is selected.
+        if (this._weatherOverrideSamplesEqual(prev, next)) { return; }
+        if (next === null) { this._weatherOverrideSamples.delete(variable); }
+        else               { this._weatherOverrideSamples.set(variable, next); }
+        this._arcInputsCache = undefined;
+        this._renderForCurrentSelection();
+    }
+
+    private _weatherOverrideSamplesEqual(
+        a: { tMs: number; v: number }[] | null,
+        b: { tMs: number; v: number }[] | null
+    ): boolean
+    {
+        if (a === b)           { return true; }
+        if (a === null || b === null) { return false; }
+        if (a.length !== b.length)    { return false; }
+        for (let i = 0; i < a.length; i++)
+        {
+            if (a[i].tMs !== b[i].tMs || a[i].v !== b[i].v) { return false; }
+        }
+        return true;
+    }
+
+    //Nearest-neighbour override value for `variable` at `t`, or null (outside the window / no samples), in which
+    //case the caller keeps the model value.
+    private _weatherOverrideAt(variable: WeatherOverrideVar, t: Date): number | null
+    {
+        const samples = this._weatherOverrideSamples.get(variable);
+        if (!samples || samples.length === 0) { return null; }
+        const tMs = t.getTime();
+        let bestIdx = -1;
+        let bestDelta = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < samples.length; i++)
+        {
+            const d = Math.abs(samples[i].tMs - tMs);
+            if (d < bestDelta) { bestDelta = d; bestIdx = i; }
+            else if (d > bestDelta) { break; }
+        }
+        if (bestIdx < 0 || bestDelta > HeliosEngine.SENSOR_WEATHER_WINDOW_MS) { return null; }
+        return samples[bestIdx].v;
+    }
+
     //Map transform changed: card recomputes screen-space projections (arc, chips, leaders) from this hook.
     public onMapTransform?:  () => void;
 
@@ -952,9 +1028,24 @@ export class HeliosEngine
         precip:         number;
         snowfall:       number;
         weatherCode:    number;
+        temperature:    number;
+        humidity:       number;
     }
     {
-        return resolveWeatherAtTime(this._homeHourlyData, t);
+        const w = resolveWeatherAtTime(this._homeHourlyData, t);
+        //Local-sensor overrides beat the model for the live + past window; forecast time falls through (the
+        //nearest-neighbour lookup returns null beyond its window). Cloud also feeds the Haurwitz irradiance/PV
+        //fallback, so a local cloud sensor sharpens that too.
+        if (this._weatherOverrideSamples.size > 0)
+        {
+            const cloud = this._weatherOverrideAt('cloudCover',  t); if (cloud !== null) { w.cloudCover  = Math.max(0, Math.min(100, cloud)); }
+            const prec  = this._weatherOverrideAt('precip',      t); if (prec  !== null) { w.precip      = Math.max(0, prec); }
+            const snow  = this._weatherOverrideAt('snowfall',    t); if (snow  !== null) { w.snowfall    = Math.max(0, snow); }
+            const temp  = this._weatherOverrideAt('temperature', t); if (temp  !== null) { w.temperature = temp; }
+            const hum   = this._weatherOverrideAt('humidity',    t); if (hum   !== null) { w.humidity    = Math.max(0, Math.min(100, hum)); }
+            const code  = this._weatherOverrideAt('code',        t); if (code  !== null) { w.weatherCode = Math.round(code); }
+        }
+        return w;
     }
 
     //Public wrapper for _getTimeRange so the card's 30 s tick can re-fetch the window after midnight rollover.
@@ -1048,6 +1139,8 @@ export class HeliosEngine
             precip:           w.precip,
             snowfall:         w.snowfall,
             weatherCode:      w.weatherCode,
+            temperature:      w.temperature,
+            humidity:         w.humidity,
             timeRange:        this._getTimeRange(),
             isLiveTime:       this._selectedTime === null,
             pvPower,
@@ -1358,6 +1451,8 @@ export class HeliosEngine
                 precip:           0,
                 snowfall:         0,
                 weatherCode:      0,
+                temperature:      NaN,
+                humidity:         NaN,
                 timeRange:        this._getTimeRange(),
                 isLiveTime:       this._selectedTime === null,
                 pvPower:          0,
@@ -1972,6 +2067,9 @@ export class HeliosEngine
         cloudLow:     number[];
         cloudMid:     number[];
         cloudHigh:    number[];
+        //Per-hour temperature (°C) + humidity (%), local sensor override applied where present, else the model.
+        temperature:  number[];
+        humidity:     number[];
     } | null
     {
         const home = this._homeHourlyData;
@@ -2003,12 +2101,19 @@ export class HeliosEngine
         const cloudMid  = home.times.map((_, i) => home.cloudMid[i]  ?? 0);
         const cloudHigh = home.times.map((_, i) => home.cloudHigh[i] ?? 0);
 
+        //Local sensor override beats the model for the live + past hours; forecast hours carry no sample and fall
+        //through to the model value (NaN where the model itself has none).
+        const temperature = home.times.map((_, i) => this._weatherOverrideAt('temperature', home.times[i]) ?? (home.temperature[i] ?? NaN));
+        const humidity    = home.times.map((_, i) => this._weatherOverrideAt('humidity',    home.times[i]) ?? (home.humidity[i]    ?? NaN));
+
         return {
             times:       home.times.slice(),
             irradiance,
             cloudLow,
             cloudMid,
             cloudHigh,
+            temperature,
+            humidity,
         };
     }
 

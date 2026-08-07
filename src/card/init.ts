@@ -212,6 +212,9 @@ export interface InitHost extends HudHost
     _precip:             number;
     _snowfall:           number;
     _weatherCode:        number;
+    //Temperature (°C) + humidity (%) at the current time, NaN when unavailable (temperature chip).
+    _temperature:        number;
+    _humidity:           number;
     //Active rolling window (days), so a fresh engine is seeded with the restored mode's span before its first
     //getTimelineRange().
     readonly _periodPastDays:   number;
@@ -378,6 +381,8 @@ function wireEngineCallbacks(host: InitHost): void
         host._precip             = data.precip;
         host._snowfall           = data.snowfall;
         host._weatherCode        = data.weatherCode;
+        host._temperature        = data.temperature;
+        host._humidity           = data.humidity;
         host._timeRange          = data.timeRange;
         host._isLiveMode         = data.isLiveTime;
         host._chartSeries        = host._engine?.getTimelineSeries() ?? null; //hourly series the chart canvas plots

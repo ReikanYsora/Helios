@@ -57,6 +57,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const atMs = startMs + (pct / 100) * rangeMs;
 
     const irrV = series ? interpAt(series.times, series.irradiance, atMs) : NaN;
+    const tempV = series ? interpAt(series.times, series.temperature, atMs) : NaN;
+    const humV  = series ? interpAt(series.times, series.humidity,    atMs) : NaN;
     const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
     const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
@@ -420,6 +422,20 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
                         </div>
                     ` : nothing}
+                ` : nothing}
+                ${target === 'temperature' && isFinite(tempV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'temperature')}" icon=${chipSlotIcon(host.config, 'temperature', 'mdi:thermometer')}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${tempV.toFixed(1)} °C</span>
+                    </div>
+                ` : nothing}
+                ${target === 'humidity' && isFinite(humV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'humidity')}" icon=${chipSlotIcon(host.config, 'humidity', 'mdi:water-percent')}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${Math.round(humV)} %</span>
+                    </div>
                 ` : nothing}
             </div>
         </div>

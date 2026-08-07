@@ -127,11 +127,31 @@ export const en: Translations = {
     chipGrid: "Grid display",
     chipBattery: "Battery display",
     chipHome: "Home consumption display",
+    chipTemperature: "Temperature display",
+    chipHumidity: "Humidity display",
     groupsConfigTitle: "Group configuration",
     optionalSensors: "Optional sensors",
     solarIrradianceEntity: "Solar irradiance entity",
     solarIrradianceEntityHelp:
       "Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours stay on Open-Meteo since a sensor cannot carry future values.",
+    temperatureEntity: "Temperature sensor",
+    temperatureEntityHelp:
+      "Optional. Use a local outdoor temperature sensor (°C) instead of the Open-Meteo value for the temperature chip. Its live state and recorder history are used for the live + past; forecast hours stay on the model.",
+    humidityEntity: "Humidity sensor",
+    humidityEntityHelp:
+      "Optional. Use a local relative-humidity sensor (%) instead of the Open-Meteo value, for the live + past.",
+    cloudCoverEntity: "Cloud cover sensor",
+    cloudCoverEntityHelp:
+      "Optional. Use a local cloud-cover sensor (%) to drive the sky grade (sun, greying) instead of the Open-Meteo value, for the live + past.",
+    precipitationEntity: "Precipitation sensor",
+    precipitationEntityHelp:
+      "Optional. Use a local precipitation sensor (mm) to drive the rain layer instead of the Open-Meteo value, for the live + past.",
+    snowfallEntity: "Snowfall sensor",
+    snowfallEntityHelp:
+      "Optional. Use a local snowfall sensor (cm) to drive the snow layer instead of the Open-Meteo value, for the live + past.",
+    weatherEntity: "Weather entity",
+    weatherEntityHelp:
+      "Optional. Use a Home Assistant weather entity to drive the condition (rain / snow / thunderstorm) instead of the Open-Meteo value, for the live + past. Forecast hours stay on the model.",
     liveDataTitle: "Configuration status",
     liveDataIntro:
       "Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source - curves and totals always come from your meters.",

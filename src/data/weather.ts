@@ -29,6 +29,10 @@ export interface SampleHourly
     precip:      number[];
     snowfall:    number[];
     weatherCode: number[];
+    //Air temperature (°C) and relative humidity (%) at 2 m, for the temperature chip and humidity readout.
+    //Gap-fill to NaN (0 is a legitimate value for both), so consumers can tell "no data" from a real reading.
+    temperature: number[];
+    humidity:    number[];
 }
 export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../core/config/constants';
 
@@ -140,13 +144,19 @@ interface CachedPayload
         precip:      number[];
         snowfall:    number[];
         weatherCode: number[];
+        temperature: number[];
+        humidity:    number[];
     };
 }
+
+//Schema version: bumped whenever the stored payload gains fields, so an older cached entry (missing the new
+//series) is treated as a miss and refetched instead of feeding NaN/empty arrays downstream.
+const CACHE_SCHEMA = 'v2';
 
 //The precision tag is part of the key so payloads at different precisions never collide.
 function cacheKey(lat: number, lon: number, precision: 'standard' | 'high'): string
 {
-    return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(CACHE_KEY_DECIMALS)},${lon.toFixed(CACHE_KEY_DECIMALS)}`;
+    return `${CACHE_KEY_PREFIX}${CACHE_SCHEMA}:${precision}:${lat.toFixed(CACHE_KEY_DECIMALS)},${lon.toFixed(CACHE_KEY_DECIMALS)}`;
 }
 
 
@@ -214,6 +224,9 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             precip:      p.precip      ?? [],
             snowfall:    p.snowfall    ?? [],
             weatherCode: p.weatherCode ?? [],
+            //JSON turns NaN into null on write; map back so a cached "no data" hour stays NaN, not 0.
+            temperature: (p.temperature ?? []).map((v: number | null) => v == null ? NaN : v),
+            humidity:    (p.humidity    ?? []).map((v: number | null) => v == null ? NaN : v),
         };
     }
     catch
@@ -241,6 +254,8 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 precip:      data.precip,
                 snowfall:    data.snowfall,
                 weatherCode: data.weatherCode,
+                temperature: data.temperature,
+                humidity:    data.humidity,
             }
         };
         window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -266,6 +281,8 @@ const HOURLY_VARS = [
     'precipitation',
     'snowfall',
     'weather_code',
+    'temperature_2m',
+    'relative_humidity_2m',
 ];
 
 //Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_<model>);
@@ -307,6 +324,8 @@ const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == nu
 //of WMO codes can land between two integer codes.
 const fillZero      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.max(0, v));
 const fillCode      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.round(v));
+//Temperature (°C, can be negative) and humidity (%) keep NaN for missing hours: 0 is a real reading for both.
+const fillNaN       = (arr: (number | null)[]): number[] => arr.map(v => (v == null || !isFinite(v)) ? NaN : v);
 
 
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
@@ -410,6 +429,8 @@ export async function fetchHomePointData(
                 precip:      fillZero(readSeries(row, 'precipitation', models)),
                 snowfall:    fillZero(readSeries(row, 'snowfall',      models)),
                 weatherCode: fillCode(readSeries(row, 'weather_code',  models)),
+                temperature: fillNaN(readSeries(row, 'temperature_2m',       models)),
+                humidity:    fillNaN(readSeries(row, 'relative_humidity_2m', models)),
             };
 
             writeCache(fLat, fLon, precision, data);

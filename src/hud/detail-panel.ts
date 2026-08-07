@@ -67,6 +67,29 @@ function aggWatts(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly
     return { peak, avg: count ? sum / count : 0, count };
 }
 
+//Min / mean / max over a store series inside the window, allowing negative values (temperature). Same bucket-time
+//iteration as aggWatts.
+function aggRange(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly (number | null)[], startMs: number, endMs: number):
+    { min: number; avg: number; max: number; count: number }
+{
+    let min = Infinity;
+    let max = -Infinity;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < arr.length; i++)
+    {
+        const raw = arr[i];
+        if (raw === null || !isFinite(raw)) { continue; }
+        const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
+        if (tMs < startMs || tMs > endMs) { continue; }
+        if (raw < min) { min = raw; }
+        if (raw > max) { max = raw; }
+        sum += raw;
+        count++;
+    }
+    return { min: count ? min : 0, avg: count ? sum / count : 0, max: count ? max : 0, count };
+}
+
 //Min / mean / max over a percent PeriodData layer's 24 hour-of-day values (state of charge). Empty when there is
 //no history in the window.
 function socStats(data: PeriodData): { min: number; avg: number; max: number } | null
@@ -121,6 +144,31 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
                 { icon: 'mdi:trending-up', value: irr(a.peak) },
                 { glyph: 'Ø',              value: irr(a.avg) },
             );
+        }
+        return rows;
+    }
+
+    //Temperature / humidity are weather metrics like irradiance: aggregate the store's own series over the window
+    //as max / mean / min (temperature keeps its sign; humidity is a percent).
+    if (target === 'temperature' || target === 'humidity')
+    {
+        const store = host._unifiedStore;
+        const rows: DetailMetric[] = [];
+        if (store)
+        {
+            const arr = target === 'temperature' ? store.temperature : store.humidity;
+            const a   = aggRange(store, arr, startMs, endMs);
+            if (a.count > 0)
+            {
+                const fmt = target === 'temperature'
+                    ? (v: number): string => `${v.toFixed(1)} °C`
+                    : (v: number): string => `${Math.round(v)} %`;
+                rows.push(
+                    { icon: 'mdi:trending-up',   value: fmt(a.max) },
+                    { glyph: 'Ø',                value: fmt(a.avg) },
+                    { icon: 'mdi:trending-down', value: fmt(a.min) },
+                );
+            }
         }
         return rows;
     }

@@ -95,6 +95,8 @@ export interface HeliosConfig
     'chip-grid-export-color'?:       unknown;
     'chip-battery-charge-color'?:    unknown;
     'chip-battery-discharge-color'?: unknown;
+    'chip-temperature-color'?:       unknown;
+    'chip-humidity-color'?:          unknown;
     //Home (consumption) chip colour; also the home pill's resting colour. Default 'primary'. The home building
     //otherwise follows the selected chip's colour.
     'chip-home-color'?:         unknown;
@@ -107,6 +109,11 @@ export interface HeliosConfig
     'chip-battery-charge-icon'?:       unknown;
     'chip-battery-discharge-icon'?:    unknown;
     'chip-home-icon'?:                unknown;
+    'chip-temperature-icon'?:         unknown;
+    'chip-humidity-icon'?:            unknown;
+    //Outdoor temperature + humidity chips (top-left column). Default shown when data is available.
+    'show-temperature'?:        unknown;
+    'show-humidity'?:           unknown;
     //Scene UI toggles (all default visible). show-timeline hides the timeline + the period selector; the detail
     //panel toggle hides the tap-to-open per-chip mini-panel; sun-times hides the sunrise/sunset markers at the arc.
     'show-timeline'?:           unknown;
@@ -124,9 +131,17 @@ export interface HeliosConfig
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
     //"Your real sky" weather effects (cloud grade + rain / snow / thunderstorm), driven by the real weather at the
-    //live/scrub time. Default true. 'weather-console' shows the dev preview panel (default false).
+    //live/scrub time. Default true.
     'weather-enabled'?:        unknown;
-    'weather-console'?:        unknown;
+    //Local-sensor overrides for the weather variables: a configured entity beats Open-Meteo for the live + past
+    //window (forecast keeps the model). Temperature feeds the temperature chip; humidity the humidity readout.
+    'cloud-cover-entity'?:     unknown;
+    'precipitation-entity'?:   unknown;
+    'snowfall-entity'?:        unknown;
+    'temperature-entity'?:     unknown;
+    'humidity-entity'?:        unknown;
+    //A HA `weather` entity whose condition (rain / snow / thunderstorm) overrides the model for the live + past.
+    'weather-entity'?:         unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. Idle delay set via 'no-ui-delay'.
     'auto-hide-ui'?:           unknown;
@@ -235,10 +250,6 @@ export function weatherEnabled(config: HeliosConfig | undefined): boolean
 {
     return config?.['weather-enabled'] !== false;
 }
-export function weatherConsole(config: HeliosConfig | undefined): boolean
-{
-    return config?.['weather-console'] === true;
-}
 
 
 //Scene UI element toggles (all default visible; explicit false hides). show-timeline covers the timeline band +
@@ -254,6 +265,15 @@ export function showDetailPanel(config: HeliosConfig | undefined): boolean
 export function showSunTimes(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-sun-times'] !== false;
+}
+//Outdoor temperature + humidity chips (top-left column). Default shown; hidden when explicitly false or no data.
+export function showTemperature(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-temperature'] !== false;
+}
+export function showHumidity(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-humidity'] !== false;
 }
 
 export type SunChipMode = 'irradiance' | 'position';
