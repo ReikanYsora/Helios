@@ -73,9 +73,6 @@ export const lv: Translations = {
       "Neobligāti. Izmantojiet Home Assistant laikapstākļu entītiju, lai noteiktu apstākļus (lietus / sniegs / pērkona negaiss) Open-Meteo vērtības vietā, tagadnei un pagātnei. Prognozes stundas paliek uz modeļa.",
     chipTemperature: "Temperatūras rādījums",
     chipHumidity: "Mitruma rādījums",
-    useCurrentView: "Izmantot pašreizējo skatu",
-    useCurrentViewHint:
-      "Iekadrējiet ainu priekšskatījumā (velciet, lai pagrieztu un noliektu), pēc tam tveriet to šeit: leņķis tiek saglabāts konfigurācijā un skats tiek fiksēts, tāpēc tas ir identisks katrā ierīcē.",
     locationSection: "Atrašanās vieta",
     homeLatitude: "Mājas platums",
     homeLongitude: "Mājas garums",
@@ -131,7 +128,7 @@ export const lv: Translations = {
       "Rāda saullēkta un saulrieta laikus un to marķierus saules loka pamatnē.",
     lockRotation: "Fiksēt rotāciju",
     lockRotationHint:
-      "Iestati skata leņķi tieši priekšskatījumā (velc, lai pagrieztu un sagāztu ainu), tad ieslēdz fiksāciju, lai to iesaldētu: vilkšana rotācijai un neaktivitātes automātiskā orbīta tiek atspējota, saglabājot iestatīto leņķi.",
+      "Velciet priekšskatījumu, lai pagrieztu un sasvērtu ainu vēlamajā skatā, pēc tam ieslēdziet šo. Bloķēšana iesaldē šo skatu (pagriešana ar vilkšanu un automātiskā griešanās miera stāvoklī tiek atspējota) un saglabā leņķi kartē, tāpēc tieši tas pats skats parādās katrā ierīcē un pārlūkā. Izslēdziet to, lai atkal brīvi grieztu.",
     chipsSection: "Entītiju attēlojums",
     chipsIntro:
       "Rādi vai slēp katru entītiju un izvēlies tās ikonu un krāsu. Māja seko izvēlētajai mikroshēmai vai pēc noklusējuma tavai primārajai krāsai.",

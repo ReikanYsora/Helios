@@ -73,9 +73,6 @@ export const ro: Translations = {
       "Opțional. Folosește o entitate meteo Home Assistant pentru a controla condiția (ploaie / ninsoare / furtună) în locul valorii Open-Meteo, pentru prezent + trecut. Orele de prognoză rămân pe model.",
     chipTemperature: "Afișare temperatură",
     chipHumidity: "Afișare umiditate",
-    useCurrentView: "Folosește vizualizarea curentă",
-    useCurrentViewHint:
-      "Încadrează scena în previzualizare (trage pentru a roti și înclina), apoi capturează-o aici: unghiul este salvat în configurație și vizualizarea este blocată, astfel încât să fie identică pe fiecare dispozitiv.",
     locationSection: "Locatie",
     homeLatitude: "Latitudinea casei",
     homeLongitude: "Longitudinea casei",
@@ -131,7 +128,7 @@ export const ro: Translations = {
       "Arata orele de rasarit si apus si marcajele lor la baza arcului solar.",
     lockRotation: "Blocheaza rotirea",
     lockRotationHint:
-      "Seteaza unghiul de vizualizare direct in previzualizare (glisati pentru a roti si inclina scena), apoi porniti blocarea pentru a-l fixa: rotirea prin glisare si auto-orbitarea la inactivitate sunt dezactivate, pastrand unghiul setat.",
+      "Trageți de previzualizare pentru a roti și înclina scena la vederea dorită, apoi activați această opțiune. Blocarea îngheață acea vedere (rotirea prin tragere și rotația automată în repaus sunt dezactivate) și salvează unghiul în card, astfel încât exact aceeași vedere apare pe fiecare dispozitiv și browser. Dezactivați-o pentru a roti din nou liber.",
     chipsSection: "Afisarea entitatilor",
     chipsIntro:
       "Arata sau ascunde fiecare entitate si alege-i pictograma si culoarea. Casa urmeaza cipul selectat sau, implicit, culoarea ta principala.",

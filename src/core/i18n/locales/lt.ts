@@ -73,9 +73,6 @@ export const lt: Translations = {
       "Neprivaloma. Naudoti Home Assistant orų objektą, kuris valdytų sąlygas (lietus / sniegas / perkūnija) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai. Prognozės valandos lieka pagal modelį.",
     chipTemperature: "Temperatūros rodymas",
     chipHumidity: "Drėgmės rodymas",
-    useCurrentView: "Naudoti dabartinį vaizdą",
-    useCurrentViewHint:
-      "Sukomponuokite sceną peržiūroje (tempkite, kad pasuktumėte ir palenktumėte), tada užfiksuokite ją čia: kampas išsaugomas konfigūracijoje, o vaizdas užrakinamas, todėl jis identiškas visuose įrenginiuose.",
     locationSection: "Namų vieta",
     homeLatitude: "Namų platuma",
     homeLongitude: "Namų ilguma",
@@ -131,7 +128,7 @@ export const lt: Translations = {
       "Rodo saulėtekio ir saulėlydžio laikus bei jų žymeklius prie saulės lanko kojų.",
     lockRotation: "Užrakinti kampą",
     lockRotationHint:
-      "Nustatyk žiūrėjimo kampą tiesiogiai peržiūroje (vilk, kad pasuktum ir pakreiptum sceną), tada įjunk užraktą, kad jį užfiksuotum: vilkimas-sukimas ir automatinis sukimasis neaktyvumo metu išjungiami, išlaikant tavo nustatytą kampą.",
+      "Vilkite peržiūrą, kad pasuktumėte ir pakreiptumėte sceną iki norimo vaizdo, tada įjunkite tai. Užraktas užfiksuoja tą vaizdą (sukimas velkant ir automatinis sukimasis ramybės būsenoje išjungiami) ir įrašo kampą į kortelę, todėl tiksliai tas pats vaizdas rodomas kiekviename įrenginyje ir naršyklėje. Išjunkite jį, kad vėl galėtumėte laisvai sukti.",
     chipsSection: "Objektų rodymas",
     chipsIntro:
       "Rodyk arba slėpk kiekvieną objektą, pasirink jo piktogramą ir spalvą. Namai seka pasirinktą lustą arba, numatytai, tavo pagrindinę spalvą.",

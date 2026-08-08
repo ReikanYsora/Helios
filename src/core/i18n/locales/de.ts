@@ -73,9 +73,6 @@ export const de: Translations = {
       "Optional. Verwendet eine Home Assistant Wetterentität, um die Bedingung (Regen / Schnee / Gewitter) zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit. Vorhersagestunden bleiben beim Modell.",
     chipTemperature: "Temperaturanzeige",
     chipHumidity: "Luftfeuchtigkeitsanzeige",
-    useCurrentView: "Aktuelle Ansicht verwenden",
-    useCurrentViewHint:
-      "Richte die Szene in der Vorschau aus (zum Drehen und Neigen ziehen) und übernimm sie hier: Der Winkel wird in der Konfiguration gespeichert und die Ansicht wird gesperrt, sodass sie auf jedem Gerät identisch ist.",
     locationSection: "Standort",
     homeLatitude: "Breitengrad des Zuhauses",
     homeLongitude: "Längengrad des Zuhauses",
@@ -131,7 +128,7 @@ export const de: Translations = {
       "Zeigt die Zeiten für Sonnenauf- und -untergang sowie deren Markierungen an den Füßen des Sonnenbogens an.",
     lockRotation: "Drehung sperren",
     lockRotationHint:
-      "Stelle den Blickwinkel direkt in der Vorschau ein (ziehen zum Drehen und Neigen der Szene) und aktiviere dann die Sperre, um ihn einzufrieren: Ziehen-zum-Drehen und die automatische Ruhedrehung werden deaktiviert, sodass der eingestellte Winkel erhalten bleibt.",
+      "Ziehen Sie in der Vorschau, um die Szene zu drehen und zu neigen, bis Sie die gewünschte Ansicht haben, und schalten Sie dies dann ein. Die Sperre friert diese Ansicht ein (Drehen per Ziehen und die automatische Rotation im Leerlauf werden deaktiviert) und speichert den Winkel in der Karte, sodass genau dieselbe Ansicht auf jedem Gerät und in jedem Browser erscheint. Schalten Sie sie aus, um wieder frei zu drehen.",
     chipsSection: "Entitätenanzeige",
     chipsIntro:
       "Blende jede Entität ein oder aus und wähle ihr Symbol und ihre Farbe. Das Zuhause folgt dem ausgewählten Chip oder standardmäßig deiner Primärfarbe.",

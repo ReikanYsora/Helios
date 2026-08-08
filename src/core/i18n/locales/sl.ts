@@ -73,9 +73,6 @@ export const sl: Translations = {
       "Neobvezno. Za trenutni čas in preteklost uporabite entiteto vremena v Home Assistant, ki namesto vrednosti Open-Meteo določa razmere (dež / sneg / nevihta). Napovedane ure ostanejo na modelu.",
     chipTemperature: "Prikaz temperature",
     chipHumidity: "Prikaz vlažnosti",
-    useCurrentView: "Uporabi trenutni pogled",
-    useCurrentViewHint:
-      "Uokvirite prizor v predogledu (povlecite za vrtenje in nagib), nato ga zajemite tukaj: kot se shrani v konfiguracijo in pogled se zaklene, tako da je enak na vseh napravah.",
     locationSection: "Lokacija doma",
     homeLatitude: "Zemljepisna širina doma",
     homeLongitude: "Zemljepisna dolžina doma",
@@ -131,7 +128,7 @@ export const sl: Translations = {
       "Pokaže čas sončnega vzhoda in zahoda ter njuni oznaki ob vznožju sončnega loka.",
     lockRotation: "Zakleni vrtenje",
     lockRotationHint:
-      "Nastavi kot pogleda neposredno v predogledu (povleci za vrtenje in nagib prizora), nato vklopi zaklep, da ga zamrzneš: vlečenje za vrtenje in samodejno kroženje ob nedejavnosti sta onemogočena, nastavljeni kot pa ostane.",
+      "Povlecite predogled, da zavrtite in nagnete prizor na želeni pogled, nato pa to vklopite. Zaklep zamrzne ta pogled (vrtenje z vlečenjem in samodejno vrtenje v mirovanju se izklopita) in shrani kot v kartico, tako da se popolnoma enak pogled prikaže na vsaki napravi in brskalniku. Izklopite ga za ponovno prosto vrtenje.",
     chipsSection: "Prikaz entitet",
     chipsIntro:
       "Pokaži ali skrij vsako entiteto ter izberi njeno ikono in barvo. Dom sledi izbranemu čipu ali privzeto tvoji primarni barvi.",

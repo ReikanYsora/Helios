@@ -73,9 +73,6 @@ export const pt: Translations = {
       "Opcional. Use uma entidade de meteorologia do Home Assistant para controlar a condição (chuva / neve / trovoada) em vez do valor do Open-Meteo, para o tempo real + passado. As horas de previsão continuam a usar o modelo.",
     chipTemperature: "Mostrar temperatura",
     chipHumidity: "Mostrar humidade",
-    useCurrentView: "Usar vista atual",
-    useCurrentViewHint:
-      "Enquadre a cena na pré-visualização (arraste para rodar e inclinar) e depois capture-a aqui: o ângulo é guardado na configuração e a vista fica bloqueada, ficando idêntica em todos os dispositivos.",
     locationSection: "Localização da casa",
     homeLatitude: "Latitude de casa",
     homeLongitude: "Longitude de casa",
@@ -131,7 +128,7 @@ export const pt: Translations = {
       "Mostra as horas do nascer e do pôr do sol e os respetivos marcadores na base do arco solar.",
     lockRotation: "Bloquear rotação",
     lockRotationHint:
-      "Define o ângulo de visualização diretamente na pré-visualização (arrasta para rodar e inclinar a cena) e depois ativa o bloqueio para o fixar: o arrastar para rodar e a auto-orbita em inatividade ficam desativados, mantendo o ângulo definido.",
+      "Arraste a pré-visualização para girar e inclinar a cena até à vista que quer e depois ative isto. O bloqueio congela essa vista (a rotação por arrasto e a rotação automática em repouso são desativadas) e guarda o ângulo no cartão, para que exatamente a mesma vista apareça em todos os dispositivos e navegadores. Desative-o para voltar a girar livremente.",
     chipsSection: "Apresentação de entidades",
     chipsIntro:
       "Mostra ou oculta cada entidade, e escolhe o seu ícone e cor. A casa segue o chip selecionado, ou a tua cor primária por predefinição.",

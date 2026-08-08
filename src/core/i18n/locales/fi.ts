@@ -73,9 +73,6 @@ export const fi: Translations = {
       "Valinnainen. Käytä Home Assistant -sääentiteettiä olosuhteen (sade / lumi / ukkosmyrsky) ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen. Ennustetunnit pysyvät mallissa.",
     chipTemperature: "Lämpötilan näyttö",
     chipHumidity: "Ilmankosteuden näyttö",
-    useCurrentView: "Käytä nykyistä näkymää",
-    useCurrentViewHint:
-      "Rajaa näkymä esikatselussa (kierrä ja kallista vetämällä) ja tallenna se tähän: kulma tallennetaan asetuksiin ja näkymä lukitaan, joten se on identtinen jokaisella laitteella.",
     locationSection: "Kodin sijainti",
     homeLatitude: "Kodin leveysaste",
     homeLongitude: "Kodin pituusaste",
@@ -131,7 +128,7 @@ export const fi: Translations = {
       "Näytä auringonnousun ja -laskun kellonajat sekä niiden merkit aurinkokaaren juurella.",
     lockRotation: "Lukitse kierto",
     lockRotationHint:
-      "Aseta katselukulma suoraan esikatselussa (vedä kiertääksesi ja kallistaaksesi näkymää) ja kytke sitten lukitus päälle jäädyttääksesi sen: vetämällä kiertäminen ja toimettomana tapahtuva automaattikierto poistetaan käytöstä, jolloin asettamasi kulma säilyy.",
+      "Vedä esikatselua kääntääksesi ja kallistaaksesi näkymää haluamaasi kulmaan ja ota tämä sitten käyttöön. Lukitus jäädyttää näkymän (vetämällä kääntäminen ja lepotilan automaattinen kierto poistetaan käytöstä) ja tallentaa kulman korttiin, joten täsmälleen sama näkymä näkyy jokaisella laitteella ja selaimella. Poista se käytöstä kääntääksesi taas vapaasti.",
     chipsSection: "Entiteettien näyttö",
     chipsIntro:
       "Näytä tai piilota kukin entiteetti, ja valitse sen kuvake ja väri. Koti seuraa valittua sirua tai oletuksena ensisijaista väriäsi.",

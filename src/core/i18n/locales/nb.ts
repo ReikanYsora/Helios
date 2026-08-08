@@ -73,9 +73,6 @@ export const nb: Translations = {
       "Valgfritt. Bruk en Home Assistant-værenhet til å styre forholdet (regn / snø / tordenvær) i stedet for Open-Meteo-verdien, for sanntid + fortid. Prognosetimer følger modellen.",
     chipTemperature: "Temperaturvisning",
     chipHumidity: "Luftfuktighetsvisning",
-    useCurrentView: "Bruk gjeldende visning",
-    useCurrentViewHint:
-      "Ram inn scenen i forhåndsvisningen (dra for å rotere og vippe), og fang den så her: vinkelen lagres i konfigurasjonen og visningen låses, slik at den er identisk på alle enheter.",
     locationSection: "Hjemmets plassering",
     homeLatitude: "Hjemmets breddegrad",
     homeLongitude: "Hjemmets lengdegrad",
@@ -131,7 +128,7 @@ export const nb: Translations = {
       "Vis tidspunktene for soloppgang og solnedgang med markørene ved foten av solbuen.",
     lockRotation: "Lås rotasjon",
     lockRotationHint:
-      "Sett visningsvinkelen direkte i forhåndsvisningen (dra for å rotere og vippe scenen), og slå deretter på låsen for å fryse den: dra-for-å-rotere og automatisk rotasjon ved inaktivitet slås av, og vinkelen du satte beholdes.",
+      "Dra i forhåndsvisningen for å rotere og vippe scenen til ønsket visning, og slå så på dette. Låsen fryser den visningen (dra-for-å-rotere og den automatiske rotasjonen i hvile slås av) og lagrer vinkelen i kortet, slik at nøyaktig samme visning vises på alle enheter og nettlesere. Slå det av for å rotere fritt igjen.",
     chipsSection: "Entitetsvisning",
     chipsIntro:
       "Vis eller skjul hver entitet, og velg ikon og farge for den. Hjemmet følger den valgte chipen, eller primærfargen din som standard.",

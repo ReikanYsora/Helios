@@ -73,9 +73,6 @@ export const cs: Translations = {
       "Volitelné. Pro aktuální a minulé hodnoty použije entitu počasí Home Assistant k řízení stavu (déšť / sníh / bouřka) namísto hodnoty z Open-Meteo. Předpovídané hodiny zůstávají na modelu.",
     chipTemperature: "Zobrazení teploty",
     chipHumidity: "Zobrazení vlhkosti",
-    useCurrentView: "Použít aktuální pohled",
-    useCurrentViewHint:
-      "Nastavte scénu v náhledu (tažením otáčejte a naklánějte) a poté ji zde zachyťte: úhel se uloží do konfigurace a pohled se uzamkne, takže je na každém zařízení stejný.",
     locationSection: "Poloha domova",
     homeLatitude: "Zeměpisná šířka domova",
     homeLongitude: "Zeměpisná délka domova",
@@ -131,7 +128,7 @@ export const cs: Translations = {
       "Zobrazí časy východu a západu slunce a jejich značky u paty slunečního oblouku.",
     lockRotation: "Zamknout otočení",
     lockRotationHint:
-      "Nastav úhel pohledu přímo v náhledu (tažením otočíš a nakloníš scénu) a poté zamkni, abys ho zafixoval: tažení pro otočení i automatické otáčení při nečinnosti se vypnou a zůstane nastavený úhel.",
+      "Tažením v náhledu otočte a nakloňte scénu do požadovaného pohledu a poté toto zapněte. Zámek tento pohled zmrazí (otáčení tažením a automatické otáčení v klidu se vypnou) a uloží úhel do karty, takže úplně stejný pohled se zobrazí na každém zařízení i prohlížeči. Vypněte jej pro opětovné volné otáčení.",
     chipsSection: "Zobrazení entit",
     chipsIntro:
       "Zobraz nebo skryj každou entitu a vyber jí ikonu a barvu. Domov přebírá barvu vybraného čipu, jinak se použije tvá primární barva.",

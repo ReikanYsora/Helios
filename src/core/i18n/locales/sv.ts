@@ -73,9 +73,6 @@ export const sv: Translations = {
       "Valfritt. Använd en Home Assistant-väderentitet för att styra förhållandet (regn / snö / åskväder) i stället för Open-Meteo-värdet, för live + dåtid. Prognostimmar följer modellen.",
     chipTemperature: "Temperaturvisning",
     chipHumidity: "Luftfuktighetsvisning",
-    useCurrentView: "Använd nuvarande vy",
-    useCurrentViewHint:
-      "Rama in scenen i förhandsvisningen (dra för att rotera och luta), och fånga den sedan här: vinkeln sparas i konfigurationen och vyn låses, så att den är identisk på alla enheter.",
     locationSection: "Hemmets plats",
     homeLatitude: "Hemmets latitud",
     homeLongitude: "Hemmets longitud",
@@ -131,7 +128,7 @@ export const sv: Translations = {
       "Visa tiderna för soluppgång och solnedgång och deras markörer vid solbågens fötter.",
     lockRotation: "Lås rotation",
     lockRotationHint:
-      "Ställ in visningsvinkeln direkt i förhandsvisningen (dra för att rotera och luta scenen), och slå sedan på låset för att frysa den: dra-för-att-rotera och den automatiska rotationen vid inaktivitet stängs av, vilket behåller vinkeln du ställt in.",
+      "Dra i förhandsvisningen för att rotera och luta scenen till önskad vy och slå sedan på detta. Låset fryser den vyn (dra-för-att-rotera och den automatiska rotationen i viloläge stängs av) och sparar vinkeln i kortet, så att exakt samma vy visas på varje enhet och webbläsare. Stäng av det för att rotera fritt igen.",
     chipsSection: "Entitetsvisning",
     chipsIntro:
       "Visa eller dölj varje entitet, och välj dess ikon och färg. Hemmet följer det valda chippet, eller din primärfärg som standard.",

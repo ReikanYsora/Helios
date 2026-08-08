@@ -88,30 +88,30 @@ export class HeliosCardEditor extends LitElement
     private static readonly RESET_FEEDBACK_MS = 2000;
     private _sliderDebounce = new Map<string, number>();
 
-    //Latest camera pose published by the live preview (helios-camera-pose event), for the "use current view"
-    //helper. Null until the user has moved the preview at least once.
+    //Latest camera pose published by the live preview (helios-camera-pose event). Captured into the config when
+    //the user turns on the camera lock. Null until the preview has published a pose (fires on init + every move).
     private _livePose: { bearing: number; pitch: number } | null = null;
     private readonly _onCameraPose = (e: Event): void =>
     {
         const d = (e as CustomEvent).detail;
         if (!d || typeof d.bearing !== 'number' || typeof d.pitch !== 'number') { return; }
-        const wasNull = this._livePose === null;
         this._livePose = { bearing: d.bearing, pitch: d.pitch };
-        //Only re-render to flip the button from disabled to enabled; later poses just refresh the cached value.
-        if (wasNull) { this.requestUpdate(); }
     };
-    //Capture the framed preview angle into the config so the locked view is identical on every device.
-    private readonly _onUseCurrentView = (): void =>
+    //Turning the lock on freezes AND saves the current framed angle into the config, so the exact view propagates
+    //to every device/browser (the drag-set pose otherwise lives only in per-device localStorage). One write.
+    private _lockCameraToCurrentView(): void
     {
         const pose = this._livePose;
-        if (!pose) { return; }
         const next = { ...this._cfg } as Record<string, unknown>;
-        next['camera-bearing-deg'] = Math.round(((pose.bearing % 360) + 360) % 360);
-        next['camera-pitch-deg']   = Math.round(pose.pitch);
-        next['camera-locked']      = true;
+        next['camera-locked'] = true;
+        if (pose)
+        {
+            next['camera-bearing-deg'] = Math.round(((pose.bearing % 360) + 360) % 360);
+            next['camera-pitch-deg']   = Math.round(pose.pitch);
+        }
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
-    };
+    }
 
     public disconnectedCallback(): void
     {
@@ -499,7 +499,12 @@ export class HeliosCardEditor extends LitElement
     {
         const el  = e.currentTarget as HTMLElement;
         const key = el.dataset.key as keyof HeliosConfig | undefined;
-        if (key) { this._update(key, el.dataset.value === 'true'); }
+        if (!key) { return; }
+        const value = el.dataset.value === 'true';
+        //Locking the camera also snapshots the current preview angle into the config (see _lockCameraToCurrentView),
+        //so a frozen view is identical on every device. Unlocking is a plain toggle.
+        if (key === 'camera-locked' && value) { this._lockCameraToCurrentView(); return; }
+        this._update(key, value);
     };
     //Toggle a device's presence in the hidden-devices list (presence = hidden). Stored back trimmed to undefined
     //when empty so the YAML drops the key.
@@ -1122,9 +1127,7 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderSlider('no-ui-delay', t.editor.noUiDelay ?? 'Idle delay before hiding', MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}
                 <div class="field-help">${t.editor.noUiDelayHint ?? 'Seconds of inactivity before the timeline and controls fade away in No UI mode. 0 keeps the UI hidden permanently. Only used when No UI mode is on.'}</div>
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
-                ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set.')}
-                ${this._renderActionButton({ icon: 'mdi:camera-marker', label: t.editor.useCurrentView ?? 'Use current view', color: '#475569', onClick: this._onUseCurrentView })}
-                <div class="field-help">${t.editor.useCurrentViewHint ?? 'Frame the scene in the preview (drag to rotate and tilt), then capture it here: the angle is saved to the config and the view is locked, so it is identical on every device.'}</div>
+                ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.')}
 
                 </details>
 

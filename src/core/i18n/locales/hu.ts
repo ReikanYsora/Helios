@@ -73,9 +73,6 @@ export const hu: Translations = {
       "Opcionális. Egy Home Assistant időjárás-entitást használ az időjárási állapot (eső / hó / zivatar) vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz. Az előrejelzett órák a modellen maradnak.",
     chipTemperature: "Hőmérséklet megjelenítése",
     chipHumidity: "Páratartalom megjelenítése",
-    useCurrentView: "Jelenlegi nézet használata",
-    useCurrentViewHint:
-      "Komponáld be a jelenetet az előnézetben (húzással forgathatod és dönthetted), majd rögzítsd itt: a szög elmentődik a konfigurációba, és a nézet rögzül, így minden eszközön azonos lesz.",
     locationSection: "Otthon helye",
     homeLatitude: "Otthon szélességi foka",
     homeLongitude: "Otthon hosszúsági foka",
@@ -131,7 +128,7 @@ export const hu: Translations = {
       "Megjeleníti a napkelte és napnyugta idejét, valamint ezek jelölőit a napív lábánál.",
     lockRotation: "Forgatás zárolása",
     lockRotationHint:
-      "Állítsd be a nézőszöget közvetlenül az előnézetben (húzással forgatható és dönthető a jelenet), majd kapcsold be a zárolást, hogy rögzítsd: a húzással forgatás és a tétlenségi automatikus keringés kikapcsol, és a beállított szög megmarad.",
+      "Húzza az előnézetet a jelenet elforgatásához és megdöntéséhez a kívánt nézetig, majd kapcsolja be ezt. A zár rögzíti ezt a nézetet (a húzással forgatás és a nyugalmi automatikus forgatás kikapcsol), és elmenti a szöget a kártyába, így pontosan ugyanaz a nézet jelenik meg minden eszközön és böngészőben. Kapcsolja ki, hogy újra szabadon forgathasson.",
     chipsSection: "Entitások megjelenítése",
     chipsIntro:
       "Jelenítsd meg vagy rejtsd el az egyes entitásokat, és válaszd ki az ikonjukat és színüket. Az otthon a kiválasztott chipet követi, alapértelmezésben pedig az elsődleges színedet.",

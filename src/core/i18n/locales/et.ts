@@ -73,9 +73,6 @@ export const et: Translations = {
       "Valikuline. Kasuta Open-Meteo väärtuse asemel Home Assistanti ilmaolemit, et juhtida ilmastikutingimusi (vihm / lumi / äike) reaalaja + mineviku jaoks. Prognoositunnid jäävad mudelile.",
     chipTemperature: "Temperatuuri kuva",
     chipHumidity: "Niiskuse kuva",
-    useCurrentView: "Kasuta praegust vaadet",
-    useCurrentViewHint:
-      "Sea stseen eelvaates paika (lohista pööramiseks ja kallutamiseks) ja jäädvusta see siin: nurk salvestatakse seadistusse ja vaade lukustatakse, nii et see on igas seadmes ühesugune.",
     locationSection: "Kodu asukoht",
     homeLatitude: "Kodu laiuskraad",
     homeLongitude: "Kodu pikkuskraad",
@@ -131,7 +128,7 @@ export const et: Translations = {
       "Näita päikesetõusu ja -loojangu aegu ning nende markereid päikesekaare jalamil.",
     lockRotation: "Lukusta pööramine",
     lockRotationHint:
-      "Sea vaatenurk otse eelvaates (lohista stseeni pööramiseks ja kallutamiseks), seejärel lülita lukustus sisse, et see fikseerida: lohistamisega pööramine ja automaatne tiirlemine tegevusetuse ajal keelatakse, säilitades sinu seatud nurga.",
+      "Lohistage eelvaadet, et pöörata ja kallutada stseeni soovitud vaateni, seejärel lülitage see sisse. Lukk külmutab selle vaate (lohistamisega pööramine ja jõudeoleku automaatne pööramine lülitatakse välja) ja salvestab nurga kaardile, nii et täpselt sama vaade kuvatakse igas seadmes ja brauseris. Lülitage see välja, et taas vabalt pöörata.",
     chipsSection: "Olemite kuvamine",
     chipsIntro:
       "Näita või peida iga olem ning vali selle ikoon ja värv. Kodu järgib valitud kiipi, või vaikimisi sinu põhivärvi.",

@@ -73,9 +73,6 @@ export const isLocale: Translations = {
       "Valfrjálst. Notaðu Home Assistant veðureiningu til að stýra veðurskilyrðum (rigning / snjór / þrumuveður) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð. Spátímar halda sig við líkanið.",
     chipTemperature: "Hitastigsbirting",
     chipHumidity: "Rakastigsbirting",
-    useCurrentView: "Nota núverandi sýn",
-    useCurrentViewHint:
-      "Stilltu senuna í forskoðuninni (dragðu til að snúa og halla), taktu hana svo hér: hornið er vistað í stillingunum og sýnin er læst, þannig að hún er eins á öllum tækjum.",
     locationSection: "Staðsetning",
     homeLatitude: "Breiddargráða heimilis",
     homeLongitude: "Lengdargráða heimilis",
@@ -131,7 +128,7 @@ export const isLocale: Translations = {
       "Sýna tímasetningar sólarupprásar og sólseturs, ásamt merkjum þeirra við fætur sólarbogans.",
     lockRotation: "Læsa snúningi",
     lockRotationHint:
-      "Stilltu sjónarhornið beint í forskoðuninni (dragðu til að snúa og halla senunni), kveiktu svo á lásnum til að festa það: að draga til að snúa og sjálfvirki hvíldarsnúningurinn verða þá óvirk, og hornið sem þú stilltir helst.",
+      "Dragðu forskoðunina til að snúa og halla senunni að þeirri sýn sem þú vilt og kveiktu svo á þessu. Læsingin frystir þá sýn (snúningur með drætti og sjálfvirkur snúningur í hvíld eru gerð óvirk) og vistar hornið á spjaldið, þannig að nákvæmlega sama sýn birtist á öllum tækjum og vöfrum. Slökktu á henni til að snúa frjálst aftur.",
     chipsSection: "Birting einda",
     chipsIntro:
       "Sýndu eða feldu hverja eind, og veldu tákn og lit hennar. Heimilið fylgir valinni flögu, eða aðallitnum þínum sjálfgefið.",

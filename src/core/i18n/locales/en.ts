@@ -101,9 +101,6 @@ export const en: Translations = {
     weatherEnabled: "Weather effects",
     weatherEnabledHint:
       "Paint the real sky over the scene: sunshine, clouds, rain, snow and thunderstorms from your local weather, following the timeline as you scrub. Off keeps a clear scene.",
-    useCurrentView: "Use current view",
-    useCurrentViewHint:
-      "Frame the scene in the preview (drag to rotate and tilt), then capture it here: the angle is saved to the config and the view is locked, so it is identical on every device.",
     noUiMode: "No UI mode",
     noUiModeHint:
       "Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.",
@@ -121,7 +118,7 @@ export const en: Translations = {
       "Show the sunrise and sunset times and their markers at the feet of the solar arc.",
     lockRotation: "Lock rotation",
     lockRotationHint:
-      "Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set.",
+      "Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.",
     chipsSection: "Entity display",
     chipsIntro:
       "Show or hide each entity, and pick its icon and colour. The home follows the selected chip, or your primary colour by default.",

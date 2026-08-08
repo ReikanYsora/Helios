@@ -73,9 +73,6 @@ export const pl: Translations = {
       "Opcjonalne. Użyj encji pogody Home Assistant, aby sterować warunkami (deszcz / śnieg / burza) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości. Godziny prognozy pozostają oparte na modelu.",
     chipTemperature: "Wyświetlanie temperatury",
     chipHumidity: "Wyświetlanie wilgotności",
-    useCurrentView: "Użyj bieżącego widoku",
-    useCurrentViewHint:
-      "Ustaw kadr sceny w podglądzie (przeciągnij, aby obrócić i pochylić), a następnie przechwyć go tutaj: kąt jest zapisywany w konfiguracji, a widok zostaje zablokowany, dzięki czemu jest identyczny na każdym urządzeniu.",
     locationSection: "Lokalizacja domu",
     homeLatitude: "Szerokość geograficzna domu",
     homeLongitude: "Długość geograficzna domu",
@@ -131,7 +128,7 @@ export const pl: Translations = {
       "Pokazuje godziny wschodu i zachodu słońca oraz ich znaczniki u podstawy łuku słonecznego.",
     lockRotation: "Zablokuj obrót",
     lockRotationHint:
-      "Ustaw kąt widoku bezpośrednio w podglądzie (przeciągnij, aby obracać i pochylać scenę), a następnie włącz blokadę, aby go zamrozić: przeciąganie w celu obrotu oraz automatyczny obrót przy bezczynności zostają wyłączone, zachowując ustawiony kąt.",
+      "Przeciągnij podgląd, aby obrócić i pochylić scenę do żądanego widoku, a następnie włącz tę opcję. Blokada zamraża ten widok (obracanie przeciąganiem i automatyczne obracanie w spoczynku zostają wyłączone) i zapisuje kąt w karcie, dzięki czemu dokładnie ten sam widok pojawia się na każdym urządzeniu i w każdej przeglądarce. Wyłącz ją, aby ponownie swobodnie obracać.",
     chipsSection: "Wyświetlanie encji",
     chipsIntro:
       "Pokaż lub ukryj każdą encję i wybierz jej ikonę oraz kolor. Dom podąża za wybranym chipem lub domyślnie za Twoim kolorem podstawowym.",

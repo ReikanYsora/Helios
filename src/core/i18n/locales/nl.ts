@@ -73,9 +73,6 @@ export const nl: Translations = {
       "Optioneel. Gebruik een Home Assistant-weerentiteit om de conditie (regen / sneeuw / onweer) aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden. Voorspelde uren blijven van het model.",
     chipTemperature: "Temperatuurweergave",
     chipHumidity: "Luchtvochtigheidsweergave",
-    useCurrentView: "Huidige weergave gebruiken",
-    useCurrentViewHint:
-      "Kadreer de scène in de voorbeeldweergave (sleep om te draaien en te kantelen) en leg deze hier vast: de hoek wordt opgeslagen in de configuratie en de weergave wordt vergrendeld, zodat deze op elk apparaat identiek is.",
     locationSection: "Locatie",
     homeLatitude: "Breedtegraad van het huis",
     homeLongitude: "Lengtegraad van het huis",
@@ -131,7 +128,7 @@ export const nl: Translations = {
       "Toon de zonsopgang- en zonsondergangtijden en hun markeringen aan de voet van de zonneboog.",
     lockRotation: "Rotatie vergrendelen",
     lockRotationHint:
-      "Stel de kijkhoek rechtstreeks in de voorvertoning in (sleep om de scène te draaien en te kantelen) en zet daarna de vergrendeling aan om hem vast te zetten: slepen om te draaien en de automatische rotatie bij inactiviteit worden uitgeschakeld, zodat de ingestelde hoek behouden blijft.",
+      "Sleep in het voorbeeld om de scène te draaien en te kantelen naar de gewenste weergave en zet dit vervolgens aan. De vergrendeling zet die weergave vast (draaien via slepen en de automatische rotatie in rust worden uitgeschakeld) en slaat de hoek op in de kaart, zodat exact dezelfde weergave op elk apparaat en in elke browser verschijnt. Zet het uit om weer vrij te draaien.",
     chipsSection: "Entiteitweergave",
     chipsIntro:
       "Toon of verberg elke entiteit en kies het bijbehorende icoon en de kleur. Het huis volgt de geselecteerde chip, of standaard je primaire kleur.",

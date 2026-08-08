@@ -72,9 +72,6 @@ export const fr: Translations = {
       "Facultatif. Utilisez une entité météo Home Assistant pour piloter la condition (pluie / neige / orage) à la place de la valeur Open-Meteo, pour le direct et le passé. Les heures de prévision restent sur le modèle.",
     chipTemperature: "Affichage de la température",
     chipHumidity: "Affichage de l'humidité",
-    useCurrentView: "Utiliser la vue actuelle",
-    useCurrentViewHint:
-      "Cadrez la scène dans l'aperçu (faites glisser pour pivoter et incliner), puis capturez-la ici : l'angle est enregistré dans la configuration et la vue est verrouillée, pour qu'elle soit identique sur tous les appareils.",
     locationSection: "Emplacement de la maison",
     homeLatitude: "Latitude du domicile",
     homeLongitude: "Longitude du domicile",
@@ -130,7 +127,7 @@ export const fr: Translations = {
       "Affiche les heures de lever et de coucher du soleil et leurs marqueurs aux pieds de l'arc solaire.",
     lockRotation: "Verrouiller la rotation",
     lockRotationHint:
-      "Réglez l'angle de vue directement dans l'aperçu (glissez pour tourner et incliner la scène), puis activez le verrou pour le figer : le glisser-tourner et l'auto-rotation au repos sont désactivés, l'angle réglé est conservé.",
+      "Faites glisser l'aperçu pour pivoter et incliner la scène jusqu'à la vue souhaitée, puis activez ceci. Le verrou fige cette vue (le glisser-pour-pivoter et l'auto-rotation au repos sont désactivés) et enregistre l'angle dans la carte, pour un rendu identique sur chaque appareil et navigateur. Désactivez-le pour pivoter à nouveau librement.",
     chipsSection: "Affichage des entités",
     chipsIntro:
       "Affichez ou masquez chaque entité, et choisissez son icône et sa couleur. La maison suit le chip sélectionné, ou votre couleur primaire par défaut.",

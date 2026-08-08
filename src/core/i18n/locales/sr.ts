@@ -73,9 +73,6 @@ export const sr: Translations = {
       "Opciono. Koristite Home Assistant vremenski entitet za određivanje uslova (kiša / sneg / grmljavina) umesto Open-Meteo vrednosti, za trenutno + prošlost. Sati prognoze ostaju na modelu.",
     chipTemperature: "Prikaz temperature",
     chipHumidity: "Prikaz vlažnosti",
-    useCurrentView: "Koristi trenutni prikaz",
-    useCurrentViewHint:
-      "Uokvirite scenu u pregledu (prevucite za rotaciju i naginjanje), zatim je snimite ovde: ugao se čuva u konfiguraciji i prikaz se zaključava, tako da je identičan na svakom uređaju.",
     locationSection: "Локација дома",
     homeLatitude: "Географска ширина дома",
     homeLongitude: "Географска дужина дома",
@@ -131,7 +128,7 @@ export const sr: Translations = {
       "Прикажи времена изласка и заласка сунца и њихове ознаке у подножју сунчевог лука.",
     lockRotation: "Закључај ротацију",
     lockRotationHint:
-      "Подеси угао гледања директно у прегледу (превуци да ротираш и нагнеш сцену), затим укључи закључавање да га замрзнеш: превлачење за ротацију и аутоматска ротација при мировању се искључују, задржавајући угао који си поставио.",
+      "Превуците преглед да бисте ротирали и нагнули сцену до жељеног приказа, а затим укључите ово. Закључавање замрзава тај приказ (ротација превлачењем и аутоматска ротација у мировању се искључују) и чува угао у картици, тако да се потпуно исти приказ појављује на сваком уређају и прегледачу. Искључите га да бисте поново слободно ротирали.",
     chipsSection: "Приказ ентитета",
     chipsIntro:
       "Прикажи или сакриј сваки ентитет и одабери његову икону и боју. Дом прати изабрани чип, или подразумевано твоју примарну боју.",
