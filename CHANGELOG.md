@@ -11,7 +11,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-alpha (`2026.9.0-a0`).
+alpha (`2026.9.0-a1`).
 
 ### Added: the real weather, painted over the scene
 
@@ -25,10 +25,11 @@ sunrise and sunset read honestly.
 
 ### Added: outdoor temperature and humidity
 
-Two new chips in the top-left corner show the outdoor temperature and humidity,
-and behave exactly like the other chips: tap one to bring its day curve up
-around the house and its series onto the timeline, tap again to toggle the
-curve, with the same detail panel (min / mean / max) and hover readout.
+Two new chips show the outdoor temperature and humidity, grouped along the bottom
+of the scene as secondary readings, and behave exactly like the other chips: tap
+one to bring its day curve up around the house and its series onto the timeline,
+tap again to toggle the curve, with the same detail panel (min / mean / max) and
+hover readout.
 Temperature scales to its own range so a two-degree swing is legible; humidity
 sits on a fixed 0–100 % scale. Thanks to @tfriberg for the suggestion (#332).
 
@@ -42,10 +43,10 @@ Open-Meteo for the live and past hours, while the forecast stays on the model.
 ### Added: a locked view that is the same on every device
 
 The viewing angle of a locked card lived in the browser, so it differed from one
-device to the next. You can now capture it into the card's configuration, with a
-**Use current view** button in the editor: frame the scene in the preview, click
-it, and the angle is saved and locked, identical everywhere. Thanks to
-@ferreto1978 (#310, #353).
+device to the next. Turning on **Lock rotation** now captures the current angle
+into the card's configuration in one step: frame the scene in the preview, enable
+the lock, and the exact same view is saved and frozen on every device and
+browser. Thanks to @ferreto1978 (#310, #353) and @roumano (#363).
 
 ### Fixed: the grid import/export arrow, definitively
 
