@@ -996,17 +996,18 @@ export class HeliosCard extends LitElement
     private _renderTempChip(): TemplateResult | typeof nothing
     {
         if (!showTemperature(this.config) || !isFinite(this._temperature)) { return nothing; }
-        //When a day curve is up, only the active chip stays (same rule as the scene chips' `keeps`).
-        if (this._dayCurveOpen && this._chartTarget !== 'temperature') { return nothing; }
-        return this._cornerChip('temperature', `${this._temperature.toFixed(1)} °C`);
+        //When a day curve is up, only the active chip is visible; the other stays in the DOM as an invisible
+        //placeholder so the visible chip keeps its slot (the centered row must not shift when its sibling drops).
+        const dimmed = this._dayCurveOpen && this._chartTarget !== 'temperature';
+        return this._cornerChip('temperature', `${this._temperature.toFixed(1)} °C`, dimmed);
     }
     private _renderHumidityChip(): TemplateResult | typeof nothing
     {
         if (!showHumidity(this.config) || !isFinite(this._humidity)) { return nothing; }
-        if (this._dayCurveOpen && this._chartTarget !== 'humidity') { return nothing; }
-        return this._cornerChip('humidity', `${Math.round(this._humidity)} %`);
+        const dimmed = this._dayCurveOpen && this._chartTarget !== 'humidity';
+        return this._cornerChip('humidity', `${Math.round(this._humidity)} %`, dimmed);
     }
-    private _cornerChip(slot: 'temperature' | 'humidity', text: string): TemplateResult
+    private _cornerChip(slot: 'temperature' | 'humidity', text: string, dimmed: boolean): TemplateResult
     {
         const color   = chipSlotColor(this, this.config, slot);
         const icon    = chipSlotIcon(this.config, slot);
@@ -1014,9 +1015,11 @@ export class HeliosCard extends LitElement
         //metric, a second tap on the active chip toggles its day curve (onChartTargetClick).
         const active  = this._chartTarget === slot;
         const curveOn = active && this._dayCurveOpen;
+        //A dimmed chip carries is-slot-hidden (visibility:hidden): it reserves its width but is automatically
+        //inert, unfocusable and out of the a11y tree, so role/tabindex/click can stay static.
         return html`
             <div
-                class="helios-corner-chip ${active ? 'is-chart-active' : ''} ${curveOn ? 'is-curve-on' : ''}"
+                class="helios-corner-chip ${active ? 'is-chart-active' : ''} ${curveOn ? 'is-curve-on' : ''} ${dimmed ? 'is-slot-hidden' : ''}"
                 style=${`--chip-color:${color}`}
                 role="button"
                 tabindex="0"
@@ -1374,6 +1377,8 @@ export class HeliosCard extends LitElement
         //Selected-chip accent for the timeline + period-selector top borders (always), plus the detail-panel
         //accent (same colour) only when the panel is open.
         const cardStyle = `--tb-accent:${activeChipColor}${infoOpen ? `; --detail-accent:${activeChipColor}` : ''}`;
+        //Whether the bottom timeline chrome is on screen. Also lifts the weather chips clear of it (.has-timeline).
+        const timelineShown = hasHomeCoords && this._timeRange && showTimeline(this.config);
 
         return html`
             <ha-card class=${cardClasses} style=${cardStyle}>
@@ -1384,14 +1389,15 @@ export class HeliosCard extends LitElement
                     @pointerup=${this._onSceneTapEnd}
                 ></div>
 
-                <!--  "Your real sky": weather overlay layers, then the corner weather chips (temperature, humidity).  -->
+                <!--  "Your real sky": weather overlay layers, then the weather chips (temperature, humidity),
+                      grouped along the bottom with the scene pill family (lifted above the timeline when shown).  -->
                 ${weatherOverlay()}
-                <div class="helios-corner-chips">
+                <div class="helios-corner-chips ${timelineShown ? 'has-timeline' : ''}">
                     ${this._renderTempChip()}
                     ${this._renderHumidityChip()}
                 </div>
 
-                ${hasHomeCoords && this._timeRange && showTimeline(this.config) ? html`
+                ${timelineShown ? html`
                     <div
                         class="time-bar"
                         @pointerdown=${this._onTimelinePointerDown}

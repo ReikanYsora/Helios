@@ -830,18 +830,31 @@ export const heliosCardStyles = css`
             radial-gradient(35% 25% at 70% 78%, rgba(150, 180, 215, 0.14), transparent 70%);
     }
 
-    /*  Corner weather chips (top-left column): temperature, then humidity. Each icon is tinted by --chip-color.  */
+    /*  Weather chips (temperature, then humidity): a centered row pinned along the BOTTOM of the scene, so they
+        read as secondary info and group with the home/grid/battery pill family rather than fighting the irradiance
+        chip up top. Below the timeline's z-index (1000) so the timeline always wins on overlap. Each icon is tinted
+        by --chip-color.  */
     .helios-corner-chips
     {
         position: absolute;
-        top: 12px;
-        left: 12px;
+        left: 0;
+        right: 0;
+        bottom: 12px;
         z-index: 8;
         display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
         pointer-events: none;
+    }
+    /*  When the timeline is shown, lift the row clear of it: period band (33px) + scrubber height + a small gap.
+        The scrubber clamp mirrors .time-bar in helios-timeline-css.ts (bottom: 33px; height: clamp(54px,18%,90px));
+        keep the two in sync if that changes.  */
+    .helios-corner-chips.has-timeline
+    {
+        bottom: calc(33px + clamp(54px, 18%, 90px) + 10px);
     }
     /*  Same shared pill recipe as the HUD chips: fixed width, 2px border in the chip's colour, card-background fill,
         icon + text in --primary-text-color. Only the border colour differs per chip (via --chip-color).  */
@@ -881,6 +894,9 @@ export const heliosCardStyles = css`
     /*  Clickable + active states, mirroring the scene chips: [role=button] re-enables events (the column is
         pointer-events:none), .is-chart-active raises the halo, .is-curve-on fills the pill with the metric colour.  */
     .helios-corner-chip[role="button"] { pointer-events: auto; cursor: pointer; }
+    /*  Day-curve open: the non-active weather chip becomes an inert, invisible placeholder. It still reserves its
+        slot width so the centered row does not shift the surviving chip when its sibling drops out.  */
+    .helios-corner-chip.is-slot-hidden { visibility: hidden; pointer-events: none; }
     .helios-corner-chip::after
     {
         content: "";
