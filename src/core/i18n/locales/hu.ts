@@ -50,6 +50,32 @@ export const hu: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Időjárási effektek",
+    weatherEnabledHint:
+      "A valódi eget vetíti a jelenet fölé: napsütés, felhők, eső, hó és zivatar a helyi időjárás alapján, az idővonalat követve, ahogy azon mozogsz. Kikapcsolva tiszta marad a jelenet.",
+    temperatureEntity: "Hőmérséklet-szenzor",
+    temperatureEntityHelp:
+      "Opcionális. Egy helyi kültéri hőmérséklet-szenzort (°C) használ az Open-Meteo érték helyett a hőmérséklet-chiphez. Az élő állapotát és a recorder-előzményeit használja az élő + múlt adatokhoz; az előrejelzett órák a modellen maradnak.",
+    humidityEntity: "Páratartalom-szenzor",
+    humidityEntityHelp:
+      "Opcionális. Egy helyi relatív páratartalom-szenzort (%) használ az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    cloudCoverEntity: "Felhőzet-szenzor",
+    cloudCoverEntityHelp:
+      "Opcionális. Egy helyi felhőzet-szenzort (%) használ az égbolt fokozatának (napsütés, szürkülés) vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    precipitationEntity: "Csapadék-szenzor",
+    precipitationEntityHelp:
+      "Opcionális. Egy helyi csapadék-szenzort (mm) használ az esőréteg vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    snowfallEntity: "Hóesés-szenzor",
+    snowfallEntityHelp:
+      "Opcionális. Egy helyi hóesés-szenzort (cm) használ a hóréteg vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    weatherEntity: "Időjárás-entitás",
+    weatherEntityHelp:
+      "Opcionális. Egy Home Assistant időjárás-entitást használ az időjárási állapot (eső / hó / zivatar) vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz. Az előrejelzett órák a modellen maradnak.",
+    chipTemperature: "Hőmérséklet megjelenítése",
+    chipHumidity: "Páratartalom megjelenítése",
+    useCurrentView: "Jelenlegi nézet használata",
+    useCurrentViewHint:
+      "Komponáld be a jelenetet az előnézetben (húzással forgathatod és dönthetted), majd rögzítsd itt: a szög elmentődik a konfigurációba, és a nézet rögzül, így minden eszközön azonos lesz.",
     locationSection: "Otthon helye",
     homeLatitude: "Otthon szélességi foka",
     homeLongitude: "Otthon hosszúsági foka",

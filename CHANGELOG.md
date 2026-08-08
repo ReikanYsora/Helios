@@ -7,6 +7,56 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.0
+
+The weather release, "Your real sky": the scene now reflects the weather over
+your home, and the outdoor temperature and humidity join the card. Currently in
+alpha (`2026.9.0-a0`).
+
+### Added: the real weather, painted over the scene
+
+The card now shows the weather at your home, resolved for the moment on the
+timeline: clear-sky sunshine that dims as the cloud cover builds, an overcast
+grey, then rain, snow or a thunderstorm on top. Each layer is driven by a real
+measured value (cloud cover, precipitation, snowfall, the weather code), never a
+guess, and the whole thing follows the scrub, so you can watch a front arrive
+across the day. The sun glow now also fades as the sun nears the horizon, so
+sunrise and sunset read honestly.
+
+### Added: outdoor temperature and humidity
+
+Two new chips in the top-left corner show the outdoor temperature and humidity,
+and behave exactly like the other chips: tap one to bring its day curve up
+around the house and its series onto the timeline, tap again to toggle the
+curve, with the same detail panel (min / mean / max) and hover readout.
+Temperature scales to its own range so a two-degree swing is legible; humidity
+sits on a fixed 0–100 % scale. Thanks to @tfriberg for the suggestion (#332).
+
+### Added: local weather sensors override the forecast
+
+If you run a weather station, you can point each weather reading at your own
+sensor, temperature, humidity, cloud cover, precipitation, snowfall, or the
+condition from a Home Assistant `weather` entity, and it takes over from
+Open-Meteo for the live and past hours, while the forecast stays on the model.
+
+### Added: a locked view that is the same on every device
+
+The viewing angle of a locked card lived in the browser, so it differed from one
+device to the next. You can now capture it into the card's configuration, with a
+**Use current view** button in the editor: frame the scene in the preview, click
+it, and the angle is saved and locked, identical everywhere. Thanks to
+@ferreto1978 (#310, #353).
+
+### Fixed: the grid import/export arrow, definitively
+
+The 2026.8.3 fix for the swapped grid tower icons was itself the wrong way round,
+because the MDI icon names are the opposite of what they draw. The arrow now
+follows the real flow, points into the grid when exporting and away from it when
+importing, everywhere it appears, with a code note so it can't be "corrected"
+back. Thanks to @7oku (#356).
+
+---
+
 ## 2026.8.3
 
 A small release on top of 2026.8.2: a new sun-chip readout, a fairer flow

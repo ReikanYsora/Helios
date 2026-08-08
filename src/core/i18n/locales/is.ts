@@ -50,6 +50,32 @@ export const isLocale: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Veðuráhrif",
+    weatherEnabledHint:
+      "Málar raunverulegan himininn yfir senuna: sólskin, ský, rigningu, snjó og þrumuveður frá veðrinu hjá þér, í takt við tímalínuna þegar þú flettir. Slökkt heldur senunni heiðskírri.",
+    temperatureEntity: "Hitaskynjari",
+    temperatureEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn útihitaskynjara (°C) í stað Open-Meteo gildisins fyrir hitastigsmerkið. Rauntímastaða hans og upptökusaga eru notuð fyrir rauntíma + fortíð; spátímar halda sig við líkanið.",
+    humidityEntity: "Rakaskynjari",
+    humidityEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn rakastigsskynjara (%) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    cloudCoverEntity: "Skýjahuluskynjari",
+    cloudCoverEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn skýjahuluskynjara (%) til að stýra himinstiginu (sól, grámi) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    precipitationEntity: "Úrkomuskynjari",
+    precipitationEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn úrkomuskynjara (mm) til að stýra rigningarlaginu í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    snowfallEntity: "Snjókomuskynjari",
+    snowfallEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn snjókomuskynjara (cm) til að stýra snjólaginu í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    weatherEntity: "Veðureining",
+    weatherEntityHelp:
+      "Valfrjálst. Notaðu Home Assistant veðureiningu til að stýra veðurskilyrðum (rigning / snjór / þrumuveður) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð. Spátímar halda sig við líkanið.",
+    chipTemperature: "Hitastigsbirting",
+    chipHumidity: "Rakastigsbirting",
+    useCurrentView: "Nota núverandi sýn",
+    useCurrentViewHint:
+      "Stilltu senuna í forskoðuninni (dragðu til að snúa og halla), taktu hana svo hér: hornið er vistað í stillingunum og sýnin er læst, þannig að hún er eins á öllum tækjum.",
     locationSection: "Staðsetning",
     homeLatitude: "Breiddargráða heimilis",
     homeLongitude: "Lengdargráða heimilis",

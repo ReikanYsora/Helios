@@ -410,6 +410,17 @@ function wireEngineCallbacks(host: InitHost): void
         {
             overlayRaf = null;
             refreshHud(host);
+            //In the editor preview, publish the live camera pose so the editor's "use current view" helper can
+            //capture the framed angle into the config. Composed + bubbling so it reaches the editor element.
+            if (host.preview)
+            {
+                const pose = host._engine?.getCameraPose();
+                if (pose)
+                {
+                    (host as unknown as HTMLElement).dispatchEvent(
+                        new CustomEvent('helios-camera-pose', { detail: pose, bubbles: true, composed: true }));
+                }
+            }
         });
     };
 }

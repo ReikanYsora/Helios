@@ -62,7 +62,13 @@ home and your consumption; the production layers simply do not appear.
 * **Live flows**, production, grid and battery, each with a bead that travels to
   the home at the speed of the power it carries.
 * **A timeline you can scrub**, two days back and two days forward. The whole
-  scene follows: sun, shadows, clouds, every value.
+  scene follows: sun, shadows, weather, every value.
+* **Your real sky**, the local weather painted over the scene: clear-sky
+  sunshine that dims as the clouds build, then rain, snow or a thunderstorm,
+  each following the timeline as you scrub.
+* **Outdoor temperature and humidity**, as two chips with their own day curve,
+  and either can be pinned to your own weather-station sensor instead of the
+  forecast.
 * **The day's curve**, your production or consumption standing on the sun's own
   path around the house, so where a point sits on it *is* the hour.
 * **Your devices, grouped**, up to four groups with their own name, colour and
@@ -70,7 +76,8 @@ home and your consumption; the production layers simply do not appear.
 * **Cast shadows** from the buildings around you, projected from real
   footprints, fading as the sun nears the horizon.
 * **Built for a wall**, an optional mode that fades the controls away after a
-  few seconds and leaves only the scene.
+  few seconds and leaves only the scene, with a locked viewing angle you can
+  set once and get identically on every device.
 
 Every option is in the visual editor, and the full reference is in the
 [documentation](https://helios-ha.org/help/).
@@ -106,7 +113,10 @@ Helios server, no account and no telemetry.
 
 Two open services are used, neither needs a key: [Open-Meteo](https://open-meteo.com/)
 for the weather, and [OpenFreeMap](https://openfreemap.org/) for the map tiles
-the ground is drawn from.
+the ground is drawn from. If you run a local weather station, you can point each
+weather reading (temperature, humidity, cloud cover, precipitation, snow, or the
+condition) at your own sensor, and it takes over from the forecast for the live
+and past hours.
 
 The scene is painted by a self-contained **2.5D engine with no WebGL**: a tilted
 vector basemap on a canvas with every overlay projected on top in SVG. Light

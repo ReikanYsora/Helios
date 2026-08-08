@@ -50,6 +50,32 @@ export const pl: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Efekty pogodowe",
+    weatherEnabledHint:
+      "Maluje prawdziwe niebo nad sceną: słońce, chmury, deszcz, śnieg i burze na podstawie lokalnej pogody, podążając za osią czasu podczas przewijania. Wyłączenie utrzymuje czystą scenę.",
+    temperatureEntity: "Czujnik temperatury",
+    temperatureEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika temperatury zewnętrznej (°C) zamiast wartości z Open-Meteo dla wskaźnika temperatury. Jego bieżący stan oraz historia z rejestratora są używane dla teraźniejszości i przeszłości; godziny prognozy pozostają oparte na modelu.",
+    humidityEntity: "Czujnik wilgotności",
+    humidityEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika wilgotności względnej (%) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    cloudCoverEntity: "Czujnik zachmurzenia",
+    cloudCoverEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika zachmurzenia (%), aby sterować wyglądem nieba (słońce, szarzenie) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    precipitationEntity: "Czujnik opadów",
+    precipitationEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika opadów (mm), aby sterować warstwą deszczu zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    snowfallEntity: "Czujnik opadów śniegu",
+    snowfallEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika opadów śniegu (cm), aby sterować warstwą śniegu zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    weatherEntity: "Encja pogody",
+    weatherEntityHelp:
+      "Opcjonalne. Użyj encji pogody Home Assistant, aby sterować warunkami (deszcz / śnieg / burza) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości. Godziny prognozy pozostają oparte na modelu.",
+    chipTemperature: "Wyświetlanie temperatury",
+    chipHumidity: "Wyświetlanie wilgotności",
+    useCurrentView: "Użyj bieżącego widoku",
+    useCurrentViewHint:
+      "Ustaw kadr sceny w podglądzie (przeciągnij, aby obrócić i pochylić), a następnie przechwyć go tutaj: kąt jest zapisywany w konfiguracji, a widok zostaje zablokowany, dzięki czemu jest identyczny na każdym urządzeniu.",
     locationSection: "Lokalizacja domu",
     homeLatitude: "Szerokość geograficzna domu",
     homeLongitude: "Długość geograficzna domu",

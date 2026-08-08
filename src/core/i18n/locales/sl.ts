@@ -50,6 +50,32 @@ export const sl: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Vremenski učinki",
+    weatherEnabledHint:
+      "Nad prizor nariše resnično nebo: sonce, oblake, dež, sneg in nevihte iz vašega lokalnega vremena, ki sledijo časovnici, ko jo premikate. Ko je izklopljeno, prizor ostane jasen.",
+    temperatureEntity: "Senzor temperature",
+    temperatureEntityHelp:
+      "Neobvezno. Za prikaz temperature uporabite lokalni zunanji senzor temperature (°C) namesto vrednosti Open-Meteo. Njegovo trenutno stanje in zgodovina snemalnika se uporabita za trenutni čas in preteklost; napovedane ure ostanejo na modelu.",
+    humidityEntity: "Senzor vlažnosti",
+    humidityEntityHelp:
+      "Neobvezno. Za trenutni čas in preteklost uporabite lokalni senzor relativne vlažnosti (%) namesto vrednosti Open-Meteo.",
+    cloudCoverEntity: "Senzor oblačnosti",
+    cloudCoverEntityHelp:
+      "Neobvezno. Za trenutni čas in preteklost uporabite lokalni senzor oblačnosti (%), ki namesto vrednosti Open-Meteo določa stopnjo neba (sonce, sivenje).",
+    precipitationEntity: "Senzor padavin",
+    precipitationEntityHelp:
+      "Neobvezno. Za trenutni čas in preteklost uporabite lokalni senzor padavin (mm), ki namesto vrednosti Open-Meteo določa plast dežja.",
+    snowfallEntity: "Senzor sneženja",
+    snowfallEntityHelp:
+      "Neobvezno. Za trenutni čas in preteklost uporabite lokalni senzor sneženja (cm), ki namesto vrednosti Open-Meteo določa plast snega.",
+    weatherEntity: "Entiteta vremena",
+    weatherEntityHelp:
+      "Neobvezno. Za trenutni čas in preteklost uporabite entiteto vremena v Home Assistant, ki namesto vrednosti Open-Meteo določa razmere (dež / sneg / nevihta). Napovedane ure ostanejo na modelu.",
+    chipTemperature: "Prikaz temperature",
+    chipHumidity: "Prikaz vlažnosti",
+    useCurrentView: "Uporabi trenutni pogled",
+    useCurrentViewHint:
+      "Uokvirite prizor v predogledu (povlecite za vrtenje in nagib), nato ga zajemite tukaj: kot se shrani v konfiguracijo in pogled se zaklene, tako da je enak na vseh napravah.",
     locationSection: "Lokacija doma",
     homeLatitude: "Zemljepisna širina doma",
     homeLongitude: "Zemljepisna dolžina doma",

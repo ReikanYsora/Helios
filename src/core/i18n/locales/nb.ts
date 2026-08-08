@@ -50,6 +50,32 @@ export const nb: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Væreffekter",
+    weatherEnabledHint:
+      "Mal den ekte himmelen over scenen: solskinn, skyer, regn, snø og tordenvær fra ditt lokale vær, som følger tidslinjen mens du blar. Av beholder en klar scene.",
+    temperatureEntity: "Temperatursensor",
+    temperatureEntityHelp:
+      "Valgfritt. Bruk en lokal utetemperatursensor (°C) i stedet for Open-Meteo-verdien for temperaturbrikken. Sanntidstilstanden og opptakshistorikken brukes for sanntid + fortid; prognosetimer følger modellen.",
+    humidityEntity: "Luftfuktighetssensor",
+    humidityEntityHelp:
+      "Valgfritt. Bruk en lokal sensor for relativ luftfuktighet (%) i stedet for Open-Meteo-verdien, for sanntid + fortid.",
+    cloudCoverEntity: "Sensor for skydekke",
+    cloudCoverEntityHelp:
+      "Valgfritt. Bruk en lokal skydekkesensor (%) til å styre himmelgraderingen (sol, gråning) i stedet for Open-Meteo-verdien, for sanntid + fortid.",
+    precipitationEntity: "Nedbørssensor",
+    precipitationEntityHelp:
+      "Valgfritt. Bruk en lokal nedbørssensor (mm) til å styre regnlaget i stedet for Open-Meteo-verdien, for sanntid + fortid.",
+    snowfallEntity: "Snøfallsensor",
+    snowfallEntityHelp:
+      "Valgfritt. Bruk en lokal snøfallsensor (cm) til å styre snølaget i stedet for Open-Meteo-verdien, for sanntid + fortid.",
+    weatherEntity: "Værenhet",
+    weatherEntityHelp:
+      "Valgfritt. Bruk en Home Assistant-værenhet til å styre forholdet (regn / snø / tordenvær) i stedet for Open-Meteo-verdien, for sanntid + fortid. Prognosetimer følger modellen.",
+    chipTemperature: "Temperaturvisning",
+    chipHumidity: "Luftfuktighetsvisning",
+    useCurrentView: "Bruk gjeldende visning",
+    useCurrentViewHint:
+      "Ram inn scenen i forhåndsvisningen (dra for å rotere og vippe), og fang den så her: vinkelen lagres i konfigurasjonen og visningen låses, slik at den er identisk på alle enheter.",
     locationSection: "Hjemmets plassering",
     homeLatitude: "Hjemmets breddegrad",
     homeLongitude: "Hjemmets lengdegrad",

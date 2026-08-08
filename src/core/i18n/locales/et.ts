@@ -50,6 +50,32 @@ export const et: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Ilmaefektid",
+    weatherEnabledHint:
+      "Kuvab stseeni kohal päris taeva: päikesepaiste, pilved, vihm, lumi ja äikesetormid sinu kohaliku ilma põhjal, järgides ajajoont selle kerimisel. Väljalülitatuna jääb stseen selgeks.",
+    temperatureEntity: "Temperatuuriandur",
+    temperatureEntityHelp:
+      "Valikuline. Kasuta temperatuurikiibi jaoks Open-Meteo väärtuse asemel kohalikku välistemperatuuri andurit (°C). Selle reaalajas olek ja salvestaja ajalugu on kasutusel reaalaja + mineviku jaoks; prognoositunnid jäävad mudelile.",
+    humidityEntity: "Niiskusandur",
+    humidityEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku suhtelise õhuniiskuse andurit (%) reaalaja + mineviku jaoks.",
+    cloudCoverEntity: "Pilvisuse andur",
+    cloudCoverEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku pilvisuse andurit (%), et juhtida taeva astet (päike, hallistumine) reaalaja + mineviku jaoks.",
+    precipitationEntity: "Sademete andur",
+    precipitationEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku sademete andurit (mm), et juhtida vihmakihti reaalaja + mineviku jaoks.",
+    snowfallEntity: "Lumesaju andur",
+    snowfallEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku lumesaju andurit (cm), et juhtida lumekihti reaalaja + mineviku jaoks.",
+    weatherEntity: "Ilmaolem",
+    weatherEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel Home Assistanti ilmaolemit, et juhtida ilmastikutingimusi (vihm / lumi / äike) reaalaja + mineviku jaoks. Prognoositunnid jäävad mudelile.",
+    chipTemperature: "Temperatuuri kuva",
+    chipHumidity: "Niiskuse kuva",
+    useCurrentView: "Kasuta praegust vaadet",
+    useCurrentViewHint:
+      "Sea stseen eelvaates paika (lohista pööramiseks ja kallutamiseks) ja jäädvusta see siin: nurk salvestatakse seadistusse ja vaade lukustatakse, nii et see on igas seadmes ühesugune.",
     locationSection: "Kodu asukoht",
     homeLatitude: "Kodu laiuskraad",
     homeLongitude: "Kodu pikkuskraad",

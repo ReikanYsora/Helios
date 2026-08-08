@@ -50,6 +50,32 @@ export const lt: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Oro efektai",
+    weatherEnabledHint:
+      "Piešia tikrą dangų virš scenos: saulę, debesis, lietų, sniegą ir perkūniją pagal jūsų vietinius orus, sekant laiko juostą jai slenkant. Išjungus scena lieka giedra.",
+    temperatureEntity: "Temperatūros jutiklis",
+    temperatureEntityHelp:
+      "Neprivaloma. Temperatūros ženkleliui naudoti vietinį lauko temperatūros jutiklį (°C) vietoje Open-Meteo reikšmės. Jo tiesioginė būsena ir įrašų istorija naudojama dabarčiai ir praeičiai; prognozės valandos lieka pagal modelį.",
+    humidityEntity: "Drėgmės jutiklis",
+    humidityEntityHelp:
+      "Neprivaloma. Naudoti vietinį santykinės drėgmės jutiklį (%) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    cloudCoverEntity: "Debesuotumo jutiklis",
+    cloudCoverEntityHelp:
+      "Neprivaloma. Naudoti vietinį debesuotumo jutiklį (%), kuris valdytų dangaus atspalvį (saulę, pilkėjimą) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    precipitationEntity: "Kritulių jutiklis",
+    precipitationEntityHelp:
+      "Neprivaloma. Naudoti vietinį kritulių jutiklį (mm), kuris valdytų lietaus sluoksnį vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    snowfallEntity: "Snygio jutiklis",
+    snowfallEntityHelp:
+      "Neprivaloma. Naudoti vietinį snygio jutiklį (cm), kuris valdytų sniego sluoksnį vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    weatherEntity: "Orų objektas",
+    weatherEntityHelp:
+      "Neprivaloma. Naudoti Home Assistant orų objektą, kuris valdytų sąlygas (lietus / sniegas / perkūnija) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai. Prognozės valandos lieka pagal modelį.",
+    chipTemperature: "Temperatūros rodymas",
+    chipHumidity: "Drėgmės rodymas",
+    useCurrentView: "Naudoti dabartinį vaizdą",
+    useCurrentViewHint:
+      "Sukomponuokite sceną peržiūroje (tempkite, kad pasuktumėte ir palenktumėte), tada užfiksuokite ją čia: kampas išsaugomas konfigūracijoje, o vaizdas užrakinamas, todėl jis identiškas visuose įrenginiuose.",
     locationSection: "Namų vieta",
     homeLatitude: "Namų platuma",
     homeLongitude: "Namų ilguma",

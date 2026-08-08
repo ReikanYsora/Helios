@@ -50,6 +50,32 @@ export const es: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Efectos meteorológicos",
+    weatherEnabledHint:
+      "Pinta el cielo real sobre la escena: sol, nubes, lluvia, nieve y tormentas según tu meteorología local, siguiendo la línea de tiempo a medida que la desplazas. Desactivado, la escena se mantiene despejada.",
+    temperatureEntity: "Sensor de temperatura",
+    temperatureEntityHelp:
+      "Opcional. Usa un sensor local de temperatura exterior (°C) en lugar del valor de Open-Meteo para el indicador de temperatura. Su estado en vivo y el historial del Recorder se usan para el presente y el pasado; las horas de pronóstico siguen usando el modelo.",
+    humidityEntity: "Sensor de humedad",
+    humidityEntityHelp:
+      "Opcional. Usa un sensor local de humedad relativa (%) en lugar del valor de Open-Meteo, para el presente y el pasado.",
+    cloudCoverEntity: "Sensor de nubosidad",
+    cloudCoverEntityHelp:
+      "Opcional. Usa un sensor local de nubosidad (%) para determinar el aspecto del cielo (sol, cielo gris) en lugar del valor de Open-Meteo, para el presente y el pasado.",
+    precipitationEntity: "Sensor de precipitación",
+    precipitationEntityHelp:
+      "Opcional. Usa un sensor local de precipitación (mm) para controlar la capa de lluvia en lugar del valor de Open-Meteo, para el presente y el pasado.",
+    snowfallEntity: "Sensor de nevada",
+    snowfallEntityHelp:
+      "Opcional. Usa un sensor local de nevada (cm) para controlar la capa de nieve en lugar del valor de Open-Meteo, para el presente y el pasado.",
+    weatherEntity: "Entidad meteorológica",
+    weatherEntityHelp:
+      "Opcional. Usa una entidad meteorológica de Home Assistant para determinar la condición (lluvia / nieve / tormenta) en lugar del valor de Open-Meteo, para el presente y el pasado. Las horas de pronóstico siguen usando el modelo.",
+    chipTemperature: "Visualización de temperatura",
+    chipHumidity: "Visualización de humedad",
+    useCurrentView: "Usar la vista actual",
+    useCurrentViewHint:
+      "Encuadra la escena en la vista previa (arrastra para girar e inclinar) y luego captúrala aquí: el ángulo se guarda en la configuración y la vista queda fijada, de modo que es idéntica en todos los dispositivos.",
     locationSection: "Ubicación del domicilio",
     homeLatitude: "Latitud del domicilio",
     homeLongitude: "Longitud del domicilio",

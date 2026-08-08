@@ -50,6 +50,32 @@ export const lv: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Laikapstākļu efekti",
+    weatherEnabledHint:
+      "Uzzīmē reālas debesis virs ainas: saulains laiks, mākoņi, lietus, sniegs un pērkona negaiss no jūsu vietējiem laikapstākļiem, sekojot laika skalai, kad to pārvietojat. Izslēgts saglabā skaidru ainu.",
+    temperatureEntity: "Temperatūras sensors",
+    temperatureEntityHelp:
+      "Neobligāti. Izmantojiet vietējo āra temperatūras sensoru (°C) temperatūras rādītājam Open-Meteo vērtības vietā. Tā pašreizējais stāvoklis un ierakstītāja vēsture tiek izmantoti tagadnei un pagātnei; prognozes stundas paliek uz modeļa.",
+    humidityEntity: "Mitruma sensors",
+    humidityEntityHelp:
+      "Neobligāti. Izmantojiet vietējo relatīvā mitruma sensoru (%) Open-Meteo vērtības vietā tagadnei un pagātnei.",
+    cloudCoverEntity: "Mākoņainības sensors",
+    cloudCoverEntityHelp:
+      "Neobligāti. Izmantojiet vietējo mākoņainības sensoru (%), lai noteiktu debesu pakāpi (saule, pelēkošana) Open-Meteo vērtības vietā, tagadnei un pagātnei.",
+    precipitationEntity: "Nokrišņu sensors",
+    precipitationEntityHelp:
+      "Neobligāti. Izmantojiet vietējo nokrišņu sensoru (mm), lai noteiktu lietus slāni Open-Meteo vērtības vietā, tagadnei un pagātnei.",
+    snowfallEntity: "Snigšanas sensors",
+    snowfallEntityHelp:
+      "Neobligāti. Izmantojiet vietējo snigšanas sensoru (cm), lai noteiktu sniega slāni Open-Meteo vērtības vietā, tagadnei un pagātnei.",
+    weatherEntity: "Laikapstākļu entītija",
+    weatherEntityHelp:
+      "Neobligāti. Izmantojiet Home Assistant laikapstākļu entītiju, lai noteiktu apstākļus (lietus / sniegs / pērkona negaiss) Open-Meteo vērtības vietā, tagadnei un pagātnei. Prognozes stundas paliek uz modeļa.",
+    chipTemperature: "Temperatūras rādījums",
+    chipHumidity: "Mitruma rādījums",
+    useCurrentView: "Izmantot pašreizējo skatu",
+    useCurrentViewHint:
+      "Iekadrējiet ainu priekšskatījumā (velciet, lai pagrieztu un noliektu), pēc tam tveriet to šeit: leņķis tiek saglabāts konfigurācijā un skats tiek fiksēts, tāpēc tas ir identisks katrā ierīcē.",
     locationSection: "Atrašanās vieta",
     homeLatitude: "Mājas platums",
     homeLongitude: "Mājas garums",

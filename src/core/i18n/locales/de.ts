@@ -50,6 +50,32 @@ export const de: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Wettereffekte",
+    weatherEnabledHint:
+      "Zeichnet den echten Himmel über die Szene: Sonnenschein, Wolken, Regen, Schnee und Gewitter aus deinem lokalen Wetter, entlang der Zeitleiste, während du sie durchziehst. Ausgeschaltet bleibt die Szene klar.",
+    temperatureEntity: "Temperatursensor",
+    temperatureEntityHelp:
+      "Optional. Verwendet einen lokalen Außentemperatursensor (°C) anstelle des Open-Meteo-Werts für den Temperatur-Chip. Sein aktueller Zustand und der Recorder-Verlauf werden für Live und Vergangenheit genutzt; Vorhersagestunden bleiben beim Modell.",
+    humidityEntity: "Luftfeuchtigkeitssensor",
+    humidityEntityHelp:
+      "Optional. Verwendet einen lokalen Sensor für relative Luftfeuchtigkeit (%) anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    cloudCoverEntity: "Bewölkungssensor",
+    cloudCoverEntityHelp:
+      "Optional. Verwendet einen lokalen Bewölkungssensor (%), um die Himmelsabstufung (Sonne, Eintrübung) zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    precipitationEntity: "Niederschlagssensor",
+    precipitationEntityHelp:
+      "Optional. Verwendet einen lokalen Niederschlagssensor (mm), um die Regenebene zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    snowfallEntity: "Schneefallsensor",
+    snowfallEntityHelp:
+      "Optional. Verwendet einen lokalen Schneefallsensor (cm), um die Schneeebene zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    weatherEntity: "Wetterentität",
+    weatherEntityHelp:
+      "Optional. Verwendet eine Home Assistant Wetterentität, um die Bedingung (Regen / Schnee / Gewitter) zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit. Vorhersagestunden bleiben beim Modell.",
+    chipTemperature: "Temperaturanzeige",
+    chipHumidity: "Luftfeuchtigkeitsanzeige",
+    useCurrentView: "Aktuelle Ansicht verwenden",
+    useCurrentViewHint:
+      "Richte die Szene in der Vorschau aus (zum Drehen und Neigen ziehen) und übernimm sie hier: Der Winkel wird in der Konfiguration gespeichert und die Ansicht wird gesperrt, sodass sie auf jedem Gerät identisch ist.",
     locationSection: "Standort",
     homeLatitude: "Breitengrad des Zuhauses",
     homeLongitude: "Längengrad des Zuhauses",

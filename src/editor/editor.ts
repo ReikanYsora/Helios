@@ -88,9 +88,35 @@ export class HeliosCardEditor extends LitElement
     private static readonly RESET_FEEDBACK_MS = 2000;
     private _sliderDebounce = new Map<string, number>();
 
+    //Latest camera pose published by the live preview (helios-camera-pose event), for the "use current view"
+    //helper. Null until the user has moved the preview at least once.
+    private _livePose: { bearing: number; pitch: number } | null = null;
+    private readonly _onCameraPose = (e: Event): void =>
+    {
+        const d = (e as CustomEvent).detail;
+        if (!d || typeof d.bearing !== 'number' || typeof d.pitch !== 'number') { return; }
+        const wasNull = this._livePose === null;
+        this._livePose = { bearing: d.bearing, pitch: d.pitch };
+        //Only re-render to flip the button from disabled to enabled; later poses just refresh the cached value.
+        if (wasNull) { this.requestUpdate(); }
+    };
+    //Capture the framed preview angle into the config so the locked view is identical on every device.
+    private readonly _onUseCurrentView = (): void =>
+    {
+        const pose = this._livePose;
+        if (!pose) { return; }
+        const next = { ...this._cfg } as Record<string, unknown>;
+        next['camera-bearing-deg'] = Math.round(((pose.bearing % 360) + 360) % 360);
+        next['camera-pitch-deg']   = Math.round(pose.pitch);
+        next['camera-locked']      = true;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+    };
+
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
+        window.removeEventListener('helios-camera-pose', this._onCameraPose);
         unsubscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
         for (const t of this._sliderDebounce.values())
         {
@@ -161,6 +187,7 @@ export class HeliosCardEditor extends LitElement
     public connectedCallback(): void
     {
         super.connectedCallback();
+        window.addEventListener('helios-camera-pose', this._onCameraPose);
         this._ensureEntityPicker();
         subscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
     }
@@ -1096,6 +1123,8 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${t.editor.noUiDelayHint ?? 'Seconds of inactivity before the timeline and controls fade away in No UI mode. 0 keeps the UI hidden permanently. Only used when No UI mode is on.'}</div>
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
                 ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set.')}
+                ${this._renderActionButton({ icon: 'mdi:camera-marker', label: t.editor.useCurrentView ?? 'Use current view', color: '#475569', onClick: this._onUseCurrentView })}
+                <div class="field-help">${t.editor.useCurrentViewHint ?? 'Frame the scene in the preview (drag to rotate and tilt), then capture it here: the angle is saved to the config and the view is locked, so it is identical on every device.'}</div>
 
                 </details>
 

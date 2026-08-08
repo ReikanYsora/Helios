@@ -50,6 +50,32 @@ export const sv: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Vädereffekter",
+    weatherEnabledHint:
+      "Måla den verkliga himlen över scenen: solsken, moln, regn, snö och åskväder från ditt lokala väder, som följer tidslinjen när du drar i den. Avstängt håller scenen klar.",
+    temperatureEntity: "Temperatursensor",
+    temperatureEntityHelp:
+      "Valfritt. Använd en lokal utomhustemperatursensor (°C) i stället för Open-Meteo-värdet för temperaturchippet. Dess aktuella tillstånd och recorder-historik används för live + dåtid; prognostimmar följer modellen.",
+    humidityEntity: "Luftfuktighetssensor",
+    humidityEntityHelp:
+      "Valfritt. Använd en lokal sensor för relativ luftfuktighet (%) i stället för Open-Meteo-värdet, för live + dåtid.",
+    cloudCoverEntity: "Molntäckessensor",
+    cloudCoverEntityHelp:
+      "Valfritt. Använd en lokal molntäckessensor (%) för att styra himlens gradering (sol, gråmulet) i stället för Open-Meteo-värdet, för live + dåtid.",
+    precipitationEntity: "Nederbördssensor",
+    precipitationEntityHelp:
+      "Valfritt. Använd en lokal nederbördssensor (mm) för att styra regnlagret i stället för Open-Meteo-värdet, för live + dåtid.",
+    snowfallEntity: "Snöfallssensor",
+    snowfallEntityHelp:
+      "Valfritt. Använd en lokal snöfallssensor (cm) för att styra snölagret i stället för Open-Meteo-värdet, för live + dåtid.",
+    weatherEntity: "Väderentitet",
+    weatherEntityHelp:
+      "Valfritt. Använd en Home Assistant-väderentitet för att styra förhållandet (regn / snö / åskväder) i stället för Open-Meteo-värdet, för live + dåtid. Prognostimmar följer modellen.",
+    chipTemperature: "Temperaturvisning",
+    chipHumidity: "Luftfuktighetsvisning",
+    useCurrentView: "Använd nuvarande vy",
+    useCurrentViewHint:
+      "Rama in scenen i förhandsvisningen (dra för att rotera och luta), och fånga den sedan här: vinkeln sparas i konfigurationen och vyn låses, så att den är identisk på alla enheter.",
     locationSection: "Hemmets plats",
     homeLatitude: "Hemmets latitud",
     homeLongitude: "Hemmets longitud",

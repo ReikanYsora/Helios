@@ -401,12 +401,17 @@ export class HeliosEngine
     //Resting pose at init: the stored bearing/pitch from localStorage (the drag-set angle) first, then the YAML
     //camera-*-deg keys, then the hemisphere-aware default (south up in NH, north up in SH). Wrapped/clamped
     //against stale reads.
+    //Locked + a configured angle: the config pose WINS over the per-device localStorage pose, so a locked view is
+    //identical on every device/browser. Unlocked (or no config angle): the drag-set localStorage pose leads, then
+    //config, then the hemisphere default, keeping the per-device behaviour for free-rotating cards.
     private _initialBearing(): number
     {
         const stored = this._readStoredPose();
         const rawStored = stored && typeof stored.bearing === 'number' ? stored.bearing : NaN;
         const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
-        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
+        const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
+            ? rawCfg
+            : (Number.isFinite(rawStored) ? rawStored : rawCfg);
         if (Number.isFinite(raw))
         {
             return ((raw % 360) + 360) % 360;
@@ -418,7 +423,9 @@ export class HeliosEngine
         const stored = this._readStoredPose();
         const rawStored = stored && typeof stored.pitch === 'number' ? stored.pitch : NaN;
         const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
-        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
+        const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
+            ? rawCfg
+            : (Number.isFinite(rawStored) ? rawStored : rawCfg);
         if (Number.isFinite(raw))
         {
             return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw));
@@ -434,6 +441,14 @@ export class HeliosEngine
     //Persist the camera's CURRENT bearing/pitch to localStorage, so reopening the dashboard restores the exact
     //view. Called on drag-end and by the card on teardown (captures an auto-rotated bearing too). No-op before
     //the renderer exists.
+    //Current camera pose (bearing/pitch in degrees), or null before the renderer exists. Used by the editor's
+    //"use current view" helper to capture the framed angle into the config.
+    public getCameraPose(): { bearing: number; pitch: number } | null
+    {
+        if (!this._renderer) { return null; }
+        return { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
+    }
+
     public persistCameraPose(): void
     {
         if (!this._renderer)

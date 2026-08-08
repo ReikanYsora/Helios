@@ -50,6 +50,32 @@ export const pt: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Efeitos meteorológicos",
+    weatherEnabledHint:
+      "Pinta o céu real sobre a cena: sol, nuvens, chuva, neve e trovoadas a partir da meteorologia local, acompanhando a linha temporal à medida que a percorre. Desativado mantém a cena limpa.",
+    temperatureEntity: "Sensor de temperatura",
+    temperatureEntityHelp:
+      "Opcional. Use um sensor local de temperatura exterior (°C) em vez do valor do Open-Meteo para o chip de temperatura. O seu estado em tempo real e o histórico do gravador são usados para o tempo real + passado; as horas de previsão continuam a usar o modelo.",
+    humidityEntity: "Sensor de humidade",
+    humidityEntityHelp:
+      "Opcional. Use um sensor local de humidade relativa (%) em vez do valor do Open-Meteo, para o tempo real + passado.",
+    cloudCoverEntity: "Sensor de nebulosidade",
+    cloudCoverEntityHelp:
+      "Opcional. Use um sensor local de nebulosidade (%) para controlar o aspeto do céu (sol, tons cinzentos) em vez do valor do Open-Meteo, para o tempo real + passado.",
+    precipitationEntity: "Sensor de precipitação",
+    precipitationEntityHelp:
+      "Opcional. Use um sensor local de precipitação (mm) para controlar a camada de chuva em vez do valor do Open-Meteo, para o tempo real + passado.",
+    snowfallEntity: "Sensor de queda de neve",
+    snowfallEntityHelp:
+      "Opcional. Use um sensor local de queda de neve (cm) para controlar a camada de neve em vez do valor do Open-Meteo, para o tempo real + passado.",
+    weatherEntity: "Entidade de meteorologia",
+    weatherEntityHelp:
+      "Opcional. Use uma entidade de meteorologia do Home Assistant para controlar a condição (chuva / neve / trovoada) em vez do valor do Open-Meteo, para o tempo real + passado. As horas de previsão continuam a usar o modelo.",
+    chipTemperature: "Mostrar temperatura",
+    chipHumidity: "Mostrar humidade",
+    useCurrentView: "Usar vista atual",
+    useCurrentViewHint:
+      "Enquadre a cena na pré-visualização (arraste para rodar e inclinar) e depois capture-a aqui: o ângulo é guardado na configuração e a vista fica bloqueada, ficando idêntica em todos os dispositivos.",
     locationSection: "Localização da casa",
     homeLatitude: "Latitude de casa",
     homeLongitude: "Longitude de casa",

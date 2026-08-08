@@ -50,6 +50,32 @@ export const fi: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Sääefektit",
+    weatherEnabledHint:
+      "Maalaa todellinen taivas näkymän päälle: auringonpaiste, pilvet, sade, lumi ja ukkosmyrskyt paikallisen sääsi mukaan, seuraten aikajanaa kelatessasi. Pois päältä pitää näkymän kirkkaana.",
+    temperatureEntity: "Lämpötila-anturi",
+    temperatureEntityHelp:
+      "Valinnainen. Käytä paikallista ulkolämpötila-anturia (°C) Open-Meteon arvon sijaan lämpötilamerkissä. Sen reaaliaikaista tilaa ja tallentimen historiaa käytetään nykyhetkeen ja menneeseen; ennustetunnit pysyvät mallissa.",
+    humidityEntity: "Ilmankosteusanturi",
+    humidityEntityHelp:
+      "Valinnainen. Käytä paikallista suhteellisen ilmankosteuden anturia (%) Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    cloudCoverEntity: "Pilvisyysanturi",
+    cloudCoverEntityHelp:
+      "Valinnainen. Käytä paikallista pilvisyysanturia (%) taivaan asteen (aurinko, harmaantuminen) ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    precipitationEntity: "Sademäärä-anturi",
+    precipitationEntityHelp:
+      "Valinnainen. Käytä paikallista sademäärä-anturia (mm) sadekerroksen ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    snowfallEntity: "Lumisadeanturi",
+    snowfallEntityHelp:
+      "Valinnainen. Käytä paikallista lumisadeanturia (cm) lumikerroksen ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    weatherEntity: "Sääentiteetti",
+    weatherEntityHelp:
+      "Valinnainen. Käytä Home Assistant -sääentiteettiä olosuhteen (sade / lumi / ukkosmyrsky) ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen. Ennustetunnit pysyvät mallissa.",
+    chipTemperature: "Lämpötilan näyttö",
+    chipHumidity: "Ilmankosteuden näyttö",
+    useCurrentView: "Käytä nykyistä näkymää",
+    useCurrentViewHint:
+      "Rajaa näkymä esikatselussa (kierrä ja kallista vetämällä) ja tallenna se tähän: kulma tallennetaan asetuksiin ja näkymä lukitaan, joten se on identtinen jokaisella laitteella.",
     locationSection: "Kodin sijainti",
     homeLatitude: "Kodin leveysaste",
     homeLongitude: "Kodin pituusaste",

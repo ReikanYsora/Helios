@@ -50,6 +50,32 @@ export const ro: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Efecte meteo",
+    weatherEnabledHint:
+      "Pictează cerul real peste scenă: soare, nori, ploaie, ninsoare și furtuni pe baza vremii tale locale, urmărind cronologia pe măsură ce o parcurgi. Dezactivat, scena rămâne senină.",
+    temperatureEntity: "Senzor de temperatură",
+    temperatureEntityHelp:
+      "Opțional. Folosește un senzor local de temperatură exterioară (°C) în locul valorii Open-Meteo pentru indicatorul de temperatură. Starea sa în timp real și istoricul din recorder sunt folosite pentru prezent + trecut; orele de prognoză rămân pe model.",
+    humidityEntity: "Senzor de umiditate",
+    humidityEntityHelp:
+      "Opțional. Folosește un senzor local de umiditate relativă (%) în locul valorii Open-Meteo, pentru prezent + trecut.",
+    cloudCoverEntity: "Senzor de nebulozitate",
+    cloudCoverEntityHelp:
+      "Opțional. Folosește un senzor local de nebulozitate (%) pentru a controla nuanța cerului (soare, înnorare) în locul valorii Open-Meteo, pentru prezent + trecut.",
+    precipitationEntity: "Senzor de precipitații",
+    precipitationEntityHelp:
+      "Opțional. Folosește un senzor local de precipitații (mm) pentru a controla stratul de ploaie în locul valorii Open-Meteo, pentru prezent + trecut.",
+    snowfallEntity: "Senzor de ninsoare",
+    snowfallEntityHelp:
+      "Opțional. Folosește un senzor local de ninsoare (cm) pentru a controla stratul de zăpadă în locul valorii Open-Meteo, pentru prezent + trecut.",
+    weatherEntity: "Entitate meteo",
+    weatherEntityHelp:
+      "Opțional. Folosește o entitate meteo Home Assistant pentru a controla condiția (ploaie / ninsoare / furtună) în locul valorii Open-Meteo, pentru prezent + trecut. Orele de prognoză rămân pe model.",
+    chipTemperature: "Afișare temperatură",
+    chipHumidity: "Afișare umiditate",
+    useCurrentView: "Folosește vizualizarea curentă",
+    useCurrentViewHint:
+      "Încadrează scena în previzualizare (trage pentru a roti și înclina), apoi capturează-o aici: unghiul este salvat în configurație și vizualizarea este blocată, astfel încât să fie identică pe fiecare dispozitiv.",
     locationSection: "Locatie",
     homeLatitude: "Latitudinea casei",
     homeLongitude: "Longitudinea casei",

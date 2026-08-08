@@ -50,6 +50,32 @@ export const sk: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Poveternostné efekty",
+    weatherEnabledHint:
+      "Vykreslí skutočnú oblohu nad scénou: slnko, oblaky, dážď, sneh a búrky podľa vášho miestneho počasia, pričom sleduje časovú os pri jej posúvaní. Vypnuté zachová jasnú scénu.",
+    temperatureEntity: "Senzor teploty",
+    temperatureEntityHelp:
+      "Voliteľné. Použite miestny senzor vonkajšej teploty (°C) namiesto hodnoty z Open-Meteo pre čip teploty. Jeho aktuálny stav a história z rekordéra sa použijú pre aktuálne + minulé; hodiny predpovede zostávajú na modeli.",
+    humidityEntity: "Senzor vlhkosti",
+    humidityEntityHelp:
+      "Voliteľné. Použite miestny senzor relatívnej vlhkosti (%) namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    cloudCoverEntity: "Senzor oblačnosti",
+    cloudCoverEntityHelp:
+      "Voliteľné. Použite miestny senzor oblačnosti (%) na riadenie odtieňa oblohy (slnko, sivnutie) namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    precipitationEntity: "Senzor zrážok",
+    precipitationEntityHelp:
+      "Voliteľné. Použite miestny senzor zrážok (mm) na riadenie vrstvy dažďa namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    snowfallEntity: "Senzor sneženia",
+    snowfallEntityHelp:
+      "Voliteľné. Použite miestny senzor sneženia (cm) na riadenie vrstvy snehu namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    weatherEntity: "Entita počasia",
+    weatherEntityHelp:
+      "Voliteľné. Použite entitu počasia Home Assistant na riadenie podmienok (dážď / sneh / búrka) namiesto hodnoty z Open-Meteo pre aktuálne + minulé. Hodiny predpovede zostávajú na modeli.",
+    chipTemperature: "Zobrazenie teploty",
+    chipHumidity: "Zobrazenie vlhkosti",
+    useCurrentView: "Použiť aktuálne zobrazenie",
+    useCurrentViewHint:
+      "Nastavte scénu v náhľade (ťahaním otáčajte a nakláňajte), potom ju tu zachyťte: uhol sa uloží do konfigurácie a zobrazenie sa uzamkne, takže je rovnaké na každom zariadení.",
     locationSection: "Poloha domova",
     homeLatitude: "Zemepisná šírka domova",
     homeLongitude: "Zemepisná dĺžka domova",

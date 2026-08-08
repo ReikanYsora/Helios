@@ -50,6 +50,32 @@ export const hr: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Vremenski efekti",
+    weatherEnabledHint:
+      "Iscrtava stvarno nebo nad scenom: sunce, oblake, kišu, snijeg i grmljavinu prema vašem lokalnom vremenu, prateći vremensku crtu dok je pomičete. Isključeno zadržava vedru scenu.",
+    temperatureEntity: "Senzor temperature",
+    temperatureEntityHelp:
+      "Neobavezno. Koristite lokalni senzor vanjske temperature (°C) umjesto vrijednosti Open-Meteo za pločicu temperature. Njegovo trenutno stanje i povijest snimača koriste se za sadašnjost i prošlost; sati prognoze ostaju na modelu.",
+    humidityEntity: "Senzor vlažnosti",
+    humidityEntityHelp:
+      "Neobavezno. Koristite lokalni senzor relativne vlažnosti (%) umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    cloudCoverEntity: "Senzor naoblake",
+    cloudCoverEntityHelp:
+      "Neobavezno. Koristite lokalni senzor naoblake (%) za upravljanje izgledom neba (sunce, sivilo) umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    precipitationEntity: "Senzor oborina",
+    precipitationEntityHelp:
+      "Neobavezno. Koristite lokalni senzor oborina (mm) za upravljanje slojem kiše umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    snowfallEntity: "Senzor snježnih padalina",
+    snowfallEntityHelp:
+      "Neobavezno. Koristite lokalni senzor snježnih padalina (cm) za upravljanje slojem snijega umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    weatherEntity: "Entitet vremena",
+    weatherEntityHelp:
+      "Neobavezno. Koristite Home Assistant entitet vremena za upravljanje uvjetima (kiša / snijeg / grmljavina) umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost. Sati prognoze ostaju na modelu.",
+    chipTemperature: "Prikaz temperature",
+    chipHumidity: "Prikaz vlažnosti",
+    useCurrentView: "Koristi trenutni prikaz",
+    useCurrentViewHint:
+      "Kadrirajte scenu u pregledu (povucite za rotaciju i nagib), zatim je zabilježite ovdje: kut se sprema u konfiguraciju i prikaz se zaključava, pa je identičan na svakom uređaju.",
     locationSection: "Lokacija doma",
     homeLatitude: "Zemljopisna širina doma",
     homeLongitude: "Zemljopisna dužina doma",

@@ -50,6 +50,32 @@ export const nl: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Weereffecten",
+    weatherEnabledHint:
+      "Toont de echte lucht boven de scène: zon, wolken, regen, sneeuw en onweer op basis van je lokale weer, die de tijdlijn volgen terwijl je scrubt. Uit houdt de scène helder.",
+    temperatureEntity: "Temperatuursensor",
+    temperatureEntityHelp:
+      "Optioneel. Gebruik een lokale buitentemperatuursensor (°C) in plaats van de Open-Meteo-waarde voor de temperatuurchip. De actuele status en recordergeschiedenis worden gebruikt voor nu + verleden; voorspelde uren blijven van het model.",
+    humidityEntity: "Luchtvochtigheidssensor",
+    humidityEntityHelp:
+      "Optioneel. Gebruik een lokale sensor voor relatieve luchtvochtigheid (%) in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    cloudCoverEntity: "Bewolkingssensor",
+    cloudCoverEntityHelp:
+      "Optioneel. Gebruik een lokale bewolkingssensor (%) om de luchtgradatie (zon, grijs worden) aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    precipitationEntity: "Neerslagsensor",
+    precipitationEntityHelp:
+      "Optioneel. Gebruik een lokale neerslagsensor (mm) om de regenlaag aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    snowfallEntity: "Sneeuwvalsensor",
+    snowfallEntityHelp:
+      "Optioneel. Gebruik een lokale sneeuwvalsensor (cm) om de sneeuwlaag aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    weatherEntity: "Weerentiteit",
+    weatherEntityHelp:
+      "Optioneel. Gebruik een Home Assistant-weerentiteit om de conditie (regen / sneeuw / onweer) aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden. Voorspelde uren blijven van het model.",
+    chipTemperature: "Temperatuurweergave",
+    chipHumidity: "Luchtvochtigheidsweergave",
+    useCurrentView: "Huidige weergave gebruiken",
+    useCurrentViewHint:
+      "Kadreer de scène in de voorbeeldweergave (sleep om te draaien en te kantelen) en leg deze hier vast: de hoek wordt opgeslagen in de configuratie en de weergave wordt vergrendeld, zodat deze op elk apparaat identiek is.",
     locationSection: "Locatie",
     homeLatitude: "Breedtegraad van het huis",
     homeLongitude: "Lengtegraad van het huis",

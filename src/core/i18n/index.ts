@@ -108,6 +108,9 @@ export interface Translations
         //"Your real sky" weather-effects toggle. Optional; fall back to English.
         weatherEnabled?:              string;
         weatherEnabledHint?:          string;
+        //Camera "use current view" helper (captures the framed angle into the config). Optional; fall back to English.
+        useCurrentView?:              string;
+        useCurrentViewHint?:          string;
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
         noUiMode?:                    string;
         noUiModeHint?:                string;

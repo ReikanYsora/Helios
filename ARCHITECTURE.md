@@ -272,23 +272,39 @@ split to the meters, self-clearing if the sensor is later fixed.
 
 One fetch per home point against Open-Meteo, fusing a global model with the best
 regional model for the location and taking the **per-timestep median** to reject
-single-model outliers. It returns only what the irradiance pipeline needs: hourly
-irradiance (`shortwave_radiation_instant`) and the three cloud layers (collapsed
-to an *effective* cover of `low + 0.6*mid + 0.2*high`). Cached in `localStorage`
-with a short TTL and exponential back-off on HTTP 429.
+single-model outliers. It returns the hourly series the scene needs: irradiance
+(`shortwave_radiation_instant`), the three cloud layers (collapsed to an
+*effective* cover of `low + 0.6*mid + 0.2*high`), precipitation, snowfall, the WMO
+weather code, temperature and humidity. Cached in `localStorage` with a short TTL,
+a schema version in the key (so a payload from an older field-set is refetched),
+and exponential back-off on HTTP 429.
 
-### Irradiance override, `data/sources/irradiance.ts`
+### "Your real sky" layers, `scene/weather-fx.ts`
 
-When `solar-irradiance-entity` is set, its recorder history + live state replace
-the Open-Meteo model for past + present timestamps (forecast hours stay on the
-model, since a sensor has no future).
+`weatherLayers()` maps the resolved weather to independent overlay strengths: the
+cloud cover sets the sun/grey grade (the sun also fading near the horizon by
+altitude), and rain, snow and thunderstorm stack on top. The overlay is CSS
+layers plus two particle canvases (`WeatherRain`, `WeatherSnow`) and a scripted
+lightning flash (`WeatherStorm`), driven by `--wx-*` custom properties the card
+sets from the layer strengths. It sits between the scene and the chips, so weather
+tints the map, never the data.
+
+### Weather overrides, `data/sources/irradiance.ts`, `data/sources/weather-override.ts`
+
+When a local sensor is configured, its recorder history + live state replace the
+Open-Meteo model for past + present timestamps (forecast hours stay on the model,
+since a sensor has no future). Irradiance keeps its own module; every other
+variable (cloud cover, precipitation, snowfall, temperature, humidity, and the
+condition from a HA `weather` entity mapped to a WMO code) runs through the
+generalised, table-driven `weather-override.ts`. Each pushes samples to the
+engine, which does the nearest-neighbour lookup at resolve time.
 
 ### Unified store, `data/unifiedStore.ts`
 
 The single source of truth for every graph. It bucketises the active period at
 the configured cadence (`display-update-frequency-per-hour`, default 4 = 15 min)
-into parallel series: `irradiance`, `cloud`, `production`, `forecast`, `battery`,
-`batterySoc`, `gridImport`, `gridExport`. Weather is interpolated from its hourly
+into parallel series: `irradiance`, `temperature`, `humidity`, `production`,
+`forecast`, `battery`, `gridImport`, `gridExport`. Weather is interpolated from its hourly
 samples; the energy series are filled from the recorder `change` buckets (past
 only, null in the future); the forecast is a stepped hourly curve. A `dataVersion`
 hash lets consumers detect "same store as last frame" and skip the rebuild; it

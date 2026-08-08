@@ -49,6 +49,32 @@ export const fr: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Effets météo",
+    weatherEnabledHint:
+      "Peint le vrai ciel au-dessus de la scène : soleil, nuages, pluie, neige et orages d'après votre météo locale, en suivant la chronologie à mesure que vous la parcourez. Désactivé, la scène reste dégagée.",
+    temperatureEntity: "Capteur de température",
+    temperatureEntityHelp:
+      "Facultatif. Utilisez un capteur de température extérieure local (°C) à la place de la valeur Open-Meteo pour la puce de température. Son état en direct et son historique d'enregistreur alimentent le direct et le passé ; les heures de prévision restent sur le modèle.",
+    humidityEntity: "Capteur d'humidité",
+    humidityEntityHelp:
+      "Facultatif. Utilisez un capteur d'humidité relative local (%) à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    cloudCoverEntity: "Capteur de couverture nuageuse",
+    cloudCoverEntityHelp:
+      "Facultatif. Utilisez un capteur de couverture nuageuse local (%) pour piloter le rendu du ciel (soleil, grisaille) à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    precipitationEntity: "Capteur de précipitations",
+    precipitationEntityHelp:
+      "Facultatif. Utilisez un capteur de précipitations local (mm) pour piloter la couche de pluie à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    snowfallEntity: "Capteur de chutes de neige",
+    snowfallEntityHelp:
+      "Facultatif. Utilisez un capteur de chutes de neige local (cm) pour piloter la couche de neige à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    weatherEntity: "Entité météo",
+    weatherEntityHelp:
+      "Facultatif. Utilisez une entité météo Home Assistant pour piloter la condition (pluie / neige / orage) à la place de la valeur Open-Meteo, pour le direct et le passé. Les heures de prévision restent sur le modèle.",
+    chipTemperature: "Affichage de la température",
+    chipHumidity: "Affichage de l'humidité",
+    useCurrentView: "Utiliser la vue actuelle",
+    useCurrentViewHint:
+      "Cadrez la scène dans l'aperçu (faites glisser pour pivoter et incliner), puis capturez-la ici : l'angle est enregistré dans la configuration et la vue est verrouillée, pour qu'elle soit identique sur tous les appareils.",
     locationSection: "Emplacement de la maison",
     homeLatitude: "Latitude du domicile",
     homeLongitude: "Longitude du domicile",

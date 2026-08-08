@@ -50,6 +50,32 @@ export const it: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Effetti meteo",
+    weatherEnabledHint:
+      "Dipinge il cielo reale sopra la scena: sole, nuvole, pioggia, neve e temporali dal meteo locale, seguendo la timeline mentre la scorri. Se disattivato, mantiene una scena serena.",
+    temperatureEntity: "Sensore di temperatura",
+    temperatureEntityHelp:
+      "Facoltativo. Usa un sensore locale di temperatura esterna (°C) al posto del valore di Open-Meteo per il chip della temperatura. Il suo stato attuale e la cronologia del recorder vengono usati per il momento attuale e il passato; le ore di previsione restano sul modello.",
+    humidityEntity: "Sensore di umidità",
+    humidityEntityHelp:
+      "Facoltativo. Usa un sensore locale di umidità relativa (%) al posto del valore di Open-Meteo, per il momento attuale e il passato.",
+    cloudCoverEntity: "Sensore di copertura nuvolosa",
+    cloudCoverEntityHelp:
+      "Facoltativo. Usa un sensore locale di copertura nuvolosa (%) per determinare la resa del cielo (sole, ingrigimento) al posto del valore di Open-Meteo, per il momento attuale e il passato.",
+    precipitationEntity: "Sensore di precipitazioni",
+    precipitationEntityHelp:
+      "Facoltativo. Usa un sensore locale di precipitazioni (mm) per determinare lo strato di pioggia al posto del valore di Open-Meteo, per il momento attuale e il passato.",
+    snowfallEntity: "Sensore di nevicate",
+    snowfallEntityHelp:
+      "Facoltativo. Usa un sensore locale di nevicate (cm) per determinare lo strato di neve al posto del valore di Open-Meteo, per il momento attuale e il passato.",
+    weatherEntity: "Entità meteo",
+    weatherEntityHelp:
+      "Facoltativo. Usa un'entità meteo di Home Assistant per determinare la condizione (pioggia / neve / temporale) al posto del valore di Open-Meteo, per il momento attuale e il passato. Le ore di previsione restano sul modello.",
+    chipTemperature: "Visualizzazione temperatura",
+    chipHumidity: "Visualizzazione umidità",
+    useCurrentView: "Usa la vista attuale",
+    useCurrentViewHint:
+      "Inquadra la scena nell'anteprima (trascina per ruotare e inclinare), poi catturala qui: l'angolazione viene salvata nella configurazione e la vista viene bloccata, così è identica su ogni dispositivo.",
     locationSection: "Posizione di casa",
     homeLatitude: "Latitudine di casa",
     homeLongitude: "Longitudine di casa",

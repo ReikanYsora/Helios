@@ -50,6 +50,32 @@ export const sr: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Vremenski efekti",
+    weatherEnabledHint:
+      "Iscrtajte pravo nebo preko scene: sunce, oblake, kišu, sneg i grmljavinu na osnovu vašeg lokalnog vremena, prateći vremensku osu dok je pomerate. Isključeno zadržava vedru scenu.",
+    temperatureEntity: "Senzor temperature",
+    temperatureEntityHelp:
+      "Opciono. Koristite lokalni senzor spoljne temperature (°C) umesto Open-Meteo vrednosti za čip temperature. Njegovo trenutno stanje i istorija iz Recorder-a koriste se za trenutno + prošlost; sati prognoze ostaju na modelu.",
+    humidityEntity: "Senzor vlažnosti",
+    humidityEntityHelp:
+      "Opciono. Koristite lokalni senzor relativne vlažnosti (%) umesto Open-Meteo vrednosti, za trenutno + prošlost.",
+    cloudCoverEntity: "Senzor oblačnosti",
+    cloudCoverEntityHelp:
+      "Opciono. Koristite lokalni senzor oblačnosti (%) za određivanje izgleda neba (sunce, sivilo) umesto Open-Meteo vrednosti, za trenutno + prošlost.",
+    precipitationEntity: "Senzor padavina",
+    precipitationEntityHelp:
+      "Opciono. Koristite lokalni senzor padavina (mm) za sloj kiše umesto Open-Meteo vrednosti, za trenutno + prošlost.",
+    snowfallEntity: "Senzor snežnih padavina",
+    snowfallEntityHelp:
+      "Opciono. Koristite lokalni senzor snežnih padavina (cm) za sloj snega umesto Open-Meteo vrednosti, za trenutno + prošlost.",
+    weatherEntity: "Vremenski entitet",
+    weatherEntityHelp:
+      "Opciono. Koristite Home Assistant vremenski entitet za određivanje uslova (kiša / sneg / grmljavina) umesto Open-Meteo vrednosti, za trenutno + prošlost. Sati prognoze ostaju na modelu.",
+    chipTemperature: "Prikaz temperature",
+    chipHumidity: "Prikaz vlažnosti",
+    useCurrentView: "Koristi trenutni prikaz",
+    useCurrentViewHint:
+      "Uokvirite scenu u pregledu (prevucite za rotaciju i naginjanje), zatim je snimite ovde: ugao se čuva u konfiguraciji i prikaz se zaključava, tako da je identičan na svakom uređaju.",
     locationSection: "Локација дома",
     homeLatitude: "Географска ширина дома",
     homeLongitude: "Географска дужина дома",
