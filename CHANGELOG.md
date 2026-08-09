@@ -11,7 +11,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-alpha (`2026.9.0-a6`).
+alpha (`2026.9.0-a7`).
 
 ### Added: a cost chip
 
@@ -94,6 +94,16 @@ The drifting cloud shadows were sized to the card's width and height, so on a
 narrow or portrait card they stretched into tall ovals. They're now sized to the
 card's width on both axes, staying round at any card shape. Thanks to @tfriberg
 (#332).
+
+### Fixed: the forecast curve could be shifted by the wrong time zone
+
+When your device or Home Assistant server sat in a different time zone from your
+home's coordinates (a "server time" setup, or simply browsing from elsewhere),
+the weather forecast curve was displaced by the difference between the two zones,
+so it no longer lined up with your live production. The forecast times are now
+anchored to a fixed reference regardless of where you view the card from, so the
+curve always aligns with the moment it belongs to. Thanks to @m1chaelmichael for
+the precise report (#366).
 
 ---
 
