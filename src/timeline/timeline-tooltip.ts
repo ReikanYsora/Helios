@@ -10,7 +10,7 @@ import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { valueAt } from '../data/unifiedStore';
 import { wattsAtFromChangeSeries, type ChangeBucket } from '../data/sources/energy-stats';
 import { groupDevices, deviceName, deviceIcon } from '../data/sources/device-consumption';
-import { staticPrice } from '../data/sources/cost';
+import { staticPrice, costRateAt } from '../data/sources/cost';
 import { pickTranslations } from '../core/i18n';
 import { resolveRangeMs } from './timeline-model';
 import {
@@ -97,9 +97,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const costImpP = host._energyDefaults ? staticPrice(host._energyDefaults.gridImportPriceNumbers) : null;
     const costExpP = host._energyDefaults ? (staticPrice(host._energyDefaults.gridExportPriceNumbers) ?? 0) : 0;
     const costCur  = String(host.hass?.config?.currency ?? '€');
-    const costV    = (costImpP !== null && (isFinite(gridImpW) || isFinite(gridExpW)))
-        ? ((isFinite(gridImpW) ? gridImpW : 0) * costImpP - (isFinite(gridExpW) ? gridExpW : 0) * costExpP) / 1000
-        : NaN;
+    //Prefer HA's cost statistics at the cursor (any tariff); else a single static price x power at that instant.
+    const costFromStats = costRateAt(host, atMs);
+    const costV    = costFromStats !== null
+        ? costFromStats
+        : (costImpP !== null && (isFinite(gridImpW) || isFinite(gridExpW)))
+            ? ((isFinite(gridImpW) ? gridImpW : 0) * costImpP - (isFinite(gridExpW) ? gridExpW : 0) * costExpP) / 1000
+            : NaN;
 
     //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
@@ -377,7 +381,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     ${socBankVals.map((v, i) => isFinite(v) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${socBeamColor}" icon="mdi:battery"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${socLabel}${socBankVals.length > 1 ? ` ${i + 1}` : ''}</span>
+                            <span class="tb-hover-tooltip-name">${host._energyDefaults?.batteryNames?.[i] || `${socLabel}${socBankVals.length > 1 ? ` ${i + 1}` : ''}`}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, v)))} %</span>
                         </div>
                     ` : nothing)}

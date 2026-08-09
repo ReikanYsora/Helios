@@ -817,9 +817,12 @@ export const heliosCardStyles = css`
         will-change: transform;
         background: radial-gradient(circle, rgba(30, 35, 42, 0.45), rgba(30, 35, 42, 0) 68%);
     }
-    .helios-wx-cloud.k1 { width: 55%; height: 70%; left: -30%; top: -10%; animation: helios-wx-sweep 22s linear infinite; }
-    .helios-wx-cloud.k2 { width: 42%; height: 60%; left: -30%; top: 20%; animation: helios-wx-sweep 30s linear infinite; animation-delay: -8s; }
-    .helios-wx-cloud.k3 { width: 66%; height: 80%; left: -45%; top: -20%; animation: helios-wx-sweep 40s linear infinite; animation-delay: -16s; }
+    /*  Sized in cqw (share of the card's WIDTH, via ha-card's container-type: inline-size) for BOTH axes, so the
+        shadows stay round at any card shape. Percent height made them tall ovals on a narrow card (#332, tfriberg):
+        55% of a small width vs 70% of a tall height. left/top keep % for placement; the sweep is element-relative. */
+    .helios-wx-cloud.k1 { width: 55cqw; height: 55cqw; left: -30%; top: -10%; animation: helios-wx-sweep 22s linear infinite; }
+    .helios-wx-cloud.k2 { width: 42cqw; height: 42cqw; left: -30%; top: 20%; animation: helios-wx-sweep 30s linear infinite; animation-delay: -8s; }
+    .helios-wx-cloud.k3 { width: 66cqw; height: 66cqw; left: -45%; top: -20%; animation: helios-wx-sweep 40s linear infinite; animation-delay: -16s; }
     @keyframes helios-wx-sweep { from { transform: translate(0, 0); } to { transform: translate(230%, 18%); } }
 
     .helios-wx-wet

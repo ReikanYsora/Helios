@@ -62,7 +62,7 @@ import
     returnTimelineToLive
 } from './timeline/timeline';
 import { refreshGrid } from './data/sources/grid';
-import { refreshCostLive } from './data/sources/cost';
+import { refreshCostLive, refreshCostSeries } from './data/sources/cost';
 import { refreshDeviceConsumption } from './data/sources/device-consumption';
 import { createGridGuard, type GridGuardState } from './data/sources/grid-guard';
 import {
@@ -135,6 +135,11 @@ export class HeliosCard extends LitElement
     @state() _costRate: number | null = null;
     //User currency from hass.config.currency; set alongside _costRate.
     _currency = '€';
+    //Recorder `change` series for the cost + compensation statistics (net money per bucket), driving the cost
+    //chip's live rate + its curve for ANY tariff (Tempo, HC/HP, a total-cost integration sensor). Null until fetched.
+    @state() _costImportSeries: ChangeBucket[] | null = null;
+    @state() _costExportSeries: ChangeBucket[] | null = null;
+    _costFetch = new KeyedFetch();
     //Screen-space layout of the always-visible labels + leaders, recomputed via
     //engine.projectHomeLabelLayout() on every map transform. null while the map is loading.
     @state() _labelLayout: LabelLayout | null = null;
@@ -1274,7 +1279,9 @@ export class HeliosCard extends LitElement
         refreshPv(this);
         refreshBattery(this);
         refreshGrid(this);
-        //Cost rate rides on the grid live values just computed above, so refresh it right after.
+        //Cost: kick the cost-statistics fetch (gated), then recompute the live rate (from those stats when loaded,
+        //else a configured price x the grid live values just computed above).
+        refreshCostSeries(this);
         refreshCostLive(this);
         refreshIrradiance(this);
         refreshWeatherOverrides(this);

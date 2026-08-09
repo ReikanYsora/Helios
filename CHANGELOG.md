@@ -11,7 +11,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-alpha (`2026.9.0-a2`).
+alpha (`2026.9.0-a3`).
 
 ### Added: a cost chip
 
@@ -23,8 +23,11 @@ house, and scrub the day to read the cost at any moment. Like the weather chips
 it sits along the bottom as secondary information, and you'll only see it if a
 price is set in the Energy dashboard, Helios never invents one. It has a fixed,
 configurable colour and icon, and a negative rate simply means you're earning
-(selling your surplus). This first pass covers a fixed price; variable and
-multi-tariff pricing follow.
+(selling your surplus). It reads Home Assistant's own cost statistics whenever
+they exist, so **any tariff is handled** out of the box, a flat price, peak /
+off-peak, Tempo, or a whole-home cost sensor from an integration, each already
+priced correctly hour by hour by Home Assistant. A fixed price with no cost
+statistic still works, computed as energy times price.
 
 ### Added: the real weather, painted over the scene
 
@@ -68,6 +71,20 @@ because the MDI icon names are the opposite of what they draw. The arrow now
 follows the real flow, points into the grid when exporting and away from it when
 importing, everywhere it appears, with a code note so it can't be "corrected"
 back. Thanks to @7oku (#356).
+
+### Fixed: the battery detail chart now shows your battery names
+
+On a multi-bank install, the battery detail chart labelled its banks "Battery 1,
+2, 3…" instead of the names you gave each battery in the Energy dashboard. It now
+uses your configured names throughout the per-bank charge, discharge and
+state-of-charge rows. Thanks to @tfriberg (#365).
+
+### Fixed: cloud shadows stayed round on a narrow card
+
+The drifting cloud shadows were sized to the card's width and height, so on a
+narrow or portrait card they stretched into tall ovals. They're now sized to the
+card's width on both axes, staying round at any card shape. Thanks to @tfriberg
+(#332).
 
 ---
 

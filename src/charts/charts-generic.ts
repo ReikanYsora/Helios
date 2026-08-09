@@ -7,7 +7,7 @@ import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarCol
 import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
-import { staticPrice } from '../data/sources/cost';
+import { staticPrice, costRateAt } from '../data/sources/cost';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
 import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
@@ -320,23 +320,34 @@ function buildTargetSeries(
     }
     else if (target === 'cost')
     {
-        //Net cost RATE per bucket (currency/hour) = import kW x import price - export kW x export price. Static price
-        //only for now, so this holds across the whole history (cost = energy x constant price). Negative = earning
-        //(surplus sold), so the Y floor drops below zero to show it. store powers are in watts, hence /1000.
+        //Net cost RATE per bucket (currency/hour). Preferred source: HA's own cost statistics (correct for any
+        //tariff, incl. Tempo + a total-cost sensor), read at each bucket's time. Fallback: a single static price x
+        //grid energy (constant price, so exact across history; store powers are watts, hence /1000). Negative =
+        //earning (surplus sold), so the Y floor drops below zero to show it.
         const ed = host._energyDefaults;
+        const hasStats = !!(host._costImportSeries || host._costExportSeries);
         const impP = staticPrice(ed.gridImportPriceNumbers);
         const expP = staticPrice(ed.gridExportPriceNumbers) ?? 0;
         const pts: { t: number; v: number }[] = [];
-        if (impP !== null)
+        if (hasStats || impP !== null)
         {
             for (let i = 0; i < store.gridImport.length; i++)
             {
-                const gi = store.gridImport[i];
-                const ge = store.gridExport[i];
-                if (gi === null && ge === null) { continue; }
                 const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
                 if (tMs < startMs || tMs > endMsAbs) { continue; }
-                pts.push({ t: tMs, v: ((gi ?? 0) * impP - (ge ?? 0) * expP) / 1000 });
+                let v: number | null;
+                if (hasStats)
+                {
+                    v = costRateAt(host, tMs);
+                }
+                else
+                {
+                    const gi = store.gridImport[i];
+                    const ge = store.gridExport[i];
+                    v = (gi === null && ge === null) ? null : ((gi ?? 0) * (impP as number) - (ge ?? 0) * expP) / 1000;
+                }
+                if (v === null) { continue; }
+                pts.push({ t: tMs, v });
             }
         }
         series = [{ pts, color: chipSlotColor(el, host.config, 'cost') }];

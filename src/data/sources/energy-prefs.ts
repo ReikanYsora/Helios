@@ -52,6 +52,9 @@ export interface EnergyDefaults
     //displayed instead of the entities' friendly names wherever the family is titled.
     gridName:               string;
     batteryName:            string;
+    //Per-source battery names (the Energy dashboard `name` field, in source order; '' when unset). Drives the
+    //battery detail chart's per-bank labels so a multi-bank install reads its own names, not "Battery N" (#365).
+    batteryNames:           string[];
     //Individual devices from the dashboard's per-device tracking (`device_consumption`), in dashboard order. NOT part
     //of the source flows above (they are sub-measurements of the home load), kept separately for the monitoring
     //groups so summing them never touches the solar/grid/battery identity.
@@ -117,6 +120,7 @@ export function freshEnergyDefaults(): EnergyDefaults
         solarForecastEntryIds:  [],
         gridName:               '',
         batteryName:            '',
+        batteryNames:           [],
         devices:                [],
     };
 }
@@ -415,9 +419,12 @@ export function parseEnergyPrefs(prefs: {
         }
         else if (type === 'battery')
         {
+            const battName = pickFirstString(src['name']) ?? '';
+            //Per-source name, in battery-source order, for the detail chart's per-bank labels (#365).
+            out.batteryNames.push(battName);
             if (!out.batteryName)
             {
-                out.batteryName = pickFirstString(src['name']) ?? '';
+                out.batteryName = battName;
             }
             pushStrings(src['stat_energy_from'], out.batteryStatEnergyFroms);
             pushStrings(src['stat_energy_to'], out.batteryStatEnergyTos);

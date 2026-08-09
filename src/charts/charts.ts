@@ -86,6 +86,9 @@ export function gridSourceName(host: ChartHost, index: number, dir: 'import' | '
 export function batterySourceName(host: ChartHost, index: number, dir: 'charge' | 'discharge'): string
 {
     const ed = host._energyDefaults;
+    //Prefer the Energy dashboard's configured per-source name (#365); else the meter friendly name, then a generic.
+    const configured = ed.batteryNames[index];
+    if (configured) { return configured; }
     const id = (dir === 'charge' ? ed.batteryStatEnergyTos : ed.batteryStatEnergyFroms)[index];
     return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `Battery ${index + 1}`;
 }
@@ -138,6 +141,10 @@ export interface ChartHost
     //Unified 5-day data source, single point of truth for the production + forecast curves. Null only between mount
     //and first build, when the chart degrades to an empty curve.
     readonly _unifiedStore: UnifiedDataStore | null;
+    //Cost + compensation `change` series (net money per bucket), for the cost target's curve (any tariff). Null
+    //until fetched or when no cost statistic is configured.
+    readonly _costImportSeries: ChangeBucket[] | null;
+    readonly _costExportSeries: ChangeBucket[] | null;
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
     readonly _batterySocHistory: { times: Date[]; values: number[] } | null;
