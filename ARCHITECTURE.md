@@ -260,7 +260,11 @@ cumulative energy meter. The past curves read the recorder's pre-computed `chang
 metric, the exact numbers the Energy dashboard shows, so the two surfaces agree to
 the watt-hour. `data/sources/pv.ts`, `battery.ts`, `grid.ts`, `irradiance.ts` own
 the live + history resolution per source; `data/energy-forecast.ts` reads the
-dashboard's configured solar-forecast provider.
+dashboard's configured solar-forecast provider. `data/sources/cost.ts` reads the
+grid flows' configured prices (`entity_energy_price` / `number_energy_price`) and
+cost statistics (`stat_cost` / `stat_compensation`) to drive the cost chip: a live
+net rate (price x power) and, for a fixed price, a cost curve derived as energy x
+price across the whole history. Absent when no price is configured, never invented.
 
 The grid live readout carries a safety layer: `data/sources/grid-guard.ts` audits
 the optional live power sensor against the billing meters (hourly recorder stats:

@@ -69,6 +69,9 @@ home and your consumption; the production layers simply do not appear.
 * **Outdoor temperature and humidity**, as two chips with their own day curve,
   and either can be pinned to your own weather-station sensor instead of the
   forecast.
+* **What it costs**, a cost chip that reads out your energy spend right now in
+  your own currency (a negative rate means you're earning), with its own curve
+  to scrub across the day. Shown only when your Energy dashboard tracks a price.
 * **The day's curve**, your production or consumption standing on the sun's own
   path around the house, so where a point sits on it *is* the hour.
 * **Your devices, grouped**, up to four groups with their own name, colour and

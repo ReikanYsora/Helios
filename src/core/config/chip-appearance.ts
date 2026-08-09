@@ -11,7 +11,7 @@ import { SUN_COLOR_HEX } from './constants';
 
 export type ChipSlot =
     | 'irradiance' | 'production' | 'gridImport' | 'gridExport'
-    | 'batteryCharge' | 'batteryDischarge' | 'home' | 'temperature' | 'humidity';
+    | 'batteryCharge' | 'batteryDischarge' | 'home' | 'temperature' | 'humidity' | 'cost';
 
 interface SlotDef
 {
@@ -40,6 +40,9 @@ export const CHIP_SLOTS: Record<ChipSlot, SlotDef> = {
     home:             { colorKey: 'chip-home-color',              iconKey: 'chip-home-icon',              uiColorDefault: 'primary',     colorVar: '--primary-color',                 fallbackHex: '#4caf50',     defaultIcon: 'mdi:home' },
     temperature:      { colorKey: 'chip-temperature-color',      iconKey: 'chip-temperature-icon',      uiColorDefault: 'red',         colorVar: '',                                fallbackHex: '#cb514d',     defaultIcon: 'mdi:thermometer' },
     humidity:         { colorKey: 'chip-humidity-color',         iconKey: 'chip-humidity-icon',         uiColorDefault: 'light-blue',  colorVar: '',                                fallbackHex: '#29b6f6',     defaultIcon: 'mdi:water-percent' },
+    //Cost chip: a fixed, user-configurable colour + icon like every other chip (no sign-driven colour). Spend vs
+    //earn is carried by the value's sign, not the colour. Default a money green; the cash icon disambiguates it.
+    cost:             { colorKey: 'chip-cost-color',             iconKey: 'chip-cost-icon',             uiColorDefault: 'green',       colorVar: '',                                fallbackHex: '#43a047',     defaultIcon: 'mdi:cash' },
 };
 
 //A slot's built-in colour (no override): its theme var resolved to hex, else the fixed fallback hex.

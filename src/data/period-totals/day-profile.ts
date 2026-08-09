@@ -24,6 +24,7 @@ import { TIMELINE_MODES } from '../../timeline/timeline-modes';
 import { buildPeriodData, binSlotSum, type PeriodHost, type PeriodLayer } from './period-totals';
 import { changeSeriesToWatts } from '../sources/energy-stats';
 import { groupDevices } from '../sources/device-consumption';
+import { staticPrice } from '../sources/cost';
 import type { PeriodWindow } from './slot-walk';
 
 //One drawn line of the day, unit-agnostic. `colour` is a descriptor the card resolves; everything else is the data
@@ -462,6 +463,30 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         dropShortRuns(values);
         if (peakOf(values) <= 0) { return []; }
         return [{ values, predicted: noPred(), peak: 1, colour: { kind: 'token', token: 'humidity' } }];
+    }
+
+    if (target === 'cost')
+    {
+        const store = host._unifiedStore;
+        if (!store) { return []; }
+        //Static price only for now (cost = energy x constant price, exact across the whole history). The ring shows
+        //the SPENDING magnitude per slot (currency/hour, floored at 0); earning hours read as no ring, since the
+        //around-house ring is a positive-magnitude shape. store powers are watts, hence /1000.
+        const impP = staticPrice(host._energyDefaults.gridImportPriceNumbers);
+        if (impP === null) { return []; }
+        const expP = staticPrice(host._energyDefaults.gridExportPriceNumbers) ?? 0;
+        const imp = binSlotAvg(store, store.gridImport, slots, win);
+        const exp = binSlotAvg(store, store.gridExport, slots, win);
+        const values = imp.map((iv, i) =>
+        {
+            const ev = exp[i];
+            if ((iv === null || !isFinite(iv)) && (ev === null || !isFinite(ev))) { return null; }
+            return Math.max(0, ((iv ?? 0) * impP - (ev ?? 0) * expP) / 1000);
+        });
+        dropShortRuns(values);
+        const peak = peakOf(values);
+        if (peak <= 0) { return []; }
+        return [{ values, predicted: noPred(), peak, colour: { kind: 'token', token: 'cost' } }];
     }
 
     //Anything else: no day curve yet.

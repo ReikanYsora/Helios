@@ -275,6 +275,12 @@ export function showHumidity(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-humidity'] !== false;
 }
+//Cost chip: shown by default, but only actually renders when a cost is configured in the Energy dashboard (the
+//card gates on a resolvable live rate). Hidden when explicitly turned off.
+export function showCost(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-cost'] !== false;
+}
 
 export type SunChipMode = 'irradiance' | 'position';
 //What the sun chip reads out: live irradiance (default) or the sun's position (azimuth + elevation).

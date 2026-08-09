@@ -11,7 +11,20 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-alpha (`2026.9.0-a1`).
+alpha (`2026.9.0-a2`).
+
+### Added: a cost chip
+
+When your Home Assistant Energy dashboard tracks a price, a new **cost chip**
+joins the card: it reads out what your energy is costing you **right now**, in
+your own currency per hour (net of any export revenue), and behaves like every
+other chip. Tap it to bring its cost curve up on the timeline and around the
+house, and scrub the day to read the cost at any moment. Like the weather chips
+it sits along the bottom as secondary information, and you'll only see it if a
+price is set in the Energy dashboard, Helios never invents one. It has a fixed,
+configurable colour and icon, and a negative rate simply means you're earning
+(selling your surplus). This first pass covers a fixed price; variable and
+multi-tariff pricing follow.
 
 ### Added: the real weather, painted over the scene
 

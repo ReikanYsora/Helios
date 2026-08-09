@@ -30,7 +30,7 @@ export type GroupTarget = typeof GROUP_TARGETS[number];
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (default) adds
 //the dashed forecast + per-source breakdown; 'grid'/'battery' draw two-direction flows (accent = dominant side);
 //'irradiance' draws W/m2 on a fixed 0..1000 scale; 'group-N' draws the group's per-device consumption curves.
-export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'temperature' | 'humidity' | GroupTarget;
+export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'temperature' | 'humidity' | 'cost' | GroupTarget;
 
 //How a day-curve strand takes its colour, resolved live against the theme by resolveStrandColour so a theme flip
 //is never baked into the data memo. `token` is a fixed chip-slot colour (production, grid import/export, ...);
@@ -95,10 +95,12 @@ export function batterySourceName(host: ChartHost, index: number, dir: 'charge' 
 const TARGET_LABELS_EN: Record<Exclude<ChartTarget, GroupTarget>, string> = {
     production: 'Production', consumption: 'Consumption', grid: 'Grid', battery: 'Battery',
     'battery-soc': 'Battery charge', irradiance: 'Irradiance', temperature: 'Temperature', humidity: 'Humidity',
+    cost: 'Cost',
 };
 const TARGET_LABELS_FR: Record<Exclude<ChartTarget, GroupTarget>, string> = {
     production: 'Production', consumption: 'Consommation', grid: 'Réseau', battery: 'Batterie',
     'battery-soc': 'Charge batterie', irradiance: 'Irradiance', temperature: 'Température', humidity: 'Humidité',
+    cost: 'Coût',
 };
 export function targetLabel(host: ChartHost, target: ChartTarget): string
 {

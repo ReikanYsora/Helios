@@ -20,6 +20,16 @@ export interface EnergyDefaults
     //Grid import kWh meters (`stat_energy_from`). Drives scrub past derivation and `imported today`.
     gridStatEnergyFroms:    string[];
     gridStatEnergyTos:      string[]; //Grid export kWh meters (`stat_energy_to`).
+    //Cost tracking (all optional; empty unless the user configured cost in the Energy dashboard). Import side lives
+    //on flow_from, export/compensation on flow_to. Live price = a €/kWh entity (`entity_energy_price`) or a static
+    //number (`number_energy_price`); the cumulative money statistics are `stat_cost` (import) / `stat_compensation`
+    //(export). The cost chip stays hidden when all of these are empty.
+    gridImportPrices:       string[]; //Live import price entities (€/kWh), current value read live.
+    gridImportPriceNumbers: number[]; //Static import prices (€/kWh) for flows configured with a fixed price.
+    gridExportPrices:       string[]; //Live export/compensation price entities (€/kWh).
+    gridExportPriceNumbers: number[]; //Static export prices (€/kWh).
+    gridStatCosts:          string[]; //Cumulative import-cost statistics (`stat_cost`), for the durable curve/panel.
+    gridStatCompensations:  string[]; //Cumulative export-revenue statistics (`stat_compensation`).
     //Battery live power sensors (`power_config`). After `invertedRateEntities` sign flips: charge positive / discharge negative.
     batteryStatRates:       string[];
     batteryStatEnergyFroms: string[]; //Battery discharge kWh meters (`stat_energy_from`). Drives `discharged today`.
@@ -92,6 +102,12 @@ export function freshEnergyDefaults(): EnergyDefaults
         gridStatRates:          [],
         gridStatEnergyFroms:    [],
         gridStatEnergyTos:      [],
+        gridImportPrices:       [],
+        gridImportPriceNumbers: [],
+        gridExportPrices:       [],
+        gridExportPriceNumbers: [],
+        gridStatCosts:          [],
+        gridStatCompensations:  [],
         batteryStatRates:       [],
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
@@ -360,6 +376,25 @@ export function parseEnergyPrefs(prefs: {
             for (const f of asRecordArray(src['flow_to']))
             {
                 pushStrings(f['stat_energy_to'], out.gridStatEnergyTos);
+            }
+            //Cost tracking (optional). HA's real multi-tariff shape carries the price + cost stat INSIDE each flow
+            //item; the simplified/single shape carries them top-level. Read both so any config maps; all empty when
+            //no cost is tracked (the cost chip then stays hidden). Import price/cost live on flow_from + top-level;
+            //export compensation on flow_to (top-level entity_energy_price is the IMPORT price, never read as export).
+            for (const f of [src, ...asRecordArray(src['flow_from'])])
+            {
+                const p = pickFirstString(f['entity_energy_price']); if (p) { out.gridImportPrices.push(p); }
+                const n = Number(f['number_energy_price']);          if (Number.isFinite(n)) { out.gridImportPriceNumbers.push(n); }
+                const c = pickFirstString(f['stat_cost']);           if (c) { out.gridStatCosts.push(c); }
+            }
+            for (const f of [src, ...asRecordArray(src['flow_to'])])
+            {
+                const c = pickFirstString(f['stat_compensation']);   if (c) { out.gridStatCompensations.push(c); }
+            }
+            for (const f of asRecordArray(src['flow_to']))
+            {
+                const p = pickFirstString(f['entity_energy_price']); if (p) { out.gridExportPrices.push(p); }
+                const n = Number(f['number_energy_price']);          if (Number.isFinite(n)) { out.gridExportPriceNumbers.push(n); }
             }
             const directRate = pickFirstString(src['stat_rate']);
             if (directRate)

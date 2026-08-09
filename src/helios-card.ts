@@ -14,6 +14,7 @@ import
     weatherEnabled,
     showTemperature,
     showHumidity,
+    showCost,
 } from './core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from './core/config/chip-appearance';
 import { buildDayProfile, daySlots, type ProfileStrand } from './data/period-totals/day-profile';
@@ -61,6 +62,7 @@ import
     returnTimelineToLive
 } from './timeline/timeline';
 import { refreshGrid } from './data/sources/grid';
+import { refreshCostLive } from './data/sources/cost';
 import { refreshDeviceConsumption } from './data/sources/device-consumption';
 import { createGridGuard, type GridGuardState } from './data/sources/grid-guard';
 import {
@@ -128,6 +130,11 @@ export class HeliosCard extends LitElement
     //Outdoor temperature (°C) + relative humidity (%) at the current time; NaN until data / when unavailable.
     @state() _temperature     = NaN;
     @state() _humidity        = NaN;
+    //Net live cost rate in `_currency` per hour (positive = spending, negative = earning), from refreshCostLive.
+    //Null when no cost is configured in the Energy dashboard (the cost chip then hides).
+    @state() _costRate: number | null = null;
+    //User currency from hass.config.currency; set alongside _costRate.
+    _currency = '€';
     //Screen-space layout of the always-visible labels + leaders, recomputed via
     //engine.projectHomeLabelLayout() on every map transform. null while the map is loading.
     @state() _labelLayout: LabelLayout | null = null;
@@ -1007,7 +1014,7 @@ export class HeliosCard extends LitElement
         const dimmed = this._dayCurveOpen && this._chartTarget !== 'humidity';
         return this._cornerChip('humidity', `${Math.round(this._humidity)} %`, dimmed);
     }
-    private _cornerChip(slot: 'temperature' | 'humidity', text: string, dimmed: boolean): TemplateResult
+    private _cornerChip(slot: 'temperature' | 'humidity' | 'cost', text: string, dimmed: boolean): TemplateResult
     {
         const color   = chipSlotColor(this, this.config, slot);
         const icon    = chipSlotIcon(this.config, slot);
@@ -1029,6 +1036,19 @@ export class HeliosCard extends LitElement
                 <ha-icon icon=${icon}></ha-icon>
                 <span>${text}</span>
             </div>`;
+    }
+
+    //Cost chip (2026.9.0): the live NET money rate in the user's currency per hour. Fixed, user-configurable colour
+    //+ icon like every other chip (no sign-driven colour); spend vs earn is carried by the value's sign (a negative
+    //rate means you are earning). Tap it like any chip to bring up its cost curve. Hidden when turned off or when no
+    //cost is configured (no resolvable rate).
+    private _renderCostChip(): TemplateResult | typeof nothing
+    {
+        if (!showCost(this.config) || this._costRate === null) { return nothing; }
+        const dimmed = this._dayCurveOpen && this._chartTarget !== 'cost';
+        const val = this._costRate
+            .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return this._cornerChip('cost', `${val} ${this._currency}/h`, dimmed);
     }
 
     //Push the resolved weather onto the host as --wx-* vars (scene grade + overlay strengths) and drive the
@@ -1254,6 +1274,8 @@ export class HeliosCard extends LitElement
         refreshPv(this);
         refreshBattery(this);
         refreshGrid(this);
+        //Cost rate rides on the grid live values just computed above, so refresh it right after.
+        refreshCostLive(this);
         refreshIrradiance(this);
         refreshWeatherOverrides(this);
         //Per-device consumption series for the monitoring groups (fire-and-forget; keyed so an unchanged id-set +
@@ -1393,6 +1415,7 @@ export class HeliosCard extends LitElement
                       grouped along the bottom with the scene pill family (lifted above the timeline when shown).  -->
                 ${weatherOverlay()}
                 <div class="helios-corner-chips ${timelineShown ? 'has-timeline' : ''}">
+                    ${this._renderCostChip()}
                     ${this._renderTempChip()}
                     ${this._renderHumidityChip()}
                 </div>
