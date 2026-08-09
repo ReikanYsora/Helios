@@ -53,7 +53,7 @@ export interface EnergyDefaults
     gridName:               string;
     batteryName:            string;
     //Per-source battery names (the Energy dashboard `name` field, in source order; '' when unset). Drives the
-    //battery detail chart's per-bank labels so a multi-bank install reads its own names, not "Battery N" (#365).
+    //battery detail chart's per-bank labels so a multi-bank install reads its own names, not "Battery N".
     batteryNames:           string[];
     //Individual devices from the dashboard's per-device tracking (`device_consumption`), in dashboard order. NOT part
     //of the source flows above (they are sub-measurements of the home load), kept separately for the monitoring
@@ -386,9 +386,9 @@ export function parseEnergyPrefs(prefs: {
             //no cost is tracked (the cost chip then stays hidden). Import price/cost live on flow_from + top-level;
             //export compensation on flow_to (top-level entity_energy_price is the IMPORT price, never read as export).
             //Import flows: price (entity/number) + cost statistic. When no explicit `stat_cost` is set, Home
-            //Assistant AUTO-GENERATES one named `<stat_energy_from>_cost` as soon as a price is configured (verified
-            //on real HC/HP + Tempo installs). Deriving it gives an exact, per-tariff cost with zero extra config,
-            //so a multi-tariff grid (several priced flows) just works. The fetch is graceful if the id doesn't exist.
+            //Assistant auto-generates one named `<stat_energy_from>_cost` as soon as a price is configured.
+            //Deriving it gives an exact, per-tariff cost with zero extra config, so a multi-tariff grid (several
+            //priced flows) just works. The fetch is graceful if the id doesn't exist.
             for (const f of [src, ...asRecordArray(src['flow_from'])])
             {
                 const meter = pickFirstString(f['stat_energy_from']);
@@ -434,7 +434,7 @@ export function parseEnergyPrefs(prefs: {
         else if (type === 'battery')
         {
             const battName = pickFirstString(src['name']) ?? '';
-            //Per-source name, in battery-source order, for the detail chart's per-bank labels (#365).
+            //Per-source name, in battery-source order, for the detail chart's per-bank labels.
             out.batteryNames.push(battName);
             if (!out.batteryName)
             {

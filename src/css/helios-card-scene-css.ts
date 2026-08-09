@@ -818,8 +818,8 @@ export const heliosCardStyles = css`
         background: radial-gradient(circle, rgba(30, 35, 42, 0.45), rgba(30, 35, 42, 0) 68%);
     }
     /*  Sized in cqw (share of the card's WIDTH, via ha-card's container-type: inline-size) for BOTH axes, so the
-        shadows stay round at any card shape. Percent height made them tall ovals on a narrow card (#332, tfriberg):
-        55% of a small width vs 70% of a tall height. left/top keep % for placement; the sweep is element-relative. */
+        shadows stay round at any card shape. Percent height made them tall ovals on a narrow card: 55% of a small
+        width vs 70% of a tall height. left/top keep % for placement; the sweep is element-relative. */
     .helios-wx-cloud.k1 { width: 55cqw; height: 55cqw; left: -30%; top: -10%; animation: helios-wx-sweep 22s linear infinite; }
     .helios-wx-cloud.k2 { width: 42cqw; height: 42cqw; left: -30%; top: 20%; animation: helios-wx-sweep 30s linear infinite; animation-delay: -8s; }
     .helios-wx-cloud.k3 { width: 66cqw; height: 66cqw; left: -45%; top: -20%; animation: helios-wx-sweep 40s linear infinite; animation-delay: -16s; }
@@ -833,7 +833,7 @@ export const heliosCardStyles = css`
             radial-gradient(35% 25% at 70% 78%, rgba(150, 180, 215, 0.14), transparent 70%);
     }
 
-    /*  Weather chips (temperature, then humidity): a centered row pinned along the BOTTOM of the scene, so they
+    /*  Corner chips (cost, temperature, humidity): a centered row pinned along the BOTTOM of the scene, so they
         read as secondary info and group with the home/grid/battery pill family rather than fighting the irradiance
         chip up top. Below the timeline's z-index (1000) so the timeline always wins on overlap. Each icon is tinted
         by --chip-color.  */
@@ -894,11 +894,11 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
     }
-    /*  Clickable + active states, mirroring the scene chips: [role=button] re-enables events (the column is
+    /*  Clickable + active states, mirroring the scene chips: [role=button] re-enables events (the row is
         pointer-events:none), .is-chart-active raises the halo, .is-curve-on fills the pill with the metric colour.  */
     .helios-corner-chip[role="button"] { pointer-events: auto; cursor: pointer; }
-    /*  Day-curve open: the non-active weather chip becomes an inert, invisible placeholder. It still reserves its
-        slot width so the centered row does not shift the surviving chip when its sibling drops out.  */
+    /*  Day-curve open: each non-active corner chip becomes an inert, invisible placeholder. It still reserves its
+        slot width so the centered row does not shift the surviving chip when its siblings drop out.  */
     .helios-corner-chip.is-slot-hidden { visibility: hidden; pointer-events: none; }
     .helios-corner-chip::after
     {

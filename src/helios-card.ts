@@ -1010,16 +1010,16 @@ export class HeliosCard extends LitElement
         if (!showTemperature(this.config) || !isFinite(this._temperature)) { return nothing; }
         //When a day curve is up, only the active chip is visible; the other stays in the DOM as an invisible
         //placeholder so the visible chip keeps its slot (the centered row must not shift when its sibling drops).
-        const dimmed = this._dayCurveOpen && this._chartTarget !== 'temperature';
-        return this._cornerChip('temperature', `${this._temperature.toFixed(1)} °C`, dimmed);
+        const hidden = this._dayCurveOpen && this._chartTarget !== 'temperature';
+        return this._cornerChip('temperature', `${this._temperature.toFixed(1)} °C`, hidden);
     }
     private _renderHumidityChip(): TemplateResult | typeof nothing
     {
         if (!showHumidity(this.config) || !isFinite(this._humidity)) { return nothing; }
-        const dimmed = this._dayCurveOpen && this._chartTarget !== 'humidity';
-        return this._cornerChip('humidity', `${Math.round(this._humidity)} %`, dimmed);
+        const hidden = this._dayCurveOpen && this._chartTarget !== 'humidity';
+        return this._cornerChip('humidity', `${Math.round(this._humidity)} %`, hidden);
     }
-    private _cornerChip(slot: 'temperature' | 'humidity' | 'cost', text: string, dimmed: boolean): TemplateResult
+    private _cornerChip(slot: 'temperature' | 'humidity' | 'cost', text: string, hidden: boolean): TemplateResult
     {
         const color   = chipSlotColor(this, this.config, slot);
         const icon    = chipSlotIcon(this.config, slot);
@@ -1027,11 +1027,11 @@ export class HeliosCard extends LitElement
         //metric, a second tap on the active chip toggles its day curve (onChartTargetClick).
         const active  = this._chartTarget === slot;
         const curveOn = active && this._dayCurveOpen;
-        //A dimmed chip carries is-slot-hidden (visibility:hidden): it reserves its width but is automatically
+        //A hidden chip carries is-slot-hidden (visibility:hidden): it reserves its width but is automatically
         //inert, unfocusable and out of the a11y tree, so role/tabindex/click can stay static.
         return html`
             <div
-                class="helios-corner-chip ${active ? 'is-chart-active' : ''} ${curveOn ? 'is-curve-on' : ''} ${dimmed ? 'is-slot-hidden' : ''}"
+                class="helios-corner-chip ${active ? 'is-chart-active' : ''} ${curveOn ? 'is-curve-on' : ''} ${hidden ? 'is-slot-hidden' : ''}"
                 style=${`--chip-color:${color}`}
                 role="button"
                 tabindex="0"
@@ -1043,22 +1043,22 @@ export class HeliosCard extends LitElement
             </div>`;
     }
 
-    //Cost chip (2026.9.0): the live NET money rate in the user's currency per hour. Fixed, user-configurable colour
+    //Cost chip: the live NET money rate in the user's currency per hour. Fixed, user-configurable colour
     //+ icon like every other chip (no sign-driven colour); spend vs earn is carried by the value's sign (a negative
     //rate means you are earning). Tap it like any chip to bring up its cost curve. Hidden when turned off or when no
     //cost is configured (no resolvable rate).
     private _renderCostChip(): TemplateResult | typeof nothing
     {
         if (!showCost(this.config) || this._costRate === null) { return nothing; }
-        const dimmed = this._dayCurveOpen && this._chartTarget !== 'cost';
+        const hidden = this._dayCurveOpen && this._chartTarget !== 'cost';
         const val = this._costRate
             .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        return this._cornerChip('cost', `${val} ${this._currency}/h`, dimmed);
+        return this._cornerChip('cost', `${val} ${this._currency}/h`, hidden);
     }
 
     //Push the resolved weather onto the host as --wx-* vars (scene grade + overlay strengths) and drive the
-    //rain/snow/storm controllers. Source is the live/scrub weather, or the dev-console override when set. The sun
-    //glow is anchored on the real sun position and gated on daylight.
+    //rain/snow/storm controllers. Source is the resolved live/scrub weather (any local sensor overrides are
+    //already folded in upstream). The sun glow is anchored on the real sun position and gated on daylight.
     private _applyWeather(): void
     {
         this.toggleAttribute('data-wx-on', this._wxOn);
@@ -1094,8 +1094,8 @@ export class HeliosCard extends LitElement
         //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
         this.toggleAttribute('data-ui-hidden', this._uiHidden);
 
-        //"Your real sky": recompute the weather layers whenever the resolved weather, the master switch, the sun
-        //(glow anchor + day/night) or the dev-console override changes.
+        //"Your real sky": recompute the weather layers whenever the resolved weather, the master switch or the sun
+        //(glow anchor + day/night) changes.
         if (_changedProperties.has('_cloudCover') || _changedProperties.has('_precip')
             || _changedProperties.has('_snowfall') || _changedProperties.has('_weatherCode')
             || _changedProperties.has('_wxOn') || _changedProperties.has('_sunScene')

@@ -1,4 +1,4 @@
-//"Your real sky" (2026.9.0): the on-card weather overlay, driven by the real weather resolved at the current
+//"Your real sky": the on-card weather overlay, driven by the real weather resolved at the current
 //live/scrub time (cloud cover, precipitation, snowfall, WMO weather code). Independent layers stack: the cloud
 //cover sets the sun/grey grade, and rain, snow and thunderstorm add on top of it.
 //
@@ -321,8 +321,16 @@ export class WeatherStorm
     private _last = 0;
     private _nextAt = 0;    //timestamp of the next strike (RAF clock)
     private _strikeT0 = -1; //start time of the strike in progress, -1 when idle between strikes
+    private _lastFlash = -1;
 
     constructor(private readonly _set: (flash: number) => void) {}
+
+    //Only touch the CSS var when the value actually changes: the multi-second gaps between strikes would otherwise
+    //rewrite the same 0 every frame, triggering a style recalc for nothing.
+    private _emit(flash: number): void
+    {
+        if (flash !== this._lastFlash) { this._lastFlash = flash; this._set(flash); }
+    }
 
     setStrength(s: number): void
     {
@@ -334,7 +342,7 @@ export class WeatherStorm
     stop(): void
     {
         if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
-        this._set(0);
+        this._emit(0);
     }
 
     //Random gap to the next strike, shorter at higher strength (~3-7 s at full, ~7-15 s when faint).
@@ -361,13 +369,13 @@ export class WeatherStorm
         if (this._strikeT0 < 0)
         {
             //Between strikes: dark, waiting for the scheduled time.
-            this._set(0);
+            this._emit(0);
             if (ts >= this._nextAt) { this._strikeT0 = ts; }
         }
         else
         {
             const tau = ts - this._strikeT0;
-            this._set(WeatherStorm._envelope(tau) * (0.7 + this._strength * 0.3));
+            this._emit(WeatherStorm._envelope(tau) * (0.7 + this._strength * 0.3));
             if (tau >= 360) { this._strikeT0 = -1; this._nextAt = ts + this._gap(); }
         }
 

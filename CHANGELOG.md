@@ -11,7 +11,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-alpha (`2026.9.0-a5`).
+alpha (`2026.9.0-a6`).
 
 ### Added: a cost chip
 
@@ -34,7 +34,9 @@ own per-tariff cost statistics and sums them. And the chip is **fully in the
 editor** now, show or hide it, and pick its colour and icon, like every other
 chip. The chip **follows the timeline** as you scrub (the cost at the hovered
 moment, like the other chips), and its **day curve around the house** now draws
-for multi-tariff grids too, not just a fixed price.
+for multi-tariff grids too, not just a fixed price. Open its detail panel for the
+cumulative total over the selected period, what you spent, what you earned, and
+the net.
 
 ### Added: the real weather, painted over the scene
 

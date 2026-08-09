@@ -86,7 +86,7 @@ export function gridSourceName(host: ChartHost, index: number, dir: 'import' | '
 export function batterySourceName(host: ChartHost, index: number, dir: 'charge' | 'discharge'): string
 {
     const ed = host._energyDefaults;
-    //Prefer the Energy dashboard's configured per-source name (#365); else the meter friendly name, then a generic.
+    //Prefer the Energy dashboard's configured per-source name; else the meter friendly name, then a generic.
     const configured = ed.batteryNames[index];
     if (configured) { return configured; }
     const id = (dir === 'charge' ? ed.batteryStatEnergyTos : ed.batteryStatEnergyFroms)[index];

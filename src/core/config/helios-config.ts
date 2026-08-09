@@ -245,7 +245,7 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 }
 
 
-//"Your real sky" weather effects. Default on (explicit false disables). The dev console is opt-in (default off).
+//"Your real sky" weather effects. Default on (explicit false disables).
 export function weatherEnabled(config: HeliosConfig | undefined): boolean
 {
     return config?.['weather-enabled'] !== false;

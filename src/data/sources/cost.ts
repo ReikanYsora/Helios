@@ -1,14 +1,9 @@
 //Live cost rate for the cost chip: the NET money flow right now, in the user's currency per hour.
-//
-//net rate = import cost - export revenue = importPrice x importPower - exportPrice x exportPower,
-//with power taken from the already-computed live grid slots and price per the HYBRID rule agreed for the feature:
-//  - a single configured price (one entity, or one static number) -> that price, measured, exact, no lag;
-//  - several prices (a multi-tariff grid, e.g. Tempo) -> resolved later from the recent stat_cost/stat_energy
-//    delta (the effective active price); until that lands the rate is left null so the chip hides rather than
-//    guessing the wrong tariff.
-//
-//Everything is absent unless the user configured cost in the Energy dashboard, matching Helios' rule: measured or
-//absent, never invented. Positive rate = you are spending; negative = you are earning (solar surplus sold).
+//net rate = import cost - export revenue = importPrice x importPower - exportPrice x exportPower.
+//Prices follow a hybrid rule: a single configured price (one entity or one static number) is used directly,
+//exact and lag-free; a multi-tariff grid (e.g. Tempo) is read from HA's own cost statistics instead, since
+//averaging tariffs would misprice the moment. Nothing is shown unless cost is configured in the Energy dashboard
+//(Helios' rule: measured or absent, never invented). Positive rate = spending, negative = earning (surplus sold).
 
 import { parseNumericState, pvNormalizeToWatts } from '../../core/format/format';
 import type { EnergyDefaults } from './energy-prefs';
@@ -102,8 +97,8 @@ function latestCostRate(host: CostHost): number | null
 
 
 //Resolve a single €/kWh price for one direction: exactly one price entity -> its live numeric state; else exactly
-//one static number -> that number; otherwise null (no price, or a multi-tariff set handled by the effective-price
-//path later). Never averages several tariffs: that would misprice the moment.
+//one static number -> that number; otherwise null (no price, or a multi-tariff set the cost-statistic path handles
+//instead). Never averages several tariffs: that would misprice the moment.
 function singlePrice(hass: CostHost['hass'], entities: string[], numbers: number[]): number | null
 {
     if (entities.length === 1)
@@ -119,7 +114,7 @@ function singlePrice(hass: CostHost['hass'], entities: string[], numbers: number
 
 //The single static price (currency/kWh) for one direction, or null when there is none or a multi-tariff set.
 //Used by the durable cost curve: with a constant price, cost = energy x price is exact across the WHOLE history
-//(no HA stat_cost backfill needed). Variable (entity) prices are handled separately, later.
+//(no HA stat_cost backfill needed). Variable (entity) prices are handled by the cost-statistic path instead.
 export function staticPrice(numbers: number[]): number | null
 {
     return numbers.length === 1 ? numbers[0] : null;
@@ -164,8 +159,8 @@ export function refreshCostLive(host: CostHost): void
     const importPrice = singlePrice(host.hass, d.gridImportPrices, d.gridImportPriceNumbers);
     const exportPrice = singlePrice(host.hass, d.gridExportPrices, d.gridExportPriceNumbers);
 
-    //No resolvable import price (0 or multi-tariff): leave the rate null for now (Inc. 2 fills multi-tariff from
-    //the effective price). Export-only pricing with no import price is not a real setup, so gate on import.
+    //No resolvable single import price (multi-tariff is served by the cost-statistic path above, not here): leave
+    //the rate null. Export-only pricing with no import price is not a real setup, so gate on import.
     if (importPrice === null)
     {
         if (host._costRate !== null) { host._costRate = null; }
