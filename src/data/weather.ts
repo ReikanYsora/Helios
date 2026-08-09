@@ -374,7 +374,10 @@ export async function fetchHomePointData(
             `&hourly=${HOURLY_VARS.join(',')}` +
             `&models=${models.join(',')}` +
             `&past_days=${PAST_DAYS}&forecast_days=${FORECAST_DAYS}` +
-            `&timezone=auto`;
+            //UTC, not timezone=auto: the hourly time strings come back with NO offset, so parsing must know the
+            //zone. UTC lets us pin each instant explicitly (below) instead of it defaulting to the device zone,
+            //which shifts the whole axis when the device/server zone differs from the home coordinates.
+            `&timezone=UTC`;
 
         if (elevation !== undefined)
         {
@@ -401,7 +404,9 @@ export async function fetchHomePointData(
             const row = Array.isArray(json) ? json[0] : json;
 
             const tArr  = row?.hourly?.time ?? [];
-            const times: Date[] = tArr.map((t: string) => new Date(t));
+            //Append 'Z' so the offset-free UTC strings parse as UTC instants (see the timezone=UTC note above),
+            //not in the device zone. new Date on a bare 'YYYY-MM-DDTHH:mm' would otherwise use local time.
+            const times: Date[] = tArr.map((t: string) => new Date(`${t}Z`));
 
             const lowSeries  = fillCloud(readSeries(row, 'cloud_cover_low',  models));
             const midSeries  = fillCloud(readSeries(row, 'cloud_cover_mid',  models));
