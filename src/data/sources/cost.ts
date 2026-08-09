@@ -29,6 +29,9 @@ export interface CostHost
     //Rolling past-window days + recorder period, for the cost `change` fetch (same span as the store).
     readonly _periodPastDays:   number;
     readonly _storeFetchPeriod: StatPeriod;
+    //Scrub state, so the chip reads the cost at the hovered time (like the other chips) rather than only live.
+    readonly _selectedTime: Date | null;
+    readonly _isLiveMode:   boolean;
     requestUpdate(): void;
     //Recorder `change` series for the cost (`stat_cost`) + compensation (`stat_compensation`) statistics, summed
     //across flows. Δ per bucket is money, so a rate is Δ / bucketHours. Null until first fetch (or none configured).
@@ -133,13 +136,18 @@ export function refreshCostLive(host: CostHost): void
 {
     host._currency = String(host.hass?.config?.currency ?? '€');
 
-    //1) Universal path: HA's own cost statistics (correct for any tariff, incl. Tempo + a total-cost sensor). Live
-    //   is the most recent committed bucket's net rate. Preferred whenever cost stats are configured.
-    const fromStats = latestCostRate(host);
-    if (fromStats !== null)
+    //1) Universal path: HA's own cost statistics (correct for any tariff, incl. Tempo + a total-cost sensor).
+    //   Scrub-aware like every other chip: the rate at the hovered instant while scrubbing, else the most recent
+    //   committed bucket when live.
+    if (host._costImportSeries || host._costExportSeries)
     {
-        if (host._costRate !== fromStats) { host._costRate = fromStats; }
-        return;
+        const scrubMs = (host._selectedTime && !host._isLiveMode) ? host._selectedTime.getTime() : null;
+        const fromStats = scrubMs !== null ? costRateAt(host, scrubMs) : latestCostRate(host);
+        if (fromStats !== null)
+        {
+            if (host._costRate !== fromStats) { host._costRate = fromStats; }
+            return;
+        }
     }
 
     //2) Fallback: a single configured PRICE x live power (no cost statistic, e.g. only a static/current price set).

@@ -11,7 +11,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-alpha (`2026.9.0-a4`).
+alpha (`2026.9.0-a5`).
 
 ### Added: a cost chip
 
@@ -32,7 +32,9 @@ statistic still works, computed as energy times price. **Multi-tariff grids
 price per tariff and never an explicit cost sensor: Helios finds Home Assistant's
 own per-tariff cost statistics and sums them. And the chip is **fully in the
 editor** now, show or hide it, and pick its colour and icon, like every other
-chip.
+chip. The chip **follows the timeline** as you scrub (the cost at the hovered
+moment, like the other chips), and its **day curve around the house** now draws
+for multi-tariff grids too, not just a fixed price.
 
 ### Added: the real weather, painted over the scene
 
