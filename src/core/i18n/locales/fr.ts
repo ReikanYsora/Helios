@@ -72,6 +72,7 @@ export const fr: Translations = {
       "Facultatif. Utilisez une entité météo Home Assistant pour piloter la condition (pluie / neige / orage) à la place de la valeur Open-Meteo, pour le direct et le passé. Les heures de prévision restent sur le modèle.",
     chipTemperature: "Affichage de la température",
     chipHumidity: "Affichage de l'humidité",
+    chipCost: "Affichage du coût",
     locationSection: "Emplacement de la maison",
     homeLatitude: "Latitude du domicile",
     homeLongitude: "Longitude du domicile",

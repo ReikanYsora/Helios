@@ -922,6 +922,7 @@ export class HeliosCardEditor extends LitElement
             ${this._renderChipBox(t.editor.chipHome ?? 'Home consumption display', 'chip-home-visible', ['home'])}
             ${this._renderChipBox(t.editor.chipTemperature ?? 'Temperature display', 'show-temperature', ['temperature'])}
             ${this._renderChipBox(t.editor.chipHumidity ?? 'Humidity display', 'show-humidity', ['humidity'])}
+            ${this._renderChipBox(t.editor.chipCost ?? 'Cost display', 'show-cost', ['cost'])}
             ${Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1).map(g => this._renderGroupChipBox(t, g))}
         `;
     }

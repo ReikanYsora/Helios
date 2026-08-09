@@ -129,6 +129,7 @@ export const en: Translations = {
     chipHome: "Home consumption display",
     chipTemperature: "Temperature display",
     chipHumidity: "Humidity display",
+    chipCost: "Cost display",
     groupsConfigTitle: "Group configuration",
     optionalSensors: "Optional sensors",
     solarIrradianceEntity: "Solar irradiance entity",

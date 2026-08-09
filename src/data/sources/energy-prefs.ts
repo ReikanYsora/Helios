@@ -385,20 +385,34 @@ export function parseEnergyPrefs(prefs: {
             //item; the simplified/single shape carries them top-level. Read both so any config maps; all empty when
             //no cost is tracked (the cost chip then stays hidden). Import price/cost live on flow_from + top-level;
             //export compensation on flow_to (top-level entity_energy_price is the IMPORT price, never read as export).
+            //Import flows: price (entity/number) + cost statistic. When no explicit `stat_cost` is set, Home
+            //Assistant AUTO-GENERATES one named `<stat_energy_from>_cost` as soon as a price is configured (verified
+            //on real HC/HP + Tempo installs). Deriving it gives an exact, per-tariff cost with zero extra config,
+            //so a multi-tariff grid (several priced flows) just works. The fetch is graceful if the id doesn't exist.
             for (const f of [src, ...asRecordArray(src['flow_from'])])
             {
-                const p = pickFirstString(f['entity_energy_price']); if (p) { out.gridImportPrices.push(p); }
-                const n = Number(f['number_energy_price']);          if (Number.isFinite(n)) { out.gridImportPriceNumbers.push(n); }
-                const c = pickFirstString(f['stat_cost']);           if (c) { out.gridStatCosts.push(c); }
+                const meter = pickFirstString(f['stat_energy_from']);
+                const p = pickFirstString(f['entity_energy_price']);
+                const n = Number(f['number_energy_price']);
+                const hasPrice = !!p || Number.isFinite(n);
+                if (p) { out.gridImportPrices.push(p); }
+                if (Number.isFinite(n)) { out.gridImportPriceNumbers.push(n); }
+                const explicit = pickFirstString(f['stat_cost']);
+                if (explicit) { out.gridStatCosts.push(explicit); }
+                else if (hasPrice && meter) { out.gridStatCosts.push(`${meter}_cost`); }
             }
+            //Export flows: compensation statistic (explicit, else HA's auto `<stat_energy_to>_compensation`) + the
+            //export price (its own `_export` fields, never the import price).
             for (const f of [src, ...asRecordArray(src['flow_to'])])
             {
-                const c = pickFirstString(f['stat_compensation']);   if (c) { out.gridStatCompensations.push(c); }
-            }
-            for (const f of asRecordArray(src['flow_to']))
-            {
-                const p = pickFirstString(f['entity_energy_price']); if (p) { out.gridExportPrices.push(p); }
-                const n = Number(f['number_energy_price']);          if (Number.isFinite(n)) { out.gridExportPriceNumbers.push(n); }
+                const meter = pickFirstString(f['stat_energy_to']);
+                const explicit = pickFirstString(f['stat_compensation']);
+                if (explicit) { out.gridStatCompensations.push(explicit); }
+                else if (meter) { out.gridStatCompensations.push(`${meter}_compensation`); }
+                const p = pickFirstString(f['entity_energy_price_export']);
+                const n = Number(f['number_energy_price_export']);
+                if (p) { out.gridExportPrices.push(p); }
+                if (Number.isFinite(n)) { out.gridExportPriceNumbers.push(n); }
             }
             const directRate = pickFirstString(src['stat_rate']);
             if (directRate)

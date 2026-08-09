@@ -134,6 +134,7 @@ export interface Translations
         chipHome?:                    string;
         chipTemperature?:             string;
         chipHumidity?:                string;
+        chipCost?:                    string;
         //Sections split out of "Entity display": group definitions and optional sensors.
         groupsConfigTitle?:           string;
         optionalSensors?:             string;
