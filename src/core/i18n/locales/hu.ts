@@ -73,6 +73,7 @@ export const hu: Translations = {
       "Opcionális. Egy Home Assistant időjárás-entitást használ az időjárási állapot (eső / hó / zivatar) vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz. Az előrejelzett órák a modellen maradnak.",
     chipTemperature: "Hőmérséklet megjelenítése",
     chipHumidity: "Páratartalom megjelenítése",
+    chipCost: "Költség megjelenítése",
     locationSection: "Otthon helye",
     homeLatitude: "Otthon szélességi foka",
     homeLongitude: "Otthon hosszúsági foka",

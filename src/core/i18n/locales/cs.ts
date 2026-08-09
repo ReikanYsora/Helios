@@ -73,6 +73,7 @@ export const cs: Translations = {
       "Volitelné. Pro aktuální a minulé hodnoty použije entitu počasí Home Assistant k řízení stavu (déšť / sníh / bouřka) namísto hodnoty z Open-Meteo. Předpovídané hodiny zůstávají na modelu.",
     chipTemperature: "Zobrazení teploty",
     chipHumidity: "Zobrazení vlhkosti",
+    chipCost: "Zobrazení nákladů",
     locationSection: "Poloha domova",
     homeLatitude: "Zeměpisná šířka domova",
     homeLongitude: "Zeměpisná délka domova",

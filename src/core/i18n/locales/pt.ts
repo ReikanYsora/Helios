@@ -73,6 +73,7 @@ export const pt: Translations = {
       "Opcional. Use uma entidade de meteorologia do Home Assistant para controlar a condição (chuva / neve / trovoada) em vez do valor do Open-Meteo, para o tempo real + passado. As horas de previsão continuam a usar o modelo.",
     chipTemperature: "Mostrar temperatura",
     chipHumidity: "Mostrar humidade",
+    chipCost: "Visualização do custo",
     locationSection: "Localização da casa",
     homeLatitude: "Latitude de casa",
     homeLongitude: "Longitude de casa",

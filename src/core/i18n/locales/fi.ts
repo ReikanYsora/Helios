@@ -73,6 +73,7 @@ export const fi: Translations = {
       "Valinnainen. Käytä Home Assistant -sääentiteettiä olosuhteen (sade / lumi / ukkosmyrsky) ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen. Ennustetunnit pysyvät mallissa.",
     chipTemperature: "Lämpötilan näyttö",
     chipHumidity: "Ilmankosteuden näyttö",
+    chipCost: "Kustannusnäyttö",
     locationSection: "Kodin sijainti",
     homeLatitude: "Kodin leveysaste",
     homeLongitude: "Kodin pituusaste",

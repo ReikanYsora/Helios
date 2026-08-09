@@ -73,6 +73,7 @@ export const pl: Translations = {
       "Opcjonalne. Użyj encji pogody Home Assistant, aby sterować warunkami (deszcz / śnieg / burza) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości. Godziny prognozy pozostają oparte na modelu.",
     chipTemperature: "Wyświetlanie temperatury",
     chipHumidity: "Wyświetlanie wilgotności",
+    chipCost: "Wyświetlanie kosztu",
     locationSection: "Lokalizacja domu",
     homeLatitude: "Szerokość geograficzna domu",
     homeLongitude: "Długość geograficzna domu",

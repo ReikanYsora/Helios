@@ -73,6 +73,7 @@ export const lv: Translations = {
       "Neobligāti. Izmantojiet Home Assistant laikapstākļu entītiju, lai noteiktu apstākļus (lietus / sniegs / pērkona negaiss) Open-Meteo vērtības vietā, tagadnei un pagātnei. Prognozes stundas paliek uz modeļa.",
     chipTemperature: "Temperatūras rādījums",
     chipHumidity: "Mitruma rādījums",
+    chipCost: "Izmaksu attēlojums",
     locationSection: "Atrašanās vieta",
     homeLatitude: "Mājas platums",
     homeLongitude: "Mājas garums",

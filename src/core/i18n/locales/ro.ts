@@ -73,6 +73,7 @@ export const ro: Translations = {
       "Opțional. Folosește o entitate meteo Home Assistant pentru a controla condiția (ploaie / ninsoare / furtună) în locul valorii Open-Meteo, pentru prezent + trecut. Orele de prognoză rămân pe model.",
     chipTemperature: "Afișare temperatură",
     chipHumidity: "Afișare umiditate",
+    chipCost: "Afișare cost",
     locationSection: "Locatie",
     homeLatitude: "Latitudinea casei",
     homeLongitude: "Longitudinea casei",

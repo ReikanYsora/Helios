@@ -173,6 +173,28 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         return rows;
     }
 
+    //Cost: total money over the window, summed from HA's cost statistics (import cost minus export compensation).
+    //Spent / earned / net / per-day, in the user's currency. Absent when no cost statistic is loaded.
+    if (target === 'cost')
+    {
+        if (!host._costImportSeries && !host._costExportSeries) { return []; }
+        const cur = String(hass?.config?.currency ?? '€');
+        const money = (v: number): string =>
+            `${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`;
+        const sumWin = (s: { startMs: number; kwh: number }[] | null): number =>
+            (s ?? []).reduce((acc, b) => (b.startMs >= startMs && b.startMs < endMs ? acc + b.kwh : acc), 0);
+        const spent  = sumWin(host._costImportSeries);
+        const earned = sumWin(host._costExportSeries);
+        const net    = spent - earned;
+        const rows: DetailMetric[] = [{ icon: 'mdi:cash-minus', value: money(spent) }];
+        if (earned > 0) { rows.push({ icon: 'mdi:cash-plus', value: money(earned) }); }
+        rows.push(
+            { icon: 'mdi:scale-balance', value: money(net) },
+            { icon: 'mdi:calendar-today', value: money(days > 0 ? net / days : net) },
+        );
+        return rows;
+    }
+
     //Monitoring group: one row per visible device of the group, its total consumption over the window (same
     //magnitude the chart curves show), shown as the device name + total (no icon, to save width).
     if (isGroupTarget(target))

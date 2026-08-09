@@ -73,6 +73,7 @@ export const nl: Translations = {
       "Optioneel. Gebruik een Home Assistant-weerentiteit om de conditie (regen / sneeuw / onweer) aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden. Voorspelde uren blijven van het model.",
     chipTemperature: "Temperatuurweergave",
     chipHumidity: "Luchtvochtigheidsweergave",
+    chipCost: "Kostenweergave",
     locationSection: "Locatie",
     homeLatitude: "Breedtegraad van het huis",
     homeLongitude: "Lengtegraad van het huis",

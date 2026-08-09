@@ -73,6 +73,7 @@ export const isLocale: Translations = {
       "Valfrjálst. Notaðu Home Assistant veðureiningu til að stýra veðurskilyrðum (rigning / snjór / þrumuveður) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð. Spátímar halda sig við líkanið.",
     chipTemperature: "Hitastigsbirting",
     chipHumidity: "Rakastigsbirting",
+    chipCost: "Kostnaðarbirting",
     locationSection: "Staðsetning",
     homeLatitude: "Breiddargráða heimilis",
     homeLongitude: "Lengdargráða heimilis",

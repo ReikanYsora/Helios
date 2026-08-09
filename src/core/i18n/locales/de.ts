@@ -73,6 +73,7 @@ export const de: Translations = {
       "Optional. Verwendet eine Home Assistant Wetterentität, um die Bedingung (Regen / Schnee / Gewitter) zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit. Vorhersagestunden bleiben beim Modell.",
     chipTemperature: "Temperaturanzeige",
     chipHumidity: "Luftfeuchtigkeitsanzeige",
+    chipCost: "Kostenanzeige",
     locationSection: "Standort",
     homeLatitude: "Breitengrad des Zuhauses",
     homeLongitude: "Längengrad des Zuhauses",

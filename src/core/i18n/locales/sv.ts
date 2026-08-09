@@ -73,6 +73,7 @@ export const sv: Translations = {
       "Valfritt. Använd en Home Assistant-väderentitet för att styra förhållandet (regn / snö / åskväder) i stället för Open-Meteo-värdet, för live + dåtid. Prognostimmar följer modellen.",
     chipTemperature: "Temperaturvisning",
     chipHumidity: "Luftfuktighetsvisning",
+    chipCost: "Kostnadsvisning",
     locationSection: "Hemmets plats",
     homeLatitude: "Hemmets latitud",
     homeLongitude: "Hemmets longitud",

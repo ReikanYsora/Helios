@@ -73,6 +73,7 @@ export const hr: Translations = {
       "Neobavezno. Koristite Home Assistant entitet vremena za upravljanje uvjetima (kiša / snijeg / grmljavina) umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost. Sati prognoze ostaju na modelu.",
     chipTemperature: "Prikaz temperature",
     chipHumidity: "Prikaz vlažnosti",
+    chipCost: "Prikaz troška",
     locationSection: "Lokacija doma",
     homeLatitude: "Zemljopisna širina doma",
     homeLongitude: "Zemljopisna dužina doma",

@@ -73,6 +73,7 @@ export const lt: Translations = {
       "Neprivaloma. Naudoti Home Assistant orų objektą, kuris valdytų sąlygas (lietus / sniegas / perkūnija) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai. Prognozės valandos lieka pagal modelį.",
     chipTemperature: "Temperatūros rodymas",
     chipHumidity: "Drėgmės rodymas",
+    chipCost: "Išlaidų rodymas",
     locationSection: "Namų vieta",
     homeLatitude: "Namų platuma",
     homeLongitude: "Namų ilguma",

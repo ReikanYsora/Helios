@@ -73,6 +73,7 @@ export const da: Translations = {
       "Valgfrit. Brug en Home Assistant-vejrenhed til at styre forholdet (regn / sne / tordenvejr) i stedet for Open-Meteo-værdien til live + fortid. Prognosetimer forbliver på modellen.",
     chipTemperature: "Temperaturvisning",
     chipHumidity: "Luftfugtighedsvisning",
+    chipCost: "Omkostningsvisning",
     locationSection: "Hjemmets placering",
     homeLatitude: "Hjemmets breddegrad",
     homeLongitude: "Hjemmets længdegrad",

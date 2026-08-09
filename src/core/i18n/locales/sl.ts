@@ -73,6 +73,7 @@ export const sl: Translations = {
       "Neobvezno. Za trenutni čas in preteklost uporabite entiteto vremena v Home Assistant, ki namesto vrednosti Open-Meteo določa razmere (dež / sneg / nevihta). Napovedane ure ostanejo na modelu.",
     chipTemperature: "Prikaz temperature",
     chipHumidity: "Prikaz vlažnosti",
+    chipCost: "Prikaz stroška",
     locationSection: "Lokacija doma",
     homeLatitude: "Zemljepisna širina doma",
     homeLongitude: "Zemljepisna dolžina doma",

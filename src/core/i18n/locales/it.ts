@@ -73,6 +73,7 @@ export const it: Translations = {
       "Facoltativo. Usa un'entità meteo di Home Assistant per determinare la condizione (pioggia / neve / temporale) al posto del valore di Open-Meteo, per il momento attuale e il passato. Le ore di previsione restano sul modello.",
     chipTemperature: "Visualizzazione temperatura",
     chipHumidity: "Visualizzazione umidità",
+    chipCost: "Visualizzazione del costo",
     locationSection: "Posizione di casa",
     homeLatitude: "Latitudine di casa",
     homeLongitude: "Longitudine di casa",

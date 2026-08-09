@@ -73,6 +73,7 @@ export const et: Translations = {
       "Valikuline. Kasuta Open-Meteo väärtuse asemel Home Assistanti ilmaolemit, et juhtida ilmastikutingimusi (vihm / lumi / äike) reaalaja + mineviku jaoks. Prognoositunnid jäävad mudelile.",
     chipTemperature: "Temperatuuri kuva",
     chipHumidity: "Niiskuse kuva",
+    chipCost: "Kulude kuva",
     locationSection: "Kodu asukoht",
     homeLatitude: "Kodu laiuskraad",
     homeLongitude: "Kodu pikkuskraad",

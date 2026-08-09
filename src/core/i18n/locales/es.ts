@@ -73,6 +73,7 @@ export const es: Translations = {
       "Opcional. Usa una entidad meteorológica de Home Assistant para determinar la condición (lluvia / nieve / tormenta) en lugar del valor de Open-Meteo, para el presente y el pasado. Las horas de pronóstico siguen usando el modelo.",
     chipTemperature: "Visualización de temperatura",
     chipHumidity: "Visualización de humedad",
+    chipCost: "Visualización del coste",
     locationSection: "Ubicación del domicilio",
     homeLatitude: "Latitud del domicilio",
     homeLongitude: "Longitud del domicilio",

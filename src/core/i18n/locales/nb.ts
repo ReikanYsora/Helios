@@ -73,6 +73,7 @@ export const nb: Translations = {
       "Valgfritt. Bruk en Home Assistant-værenhet til å styre forholdet (regn / snø / tordenvær) i stedet for Open-Meteo-verdien, for sanntid + fortid. Prognosetimer følger modellen.",
     chipTemperature: "Temperaturvisning",
     chipHumidity: "Luftfuktighetsvisning",
+    chipCost: "Kostnadsvisning",
     locationSection: "Hjemmets plassering",
     homeLatitude: "Hjemmets breddegrad",
     homeLongitude: "Hjemmets lengdegrad",

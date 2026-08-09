@@ -73,6 +73,7 @@ export const sk: Translations = {
       "Voliteľné. Použite entitu počasia Home Assistant na riadenie podmienok (dážď / sneh / búrka) namiesto hodnoty z Open-Meteo pre aktuálne + minulé. Hodiny predpovede zostávajú na modeli.",
     chipTemperature: "Zobrazenie teploty",
     chipHumidity: "Zobrazenie vlhkosti",
+    chipCost: "Zobrazenie nákladov",
     locationSection: "Poloha domova",
     homeLatitude: "Zemepisná šírka domova",
     homeLongitude: "Zemepisná dĺžka domova",
