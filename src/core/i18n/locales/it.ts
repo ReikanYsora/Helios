@@ -92,6 +92,10 @@ export const it: Translations = {
     sunChipMode: "Lettura del chip del sole",
     sunChipModeHelp:
       "Cosa mostra il chip del sole: l'irraggiamento solare live (predefinito) o la posizione del sole (azimut ed elevazione). La posizione non richiede alcun sensore, deriva dai calcoli solari della scheda stessa.",
+      batteryChipMode: "Lettura del chip batteria",
+      batteryChipModeHelp: "Cosa mostra il chip batteria: la potenza in tempo reale (predefinito) o lo stato di carica (%). Ripiega sul valore effettivamente fornito dalla batteria.",
+      batteryChipModePower: "Potenza",
+      batteryChipModeSoc: "Stato di carica",
     sunChipModeIrradiance: "Irraggiamento",
     sunChipModePosition: "Posizione del sole",
     displayUpdateFrequency: "Dettaglio del grafico",
@@ -127,6 +131,10 @@ export const it: Translations = {
     showSunTimes: "Mostra orari alba / tramonto",
     showSunTimesHint:
       "Mostra gli orari di alba e tramonto e i relativi indicatori ai piedi dell'arco solare.",
+    showHorizonLine: "Mostra l'orizzonte del terreno",
+    showHorizonLineHint: "Disegna la linea dell'orizzonte del rilievo attorno alla casa, calcolata dal terreno locale. L'orizzonte attenua sempre il sole in modo realistico dietro le colline; questo mostra o nasconde solo la linea.",
+    horizonLineColor: "Colore dell'orizzonte del terreno",
+    horizonLineColorHint: "Colore della linea dell'orizzonte del terreno.",
     lockRotation: "Blocca rotazione",
     lockRotationHint:
       "Trascina l'anteprima per ruotare e inclinare la scena fino alla vista desiderata, poi attiva questa opzione. Il blocco congela quella vista (la rotazione con trascinamento e l'auto-rotazione a riposo vengono disattivate) e salva l'angolo nella scheda, così la stessa identica vista appare su ogni dispositivo e browser. Disattivalo per ruotare di nuovo liberamente.",

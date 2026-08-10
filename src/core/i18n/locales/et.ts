@@ -92,6 +92,10 @@ export const et: Translations = {
     sunChipMode: "Päikesekiibi näit",
     sunChipModeHelp:
       "Mida päikesekiip näitab: otsest päikesekiirgust (vaikimisi) või päikese asendit (asimuut ja kõrgus). Asend ei vaja andurit, see tuleb kaardi enda päikesearvutustest.",
+      batteryChipMode: "Aku kiibi näit",
+      batteryChipModeHelp: "Mida aku kiip näitab: reaalajas võimsust (vaikimisi) või laetuse taset (%). See langeb tagasi väärtusele, mida su aku tegelikult pakub.",
+      batteryChipModePower: "Võimsus",
+      batteryChipModeSoc: "Laetuse tase",
     sunChipModeIrradiance: "Kiirgustugevus",
     sunChipModePosition: "Päikese asend",
     displayUpdateFrequency: "Graafiku detailsus",
@@ -127,6 +131,10 @@ export const et: Translations = {
     showSunTimes: "Näita päikesetõusu ja -loojangu aegu",
     showSunTimesHint:
       "Näita päikesetõusu ja -loojangu aegu ning nende markereid päikesekaare jalamil.",
+    showHorizonLine: "Näita maastiku horisonti",
+    showHorizonLineHint: "Joonistab maastiku horisondijoone kodu ümber, arvutatuna kohalikust reljeefist. Horisont summutab päikest alati realistlikult küngaste taga; see üksnes näitab või peidab joonistatud joone.",
+    horizonLineColor: "Maastiku horisondi värv",
+    horizonLineColorHint: "Maastiku horisondijoone värv.",
     lockRotation: "Lukusta pööramine",
     lockRotationHint:
       "Lohistage eelvaadet, et pöörata ja kallutada stseeni soovitud vaateni, seejärel lülitage see sisse. Lukk külmutab selle vaate (lohistamisega pööramine ja jõudeoleku automaatne pööramine lülitatakse välja) ja salvestab nurga kaardile, nii et täpselt sama vaade kuvatakse igas seadmes ja brauseris. Lülitage see välja, et taas vabalt pöörata.",

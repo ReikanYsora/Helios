@@ -92,6 +92,10 @@ export const isLocale: Translations = {
     sunChipMode: "Lestur sólarflögu",
     sunChipModeHelp:
       "Hvað sólarflagan sýnir: lifandi sólgeislun (sjálfgefið) eða stöðu sólarinnar (áttarhorn og hæð). Staðan þarf engan skynjara, hún kemur frá sólarreikningum kortsins sjálfs.",
+      batteryChipMode: "Aflestur rafhlöðukubbs",
+      batteryChipModeHelp: "Hvað rafhlöðukubburinn sýnir: rauntímaafl (sjálfgefið) eða hleðslustöðu (%). Hann fellur til baka á það gildi sem rafhlaðan þín gefur í raun.",
+      batteryChipModePower: "Afl",
+      batteryChipModeSoc: "Hleðslustaða",
     sunChipModeIrradiance: "Sólgeislun",
     sunChipModePosition: "Staða sólar",
     displayUpdateFrequency: "Nákvæmni grafs",
@@ -127,6 +131,10 @@ export const isLocale: Translations = {
     showSunTimes: "Sýna sólarupprás / sólsetur",
     showSunTimesHint:
       "Sýna tímasetningar sólarupprásar og sólseturs, ásamt merkjum þeirra við fætur sólarbogans.",
+    showHorizonLine: "Sýna sjóndeildarhring lands",
+    showHorizonLineHint: "Teiknar sjóndeildarlínu landslagsins í kringum heimilið, reiknaða út frá staðbundnu landslagi. Sjóndeildarhringurinn deyfir alltaf sólina raunsætt á bak við hæðir; þetta sýnir eða felur aðeins teiknuðu línuna.",
+    horizonLineColor: "Litur sjóndeildarhrings lands",
+    horizonLineColorHint: "Litur sjóndeildarlínu landslagsins.",
     lockRotation: "Læsa snúningi",
     lockRotationHint:
       "Dragðu forskoðunina til að snúa og halla senunni að þeirri sýn sem þú vilt og kveiktu svo á þessu. Læsingin frystir þá sýn (snúningur með drætti og sjálfvirkur snúningur í hvíld eru gerð óvirk) og vistar hornið á spjaldið, þannig að nákvæmlega sama sýn birtist á öllum tækjum og vöfrum. Slökktu á henni til að snúa frjálst aftur.",

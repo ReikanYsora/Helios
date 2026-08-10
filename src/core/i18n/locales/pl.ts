@@ -92,6 +92,10 @@ export const pl: Translations = {
     sunChipMode: "Odczyt chipa słońca",
     sunChipModeHelp:
       "Co pokazuje chip słońca: nasłonecznienie solarne na żywo (domyślnie) lub pozycję słońca (azymut i wysokość). Pozycja nie potrzebuje czujnika, pochodzi z własnych obliczeń słonecznych karty.",
+      batteryChipMode: "Odczyt chipa baterii",
+      batteryChipModeHelp: "Co pokazuje chip baterii: moc na żywo (domyślnie) lub stan naładowania (%). Wraca do wartości, którą faktycznie udostępnia bateria.",
+      batteryChipModePower: "Moc",
+      batteryChipModeSoc: "Stan naładowania",
     sunChipModeIrradiance: "Nasłonecznienie",
     sunChipModePosition: "Pozycja słońca",
     displayUpdateFrequency: "Szczegółowość wykresu",
@@ -127,6 +131,10 @@ export const pl: Translations = {
     showSunTimes: "Pokaż godziny wschodu / zachodu słońca",
     showSunTimesHint:
       "Pokazuje godziny wschodu i zachodu słońca oraz ich znaczniki u podstawy łuku słonecznego.",
+    showHorizonLine: "Pokaż horyzont terenu",
+    showHorizonLineHint: "Rysuje linię horyzontu terenu wokół domu, obliczoną na podstawie lokalnego ukształtowania. Horyzont zawsze realistycznie przygasza słońce za wzniesieniami; to tylko włącza lub wyłącza rysowaną linię.",
+    horizonLineColor: "Kolor horyzontu terenu",
+    horizonLineColorHint: "Kolor linii horyzontu terenu.",
     lockRotation: "Zablokuj obrót",
     lockRotationHint:
       "Przeciągnij podgląd, aby obrócić i pochylić scenę do żądanego widoku, a następnie włącz tę opcję. Blokada zamraża ten widok (obracanie przeciąganiem i automatyczne obracanie w spoczynku zostają wyłączone) i zapisuje kąt w karcie, dzięki czemu dokładnie ten sam widok pojawia się na każdym urządzeniu i w każdej przeglądarce. Wyłącz ją, aby ponownie swobodnie obracać.",

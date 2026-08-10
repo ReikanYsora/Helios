@@ -92,6 +92,10 @@ export const da: Translations = {
     sunChipMode: "Solchip-aflæsning",
     sunChipModeHelp:
       "Hvad solchippen viser: live solirradians (standard) eller solens position (azimut og højde). Positionen kræver ingen sensor, den kommer fra kortets egne solberegninger.",
+      batteryChipMode: "Batterichip-visning",
+      batteryChipModeHelp: "Hvad batterichippen viser: den aktuelle effekt (standard) eller ladningstilstanden (%). Den falder tilbage til den værdi, dit batteri rent faktisk leverer.",
+      batteryChipModePower: "Effekt",
+      batteryChipModeSoc: "Ladningstilstand",
     sunChipModeIrradiance: "Irradians",
     sunChipModePosition: "Solens position",
     displayUpdateFrequency: "Grafdetaljer",
@@ -127,6 +131,10 @@ export const da: Translations = {
     showSunTimes: "Vis soltid for solopgang / solnedgang",
     showSunTimesHint:
       "Vis tidspunkterne for solopgang og solnedgang samt deres markører ved foden af solbuen.",
+    showHorizonLine: "Vis terrænhorisont",
+    showHorizonLineHint: "Tegner terrænets horisontlinje omkring hjemmet, beregnet ud fra det lokale terræn. Horisonten dæmper altid solen realistisk bag bakker; dette viser eller skjuler kun den tegnede linje.",
+    horizonLineColor: "Farve på terrænhorisonten",
+    horizonLineColorHint: "Farve på terrænhorisontlinjen.",
     lockRotation: "Lås rotation",
     lockRotationHint:
       "Træk i forhåndsvisningen for at rotere og vippe scenen til den ønskede visning, og slå så dette til. Låsen fastfryser den visning (træk-for-at-rotere og den automatiske rotation i hvile deaktiveres) og gemmer vinklen i kortet, så nøjagtig samme visning vises på alle enheder og browsere. Slå det fra for at rotere frit igen.",

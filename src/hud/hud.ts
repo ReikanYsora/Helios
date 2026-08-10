@@ -26,6 +26,7 @@ export interface SunScene
     sun:      { x: number; y: number; irradiance: number; altitude: number; azimuth: number; nearness: number };
     home:     { x: number; y: number };
     daylight: number;
+    ridge:    { x: number; y: number }[];
     sunrise:  { x: number; y: number; angleRad: number; time: Date } | null;
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
 }

@@ -92,6 +92,10 @@ export const hu: Translations = {
     sunChipMode: "Nap chip kijelzése",
     sunChipModeHelp:
       "Mit mutat a nap chip: az élő napsugárzást (alapértelmezett) vagy a nap helyzetét (azimut és magasság). A helyzethez nem kell érzékelő, a kártya saját napszámításaiból származik.",
+      batteryChipMode: "Akkumulátor chip kijelzése",
+      batteryChipModeHelp: "Mit mutat az akkumulátor chip: az élő teljesítményt (alapértelmezett) vagy a töltöttségi szintet (%). Arra az értékre vált, amelyet az akkumulátor ténylegesen biztosít.",
+      batteryChipModePower: "Teljesítmény",
+      batteryChipModeSoc: "Töltöttségi szint",
     sunChipModeIrradiance: "Besugárzás",
     sunChipModePosition: "Nap helyzete",
     displayUpdateFrequency: "Grafikon részletessége",
@@ -127,6 +131,10 @@ export const hu: Translations = {
     showSunTimes: "Napkelte / napnyugta idejének megjelenítése",
     showSunTimesHint:
       "Megjeleníti a napkelte és napnyugta idejét, valamint ezek jelölőit a napív lábánál.",
+    showHorizonLine: "Domborzati horizont megjelenítése",
+    showHorizonLineHint: "Kirajzolja a domborzat horizontvonalát az otthon körül, a helyi terep alapján számítva. A horizont mindig valósághűen tompítja a napot a dombok mögött; ez csak megjeleníti vagy elrejti a kirajzolt vonalat.",
+    horizonLineColor: "Domborzati horizont színe",
+    horizonLineColorHint: "A domborzati horizontvonal színe.",
     lockRotation: "Forgatás zárolása",
     lockRotationHint:
       "Húzza az előnézetet a jelenet elforgatásához és megdöntéséhez a kívánt nézetig, majd kapcsolja be ezt. A zár rögzíti ezt a nézetet (a húzással forgatás és a nyugalmi automatikus forgatás kikapcsol), és elmenti a szöget a kártyába, így pontosan ugyanaz a nézet jelenik meg minden eszközön és böngészőben. Kapcsolja ki, hogy újra szabadon forgathasson.",

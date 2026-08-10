@@ -92,6 +92,10 @@ export const sv: Translations = {
     sunChipMode: "Solchippets utläsning",
     sunChipModeHelp:
       "Vad solchippet visar: solirradians i realtid (standard) eller solens position (azimut och höjd). Positionen behöver ingen sensor, den kommer från kortets egen solberäkning.",
+      batteryChipMode: "Batterichip-avläsning",
+      batteryChipModeHelp: "Vad batterichippet visar: den aktuella effekten (standard) eller laddningsnivån (%). Det faller tillbaka på det värde som ditt batteri faktiskt tillhandahåller.",
+      batteryChipModePower: "Effekt",
+      batteryChipModeSoc: "Laddningsnivå",
     sunChipModeIrradiance: "Irradians",
     sunChipModePosition: "Solposition",
     displayUpdateFrequency: "Grafdetaljer",
@@ -127,6 +131,10 @@ export const sv: Translations = {
     showSunTimes: "Visa soluppgång / solnedgång",
     showSunTimesHint:
       "Visa tiderna för soluppgång och solnedgång och deras markörer vid solbågens fötter.",
+    showHorizonLine: "Visa terränghorisont",
+    showHorizonLineHint: "Ritar terrängens horisontlinje runt hemmet, beräknad från den lokala terrängen. Horisonten dämpar alltid solen realistiskt bakom kullar; detta visar eller döljer bara den ritade linjen.",
+    horizonLineColor: "Färg på terränghorisonten",
+    horizonLineColorHint: "Färg på terränghorisontlinjen.",
     lockRotation: "Lås rotation",
     lockRotationHint:
       "Dra i förhandsvisningen för att rotera och luta scenen till önskad vy och slå sedan på detta. Låset fryser den vyn (dra-för-att-rotera och den automatiska rotationen i viloläge stängs av) och sparar vinkeln i kortet, så att exakt samma vy visas på varje enhet och webbläsare. Stäng av det för att rotera fritt igen.",

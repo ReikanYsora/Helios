@@ -92,6 +92,10 @@ export const fi: Translations = {
     sunChipMode: "Aurinkosirun lukema",
     sunChipModeHelp:
       "Mitä aurinkosiru näyttää: reaaliaikaisen aurinkoirradianssin (oletus) tai auringon sijainnin (atsimuutti ja korkeus). Sijainti ei tarvitse anturia, se tulee kortin omista aurinkolaskelmista.",
+      batteryChipMode: "Akkusirun lukema",
+      batteryChipModeHelp: "Mitä akkusiru näyttää: reaaliaikaisen tehon (oletus) tai varaustason (%). Se palaa siihen arvoon, jonka akkusi todella tarjoaa.",
+      batteryChipModePower: "Teho",
+      batteryChipModeSoc: "Varaustaso",
     sunChipModeIrradiance: "Irradianssi",
     sunChipModePosition: "Auringon sijainti",
     displayUpdateFrequency: "Kaavion tarkkuus",
@@ -127,6 +131,10 @@ export const fi: Translations = {
     showSunTimes: "Näytä auringonnousu- ja -laskuajat",
     showSunTimesHint:
       "Näytä auringonnousun ja -laskun kellonajat sekä niiden merkit aurinkokaaren juurella.",
+    showHorizonLine: "Näytä maaston horisontti",
+    showHorizonLineHint: "Piirtää maaston horisonttiviivan kodin ympärille paikallisesta maastosta laskettuna. Horisontti himmentää auringon aina realistisesti kukkuloiden taakse; tämä vain näyttää tai piilottaa piirretyn viivan.",
+    horizonLineColor: "Maaston horisontin väri",
+    horizonLineColorHint: "Maaston horisonttiviivan väri.",
     lockRotation: "Lukitse kierto",
     lockRotationHint:
       "Vedä esikatselua kääntääksesi ja kallistaaksesi näkymää haluamaasi kulmaan ja ota tämä sitten käyttöön. Lukitus jäädyttää näkymän (vetämällä kääntäminen ja lepotilan automaattinen kierto poistetaan käytöstä) ja tallentaa kulman korttiin, joten täsmälleen sama näkymä näkyy jokaisella laitteella ja selaimella. Poista se käytöstä kääntääksesi taas vapaasti.",

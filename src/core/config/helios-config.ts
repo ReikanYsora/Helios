@@ -119,7 +119,10 @@ export interface HeliosConfig
     'show-timeline'?:           unknown;
     'show-detail-panel'?:       unknown;
     'show-sun-times'?:          unknown;
+    'show-horizon-line'?:       unknown;
+    'horizon-line-color'?:      unknown;
     'sun-chip-mode'?:           unknown;
+    'battery-chip-mode'?:       unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
@@ -266,6 +269,18 @@ export function showSunTimes(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-sun-times'] !== false;
 }
+//Drawn terrain-horizon ridge line. Default shown; hidden when explicitly false. The sun gate uses the terrain
+//regardless of this, so hiding the line never changes the realistic dimming behind hills.
+export function showHorizonLine(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-horizon-line'] !== false;
+}
+//Configured colour for the horizon ridge line, as a ui_color token or hex. Undefined falls back to the card CSS.
+export function horizonLineColor(config: HeliosConfig | undefined): string | undefined
+{
+    const v = config?.['horizon-line-color'];
+    return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
 //Outdoor temperature + humidity chips (top-left column). Default shown; hidden when explicitly false or no data.
 export function showTemperature(config: HeliosConfig | undefined): boolean
 {
@@ -288,6 +303,14 @@ export type SunChipMode = 'irradiance' | 'position';
 export function sunChipMode(config: HeliosConfig | undefined): SunChipMode
 {
     return config?.['sun-chip-mode'] === 'position' ? 'position' : 'irradiance';
+}
+
+export type BatteryChipMode = 'power' | 'soc';
+//What the fused battery chip reads out: live power (default) or the state of charge (%). The other reading
+//still drives the icon, and the chip falls back to whichever value is actually available.
+export function batteryChipMode(config: HeliosConfig | undefined): BatteryChipMode
+{
+    return config?.['battery-chip-mode'] === 'soc' ? 'soc' : 'power';
 }
 
 

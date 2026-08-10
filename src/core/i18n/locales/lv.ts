@@ -92,6 +92,10 @@ export const lv: Translations = {
     sunChipMode: "Saules mikroshēmas rādījums",
     sunChipModeHelp:
       "Ko rāda saules mikroshēma: dzīvo saules apstarojumu (noklusējums) vai saules stāvokli (azimutu un augstumu). Stāvoklim nav vajadzīgs sensors, tas nāk no pašas kartītes saules aprēķiniem.",
+      batteryChipMode: "Akumulatora mikroshēmas rādījums",
+      batteryChipModeHelp: "Ko rāda akumulatora mikroshēma: reāllaika jaudu (noklusējums) vai uzlādes līmeni (%). Tā atgriežas pie vērtības, ko akumulators patiešām sniedz.",
+      batteryChipModePower: "Jauda",
+      batteryChipModeSoc: "Uzlādes līmenis",
     sunChipModeIrradiance: "Apstarojums",
     sunChipModePosition: "Saules stāvoklis",
     displayUpdateFrequency: "Grafika detalizācija",
@@ -127,6 +131,10 @@ export const lv: Translations = {
     showSunTimes: "Rādīt saullēkta / saulrieta laikus",
     showSunTimesHint:
       "Rāda saullēkta un saulrieta laikus un to marķierus saules loka pamatnē.",
+    showHorizonLine: "Rādīt reljefa horizontu",
+    showHorizonLineHint: "Zīmē reljefa horizonta līniju ap māju, aprēķinātu no vietējā reljefa. Horizonts vienmēr reālistiski pieklusina sauli aiz pakalniem; tas tikai parāda vai paslēpj zīmēto līniju.",
+    horizonLineColor: "Reljefa horizonta krāsa",
+    horizonLineColorHint: "Reljefa horizonta līnijas krāsa.",
     lockRotation: "Fiksēt rotāciju",
     lockRotationHint:
       "Velciet priekšskatījumu, lai pagrieztu un sasvērtu ainu vēlamajā skatā, pēc tam ieslēdziet šo. Bloķēšana iesaldē šo skatu (pagriešana ar vilkšanu un automātiskā griešanās miera stāvoklī tiek atspējota) un saglabā leņķi kartē, tāpēc tieši tas pats skats parādās katrā ierīcē un pārlūkā. Izslēdziet to, lai atkal brīvi grieztu.",

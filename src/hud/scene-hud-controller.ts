@@ -1,7 +1,7 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode } from '../core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
@@ -426,7 +426,11 @@ export class SceneHudController
         //batteryLevelIcon falls back to a neutral battery. The chip value is the power, or the SoC percentage
         //on a SoC-only install.
         const batteryChipIcon = chipSlotIcon(cfg, batteryCharging ? 'batteryCharge' : 'batteryDischarge', batteryLevelIcon(showSocChip ? activeBatterySoc : null, batteryCharging));
-        const batteryChipText = showPowerChip ? batteryPowerText : batterySocText;
+        //Readout follows the configured mode (power by default, or SoC), each falling back to the other when its
+        //own value is unavailable, so a power-only or SoC-only install still shows something.
+        const batteryChipText = batteryChipMode(cfg) === 'soc'
+            ? (showSocChip ? batterySocText : batteryPowerText)
+            : (showPowerChip ? batteryPowerText : batterySocText);
         //Leader anchoring on the battery chip. The home connector is always present; the PV charge lead only
         //while charging. When BOTH show they'd merge at the centre, so split them vertically: PV charge at 35%
         //of the chip height (above centre), home connector at 65% (below centre). When the home connector is
@@ -713,7 +717,23 @@ export class SceneHudController
                 { minX: clipRect.minX - 80, minY: clipRect.minY - 80, maxX: clipRect.maxX + 80, maxY: clipRect.maxY + 80 },
             );
 
+        //Terrain-horizon ridge: a discrete relief silhouette as a CLOSED ring around the home (empty on flat
+        //terrain). Drawn as a polygon so it encircles the house; the sun crosses the crest at its azimuth.
+        const ridgePts = sunScene?.ridge ?? [];
+        const showRidge = ridgePts.length >= 3;
+        const ridgeLine = showRidge
+            ? ridgePts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+            : '';
+
         return html`
+                <!--  Terrain-horizon ridge: distant relief silhouette encircling the home, behind the arc + chips.  -->
+                ${showRidge ? html`
+                    <svg class="solar-svg horizon-ridge-svg">
+                        <polygon class="horizon-ridge-line-outline" points=${ridgeLine}></polygon>
+                        <polygon class="horizon-ridge-line" points=${ridgeLine}></polygon>
+                    </svg>
+                ` : nothing}
+
                 <!--  Solar arc, BACK pass: only the dotted below-horizon segments (the sun's path under the
                       celestial sphere), so the home + chips read in front of the night half of the loop.
                       Above-horizon segments, ray, disc and W/m² readout are in the FRONT pass below.  -->

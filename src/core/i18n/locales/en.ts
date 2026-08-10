@@ -84,6 +84,10 @@ export const en: Translations = {
     sunChipMode: "Sun chip readout",
     sunChipModeHelp:
       "What the sun chip shows: live solar irradiance (default) or the sun's position (azimuth and elevation). The position needs no sensor, it comes from the card's own sun maths.",
+      batteryChipMode: "Battery chip readout",
+      batteryChipModeHelp: "What the battery chip shows: live power (default) or the state of charge (%). It falls back to whichever value your battery actually provides.",
+      batteryChipModePower: "Power",
+      batteryChipModeSoc: "State of charge",
     sunChipModeIrradiance: "Irradiance",
     sunChipModePosition: "Sun position",
     powerUnit: "Power unit",
@@ -116,6 +120,10 @@ export const en: Translations = {
     showSunTimes: "Show sunrise / sunset times",
     showSunTimesHint:
       "Show the sunrise and sunset times and their markers at the feet of the solar arc.",
+    showHorizonLine: "Show terrain horizon",
+    showHorizonLineHint: "Draw the terrain skyline around the home, computed from the local relief. The horizon always dims the sun realistically behind hills; this only toggles the drawn line.",
+    horizonLineColor: "Terrain horizon colour",
+    horizonLineColorHint: "Colour of the terrain horizon line.",
     lockRotation: "Lock rotation",
     lockRotationHint:
       "Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.",

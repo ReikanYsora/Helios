@@ -341,10 +341,13 @@ export const editorStyles = css`
         background: var(--btn-color, var(--error-color, #ef4444));
         color: var(--text-primary-color, #fff);
     }
-    /*  Disabled field (a dependent control kept visible but inert, e.g. the No-UI delay when the mode is off). */
+    /*  Disabled field (a dependent control kept visible but inert, e.g. the No-UI delay when the mode is off, or the
+        horizon colour when the horizon line is hidden). pointer-events off covers rich controls like the colour
+        picker that have no native disabled attribute. */
     .field-disabled
     {
         opacity: 0.45;
+        pointer-events: none;
     }
     .field-disabled input
     {

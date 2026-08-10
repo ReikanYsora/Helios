@@ -7,7 +7,8 @@ import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } fr
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
 import { resolveWeatherAtTime } from '../data/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './hud-layout';
-import { sunSpherePoint, daylightRamp } from './sun-arc';
+import { sunSpherePoint, daylightRamp, horizonSpherePoint } from './sun-arc';
+import { fetchHorizonProfile, horizonAltAt, horizonPeak, HORIZON_MIN_PEAK_DEG, type HorizonProfile } from '../data/sources/horizon';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
@@ -138,6 +139,14 @@ export class HeliosEngine
     private _otherErrorStreak = 0;
 
     private _fetchAbortController?: AbortController;
+
+    //Terrain horizon (visual only): the ridge elevation per azimuth, so the sun hides behind relief. Null until
+    //resolved or on flat terrain. Its own abort controller since it fetches independently of the weather. The
+    //profile ALWAYS refines the sun gate (realism); `_horizonLineVisible` only toggles the drawn ridge line.
+    private _horizonProfile: HorizonProfile | null = null;
+    private _horizonLineVisible = true;
+    private _horizonAbort?: AbortController;
+
     //Last container size the observer acted on, so a no-op resize notification can't loop into a repaint.
     private _obsW = -1;
     private _obsH = -1;
@@ -623,6 +632,7 @@ export class HeliosEngine
             lat: number;
             altitudeM: number;
             altitudeDeg: number;
+            azimuthDeg: number;
             wm2: number;
             belowHorizon: boolean;
         } | null)[];
@@ -896,6 +906,10 @@ export class HeliosEngine
         this._dragRotateHandlers = { canvas: container, onDown, onMove, onEnd, onDragStart };
 
         this._refreshWeather();
+        //Weather has several triggers (init, timers, setHome); the terrain horizon is only re-fetched on a real
+        //home change, so it needs its own initial kick here or a card whose coords match the constructor's would
+        //never resolve a profile.
+        this._refreshHorizon(this.homeLat, this.homeLon);
     }
 
     //Async bootstrap: resolve the basemap for the home, then mark ready, feed buildings + sun, and kick off
@@ -1600,6 +1614,37 @@ export class HeliosEngine
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
         void this._refreshWeather(lat, lon);
+        this._refreshHorizon(lat, lon);
+    }
+
+    //Show / hide the drawn horizon ridge line (visual only). The sun gate keeps using the terrain either way, so
+    //this just repaints with or without the crest.
+    public setHorizonLineVisible(visible: boolean): void
+    {
+        if (visible === this._horizonLineVisible) { return; }
+        this._horizonLineVisible = visible;
+        this._renderForCurrentSelection();
+    }
+
+    //Resolve the terrain horizon for the home, off the render path. On success it stores the profile, drops the
+    //arc-sample cache so belowHorizon recomputes against the relief, and repaints. Failure leaves the flat horizon.
+    private _refreshHorizon(lat: number, lon: number): void
+    {
+        this._horizonAbort?.abort();
+        this._horizonAbort = new AbortController();
+        void fetchHorizonProfile(lat, lon, this._horizonAbort.signal).then((profile) =>
+        {
+            if (!profile) { return; }
+            this._horizonProfile = profile;
+            this._arcInputsCache = undefined;
+            this._renderForCurrentSelection();
+        });
+    }
+
+    //Local horizon elevation (deg) at an azimuth, or 0 (flat) when unresolved.
+    private _horizonAt(azimuthDeg: number): number
+    {
+        return horizonAltAt(this._horizonProfile, azimuthDeg);
     }
 
     //Screen-space layout of the on-map readout chips and their leader lines. Returns positions (CSS px
@@ -1792,6 +1837,9 @@ export class HeliosEngine
         sun:      { x: number; y: number; irradiance: number; altitude: number; azimuth: number; nearness: number };
         home:     { x: number; y: number };
         daylight: number;
+        //Terrain-horizon ridge polyline (screen px), the relief silhouette under the sun path. Empty on flat
+        //terrain or when the feature is off.
+        ridge:    { x: number; y: number }[];
         //Horizon crossings on the day's arc, with local tangent angle (rad) so the card draws a ring
         //perpendicular to the arc. Either may be null at high latitudes (polar summer/winter).
         sunrise:  { x: number; y: number; angleRad: number; time: Date } | null;
@@ -1845,6 +1893,7 @@ export class HeliosEngine
                 lat: number;
                 altitudeM: number;
                 altitudeDeg: number;
+                azimuthDeg: number;
                 wm2: number;
                 belowHorizon: boolean;
             } | null)[] = [];
@@ -1868,10 +1917,12 @@ export class HeliosEngine
                     lat:          sun3D.lat,
                     altitudeM:    sun3D.altitudeM,
                     altitudeDeg:  sun3D.altitudeDeg,
+                    azimuthDeg:   sun3D.azimuthDeg,
                     wm2,
-                    //altitudeM is R·sin(α), same sign as α, so < 0 means below the horizon. Surface a flag,
-                    //not the value, since the card only switches render mode (solid vs dotted).
-                    belowHorizon: sun3D.altitudeM < 0
+                    //Below the LOCAL horizon: the terrain elevation at this azimuth (0 = flat, so this reduces
+                    //to altitude < 0 when no relief profile). Surface a flag, not the value, since the card only
+                    //switches render mode (solid vs dotted).
+                    belowHorizon: sun3D.altitudeDeg <= this._horizonAt(sun3D.azimuthDeg)
                 });
             }
             cache = { dayStartMs, cloudPctInt, scaleKey: arcScaleKey, samples };
@@ -1951,8 +2002,28 @@ export class HeliosEngine
             belowHorizon: p.belowHorizon
         }));
 
-        //daylight: smooth 0..1 ramp on solar altitude (pure ramp in engine/sun-arc).
-        const daylight = daylightRamp(sunNowAlt, SUN_ARC_NIGHT_OPACITY);
+        //Terrain-horizon ridge: the relief silhouette as a CLOSED ring around the home (full 360°, not just the
+        //sun's path, so it encircles the house). Same celestial projection as the arc (horizonSpherePoint) so the
+        //sun meets the crest exactly. Empty on flat terrain or when the feature is off; the card closes the loop.
+        const ridge: { x: number; y: number }[] = [];
+        if (this._horizonLineVisible && horizonPeak(this._horizonProfile) >= HORIZON_MIN_PEAK_DEG)
+        {
+            const ridgeScale = this._sunArcScale();
+            //Fine enough for a smooth ring once projected (the profile itself is interpolated between its buckets).
+            const HORIZON_RIDGE_STEP_DEG = 5;
+            for (let az = 0; az < 360; az += HORIZON_RIDGE_STEP_DEG)
+            {
+                const hp = horizonSpherePoint(this.homeLat, this.homeLon, ridgeScale, az, this._horizonAt(az));
+                const px = this._projectScenePoint(hp.lon, hp.lat, hp.altitudeM);
+                if (px) { ridge.push({ x: px.x, y: px.y }); }
+            }
+        }
+
+        //daylight: smooth 0..1 ramp on solar altitude, but snap to night once the sun drops behind the local
+        //terrain horizon (visual only, the glow fades behind the ridge; production is never touched).
+        const daylight = sunNowAlt <= this._horizonAt(sunNowPos.azimuth)
+            ? SUN_ARC_NIGHT_OPACITY
+            : daylightRamp(sunNowAlt, SUN_ARC_NIGHT_OPACITY);
 
         //Horizon crossings: walk the cached samples for below->above (sunrise) and above->below (sunset)
         //transitions, interpolating linearly between brackets. The tangent comes from the bracketing points
@@ -2023,6 +2094,7 @@ export class HeliosEngine
             },
             home:     { x: homeScreen.x, y: homeScreen.y },
             daylight,
+            ridge,
             sunrise,
             sunset
         };
@@ -2031,7 +2103,7 @@ export class HeliosEngine
     //date -> 3D point on the celestial hemisphere (centred on home) for _projectScenePoint; the pure
     //geometry lives in engine/sun-arc, fed the current kiosk arc scale.
     private _sunSpherePoint(date: Date): {
-        lon: number; lat: number; altitudeM: number; altitudeDeg: number
+        lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number
     } | null
     {
         return sunSpherePoint(date, this.homeLat, this.homeLon, this._sunArcScale());

@@ -97,6 +97,10 @@ export const fr: Translations = {
     sunChipMode: "Contenu de la puce soleil",
     sunChipModeHelp:
       "Ce qu'affiche la puce soleil : l'irradiance solaire en direct (par défaut) ou la position du soleil (azimut et élévation). La position ne nécessite aucun capteur, elle vient des calculs solaires de la carte.",
+      batteryChipMode: "Affichage du chip batterie",
+      batteryChipModeHelp: "Ce qu'affiche le chip batterie : la puissance en direct (par défaut) ou l'état de charge (%). Il bascule sur la valeur réellement fournie par votre batterie.",
+      batteryChipModePower: "Puissance",
+      batteryChipModeSoc: "État de charge",
     sunChipModeIrradiance: "Irradiance",
     sunChipModePosition: "Position du soleil",
     powerUnit: "Unité de puissance",
@@ -126,6 +130,10 @@ export const fr: Translations = {
     showSunTimes: "Afficher les heures de lever / coucher du soleil",
     showSunTimesHint:
       "Affiche les heures de lever et de coucher du soleil et leurs marqueurs aux pieds de l'arc solaire.",
+    showHorizonLine: "Afficher l'horizon du terrain",
+    showHorizonLineHint: "Dessine la ligne d'horizon du relief autour de la maison, calculée à partir du terrain local. L'horizon atténue toujours le soleil de façon réaliste derrière les collines ; ceci ne fait qu'afficher ou masquer la ligne.",
+    horizonLineColor: "Couleur de l'horizon du terrain",
+    horizonLineColorHint: "Couleur de la ligne d'horizon du terrain.",
     lockRotation: "Verrouiller la rotation",
     lockRotationHint:
       "Faites glisser l'aperçu pour pivoter et incliner la scène jusqu'à la vue souhaitée, puis activez ceci. Le verrou fige cette vue (le glisser-pour-pivoter et l'auto-rotation au repos sont désactivés) et enregistre l'angle dans la carte, pour un rendu identique sur chaque appareil et navigateur. Désactivez-le pour pivoter à nouveau librement.",

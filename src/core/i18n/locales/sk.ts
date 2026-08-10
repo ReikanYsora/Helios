@@ -92,6 +92,10 @@ export const sk: Translations = {
     sunChipMode: "Zobrazenie čipu slnka",
     sunChipModeHelp:
       "Čo zobrazuje čip slnka: živé slnečné ožiarenie (predvolené) alebo polohu slnka (azimut a výšku). Poloha nepotrebuje senzor, pochádza z vlastných slnečných výpočtov karty.",
+      batteryChipMode: "Údaj čipu batérie",
+      batteryChipModeHelp: "Čo zobrazuje čip batérie: aktuálny výkon (predvolené) alebo stav nabitia (%). Prepne na hodnotu, ktorú batéria skutočne poskytuje.",
+      batteryChipModePower: "Výkon",
+      batteryChipModeSoc: "Stav nabitia",
     sunChipModeIrradiance: "Ožiarenie",
     sunChipModePosition: "Poloha slnka",
     displayUpdateFrequency: "Detail grafu",
@@ -127,6 +131,10 @@ export const sk: Translations = {
     showSunTimes: "Zobraziť čas východu / západu slnka",
     showSunTimesHint:
       "Zobrazí časy východu a západu slnka a ich značky pri pätách slnečného oblúka.",
+    showHorizonLine: "Zobraziť horizont terénu",
+    showHorizonLineHint: "Vykreslí líniu horizontu terénu okolo domu, vypočítanú z miestneho reliéfu. Horizont vždy realisticky stlmí slnko za kopcami; toto iba zobrazí alebo skryje vykreslenú líniu.",
+    horizonLineColor: "Farba horizontu terénu",
+    horizonLineColorHint: "Farba línie horizontu terénu.",
     lockRotation: "Uzamknúť natočenie",
     lockRotationHint:
       "Potiahnutím v náhľade otočte a nakloňte scénu do požadovaného pohľadu a potom toto zapnite. Zámok tento pohľad zmrazí (otáčanie ťahaním a automatické otáčanie v pokoji sa vypnú) a uloží uhol do karty, takže úplne rovnaký pohľad sa zobrazí na každom zariadení a prehliadači. Vypnite ho pre opätovné voľné otáčanie.",

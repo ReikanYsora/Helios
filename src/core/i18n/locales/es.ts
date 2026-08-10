@@ -92,6 +92,10 @@ export const es: Translations = {
     sunChipMode: "Lectura del chip del sol",
     sunChipModeHelp:
       "Lo que muestra el chip del sol: la irradiancia solar en directo (por defecto) o la posición del sol (acimut y elevación). La posición no necesita ningún sensor, proviene de los propios cálculos solares de la tarjeta.",
+      batteryChipMode: "Lectura del chip de batería",
+      batteryChipModeHelp: "Lo que muestra el chip de batería: la potencia en directo (predeterminado) o el estado de carga (%). Recurre al valor que realmente proporcione tu batería.",
+      batteryChipModePower: "Potencia",
+      batteryChipModeSoc: "Estado de carga",
     sunChipModeIrradiance: "Irradiancia",
     sunChipModePosition: "Posición del sol",
     displayUpdateFrequency: "Detalle del gráfico",
@@ -127,6 +131,10 @@ export const es: Translations = {
     showSunTimes: "Mostrar horas de salida y puesta del sol",
     showSunTimesHint:
       "Muestra las horas de salida y puesta del sol y sus marcadores en los extremos del arco solar.",
+    showHorizonLine: "Mostrar horizonte del terreno",
+    showHorizonLineHint: "Dibuja la línea del horizonte del relieve alrededor de la casa, calculada a partir del terreno local. El horizonte siempre atenúa el sol de forma realista tras las colinas; esto solo muestra u oculta la línea.",
+    horizonLineColor: "Color del horizonte del terreno",
+    horizonLineColorHint: "Color de la línea del horizonte del terreno.",
     lockRotation: "Bloquear rotación",
     lockRotationHint:
       "Arrastra la vista previa para girar e inclinar la escena hasta la vista que quieras y luego activa esto. El bloqueo congela esa vista (se desactivan el giro con arrastre y la rotación automática en reposo) y guarda el ángulo en la tarjeta, de modo que la misma vista aparece en todos los dispositivos y navegadores. Desactívalo para volver a girar libremente.",

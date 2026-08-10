@@ -92,6 +92,10 @@ export const ro: Translations = {
     sunChipMode: "Citirea cipului soarelui",
     sunChipModeHelp:
       "Ce afiseaza cipul soarelui: iradianta solara live (implicit) sau pozitia soarelui (azimut si altitudine). Pozitia nu are nevoie de senzor, provine din propriile calcule solare ale cardului.",
+      batteryChipMode: "Afișajul cipului de baterie",
+      batteryChipModeHelp: "Ce afișează cipul bateriei: puterea în timp real (implicit) sau starea de încărcare (%). Revine la valoarea pe care bateria o oferă efectiv.",
+      batteryChipModePower: "Putere",
+      batteryChipModeSoc: "Stare de încărcare",
     sunChipModeIrradiance: "Iradianta",
     sunChipModePosition: "Pozitia soarelui",
     displayUpdateFrequency: "Detaliul graficului",
@@ -127,6 +131,10 @@ export const ro: Translations = {
     showSunTimes: "Arata orele de rasarit / apus",
     showSunTimesHint:
       "Arata orele de rasarit si apus si marcajele lor la baza arcului solar.",
+    showHorizonLine: "Afișează orizontul terenului",
+    showHorizonLineHint: "Desenează linia orizontului reliefului în jurul casei, calculată din terenul local. Orizontul estompează întotdeauna soarele în mod realist în spatele dealurilor; aceasta doar afișează sau ascunde linia desenată.",
+    horizonLineColor: "Culoarea orizontului terenului",
+    horizonLineColorHint: "Culoarea liniei orizontului terenului.",
     lockRotation: "Blocheaza rotirea",
     lockRotationHint:
       "Trageți de previzualizare pentru a roti și înclina scena la vederea dorită, apoi activați această opțiune. Blocarea îngheață acea vedere (rotirea prin tragere și rotația automată în repaus sunt dezactivate) și salvează unghiul în card, astfel încât exact aceeași vedere apare pe fiecare dispozitiv și browser. Dezactivați-o pentru a roti din nou liber.",

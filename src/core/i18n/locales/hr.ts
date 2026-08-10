@@ -92,6 +92,10 @@ export const hr: Translations = {
     sunChipMode: "Očitanje čipa sunca",
     sunChipModeHelp:
       "Što čip sunca prikazuje: solarno ozračenje uživo (zadano) ili položaj sunca (azimut i visina). Položaj ne treba senzor, dolazi iz vlastitih sunčevih izračuna kartice.",
+      batteryChipMode: "Prikaz čipa baterije",
+      batteryChipModeHelp: "Što prikazuje čip baterije: trenutnu snagu (zadano) ili stanje napunjenosti (%). Vraća se na vrijednost koju baterija stvarno pruža.",
+      batteryChipModePower: "Snaga",
+      batteryChipModeSoc: "Stanje napunjenosti",
     sunChipModeIrradiance: "Ozračenje",
     sunChipModePosition: "Položaj sunca",
     displayUpdateFrequency: "Detalji grafa",
@@ -127,6 +131,10 @@ export const hr: Translations = {
     showSunTimes: "Prikaži vrijeme izlaska / zalaska sunca",
     showSunTimesHint:
       "Prikazuje vrijeme izlaska i zalaska sunca te njihove oznake u podnožju sunčevog luka.",
+    showHorizonLine: "Prikaži horizont terena",
+    showHorizonLineHint: "Crta liniju horizonta reljefa oko doma, izračunatu iz lokalnog terena. Horizont uvijek realistično prigušuje sunce iza brežuljaka; ovo samo prikazuje ili skriva nacrtanu liniju.",
+    horizonLineColor: "Boja horizonta terena",
+    horizonLineColorHint: "Boja linije horizonta terena.",
     lockRotation: "Zaključaj rotaciju",
     lockRotationHint:
       "Povucite pregled da biste zakrenuli i nagnuli scenu na željeni prikaz, a zatim uključite ovo. Zaključavanje zamrzava taj prikaz (zakretanje povlačenjem i automatsko okretanje u mirovanju se isključuju) i sprema kut u karticu, tako da se potpuno isti prikaz pojavljuje na svakom uređaju i pregledniku. Isključite ga za ponovno slobodno zakretanje.",

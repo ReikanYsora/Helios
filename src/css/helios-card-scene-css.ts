@@ -307,6 +307,14 @@ export const heliosCardStyles = css`
     {
         stroke-linecap: round;
     }
+    /*  Contrast halo drawn UNDER each curve (2 px wider = ~1 px each side), in the card background (white in a light
+        theme, near-black in a dark one) so it detaches the curve from any ground tint or building. */
+    .helios-day-curve-line-outline
+    {
+        stroke: var(--card-background-color, #ffffff);
+        stroke-linecap: round;
+        stroke-opacity: 0.25;
+    }
     /*  The drop from the sun to the curve beneath it. Its colour is the metric's, set per element; everything else
         is the same for every one of them, so it lives here. */
     .helios-day-curve-leader
@@ -319,17 +327,26 @@ export const heliosCardStyles = css`
     /*  Forecast: same curve, same colour, dashed. What changes after the present moment is not the metric but its
         certainty, so the line carries straight on and only its stroke gives way - the same language the timeline's
         own predicted curve already speaks. */
-    .helios-day-curve-line.is-predicted
+    .helios-day-curve-line.is-predicted,
+    .helios-day-curve-line-outline.is-predicted
     {
         stroke-dasharray: 1 5;
         stroke-opacity: 0.85;
     }
     /*  A level rather than a flow (the battery state of charge): dashed the whole way. Longer dashes than the
         forecast pattern so a state of charge and a solar forecast never read as the same thing. */
-    .helios-day-curve-line.is-dashed
+    .helios-day-curve-line.is-dashed,
+    .helios-day-curve-line-outline.is-dashed
     {
         stroke-dasharray: 5 4;
         stroke-opacity: 0.9;
+    }
+    /*  The halo stays faint even on dashed/forecast curves (the shared rules above set a high opacity for the
+        coloured line; the outline must keep its low contrast value). */
+    .helios-day-curve-line-outline.is-predicted,
+    .helios-day-curve-line-outline.is-dashed
+    {
+        stroke-opacity: 0.25;
     }
 
     /*  Per-chip detail panel: a compact vertical readout top-right, opened by any chip tap and closed by tapping
@@ -564,6 +581,29 @@ export const heliosCardStyles = css`
         /* Daylight fade via the --solar-daylight variable (0..1, set inline). */
         opacity: var(--solar-daylight, 1);
         transition: opacity 600ms ease-out;
+    }
+    /*  Terrain-horizon ridge: a discrete distant-relief silhouette under the sun path, behind the arc + chips
+        (z 3). A hazy blue-grey reads on the map without fighting the scene; the fill fades downward to nothing. */
+    .horizon-ridge-svg { z-index: 3; opacity: 1; }
+    /*  Contrast halo under the crest line, in the card background (white light / near-black dark), so the ridge
+        detaches from any ground/building. */
+    .horizon-ridge-line-outline
+    {
+        fill: none;
+        stroke: var(--card-background-color, #ffffff);
+        stroke-width: 3.4;
+        stroke-opacity: 0.25;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+    }
+    .horizon-ridge-line
+    {
+        fill: none;
+        stroke: var(--helios-horizon-line-color, var(--blue-grey-color, #607d8b));
+        stroke-opacity: 0.75;
+        stroke-width: 1.4;
+        stroke-linejoin: round;
+        stroke-linecap: round;
     }
     /*  Central home pill at the projected home centre. Every chip leader docks against its border so
         the home reads as the single energy hub, like HA's Energy distribution card. */

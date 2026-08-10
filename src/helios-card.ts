@@ -15,6 +15,8 @@ import
     showTemperature,
     showHumidity,
     showCost,
+    showHorizonLine,
+    horizonLineColor,
 } from './core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from './core/config/chip-appearance';
 import { buildDayProfile, daySlots, type ProfileStrand } from './data/period-totals/day-profile';
@@ -26,7 +28,7 @@ import { heliosCardStyles } from './css/helios-card-scene-css';
 import { weatherOverlay, WeatherRain, WeatherSnow, WeatherStorm, weatherLayers, type WxInput } from './scene/weather-fx';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { setServerTimeZone, serverMsOfDay } from './core/time/timezone';
-import { isDarkFromCss } from './core/format/format';
+import { isDarkFromCss, resolveUiColor } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
 import
 {
@@ -667,6 +669,14 @@ export class HeliosCard extends LitElement
             ${pass.risers ? svg`<path class="helios-day-curve-riser" d=${pass.risers} fill="none"></path>` : nothing}
             ${pass.strands.map(st => st.spans.map(s => svg`
                 <path
+                    class="helios-day-curve-line-outline ${st.dashed ? 'is-dashed' : ''} ${s.predicted ? 'is-predicted' : ''}"
+                    d=${s.d}
+                    fill="none"
+                    stroke-width=${s.w + 2}
+                ></path>
+            `))}
+            ${pass.strands.map(st => st.spans.map(s => svg`
+                <path
                     class="helios-day-curve-line ${st.dashed ? 'is-dashed' : ''} ${s.predicted ? 'is-predicted' : ''}"
                     d=${s.d}
                     fill="none"
@@ -1114,6 +1124,14 @@ export class HeliosCard extends LitElement
 
         //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it.
         publishConsumptionColor(this);
+
+        //Terrain-horizon ridge: show/hide the drawn line (the sun gate always uses the terrain), and publish its
+        //colour as a :host var, resolved through the shared ui_color resolver so a token, hex or rgb all work.
+        this._engine?.setHorizonLineVisible(showHorizonLine(this.config));
+        this.style.setProperty(
+            '--helios-horizon-line-color',
+            resolveUiColor(this, horizonLineColor(this.config), '#607d8b', 'blue-grey')
+        );
 
         //Restore the saved selected chip once coords resolve (idempotent; retries until ready).
         this._restoreUiState();

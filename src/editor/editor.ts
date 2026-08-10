@@ -622,11 +622,11 @@ export class HeliosCardEditor extends LitElement
     }
 
     //One ui_color picker field (label + ha-selector + help). Same markup for every colour config key.
-    private _renderColorPicker(key: string, label: string, help: string, defaultColor: string): TemplateResult
+    private _renderColorPicker(key: string, label: string, help: string, defaultColor: string, disabled = false): TemplateResult
     {
         const c = this._cfg as Record<string, unknown>;
         return html`
-                <div class="field field-block">
+                <div class="field field-block ${disabled ? 'field-disabled' : ''}">
                     <span class="label">${label}</span>
                     ${this._pickerReady ? html`
                         ${keyed(this._colorNonce, html`<ha-selector
@@ -1123,6 +1123,8 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderToggle('show-timeline', t.editor.showTimeline ?? 'Show timeline', t.editor.showTimelineHint ?? 'Show the timeline and the period selector below the scene. Off keeps just the scene.', undefined, undefined, true)}
                 ${this._renderToggle('show-detail-panel', t.editor.showDetailPanel ?? 'Show additional info', t.editor.showDetailPanelHint ?? 'Allow the per-chip mini-panel (aggregated metrics) to open top-right when a chip is tapped. Off never shows it.', undefined, undefined, true)}
                 ${this._renderToggle('show-sun-times', t.editor.showSunTimes ?? 'Show sunrise / sunset times', t.editor.showSunTimesHint ?? 'Show the sunrise and sunset times and their markers at the feet of the solar arc.', undefined, undefined, true)}
+                ${this._renderToggle('show-horizon-line', t.editor.showHorizonLine ?? 'Show terrain horizon', t.editor.showHorizonLineHint ?? 'Draw the terrain skyline around the home, computed from the local relief. The horizon always dims the sun realistically behind hills; this only toggles the drawn line.', undefined, undefined, true)}
+                ${this._renderColorPicker('horizon-line-color', t.editor.horizonLineColor ?? 'Terrain horizon colour', t.editor.horizonLineColorHint ?? 'Colour of the terrain horizon line.', 'blue-grey', c['show-horizon-line'] === false)}
                 ${this._renderToggle('weather-enabled', t.editor.weatherEnabled ?? 'Weather effects', t.editor.weatherEnabledHint ?? 'Paint the real sky over the scene: sunshine, clouds, rain, snow and thunderstorms from your local weather, following the timeline as you scrub. Off keeps a clear scene.', undefined, undefined, true)}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode ?? 'No UI mode', t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.')}
                 ${this._renderSlider('no-ui-delay', t.editor.noUiDelay ?? 'Idle delay before hiding', MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}
@@ -1190,6 +1192,10 @@ export class HeliosCardEditor extends LitElement
                     [{ value: 'irradiance', label: t.editor.sunChipModeIrradiance ?? 'Irradiance' },
                      { value: 'position', label: t.editor.sunChipModePosition ?? 'Sun position' }], 'irradiance',
                     t.editor.sunChipModeHelp ?? "What the sun chip shows: irradiance (default) or the sun's position (azimuth and elevation). Position needs no sensor.")}
+                ${this._renderSelect('battery-chip-mode', t.editor.batteryChipMode ?? 'Battery chip readout',
+                    [{ value: 'power', label: t.editor.batteryChipModePower ?? 'Power' },
+                     { value: 'soc', label: t.editor.batteryChipModeSoc ?? 'State of charge' }], 'power',
+                    t.editor.batteryChipModeHelp ?? 'What the battery chip shows: live power (default) or the state of charge (%). It falls back to whichever value your battery actually provides.')}
                 ${this._renderSelect('battery-sign', t.editor.batterySign ?? 'Battery sign', [
                         { value: 'default',  label: t.editor.batterySignDefault ?? 'Default' },
                         { value: 'inverted', label: t.editor.batterySignInverted ?? 'Inverted' },

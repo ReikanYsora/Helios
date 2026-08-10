@@ -92,6 +92,10 @@ export const sl: Translations = {
     sunChipMode: "Prikaz čipa sonca",
     sunChipModeHelp:
       "Kaj prikazuje čip sonca: živo sončno obsevanje (privzeto) ali položaj sonca (azimut in višino). Položaj ne potrebuje senzorja, izhaja iz lastnih sončnih izračunov kartice.",
+      batteryChipMode: "Prikaz čipa baterije",
+      batteryChipModeHelp: "Kaj prikazuje čip baterije: trenutno moč (privzeto) ali stanje napolnjenosti (%). Preklopi na vrednost, ki jo baterija dejansko zagotavlja.",
+      batteryChipModePower: "Moč",
+      batteryChipModeSoc: "Stanje napolnjenosti",
     sunChipModeIrradiance: "Obsevanje",
     sunChipModePosition: "Položaj sonca",
     displayUpdateFrequency: "Podrobnost grafa",
@@ -127,6 +131,10 @@ export const sl: Translations = {
     showSunTimes: "Pokaži čas sončnega vzhoda / zahoda",
     showSunTimesHint:
       "Pokaže čas sončnega vzhoda in zahoda ter njuni oznaki ob vznožju sončnega loka.",
+    showHorizonLine: "Prikaži obzorje terena",
+    showHorizonLineHint: "Nariše črto obzorja reliefa okoli doma, izračunano iz lokalnega terena. Obzorje vedno realistično zatemni sonce za griči; to samo prikaže ali skrije narisano črto.",
+    horizonLineColor: "Barva obzorja terena",
+    horizonLineColorHint: "Barva črte obzorja terena.",
     lockRotation: "Zakleni vrtenje",
     lockRotationHint:
       "Povlecite predogled, da zavrtite in nagnete prizor na želeni pogled, nato pa to vklopite. Zaklep zamrzne ta pogled (vrtenje z vlečenjem in samodejno vrtenje v mirovanju se izklopita) in shrani kot v kartico, tako da se popolnoma enak pogled prikaže na vsaki napravi in brskalniku. Izklopite ga za ponovno prosto vrtenje.",

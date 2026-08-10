@@ -94,6 +94,11 @@ export interface Translations
         sunChipModeHelp?:             string;
         sunChipModeIrradiance?:       string;
         sunChipModePosition?:         string;
+        //Battery-chip readout mode (power / state of charge) and its option labels. Optional; fall back to English.
+        batteryChipMode?:             string;
+        batteryChipModeHelp?:         string;
+        batteryChipModePower?:        string;
+        batteryChipModeSoc?:          string;
         //Power unit selector (W / kW) and solar-constant unit selector (W/m2 / kW/m2). Optional; fall back to English.
         powerUnit?:                   string;
         powerUnitHelp?:               string;
@@ -121,6 +126,11 @@ export interface Translations
         showDetailPanelHint?:         string;
         showSunTimes?:                string;
         showSunTimesHint?:            string;
+        //Terrain-horizon ridge: show/hide the drawn line + its colour. The sun gate always uses the terrain.
+        showHorizonLine?:             string;
+        showHorizonLineHint?:         string;
+        horizonLineColor?:            string;
+        horizonLineColorHint?:        string;
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
         lockRotation?:                string;
         lockRotationHint?:            string;

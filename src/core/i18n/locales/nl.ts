@@ -92,6 +92,10 @@ export const nl: Translations = {
     sunChipMode: "Weergave zonchip",
     sunChipModeHelp:
       "Wat de zonchip toont: de live zonne-instraling (standaard) of de positie van de zon (azimut en hoogte). De positie heeft geen sensor nodig, ze komt uit de eigen zonneberekening van de kaart.",
+      batteryChipMode: "Batterijchip-weergave",
+      batteryChipModeHelp: "Wat de batterijchip toont: het live vermogen (standaard) of de laadtoestand (%). Valt terug op de waarde die je batterij daadwerkelijk levert.",
+      batteryChipModePower: "Vermogen",
+      batteryChipModeSoc: "Laadtoestand",
     sunChipModeIrradiance: "Instraling",
     sunChipModePosition: "Zonpositie",
     displayUpdateFrequency: "Grafiekdetail",
@@ -127,6 +131,10 @@ export const nl: Translations = {
     showSunTimes: "Zonsopgang- / zonsondergangtijden tonen",
     showSunTimesHint:
       "Toon de zonsopgang- en zonsondergangtijden en hun markeringen aan de voet van de zonneboog.",
+    showHorizonLine: "Terreinhorizon tonen",
+    showHorizonLineHint: "Tekent de horizonlijn van het reliëf rond het huis, berekend op basis van het lokale terrein. De horizon dempt de zon altijd realistisch achter heuvels; dit toont of verbergt alleen de getekende lijn.",
+    horizonLineColor: "Kleur van de terreinhorizon",
+    horizonLineColorHint: "Kleur van de terreinhorizonlijn.",
     lockRotation: "Rotatie vergrendelen",
     lockRotationHint:
       "Sleep in het voorbeeld om de scène te draaien en te kantelen naar de gewenste weergave en zet dit vervolgens aan. De vergrendeling zet die weergave vast (draaien via slepen en de automatische rotatie in rust worden uitgeschakeld) en slaat de hoek op in de kaart, zodat exact dezelfde weergave op elk apparaat en in elke browser verschijnt. Zet het uit om weer vrij te draaien.",

@@ -92,6 +92,10 @@ export const de: Translations = {
     sunChipMode: "Sonnen-Chip-Anzeige",
     sunChipModeHelp:
       "Was der Sonnen-Chip zeigt: die Live-Bestrahlungsstärke (Standard) oder die Position der Sonne (Azimut und Höhe). Die Position braucht keinen Sensor, sie stammt aus den eigenen Sonnenberechnungen der Karte.",
+      batteryChipMode: "Batterie-Chip-Anzeige",
+      batteryChipModeHelp: "Was der Batterie-Chip zeigt: die Live-Leistung (Standard) oder den Ladezustand (%). Er weicht auf den Wert aus, den deine Batterie tatsächlich liefert.",
+      batteryChipModePower: "Leistung",
+      batteryChipModeSoc: "Ladezustand",
     sunChipModeIrradiance: "Bestrahlungsstärke",
     sunChipModePosition: "Sonnenposition",
     displayUpdateFrequency: "Diagrammdetail",
@@ -127,6 +131,10 @@ export const de: Translations = {
     showSunTimes: "Sonnenauf- / -untergangszeiten anzeigen",
     showSunTimesHint:
       "Zeigt die Zeiten für Sonnenauf- und -untergang sowie deren Markierungen an den Füßen des Sonnenbogens an.",
+    showHorizonLine: "Geländehorizont anzeigen",
+    showHorizonLineHint: "Zeichnet die Horizontlinie des Geländes rund um das Zuhause, aus dem lokalen Relief berechnet. Der Horizont dämpft die Sonne immer realistisch hinter Hügeln; dies blendet nur die gezeichnete Linie ein oder aus.",
+    horizonLineColor: "Farbe des Geländehorizonts",
+    horizonLineColorHint: "Farbe der Geländehorizontlinie.",
     lockRotation: "Drehung sperren",
     lockRotationHint:
       "Ziehen Sie in der Vorschau, um die Szene zu drehen und zu neigen, bis Sie die gewünschte Ansicht haben, und schalten Sie dies dann ein. Die Sperre friert diese Ansicht ein (Drehen per Ziehen und die automatische Rotation im Leerlauf werden deaktiviert) und speichert den Winkel in der Karte, sodass genau dieselbe Ansicht auf jedem Gerät und in jedem Browser erscheint. Schalten Sie sie aus, um wieder frei zu drehen.",

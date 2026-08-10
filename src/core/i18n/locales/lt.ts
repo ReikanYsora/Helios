@@ -92,6 +92,10 @@ export const lt: Translations = {
     sunChipMode: "Saulės lusto rodmuo",
     sunChipModeHelp:
       "Ką rodo saulės lustas: gyvą saulės apšvitą (numatytoji) arba saulės padėtį (azimutą ir aukštį). Padėčiai nereikia jokio jutiklio, ji gaunama iš pačios kortelės saulės skaičiavimų.",
+      batteryChipMode: "Baterijos lusto rodmuo",
+      batteryChipModeHelp: "Ką rodo baterijos lustas: tikralaikę galią (numatyta) arba įkrovos lygį (%). Grįžta prie tos reikšmės, kurią baterija iš tikrųjų pateikia.",
+      batteryChipModePower: "Galia",
+      batteryChipModeSoc: "Įkrovos lygis",
     sunChipModeIrradiance: "Apšvita",
     sunChipModePosition: "Saulės padėtis",
     displayUpdateFrequency: "Grafiko detalumas",
@@ -127,6 +131,10 @@ export const lt: Translations = {
     showSunTimes: "Rodyti saulėtekio / saulėlydžio laikus",
     showSunTimesHint:
       "Rodo saulėtekio ir saulėlydžio laikus bei jų žymeklius prie saulės lanko kojų.",
+    showHorizonLine: "Rodyti reljefo horizontą",
+    showHorizonLineHint: "Nubrėžia reljefo horizonto liniją aplink namus, apskaičiuotą pagal vietovės reljefą. Horizontas visada realistiškai pritemdo saulę už kalvų; tai tik parodo arba paslepia nubrėžtą liniją.",
+    horizonLineColor: "Reljefo horizonto spalva",
+    horizonLineColorHint: "Reljefo horizonto linijos spalva.",
     lockRotation: "Užrakinti kampą",
     lockRotationHint:
       "Vilkite peržiūrą, kad pasuktumėte ir pakreiptumėte sceną iki norimo vaizdo, tada įjunkite tai. Užraktas užfiksuoja tą vaizdą (sukimas velkant ir automatinis sukimasis ramybės būsenoje išjungiami) ir įrašo kampą į kortelę, todėl tiksliai tas pats vaizdas rodomas kiekviename įrenginyje ir naršyklėje. Išjunkite jį, kad vėl galėtumėte laisvai sukti.",
