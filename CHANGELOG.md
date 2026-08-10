@@ -11,7 +11,24 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-alpha (`2026.9.0-a7`).
+beta (`2026.9.0-b0`).
+
+### Added: the terrain horizon
+
+Helios now knows the shape of the land around your home. It works out the local
+skyline from the surrounding terrain (worldwide, with no setup on your part) and
+uses it two ways: the sun **dims realistically the moment it drops behind a hill
+or a mountain**, not only at the flat horizon, and a discreet **horizon ridge** is
+drawn around the house. The realistic dimming is always on, so the scene stays
+true to where you live; the drawn line can be shown or hidden and recoloured in
+the editor. A perfect match for anyone in a valley or the mountains.
+
+### Added: state of charge on the battery chip
+
+The battery chip now has a readout option: keep showing live **power** (the
+default), or switch it to the battery's **state of charge (%)**, so a wall
+dashboard can show how full the battery is at a glance. It falls back to whichever
+value your battery actually provides.
 
 ### Added: a cost chip
 
