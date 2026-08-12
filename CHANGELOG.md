@@ -137,11 +137,11 @@ exactly. Thanks to @ritonbrunis-lab for the clear screenshots (#371).
 ### Fixed: flicker and black screen on some entry-level tablets
 
 On a few low-end wall tablets the whole view could shimmer or recompose between
-frames, and a kiosk screenshot came back black. The cause was the same one behind
-the old half-3D iPad issue: the device's graphics chip could not hold the scene's
-ground as a single layer. Helios now detects that limit and switches those devices
-to a lighter drawing path automatically — no setting to touch, and the 2.5D look
-is kept. Thanks to @Richaaldo and @charleslales for the detailed reports (#370).
+frames, and a kiosk screenshot came back black. The cause was the same family as
+the old half-3D iPad issue: the device's graphics couldn't correctly compose the
+tilted 3D ground layer. Helios now recognises those graphics chips and switches
+them to a lighter drawing path automatically — no setting to touch, and the 2.5D
+look is kept. Thanks to @Richaaldo and @charleslales for the detailed reports (#370).
 
 ---
 
