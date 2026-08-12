@@ -16,7 +16,32 @@ import {
     GROWTH_RISE_MS,
     HOME_SQUASH_MS,
     HOME_GROW_MS,
+    GROUND_RADIUS,
+    TILE_PX,
 } from '../core/config/constants';
+
+//Edge of the square basemap canvas (px): (2*radius+1) tiles across. On the normal path this canvas is CSS
+//3D-transformed, so the compositor backs it as one layer of this size.
+const GROUND_CANVAS_EDGE_PX = (2 * GROUND_RADIUS + 1) * TILE_PX;
+
+//The GPU's max texture edge (px), or 0 when it can't be read. A throwaway WebGL context, released at once.
+function gpuMaxTextureSize(): number
+{
+    if (typeof document === 'undefined') { return 0; }
+    try
+    {
+        const canvas = document.createElement('canvas');
+        const gl = (canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+        if (!gl) { return 0; }
+        const max = gl.getParameter(gl.MAX_TEXTURE_SIZE) as unknown;
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
+        return typeof max === 'number' && Number.isFinite(max) ? max : 0;
+    }
+    catch
+    {
+        return 0;
+    }
+}
 
 //Old iOS/iPadOS WebKit half-composites a flat layer over a CSS 3D-transformed one, clipping the whole scene to
 //its top half. Those devices render the ground on the projected compat path instead of a 3D
@@ -26,6 +51,14 @@ import {
 //positive only swaps in the near-equivalent compat render, so erring is cheap.
 function needsProjectedGround(): boolean
 {
+    //Platform-agnostic capability gate, checked first: the normal path composites the whole basemap canvas as one
+    //CSS 3D-transformed layer. A GPU whose max texture edge is smaller than that canvas cannot back the layer and
+    //drops it to black / flickers the whole view (the entry-level Android wall tablets that flicker under a
+    //2048-cap GPU with a 2816 px canvas). The projected compat path paints a card-sized canvas instead, so it clears the
+    //cap while keeping the 2.5D look. A GPU that can't be read (maxTex 0) falls through to the Apple sniff below.
+    const maxTex = gpuMaxTextureSize();
+    if (maxTex > 0 && maxTex < GROUND_CANVAS_EDGE_PX) { return true; }
+
     if (typeof navigator === 'undefined') { return false; }
     const ua = navigator.userAgent || '';
     const appleTouch = /iPad|iPhone|iPod/.test(ua)

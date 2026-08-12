@@ -7,7 +7,7 @@
 //unit conversion (`units: { energy: 'kWh' }` normalises Wh/kWh/MWh server-side). The only math here is
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number the card shows the same number.
 
-import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, COARSE_REGULARITY, HOUR_MS, DAY_MS } from '../../core/config/constants';
+import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, HOUR_MS, DAY_MS } from '../../core/config/constants';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
 import { loadDurable, saveDurable } from '../durable-cache';
@@ -187,13 +187,14 @@ export function outlierCapKwh(buckets: ChangeBucket[] | null): number
     return mags[idx] * OUTLIER_CAP_FACTOR;
 }
 
-//Coarse-meter smoothing on the binned per-bucket energy (sums/hit). A meter that reports its cumulative energy
-//less often than a store bucket lands each delta in one bucket and leaves 0 in the buckets between reports, which
-//draws a sawtooth (production looks spiky while a dense grid meter stays smooth). When the non-zero buckets are
-//REGULARLY spaced (a real report cadence, not intermittent flow), spread each delta back over its report interval,
-//capped so a night-long gap before the first daytime reading is never smeared. Energy-conserving: the sum over each
-//interval is unchanged, so totals still match the Energy dashboard. No-op for dense meters (cadence 1) and for
-//irregular series (export that only flows sometimes).
+//Floor the reconstructed power to the meter's real report cadence, on the binned per-bucket energy (sums/hit). A
+//meter that reports its cumulative energy less often than a store bucket lands each delta in one bucket and leaves 0
+//in the buckets between reports; dividing that lump by the (shorter) bucket then reads an average power ABOVE what
+//the site actually produced (a 2.5 kW-capped array can plot >2.5 kW), and draws a sawtooth. So spread each report
+//back over the interval since the previous report, its true accumulation window: no bucket can then hold more than
+//one interval's energy, so no bucket over-reads. Capped so a long genuine gap (overnight before the first daytime
+//reading) is never smeared. Energy-conserving (each report's total is unchanged, so totals still match the Energy
+//dashboard) and inert for dense meters (consecutive reports are one bucket apart, so span 1 leaves the value as-is).
 function smoothCoarseReports(sums: number[], hit: boolean[]): void
 {
     const reports: number[] = [];
@@ -201,22 +202,18 @@ function smoothCoarseReports(sums: number[], hit: boolean[]): void
     {
         if (hit[i] && sums[i] !== 0) { reports.push(i); }
     }
-    if (reports.length < 3) { return; }
-    const gaps: number[] = [];
-    for (let k = 1; k < reports.length; k++) { gaps.push(reports[k] - reports[k - 1]); }
-    const cadence = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)];   //median gap
-    if (cadence <= 1 || cadence > COARSE_MAX_SPREAD_BUCKETS) { return; }
-    const regular = gaps.filter(g => Math.abs(g - cadence) <= 1).length / gaps.length;
-    if (regular < COARSE_REGULARITY) { return; }
-    //Spread each report back over its own interval (capped at the cadence), evenly. Left to right; a report's range
-    //never reaches the previous report (span <= cadence <= gap), so the in-place writes never collide, and the
-    //genuine-gap buckets before a capped range keep their zero.
-    let prev = -1;
-    for (const i of reports)
+    //Need two reports to know an interval; a lone spike (fully intermittent flow) is left untouched.
+    if (reports.length < 2) { return; }
+    //The first report keeps its own bucket (its accumulation start is unknown, so it is never spread backward);
+    //every later report spreads over the capped gap to its predecessor. span <= gap means a report's range never
+    //reaches the previous report, so the in-place writes never collide and genuine-gap buckets keep their zero.
+    let prev = reports[0];
+    for (let r = 1; r < reports.length; r++)
     {
-        const span  = prev < 0 ? cadence : Math.min(i - prev, cadence);
-        const start = Math.max(0, i - span + 1);
-        const share = sums[i] / (i - start + 1);
+        const i     = reports[r];
+        const span  = Math.min(i - prev, COARSE_MAX_SPREAD_BUCKETS);
+        const start = i - span + 1;
+        const share = sums[i] / span;
         for (let j = start; j <= i; j++)
         {
             sums[j] = share;

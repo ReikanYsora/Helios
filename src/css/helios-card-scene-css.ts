@@ -958,12 +958,14 @@ export const heliosCardStyles = css`
     }
     .helios-corner-chip.is-curve-on ha-icon { color: var(--ha-card-background, var(--card-background-color, #fff)); }
 
-    /*  THUNDERSTORM lightning: a top-weighted blue-white flash pushed by the storm controller via --wx-flash.  */
+    /*  THUNDERSTORM lightning: a top-weighted blue-white flash pushed by the storm controller via --wx-flash.
+        Plain opacity compositing (no mix-blend-mode): screen-blend forces a stacking-context blend group that some
+        Android WebViews flicker/recompose the whole view under, and the near-white flash reads almost the same
+        through straight opacity. */
     .helios-wx-flash
     {
         z-index: 7;
         opacity: var(--wx-flash, 0);
-        mix-blend-mode: screen;
         background:
             radial-gradient(120% 80% at 50% -10%, rgba(226, 236, 255, 0.9), rgba(200, 216, 255, 0.35) 40%, transparent 75%);
     }

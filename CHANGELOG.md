@@ -11,7 +11,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-beta (`2026.9.0-b0`).
+beta (`2026.9.0-b1`).
 
 ### Added: the terrain horizon
 
@@ -121,6 +121,27 @@ so it no longer lined up with your live production. The forecast times are now
 anchored to a fixed reference regardless of where you view the card from, so the
 curve always aligns with the moment it belongs to. Thanks to @m1chaelmichael for
 the precise report (#366).
+
+### Fixed: the production curve could read above your real power
+
+On installations whose production meter reports its energy less often than the
+graph's detail (or at an uneven pace), the past-production curve could briefly
+climb **above the real power your panels can produce** — a 2.5 kW-capped array
+plotting more than 2.5 kW for a moment. The curve is reconstructed from the
+Energy dashboard's energy, and a long report landing in a short slice made the
+computed average too high. Helios now spreads each reading across the interval it
+actually covers, so the curve never resolves finer than your meter reports and
+can no longer overshoot — while the totals still match the Energy dashboard
+exactly. Thanks to @ritonbrunis-lab for the clear screenshots (#371).
+
+### Fixed: flicker and black screen on some entry-level tablets
+
+On a few low-end wall tablets the whole view could shimmer or recompose between
+frames, and a kiosk screenshot came back black. The cause was the same one behind
+the old half-3D iPad issue: the device's graphics chip could not hold the scene's
+ground as a single layer. Helios now detects that limit and switches those devices
+to a lighter drawing path automatically — no setting to touch, and the 2.5D look
+is kept. Thanks to @Richaaldo and @charleslales for the detailed reports (#370).
 
 ---
 
