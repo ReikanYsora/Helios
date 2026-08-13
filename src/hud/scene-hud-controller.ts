@@ -397,7 +397,6 @@ export class SceneHudController
         //~5 kW. The dual-tone leader colour tracks the physical direction, independent of the chip's HA-sign
         //flip above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
-        const batteryDischarging = showPowerChip && (activeBatteryPower! < 0);
         const batteryChargeColor    = chipSlotColor(this.host, cfg, 'batteryCharge');
         const batteryDischargeColor = chipSlotColor(this.host, cfg, 'batteryDischarge');
         const batteryLeaderColor = batteryCharging ? batteryChargeColor : batteryDischargeColor;
@@ -431,37 +430,13 @@ export class SceneHudController
         const batteryChipText = batteryChipMode(cfg) === 'soc'
             ? (showSocChip ? batterySocText : batteryPowerText)
             : (showPowerChip ? batteryPowerText : batterySocText);
-        //Leader anchoring on the battery chip. The home connector is always present; the PV charge lead only
-        //while charging. When BOTH show they'd merge at the centre, so split them vertically: PV charge at 35%
-        //of the chip height (above centre), home connector at 65% (below centre). When the home connector is
-        //alone it sits back at the centre (50%). +/-15% of the full height off centre.
-        const BATTERY_CHIP_HALF_HEIGHT_PX = 14;
-        const batteryTwoLeads    = !!(layout && batteryCharging && showPvLabel);
-        const batteryPvArriveY   = batteryChipY - BATTERY_CHIP_HALF_HEIGHT_PX * 0.30;
-        const batteryHomeAnchorY = batteryTwoLeads
-            ? batteryChipY + BATTERY_CHIP_HALF_HEIGHT_PX * 0.30
-            : batteryChipY;
-        //Battery -> home: the discharge flow (rounded L + bead) while discharging, else a static connector so
-        //the chip is always tied to the home hub like every other chip.
-        const dischargeLeaderPath = (layout && showBatteryChip && batteryDischarging)
-            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY)
-            : '';
-        const batteryHomeLeaderPath = (layout && showBatteryChip && !batteryDischarging)
-            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY)
-            : '';
-        //PV -> battery chip, only while charging: an inverted L dropping from the PV chip then right into the
-        //battery chip's left edge, PV-coloured bead toward the battery. Removed the instant it discharges.
-        //Its drop starts halfway between the PV->home leg (chip centre) and the chip's right edge so the two
-        //leaders leaving the PV chip don't overlap at their root.
-        const PV_TO_BATTERY_NUDGE_X = 30;
-        const pvToBatteryPath = (layout && batteryCharging && showPvLabel)
-            ? this._buildLPath(
-                layout.pvLabel.x + PV_HALF_WIDTH_PX / 2,
-                layout.pvLabel.y + PV_HALF_HEIGHT_PX,
-                batteryChipX - PV_TO_BATTERY_NUDGE_X,
-                batteryPvArriveY,
-                true
-            )
+        //Single battery <-> home lead: the battery is just a node on the home hub, like every other chip. The bead
+        //runs battery -> home while discharging (it feeds the house) and home -> battery while charging; idle leaves
+        //a static connector. We deliberately draw NO PV -> battery lead: whether a charge comes from solar or the
+        //grid is not measured (an AC-coupled or grid-charged battery would make that source wrong), and inventing
+        //that split is the one thing the card never does. The lead's magnitude is still the real battery power.
+        const batteryHomeLeaderPath = (layout && showBatteryChip)
+            ? this._buildLPathToHome(layout, batteryChipX, batteryChipY)
             : '';
         const gridLeaderPath       = this._buildLPathToHome(layout, layout?.gridLabel.x ?? 0, layout?.gridLabel.y ?? 0);
 
@@ -820,24 +795,16 @@ export class SceneHudController
 
                 ${showBatteryChip ? html`
                     <svg class="battery-leader-svg">
-                        <!--  Battery -> home static connector: keeps the chip tied to the home hub whenever it
-                              is not actively discharging (the discharge flow below docks it then).  -->
+                        <!--  Single battery <-> home lead. A static connector when idle; a bead runs battery -> home
+                              while discharging (feeding the house) and home -> battery while charging. No source is
+                              claimed on the charge side, so the card never asserts where the charge came from.  -->
                         ${batteryHomeLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${batteryHomeLeaderPath}"
                             ></path>
-                        ` : nothing}
-                        <!--  Battery -> home discharge flow: solid rounded-L + bead toward the home, drawn only
-                              while the battery is discharging to feed the house.  -->
-                        ${dischargeLeaderPath ? svg`
-                            <path
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${dischargeLeaderPath}"
-                            ></path>
-                            ${!batteryIdle ? svg`
+                            ${(showPowerChip && !batteryIdle) ? svg`
                                 <circle
                                     class="battery-leader-bead"
                                     r="3"
@@ -846,30 +813,9 @@ export class SceneHudController
                                     <animateMotion
                                         dur="${batteryFlowDuration}s"
                                         repeatCount="indefinite"
-                                        path="${dischargeLeaderPath}"
-                                    ></animateMotion>
-                                </circle>
-                            ` : nothing}
-                        ` : nothing}
-                        <!--  PV -> battery chip, only while charging: an inverted L (down then right) in the PV
-                              colour, bead flowing toward the battery so the user sees PV feeding it.  -->
-                        ${pvToBatteryPath ? svg`
-                            <path
-                                class="pv-home-leader-line"
-                                style="--pv-leader-color:${pvColor}"
-                                fill="none"
-                                d="${pvToBatteryPath}"
-                            ></path>
-                            ${!batteryIdle ? svg`
-                                <circle
-                                    class="pv-home-leader-bead"
-                                    r="3"
-                                    fill="${pvColor}"
-                                >
-                                    <animateMotion
-                                        dur="${batteryFlowDuration}s"
-                                        repeatCount="indefinite"
-                                        path="${pvToBatteryPath}"
+                                        path="${batteryHomeLeaderPath}"
+                                        keyPoints=${batteryCharging ? '1;0' : nothing}
+                                        keyTimes=${batteryCharging ? '0;1' : nothing}
                                     ></animateMotion>
                                 </circle>
                             ` : nothing}
