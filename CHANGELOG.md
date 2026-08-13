@@ -11,7 +11,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 The weather release, "Your real sky": the scene now reflects the weather over
 your home, and the outdoor temperature and humidity join the card. Currently in
-beta (`2026.9.0-b1`).
+beta (`2026.9.0-b2`).
 
 ### Added: the terrain horizon
 
@@ -143,9 +143,16 @@ tilted 3D ground layer. Helios now recognises those graphics chips and switches
 them to a lighter drawing path automatically — no setting to touch, and the 2.5D
 look is kept. Thanks to @Richaaldo and @charleslales for the detailed reports (#370).
 
----
+### Changed: the battery now connects to the home, not the solar
 
-## 2026.8.3
+The battery used to show a line from the solar chip while charging, which quietly
+claimed the charge came from your panels. That isn't always true — an AC-coupled
+battery, or one charged from the grid overnight, would be drawn charging "from
+solar" even with no sun. The battery is now a single connection to the home, like
+every other chip: the flow runs from the battery to the home while discharging and
+from the home to the battery while charging, without claiming a source. As always,
+the flow's value is your real measured battery power — nothing is invented. Thanks
+to @addinsella for the sharp, fair pushback (#355).
 
 A small release on top of 2026.8.2: a new sun-chip readout, a fairer flow
 animation, and a handful of fixes.
