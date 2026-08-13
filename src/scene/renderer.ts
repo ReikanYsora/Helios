@@ -240,7 +240,9 @@ export class SceneRenderer
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
         const token = ++this._groundToken;
-        const built = await buildVectorGround(lat, lon, style, this._groundAltitude);
+        //On the projected compat path (the degraded mode for the GPUs that mis-render the basemap), back the ground
+        //canvas on the CPU to dodge the driver's GPU-canvas corruption.
+        const built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, this._projectedGround);
         if (!this._alive || token !== this._groundToken) { return; }
         this._groundStyleCur = style;
         this._ground         = built.ground;
