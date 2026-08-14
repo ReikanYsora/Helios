@@ -66,6 +66,10 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `auto-hide-ui` | boolean | `false` | No UI mode: fade the timeline and the on-card controls after a few seconds of inactivity, bringing them back on any tap or move. For kiosks and wall displays. |
+| `no-ui-delay` | seconds | `5` | Idle delay before the No UI fade (only when `auto-hide-ui` is on). Clamped to a sensible range. |
+| `show-timeline` | boolean | `true` | Show the bottom timeline band and its period selector. |
+| `show-detail-panel` | boolean | `true` | Allow a chip's detail panel to open on tap. |
+| `show-sun-times` | boolean | `true` | Show the sunrise / sunset markers on the sun arc. |
 
 ## Buildings + shadows
 
@@ -90,8 +94,61 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips). Energy follows it, so `kW` pairs with `kWh` and `W` with `Wh`. |
 | `irradiance-unit` | `W/m²` \| `kW/m²` | `W/m²` | Unit for the solar-constant (irradiance) readout above the sun. |
 | `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
+| `max-expected-power` | 500-30000 W | `5000` | Reference power at which a flow animates at full speed, so every flow shares one honest pace. Raise it for a large installation, lower it for a small one. |
 
 The rolling window itself is chosen live from the timeline's period selector (**Forecast**, **Yesterday**, **Today**, **Week**, **Month**) and remembered per card; it needs no YAML key.
+
+## Weather
+
+The card paints the real weather over the scene (see the README). Everything here is on by default.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `weather-enabled` | boolean | `true` | Master toggle for the "Your real sky" overlay (sun glow, cloud grade, rain / snow / thunderstorm). |
+| `show-temperature` | boolean | `true` | Show the outdoor temperature chip. |
+| `show-humidity` | boolean | `true` | Show the outdoor humidity chip. |
+| `show-cost` | boolean | `true` | Show the cost chip (only ever visible when the Energy dashboard tracks a price). |
+| `show-horizon-line` | boolean | `true` | Draw the terrain horizon ridge around the house. The realistic sun dimming behind terrain is always on regardless. |
+| `horizon-line-color` | color | theme | Optional colour for the drawn horizon ridge. |
+
+### Local weather sensors (override the model)
+
+Point any weather reading at your own station; it takes over from Open-Meteo for the live and past hours, while the forecast stays on the model.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `temperature-entity` | entity_id | none | Local outdoor-temperature sensor. |
+| `humidity-entity` | entity_id | none | Local relative-humidity sensor. |
+| `cloud-cover-entity` | entity_id | none | Local cloud-cover sensor (%). |
+| `precipitation-entity` | entity_id | none | Local precipitation sensor (mm). |
+| `snowfall-entity` | entity_id | none | Local snowfall sensor (cm). |
+| `weather-entity` | entity_id | none | A Home Assistant `weather` entity whose condition drives the rain / snow / storm layer. |
+
+## Chips
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `sun-chip-mode` | `irradiance` \| `position` | `irradiance` | What the sun chip reads out: solar irradiance, or the sun's position (azimuth + elevation). |
+| `battery-chip-mode` | `power` \| `soc` | `power` | What the battery chip reads out: live power, or state of charge (%). |
+| `chip-irradiance-visible` | boolean | `true` | Show / hide the irradiance (sun) chip. |
+| `chip-production-visible` | boolean | `true` | Show / hide the production chip. |
+| `chip-grid-visible` | boolean | `true` | Show / hide the grid chip. |
+| `chip-battery-visible` | boolean | `true` | Show / hide the battery chip. |
+| `chip-home-visible` | boolean | `true` | Show / hide the home pill. |
+
+Each chip's colour and icon are configurable through a pair of keys, `chip-<slot>-color` and `chip-<slot>-icon` (both default to the theme colour and a sensible MDI icon). These are all exposed in the editor's chip section, so you rarely write them by hand.
+
+## Map theming
+
+The in-house vector basemap (OpenFreeMap) follows the Home Assistant theme by default.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `map-theme-mode` | `auto` \| `dark` \| `light` \| `custom` | `auto` | How the basemap picks its colours: follow the theme, force a polarity, or `custom` to use the per-layer keys below. |
+| `map-color-<layer>` | color | theme | Custom colour for one ground layer (used when `map-theme-mode: custom`). |
+| `map-show-<layer>` | boolean | `true` | Show / hide one ground layer (used when `map-theme-mode: custom`). |
+
+The `<layer>` names (water, roads, parks, ...) and their colours are all exposed in the editor's map section, so you rarely write these by hand.
 
 ## Sensors + colors
 
@@ -101,6 +158,8 @@ The rolling window itself is chosen live from the timeline's period selector (**
 | `monitoring-group-names` | map | none | Per-group display name (group number -> name). Set from the editor's monitoring-group section. |
 | `monitoring-group-colors` | map | `--graph-color-N` | Per-group colour (group number -> colour). Falls back to Home Assistant's graph colour for that group. |
 | `monitoring-group-icons` | map | none | Per-group icon (group number -> MDI icon). With no icon the group shows its number. |
+| `monitoring-groups` | map | none | Device-to-group assignment (which monitoring group each tracked device belongs to). Set by dragging devices into groups in the editor. |
+| `monitoring-group-hidden` | map | none | Per-group hidden flag, so a group can be turned off without losing its device assignments. |
 | `hidden-devices` | list | none | Device meters hidden from every view. Managed from the editor's device list (the eye toggle). |
 | `chip-home-color` | color | theme | Optional colour for the home pill and its consumption readout. |
 

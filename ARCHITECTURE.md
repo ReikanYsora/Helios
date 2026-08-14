@@ -166,6 +166,17 @@ it. One clip, not a subtraction per shape: non-zero fill counts a winding NUMBER
 the sweep's pieces overlap most over the footprints, so a single reversed ring cannot
 bring the count to zero there.
 
+### Terrain horizon, `data/sources/horizon.ts`
+
+The surrounding skyline is resolved on-device from Open-Meteo's elevation API (no
+key, worldwide): a fan of ridge samples around the home, log-spaced out to ~25 km,
+reduced to the largest elevation angle any ridge subtends per azimuth (a fixed-step
+`HorizonProfile`). The profile is cached in durable storage keyed on the rounded home
+coordinates, since terrain does not change. It feeds the scene two ways: the sun
+**dims the moment it drops behind a hill**, not only at the flat horizon, and a
+discreet ridge line is drawn around the house (shown / hidden / recoloured in the
+editor). It is visual only, never touching measured production or the forecast.
+
 ---
 
 ## 3. The view
