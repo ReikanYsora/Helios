@@ -133,9 +133,14 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     {
         return false;
     }
+    //irradiance and nearness are gated too, not just position: irradiance drives the disc fill, halo, heat aura and
+    //W/m2 chip, and nearness the disc radius + z-split, so a weather-only change at a stationary sun (fixed scrub
+    //time, new cloud) still has to repaint.
     if (!nearlyEq(a.sun.x, b.sun.x) || !nearlyEq(a.sun.y, b.sun.y)
         || !nearlyEq(a.sun.altitude, b.sun.altitude)
-        || !nearlyEq(a.sun.azimuth, b.sun.azimuth)) return false;
+        || !nearlyEq(a.sun.azimuth, b.sun.azimuth)
+        || !nearlyEq(a.sun.irradiance, b.sun.irradiance)
+        || !nearlyEq(a.sun.nearness, b.sun.nearness)) return false;
     if (a.arc.length !== b.arc.length)
     {
         return false;
