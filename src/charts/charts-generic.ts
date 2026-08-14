@@ -404,8 +404,6 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
         return out;
     };
-    const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
-
     const { series, fixedMax, fixedMin, socHover } = buildTargetSeries(host, target, { el, store, startMs, endMsAbs, toPts });
 
     //Y scale: fixed where set, else the per-series running max. No target stacks its own series; the cloud bands
@@ -422,7 +420,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
 
     const drawn = series.map(s =>
     {
-        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, dashed: !!s.dashed, total: sum(s.pts) }; }
+        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, dashed: !!s.dashed }; }
         const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
         const x0 = xOf(s.pts[0].t);
         const xN = xOf(s.pts[s.pts.length - 1].t);
@@ -432,7 +430,6 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             line:  `M ${pp.join(' L ')}`,
             color: s.color,
             dashed: !!s.dashed,
-            total: sum(s.pts),
         };
     });
 

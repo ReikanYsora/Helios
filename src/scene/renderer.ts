@@ -298,11 +298,6 @@ export class SceneRenderer
         this.scheduleRedraw();
     }
 
-    public setGrowth(growth: number): void
-    {
-        this._growth = Math.max(0, Math.min(1, growth));
-    }
-
     //Play the one-off building rise: prisms grow from the ground to full height (0 -> 1, cubic-out),
     //matching the HA energy dashboard graph animation. Instant under prefers-reduced-motion. The host
     //replays it whenever buildings (re)arrive, so it stays in step with the graphs.
