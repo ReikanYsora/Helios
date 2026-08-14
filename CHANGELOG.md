@@ -10,8 +10,7 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 ## 2026.9.0
 
 The weather release, "Your real sky": the scene now reflects the weather over
-your home, and the outdoor temperature and humidity join the card. Currently in
-beta (`2026.9.0-b2`).
+your home, and the outdoor temperature and humidity join the card.
 
 ### Added: the terrain horizon
 
