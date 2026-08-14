@@ -193,15 +193,12 @@ export const ro: Translations = {
     hiddenDevicesEmpty:
       "Niciun dispozitiv individual nu este inca urmarit in tabloul tau de bord Energie. Adauga acolo consumul dispozitivelor pentru a le controla aici.",
     deviceVisibilityLabel: "Arata dispozitivul",
-    deviceGroupLabel: "Grup de monitorizare",
     group: "Grup",
     noGroup: "Fara grup",
     groupAssignHint:
       "Trageți dispozitivele într-un grup. Ce rămâne mai jos nu aparține niciunui grup.",
     groupDropHere: "Trageți un dispozitiv aici",
     backToLive: "Înapoi la live",
-    devicesEnergyNote:
-      "Acestea sunt dispozitivele individuale configurate momentan in tabloul tau de bord Energie din Home Assistant. Ochiul arata sau ascunde fiecare dispozitiv peste tot, iar eticheta il atribuie unui grup.",
     buildingClusterRadius: "Raza de grupare a casei",
     buildingClusterRadiusHelp:
       "Raza din jurul casei in care anexele atasate (verande, garaje, soproane) sunt tratate ca parte a casei: sunt redate la opacitatea si culoarea completa a casei, in loc de vecini estompati. 0 pastreaza doar cladirea principala.",

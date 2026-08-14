@@ -194,15 +194,12 @@ export const fr: Translations = {
     hiddenDevicesEmpty:
       "Aucun appareil individuel n'est encore suivi dans votre tableau de bord Énergie. Ajoutez-y la consommation par appareil pour les gérer ici.",
     deviceVisibilityLabel: "Afficher l'appareil",
-    deviceGroupLabel: "Groupe de suivi",
     group: "Groupe",
     noGroup: "Aucun groupe",
     groupAssignHint:
       "Glissez vos appareils dans un groupe. Ce qui reste en bas n'appartient à aucun groupe.",
     groupDropHere: "Déposez un appareil ici",
     backToLive: "Retour au live",
-    devicesEnergyNote:
-      "Voici les appareils individuels actuellement configurés dans votre tableau de bord Énergie Home Assistant. L'œil affiche ou masque chacun partout, et la pastille l'assigne à un groupe.",
     buildingClusterRadius: "Rayon de regroupement maison",
     buildingClusterRadiusHelp:
       "Rayon autour de la maison dans lequel les dépendances attenantes (vérandas, garages, abris) sont considérées comme faisant partie de la maison : elles sont rendues à la pleine opacité et couleur de la maison, et non en voisines estompées. À 0, seul le bâtiment principal est conservé.",

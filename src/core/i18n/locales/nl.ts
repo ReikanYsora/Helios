@@ -194,15 +194,12 @@ export const nl: Translations = {
     hiddenDevicesEmpty:
       "Er worden nog geen individuele apparaten bijgehouden in je Energiedashboard. Voeg daar apparaatverbruik toe om ze hier te beheren.",
     deviceVisibilityLabel: "Apparaat tonen",
-    deviceGroupLabel: "Bewakingsgroep",
     group: "Groep",
     noGroup: "Geen groep",
     groupAssignHint:
       "Sleep je apparaten naar een groep. Wat onderaan overblijft, hoort bij geen enkele groep.",
     groupDropHere: "Sleep hier een apparaat naartoe",
     backToLive: "Terug naar live",
-    devicesEnergyNote:
-      "Dit zijn de individuele apparaten die momenteel zijn ingesteld in je Home Assistant Energiedashboard. Het oog toont of verbergt elk apparaat overal, en de pil wijst het aan een groep toe.",
     buildingClusterRadius: "Clusterstraal huis",
     buildingClusterRadiusHelp:
       "Straal rond het huis waarbinnen aangebouwde bijgebouwen (veranda's, garages, schuren) als deel van het huis worden behandeld: ze worden weergegeven met de volledige dekking en kleur van het huis in plaats van als vervaagde buren. 0 houdt alleen het hoofdgebouw over.",

@@ -193,15 +193,12 @@ export const nb: Translations = {
     hiddenDevicesEmpty:
       "Ingen individuelle enheter spores ennå i energidashbordet ditt. Legg til enhetsforbruk der for å styre dem her.",
     deviceVisibilityLabel: "Vis enhet",
-    deviceGroupLabel: "Overvåkingsgruppe",
     group: "Gruppe",
     noGroup: "Ingen gruppe",
     groupAssignHint:
       "Dra enhetene dine inn i en gruppe. Det som blir igjen nedenfor, tilhører ingen gruppe.",
     groupDropHere: "Slipp en enhet her",
     backToLive: "Tilbake til live",
-    devicesEnergyNote:
-      "Dette er de individuelle enhetene som for øyeblikket er satt opp i Home Assistant-energidashbordet ditt. Øyet viser eller skjuler hver enkelt overalt, og pillen tildeler den til en gruppe.",
     buildingClusterRadius: "Hjemmets klyngeradius",
     buildingClusterRadiusHelp:
       "Radius rundt hjemmet innenfor hvilken tilknyttede uthus (verandaer, garasjer, skur) regnes som en del av hjemmet: de gjengis med hjemmets fulle ugjennomsiktighet og farge i stedet for som falmede naboer. 0 beholder bare hovedbygningen.",

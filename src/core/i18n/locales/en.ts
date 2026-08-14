@@ -204,15 +204,12 @@ export const en: Translations = {
     hiddenDevicesEmpty:
       "No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.",
     deviceVisibilityLabel: "Show device",
-    deviceGroupLabel: "Monitoring group",
     group: "Group",
     noGroup: "No group",
     groupAssignHint:
       "Drag your devices into a group. Anything left below belongs to no group.",
     groupDropHere: "Drop a device here",
     backToLive: "Back to live",
-    devicesEnergyNote:
-      "These are the individual devices currently set up in your Home Assistant Energy dashboard. The eye shows or hides each one everywhere, and the pill assigns it to a group.",
     buildingClusterRadius: "Home cluster radius",
     buildingClusterRadiusHelp:
       "Radius around the home within which attached outbuildings (verandas, garages, sheds) are treated as part of the home: they render at the home's full opacity and colour instead of as faded neighbours. 0 keeps only the main building.",
@@ -233,7 +230,7 @@ export const en: Translations = {
       "Maintenance tools: refetch the card's cached data, or reset every option to its default.",
     resetCacheButton: "Reset data cache",
     resetCacheWarning:
-      "Warning: this refetches everything the card has cached - the Open-Meteo weather, every in-memory energy series (production, grid, battery, devices, irradiance), the refined forecast's calibration, and the OpenFreeMap building footprints - for every Helios card open on this page. Use it to clear stuck calibration or stale weather/map data - a full refetch takes a few minutes depending on your HA server. Your data inside Home Assistant is never touched.",
+      "Warning: this refetches everything the card has cached - the Open-Meteo weather, every in-memory energy series (production, grid, battery, devices, irradiance), the refined forecast's calibration, and the OpenFreeMap building footprints - for every Helios card open on this page. Use it to clear stuck calibration or stale weather/map data - a full refetch takes a few minutes depending on your Home Assistant server. Your data inside Home Assistant is never touched.",
     resetCacheDone: "Cache cleared ✓",
     resetOptionsButton: "Reset options to defaults",
     resetOptionsConfirm: "Click again to confirm",

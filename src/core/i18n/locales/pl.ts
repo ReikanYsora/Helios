@@ -194,15 +194,12 @@ export const pl: Translations = {
     hiddenDevicesEmpty:
       "W panelu Energia nie są jeszcze śledzone żadne pojedyncze urządzenia. Dodaj tam zużycie urządzeń, aby zarządzać nimi tutaj.",
     deviceVisibilityLabel: "Pokaż urządzenie",
-    deviceGroupLabel: "Grupa monitorowania",
     group: "Grupa",
     noGroup: "Brak grupy",
     groupAssignHint:
       "Przeciągnij urządzenia do grupy. To, co zostanie na dole, nie należy do żadnej grupy.",
     groupDropHere: "Upuść tutaj urządzenie",
     backToLive: "Powrót do trybu na żywo",
-    devicesEnergyNote:
-      "To pojedyncze urządzenia obecnie skonfigurowane w panelu Energia Twojego Home Assistant. Oko pokazuje lub ukrywa każde z nich wszędzie, a pigułka przypisuje je do grupy.",
     buildingClusterRadius: "Promień grupowania domu",
     buildingClusterRadiusHelp:
       "Promień wokół domu, w którym przylegające zabudowania (werandy, garaże, szopy) są traktowane jako część domu: są renderowane z pełną nieprzezroczystością i kolorem domu zamiast jako przygaszeni sąsiedzi. 0 zachowuje tylko budynek główny.",

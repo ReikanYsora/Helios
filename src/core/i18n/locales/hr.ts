@@ -194,15 +194,12 @@ export const hr: Translations = {
     hiddenDevicesEmpty:
       "U tvojoj energetskoj nadzornoj ploči još nije praćen nijedan pojedinačni uređaj. Dodaj tamo potrošnju uređaja da bi ih ovdje mogao kontrolirati.",
     deviceVisibilityLabel: "Prikaži uređaj",
-    deviceGroupLabel: "Skupina praćenja",
     group: "Skupina",
     noGroup: "Bez skupine",
     groupAssignHint:
       "Povucite svoje uređaje u grupu. Ono što ostane ispod ne pripada nijednoj grupi.",
     groupDropHere: "Ovdje ispustite uređaj",
     backToLive: "Natrag na uživo",
-    devicesEnergyNote:
-      "Ovo su pojedinačni uređaji trenutno postavljeni u tvojoj energetskoj nadzornoj ploči Home Assistant. Oko prikazuje ili skriva svaki od njih posvuda, a pločica ga dodjeljuje skupini.",
     buildingClusterRadius: "Radijus grupiranja doma",
     buildingClusterRadiusHelp:
       "Radijus oko doma unutar kojeg se prislonjene pomoćne zgrade (verande, garaže, šupe) tretiraju kao dio doma: iscrtavaju se s punom neprozirnošću i bojom doma umjesto kao izblijedjeli susjedi. 0 zadržava samo glavnu zgradu.",

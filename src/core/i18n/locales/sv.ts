@@ -193,15 +193,12 @@ export const sv: Translations = {
     hiddenDevicesEmpty:
       "Inga enskilda enheter spåras ännu i din energidashboard. Lägg till enhetsförbrukning där för att styra dem här.",
     deviceVisibilityLabel: "Visa enhet",
-    deviceGroupLabel: "Övervakningsgrupp",
     group: "Grupp",
     noGroup: "Ingen grupp",
     groupAssignHint:
       "Dra dina enheter till en grupp. Det som blir kvar nedanför tillhör ingen grupp.",
     groupDropHere: "Släpp en enhet här",
     backToLive: "Tillbaka till live",
-    devicesEnergyNote:
-      "Detta är de enskilda enheter som för närvarande är konfigurerade i din Home Assistant-energidashboard. Ögat visar eller döljer varje enhet överallt, och pillen tilldelar den till en grupp.",
     buildingClusterRadius: "Hemmets klusterradie",
     buildingClusterRadiusHelp:
       "Radie runt hemmet inom vilken tillhörande uthus (verandor, garage, skjul) behandlas som en del av hemmet: de renderas med hemmets fulla ogenomskinlighet och färg istället för som blekta grannar. 0 behåller bara huvudbyggnaden.",

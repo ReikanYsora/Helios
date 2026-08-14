@@ -195,15 +195,12 @@ export const hu: Translations = {
     hiddenDevicesEmpty:
       "Egyetlen eszköz sincs még nyomon követve az energia irányítópultodon. Adj hozzá ott eszközfogyasztást, hogy itt kezelhesd őket.",
     deviceVisibilityLabel: "Eszköz megjelenítése",
-    deviceGroupLabel: "Felügyeleti csoport",
     group: "Csoport",
     noGroup: "Nincs csoport",
     groupAssignHint:
       "Húzza az eszközeit egy csoportba. Ami alul marad, egyik csoporthoz sem tartozik.",
     groupDropHere: "Húzzon ide egy eszközt",
     backToLive: "Vissza az élőhöz",
-    devicesEnergyNote:
-      "Ezek a jelenleg a Home Assistant energia irányítópultodon beállított egyedi eszközök. A szem ikon mindenhol megjeleníti vagy elrejti az adott eszközt, a jelölő pedig egy csoporthoz rendeli.",
     buildingClusterRadius: "Otthon csoportosítási sugara",
     buildingClusterRadiusHelp:
       "Az otthon körüli sugár, amelyen belül a hozzáépített melléképületek (verandák, garázsok, fészerek) az otthon részének számítanak: az otthon teljes átlátszatlanságával és színével jelennek meg, nem elhalványult szomszédként. A 0 csak a főépületet tartja meg.",

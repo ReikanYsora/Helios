@@ -3,7 +3,7 @@
 //"flow duration" easing that ramps animation speed with the live production rate.
 
 import type { HeliosEngine } from '../scene/helios-engine';
-import type { DayCurveScene } from '../scene/day-curve';
+import type { DayCurveScene, DayCurvePass } from '../scene/day-curve';
 import { EQ_EPS_PX } from '../core/config/constants';
 import { arcColor } from '../core/render-kit/colors';
 
@@ -173,6 +173,62 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     return true;
 }
 
+function dayCurvePassEq(a: DayCurvePass, b: DayCurvePass): boolean
+{
+    if (a.foot !== b.foot || a.risers !== b.risers)
+    {
+        return false;
+    }
+    if ((a.leader === null) !== (b.leader === null))
+    {
+        return false;
+    }
+    if (a.leader && b.leader
+        && (a.leader.stroke !== b.leader.stroke
+            || !nearlyEq(a.leader.x1, b.leader.x1) || !nearlyEq(a.leader.y1, b.leader.y1)
+            || !nearlyEq(a.leader.x2, b.leader.x2) || !nearlyEq(a.leader.y2, b.leader.y2))) return false;
+    if (a.beads.length !== b.beads.length)
+    {
+        return false;
+    }
+    for (let i = 0; i < a.beads.length; i++)
+    {
+        const ba = a.beads[i]; const bb = b.beads[i];
+        if (ba.colour !== bb.colour || !nearlyEq(ba.x, bb.x) || !nearlyEq(ba.y, bb.y)) return false;
+    }
+    if (a.strands.length !== b.strands.length)
+    {
+        return false;
+    }
+    for (let i = 0; i < a.strands.length; i++)
+    {
+        const sa = a.strands[i]; const sb = b.strands[i];
+        if (sa.dashed !== sb.dashed || sa.spans.length !== sb.spans.length) return false;
+        for (let j = 0; j < sa.spans.length; j++)
+        {
+            const pa = sa.spans[j]; const pb = sb.spans[j];
+            if (pa.d !== pb.d || pa.w !== pb.w || pa.predicted !== pb.predicted || pa.colour !== pb.colour) return false;
+        }
+    }
+    return true;
+}
+
+//Same rationale as the guards above: the day curve is projected on every map transform, and its two passes feed the
+//heaviest scene layer. On an idle tick (no camera move, no scrub) the projection is deterministic and identical, so a
+//content-equal result must keep its identity or Lit rebuilds the subtree and re-arms its SMIL clock for nothing.
+function dayCurveSceneEq(a: DayCurveScene | null, b: DayCurveScene | null): boolean
+{
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b)
+    {
+        return false;
+    }
+    return dayCurvePassEq(a.far, b.far) && dayCurvePassEq(a.near, b.near);
+}
+
 //Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per
 //projection). Called on every map transform, once at first weather update (projection matrix ready only after style
 //load), and on every periodic tick in live mode (sun position depends on time).
@@ -204,8 +260,12 @@ export function refreshHud(host: HudHost): void
     }
 
     //The day curve rides the same refresh as the rest of the HUD, for the same reason: it is projected through the
-    //camera, so it has to be redrawn on every map transform or it slides off the scene under it.
-    host._dayCurveScene = host._engine?.projectDayCurve(t) ?? null;
+    //camera, so it has to be redrawn on every map transform or it slides off the scene under it. Gated like the others.
+    const nextCurve = host._engine?.projectDayCurve(t) ?? null;
+    if (!dayCurveSceneEq(host._dayCurveScene, nextCurve))
+    {
+        host._dayCurveScene = nextCurve;
+    }
 }
 
 

@@ -194,15 +194,12 @@ export const isLocale: Translations = {
     hiddenDevicesEmpty:
       "Engin einstök tæki eru skráð í orkumælaborðinu þínu ennþá. Bættu notkun tækja þar við til að stjórna þeim hér.",
     deviceVisibilityLabel: "Sýna tæki",
-    deviceGroupLabel: "Vöktunarhópur",
     group: "Hópur",
     noGroup: "Enginn hópur",
     groupAssignHint:
       "Dragðu tækin þín í hóp. Það sem eftir verður neðar tilheyrir engum hópi.",
     groupDropHere: "Slepptu tæki hér",
     backToLive: "Til baka í beina útsendingu",
-    devicesEnergyNote:
-      "Þetta eru einstök tæki sem nú eru sett upp í orkumælaborði Home Assistant. Augað sýnir eða felur hvert tæki alls staðar, og hnappurinn úthlutar því í hóp.",
     buildingClusterRadius: "Klasaradíus heimilis",
     buildingClusterRadiusHelp:
       "Radíus umhverfis heimilið þar sem áfastar útibyggingar (verandir, bílskúrar, skúrar) eru meðhöndlaðar sem hluti af heimilinu: þær eru myndgerðar með fullri ógagnsæi og lit heimilisins í stað þess að birtast sem dofnir nágrannar. 0 heldur aðeins aðalbyggingunni.",

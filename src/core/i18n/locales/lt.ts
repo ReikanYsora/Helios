@@ -195,15 +195,12 @@ export const lt: Translations = {
     hiddenDevicesEmpty:
       "Tavo Energijos skydelyje kol kas nesekamas nė vienas pavienis prietaisas. Pridėk ten prietaiso suvartojimą, kad galėtum jį valdyti čia.",
     deviceVisibilityLabel: "Rodyti prietaisą",
-    deviceGroupLabel: "Stebėjimo grupė",
     group: "Grupė",
     noGroup: "Be grupės",
     groupAssignHint:
       "Vilkite savo įrenginius į grupę. Kas lieka apačioje, nepriklauso jokiai grupei.",
     groupDropHere: "Vilkite įrenginį čia",
     backToLive: "Grįžti į tiesioginį",
-    devicesEnergyNote:
-      "Tai pavieniai prietaisai, šiuo metu sukonfigūruoti tavo Home Assistant Energijos skydelyje. Akis rodo arba slepia kiekvieną iš jų visur, o žymeklis priskiria jį grupei.",
     buildingClusterRadius: "Namų sankaupos spindulys",
     buildingClusterRadiusHelp:
       "Spindulys aplink namus, kurio ribose prijungti pagalbiniai pastatai (verandos, garažai, sandėliukai) laikomi namų dalimi: jie atvaizduojami su namų nepermatomumu ir spalva, o ne kaip išblukę kaimynai. 0 palieka tik pagrindinį pastatą.",

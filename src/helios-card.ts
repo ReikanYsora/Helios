@@ -357,7 +357,10 @@ export class HeliosCard extends LitElement
 
     //Cached theme polarity. The fallback path (getComputedStyle + regex) forces a style flush, too costly
     //per render. Result only changes on theme polarity flip / style reload, so cache by themesObj identity.
-    private _cachedIsDarkThemesRef: unknown = undefined;
+    //The empty-cache marker is a private symbol, not undefined, so a genuinely-undefined themesObj still
+    //resolves through the CSS fallback instead of colliding with "not cached yet".
+    private static readonly _UNCACHED_THEMES = Symbol('theme-cache-empty');
+    private _cachedIsDarkThemesRef: unknown = HeliosCard._UNCACHED_THEMES;
     private _cachedIsDark = false;
     //Last resolved home-colour token, so the :host consumption var is only re-derived when it changes.
     //Read + written by publishConsumptionColor (card/init.ts), so not TS-private.
@@ -1332,7 +1335,7 @@ export class HeliosCard extends LitElement
     {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible')
         {
-            this._cachedIsDarkThemesRef = undefined;
+            this._cachedIsDarkThemesRef = HeliosCard._UNCACHED_THEMES;
             this.requestUpdate();
         }
     };
@@ -1699,7 +1702,7 @@ export class HeliosCard extends LitElement
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object')
             {
-                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'temperature', 'humidity', ...GROUP_TARGETS];
+                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'temperature', 'humidity', 'cost', ...GROUP_TARGETS];
                 if (typeof parsed.chartTarget === 'string' && valid.includes(parsed.chartTarget as ChartTarget))
                 {
                     this._chartTarget = parsed.chartTarget as ChartTarget;

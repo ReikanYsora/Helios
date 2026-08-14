@@ -193,15 +193,12 @@ export const it: Translations = {
     hiddenDevicesEmpty:
       "Nessun dispositivo individuale è ancora tracciato nel tuo dashboard Energia. Aggiungi lì il consumo per dispositivo per gestirli qui.",
     deviceVisibilityLabel: "Mostra dispositivo",
-    deviceGroupLabel: "Gruppo di monitoraggio",
     group: "Gruppo",
     noGroup: "Nessun gruppo",
     groupAssignHint:
       "Trascina i tuoi dispositivi in un gruppo. Ciò che resta sotto non appartiene a nessun gruppo.",
     groupDropHere: "Trascina qui un dispositivo",
     backToLive: "Torna al live",
-    devicesEnergyNote:
-      "Questi sono i dispositivi individuali attualmente configurati nel tuo dashboard Energia di Home Assistant. L'occhio mostra o nasconde ciascuno ovunque, e la pillola lo assegna a un gruppo.",
     buildingClusterRadius: "Raggio di raggruppamento casa",
     buildingClusterRadiusHelp:
       "Raggio attorno alla casa entro cui le pertinenze attigue (verande, garage, capanni) sono considerate parte della casa: vengono rese con la piena opacità e il colore della casa invece che come vicini sfumati. 0 mantiene solo l'edificio principale.",

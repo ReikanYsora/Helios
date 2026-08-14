@@ -975,12 +975,16 @@ export const heliosCardStyles = css`
         pointer-events: none;
         box-shadow: 0 0 12px 1px color-mix(in srgb, var(--chip-glow, transparent) 90%, transparent);
         opacity: 0;
+        /*  Same grow-synced fade as the scene chips (HOME_GROW_MS), so a corner chip's glow settles like the rest
+            instead of snapping on. */
+        transition: opacity ${unsafeCSS(HOME_GROW_MS)}ms ease;
     }
     .helios-corner-chip.is-chart-active::after { opacity: 1; }
     .helios-corner-chip.is-curve-on
     {
         background: var(--chip-glow, var(--primary-color, #ff9800));
         color: var(--ha-card-background, var(--card-background-color, #fff));
+        transition: background ${unsafeCSS(HOME_GROW_MS)}ms ease, color ${unsafeCSS(HOME_GROW_MS)}ms ease;
     }
     .helios-corner-chip.is-curve-on ha-icon { color: var(--ha-card-background, var(--card-background-color, #fff)); }
 

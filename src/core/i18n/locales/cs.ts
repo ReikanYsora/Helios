@@ -195,15 +195,12 @@ export const cs: Translations = {
     hiddenDevicesEmpty:
       "V tvém energetickém přehledu zatím nejsou sledovány žádná jednotlivá zařízení. Přidej tam spotřebu zařízení, abys je mohl ovládat zde.",
     deviceVisibilityLabel: "Zobrazit zařízení",
-    deviceGroupLabel: "Sledovací skupina",
     group: "Skupina",
     noGroup: "Bez skupiny",
     groupAssignHint:
       "Přetáhněte svá zařízení do skupiny. Co zůstane dole, nepatří do žádné skupiny.",
     groupDropHere: "Sem přetáhněte zařízení",
     backToLive: "Zpět na živě",
-    devicesEnergyNote:
-      "Toto jsou jednotlivá zařízení aktuálně nastavená v tvém energetickém přehledu Home Assistant. Oko zobrazí nebo skryje každé z nich všude a pilulka jej zařadí do skupiny.",
     buildingClusterRadius: "Poloměr shlukování domova",
     buildingClusterRadiusHelp:
       "Poloměr kolem domova, ve kterém jsou přilehlé přístavby (verandy, garáže, kůlny) považovány za součást domova: vykreslí se v plné neprůhlednosti a barvě domova místo jako ztlumení sousedé. 0 ponechá pouze hlavní budovu.",

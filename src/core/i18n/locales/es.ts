@@ -195,15 +195,12 @@ export const es: Translations = {
     hiddenDevicesEmpty:
       "Todavía no hay dispositivos individuales registrados en tu panel de Energía. Añade ahí el consumo de dispositivos para controlarlos aquí.",
     deviceVisibilityLabel: "Mostrar dispositivo",
-    deviceGroupLabel: "Grupo de monitorización",
     group: "Grupo",
     noGroup: "Sin grupo",
     groupAssignHint:
       "Arrastra tus dispositivos a un grupo. Lo que quede abajo no pertenece a ningún grupo.",
     groupDropHere: "Suelta un dispositivo aquí",
     backToLive: "Volver al directo",
-    devicesEnergyNote:
-      "Estos son los dispositivos individuales configurados actualmente en tu panel de Energía de Home Assistant. El ojo muestra u oculta cada uno en todas partes, y la píldora lo asigna a un grupo.",
     buildingClusterRadius: "Radio de agrupación de la casa",
     buildingClusterRadiusHelp:
       "Radio alrededor de la casa dentro del cual los anexos adosados (porches, garajes, cobertizos) se tratan como parte de la casa: se renderizan con la opacidad y el color completos de la casa en lugar de como vecinos difuminados. 0 mantiene solo el edificio principal.",

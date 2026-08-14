@@ -195,15 +195,12 @@ export const lv: Translations = {
     hiddenDevicesEmpty:
       "Tavā enerģijas panelī vēl netiek izsekota neviena atsevišķa ierīce. Pievieno tur ierīču patēriņu, lai tās pārvaldītu šeit.",
     deviceVisibilityLabel: "Rādīt ierīci",
-    deviceGroupLabel: "Uzraudzības grupa",
     group: "Grupa",
     noGroup: "Bez grupas",
     groupAssignHint:
       "Velciet savas ierīces grupā. Tas, kas paliek zemāk, nepieder nevienai grupai.",
     groupDropHere: "Nometiet ierīci šeit",
     backToLive: "Atpakaļ uz tiešraidi",
-    devicesEnergyNote:
-      "Šīs ir atsevišķās ierīces, kas pašlaik iestatītas tavā Home Assistant enerģijas panelī. Acs ikona rāda vai slēpj katru no tām visur, bet zīmīte piešķir to grupai.",
     buildingClusterRadius: "Mājas klastera rādiuss",
     buildingClusterRadiusHelp:
       "Rādiuss ap māju, kura robežās piesaistītās palīgēkas (verandas, garāžas, šķūņi) tiek uzskatītas par mājas daļu: tās tiek renderētas ar mājas pilnu necaurspīdību un krāsu, nevis kā izbalējuši kaimiņi. 0 saglabā tikai galveno ēku.",

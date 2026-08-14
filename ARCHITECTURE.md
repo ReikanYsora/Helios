@@ -42,8 +42,8 @@ The code is organised in layers:
 
 Cutting across all of it, `src/core/*` holds the pure shared primitives that both
 sides reuse: `render-kit/` (2D point geometry, hex + tint colour math), `energy.ts`
-(the consumption identity), `format/`, `time/` (timezone, sun-zone and sun
-position math), `config/` and `i18n/`.
+(the consumption identity), `format/`, `time/` (timezone and sun-position
+math), `config/` and `i18n/`.
 
 The card feeds the engine a few setters (home location, sun time, palette,
 buildings, period) and reads back projected screen-space geometry to place its

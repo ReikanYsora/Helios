@@ -193,15 +193,12 @@ export const sl: Translations = {
     hiddenDevicesEmpty:
       "V tvoji nadzorni plošči Energija še ni sledenih posameznih naprav. Tam dodaj porabo naprav, da jih lahko upravljaš tukaj.",
     deviceVisibilityLabel: "Pokaži napravo",
-    deviceGroupLabel: "Nadzorna skupina",
     group: "Skupina",
     noGroup: "Brez skupine",
     groupAssignHint:
       "Povlecite svoje naprave v skupino. Kar ostane spodaj, ne pripada nobeni skupini.",
     groupDropHere: "Sem spustite napravo",
     backToLive: "Nazaj na v živo",
-    devicesEnergyNote:
-      "To so posamezne naprave, ki so trenutno nastavljene v tvoji nadzorni plošči Energija v Home Assistant. Oko povsod pokaže ali skrije vsako od njih, ploščica pa jo dodeli skupini.",
     buildingClusterRadius: "Polmer združevanja doma",
     buildingClusterRadiusHelp:
       "Polmer okoli doma, znotraj katerega se prizidane pomožne stavbe (verande, garaže, lope) obravnavajo kot del doma: izrišejo se s polno neprosojnostjo in barvo doma namesto kot zatemnjeni sosedi. 0 ohrani le glavno stavbo.",

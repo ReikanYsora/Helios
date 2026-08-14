@@ -194,15 +194,12 @@ export const de: Translations = {
     hiddenDevicesEmpty:
       "In deinem Energie-Dashboard werden noch keine einzelnen Geräte erfasst. Füge dort den Geräteverbrauch hinzu, um sie hier zu steuern.",
     deviceVisibilityLabel: "Gerät anzeigen",
-    deviceGroupLabel: "Überwachungsgruppe",
     group: "Gruppe",
     noGroup: "Keine Gruppe",
     groupAssignHint:
       "Zieh deine Geräte in eine Gruppe. Was unten übrig bleibt, gehört zu keiner Gruppe.",
     groupDropHere: "Gerät hier ablegen",
     backToLive: "Zurück zu Live",
-    devicesEnergyNote:
-      "Dies sind die einzelnen Geräte, die aktuell in deinem Home Assistant Energie-Dashboard eingerichtet sind. Das Auge blendet jedes überall ein oder aus, und die Pille weist es einer Gruppe zu.",
     buildingClusterRadius: "Cluster-Radius Zuhause",
     buildingClusterRadiusHelp:
       "Radius um das Zuhause, innerhalb dessen angebaute Nebengebäude (Wintergärten, Garagen, Schuppen) als Teil des Zuhauses behandelt werden: sie werden mit der vollen Deckkraft und Farbe des Zuhauses statt als ausgeblendete Nachbarn gerendert. 0 behält nur das Hauptgebäude.",

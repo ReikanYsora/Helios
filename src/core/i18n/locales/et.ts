@@ -194,15 +194,12 @@ export const et: Translations = {
     hiddenDevicesEmpty:
       "Sinu energiapaneelis pole veel jälgitavaid üksikuid seadmeid. Lisa sinna seadme tarbimine, et neid siin juhtida.",
     deviceVisibilityLabel: "Näita seadet",
-    deviceGroupLabel: "Jälgimisrühm",
     group: "Rühm",
     noGroup: "Rühm puudub",
     groupAssignHint:
       "Lohistage oma seadmed rühma. See, mis jääb alla, ei kuulu ühtegi rühma.",
     groupDropHere: "Lohistage seade siia",
     backToLive: "Tagasi reaalaega",
-    devicesEnergyNote:
-      "Need on hetkel sinu Home Assistanti energiapaneelis seadistatud üksikud seadmed. Silm näitab või peidab iga seadme kõikjal, pill määrab selle rühma.",
     buildingClusterRadius: "Kodu klastri raadius",
     buildingClusterRadiusHelp:
       "Raadius kodu ümber, mille sees külgnevaid kõrvalhooneid (verandad, garaažid, kuurid) käsitletakse kodu osana: need renderdatakse kodu täieliku läbipaistmatuse ja värviga, mitte tuhmunud naabritena. 0 jätab alles ainult peahoone.",

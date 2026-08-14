@@ -194,15 +194,12 @@ export const fi: Translations = {
     hiddenDevicesEmpty:
       "Yhtäkään yksittäistä laitetta ei vielä seurata Energia-kojelaudassasi. Lisää sinne laitekohtainen kulutus hallitaksesi niitä täällä.",
     deviceVisibilityLabel: "Näytä laite",
-    deviceGroupLabel: "Seurantaryhmä",
     group: "Ryhmä",
     noGroup: "Ei ryhmää",
     groupAssignHint:
       "Vedä laitteesi ryhmään. Alle jäävät eivät kuulu mihinkään ryhmään.",
     groupDropHere: "Pudota laite tähän",
     backToLive: "Takaisin reaaliaikaan",
-    devicesEnergyNote:
-      "Nämä ovat Home Assistantin Energia-kojelaudassasi tällä hetkellä määritetyt yksittäiset laitteet. Silmäkuvake näyttää tai piilottaa kunkin kaikkialla, ja pilleri määrittää sen ryhmään.",
     buildingClusterRadius: "Kodin klusterisäde",
     buildingClusterRadiusHelp:
       "Säde kodin ympärillä, jonka sisällä liittyvät ulkorakennukset (kuistit, autotallit, vajat) käsitellään osana kotia: ne renderöidään kodin täydellä läpinäkymättömyydellä ja värillä sen sijaan, että näkyisivät haalistuneina naapureina. 0 pitää mukana vain päärakennuksen.",

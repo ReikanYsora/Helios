@@ -1486,6 +1486,10 @@ export class HeliosEngine
         this.homeLon   = lon;
         this._fetchLat = lat;
         this._fetchLon = lon;
+        //Both arc caches bake the projection around the home: the scale probe and the per-sample sun points.
+        //Drop them so the arc rebuilds at the new position instead of reusing the old location's geometry.
+        this._arcScaleMemo   = undefined;
+        this._arcInputsCache = undefined;
         void this._renderer?.setLocation(lat, lon, this._groundStyle());
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
@@ -2155,6 +2159,7 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
+        this._horizonAbort?.abort();
         this._clearBuildingsRetry();
         this._arcInputsCache         = undefined;
         this._resizeObserver?.disconnect();

@@ -888,8 +888,8 @@ export class HeliosCardEditor extends LitElement
                         <span class="group-name-badge" style="--group-pill-color:${pill}"></span>
                         <span class="chip-box-name">${this._mapLayerLabel(t, key)}</span>
                         <div class="segmented-toggle">
-                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-key=${mapShowKey(key)} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
-                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-key=${mapShowKey(key)} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" aria-pressed=${on ? 'true' : 'false'} data-key=${mapShowKey(key)} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" aria-pressed=${!on ? 'true' : 'false'} data-key=${mapShowKey(key)} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
                     ${this._pickerReady ? html`
@@ -938,8 +938,8 @@ export class HeliosCardEditor extends LitElement
                         <span class="group-name-badge" style="--group-pill-color:${badge}"><ha-icon icon=${badgeIcon}></ha-icon></span>
                         <span class="chip-box-name">${label}</span>
                         <div class="segmented-toggle">
-                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-key=${visKey} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
-                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-key=${visKey} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" aria-pressed=${on ? 'true' : 'false'} data-key=${visKey} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" aria-pressed=${!on ? 'true' : 'false'} data-key=${visKey} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
                     ${this._pickerReady ? slots.map(slot => {
@@ -987,8 +987,8 @@ export class HeliosCardEditor extends LitElement
                             @change=${this._onGroupNameChanged}
                         />
                         <div class="segmented-toggle">
-                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-group=${String(g)} data-value="true" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOn}</button>
-                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-group=${String(g)} data-value="false" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOff}</button>
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" aria-pressed=${on ? 'true' : 'false'} data-group=${String(g)} data-value="true" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" aria-pressed=${!on ? 'true' : 'false'} data-group=${String(g)} data-value="false" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
                     ${this._pickerReady ? html`
