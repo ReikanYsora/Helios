@@ -14,6 +14,7 @@ import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, gro
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
+import { CHART_W, CHART_H, emptyChartSvg, makeXOf, makeYOf } from './chart-scale';
 import { HOUR_MS } from '../core/config/constants';
 
 
@@ -373,20 +374,20 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     const el = host as unknown as Element; //live HA theme-token colour resolution
     const store = host._unifiedStore;
     const range = host._timeRange;
-    const W = 1000;
-    const H = 100;
+    const W = CHART_W;
+    const H = CHART_H;
     if (!store || !range)
     {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+        return emptyChartSvg();
     }
     const startMs  = range.start.getTime();
     const endMsAbs = range.end.getTime();
     const rangeMs  = endMsAbs - startMs;
     if (rangeMs <= 0)
     {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+        return emptyChartSvg();
     }
-    const xOf = (tMs: number): number => ((tMs - startMs) / rangeMs) * W;
+    const xOf = makeXOf(startMs, rangeMs);
 
     //Store series to visible-range points: drop nulls, clip to the window. Bucket centre matches sliceForRange so
     //curves line up with the production chart's day separators.
@@ -417,9 +418,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         yMax = yMin + 1;
         for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
     }
-    //Headroom at the top so a curve's peak never kisses the top edge.
-    const TOP_HEADROOM_PX = 10;
-    const yOf = (v: number): number => H - Math.max(0, Math.min(1, (v - yMin) / (yMax - yMin))) * (H - TOP_HEADROOM_PX);
+    const yOf = makeYOf(yMin, yMax);
 
     const drawn = series.map(s =>
     {
@@ -467,8 +466,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
         if (bands.length >= 2)
         {
-            const yOfPct = (pct: number): number =>
-                H - Math.max(0, Math.min(1, pct / 100)) * (H - TOP_HEADROOM_PX);
+            const yOfPct = makeYOf(0, 100);
             const layers: { pick: (b: { lo: number; mi: number; hi: number }) => number; color: string }[] = [
                 { pick: b => b.lo, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
                 { pick: b => b.mi, color: ENERGY_COLOR.cloud(el) },
@@ -515,8 +513,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
         if (pts.length >= 2 && fMax > 0)
         {
-            const yOfF = (v: number): number =>
-                H - Math.max(0, Math.min(1, v / fMax)) * (H - TOP_HEADROOM_PX);
+            const yOfF = makeYOf(0, fMax);
             forecastLine = `M ${pts.map(p => `${xOf(p.t.getTime()).toFixed(2)},${yOfF(p.v).toFixed(2)}`).join(' L ')}`;
             forecastHover = { pts: pts.map(p => ({ t: p.t.getTime(), v: p.v })), yOf: yOfF };
         }
