@@ -51,6 +51,13 @@ const _sharedBuildingsCache = new Map<string, SharedBuildingsCacheEntry>();
 //near-fresh without lagging a model cycle, well within free-tier quotas.
 const WEATHER_REFRESH_INTERVAL_MS = 600_000;
 
+//Terrain horizon is visual-only and cached for months, so it is kicked a beat after the scene first paints (its
+//elevation requests must not burst into the cold-start weather + tile + building fetches), and retried a bounded
+//few times on failure (a cold-start Open-Meteo 429) instead of leaving the flat horizon until the next reload.
+const HORIZON_INITIAL_DELAY_MS = 2500;
+const HORIZON_RETRY_DELAY_MS   = 60_000;
+const HORIZON_MAX_RETRIES      = 3;
+
 
 function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 {
@@ -148,6 +155,9 @@ export class HeliosEngine
     private _horizonProfile: HorizonProfile | null = null;
     private _horizonLineVisible = true;
     private _horizonAbort?: AbortController;
+    //Deferred initial kick + bounded retry share one timer; the counter resets on a real new request (setHome).
+    private _horizonTimer?: number;
+    private _horizonRetryCount = 0;
 
     //Last container size the observer acted on, so a no-op resize notification can't loop into a repaint.
     private _obsW = -1;
@@ -782,10 +792,9 @@ export class HeliosEngine
         this._dragRotateHandlers = { canvas: container, onDown, onMove, onEnd, onDragStart };
 
         this._refreshWeather();
-        //Weather has several triggers (init, timers, setHome); the terrain horizon is only re-fetched on a real
-        //home change, so it needs its own initial kick here or a card whose coords match the constructor's would
-        //never resolve a profile.
-        this._refreshHorizon(this.homeLat, this.homeLon);
+        //The terrain horizon gets its own initial kick (weather has several triggers, the horizon only re-fetches
+        //on a real home change), but deferred to _onRendererReady so it lands after the first paint, off the
+        //cold-start burst.
     }
 
     //Async bootstrap: resolve the basemap for the home, then mark ready, feed buildings + sun, and kick off
@@ -854,6 +863,16 @@ export class HeliosEngine
         //absent. Waiting on _homeHourlyData left the whole scene blank through a slow / rate-limited weather fetch
         //whenever auto-rotate was off (nothing else repaints). Weather repaints on arrival, gated by sunSceneEq.
         this._renderForCurrentSelection();
+
+        //Deferred horizon kick: a beat past the first paint so its elevation requests never burst into the
+        //cold-start weather + tile + building fetches. Skipped if a profile already resolved (cache hit).
+        if (!this._horizonProfile)
+        {
+            window.clearTimeout(this._horizonTimer);
+            this._horizonTimer = window.setTimeout(
+                () => { if (this._renderer) { this._refreshHorizon(this.homeLat, this.homeLon); } },
+                HORIZON_INITIAL_DELAY_MS);
+        }
     }
 
     //The card-side host element (#map-container) the renderer mounts into; carries the cascaded HA theme CSS
@@ -1496,6 +1515,9 @@ export class HeliosEngine
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
         void this._refreshWeather(lat, lon);
+        //New location: fresh retry budget, and drop any pending initial/retry kick for the old one.
+        window.clearTimeout(this._horizonTimer);
+        this._horizonRetryCount = 0;
         this._refreshHorizon(lat, lon);
     }
 
@@ -1516,7 +1538,21 @@ export class HeliosEngine
         this._horizonAbort = new AbortController();
         void fetchHorizonProfile(lat, lon, this._horizonAbort.signal).then((profile) =>
         {
-            if (!profile) { return; }
+            if (!profile)
+            {
+                //Cold-start Open-Meteo 429 or a network blip: retry a bounded few times, spaced out, so a transient
+                //failure does not leave the flat horizon until the next home change / reload.
+                if (this._renderer && this._horizonRetryCount < HORIZON_MAX_RETRIES)
+                {
+                    this._horizonRetryCount++;
+                    window.clearTimeout(this._horizonTimer);
+                    this._horizonTimer = window.setTimeout(
+                        () => { if (this._renderer) { this._refreshHorizon(this.homeLat, this.homeLon); } },
+                        HORIZON_RETRY_DELAY_MS);
+                }
+                return;
+            }
+            this._horizonRetryCount = 0;
             this._horizonProfile = profile;
             this._arcInputsCache = undefined;
             this._renderForCurrentSelection();
@@ -2161,6 +2197,7 @@ export class HeliosEngine
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
         this._horizonAbort?.abort();
+        window.clearTimeout(this._horizonTimer);
         this._clearBuildingsRetry();
         this._arcInputsCache         = undefined;
         this._resizeObserver?.disconnect();

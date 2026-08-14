@@ -86,28 +86,32 @@ function writeCache(lat: number, lon: number, profile: HorizonProfile): void
     saveDurable(cacheKey(lat, lon), profile);
 }
 
-//Batched elevation lookup: Open-Meteo takes up to BATCH coordinates per request. Chunks fire in parallel and
-//Promise.all preserves order, so the flattened result stays aligned with `coords`. Null if any chunk fails.
+//Batched elevation lookup: Open-Meteo takes up to BATCH coordinates per request. Null if any chunk fails.
 async function fetchElevations(coords: [number, number][], signal: AbortSignal): Promise<number[] | null>
 {
     const chunks: [number, number][][] = [];
     for (let i = 0; i < coords.length; i += BATCH) { chunks.push(coords.slice(i, i + BATCH)); }
 
-    const results = await Promise.all(chunks.map(async (chunk) =>
+    //Sequential, not Promise.all: firing every chunk at once bursts 4-5 heavy elevation calls (100 points each)
+    //at Open-Meteo in a single instant, the surest way to trip its rate limit on a cold start. One at a time
+    //keeps the pressure low; the horizon is deferred off the critical path and cached for months, so the slightly
+    //slower resolve costs nothing visible.
+    const out: number[] = [];
+    for (const chunk of chunks)
     {
         const lats = chunk.map((c) => c[0].toFixed(5)).join(',');
         const lons = chunk.map((c) => c[1].toFixed(5)).join(',');
         const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
+        // eslint-disable-next-line no-await-in-loop -- deliberate serialization to avoid a request burst
         const res = await fetch(url, { signal });
         if (!res.ok) { return null; }
+        // eslint-disable-next-line no-await-in-loop -- same
         const json = await res.json();
         const el = json?.elevation;
         if (!Array.isArray(el) || el.length !== chunk.length) { return null; }
-        return el.map(Number);
-    }));
-
-    if (results.some((r) => r === null)) { return null; }
-    return (results as number[][]).flat();
+        for (const v of el) { out.push(Number(v)); }
+    }
+    return out;
 }
 
 //Resolve the terrain horizon for a home location: cache, else compute from Open-Meteo elevation. Returns null on
