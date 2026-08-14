@@ -2661,20 +2661,20 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
         `}_energyConfigLink(){return te`
             <a class="live-status-link" href="/config/energy/dashboard" target="_blank" rel="noopener noreferrer">
                 <ha-icon icon="mdi:open-in-new"></ha-icon>
-                <span>${this._t().editor.openEnergyConfig??"Open Energy configuration"}</span>
+                <span>${this._t().editor.openEnergyConfig}</span>
             </a>
         `}_renderLiveDataStatus(e){if(!this._energyDefaultsLoaded)return ne;const t=this._energyDefaults,i=t.solarStatEnergyFroms.length>0,n=t.gridStatEnergyFroms.length>0||t.gridStatEnergyTos.length>0,r=t.batteryStatEnergyFroms.length>0||t.batteryStatEnergyTos.length>0,l="flagged"===this._gridGuard.status,d=t.solarStatRates.length>0,c=t.gridStatRates.length>0&&!l,g=!batteryLiveIsBucketSourced(t),m=(i||n||r)&&(!i||d)&&(!n||c)&&(!r||g);return te`
             <div class="live-data-panel">
-                <div class="section-title"><ha-icon class="section-icon" icon="mdi:list-status"></ha-icon>${e.editor.liveDataTitle??"Configuration status"}</div>
-                <div class="hint">${e.editor.liveDataIntro??"Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source; curves and totals always come from your meters."}</div>
+                <div class="section-title"><ha-icon class="section-icon" icon="mdi:list-status"></ha-icon>${e.editor.liveDataTitle}</div>
+                <div class="hint">${e.editor.liveDataIntro}</div>
 
-                ${i?this._liveStatusLine(d,!1,d?e.editor.liveSolarOk??"Solar: live power sensor detected.":e.editor.liveSolarMissing??"Solar: no live power sensor, the production chip stays hidden. Add one under Settings > Dashboards > Energy > Solar panels."):this._liveStatusLine(!1,!1,e.editor.liveSolarAbsent??"Solar: not set up in your Energy dashboard. Add solar panels there to get the production chip.")}
+                ${i?this._liveStatusLine(d,!1,d?e.editor.liveSolarOk:e.editor.liveSolarMissing):this._liveStatusLine(!1,!1,e.editor.liveSolarAbsent)}
 
-                ${n?this._liveStatusLine(c,l,l?e.editor.liveGridMiswired??"Grid: the live power sensor contradicts your meters (it seems to measure a single direction). The chips stay hidden; configure a signed sensor or the Two sensors mode.":c?e.editor.liveGridOk??"Grid: live power sensor detected.":e.editor.liveGridMissing??"Grid: no live power sensor, the import/export chips stay hidden. Add one under Settings > Dashboards > Energy > Grid."):this._liveStatusLine(!1,!1,e.editor.liveGridAbsent??"Grid: not set up in your Energy dashboard. Add the grid there to get the import and export chips.")}
+                ${n?this._liveStatusLine(c,l,l?e.editor.liveGridMiswired:c?e.editor.liveGridOk:e.editor.liveGridMissing):this._liveStatusLine(!1,!1,e.editor.liveGridAbsent)}
 
-                ${r?this._liveStatusLine(g,!1,g?e.editor.liveBatteryOk??"Battery: live power sensors cover every battery.":e.editor.liveBatteryMissing??"Battery: live power missing on at least one battery, the power chip stays hidden. Add the power sensor(s) under Settings > Dashboards > Energy > Battery."):this._liveStatusLine(!1,!1,e.editor.liveBatteryAbsent??"Battery: not set up in your Energy dashboard. Add a battery there to get the charge and discharge chip.")}
+                ${r?this._liveStatusLine(g,!1,g?e.editor.liveBatteryOk:e.editor.liveBatteryMissing):this._liveStatusLine(!1,!1,e.editor.liveBatteryAbsent)}
 
-                ${this._liveStatusLine(m,!1,m?e.editor.liveHomeOk??"Home consumption: shown, derived from the live families above.":e.editor.liveHomeNote??"Home consumption: appears once every configured family above has its live sensor.")}
+                ${this._liveStatusLine(m,!1,m?e.editor.liveHomeOk:e.editor.liveHomeNote)}
 
                 <div class="live-config-link-row">${this._energyConfigLink()}</div>
             </div>
@@ -2759,17 +2759,17 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                         <ha-icon icon=${e}></ha-icon>
                         <span>${t}</span>
                     </a>
-                </div>`}_deviceName(e){return e.name||this.hass?.states?.[e.statConsumption]?.attributes?.friendly_name||e.statConsumption}_deviceIcon(e){const t=this.hass?.states?.[e.statConsumption]?.attributes?.icon;return"string"==typeof t&&t||"mdi:flash"}_orderedDevices(){return[...this._energyDefaults.devices].sort((e,t)=>e.index-t.index||this._deviceName(e).localeCompare(this._deviceName(t),void 0,{sensitivity:"base"}))}_renderGroupAssignment(e){const t=e.editor.groupAssignHint??"Drag your devices into a group. Anything left below belongs to no group.",i=this._orderedDevices(),n=hiddenDevices(this._cfg);if(0===i.length)return te`
+                </div>`}_deviceName(e){return e.name||this.hass?.states?.[e.statConsumption]?.attributes?.friendly_name||e.statConsumption}_deviceIcon(e){const t=this.hass?.states?.[e.statConsumption]?.attributes?.icon;return"string"==typeof t&&t||"mdi:flash"}_orderedDevices(){return[...this._energyDefaults.devices].sort((e,t)=>e.index-t.index||this._deviceName(e).localeCompare(this._deviceName(t),void 0,{sensitivity:"base"}))}_renderGroupAssignment(e){const t=e.editor.groupAssignHint,i=this._orderedDevices(),n=hiddenDevices(this._cfg);if(0===i.length)return te`
                 <div class="hint">${t}</div>
                 <div class="live-config-link-row">${this._energyConfigLink()}</div>
-                <div class="device-empty">${e.editor.hiddenDevicesEmpty??"No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here."}</div>`;const r=monitoringGroups(this._cfg),inGroup=e=>i.filter(t=>(r.get(t.statConsumption)??0)===e);return te`
+                <div class="device-empty">${e.editor.hiddenDevicesEmpty}</div>`;const r=monitoringGroups(this._cfg),inGroup=e=>i.filter(t=>(r.get(t.statConsumption)??0)===e);return te`
             <div class="hint">${t}</div>
             <div class="live-config-link-row">${this._energyConfigLink()}</div>
             <div class="group-zones">
                 ${Array.from({length:4},(e,t)=>t+1).map(t=>this._renderGroupZone(e,t,inGroup(t),n))}
             </div>
             ${this._renderGroupZone(e,0,inGroup(0),n)}
-        `}_renderGroupZone(e,t,i,n){const r=0===t,l=r?e.editor.noGroup??"No group":monitoringGroupName(this._cfg,t)||`${e.editor.group??"Group"} ${t}`,d=r?"":monitoringGroupIcon(this._cfg,t),c=r?"":monitoringGroupColor(this._cfg,t);return te`
+        `}_renderGroupZone(e,t,i,n){const r=0===t,l=r?e.editor.noGroup:monitoringGroupName(this._cfg,t)||`${e.editor.group} ${t}`,d=r?"":monitoringGroupIcon(this._cfg,t),c=r?"":monitoringGroupColor(this._cfg,t);return te`
             <div
                 class="group-zone ${r?"group-zone-none":""}"
                 style=${r?"":`--group-pill-color:${c}`}
@@ -2790,7 +2790,7 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                     @item-added=${this._onZoneItemAdded}
                 >
                     <div class="group-zone-body">
-                        ${i.length?ui(i,e=>e.statConsumption,t=>this._renderDeviceChip(t,n,e)):te`<div class="group-zone-empty">${e.editor.groupDropHere??"Drop a device here"}</div>`}
+                        ${i.length?ui(i,e=>e.statConsumption,t=>this._renderDeviceChip(t,n,e)):te`<div class="group-zone-empty">${e.editor.groupDropHere}</div>`}
                     </div>
                 </ha-sortable>
             </div>`}_renderDeviceChip(e,t,i){const n=e.statConsumption,r=this._deviceName(e),l=deviceColorByIndex(this,e.index),d=!t.has(n);return te`
@@ -2802,7 +2802,7 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                     class="device-toggle ${d?"active":""}"
                     data-stat=${n}
                     aria-pressed=${d?"true":"false"}
-                    aria-label=${i.editor.deviceVisibilityLabel??"Show device"}
+                    aria-label=${i.editor.deviceVisibilityLabel}
                     @click=${this._onDeviceToggleClick}
                 >
                     <ha-icon icon=${d?"mdi:eye":"mdi:eye-off"}></ha-icon>
@@ -2838,15 +2838,15 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                             ></ha-selector>`)}
                         </div>`:ne}
                 </div>`}_renderChipsSection(e){return te`
-            <div class="hint">${e.editor.chipsIntro??"Show or hide each entity, and pick its icon and colour. The home follows the selected chip, or your primary colour by default."}</div>
-            ${this._renderChipBox(e.editor.chipIrradiance??"Irradiance display","chip-irradiance-visible",["irradiance"])}
-            ${this._renderChipBox(e.editor.chipProduction??"Production display","chip-production-visible",["production"])}
-            ${this._renderChipBox(e.editor.chipGrid??"Grid display","chip-grid-visible",["gridImport","gridExport"])}
-            ${this._renderChipBox(e.editor.chipBattery??"Battery display","chip-battery-visible",["batteryCharge","batteryDischarge"])}
-            ${this._renderChipBox(e.editor.chipHome??"Home consumption display","chip-home-visible",["home"])}
-            ${this._renderChipBox(e.editor.chipTemperature??"Temperature display","show-temperature",["temperature"])}
-            ${this._renderChipBox(e.editor.chipHumidity??"Humidity display","show-humidity",["humidity"])}
-            ${this._renderChipBox(e.editor.chipCost??"Cost display","show-cost",["cost"])}
+            <div class="hint">${e.editor.chipsIntro}</div>
+            ${this._renderChipBox(e.editor.chipIrradiance,"chip-irradiance-visible",["irradiance"])}
+            ${this._renderChipBox(e.editor.chipProduction,"chip-production-visible",["production"])}
+            ${this._renderChipBox(e.editor.chipGrid,"chip-grid-visible",["gridImport","gridExport"])}
+            ${this._renderChipBox(e.editor.chipBattery,"chip-battery-visible",["batteryCharge","batteryDischarge"])}
+            ${this._renderChipBox(e.editor.chipHome,"chip-home-visible",["home"])}
+            ${this._renderChipBox(e.editor.chipTemperature,"show-temperature",["temperature"])}
+            ${this._renderChipBox(e.editor.chipHumidity,"show-humidity",["humidity"])}
+            ${this._renderChipBox(e.editor.chipCost,"show-cost",["cost"])}
             ${Array.from({length:4},(e,t)=>t+1).map(t=>this._renderGroupChipBox(e,t))}
         `}_renderChipBox(e,t,i){const n=this._cfg,r=chipVisible(this._cfg,t),l=this._t();return te`
                 <div class="group-block">
@@ -2885,7 +2885,7 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                             class="group-name-input"
                             type="text"
                             .value=${monitoringGroupName(this._cfg,t)}
-                            placeholder=${`${e.editor.group??"Group"} ${t}`}
+                            placeholder=${`${e.editor.group} ${t}`}
                             data-group=${String(t)}
                             @change=${this._onGroupNameChanged}
                         />
@@ -2953,17 +2953,17 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
 
                 <details class="advanced-section" data-section="map" ?open=${"map"===this._openSection} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
-                ${this._renderToggle("show-timeline",t.editor.showTimeline??"Show timeline",t.editor.showTimelineHint??"Show the timeline and the period selector below the scene. Off keeps just the scene.",void 0,void 0,!0)}
-                ${this._renderToggle("show-detail-panel",t.editor.showDetailPanel??"Show additional info",t.editor.showDetailPanelHint??"Allow the per-chip mini-panel (aggregated metrics) to open top-right when a chip is tapped. Off never shows it.",void 0,void 0,!0)}
-                ${this._renderToggle("show-sun-times",t.editor.showSunTimes??"Show sunrise / sunset times",t.editor.showSunTimesHint??"Show the sunrise and sunset times and their markers at the feet of the solar arc.",void 0,void 0,!0)}
-                ${this._renderToggle("show-horizon-line",t.editor.showHorizonLine??"Show terrain horizon",t.editor.showHorizonLineHint??"Draw the terrain skyline around the home, computed from the local relief. The horizon always dims the sun realistically behind hills; this only toggles the drawn line.",void 0,void 0,!0)}
-                ${this._renderColorPicker("horizon-line-color",t.editor.horizonLineColor??"Terrain horizon colour",t.editor.horizonLineColorHint??"Colour of the terrain horizon line.","blue-grey",!1===e["show-horizon-line"])}
-                ${this._renderToggle("weather-enabled",t.editor.weatherEnabled??"Weather effects",t.editor.weatherEnabledHint??"Paint the real sky over the scene: sunshine, clouds, rain, snow and thunderstorms from your local weather, following the timeline as you scrub. Off keeps a clear scene.",void 0,void 0,!0)}
-                ${this._renderToggle("auto-hide-ui",t.editor.noUiMode??"No UI mode",t.editor.noUiModeHint??"Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.")}
-                ${this._renderSlider("no-ui-delay",t.editor.noUiDelay??"Idle delay before hiding",0,10,1,5," s",!0!==e["auto-hide-ui"])}
-                <div class="field-help">${t.editor.noUiDelayHint??"Seconds of inactivity before the timeline and controls fade away in No UI mode. 0 keeps the UI hidden permanently. Only used when No UI mode is on."}</div>
+                ${this._renderToggle("show-timeline",t.editor.showTimeline,t.editor.showTimelineHint,void 0,void 0,!0)}
+                ${this._renderToggle("show-detail-panel",t.editor.showDetailPanel,t.editor.showDetailPanelHint,void 0,void 0,!0)}
+                ${this._renderToggle("show-sun-times",t.editor.showSunTimes,t.editor.showSunTimesHint,void 0,void 0,!0)}
+                ${this._renderToggle("show-horizon-line",t.editor.showHorizonLine,t.editor.showHorizonLineHint,void 0,void 0,!0)}
+                ${this._renderColorPicker("horizon-line-color",t.editor.horizonLineColor,t.editor.horizonLineColorHint,"blue-grey",!1===e["show-horizon-line"])}
+                ${this._renderToggle("weather-enabled",t.editor.weatherEnabled,t.editor.weatherEnabledHint,void 0,void 0,!0)}
+                ${this._renderToggle("auto-hide-ui",t.editor.noUiMode,t.editor.noUiModeHint)}
+                ${this._renderSlider("no-ui-delay",t.editor.noUiDelay,0,10,1,5," s",!0!==e["auto-hide-ui"])}
+                <div class="field-help">${t.editor.noUiDelayHint}</div>
                 ${this._renderToggle("auto-rotate-enabled",t.editor.autoRotate,t.editor.autoRotateHint)}
-                ${this._renderToggle("camera-locked",t.editor.lockRotation??"Lock rotation",t.editor.lockRotationHint??"Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.")}
+                ${this._renderToggle("camera-locked",t.editor.lockRotation,t.editor.lockRotationHint)}
 
                 </details>
 
@@ -2973,17 +2973,17 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                 </details>
 
                 <details class="advanced-section" data-section="chips" ?open=${"chips"===this._openSection} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:palette-swatch-outline"></ha-icon>${t.editor.chipsSection??"Entity display"}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:palette-swatch-outline"></ha-icon>${t.editor.chipsSection}</summary>
                 ${this._renderChipsSection(t)}
                 </details>
 
                 <details class="advanced-section" data-section="groups" ?open=${"groups"===this._openSection} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:select-group"></ha-icon>${t.editor.groupsConfigTitle??"Group configuration"}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:select-group"></ha-icon>${t.editor.groupsConfigTitle}</summary>
                 ${this._renderGroupAssignment(t)}
                 </details>
 
                 <details class="advanced-section" data-section="sensors" ?open=${"sensors"===this._openSection} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:sun-wireless-outline"></ha-icon>${t.editor.optionalSensors??"Optional sensors"}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:sun-wireless-outline"></ha-icon>${t.editor.optionalSensors}</summary>
                 <div class="field field-block">
                     <span class="label">${t.editor.solarIrradianceEntity}</span>
                     ${this._pickerReady?te`
@@ -2999,39 +2999,39 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                     `:ne}
                 </div>
                 <div class="field-help">${t.editor.solarIrradianceEntityHelp}</div>
-                ${this._renderSensorPicker("temperature-entity",t.editor.temperatureEntity??"Temperature sensor",t.editor.temperatureEntityHelp??"Optional. Use a local outdoor temperature sensor instead of the Open-Meteo value for the temperature chip. The forecast still comes from the model.")}
-                ${this._renderSensorPicker("humidity-entity",t.editor.humidityEntity??"Humidity sensor",t.editor.humidityEntityHelp??"Optional. Use a local relative-humidity sensor (%) instead of the Open-Meteo value.")}
-                ${this._renderSensorPicker("cloud-cover-entity",t.editor.cloudCoverEntity??"Cloud cover sensor",t.editor.cloudCoverEntityHelp??"Optional. Use a local cloud-cover sensor (%) to drive the sky grade instead of the Open-Meteo value.")}
-                ${this._renderSensorPicker("precipitation-entity",t.editor.precipitationEntity??"Precipitation sensor",t.editor.precipitationEntityHelp??"Optional. Use a local precipitation sensor (mm) to drive the rain layer instead of the Open-Meteo value.")}
-                ${this._renderSensorPicker("snowfall-entity",t.editor.snowfallEntity??"Snowfall sensor",t.editor.snowfallEntityHelp??"Optional. Use a local snowfall sensor (cm) to drive the snow layer instead of the Open-Meteo value.")}
-                ${this._renderSensorPicker("weather-entity",t.editor.weatherEntity??"Weather entity",t.editor.weatherEntityHelp??"Optional. Use a Home Assistant weather entity to drive the condition (rain / snow / thunderstorm) instead of the Open-Meteo value, for the live + past.",["weather"])}
+                ${this._renderSensorPicker("temperature-entity",t.editor.temperatureEntity,t.editor.temperatureEntityHelp)}
+                ${this._renderSensorPicker("humidity-entity",t.editor.humidityEntity,t.editor.humidityEntityHelp)}
+                ${this._renderSensorPicker("cloud-cover-entity",t.editor.cloudCoverEntity,t.editor.cloudCoverEntityHelp)}
+                ${this._renderSensorPicker("precipitation-entity",t.editor.precipitationEntity,t.editor.precipitationEntityHelp)}
+                ${this._renderSensorPicker("snowfall-entity",t.editor.snowfallEntity,t.editor.snowfallEntityHelp)}
+                ${this._renderSensorPicker("weather-entity",t.editor.weatherEntity,t.editor.weatherEntityHelp,["weather"])}
                 </details>
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${"dataDisplay"===this._openSection} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
                 ${this._renderSlider("display-update-frequency-per-hour",t.editor.displayUpdateFrequency,1,6,1,4," / h")}
                 <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
-                ${this._renderSlider("value-decimals",t.editor.valueDecimals??"Value decimals",0,3,1,1)}
-                <div class="field-help">${t.editor.valueDecimalsHelp??"Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3."}</div>
-                ${this._renderSlider("max-expected-power",t.editor.maxExpectedPower??"Max expected power",500,3e4,500,5e3," W")}
-                <div class="field-help">${t.editor.maxExpectedPowerHelp??"The power at which a flow animates at full speed, so a bigger flow always reads as faster. Raise it for a large installation, lower it for a small one."}</div>
-                ${this._renderSelect("power-unit",t.editor.powerUnit??"Power unit",[{value:"kW",label:"kW"},{value:"W",label:"W"}],"kW",t.editor.powerUnitHelp??"Unit for every power readout on the card. Energy always stays in kWh.")}
-                ${this._renderSelect("irradiance-unit",t.editor.irradianceUnit??"Solar constant unit",[{value:"W/m²",label:"W/m²"},{value:"kW/m²",label:"kW/m²"}],"W/m²",t.editor.irradianceUnitHelp??"Unit for the solar constant (irradiance) readout.")}
-                ${this._renderSelect("sun-chip-mode",t.editor.sunChipMode??"Sun chip readout",[{value:"irradiance",label:t.editor.sunChipModeIrradiance??"Irradiance"},{value:"position",label:t.editor.sunChipModePosition??"Sun position"}],"irradiance",t.editor.sunChipModeHelp??"What the sun chip shows: irradiance (default) or the sun's position (azimuth and elevation). Position needs no sensor.")}
-                ${this._renderSelect("battery-chip-mode",t.editor.batteryChipMode??"Battery chip readout",[{value:"power",label:t.editor.batteryChipModePower??"Power"},{value:"soc",label:t.editor.batteryChipModeSoc??"State of charge"}],"power",t.editor.batteryChipModeHelp??"What the battery chip shows: live power (default) or the state of charge (%). It falls back to whichever value your battery actually provides.")}
-                ${this._renderSelect("battery-sign",t.editor.batterySign??"Battery sign",[{value:"default",label:t.editor.batterySignDefault??"Default"},{value:"inverted",label:t.editor.batterySignInverted??"Inverted"},{value:"hidden",label:t.editor.batterySignHidden??"Hidden"}],"default",t.editor.batterySignHelp??"Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.")}
+                ${this._renderSlider("value-decimals",t.editor.valueDecimals,0,3,1,1)}
+                <div class="field-help">${t.editor.valueDecimalsHelp}</div>
+                ${this._renderSlider("max-expected-power",t.editor.maxExpectedPower,500,3e4,500,5e3," W")}
+                <div class="field-help">${t.editor.maxExpectedPowerHelp}</div>
+                ${this._renderSelect("power-unit",t.editor.powerUnit,[{value:"kW",label:"kW"},{value:"W",label:"W"}],"kW",t.editor.powerUnitHelp)}
+                ${this._renderSelect("irradiance-unit",t.editor.irradianceUnit,[{value:"W/m²",label:"W/m²"},{value:"kW/m²",label:"kW/m²"}],"W/m²",t.editor.irradianceUnitHelp)}
+                ${this._renderSelect("sun-chip-mode",t.editor.sunChipMode,[{value:"irradiance",label:t.editor.sunChipModeIrradiance},{value:"position",label:t.editor.sunChipModePosition}],"irradiance",t.editor.sunChipModeHelp)}
+                ${this._renderSelect("battery-chip-mode",t.editor.batteryChipMode,[{value:"power",label:t.editor.batteryChipModePower},{value:"soc",label:t.editor.batteryChipModeSoc}],"power",t.editor.batteryChipModeHelp)}
+                ${this._renderSelect("battery-sign",t.editor.batterySign,[{value:"default",label:t.editor.batterySignDefault},{value:"inverted",label:t.editor.batterySignInverted},{value:"hidden",label:t.editor.batterySignHidden}],"default",t.editor.batterySignHelp)}
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${"buildings"===this._openSection} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
-                ${this._renderSlider("display-radius",t.editor.displayRadius??"Display radius",0,250,10,200," m")}
-                <div class="hint">${t.editor.displayRadiusHelp??"Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home."}</div>
-                ${this._renderSlider("building-count",t.editor.buildingCount??"Building count",10,100,5,50)}
-                <div class="hint">${t.editor.buildingCountHelp??"Maximum number of nearby buildings to draw. Lower it to lighten rendering on a slow device."}</div>
-                ${this._renderToggle("building-real-size",t.editor.buildingRealSize??"Real building heights",t.editor.buildingRealSizeHint??"On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.",t.editor.buildingRealSizeOn??"On",t.editor.buildingRealSizeOff??"Off",!0)}
-                ${!1===e["building-real-size"]?this._renderSlider("building-height",t.editor.buildingHeight??"Building height",3,10,.5,6," m"):ne}
+                ${this._renderSlider("display-radius",t.editor.displayRadius,0,250,10,200," m")}
+                <div class="hint">${t.editor.displayRadiusHelp}</div>
+                ${this._renderSlider("building-count",t.editor.buildingCount,10,100,5,50)}
+                <div class="hint">${t.editor.buildingCountHelp}</div>
+                ${this._renderToggle("building-real-size",t.editor.buildingRealSize,t.editor.buildingRealSizeHint,t.editor.buildingRealSizeOn,t.editor.buildingRealSizeOff,!0)}
+                ${!1===e["building-real-size"]?this._renderSlider("building-height",t.editor.buildingHeight,3,10,.5,6," m"):ne}
                 ${this._renderSlider("building-cluster-radius",t.editor.buildingClusterRadius,0,100,1,0," m")}
-                <div class="hint">${t.editor.buildingClusterRadiusHelp??"Radius around the home within which attached outbuildings (verandas, garages, sheds) are treated as part of the home: they render at the home's full opacity and colour instead of as faded neighbours. 0 keeps only the main building."}</div>
+                <div class="hint">${t.editor.buildingClusterRadiusHelp}</div>
                 ${this._renderSlider("building-opacity",t.editor.buildingOpacity,0,1,.05,.5)}
                 <div class="hint">${t.editor.buildingsHint}</div>
                 ${this._renderColorPicker("building-color",t.editor.buildingColor,t.editor.buildingColorHelp,"grey")}
@@ -3053,8 +3053,8 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                     <div class="hint">${t.editor.resetSectionHint}</div>
                     <div class="hint reset-warning">${t.editor.resetCacheWarning}</div>
                     ${this._renderActionButton({icon:"mdi:database-refresh-outline",label:this._resetFeedback??t.editor.resetCacheButton,color:"var(--error-color, #ef4444)",onClick:this._onResetCacheClick.bind(this)})}
-                    <div class="hint reset-warning">${t.editor.resetOptionsWarning??"Warning: this resets ALL of this card's options to their defaults (chip visibility, colours and icons, group names/colours/icons, buildings, shadows, units and every other setting). Your Home Assistant data is untouched, but your customisation is cleared. Click again to confirm."}</div>
-                    ${this._renderActionButton({icon:"mdi:cog-refresh-outline",label:this._optionsResetFeedback??(this._optionsResetArmed?t.editor.resetOptionsConfirm??"Click again to confirm":t.editor.resetOptionsButton??"Reset options to defaults"),color:"var(--error-color, #ef4444)",onClick:this._onResetOptionsClick.bind(this),filled:this._optionsResetArmed})}
+                    <div class="hint reset-warning">${t.editor.resetOptionsWarning}</div>
+                    ${this._renderActionButton({icon:"mdi:cog-refresh-outline",label:this._optionsResetFeedback??(this._optionsResetArmed?t.editor.resetOptionsConfirm:t.editor.resetOptionsButton),color:"var(--error-color, #ef4444)",onClick:this._onResetOptionsClick.bind(this),filled:this._optionsResetArmed})}
                 </details>
 
                 <details class="advanced-section about-section" data-section="about" ?open=${"about"===this._openSection} @toggle=${this._onSectionToggleEvt}>
@@ -3082,7 +3082,7 @@ return new Date((c+g)/2)}var Mt=null;function renderTimelineNightZones(e){const 
                 </details>
 
             </div>
-        `}_onResetCacheClick(){try{window.dispatchEvent(new CustomEvent("helios-data-cache-reset"))}catch(Z){}const e=this._t();this._resetFeedback=e.editor.resetCacheDone,void 0!==this._resetFeedbackTimer&&window.clearTimeout(this._resetFeedbackTimer),this._resetFeedbackTimer=window.setTimeout(()=>{this._resetFeedback=null},di.RESET_FEEDBACK_MS)}_onResetOptionsClick(){if(!this._optionsResetArmed)return this._optionsResetArmed=!0,void 0!==this._optionsResetConfirmTimer&&window.clearTimeout(this._optionsResetConfirmTimer),void(this._optionsResetConfirmTimer=window.setTimeout(()=>{this._optionsResetArmed=!1},4e3));this._optionsResetArmed=!1,void 0!==this._optionsResetConfirmTimer&&window.clearTimeout(this._optionsResetConfirmTimer);const e=this._cfg,t={};for(const n of di.LOVELACE_KEYS)void 0!==e[n]&&(t[n]=e[n]);this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:t}})),this._cfg=t;const i=this._t();this._optionsResetFeedback=i.editor.resetOptionsDone??"Options reset ✓",void 0!==this._optionsResetFeedbackTimer&&window.clearTimeout(this._optionsResetFeedbackTimer),this._optionsResetFeedbackTimer=window.setTimeout(()=>{this._optionsResetFeedback=null},di.RESET_FEEDBACK_MS)}},di=li,li.SLIDER_COMMIT_DELAY_MS=250,li.PICKER_LOAD_TIMEOUT_MS=8e3,li.RESET_FEEDBACK_MS=2e3,li.LEGACY_KEYS=["custom-power-entity","custom-energy-entity","custom-entity","custom-entity-icon","custom-entity-color"],li.LOVELACE_KEYS=["type","view_layout","grid_options","layout_options"],li.styles=ci,li);__decorate([n$1({attribute:!1}),__decorateMetadata("design:type",Object)],pi.prototype,"hass",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_cfg",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_pickerReady",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_colorNonce",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_openSection",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_energyDefaults",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_energyDefaultsLoaded",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_resetFeedback",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_optionsResetArmed",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_optionsResetFeedback",void 0),pi=di=__decorate([t$2("helios-card-editor")],pi);var gi=pickTranslations("undefined"!=typeof navigator?navigator.language:"en");window.customCards=window.customCards||[];{const e={type:"helios-card",name:gi.cardName,description:gi.cardDescription,preview:!0},t=window.customCards.findIndex(e=>"helios-card"===e.type);t>=0?window.customCards[t]=e:window.customCards.push(e)}var mi=/* @__PURE__ */new Set;{const e="__heliosBannerPrinted",t=window;t[e]||(t[e]=!0,console.info("%c☀ HELIOS%c v2026.9.0-b2","background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;","background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;"))}{const e=window;e.setHeliosLocation||(e.setHeliosLocation=(t,i)=>{if(!("number"!=typeof t||"number"!=typeof i||!isFinite(t)||!isFinite(i)||t<-90||t>90||i<-180||i>180)){e.__heliosLocationOverride={lat:t,lon:i};for(const e of mi)e.invalidateLocation()}}),e.clearHeliosLocation||(e.clearHeliosLocation=()=>{if(e.__heliosLocationOverride){e.__heliosLocationOverride=void 0;for(const e of mi)e.invalidateLocation()}})}function nudgeToHomePill(e,t,i,n,r,l){const d=e-i,c=t-n,g=Math.max(0,r-l);if(Math.abs(d)<=g)return{x:e,y:n+(c>=0?1:-1)*l};const m=i+(d>=0?1:-1)*g,f=e-m,y=t-n,b=Math.sqrt(f*f+y*y)||1;return{x:m+l*f/b,y:n+l*y/b}}window.addEventListener("helios-data-cache-reset",()=>{for(const e of mi)e.resetDataCache()});var vi,fi=1.5,yi=class{constructor(e){this.host=e,this._gridLeaderColor="var(--energy-grid-consumption-color, #488fc2)",this._batteryLeaderColor="var(--energy-battery-out-color, #4db6ac)"}_nudgeToHomePill(e,t,i,n){return nudgeToHomePill(e,t,i,n,38,14)}_buildLPathToHome(e,t,i){if(!e)return"";const n=e.home.x,r=e.home.y,l=n>t?1:-1,d=r>i?1:-1,c=t+22*l,g=i,m=n-13*l,f=r-14*d,y=Math.min(12,Math.abs(m-c)/2,Math.abs(f-g)/2),b=m-l*y,w=g+d*y;return`M ${c.toFixed(1)},${g.toFixed(1)} L ${b.toFixed(1)},${g.toFixed(1)} Q ${m.toFixed(1)},${g.toFixed(1)} ${m.toFixed(1)},${w.toFixed(1)} L ${m.toFixed(1)},${f.toFixed(1)}`}_buildLPath(e,t,i,n,r){const l=i>e?1:-1,d=n>t?1:-1,c=Math.min(12,Math.abs(i-e)/2,Math.abs(n-t)/2);if(r){const r=n-d*c,g=e+l*c;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${e.toFixed(1)},${r.toFixed(1)} Q ${e.toFixed(1)},${n.toFixed(1)} ${g.toFixed(1)},${n.toFixed(1)} L ${i.toFixed(1)},${n.toFixed(1)}`}const g=i-l*c,m=t+d*c;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${g.toFixed(1)},${t.toFixed(1)} Q ${i.toFixed(1)},${t.toFixed(1)} ${i.toFixed(1)},${m.toFixed(1)} L ${i.toFixed(1)},${n.toFixed(1)}`}_buildVerticalLeadFromHome(e,t,i){const n=e.home.y+14;return`M ${t.toFixed(1)},${n.toFixed(1)} L ${t.toFixed(1)},${i.toFixed(1)}`}_renderSunCrossing(e,t,i,n){if(!e)return ne;const r=e.x-t.x,l=e.y-t.y,d=Math.hypot(r,l)||1,c=e.x+r/d*22,g=e.y+l/d*22,m=function formatHaTime(e,t){return formatWithHaLocale(e,t,{hour:"numeric",minute:"2-digit"})}(this.host.hass,e.time);return te`
+        `}_onResetCacheClick(){try{window.dispatchEvent(new CustomEvent("helios-data-cache-reset"))}catch(Z){}const e=this._t();this._resetFeedback=e.editor.resetCacheDone,void 0!==this._resetFeedbackTimer&&window.clearTimeout(this._resetFeedbackTimer),this._resetFeedbackTimer=window.setTimeout(()=>{this._resetFeedback=null},di.RESET_FEEDBACK_MS)}_onResetOptionsClick(){if(!this._optionsResetArmed)return this._optionsResetArmed=!0,void 0!==this._optionsResetConfirmTimer&&window.clearTimeout(this._optionsResetConfirmTimer),void(this._optionsResetConfirmTimer=window.setTimeout(()=>{this._optionsResetArmed=!1},4e3));this._optionsResetArmed=!1,void 0!==this._optionsResetConfirmTimer&&window.clearTimeout(this._optionsResetConfirmTimer);const e=this._cfg,t={};for(const n of di.LOVELACE_KEYS)void 0!==e[n]&&(t[n]=e[n]);this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:t}})),this._cfg=t;const i=this._t();this._optionsResetFeedback=i.editor.resetOptionsDone,void 0!==this._optionsResetFeedbackTimer&&window.clearTimeout(this._optionsResetFeedbackTimer),this._optionsResetFeedbackTimer=window.setTimeout(()=>{this._optionsResetFeedback=null},di.RESET_FEEDBACK_MS)}},di=li,li.SLIDER_COMMIT_DELAY_MS=250,li.PICKER_LOAD_TIMEOUT_MS=8e3,li.RESET_FEEDBACK_MS=2e3,li.LEGACY_KEYS=["custom-power-entity","custom-energy-entity","custom-entity","custom-entity-icon","custom-entity-color"],li.LOVELACE_KEYS=["type","view_layout","grid_options","layout_options"],li.styles=ci,li);__decorate([n$1({attribute:!1}),__decorateMetadata("design:type",Object)],pi.prototype,"hass",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_cfg",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_pickerReady",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_colorNonce",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_openSection",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_energyDefaults",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_energyDefaultsLoaded",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_resetFeedback",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_optionsResetArmed",void 0),__decorate([r$1(),__decorateMetadata("design:type",Object)],pi.prototype,"_optionsResetFeedback",void 0),pi=di=__decorate([t$2("helios-card-editor")],pi);var gi=pickTranslations("undefined"!=typeof navigator?navigator.language:"en");window.customCards=window.customCards||[];{const e={type:"helios-card",name:gi.cardName,description:gi.cardDescription,preview:!0},t=window.customCards.findIndex(e=>"helios-card"===e.type);t>=0?window.customCards[t]=e:window.customCards.push(e)}var mi=/* @__PURE__ */new Set;{const e="__heliosBannerPrinted",t=window;t[e]||(t[e]=!0,console.info("%c☀ HELIOS%c v2026.9.0-b2","background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;","background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;"))}{const e=window;e.setHeliosLocation||(e.setHeliosLocation=(t,i)=>{if(!("number"!=typeof t||"number"!=typeof i||!isFinite(t)||!isFinite(i)||t<-90||t>90||i<-180||i>180)){e.__heliosLocationOverride={lat:t,lon:i};for(const e of mi)e.invalidateLocation()}}),e.clearHeliosLocation||(e.clearHeliosLocation=()=>{if(e.__heliosLocationOverride){e.__heliosLocationOverride=void 0;for(const e of mi)e.invalidateLocation()}})}function nudgeToHomePill(e,t,i,n,r,l){const d=e-i,c=t-n,g=Math.max(0,r-l);if(Math.abs(d)<=g)return{x:e,y:n+(c>=0?1:-1)*l};const m=i+(d>=0?1:-1)*g,f=e-m,y=t-n,b=Math.sqrt(f*f+y*y)||1;return{x:m+l*f/b,y:n+l*y/b}}window.addEventListener("helios-data-cache-reset",()=>{for(const e of mi)e.resetDataCache()});var vi,fi=1.5,yi=class{constructor(e){this.host=e,this._gridLeaderColor="var(--energy-grid-consumption-color, #488fc2)",this._batteryLeaderColor="var(--energy-battery-out-color, #4db6ac)"}_nudgeToHomePill(e,t,i,n){return nudgeToHomePill(e,t,i,n,38,14)}_buildLPathToHome(e,t,i){if(!e)return"";const n=e.home.x,r=e.home.y,l=n>t?1:-1,d=r>i?1:-1,c=t+22*l,g=i,m=n-13*l,f=r-14*d,y=Math.min(12,Math.abs(m-c)/2,Math.abs(f-g)/2),b=m-l*y,w=g+d*y;return`M ${c.toFixed(1)},${g.toFixed(1)} L ${b.toFixed(1)},${g.toFixed(1)} Q ${m.toFixed(1)},${g.toFixed(1)} ${m.toFixed(1)},${w.toFixed(1)} L ${m.toFixed(1)},${f.toFixed(1)}`}_buildLPath(e,t,i,n,r){const l=i>e?1:-1,d=n>t?1:-1,c=Math.min(12,Math.abs(i-e)/2,Math.abs(n-t)/2);if(r){const r=n-d*c,g=e+l*c;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${e.toFixed(1)},${r.toFixed(1)} Q ${e.toFixed(1)},${n.toFixed(1)} ${g.toFixed(1)},${n.toFixed(1)} L ${i.toFixed(1)},${n.toFixed(1)}`}const g=i-l*c,m=t+d*c;return`M ${e.toFixed(1)},${t.toFixed(1)} L ${g.toFixed(1)},${t.toFixed(1)} Q ${i.toFixed(1)},${t.toFixed(1)} ${i.toFixed(1)},${m.toFixed(1)} L ${i.toFixed(1)},${n.toFixed(1)}`}_buildVerticalLeadFromHome(e,t,i){const n=e.home.y+14;return`M ${t.toFixed(1)},${n.toFixed(1)} L ${t.toFixed(1)},${i.toFixed(1)}`}_renderSunCrossing(e,t,i,n){if(!e)return ne;const r=e.x-t.x,l=e.y-t.y,d=Math.hypot(r,l)||1,c=e.x+r/d*22,g=e.y+l/d*22,m=function formatHaTime(e,t){return formatWithHaLocale(e,t,{hour:"numeric",minute:"2-digit"})}(this.host.hass,e.time);return te`
             <div
                 class="sun-cross-marker"
                 style="left:${c.toFixed(1)}px; top:${g.toFixed(1)}px; --sun-cross-color:${n}"

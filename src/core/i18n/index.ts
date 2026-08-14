@@ -84,132 +84,132 @@ export interface Translations
         displayUpdateFrequency:       string;
         displayUpdateFrequencyHelp:   string;
         //Decimal-precision slider (0-3) for value readouts. Optional; falls back to inline English.
-        valueDecimals?:               string;
-        valueDecimalsHelp?:           string;
+        valueDecimals:               string;
+        valueDecimalsHelp:           string;
         //Flow-animation reference power (W). Optional; falls back to inline English.
-        maxExpectedPower?:            string;
-        maxExpectedPowerHelp?:        string;
+        maxExpectedPower:            string;
+        maxExpectedPowerHelp:        string;
         //Sun-chip readout mode (irradiance / sun position / both) and its option labels. Optional; fall back to English.
-        sunChipMode?:                 string;
-        sunChipModeHelp?:             string;
-        sunChipModeIrradiance?:       string;
-        sunChipModePosition?:         string;
+        sunChipMode:                 string;
+        sunChipModeHelp:             string;
+        sunChipModeIrradiance:       string;
+        sunChipModePosition:         string;
         //Battery-chip readout mode (power / state of charge) and its option labels. Optional; fall back to English.
-        batteryChipMode?:             string;
-        batteryChipModeHelp?:         string;
-        batteryChipModePower?:        string;
-        batteryChipModeSoc?:          string;
+        batteryChipMode:             string;
+        batteryChipModeHelp:         string;
+        batteryChipModePower:        string;
+        batteryChipModeSoc:          string;
         //Power unit selector (W / kW) and solar-constant unit selector (W/m2 / kW/m2). Optional; fall back to English.
-        powerUnit?:                   string;
-        powerUnitHelp?:               string;
-        irradianceUnit?:              string;
-        irradianceUnitHelp?:          string;
+        powerUnit:                   string;
+        powerUnitHelp:               string;
+        irradianceUnit:              string;
+        irradianceUnitHelp:          string;
         //Battery-sign selector + home-consumption override entity. Optional; fall back to English.
-        batterySign?:                 string;
-        batterySignHelp?:             string;
-        batterySignDefault?:          string;
-        batterySignInverted?:         string;
-        batterySignHidden?:           string;
+        batterySign:                 string;
+        batterySignHelp:             string;
+        batterySignDefault:          string;
+        batterySignInverted:         string;
+        batterySignHidden:           string;
         //"Your real sky" weather-effects toggle. Optional; fall back to English.
-        weatherEnabled?:              string;
-        weatherEnabledHint?:          string;
+        weatherEnabled:              string;
+        weatherEnabledHint:          string;
         //"No UI" mode toggle (auto-hide the timeline + controls). Optional; fall back to English.
-        noUiMode?:                    string;
-        noUiModeHint?:                string;
+        noUiMode:                    string;
+        noUiModeHint:                string;
         //"No UI" idle-delay slider (0-10 s). Only editable when No UI mode is on. Optional; fall back to English.
-        noUiDelay?:                   string;
-        noUiDelayHint?:               string;
+        noUiDelay:                   string;
+        noUiDelayHint:               string;
         //Scene element visibility toggles. Optional; fall back to English.
-        showTimeline?:                string;
-        showTimelineHint?:            string;
-        showDetailPanel?:             string;
-        showDetailPanelHint?:         string;
-        showSunTimes?:                string;
-        showSunTimesHint?:            string;
+        showTimeline:                string;
+        showTimelineHint:            string;
+        showDetailPanel:             string;
+        showDetailPanelHint:         string;
+        showSunTimes:                string;
+        showSunTimesHint:            string;
         //Terrain-horizon ridge: show/hide the drawn line + its colour. The sun gate always uses the terrain.
-        showHorizonLine?:             string;
-        showHorizonLineHint?:         string;
-        horizonLineColor?:            string;
-        horizonLineColorHint?:        string;
+        showHorizonLine:             string;
+        showHorizonLineHint:         string;
+        horizonLineColor:            string;
+        horizonLineColorHint:        string;
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
-        lockRotation?:                string;
-        lockRotationHint?:            string;
+        lockRotation:                string;
+        lockRotationHint:            string;
         //"Chips & colours" section: per-chip show/hide toggles + colour pickers. Optional; fall back to English.
-        chipsSection?:                string;
-        chipsIntro?:                  string;
-        chipIrradiance?:              string;
-        chipProduction?:              string;
-        chipGrid?:                    string;
-        chipBattery?:                 string;
-        chipHome?:                    string;
-        chipTemperature?:             string;
-        chipHumidity?:                string;
-        chipCost?:                    string;
+        chipsSection:                string;
+        chipsIntro:                  string;
+        chipIrradiance:              string;
+        chipProduction:              string;
+        chipGrid:                    string;
+        chipBattery:                 string;
+        chipHome:                    string;
+        chipTemperature:             string;
+        chipHumidity:                string;
+        chipCost:                    string;
         //Sections split out of "Entity display": group definitions and optional sensors.
-        groupsConfigTitle?:           string;
-        optionalSensors?:             string;
+        groupsConfigTitle:           string;
+        optionalSensors:             string;
         //Global display radius slider (50-500 m).
-        displayRadius?:               string;
-        displayRadiusHelp?:           string;
-        buildingCount?:               string;
-        buildingCountHelp?:           string;
-        buildingRealSize?:            string;
-        buildingRealSizeOn?:          string;
-        buildingRealSizeOff?:         string;
-        buildingRealSizeHint?:        string;
-        buildingHeight?:              string;
+        displayRadius:               string;
+        displayRadiusHelp:           string;
+        buildingCount:               string;
+        buildingCountHelp:           string;
+        buildingRealSize:            string;
+        buildingRealSizeOn:          string;
+        buildingRealSizeOff:         string;
+        buildingRealSizeHint:        string;
+        buildingHeight:              string;
         //Devices & monitoring groups: per-device show/hide and group assignment. Optional; fall back to English.
-        hiddenDevicesEmpty?:      string;
+        hiddenDevicesEmpty:      string;
         //aria-label (screen-reader only, no visible tooltip) for the per-device show/hide toggle.
-        deviceVisibilityLabel?:      string;
+        deviceVisibilityLabel:      string;
         //The group pill: its aria-label, the "Group" word (+ number) and the "No group" state.
-        deviceGroupLabel?:              string;
-        group?:                         string;
-        noGroup?:                       string;
-        groupAssignHint?:               string;
-        groupDropHere?:                 string;
-        backToLive?:                    string;
+        deviceGroupLabel:              string;
+        group:                         string;
+        noGroup:                       string;
+        groupAssignHint:               string;
+        groupDropHere:                 string;
+        backToLive:                    string;
         //Note above the device list clarifying these are the entities set up in the HA Energy dashboard.
-        devicesEnergyNote?:             string;
+        devicesEnergyNote:             string;
         //Solar-irradiance override entity (W/m² sensor). When wired, preferred over the model for live + past
         //irradiance; forecast hours always fall through to the model.
         solarIrradianceEntity:     string;
         solarIrradianceEntityHelp: string;
         //Local weather-override sensors. Optional; fall back to English.
-        temperatureEntity?:        string;
-        temperatureEntityHelp?:    string;
-        humidityEntity?:           string;
-        humidityEntityHelp?:       string;
-        cloudCoverEntity?:         string;
-        cloudCoverEntityHelp?:     string;
-        precipitationEntity?:      string;
-        precipitationEntityHelp?:  string;
-        snowfallEntity?:           string;
-        snowfallEntityHelp?:       string;
-        weatherEntity?:            string;
-        weatherEntityHelp?:        string;
+        temperatureEntity:        string;
+        temperatureEntityHelp:    string;
+        humidityEntity:           string;
+        humidityEntityHelp:       string;
+        cloudCoverEntity:         string;
+        cloudCoverEntityHelp:     string;
+        precipitationEntity:      string;
+        precipitationEntityHelp:  string;
+        snowfallEntity:           string;
+        snowfallEntityHelp:       string;
+        weatherEntity:            string;
+        weatherEntityHelp:        string;
         //Measured-only status lines (live chip readiness per energy family, configured or not). Optional; fall back to English.
-        liveDataTitle?:            string;
-        liveDataIntro?:            string;
-        liveSolarOk?:              string;
-        liveSolarMissing?:         string;
-        liveSolarAbsent?:          string;
-        liveGridOk?:               string;
-        liveGridMissing?:          string;
-        liveGridMiswired?:         string;
-        liveGridAbsent?:           string;
-        liveBatteryOk?:            string;
-        liveBatteryMissing?:       string;
-        liveBatteryAbsent?:        string;
-        liveHomeOk?:               string;
-        liveHomeNote?:             string;
+        liveDataTitle:            string;
+        liveDataIntro:            string;
+        liveSolarOk:              string;
+        liveSolarMissing:         string;
+        liveSolarAbsent:          string;
+        liveGridOk:               string;
+        liveGridMissing:          string;
+        liveGridMiswired:         string;
+        liveGridAbsent:           string;
+        liveBatteryOk:            string;
+        liveBatteryMissing:       string;
+        liveBatteryAbsent:        string;
+        liveHomeOk:               string;
+        liveHomeNote:             string;
         //Deep link on a non-OK status line to Home Assistant's Energy configuration. Optional; falls back to English.
-        openEnergyConfig?:         string;
+        openEnergyConfig:         string;
         //Surrounding buildings: cluster radius, neighbour opacity, base tint.
         buildingsSection:         string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
-        buildingClusterRadiusHelp?: string;
+        buildingClusterRadiusHelp: string;
         buildingOpacity:          string;
         buildingColor:            string;
         buildingColorHelp:        string;
@@ -231,10 +231,10 @@ export interface Translations
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
-        resetOptionsButton?:      string;
-        resetOptionsConfirm?:     string;
-        resetOptionsWarning?:     string;
-        resetOptionsDone?:        string;
+        resetOptionsButton:      string;
+        resetOptionsConfirm:     string;
+        resetOptionsWarning:     string;
+        resetOptionsDone:        string;
         //About section: version string, source repo, appreciation line + Buy Me A Coffee link.
         aboutSection:             string;
         aboutVersionLabel:        string;
