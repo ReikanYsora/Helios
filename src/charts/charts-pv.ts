@@ -129,6 +129,12 @@ export function renderPvChart(host: ChartHost): TemplateResult
             }
             raw.push(arr);
         }
+        //Column totals once (O(S*N)); re-summing them inside the per-source loop made the stack O(S^2*N).
+        const colTotal = new Array<number>(N).fill(0);
+        for (let j = 0; j < N; j++)
+        {
+            for (let k = 0; k < S; k++) { colTotal[j] += raw[k][j]; }
+        }
         //Stack each source as its share of the aggregate, so the stack top tracks the aggregate curve exactly.
         const lower = new Array<number>(N).fill(0);
         for (let s = 0; s < S; s++)
@@ -137,8 +143,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
             const lo: string[] = [];
             for (let j = 0; j < N; j++)
             {
-                let total = 0;
-                for (let k = 0; k < S; k++) { total += raw[k][j]; }
+                const total = colTotal[j];
                 const share = total > 0 ? raw[s][j] / total : 0;
                 const y0 = lower[j];
                 const y1 = y0 + share * samples[j].v;
