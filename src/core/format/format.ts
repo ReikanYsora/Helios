@@ -125,16 +125,64 @@ export function formatPowerKw(hass: HassLike, watts: number, decimals: number, s
     return formatPower(hass, watts, decimals, unit, signed);
 }
 
+//Irradiance (solar constant) readout unit for the whole card, resolved from config (see irradianceUnit()).
+export type IrradianceUnit = 'W/m²' | 'kW/m²' | 'W/ft²';
+
+//One square foot in square metres, so a per-m2 irradiance spreads onto the imperial area unit.
+const M2_PER_FT2 = 0.09290304;
+
 //Irradiance (solar constant) readout in the configured unit. Input is W/m². 'W/m²' prints whole units; 'kW/m²'
-//divides by 1000 at the caller's decimal count (a typical peak reads ~1 kW/m²).
-export function formatIrradiance(hass: HassLike, wPerM2: number, decimals: number, unit: 'W/m²' | 'kW/m²'): string
+//divides by 1000 at the caller's decimal count (a typical peak reads ~1 kW/m²); 'W/ft²' rescales onto square feet
+//and prints whole units like 'W/m²' does (a typical peak reads ~93 W/ft²).
+export function formatIrradiance(hass: HassLike, wPerM2: number, decimals: number, unit: IrradianceUnit): string
 {
     const v = Math.max(0, wPerM2);
     if (unit === 'kW/m²')
     {
         return `${formatLocalisedNumber(hass, v / 1000, decimals)} kW/m²`;
     }
+    if (unit === 'W/ft²')
+    {
+        return `${formatLocalisedNumber(hass, Math.round(v * M2_PER_FT2), 0)} W/ft²`;
+    }
     return `${formatLocalisedNumber(hass, Math.round(v), 0)} W/m²`;
+}
+
+
+//Temperature readout unit, taken from Home Assistant's own unit system so the card follows the same setting as every
+//core entity instead of assuming Celsius. HA reports '°F' for the US customary system; anything else stays Celsius.
+export type TemperatureUnit = '°C' | '°F';
+
+export function temperatureUnit(hass: HassLike | undefined): TemperatureUnit
+{
+    return String(hass?.config?.unit_system?.temperature ?? '').trim() === '°F' ? '°F' : '°C';
+}
+
+//Celsius -> the card's display unit. The weather pipeline (model, overrides, engine, store) is canonical Celsius
+//end to end, so the conversion happens exactly once: here, at the readout.
+function celsiusTo(celsius: number, unit: TemperatureUnit): number
+{
+    return unit === '°F' ? celsius * 9 / 5 + 32 : celsius;
+}
+
+//The inverse, at the INGEST boundary: a local sensor reports in whatever unit its entity declares, while the whole
+//weather pipeline is canonical Celsius. Maps an HA `unit_of_measurement` to the converter that normalises its
+//readings, or null when the unit already is Celsius (or is unknown - HA's own default assumption). Returning null
+//rather than an identity function lets callers skip the work and key their caches on "converted or not".
+export function temperatureToCelsius(unitOfMeasurement: string | undefined): ((v: number) => number) | null
+{
+    const u = String(unitOfMeasurement ?? '').trim().toUpperCase();
+    if (u === '°F' || u === 'F') { return (v) => (v - 32) * 5 / 9; }
+    if (u === 'K')               { return (v) => v - 273.15; }
+    return null;
+}
+
+//Uniform outdoor-temperature readout in HA's configured unit, locale-aware like every other value on the card.
+//Input is Celsius.
+export function formatTemperature(hass: HassLike, celsius: number, decimals = 1): string
+{
+    const unit = temperatureUnit(hass);
+    return `${formatLocalisedNumber(hass, celsiusTo(celsius, unit), decimals)} ${unit}`;
 }
 
 

@@ -16,13 +16,21 @@ export interface HassEntity
     last_updated?: string;
 }
 
+//The subset of HA's unit system the card reads. HA reports the display unit for each measurement family; only
+//temperature is consumed today (the readouts the card owns are otherwise its own configured units).
+export interface HassUnitSystem
+{
+    temperature?: string;
+}
+
 export interface HassConfig
 {
-    time_zone?: string;
-    latitude?:  number;
-    longitude?: number;
-    elevation?: number;
-    currency?:  string;
+    time_zone?:   string;
+    latitude?:    number;
+    longitude?:   number;
+    elevation?:   number;
+    currency?:    string;
+    unit_system?: HassUnitSystem;
 }
 
 export interface HassLocale

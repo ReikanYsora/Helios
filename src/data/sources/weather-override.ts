@@ -17,10 +17,11 @@ import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 import { quantizedAnchorMs } from '../source-fetch';
 import { parseStatBoundaryLoose } from './energy-stats';
+import { temperatureToCelsius } from '../../core/format/format';
 import { HOUR_MS, DAY_MS } from '../../core/config/constants';
 
 
-// Parallel times[]/values[] in the variable's own unit (%, mm, cm, °C).
+// Parallel times[]/values[] in the variable's own CANONICAL unit (%, mm, cm, °C), never the source sensor's.
 interface NumSeries { times: Date[]; values: number[]; }
 
 // One overridable variable: which engine field it feeds, its config entity key, and the valid range (null = unbounded).
@@ -91,14 +92,33 @@ function stateFor(host: WeatherOverrideHost, variable: WeatherOverrideVar): VarS
     return st;
 }
 
-// Clamp a raw sensor reading to the variable's valid range; null when it is not a finite number.
-function clampReading(raw: number, def: OverrideDef): number | null
+// Clamp a raw sensor reading to the variable's valid range; null when it is not a finite number. The reading is
+// normalised to the canonical unit FIRST, so the range bounds stay expressed in canonical units.
+function clampReading(raw: number, def: OverrideDef, conv: ReadingConverter): number | null
 {
     if (!isFinite(raw)) { return null; }
-    let v = raw;
+    let v = conv.convert(raw);
+    if (!isFinite(v)) { return null; }
     if (def.min !== null) { v = Math.max(def.min, v); }
     if (def.max !== null) { v = Math.min(def.max, v); }
     return v;
+}
+
+
+// A sensor reports in whatever unit its entity declares, while the model, the engine and the store are all canonical
+// (%, mm, cm, °C). Normalise at ingest so a °F probe feeds exactly the same pipeline as an Open-Meteo °C hour;
+// without this a 73 °F reading lands in the store as 73 °C. `tag` keys the caches so a unit change re-fetches
+// instead of serving values converted under the previous unit.
+interface ReadingConverter { convert: (v: number) => number; tag: string; }
+
+const IDENTITY_CONVERTER: ReadingConverter = { convert: (v) => v, tag: '' };
+
+function readingConverter(hass: HassLike, entityId: string, def: OverrideDef): ReadingConverter
+{
+    if (def.variable !== 'temperature') { return IDENTITY_CONVERTER; }
+    const unit = String(hass?.states?.[entityId]?.attributes?.unit_of_measurement ?? '').trim();
+    const convert = temperatureToCelsius(unit);
+    return convert ? { convert, tag: `@${unit}` } : IDENTITY_CONVERTER;
 }
 
 
@@ -239,8 +259,10 @@ function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
         return;
     }
 
+    const conv = readingConverter(host.hass, entity, def);
+
     // Keep the engine's "now" sample fresh every cycle (the engine de-dupes on sort, so it is cheap).
-    pushOne(host, def, entity);
+    pushOne(host, def, entity, conv);
 
     if (!host._timeRange || st.fetching) { return; }
 
@@ -252,20 +274,20 @@ function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
     const cap        = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const fetchStart = host._timeRange.start < cap ? cap : host._timeRange.start;
     const keyEnd     = Math.floor(host._timeRange.end.getTime() / OVERRIDE_TTL_MS) * OVERRIDE_TTL_MS;
-    const fetchKey   = `${def.variable}:${entity}@${fetchStart.getTime()}|${keyEnd}`;
+    const fetchKey   = `${def.variable}:${entity}${conv.tag}@${fetchStart.getTime()}|${keyEnd}`;
     if (fetchKey === st.fetchKey) { return; }
     st.fetchKey = fetchKey;
 
-    const durableKey = `wxo:${def.variable}:${entity}`;
+    const durableKey = `wxo:${def.variable}:${entity}${conv.tag}`;
     st.fetching = true;
-    void _cache.get(fetchKey, () => fetchNumericHistory(host.hass, entity, fetchStart, host._timeRange!.end, durableKey, def))
-        .then(h => { st.history = h ?? { times: [], values: [] }; pushOne(host, def, entity); })
+    void _cache.get(fetchKey, () => fetchNumericHistory(host.hass, entity, fetchStart, host._timeRange!.end, durableKey, def, conv))
+        .then(h => { st.history = h ?? { times: [], values: [] }; pushOne(host, def, entity, conv); })
         .finally(() => { st.fetching = false; });
 }
 
 // Merge cached recorder history with the live state and push to the engine. Dirty-flag gated so an unchanged
 // (history, state, entity) triple skips the rebuild.
-function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string): void
+function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string, conv: ReadingConverter): void
 {
     if (!host._engine) { return; }
     const st       = stateFor(host, def.variable);
@@ -280,7 +302,7 @@ function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string): v
     }
     if (stateRef)
     {
-        const v = clampReading(parseFloat(stateRef.state), def);
+        const v = clampReading(parseFloat(stateRef.state), def, conv);
         if (v !== null)
         {
             const ts = stateRef.last_updated ? new Date(stateRef.last_updated) : new Date();
@@ -295,8 +317,9 @@ function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string): v
 
 
 // Pure numeric-history fetcher: statistics `mean` first (scales to high-frequency measurement sensors that land in
-// LTS), raw history as the fallback. Returns the fresh series, the last-good durable copy on a failed fetch, or an
-// empty series for an empty window. No host mutation and no engine push (the caller pushes in the `.then`).
+// LTS), raw history as the fallback. Values come back in the variable's canonical unit (`conv` normalises whatever
+// the entity reports). Returns the fresh series, the last-good durable copy on a failed fetch, or an empty series
+// for an empty window. No host mutation and no engine push (the caller pushes in the `.then`).
 export async function fetchNumericHistory(
     hass:       HassLike,
     entityId:   string,
@@ -304,6 +327,7 @@ export async function fetchNumericHistory(
     end:        Date,
     durableKey: string,
     def:        OverrideDef,
+    conv:       ReadingConverter = IDENTITY_CONVERTER,
 ): Promise<NumSeries | null>
 {
     if (!hass?.callWS) { return null; }
@@ -325,7 +349,7 @@ export async function fetchNumericHistory(
         const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
         if (statsArr.length > 0)
         {
-            series = parseStats(statsArr, def);
+            series = parseStats(statsArr, def, conv);
         }
         else
         {
@@ -338,7 +362,7 @@ export async function fetchNumericHistory(
                 no_attributes:            true,
                 significant_changes_only: true,
             });
-            series = parseRaw((rawResult && rawResult[entityId]) ?? [], def);
+            series = parseRaw((rawResult && rawResult[entityId]) ?? [], def, conv);
         }
 
         saveDurableSeries(durableKey, series);
@@ -352,7 +376,7 @@ export async function fetchNumericHistory(
 }
 
 // Statistics parser: the `mean` column at the bucket midpoint. Buckets with a null/out-of-range mean are skipped.
-function parseStats(arr: any[], def: OverrideDef): NumSeries
+function parseStats(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSeries
 {
     const times: Date[] = [];
     const values: number[] = [];
@@ -363,7 +387,7 @@ function parseStats(arr: any[], def: OverrideDef): NumSeries
         if (startMs === null) { continue; }
         const raw = item?.mean;
         if (raw === null || raw === undefined) { continue; }
-        const v = clampReading(typeof raw === 'number' ? raw : parseFloat(String(raw)), def);
+        const v = clampReading(typeof raw === 'number' ? raw : parseFloat(String(raw)), def, conv);
         if (v === null) { continue; }
         times.push(new Date(endMs !== null ? (startMs + endMs) / 2 : startMs));
         values.push(v);
@@ -373,7 +397,7 @@ function parseStats(arr: any[], def: OverrideDef): NumSeries
 
 // Raw-history parser (fallback), tolerant of the compact `s`/`lu` and verbose `state`/`last_updated` shapes; drops
 // unavailable/unknown/empty and falls back to the previous timestamp when `lu` is omitted on repeats.
-function parseRaw(arr: any[], def: OverrideDef): NumSeries
+function parseRaw(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSeries
 {
     const times: Date[] = [];
     const values: number[] = [];
@@ -383,7 +407,7 @@ function parseRaw(arr: any[], def: OverrideDef): NumSeries
     {
         const sRaw = item?.s ?? item?.state;
         if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') { continue; }
-        const v = clampReading(parseFloat(String(sRaw)), def);
+        const v = clampReading(parseFloat(String(sRaw)), def, conv);
         if (v === null) { continue; }
 
         let ts: Date | null = null;
