@@ -7,7 +7,8 @@
 **Make your energy visible, in 2.5D.**
 
 A Home Assistant card that turns your Energy dashboard into a living scene:
-what your home produces, stores and consumes, as the sun crosses your sky.
+what your home produces, stores and consumes, as the sun and the real weather
+cross your sky.
 
 <img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/helios-preview.gif" alt="The Helios card: the sun crossing its arc over a home, the day's production curve rising around the house, and the live production and consumption chips following along." width="880">
 
@@ -20,6 +21,12 @@ what your home produces, stores and consumes, as the sun crosses your sky.
 [![Downloads](https://img.shields.io/github/downloads/ReikanYsora/Helios/total?style=for-the-badge&color=e0a106&label=downloads)](https://github.com/ReikanYsora/Helios/releases)
 [![Community: Discussions](https://img.shields.io/badge/community-discussions-e0a106?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ReikanYsora/Helios/discussions)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/reikanysora)
+
+<br>
+
+<a href="https://www.youtube.com/watch?v=KrGNsCsGLGg"><img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/trailer-thumb.jpg" alt="Watch the Helios 2026.9.0 trailer, 'Your real sky', on YouTube." width="820"></a>
+
+**[▶ Watch the 2026.9.0 trailer](https://www.youtube.com/watch?v=KrGNsCsGLGg)**
 
 </div>
 
@@ -59,6 +66,9 @@ home and your consumption; the production layers simply do not appear.
 * **The sun's real arc** over your own address, with the live sun disc, the
   incidence ray and the irradiance reading (or the sun's azimuth and elevation,
   if you prefer), sunrise and sunset placed where the arc meets your horizon.
+* **Your real horizon**, worked out from the terrain around your home, so the sun
+  dims the moment it drops behind a hill and not only at the flat horizon, with
+  the skyline drawn as a discreet ridge around the scene.
 * **Live flows**, production, grid and battery, each with a bead that travels to
   the home at the speed of the power it carries.
 * **A timeline you can scrub**, two days back and two days forward. The whole
@@ -144,11 +154,13 @@ against.
 
 <br>
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.png" alt="Helios: the day's production curve arcing over the home along the sun's path, with the live chips and the timeline.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.jpg" alt="Helios at golden hour: the sun's arc and irradiance, the live production, home, grid and device chips, and the cost, temperature and humidity chips along the bottom.">
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png" alt="Helios: the live flow with the production, battery, grid, home and device chips around the house, and the sun's irradiance.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.jpg" alt="Helios: rain falling over an overcast scene, the sun dimmed behind the cloud, with the live chips and the timeline below.">
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.png" alt="Helios: a custom-themed scene with the chip cluster and the timeline below.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.jpg" alt="Helios: the week's consumption curve standing on the sun's own path around the house, over a golden-hour scene.">
+
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_04.jpg" alt="Helios at dusk: the day ring in blue with sunrise and sunset marked on the sun's path, and the buildings under a low sky.">
 
 An interactive live demo is at [helios-ha.org](https://helios-ha.org/helios/).
 
