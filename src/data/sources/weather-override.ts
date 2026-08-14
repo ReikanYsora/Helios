@@ -281,7 +281,22 @@ function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
     const durableKey = `wxo:${def.variable}:${entity}${conv.tag}`;
     st.fetching = true;
     void _cache.get(fetchKey, () => fetchNumericHistory(host.hass, entity, fetchStart, host._timeRange!.end, durableKey, def, conv))
-        .then(h => { st.history = h ?? { times: [], values: [] }; pushOne(host, def, entity, conv); })
+        .then(h =>
+        {
+            // The entity, or the unit it declares, can change while this request is in flight. The refresh that
+            // noticed already bailed on `st.fetching` without re-keying, so `st.fetchKey` still holds THIS fetch's
+            // key and cannot detect the change: re-derive the live wiring instead. Installing a stale result would
+            // overwrite the freshly converted live sample with history converted under the previous unit. Clearing
+            // the key re-arms the next cycle against the current wiring (mirrors grid-guard's mid-fetch bail).
+            const liveEntity = String(host.config?.[def.configKey] ?? '').trim();
+            if (liveEntity !== entity || readingConverter(host.hass, entity, def).tag !== conv.tag)
+            {
+                st.fetchKey = '';
+                return;
+            }
+            st.history = h ?? { times: [], values: [] };
+            pushOne(host, def, entity, conv);
+        })
         .finally(() => { st.fetching = false; });
 }
 
