@@ -579,12 +579,14 @@ export class HeliosCardEditor extends LitElement
                         <button
                             type="button"
                             class="seg-option ${on ? 'active' : ''}"
+                            aria-pressed=${on ? 'true' : 'false'}
                             data-key=${key} data-value="true"
                             @click=${this._onBoolToggleClick}
                         >${onLabel ?? t.editor.autoRotateOn}</button>
                         <button
                             type="button"
                             class="seg-option ${!on ? 'active' : ''}"
+                            aria-pressed=${!on ? 'true' : 'false'}
                             data-key=${key} data-value="false"
                             @click=${this._onBoolToggleClick}
                         >${offLabel ?? t.editor.autoRotateOff}</button>
@@ -833,7 +835,7 @@ export class HeliosCardEditor extends LitElement
         const mode = mapThemeMode(this._cfg);
         const mc   = t.mapConfig;
         const opt  = (val: MapThemeMode, label: string): TemplateResult => html`
-            <button type="button" class="seg-option ${mode === val ? 'active' : ''}" data-value=${val} @click=${this._onMapModeClick}>${label}</button>`;
+            <button type="button" class="seg-option ${mode === val ? 'active' : ''}" aria-pressed=${mode === val ? 'true' : 'false'} data-value=${val} @click=${this._onMapModeClick}>${label}</button>`;
         return html`
             <div class="field-help">${mc.intro}</div>
             <div class="segmented-toggle map-mode-toggle">

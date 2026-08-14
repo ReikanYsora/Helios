@@ -34,7 +34,6 @@ export interface SampleHourly
     temperature: number[];
     humidity:    number[];
 }
-export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../core/config/constants';
 
 
 //Median ignoring null/undefined/NaN. Combines concurrent multi-model forecasts into one robust value per timestep.

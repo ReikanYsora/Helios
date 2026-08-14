@@ -3,7 +3,7 @@
 //Keyed so an unchanged (id-set, window) is a no-op.
 
 import type { HassLike } from '../../core/ha-types';
-import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, wattsAtFromChangeSeries, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeById, extractPerEntity, changeRefreshAnchorMs, wattsAtFromChangeSeries, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { cssHex, resolveUiColor } from '../../core/format/format';
 import type { EnergyDefaults, DeviceConsumption } from './energy-prefs';
@@ -140,13 +140,8 @@ export function refreshDeviceConsumption(host: DeviceConsumptionHost): void
             .then((byId) =>
             {
                 if (byId === null) { return; }
-                const next = new Map<string, ChangeBucket[]>();
-                for (const id of sorted)
-                {
-                    const s = mergeChangeSeries(byId, [id]);
-                    if (s !== null) { next.set(id, s); }
-                }
-                host._deviceChangeSeries = next;
+                //Per-device split of the shared fetch: each id's own buckets (already sorted), in one pass.
+                host._deviceChangeSeries = extractPerEntity(byId, sorted);
                 host.requestUpdate();
             }));
 }

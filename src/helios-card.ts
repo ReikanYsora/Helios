@@ -949,6 +949,7 @@ export class HeliosCard extends LitElement
         this._wxStormCtl.stop();
         liveCards.delete(this);
         window.clearInterval(this._timer);
+        if (this._dayCurveRaf) { cancelAnimationFrame(this._dayCurveRaf); this._dayCurveRaf = 0; }
         this.removeEventListener('pointerdown', this._onUiActivity);
         this.removeEventListener('pointermove', this._onUiActivity);
         this.removeEventListener('wheel', this._onUiActivity);

@@ -86,6 +86,12 @@ export function onTimelinePointerDown(host: TimelineHost, e: PointerEvent): void
     {
         return;
     }
+    //Ignore a second (multi-touch) pointer while one is already tracking: otherwise it overwrites _trackPointerId,
+    //and the first pointer's pointerup then hits the id guard and never releases its capture or listeners.
+    if (host._trackPointerId !== null)
+    {
+        return;
+    }
     const track = e.currentTarget as HTMLElement;
     track.setPointerCapture(e.pointerId);
     host._trackElement   = track;

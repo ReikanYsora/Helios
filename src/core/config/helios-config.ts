@@ -318,7 +318,9 @@ export function batteryChipMode(config: HeliosConfig | undefined): BatteryChipMo
 //Defaults to DEFAULT_NO_UI_DELAY_S when unset or invalid.
 export function noUiDelayMs(config: HeliosConfig | undefined): number
 {
-    const raw = Number(config?.['no-ui-delay']);
+    //parseFloat (not Number): Number('') and Number('  ') are 0, which would silently mean a 0 ms delay instead of
+    //the default; parseFloat yields NaN there and falls through to DEFAULT_NO_UI_DELAY_S.
+    const raw = Number.parseFloat(String(config?.['no-ui-delay'] ?? ''));
     const secs = Number.isFinite(raw)
         ? Math.min(MAX_NO_UI_DELAY_S, Math.max(MIN_NO_UI_DELAY_S, raw))
         : DEFAULT_NO_UI_DELAY_S;

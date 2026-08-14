@@ -395,7 +395,7 @@ function aggregateBatterySocLkcf(perEntity: BatteryHistory[]): BatteryHistory
     {
         const only = perEntity[0];
         return {
-            times:  only.times,
+            times:  only.times.slice(), //copy so a downstream mutation can't corrupt the source series
             values: only.values.map(clamp),
         };
     }

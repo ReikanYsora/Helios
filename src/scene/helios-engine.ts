@@ -2,7 +2,7 @@ import { SceneRenderer } from './renderer';
 import { renderDayCurve, type DayCurveInput as CurveInput, type DayCurveScene } from './day-curve';
 import type { Building, RawBuilding } from './buildings';
 import { getSunPosition, computePvPercent, computeIrradianceWm2 } from '../core/time/sun';
-import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from '../data/weather';
+import { fetchHomePointData, clearWeatherCache, type SampleHourly } from '../data/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './buildings';
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
 import { resolveWeatherAtTime } from '../data/weather-resolve';
@@ -14,7 +14,8 @@ import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
-    BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS} from '../core/config/constants';
+    BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS,
+    RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS} from '../core/config/constants';
 import
 {
     type HeliosConfig,
@@ -127,7 +128,7 @@ export class HeliosEngine
     private _homeHourlyData: SampleHourly | null = null;
     private _selectedTime:  Date | null       = null;
 
-    //Skip atmosphere repaint when the sun moved less than 0.5° since last call (~ 2 min).
+    //Skip atmosphere repaint when the sun moved less than 1.5° since last call (~6 min).
     private _lastAtmosphereAlt = -999;
     //Sun altitude at the last ground re-tint. Coarser step than the wash (the vector ground re-raster is heavier
     //than the cheap full-frame wash), so the day/night grade on the map updates every few degrees.
@@ -1738,8 +1739,7 @@ export class HeliosEngine
         //at the user's actual midnight regardless of timezone).
         const dayStart = new Date(now);
         dayStart.setHours(0, 0, 0, 0);
-        const dayMs = 24 * 60 * 60 * 1000;
-        const stepMs = dayMs / SUN_ARC_SAMPLES;
+        const stepMs = DAY_MS / SUN_ARC_SAMPLES;
 
         //Live cloud cover colours the whole arc; with no reading yet treat as clear (0%) so the arc still
         //shows clear-sky intensity before the first weather fetch.
@@ -1851,7 +1851,7 @@ export class HeliosEngine
             //Keep a defined sun position even at night so the incidence ray has an anchor and downstream
             //maths stays finite (the ray just isn't drawn). Borrow home's depth so nearness degrades
             //gracefully.
-            sunScreen = { ...homeScreen, depth: homeScreen.depth };
+            sunScreen = { ...homeScreen };
         }
 
         //Depth range across the full arc + the sun, so every element shares one perspective scale. Spans the
