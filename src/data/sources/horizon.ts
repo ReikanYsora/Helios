@@ -4,6 +4,8 @@
 //in a fan around the home, and for each azimuth take the largest angle any ridge subtends. Cached in
 //localStorage keyed on the rounded home coordinates, since terrain does not change.
 
+import { saveDurable, loadDurable } from '../durable-cache';
+
 const R_EARTH = 6371000;
 //Curvature + standard atmospheric refraction: distant terrain sits lower than a flat-earth angle would say.
 const R_EFFECTIVE = (R_EARTH * 7) / 3 / 2;
@@ -19,7 +21,6 @@ const BATCH = 100;
 
 //Round coordinates to this many decimals for the cache key (~1 km), so small home moves reuse one profile.
 const KEY_DECIMALS = 2;
-const CACHE_PREFIX = 'helios-horizon:';
 const CACHE_VERSION = 1;
 //Terrain is static; refresh only every few months so a home relocation eventually re-resolves.
 const CACHE_TTL_MS = 180 * 24 * 60 * 60 * 1000;
@@ -39,9 +40,12 @@ export interface HorizonProfile
 
 const _inflight = new Map<string, Promise<HorizonProfile | null>>();
 
+//Durable sub-key with horizon's own CACHE_VERSION embedded, so a profile-shape bump orphans old entries
+//independently of the shared durable schema version. durable-cache adds its prefix, TTL, skip-identical write and
+//quota eviction (which the previous bespoke read/write here lacked).
 function cacheKey(lat: number, lon: number): string
 {
-    return `${CACHE_PREFIX}${lat.toFixed(KEY_DECIMALS)},${lon.toFixed(KEY_DECIMALS)}`;
+    return `horizon:v${CACHE_VERSION}:${lat.toFixed(KEY_DECIMALS)},${lon.toFixed(KEY_DECIMALS)}`;
 }
 
 //Destination point DIST metres from (lat, lon) along a compass bearing (deg from North), on a sphere.
@@ -72,36 +76,14 @@ function ringDistances(): number[]
 
 function readCache(lat: number, lon: number): HorizonProfile | null
 {
-    try
-    {
-        const raw = window.localStorage?.getItem(cacheKey(lat, lon));
-        if (!raw) { return null; }
-        const obj = JSON.parse(raw);
-        if (obj?.v !== CACHE_VERSION || typeof obj.storedAt !== 'number') { return null; }
-        if (Date.now() - obj.storedAt > CACHE_TTL_MS) { return null; }
-        const p = obj.profile;
-        if (!p || !Array.isArray(p.alt) || typeof p.step !== 'number') { return null; }
-        return { step: p.step, alt: p.alt.map(Number) };
-    }
-    catch (_)
-    {
-        return null;
-    }
+    const p = loadDurable<HorizonProfile>(cacheKey(lat, lon), CACHE_TTL_MS);
+    if (!p || !Array.isArray(p.alt) || typeof p.step !== 'number') { return null; }
+    return { step: p.step, alt: p.alt.map(Number) };
 }
 
 function writeCache(lat: number, lon: number, profile: HorizonProfile): void
 {
-    try
-    {
-        window.localStorage?.setItem(
-            cacheKey(lat, lon),
-            JSON.stringify({ v: CACHE_VERSION, storedAt: Date.now(), profile })
-        );
-    }
-    catch (_)
-    {
-        //Storage full or unavailable: the profile just recomputes next session.
-    }
+    saveDurable(cacheKey(lat, lon), profile);
 }
 
 //Batched elevation lookup: Open-Meteo takes up to BATCH coordinates per request. Chunks fire in parallel and
