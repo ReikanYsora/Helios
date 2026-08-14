@@ -55,7 +55,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `auto-rotate-enabled` | boolean | `false` | Idle camera orbit. Off by default; enable for kiosk / always-on dashboards. Any drag pauses it, then it resumes after a short idle. |
-| `camera-pitch-deg` | 15-85 | `55` | Optional fixed pitch at boot. Drag still works unless locked. |
+| `camera-pitch-deg` | 0-65 | `50` | Optional fixed pitch at boot. Drag still works unless locked. |
 | `camera-bearing-deg` | 0-359 | hemisphere | Optional fixed bearing at boot. |
 | `camera-locked` | boolean | `false` | Disable drag-rotate and the idle orbit; the camera stays at the configured pose. Also toggled live from the lock button on the card. |
 
@@ -102,7 +102,7 @@ The rolling window itself is chosen live from the timeline's period selector (**
 | `monitoring-group-colors` | map | `--graph-color-N` | Per-group colour (group number -> colour). Falls back to Home Assistant's graph colour for that group. |
 | `monitoring-group-icons` | map | none | Per-group icon (group number -> MDI icon). With no icon the group shows its number. |
 | `hidden-devices` | list | none | Device meters hidden from every view. Managed from the editor's device list (the eye toggle). |
-| `home-color` | color | theme | Optional colour for the home pill and its consumption readout. |
+| `chip-home-color` | color | theme | Optional colour for the home pill and its consumption readout. |
 
 ## Per-card cache
 
