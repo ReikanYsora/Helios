@@ -34,11 +34,6 @@ interface DetailMetric
     label?: string;
 }
 
-//English fallbacks for the period title, mirroring the selector: a locale may omit some period strings.
-const PERIOD_FALLBACK: Record<TimelineMode, string> = {
-    forecast: 'Forecast', yesterday: 'Yesterday', today: 'Today', week: 'Week', month: 'Month',
-};
-
 //Number of whole days the window spans, for the per-day averages. At least 1 so a same-day window never divides
 //by zero.
 function windowDays(startMs: number, endMs: number): number
@@ -281,7 +276,7 @@ export function renderDetailPanel(host: DetailHost): TemplateResult | typeof not
     }
     //Title = the selected rolling period, so the aggregates below read as "over this period", not a live value.
     const t = pickTranslations(host.hass?.language);
-    const periodLabel = t.period?.[host._timelineMode] ?? PERIOD_FALLBACK[host._timelineMode] ?? '';
+    const periodLabel = t.period[host._timelineMode];
     return html`
         <div class="detail-panel">
             ${periodLabel ? html`<div class="dp-title">${periodLabel}</div>` : nothing}

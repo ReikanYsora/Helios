@@ -627,7 +627,7 @@ export class SceneHudController
         const chipMode        = sunChipMode(cfg);
         const sunAlt          = sunScene?.sun.altitude ?? 0;
         const sunAz           = sunScene?.sun.azimuth ?? 0;
-        const sunPositionText = formatSunPosition(sunAz, sunAlt, pickTranslations(this.host.hass?.language).compass ?? 'N,NE,E,SE,S,SW,W,NW');
+        const sunPositionText = formatSunPosition(sunAz, sunAlt, pickTranslations(this.host.hass?.language).compass);
         //Irradiance (and its cloud chip) are weather; hidden when weather is off (month/year). Sun position
         //is pure geometry and needs none, so position mode stays visible without it. The sun disc/arc (also
         //pure geometry) stays regardless.

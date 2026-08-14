@@ -707,17 +707,17 @@ export class HeliosCard extends LitElement
     {
         const t = pickTranslations(this.hass?.language);
         const labels: Record<TimelineMode, string> = {
-            forecast:  t.period?.forecast  ?? 'Forecast',
-            yesterday: t.period?.yesterday ?? 'Yesterday',
-            today:     t.period?.today     ?? 'Today',
-            week:      t.period?.week      ?? 'Week',
-            month:     t.period?.month     ?? 'Month',
+            forecast:  t.period.forecast,
+            yesterday: t.period.yesterday,
+            today:     t.period.today,
+            week:      t.period.week,
+            month:     t.period.month,
         };
         return html`
             <div
                 class="tb-period-selector"
                 role="group"
-                aria-label=${t.period?.rangeLabel ?? 'Time range'}
+                aria-label=${t.period.rangeLabel}
                 @pointerdown=${this._stopPropagation}
             >
                 ${TIMELINE_MODE_ORDER.map(m => html`
@@ -1347,7 +1347,7 @@ export class HeliosCard extends LitElement
     private _stopPointer    = (e: Event): void => { e.stopPropagation(); };
     private get _backToLiveLabel(): string
     {
-        return pickTranslations(this.hass?.language).editor.backToLive ?? 'Back to live';
+        return pickTranslations(this.hass?.language).editor.backToLive;
     }
 
 

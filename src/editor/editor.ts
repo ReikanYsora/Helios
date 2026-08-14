@@ -57,13 +57,6 @@ import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardH
 import { batteryLiveIsBucketSourced } from '../data/sources/battery';
 
 
-// English fallback labels for the configurable basemap layers (localised via t.mapConfig when present).
-const MAP_LAYER_EN: Record<GroundLayerKey, string> = {
-    land: 'Background', water: 'Water', wood: 'Woodland', grass: 'Greenery', sand: 'Sand',
-    wetland: 'Wetland', ice: 'Ice & snow', landuse: 'Built-up land',
-    roadMajor: 'Major roads', roadMinor: 'Minor roads', roadCasing: 'Road outline', path: 'Paths & tracks',
-    rail: 'Railways', building: 'Buildings', boundary: 'Boundaries',
-};
 
 // Visual editor exposing every config option through native HA form controls.
 @customElement('helios-card-editor')
@@ -842,12 +835,12 @@ export class HeliosCardEditor extends LitElement
         const opt  = (val: MapThemeMode, label: string): TemplateResult => html`
             <button type="button" class="seg-option ${mode === val ? 'active' : ''}" data-value=${val} @click=${this._onMapModeClick}>${label}</button>`;
         return html`
-            <div class="field-help">${mc?.intro ?? 'The basemap is drawn from OpenStreetMap vector tiles. Auto follows your theme, Dark / Light force one, Custom lets you set every colour and hide any layer.'}</div>
+            <div class="field-help">${mc.intro}</div>
             <div class="segmented-toggle map-mode-toggle">
-                ${opt('auto', mc?.modeAuto ?? 'Auto')}
-                ${opt('dark', mc?.modeDark ?? 'Dark')}
-                ${opt('light', mc?.modeLight ?? 'Light')}
-                ${opt('custom', mc?.modeCustom ?? 'Custom')}
+                ${opt('auto', mc.modeAuto)}
+                ${opt('dark', mc.modeDark)}
+                ${opt('light', mc.modeLight)}
+                ${opt('custom', mc.modeCustom)}
             </div>
             ${mode === 'custom' ? GROUND_LAYER_KEYS.map((key) => this._renderMapLayerBlock(t, key)) : nothing}`;
     }
@@ -876,7 +869,7 @@ export class HeliosCardEditor extends LitElement
 
     private _mapLayerLabel(t: Translations, key: GroundLayerKey): string
     {
-        return t.mapConfig?.[key] ?? MAP_LAYER_EN[key];
+        return t.mapConfig[key];
     }
 
     //One configurable map layer: colour pill + name + show/hide toggle + the HA ui_color picker.
@@ -1135,7 +1128,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" data-section="mapconfig" ?open=${this._openSection === 'mapconfig'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.mapConfig?.section ?? 'Map configuration'}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.mapConfig.section}</summary>
                 ${this._renderMapSection(t)}
                 </details>
 

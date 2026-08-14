@@ -40,21 +40,21 @@ export interface Translations
     cardDescription: string;
 
     //In-card rolling-period selector on the timeline. Optional; renderer falls back to English.
-    period?:
+    period:
     {
-        rangeLabel?: string; //'Time range' (aria-label on the selector group)
-        forecast?:   string; //'Forecast' (the J..J+2 rolling window: today and the two days ahead)
-        yesterday?:  string; //'Yesterday'
-        today?:      string; //'Today'
-        week?:       string; //'1 week'
-        month?:      string; //'1 month'
-        year?:       string; //'1 year'
+        rangeLabel: string; //'Time range' (aria-label on the selector group)
+        forecast:   string; //'Forecast' (the J..J+2 rolling window: today and the two days ahead)
+        yesterday:  string; //'Yesterday'
+        today:      string; //'Today'
+        week:       string; //'1 week'
+        month:      string; //'1 month'
+        year:       string; //'1 year'
     };
 
 
     //Eight-point compass abbreviations for the sun-position chip, N first and clockwise, comma-joined.
     //Optional; falls back to the English set.
-    compass?: string;
+    compass: string;
 
 
     //The three cloud-cover band names shown in the timeline tooltip.
@@ -248,7 +248,7 @@ export interface Translations
 
     //Vector basemap "Map configuration" section. Optional; every field falls back to English. The layer fields
     //are keyed by the GroundLayerKey names so the editor can look them up directly.
-    mapConfig?:
+    mapConfig:
     {
         section:    string;
         intro:      string;
