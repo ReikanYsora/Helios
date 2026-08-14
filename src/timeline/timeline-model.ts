@@ -80,8 +80,23 @@ function startOfMonth(d: Date): Date
 }
 
 
-//Build the adaptive tick/label model for a visible window.
+//Build the adaptive tick/label model for a visible window. Memoised on the window (+ tick budget): the PV chart,
+//the target chart and the day-label renderer each ask for the same model every render, and it is a pure function
+//of start/end/maxTicks, so one build per range serves them all until the range changes.
+let _tmKey: string | null = null;
+let _tmVal: TimelineModel | null = null;
+
 export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TIMELINE_MAX_TICKS): TimelineModel
+{
+    const key = `${start.getTime()}|${end.getTime()}|${maxTicks}`;
+    if (key === _tmKey && _tmVal) { return _tmVal; }
+    const model = buildTimelineModelUncached(start, end, maxTicks);
+    _tmKey = key;
+    _tmVal = model;
+    return model;
+}
+
+function buildTimelineModelUncached(start: Date, end: Date, maxTicks: number): TimelineModel
 {
     const total    = end.getTime() - start.getTime() || 1;
     const spanDays = total / DAY_MS;
