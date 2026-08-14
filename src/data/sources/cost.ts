@@ -10,6 +10,7 @@ import { parseNumericState, pvNormalizeToWatts } from '../../core/format/format'
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { localMidnightMinusDays } from '../../core/time/timezone';
+import { COST_STAT_MAX_AGE_MS } from '../../core/config/constants';
 import type { KeyedFetch } from '../source-fetch';
 
 
@@ -79,12 +80,25 @@ export function costRateAt(
     return ((impW ?? 0) - (expW ?? 0)) / 1000;
 }
 
-//Live cost rate from the most recent committed cost bucket (net). Null when no cost series is loaded.
-function latestCostRate(host: CostHost): number | null
+//Live cost rate from the most recent committed cost bucket (net). Null when no cost series is loaded, or when the
+//newest bucket is too old to speak for "now" (see COST_STAT_MAX_AGE_MS) - the caller then falls through to the
+//price x power path, or draws nothing. Exported for tests.
+export function latestCostRate(host: CostHost, nowMs: number = Date.now()): number | null
 {
     const imp = host._costImportSeries;
     const exp = host._costExportSeries;
     if ((!imp || imp.length === 0) && (!exp || exp.length === 0)) { return null; }
+
+    //Freshness gate. HA's own price-driven cost sensors track the meter in real time and always pass; a utility
+    //integration that backfills yesterday does not, and its last bucket would otherwise be rendered as the live
+    //rate - the same "invented" reading the card refuses everywhere else. Newest END across both directions, so an
+    //install that simply is not exporting (no compensation buckets) still qualifies on its import series alone.
+    const newestEnd = Math.max(
+        imp && imp.length > 0 ? imp[imp.length - 1].endMs : Number.NEGATIVE_INFINITY,
+        exp && exp.length > 0 ? exp[exp.length - 1].endMs : Number.NEGATIVE_INFINITY,
+    );
+    if (!isFinite(newestEnd) || (nowMs - newestEnd) > COST_STAT_MAX_AGE_MS) { return null; }
+
     const bucketRate = (b: ChangeBucket | undefined): number =>
     {
         if (!b) { return 0; }
@@ -134,7 +148,9 @@ export function refreshCostLive(host: CostHost): void
 
     //1) Universal path: HA's own cost statistics (correct for any tariff, incl. Tempo + a total-cost sensor).
     //   Scrub-aware like every other chip: the rate at the hovered instant while scrubbing, else the most recent
-    //   committed bucket when live.
+    //   committed bucket when live - and only while that bucket is still recent enough to mean "now". A lagging
+    //   source (a utility integration backfilling yesterday) yields null here and drops to the price path below,
+    //   so an install with BOTH a cost statistic and a price keeps a live chip instead of freezing on a stale hour.
     if (host._costImportSeries || host._costExportSeries)
     {
         const scrubMs = (host._selectedTime && !host._isLiveMode) ? host._selectedTime.getTime() : null;
