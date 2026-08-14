@@ -162,19 +162,30 @@ function storeOriginMs(daysPast: number): number
 //---------------------------------------------------------------------------------------------------
 
 
-function buildIrradiance(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
+//Average a weather series' field into store buckets: mean of the in-window finite samples per bucket, remaining
+//gaps interpolated (the model lands ~1 sample/hour). `accept` maps a finite sample to the value to average, or
+//null to drop it - the only difference between the three weather metrics.
+export function bucketizeWeatherAvg(
+    times:        Date[] | undefined,
+    values:       (number | null | undefined)[] | undefined,
+    storeStartMs: number,
+    storeEndMs:   number,
+    p:            CadenceParams,
+    accept:       (v: number) => number | null,
+): (number | null)[]
 {
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const series = host._chartSeries;
-    if (!series || series.times.length === 0) { return out; }
+    if (!times || times.length === 0 || !values) { return out; }
     const sums   = new Array<number>(p.bucketsTotal).fill(0);
     const counts = new Array<number>(p.bucketsTotal).fill(0);
-    for (let i = 0; i < series.times.length; i++)
+    for (let i = 0; i < times.length; i++)
     {
-        const t = series.times[i].getTime();
+        const t = times[i].getTime();
         if (t < storeStartMs || t >= storeEndMs) { continue; }
-        const v = series.irradiance?.[i];
-        if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) { continue; }
+        const raw = values[i];
+        if (typeof raw !== 'number' || !Number.isFinite(raw)) { continue; }
+        const v = accept(raw);
+        if (v === null) { continue; }
         const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
         if (h < 0) { continue; }
         sums[h]   += v;
@@ -184,59 +195,27 @@ function buildIrradiance(host: UnifiedStoreHost, storeStartMs: number, storeEndM
     {
         if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
     }
-    //Weather model lands ~1 sample/hour; remaining buckets stay null until interpolated.
     interpolateNullGaps(out);
     return out;
 }
 
+//Irradiance drops negatives; temperature keeps sub-zero readings (they are real); humidity clamps to 0..100.
+function buildIrradiance(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
+{
+    const s = host._chartSeries;
+    return bucketizeWeatherAvg(s?.times, s?.irradiance, storeStartMs, storeEndMs, p, (v) => (v < 0 ? null : v));
+}
 
-//Temperature (°C) bucketised from the weather series. Same shape as buildIrradiance but keeps negative values
-//(sub-zero temperatures are real), so only non-finite samples are dropped.
 function buildTemperature(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
 {
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const series = host._chartSeries;
-    if (!series || series.times.length === 0) { return out; }
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    for (let i = 0; i < series.times.length; i++)
-    {
-        const t = series.times[i].getTime();
-        if (t < storeStartMs || t >= storeEndMs) { continue; }
-        const v = series.temperature?.[i];
-        if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
-        const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
-        if (h < 0) { continue; }
-        sums[h]   += v;
-        counts[h] += 1;
-    }
-    for (let h = 0; h < p.bucketsTotal; h++) { if (counts[h] > 0) { out[h] = sums[h] / counts[h]; } }
-    interpolateNullGaps(out);
-    return out;
+    const s = host._chartSeries;
+    return bucketizeWeatherAvg(s?.times, s?.temperature, storeStartMs, storeEndMs, p, (v) => v);
 }
 
-//Humidity (%) bucketised from the weather series, clamped to 0..100.
 function buildHumidity(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, p: CadenceParams): (number | null)[]
 {
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const series = host._chartSeries;
-    if (!series || series.times.length === 0) { return out; }
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    for (let i = 0; i < series.times.length; i++)
-    {
-        const t = series.times[i].getTime();
-        if (t < storeStartMs || t >= storeEndMs) { continue; }
-        const v = series.humidity?.[i];
-        if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
-        const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
-        if (h < 0) { continue; }
-        sums[h]   += Math.max(0, Math.min(100, v));
-        counts[h] += 1;
-    }
-    for (let h = 0; h < p.bucketsTotal; h++) { if (counts[h] > 0) { out[h] = sums[h] / counts[h]; } }
-    interpolateNullGaps(out);
-    return out;
+    const s = host._chartSeries;
+    return bucketizeWeatherAvg(s?.times, s?.humidity, storeStartMs, storeEndMs, p, (v) => Math.max(0, Math.min(100, v)));
 }
 
 
