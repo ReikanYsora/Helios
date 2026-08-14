@@ -287,7 +287,27 @@ const HOURLY_VARS = [
 
 //Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_<model>);
 //"best_match" mode uses bare keys. Try the bare key first then the suffixed ones so one code path handles both.
-function readSeries(row: any, varName: string, models: string[]): (number | null)[]
+//Categorical fuse for weather_code: a median of WMO codes is meaningless (rain 63 and cloudy 3 average to 33, a
+//code that maps to neither model's sky). Take the first model that reported a code - the primary regional model,
+//first in pickModelsForLocation - so the FX layers always reflect one real forecast.
+function firstFinite(vals: (number | null)[]): number | null
+{
+    for (const v of vals)
+    {
+        if (v != null && Number.isFinite(v))
+        {
+            return v;
+        }
+    }
+    return null;
+}
+
+function readSeries(
+    row:     any,
+    varName: string,
+    models:  string[],
+    fuse:    (vals: (number | null)[]) => number | null = medianOfNumbers,
+): (number | null)[]
 {
     const direct = row?.hourly?.[varName];
     if (Array.isArray(direct))
@@ -312,7 +332,7 @@ function readSeries(row: any, varName: string, models: string[]): (number | null
     const out = new Array<number | null>(len);
     for (let i = 0; i < len; i++)
     {
-        out[i] = medianOfNumbers(series.map(s => s[i]));
+        out[i] = fuse(series.map(s => s[i]));
     }
     return out;
 }
@@ -320,8 +340,8 @@ function readSeries(row: any, varName: string, models: string[]): (number | null
 //Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value).
 const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
 const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
-//Precip (mm) / snowfall (cm) -> 0 (missing = dry). Weather code -> 0 (clear); rounded since a cross-model median
-//of WMO codes can land between two integer codes.
+//Precip (mm) / snowfall (cm) -> 0 (missing = dry). Weather code -> 0 (clear); Math.round is a safety on an already
+//integer code (weather_code is fused by first-reporting model, never averaged - see firstFinite).
 const fillZero      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.max(0, v));
 const fillCode      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.round(v));
 //Temperature (°C, can be negative) and humidity (%) keep NaN for missing hours: 0 is a real reading for both.
@@ -433,7 +453,7 @@ export async function fetchHomePointData(
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
                 precip:      fillZero(readSeries(row, 'precipitation', models)),
                 snowfall:    fillZero(readSeries(row, 'snowfall',      models)),
-                weatherCode: fillCode(readSeries(row, 'weather_code',  models)),
+                weatherCode: fillCode(readSeries(row, 'weather_code',  models, firstFinite)),
                 temperature: fillNaN(readSeries(row, 'temperature_2m',       models)),
                 humidity:    fillNaN(readSeries(row, 'relative_humidity_2m', models)),
             };
