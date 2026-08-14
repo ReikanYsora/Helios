@@ -107,8 +107,11 @@ export type PowerUnit = 'W' | 'kW';
 //+/- so battery charge reads apart from discharge.
 export function formatPower(hass: HassLike, watts: number, decimals: number, unit: PowerUnit, signed = false): string
 {
-    const sign = signed ? (watts > 0 ? '+' : (watts < 0 ? '-' : '')) : '';
-    const mag  = signed ? Math.abs(watts) : watts;
+    const mag = signed ? Math.abs(watts) : watts;
+    //Sign from the ROUNDED display magnitude: a value that snaps to 0 at the shown precision prints no sign, so a
+    //tiny negative reading reads "0 kW", never "-0.0 kW".
+    const displayMag = unit === 'W' ? Math.round(mag) : Number((mag / 1000).toFixed(decimals));
+    const sign = signed && displayMag !== 0 ? (watts < 0 ? '-' : '+') : '';
     if (unit === 'W')
     {
         return `${sign}${formatLocalisedNumber(hass, Math.round(mag), 0)} W`;
@@ -131,7 +134,7 @@ export function formatIrradiance(hass: HassLike, wPerM2: number, decimals: numbe
     {
         return `${formatLocalisedNumber(hass, v / 1000, decimals)} kW/m²`;
     }
-    return `${Math.round(v)} W/m²`;
+    return `${formatLocalisedNumber(hass, Math.round(v), 0)} W/m²`;
 }
 
 
@@ -311,7 +314,9 @@ export function resolveUiColor(
 ): string
 {
     const t = (token ?? '').trim();
-    if (/^(#|rgb)/i.test(t))
+    //A literal colour passes through untouched: #hex, rgb()/rgba(), or a var() reference (else `var(--x)` would be
+    //wrapped into the meaningless `var(--var(--x)-color)`). Matches monitoringGroupColor so every colour input behaves the same.
+    if (/^(#|rgb|var)/i.test(t))
     {
         return t;
     }

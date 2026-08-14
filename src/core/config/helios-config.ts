@@ -46,7 +46,7 @@ export interface HeliosConfig
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.
     'camera-locked'?:          unknown;
-    //Global display radius (m) around the home within which buildings and shadows render. Clamped [0,500],
+    //Global display radius (m) around the home within which buildings and shadows render. Clamped [0,250],
     //default 200. Lowering it is the main perf lever on weak hardware.
     'display-radius'?:         unknown;
     //Opacity 0..1 of surrounding buildings (home stays 1.0). Default 0.5.
