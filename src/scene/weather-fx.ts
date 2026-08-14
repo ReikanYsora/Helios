@@ -166,7 +166,8 @@ export class WeatherRain
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
         if (!c || !ctx) { this._raf = 0; return; }
-        if (Math.round(c.getBoundingClientRect().width) !== Math.round(this._w)) { this._resize(); }
+        const rect = c.getBoundingClientRect();
+        if (Math.round(rect.width) !== Math.round(this._w) || Math.round(rect.height) !== Math.round(this._h)) { this._resize(); }
 
         if (!this._last) { this._last = ts; }
         let dt = (ts - this._last) / 1000;
@@ -285,7 +286,8 @@ export class WeatherSnow
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
         if (!c || !ctx) { this._raf = 0; return; }
-        if (Math.round(c.getBoundingClientRect().width) !== Math.round(this._w)) { this._resize(); }
+        const rect = c.getBoundingClientRect();
+        if (Math.round(rect.width) !== Math.round(this._w) || Math.round(rect.height) !== Math.round(this._h)) { this._resize(); }
 
         if (!this._last) { this._last = ts; }
         let dt = (ts - this._last) / 1000;

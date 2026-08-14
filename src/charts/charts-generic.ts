@@ -544,7 +544,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             if (s.pts.length < 1 || s.noHoverDot) { continue; }
             const v = interpAt(s.pts.map(p => new Date(p.t)), s.pts.map(p => p.v), hoverMs);
             if (!isFinite(v)) { continue; }
-            hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
+            //Plot the dot at the real value so it rides the curve. yOf already clamps to the axis, so the old
+            //Math.max(0, v) only detached the dot from the curve on signed targets (temperature below 0, cost when earning).
+            hoverDots.push({ y: yOf(v), color: s.color });
             showHover = true;
         }
         //Battery SoC: ONE dot per bank at the cursor, in the live flow colour, instead of one dot per colour run.
@@ -555,7 +557,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 if (pts.length < 1) { continue; }
                 const v = interpAt(pts.map(p => new Date(p.t)), pts.map(p => p.v), hoverMs);
                 if (!isFinite(v)) { continue; }
-                hoverDots.push({ y: yOf(Math.max(0, v)), color: socHover.flowColorAt(hoverMs, hoverMs) });
+                hoverDots.push({ y: yOf(v), color: socHover.flowColorAt(hoverMs, hoverMs) });
                 showHover = true;
             }
         }
