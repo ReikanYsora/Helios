@@ -8,6 +8,7 @@ import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundL
 import { resolveWeatherAtTime } from '../data/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './hud-layout';
 import { sunSpherePoint, daylightRamp, horizonSpherePoint } from './sun-arc';
+import { buildTimeSamples, timeSamplesEqual, nearestSampleAt, type TimeSample } from '../core/nearest-series';
 import { fetchHorizonProfile, horizonAltAt, horizonPeak, HORIZON_MIN_PEAK_DEG, type HorizonProfile } from '../data/sources/horizon';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
@@ -176,121 +177,34 @@ export class HeliosEngine
     //ground-truth shortwave irradiance at the home in the same units as the model's shortwave field, so it
     //slots into the pipeline unscaled. Lookup is nearest-neighbour within a strict +/-30 min window; outside
     //it (and always for forecast time) fall through to the model rather than extrapolate stale values.
-    private _sensorIrradianceSamples: { tMs: number; wm2: number }[] | null = null;
+    private _sensorIrradianceSamples: TimeSample[] | null = null;
     private static readonly SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1000;
     public setSolarIrradianceSamples(
         samples: { time: Date; wm2: number }[] | null
     ): void
     {
-        if (!samples || samples.length === 0)
-        {
-            if (this._sensorIrradianceSamples === null)
-            {
-                return;
-            }
-            this._sensorIrradianceSamples = null;
-            this._arcInputsCache = undefined;
-            this._renderForCurrentSelection();
-            return;
-        }
-        const cleaned: { tMs: number; wm2: number }[] = [];
-        for (const s of samples)
-        {
-            const ms = s.time.getTime();
-            if (!isFinite(ms))
-            {
-                continue;
-            }
-            if (!isFinite(s.wm2) || s.wm2 < 0)
-            {
-                continue;
-            }
-            cleaned.push({ tMs: ms, wm2: s.wm2 });
-        }
-        cleaned.sort((a, b) => a.tMs - b.tMs);
-        const next = cleaned.length > 0 ? cleaned : null;
-
-        //Skip the re-render when the dataset is unchanged. The card pushes samples every Lit cycle; without
-        //this guard each push fires onWeatherUpdate -> updated() -> push again, an infinite loop that
-        //freezes the dashboard the moment an irradiance entity is selected.
-        if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next))
-        {
-            return;
-        }
+        //Drop non-finite and negative readings; build -> null when empty, so the equality guard below covers both
+        //the "cleared" and "unchanged" cases. The card re-pushes every Lit cycle; without the guard each push
+        //fires onWeatherUpdate -> updated() -> push again, an infinite loop that freezes the dashboard the moment
+        //an irradiance entity is selected.
+        const next = buildTimeSamples(samples, (s) => s.time.getTime(), (s) => s.wm2, (v) => v >= 0);
+        if (timeSamplesEqual(this._sensorIrradianceSamples, next)) { return; }
         this._sensorIrradianceSamples = next;
         //Invalidate the arc cache so the next projectSunScene rebuilds with the new sensor ground truth.
         this._arcInputsCache = undefined;
         this._renderForCurrentSelection();
     }
 
-    private _sensorSamplesEqual(
-        a: { tMs: number; wm2: number }[] | null,
-        b: { tMs: number; wm2: number }[] | null
-    ): boolean
-    {
-        if (a === b)
-        {
-            return true;
-        }
-        if (a === null || b === null)
-        {
-            return false;
-        }
-        if (a.length !== b.length)
-        {
-            return false;
-        }
-        for (let i = 0; i < a.length; i++)
-        {
-            if (a[i].tMs !== b[i].tMs)
-            {
-                return false;
-            }
-            if (a[i].wm2 !== b[i].wm2)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    //Nearest-neighbour lookup over the sensor history; returns the W/m² reading closest to `t` within the
-    //window, else null (caller falls back to the model). Linear scan is fine for ~hourly few-day samples.
+    //Nearest-neighbour reading closest to `t` within the +/-30 min window, else null (caller falls back to the model).
     private _sensorIrradianceAt(t: Date): number | null
     {
-        const samples = this._sensorIrradianceSamples;
-        if (!samples || samples.length === 0)
-        {
-            return null;
-        }
-        const tMs = t.getTime();
-        let bestIdx = -1;
-        let bestDelta = Number.POSITIVE_INFINITY;
-        for (let i = 0; i < samples.length; i++)
-        {
-            const d = Math.abs(samples[i].tMs - tMs);
-            if (d < bestDelta)
-            {
-                bestDelta = d;
-                bestIdx   = i;
-            }
-            //Samples are sorted: once delta grows again the rest is monotonically worse, so stop.
-            else if (d > bestDelta)
-            {
-                break;
-            }
-        }
-        if (bestIdx < 0 || bestDelta > HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS)
-        {
-            return null;
-        }
-        return samples[bestIdx].wm2;
+        return nearestSampleAt(this._sensorIrradianceSamples, t.getTime(), HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS);
     }
 
     //Local-sensor weather overrides: per-variable sample series (sorted ascending), pushed by the card from a
     //configured entity's history + live state. Nearest-neighbour within the window replaces the model value at
     //resolve time; empty/absent = model unchanged.
-    private _weatherOverrideSamples = new Map<WeatherOverrideVar, { tMs: number; v: number }[]>();
+    private _weatherOverrideSamples = new Map<WeatherOverrideVar, TimeSample[]>();
     private static readonly SENSOR_WEATHER_WINDOW_MS = 30 * 60 * 1000;
 
     public setWeatherOverrideSamples(
@@ -299,60 +213,21 @@ export class HeliosEngine
     ): void
     {
         const prev = this._weatherOverrideSamples.get(variable) ?? null;
-        let next: { tMs: number; v: number }[] | null = null;
-        if (samples && samples.length > 0)
-        {
-            const cleaned: { tMs: number; v: number }[] = [];
-            for (const s of samples)
-            {
-                const ms = s.time.getTime();
-                if (isFinite(ms) && isFinite(s.value)) { cleaned.push({ tMs: ms, v: s.value }); }
-            }
-            cleaned.sort((a, b) => a.tMs - b.tMs);
-            if (cleaned.length > 0) { next = cleaned; }
-        }
-
-        //Skip the re-render when unchanged: the card pushes every Lit cycle, and an unconditional re-render would
-        //loop (render -> onWeatherUpdate -> updated() -> push -> render) the moment an override entity is selected.
-        if (this._weatherOverrideSamplesEqual(prev, next)) { return; }
+        //Overrides keep every finite value (a temperature override is legitimately negative).
+        const next = buildTimeSamples(samples, (s) => s.time.getTime(), (s) => s.value, () => true);
+        //Same re-render guard as the irradiance setter (the card pushes every Lit cycle).
+        if (timeSamplesEqual(prev, next)) { return; }
         if (next === null) { this._weatherOverrideSamples.delete(variable); }
         else               { this._weatherOverrideSamples.set(variable, next); }
         this._arcInputsCache = undefined;
         this._renderForCurrentSelection();
     }
 
-    private _weatherOverrideSamplesEqual(
-        a: { tMs: number; v: number }[] | null,
-        b: { tMs: number; v: number }[] | null
-    ): boolean
-    {
-        if (a === b)           { return true; }
-        if (a === null || b === null) { return false; }
-        if (a.length !== b.length)    { return false; }
-        for (let i = 0; i < a.length; i++)
-        {
-            if (a[i].tMs !== b[i].tMs || a[i].v !== b[i].v) { return false; }
-        }
-        return true;
-    }
-
     //Nearest-neighbour override value for `variable` at `t`, or null (outside the window / no samples), in which
     //case the caller keeps the model value.
     private _weatherOverrideAt(variable: WeatherOverrideVar, t: Date): number | null
     {
-        const samples = this._weatherOverrideSamples.get(variable);
-        if (!samples || samples.length === 0) { return null; }
-        const tMs = t.getTime();
-        let bestIdx = -1;
-        let bestDelta = Number.POSITIVE_INFINITY;
-        for (let i = 0; i < samples.length; i++)
-        {
-            const d = Math.abs(samples[i].tMs - tMs);
-            if (d < bestDelta) { bestDelta = d; bestIdx = i; }
-            else if (d > bestDelta) { break; }
-        }
-        if (bestIdx < 0 || bestDelta > HeliosEngine.SENSOR_WEATHER_WINDOW_MS) { return null; }
-        return samples[bestIdx].v;
+        return nearestSampleAt(this._weatherOverrideSamples.get(variable) ?? null, t.getTime(), HeliosEngine.SENSOR_WEATHER_WINDOW_MS);
     }
 
     //Map transform changed: card recomputes screen-space projections (arc, chips, leaders) from this hook.
