@@ -1019,6 +1019,10 @@ export class SceneHudController
                             //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.
                             const haloR        = r * 3;
                             const haloAlphaMax = sunFillRatio * 0.55;
+                            //Radiant-heat aura: a soft warm halo that gently breathes (a scale pulse in CSS),
+                            //fading in only once the sun is genuinely strong (clear, high) so a hazy or low sun
+                            //stays calm. Inline opacity is the irradiance gate; the animation only scales it.
+                            const heatOpacity  = Math.max(0, (sunFillRatio - 0.45) / 0.55) * 0.55;
                             return svg`
                                 <defs>
                                     <radialGradient id="solar-halo-grad-${this.host._instanceId}">
@@ -1031,6 +1035,13 @@ export class SceneHudController
                                     cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
                                     r="${haloR}"
                                     fill="url(#solar-halo-grad-${this.host._instanceId})"
+                                ></circle>
+                                <circle
+                                    class="solar-sun-heat"
+                                    cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
+                                    r="${r * 2.1}"
+                                    fill="url(#solar-halo-grad-${this.host._instanceId})"
+                                    style="opacity:${heatOpacity}"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"

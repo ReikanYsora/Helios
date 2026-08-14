@@ -509,7 +509,9 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         pointer-events: none;
-        z-index: 5;
+        /*  z 7: above the weather veil (z 6) so fog never dims the leaders while the chips (z 8) stay lit -
+            the leaders are data, not scenery - yet still below the chip cluster so the dashes pass behind it. */
+        z-index: 7;
     }
     /*  Group leader: a thin static line from the home pill down to the group chip, in the group's colour. */
     .group-leader-line
@@ -527,8 +529,8 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  PV to home leader: vertical dashed line from the PV chip down to the home, in the PV colour. z 5,
-        below the chip cluster so the dashes pass behind the chips. */
+    /*  PV to home leader: vertical dashed line from the PV chip down to the home, in the PV colour. On the
+        leader layer (z 7, above the weather veil, below the chip cluster) so the dashes pass behind the chips. */
     .pv-home-leader-line
     {
         stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
@@ -667,6 +669,27 @@ export const heliosCardStyles = css`
     .solar-svg-front-near { z-index: 11; }
     .solar-svg-sun-far    { z-index: 5;  }
     .solar-svg-sun-near   { z-index: 12; }
+    /*  Radiant-heat aura around the sun disc: a warm halo that slowly breathes so a strong sun visibly
+        shimmers with heat. Only the scale animates; the inline opacity gates it on irradiance (0 when the sun
+        is weak). transform-box + centre origin so it pulses around its own centre wherever the sun sits;
+        screen blend adds warmth without darkening. */
+    .solar-sun-heat
+    {
+        transform-box: fill-box;
+        transform-origin: center;
+        mix-blend-mode: screen;
+        animation: solar-heat-pulse 2.6s ease-in-out infinite;
+        will-change: transform;
+    }
+    @keyframes solar-heat-pulse
+    {
+        0%, 100% { transform: scale(0.94); }
+        50%      { transform: scale(1.18); }
+    }
+    @media (prefers-reduced-motion: reduce)
+    {
+        .solar-sun-heat { animation: none; }
+    }
     /*  Sun to PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the ray
         endpoint at the chip border. */
     .solar-ray-svg        { z-index: 7;  }
