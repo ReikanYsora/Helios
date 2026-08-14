@@ -53,6 +53,7 @@ import
     onChartHoverMove,
     onChartHoverLeave
 } from './charts/charts';
+import { firstAvailableChartTarget } from './charts/chart-target-availability';
 import { renderDetailPanel } from './hud/detail-panel';
 import { refreshHud } from './hud/hud';
 import type { ArcSegment, SunScene, LabelLayout } from './hud/hud';
@@ -432,10 +433,14 @@ export class HeliosCard extends LitElement
         const spec = TIMELINE_MODES[mode];
         this._periodPastDays   = modePastDays(mode);
         this._periodFutureDays = modeFutureDays(mode);
-        //Entering a no-weather mode: retarget the chart off any weather metric (irradiance / temperature / humidity).
+        //Entering a no-weather mode: retarget the chart off any weather metric (irradiance / temperature / humidity)
+        //onto the first configured + visible energy chip (consumption -> production -> grid -> battery -> groups).
+        //Never force production, which the user may have hidden or have no solar source for; if nothing qualifies,
+        //keep the current target and let the chart draw nothing.
         if (!spec.weather && (this._chartTarget === 'irradiance' || this._chartTarget === 'temperature' || this._chartTarget === 'humidity'))
         {
-            this._chartTarget = 'production';
+            const fallback = firstAvailableChartTarget(this.config, this._energyDefaults);
+            if (fallback) { this._chartTarget = fallback; }
         }
         this._applyPeriod();
         this.persistUiState();
