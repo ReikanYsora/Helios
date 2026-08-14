@@ -38,21 +38,22 @@ physics, the cloud metric, the model selection, or the interpolation.
 
 - Endpoint `https://api.open-meteo.com/v1/forecast`, `timezone=UTC`, no unit
   params (defaults: W/m2, degC, snow depth in metres), coordinates rounded to the
-  cache-key precision before building the URL.
+  cache-key precision before building the URL. `elevation=` (the home's altitude)
+  is sent for sharper boundary conditions; both sides send the identical value.
 - `models=` from `pickModelsForLocation(lat, lon, precision)`. Per-hour fusion is
-  the **median** of the finite model values (median of one = the value).
-- Hourly variables (weather): `cloud_cover_low`, `cloud_cover_mid`,
-  `cloud_cover_high`, `shortwave_radiation_instant`, `direct_radiation`,
-  `diffuse_radiation`, `temperature_2m`, `relative_humidity_2m`,
-  `wind_speed_10m`, `precipitation`, `snowfall`, `weather_code`, `snow_depth`.
-  (Superset of today's two fetches: the card gains direct/diffuse/wind/snow_depth
-  for the tilted production; the integration gains the cloud layers + precip /
-  snowfall / weather_code / humidity.)
-- Optional GTI request: `global_tilted_irradiance_instant` with `tilt` +
-  `azimuth` (Open-Meteo convention `omAz = heliosAz - 180`), one GET per distinct
-  1-degree-binned orientation. Used as the preferred POA source when present.
-- Missing-value fill: cloud -> 0, shortwave/direct/diffuse -> -1 sentinel (means
-  "no model value, fall back"), precip/snowfall -> 0, temp/humidity -> NaN.
+  the **median** of the finite model values (median of one = the value). The one
+  exception is the categorical `weather_code`: a median of WMO codes is
+  meaningless, so it takes the first reporting model's code.
+- Hourly variables the **card** fetches: `shortwave_radiation_instant`,
+  `cloud_cover_low`, `cloud_cover_mid`, `cloud_cover_high`, `precipitation`,
+  `snowfall`, `weather_code`, `temperature_2m`, `relative_humidity_2m`. The
+  **integration** additionally fetches `direct_radiation` / `diffuse_radiation`
+  (and `wind_speed_10m`, `snow_depth`) for its tilted production model; the card
+  does not, since it shows GHI irradiance only and reads production from the
+  forecast (see the Correction below).
+- Missing-value fill: cloud -> 0, shortwave (and the integration's direct /
+  diffuse) -> -1 sentinel (means "no model value, fall back"), precip/snowfall ->
+  0, temp/humidity -> NaN.
 - Transient handling: retry an empty / non-200 payload; per-request timeout; on
   failure reuse the last-good series rather than blanking. HTTP 429 arms a
   back-off.
@@ -113,10 +114,13 @@ Per co-oriented panel group, then summed with per-array inverter caps.
 
 Both sides resolve a weather sample at an arbitrary instant the **same** way:
 linear interpolation between the two bracketing hourly samples (moving cursor,
-ascending time), guarding missing / negative irradiance fields. Irradiance and
-production are then evaluated at that interpolated sample. (Today the card uses
-nearest-hour for the scene; align it to the same linear interpolation the
-forecast uses, so a value on the boundary of two hours agrees.)
+ascending time), guarding missing / negative irradiance fields. The **effective
+cloud cover is recomputed from the interpolated layers** (via `cloudEffective`),
+never interpolated directly: the `min(100)` clamp makes it a non-linear function
+of the layers, so a separately-interpolated effective drifts from the layers once
+the clamp bites. Categorical fields (`weather_code`, precip, snowfall) take the
+nearer hour instead of blending. Irradiance and production are then evaluated at
+that interpolated sample.
 
 ## Parity discipline
 
@@ -143,6 +147,11 @@ Card:
 - [x] Scene weather now linearly interpolates the continuous fields between the
       bracketing hours (`weather-resolve.ts`), matching the forecast, with the
       same -1 / NaN guards.
+- [x] The effective cloud cover is recomputed from the interpolated layers via a
+      single shared `cloudEffective` (`weather.ts`), so the per-hour precompute and
+      the at-instant resolve can no longer diverge under the `min(100)` clamp.
+- [x] `weather_code` is fused by first-reporting model, not median-averaged (a
+      median of WMO codes is meaningless).
 - [x] The simple `computePvPower` is renamed `computePvPercent` (it returns a
       GHI-derived irradiance %, and the old name collided with the integration's
       tilted `compute_pv_power`).

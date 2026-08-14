@@ -39,7 +39,7 @@ describe('resolveWeatherAtTime', () =>
     it('reads the exact hour on the boundary', () =>
     {
         const w = resolveWeatherAtTime(fixture(), new Date('2024-06-01T10:00:00Z'));
-        expect(w.cloudCover).toBe(20);
+        expect(w.cloudCover).toBe(13); //cloudEffective(10, 5, 0) = 10 + 0.6*5 + 0.2*0
         expect(w.shortwave).toBe(200);
         expect(w.temperature).toBe(10);
         expect(w.weatherCode).toBe(1);
@@ -48,9 +48,17 @@ describe('resolveWeatherAtTime', () =>
     it('linearly interpolates continuous fields between the hours', () =>
     {
         const w = resolveWeatherAtTime(fixture(), new Date('2024-06-01T10:15:00Z')); //f = 0.25
-        expect(w.cloudCover).toBeCloseTo(25, 6);
+        expect(w.cloudLow).toBeCloseTo(15, 6); //raw layer, linear
         expect(w.temperature).toBeCloseTo(12.5, 6);
         expect(w.shortwave).toBeCloseTo(250, 6);
+    });
+
+    it('recomputes the effective cloud from the interpolated layers, not by interpolating the effective', () =>
+    {
+        //Hour 1 layers 100/100/100 -> raw 180, clamped to 100. At the midpoint the layers are 50/50/50 ->
+        //effective 50 + 30 + 10 = 90; interpolating the clamped effective (0 -> 100) would wrongly give 50.
+        const clamped = fixture({ cloudLow: [0, 100], cloudMid: [0, 100], cloudHigh: [0, 100], cloudCover: [0, 100] });
+        expect(resolveWeatherAtTime(clamped, new Date('2024-06-01T10:30:00Z')).cloudCover).toBe(90);
     });
 
     it('takes the nearer hour for the categorical code and precip/snow', () =>
@@ -68,9 +76,9 @@ describe('resolveWeatherAtTime', () =>
     it('clamps to the first hour before the range and the last hour after it', () =>
     {
         const before = resolveWeatherAtTime(fixture(), new Date('2024-06-01T09:00:00Z'));
-        expect(before.cloudCover).toBe(20);
+        expect(before.cloudCover).toBe(13); //cloudEffective of hour 0 layers (10, 5, 0)
         const after = resolveWeatherAtTime(fixture(), new Date('2024-06-01T12:00:00Z'));
-        expect(after.cloudCover).toBe(40);
+        expect(after.cloudCover).toBe(43);  //cloudEffective of hour 1 layers (30, 15, 20)
         expect(after.temperature).toBe(20);
     });
 

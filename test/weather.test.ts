@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { medianOfNumbers, pickModelsForLocation } from '../src/data/weather';
+import { medianOfNumbers, pickModelsForLocation, cloudEffective } from '../src/data/weather';
 
 //Parity anchors for the multi-model fusion: both sides median-combine the picked models and select the same model
 //set per coordinate (spec decisions A + B).
@@ -24,6 +24,23 @@ describe('medianOfNumbers', () =>
     {
         //Mean would be 40; the median stays with the two agreeing models.
         expect(medianOfNumbers([10, 10, 100])).toBe(10);
+    });
+});
+
+describe('cloudEffective', () =>
+{
+    it('weights low > mid > high and clamps the total to 100', () =>
+    {
+        expect(cloudEffective(10, 5, 0)).toBe(13);      //10 + 0.6*5 + 0.2*0
+        expect(cloudEffective(0, 100, 0)).toBe(60);     //mid weight 0.6
+        expect(cloudEffective(0, 0, 100)).toBe(20);     //high weight 0.2
+        expect(cloudEffective(100, 100, 100)).toBe(100); //raw 180 -> clamped
+    });
+
+    it('clamps each layer to [0, 100] before weighting', () =>
+    {
+        expect(cloudEffective(150, -10, 50)).toBe(100); //100 + 0 + 0.2*50 = 110 -> clamped
+        expect(cloudEffective(0, 0, 0)).toBe(0);
     });
 });
 

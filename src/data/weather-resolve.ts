@@ -3,7 +3,7 @@
 //agree at any instant, not only on the hour. No DOM, map, network, or engine state; the fetch/cache/timer
 //orchestration stays in the engine, and these helpers only read the hourly arrays it hands in.
 
-import type { SampleHourly } from './weather';
+import { cloudEffective, type SampleHourly } from './weather';
 
 //The two samples bracketing `t` (i0 before, i1 at/after) plus the 0..1 fraction between them. A target past
 //the last sample clamps to it (f pinned to 0 or 1), before the first clamps to the first.
@@ -99,11 +99,19 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
     const { i0, i1, f } = bracket(home.times, t);
     const near = f < 0.5 ? i0 : i1;
 
+    //Interpolate the raw layers, then recompute the effective cover from them at this instant (via the shared
+    //cloudEffective), rather than interpolating the precomputed effective: the min(100) clamp makes effective a
+    //non-linear function of the layers, so a separately-interpolated value drifts once the clamp bites. This keeps
+    //the effective cover a function of the layers at any instant, matching the parity golden vectors.
+    const cloudLow  = lerp(home.cloudLow[i0]  ?? 0, home.cloudLow[i1]  ?? 0, f);
+    const cloudMid  = lerp(home.cloudMid[i0]  ?? 0, home.cloudMid[i1]  ?? 0, f);
+    const cloudHigh = lerp(home.cloudHigh[i0] ?? 0, home.cloudHigh[i1] ?? 0, f);
+
     return {
-        cloudCover:     lerp(home.cloudCover[i0] ?? 0, home.cloudCover[i1] ?? 0, f),
-        cloudLow:       lerp(home.cloudLow[i0]   ?? 0, home.cloudLow[i1]   ?? 0, f),
-        cloudMid:       lerp(home.cloudMid[i0]   ?? 0, home.cloudMid[i1]   ?? 0, f),
-        cloudHigh:      lerp(home.cloudHigh[i0]  ?? 0, home.cloudHigh[i1]  ?? 0, f),
+        cloudCover:     cloudEffective(cloudLow, cloudMid, cloudHigh),
+        cloudLow,
+        cloudMid,
+        cloudHigh,
         shortwave:      lerpRad(home.shortwave[i0] ?? -1, home.shortwave[i1] ?? -1, f),
         precip:         home.precip[near]      ?? 0,
         snowfall:       home.snowfall[near]    ?? 0,

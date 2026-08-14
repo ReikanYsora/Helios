@@ -348,6 +348,20 @@ const fillCode      = (arr: (number | null)[]): number[] => arr.map(v => v == nu
 const fillNaN       = (arr: (number | null)[]): number[] => arr.map(v => (v == null || !isFinite(v)) ? NaN : v);
 
 
+//Layer-weighted effective cloud cover (spec decision B): each layer clamped to [0, 100] before weighting so an
+//upstream > 100 quirk doesn't bleed in with the wrong relative contribution. Low cloud attenuates far more than high
+//cirrus. THE single source: the per-hour precompute here and weather-resolve's at-instant recompute both call it, so
+//the effective cover is always a function of the layers at that instant (never a separately-interpolated value that
+//would drift from the layers once the min(100) clamp bites).
+export function cloudEffective(low: number, mid: number, high: number): number
+{
+    const lc = Math.max(0, Math.min(100, low));
+    const mc = Math.max(0, Math.min(100, mid));
+    const hc = Math.max(0, Math.min(100, high));
+    return Math.min(100, lc + 0.6 * mc + 0.2 * hc);
+}
+
+
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
 //fusion (median per timestep), user elevation via &elevation= for sharper boundary conditions, and a layer-weighted
 //effective cloud cover matching both ground perception and shortwave attenuation:
@@ -432,21 +446,14 @@ export async function fetchHomePointData(
             const midSeries  = fillCloud(readSeries(row, 'cloud_cover_mid',  models));
             const highSeries = fillCloud(readSeries(row, 'cloud_cover_high', models));
 
-            //Clamp each layer to [0, 100] before weighting so an upstream > 100 quirk doesn't bleed into the weighted sum
-            //with the wrong relative contribution (the final Math.min catches the total but the mix would already be wrong).
-            const cloudEffective = lowSeries.map((lo, i) =>
-            {
-                const lc = Math.max(0, Math.min(100, lo ?? 0));
-                const mc = Math.max(0, Math.min(100, midSeries[i]  ?? 0));
-                const hc = Math.max(0, Math.min(100, highSeries[i] ?? 0));
-                return Math.min(100, lc + 0.6 * mc + 0.2 * hc);
-            });
+            const cloudEffectiveSeries = lowSeries.map((lo, i) =>
+                cloudEffective(lo ?? 0, midSeries[i] ?? 0, highSeries[i] ?? 0));
 
             const data: SampleHourly = {
                 lat: fLat,
                 lon: fLon,
                 times,
-                cloudCover:  cloudEffective,
+                cloudCover:  cloudEffectiveSeries,
                 cloudLow:    lowSeries,
                 cloudMid:    midSeries,
                 cloudHigh:   highSeries,
