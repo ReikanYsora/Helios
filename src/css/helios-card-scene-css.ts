@@ -678,17 +678,20 @@ export const heliosCardStyles = css`
         transform-box: fill-box;
         transform-origin: center;
         mix-blend-mode: screen;
-        animation: solar-heat-pulse 2.6s ease-in-out infinite;
-        will-change: transform;
+        opacity: var(--heat, 0);
+        animation: solar-heat-pulse 2.4s ease-in-out infinite;
+        will-change: transform, opacity;
     }
+    /*  A heat wave: the warm aura swells and fades outward, then settles. Opacity is scaled by --heat (the
+        irradiance gate) so the whole thing vanishes when the sun is weak. */
     @keyframes solar-heat-pulse
     {
-        0%, 100% { transform: scale(0.94); }
-        50%      { transform: scale(1.18); }
+        0%, 100% { transform: scale(0.9);  opacity: var(--heat, 0); }
+        50%      { transform: scale(1.28); opacity: calc(var(--heat, 0) * 0.25); }
     }
     @media (prefers-reduced-motion: reduce)
     {
-        .solar-sun-heat { animation: none; }
+        .solar-sun-heat { animation: none; opacity: var(--heat, 0); }
     }
     /*  Sun to PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the ray
         endpoint at the chip border. */
