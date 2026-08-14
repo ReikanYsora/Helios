@@ -849,10 +849,11 @@ export class HeliosEngine
 
         this._startAutoRotateLoop();
 
-        if (this._homeHourlyData)
-        {
-            this._renderForCurrentSelection();
-        }
+        //Paint the scene as soon as the renderer is ready, weather or not: the sun arc, home, buildings and the day
+        //curve need none of it, and _renderForCurrentSelection already falls back to Haurwitz when the forecast is
+        //absent. Waiting on _homeHourlyData left the whole scene blank through a slow / rate-limited weather fetch
+        //whenever auto-rotate was off (nothing else repaints). Weather repaints on arrival, gated by sunSceneEq.
+        this._renderForCurrentSelection();
     }
 
     //The card-side host element (#map-container) the renderer mounts into; carries the cascaded HA theme CSS
