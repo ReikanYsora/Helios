@@ -73,7 +73,7 @@ one to bring its day curve up around the house and its series onto the timeline,
 tap again to toggle the curve, with the same detail panel (min / mean / max) and
 hover readout.
 Temperature scales to its own range so a two-degree swing is legible; humidity
-sits on a fixed 0–100 % scale. Thanks to @tfriberg for the suggestion (#332).
+sits on a fixed 0-100 % scale. Thanks to @tfriberg for the suggestion (#332).
 
 ### Added: local weather sensors override the forecast
 
@@ -126,12 +126,12 @@ the precise report (#366).
 
 On installations whose production meter reports its energy less often than the
 graph's detail (or at an uneven pace), the past-production curve could briefly
-climb **above the real power your panels can produce** — a 2.5 kW-capped array
+climb **above the real power your panels can produce** - a 2.5 kW-capped array
 plotting more than 2.5 kW for a moment. The curve is reconstructed from the
 Energy dashboard's energy, and a long report landing in a short slice made the
 computed average too high. Helios now spreads each reading across the interval it
 actually covers, so the curve never resolves finer than your meter reports and
-can no longer overshoot — while the totals still match the Energy dashboard
+can no longer overshoot - while the totals still match the Energy dashboard
 exactly. Thanks to @ritonbrunis-lab for the clear screenshots (#371).
 
 ### Fixed: flicker and black screen on some entry-level tablets
@@ -140,19 +140,23 @@ On a few low-end wall tablets the whole view could shimmer or recompose between
 frames, and a kiosk screenshot came back black. The cause was the same family as
 the old half-3D iPad issue: the device's graphics couldn't correctly compose the
 tilted 3D ground layer. Helios now recognises those graphics chips and switches
-them to a lighter drawing path automatically — no setting to touch, and the 2.5D
+them to a lighter drawing path automatically - no setting to touch, and the 2.5D
 look is kept. Thanks to @Richaaldo and @charleslales for the detailed reports (#370).
 
 ### Changed: the battery now connects to the home, not the solar
 
 The battery used to show a line from the solar chip while charging, which quietly
-claimed the charge came from your panels. That isn't always true — an AC-coupled
+claimed the charge came from your panels. That isn't always true - an AC-coupled
 battery, or one charged from the grid overnight, would be drawn charging "from
 solar" even with no sun. The battery is now a single connection to the home, like
 every other chip: the flow runs from the battery to the home while discharging and
 from the home to the battery while charging, without claiming a source. As always,
-the flow's value is your real measured battery power — nothing is invented. Thanks
+the flow's value is your real measured battery power - nothing is invented. Thanks
 to @addinsella for the sharp, fair pushback (#355).
+
+---
+
+## 2026.8.3
 
 A small release on top of 2026.8.2: a new sun-chip readout, a fairer flow
 animation, and a handful of fixes.
