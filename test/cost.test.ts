@@ -58,6 +58,16 @@ describe('latestCostRate freshness gate', () =>
         expect(latestCostRate(host([bucket(0, 2)], null), NOW)).toBeCloseTo(2, 6);
     });
 
+    it('fails when EITHER populated direction is stale, not just the newest', () =>
+    {
+        //The two statistics can update at different cadences. A fresh bucket on one side must not vouch for a
+        //stale bucket on the other: netting them would publish the stale side's rate as the live one.
+        expect(latestCostRate(host([bucket(16 * HOUR, 3)], [bucket(0, 1)]), NOW)).toBeNull();
+        expect(latestCostRate(host([bucket(0, 3)], [bucket(16 * HOUR, 1)]), NOW)).toBeNull();
+        //Both fresh still nets normally.
+        expect(latestCostRate(host([bucket(0, 3)], [bucket(0, 1)]), NOW)).toBeCloseTo(2, 6);
+    });
+
     it('returns null when no series is loaded at all', () =>
     {
         expect(latestCostRate(host(null, null), NOW)).toBeNull();

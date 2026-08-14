@@ -91,13 +91,15 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
 
     //Freshness gate. HA's own price-driven cost sensors track the meter in real time and always pass; a utility
     //integration that backfills yesterday does not, and its last bucket would otherwise be rendered as the live
-    //rate - the same "invented" reading the card refuses everywhere else. Newest END across both directions, so an
-    //install that simply is not exporting (no compensation buckets) still qualifies on its import series alone.
-    const newestEnd = Math.max(
-        imp && imp.length > 0 ? imp[imp.length - 1].endMs : Number.NEGATIVE_INFINITY,
-        exp && exp.length > 0 ? exp[exp.length - 1].endMs : Number.NEGATIVE_INFINITY,
-    );
-    if (!isFinite(newestEnd) || (nowMs - newestEnd) > COST_STAT_MAX_AGE_MS) { return null; }
+    // rate - the same "invented" reading the card refuses everywhere else.
+    //
+    // Each POPULATED direction is checked on its own. Taking the newest end ACROSS both would let a fresh
+    // compensation bucket vouch for a 16-hour-old import bucket, and the netting below would then publish that
+    // stale import rate as "now". An EMPTY direction is skipped rather than failed: an install that never exports
+    // has no compensation buckets at all, and absence is not staleness.
+    const stale = (s: ChangeBucket[] | null): boolean =>
+        !!s && s.length > 0 && (nowMs - s[s.length - 1].endMs) > COST_STAT_MAX_AGE_MS;
+    if (stale(imp) || stale(exp)) { return null; }
 
     const bucketRate = (b: ChangeBucket | undefined): number =>
     {
