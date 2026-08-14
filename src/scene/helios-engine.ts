@@ -1,7 +1,7 @@
 import { SceneRenderer } from './renderer';
 import { renderDayCurve, type DayCurveInput as CurveInput, type DayCurveScene } from './day-curve';
 import type { Building, RawBuilding } from './buildings';
-import { getSunPosition, computePvPower, computeIrradianceWm2 } from '../core/time/sun';
+import { getSunPosition, computePvPercent, computeIrradianceWm2 } from '../core/time/sun';
 import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from '../data/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './buildings';
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
@@ -1125,8 +1125,9 @@ export class HeliosEngine
         const w = this._getWeatherAtTime(t);
 
         //Compute every irradiance candidate; priority sensor > shortwave > Haurwitz (see IrradianceSource).
-        //These are GHI (horizontal); the tilt/azimuth transposition lives in the card-side PV helpers.
-        const pvPowerHaurwitz = computePvPower(t, this.homeLat, this.homeLon, w.cloudCover);
+        //These are ground-horizontal (GHI): the scene shows irradiance, not per-panel production (that comes
+        //measured from the recorder, and modelled by the Helios-Forecast integration).
+        const pvPowerHaurwitz = computePvPercent(t, this.homeLat, this.homeLon, w.cloudCover);
 
         let pvPowerShortwave = -1;
         if (w.shortwave >= 0)
@@ -2179,8 +2180,8 @@ export class HeliosEngine
             {
                 return sw;
             }
-            //Haurwitz returns a normalised PV %; rescale to W/m² (×10, since 1000 = STC) for one chart unit.
-            const pct = computePvPower(home.times[i], this.homeLat, this.homeLon, home.cloudCover[i] ?? 0);
+            //Haurwitz returns a normalised irradiance %; rescale to W/m² (×10, since 1000 = STC) for one chart unit.
+            const pct = computePvPercent(home.times[i], this.homeLat, this.homeLon, home.cloudCover[i] ?? 0);
             return pct * 10;
         });
 
