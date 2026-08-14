@@ -23,6 +23,7 @@
 //Only single-net-sensor installs are evaluated (the flattened prefs of every modern core produce exactly one
 //stat_rate per source; multi-source wirings keep the current behavior untouched).
 
+import type { HassLike } from '../../core/ha-types';
 import type { EnergyDefaults } from './energy-prefs';
 import {
     GUARD_REFRESH_MS, GUARD_WINDOW_MS, GUARD_MIN_EXPORT_KWH, GUARD_MAX_EXPORT_KWH,
@@ -156,7 +157,7 @@ export function nextGuardState(prev: GridGuardState, hours: GuardHour[]): GridGu
 
 export interface GridGuardHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     readonly _energyDefaults?: EnergyDefaults;
     _gridGuard: GridGuardState;
     requestUpdate(): void;

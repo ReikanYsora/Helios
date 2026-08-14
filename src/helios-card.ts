@@ -2,6 +2,7 @@ import type { PropertyValues, TemplateResult} from 'lit';
 import { LitElement, html, svg, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
+import type { HassLike } from './core/ha-types';
 import type { HeliosEngine, WeatherOverrideVar } from './scene/helios-engine';
 import
 {
@@ -109,7 +110,7 @@ const _cacheIdRegistry = new Map<string, HeliosCard[]>();
 @customElement('helios-card')
 export class HeliosCard extends LitElement
 {
-    @property({ attribute: false }) public hass!: any;
+    @property({ attribute: false }) public hass!: HassLike;
     @property({ attribute: false }) config!: HeliosConfig;
     //Set by HA on the editor's live-preview card. HA rebuilds that card on every keystroke, so intro
     //animations (prism rise, timeline curve grow) are suppressed while it is true.

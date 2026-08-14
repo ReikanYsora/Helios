@@ -1,6 +1,7 @@
 //HA Energy dashboard preferences subscription. All sensors resolve from the dashboard's global settings (no per-card
 //entity slots). Subscribed once per card; HA's `energy_preferences_updated` event triggers a fresh fetch.
 
+import type { HassLike } from '../../core/ha-types';
 import { HA_DAILY_TOTALS_TTL_MS, DAY_MS } from '../../core/config/constants';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
@@ -130,7 +131,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults = freshEnergyDefaults();
 
 export interface EnergyPrefsHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     _energyDefaults: EnergyDefaults;
     //True once `fetchEnergyPrefs` lands a parsed snapshot (including the empty "no energy_sources" case), so boot
     //gating stops blocking on a never-arriving prefs payload when no HA Energy dashboard is configured.
@@ -232,7 +233,7 @@ export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
 //prefers it over local integration for today's produced-kWh headline.
 export interface HaDailyTotalsHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     readonly _energyDefaults: EnergyDefaults;
     _haSolarTodayKwh:          number | null;
     requestUpdate(): void;

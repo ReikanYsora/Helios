@@ -8,6 +8,7 @@
 //
 // Same host-driven, table-driven pattern as data/sources/irradiance.ts, generalised over every overridable variable.
 
+import type { HassLike } from '../../core/ha-types';
 import type { HeliosConfig } from '../../core/config/helios-config';
 import type { HeliosEngine, WeatherOverrideVar } from '../../scene/helios-engine';
 import { callWS } from '../ha-gateway';
@@ -72,7 +73,7 @@ interface VarState
 export interface WeatherOverrideHost
 {
     readonly config:     HeliosConfig | undefined;
-    readonly hass:       any;
+    readonly hass:       HassLike;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _engine?:   HeliosEngine;
 
@@ -178,7 +179,7 @@ function pushCondition(host: WeatherOverrideHost, entity: string): void
 
 //Condition history: raw recorder states mapped to WMO codes (skipping unknown/unavailable conditions). Restores
 //the last-good durable copy on a failed fetch.
-async function fetchConditionHistory(hass: any, entityId: string, start: Date, end: Date, durableKey: string): Promise<NumSeries | null>
+async function fetchConditionHistory(hass: HassLike, entityId: string, start: Date, end: Date, durableKey: string): Promise<NumSeries | null>
 {
     if (!hass?.callWS) { return null; }
     try
@@ -297,7 +298,7 @@ function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string): v
 // LTS), raw history as the fallback. Returns the fresh series, the last-good durable copy on a failed fetch, or an
 // empty series for an empty window. No host mutation and no engine push (the caller pushes in the `.then`).
 export async function fetchNumericHistory(
-    hass:       any,
+    hass:       HassLike,
     entityId:   string,
     start:      Date,
     end:        Date,

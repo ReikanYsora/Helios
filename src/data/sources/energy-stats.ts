@@ -7,6 +7,7 @@
 //unit conversion (`units: { energy: 'kWh' }` normalises Wh/kWh/MWh server-side). The only math here is
 //kWh-per-bucket / bucket-duration = average watts, so where HA has a number the card shows the same number.
 
+import type { HassLike } from '../../core/ha-types';
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, HOUR_MS, DAY_MS } from '../../core/config/constants';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
@@ -58,7 +59,7 @@ export function clearEnergyStatsCache(): void
 //collapses their calls to a single recorder round-trip; each source then merges its own ids. Null on empty
 //ids, no hass, or rejection (falling back to the durable copy) so callers keep their previous series.
 export async function fetchChangeById(
-    hass:         any,
+    hass:         HassLike,
     statisticIds: string[],
     startMs:      number,
     endMs:        number,

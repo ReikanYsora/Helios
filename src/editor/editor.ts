@@ -3,6 +3,7 @@ import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
+import type { HassLike } from '../core/ha-types';
 import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
@@ -68,7 +69,7 @@ const MAP_LAYER_EN: Record<GroundLayerKey, string> = {
 @customElement('helios-card-editor')
 export class HeliosCardEditor extends LitElement
 {
-    @property({ attribute: false }) public hass?: any;
+    @property({ attribute: false }) public hass?: HassLike;
     @state()                        private _cfg: HeliosConfig = {};
     @state()                        private _pickerReady = false;
     //Bumped whenever a colour picker is cleared with its X, to force that picker to be re-created (via keyed) so

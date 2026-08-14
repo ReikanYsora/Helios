@@ -3,6 +3,7 @@
 //
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
+import type { HassLike } from '../core/ha-types';
 import { homeColor, mapColorKey, mapShowKey, type HeliosConfig } from '../core/config/helios-config';
 import { resolveUiColor } from '../core/format/format';
 import { GROUND_LAYER_KEYS } from '../scene/ground-render';
@@ -107,7 +108,7 @@ let   _homeCoordsNoConfigCache: HomeCoordsCacheEntry | null = null;
 
 export function getHomeCoords(
     config: HeliosConfig | undefined,
-    hass:   any
+    hass:   HassLike
 ): { lat: number; lon: number } | null
 {
     const hassCfg    = hass?.config;
@@ -203,7 +204,7 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
 export interface InitHost extends HudHost
 {
     readonly config: HeliosConfig | undefined;
-    readonly hass:   any;
+    readonly hass:   HassLike;
     readonly preview?: boolean;
 
     _engine?:            HeliosEngine;

@@ -5,6 +5,7 @@
 //averaging tariffs would misprice the moment. Nothing is shown unless cost is configured in the Energy dashboard
 //(Helios' rule: measured or absent, never invented). Positive rate = spending, negative = earning (surplus sold).
 
+import type { HassLike } from '../../core/ha-types';
 import { parseNumericState, pvNormalizeToWatts } from '../../core/format/format';
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
@@ -14,7 +15,7 @@ import type { KeyedFetch } from '../source-fetch';
 
 export interface CostHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     readonly _energyDefaults?: EnergyDefaults;
     //Live grid slots, already resolved by grid.ts (measured or null).
     _gridImportValue: number | null;

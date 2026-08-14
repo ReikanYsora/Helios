@@ -2,6 +2,7 @@
 //modules read off, plus re-exports of the render + sampling concerns living in sibling modules. Charts only read;
 //state mutations live elsewhere.
 
+import type { HassLike } from '../core/ha-types';
 import { type HeliosConfig, monitoringGroupName } from '../core/config/helios-config';
 import type { ChipSlot } from '../core/config/chip-appearance';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
@@ -121,7 +122,7 @@ export function targetLabel(host: ChartHost, target: ChartTarget): string
 export interface ChartHost
 {
     readonly config:         HeliosConfig | undefined;
-    readonly hass:           any;
+    readonly hass:           HassLike;
     readonly _energyDefaults: EnergyDefaults;
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;

@@ -13,6 +13,7 @@
 //meters: the live chips stay EMPTY and the editor explains what to configure; curves and scrub keep
 //reading the meters regardless.
 
+import type { HassLike } from '../../core/ha-types';
 import { formatEntityValue, type PowerUnit } from '../../core/format/format';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, extractPerEntity, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
@@ -23,7 +24,7 @@ import { localMidnightMinusDays } from '../../core/time/timezone';
 
 export interface GridHost
 {
-    readonly hass:   any;
+    readonly hass:   HassLike;
     //HA Energy dashboard defaults (populated by card/energy-prefs.ts), the sole source of grid wiring:
     //import/export meters, live power sensors, and the sign-inversion set.
     readonly _energyDefaults?: EnergyDefaults;
@@ -193,7 +194,7 @@ function readStatRates(host: GridHost, rates: string[]): void
 
 //Format the grid chip value: power sources in kW, energy sources in kWh, locale-aware at the configured precision.
 //Empty string when null so callers can collapse the chip. Thin wrapper over the shared formatter.
-export function formatGridValue(hass: any, value: number | null, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
+export function formatGridValue(hass: HassLike, value: number | null, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
     if (value === null) { return ''; }
     return formatEntityValue(hass, value, unit, decimals, powerU);

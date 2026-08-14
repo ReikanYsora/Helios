@@ -3,6 +3,7 @@
 //The user wires their battery on the HA Energy dashboard (per-source lists of `stat_rate`, `stat_energy_from`, `stat_energy_to`,
 //`stat_soc`). Live reads aggregate across every wired bank (sum for power, mean for SoC).
 
+import type { HassLike } from '../../core/ha-types';
 import { formatPowerKw, parseNumericState, type PowerUnit } from '../../core/format/format';
 import { pvNormalizeToWatts } from './pv';
 import { callWS } from '../ha-gateway';
@@ -73,7 +74,7 @@ export function batteryLiveIsBucketSourced(defaults: EnergyDefaults): boolean
 //@state reactivity is preserved since each assignment hits the decorator's setter.
 export interface BatteryHost
 {
-    readonly hass:       any;
+    readonly hass:       HassLike;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _energyDefaults: EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
@@ -111,7 +112,7 @@ export interface BatteryHost
 //source), sum their states like the HA Energy live tile (per-bank sign honoured via `invertedRateEntities`). A mixed or
 //energy-only wiring shows NO live power (the sum would silently miss a bank, and a live value is never derived from the
 //meters); scrub and curves keep netting the directional change series regardless.
-function computeBatteryLive(hass: any, defaults: EnergyDefaults): { soc: number | null; power: number | null; unit: string }
+function computeBatteryLive(hass: HassLike, defaults: EnergyDefaults): { soc: number | null; power: number | null; unit: string }
 {
     let soc: number | null = null;
     const socEntities = defaults.batteryStatSocs;
@@ -441,7 +442,7 @@ function aggregateBatterySocLkcf(perEntity: BatteryHistory[]): BatteryHistory
 //RequestCache and lands the result on `@state`. Returns the fresh SoC series on success, the last-good durable copy on a
 //failed fetch (so the curve survives an HA restart / timeout instead of blanking), or an empty series for an empty window.
 export async function fetchBatterySoc(
-    hass:       any,
+    hass:       HassLike,
     ids:        string[],
     ltsStart:   Date,
     rawStart:   Date,
@@ -565,7 +566,7 @@ export function batterySampleAtTime(
 //Format a battery power value for the chip in the card's configured unit (W or kW), at the configured precision.
 //`sign` picks the convention: 'default' keeps the +/- as given (charging negative, discharging positive after the
 //caller's negation), 'inverted' flips it, 'hidden' drops the sign and shows the magnitude only.
-export function formatBatteryPower(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW', sign: 'default' | 'inverted' | 'hidden' = 'default'): string
+export function formatBatteryPower(hass: HassLike, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW', sign: 'default' | 'inverted' | 'hidden' = 'default'): string
 {
     const watts = pvNormalizeToWatts(value, unit);
     if (sign === 'hidden') { return formatPowerKw(hass, Math.abs(watts), decimals, false, powerU); }

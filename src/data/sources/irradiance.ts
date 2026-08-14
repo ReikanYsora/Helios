@@ -7,6 +7,7 @@
 // Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_irradiance*` fields; functions here read/write
 // them through the structural IrradianceHost interface.
 
+import type { HassLike } from '../../core/ha-types';
 import type { HeliosConfig } from '../../core/config/helios-config';
 import type { HeliosEngine } from '../../scene/helios-engine';
 import { callWS } from '../ha-gateway';
@@ -78,7 +79,7 @@ export interface IrradianceHistory
 export interface IrradianceHost
 {
     readonly config:     HeliosConfig | undefined;
-    readonly hass:       any;
+    readonly hass:       HassLike;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _engine?:   HeliosEngine;
 
@@ -213,7 +214,7 @@ export function pushIrradianceToEngine(host: IrradianceHost): void
 // success, the last-good durable copy on a failed fetch (so the curve survives an HA restart / timeout), or an empty
 // series for an empty window.
 export async function fetchIrradiance(
-    hass:       any,
+    hass:       HassLike,
     entityId:   string,
     start:      Date,
     end:        Date,
