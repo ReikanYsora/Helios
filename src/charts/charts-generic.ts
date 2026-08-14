@@ -698,10 +698,40 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeo
 
 
 
+//Memo for computeDailyKwhTotals. The tooltip calls it on every pointermove, but the result depends only on the
+//range + data, never the cursor. Key: the range, the store's data-version hash (which already folds in the pv
+//change series), a light pv signature for the store-null case, and a per-minute term so Pass 2's now-split stays
+//fresh. Stable across a hover session, so the whole per-day sum stops recomputing on every frame.
+let _dailyTotalsKey: string | null = null;
+let _dailyTotalsVal: Map<number, number> | null = null;
+
+function dailyTotalsKey(host: ChartHost): string
+{
+    const r = host._timeRange;
+    if (!r) { return 'norange'; }
+    const pv     = host._pvChangeSeries;
+    const pvLast = pv && pv.length ? pv[pv.length - 1] : null;
+    return `${r.start.getTime()}|${r.end.getTime()}`
+        + `|${host._unifiedStore?.dataVersion ?? 'nostore'}`
+        + `|pv${pv?.length ?? 0}:${pvLast?.endMs ?? 0}:${pvLast?.kwh ?? 0}`
+        + `|m${Math.floor(Date.now() / 60000)}`;
+}
+
 //kWh-per-day totals over the active range from two passes: past + today-so-far from the recorder `change` buckets,
 //today-remainder + future from the store's corrected forecast. Returns a Map keyed by each day's local-midnight ms
-//(kWh); days outside the range or without usable data are omitted.
+//(kWh); days outside the range or without usable data are omitted. Memoised on dailyTotalsKey; callers only read
+//the map (never mutate it), so a shared cached instance is safe.
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
+{
+    const key = dailyTotalsKey(host);
+    if (key === _dailyTotalsKey && _dailyTotalsVal) { return _dailyTotalsVal; }
+    const out = computeDailyKwhTotalsUncached(host);
+    _dailyTotalsKey = key;
+    _dailyTotalsVal = out;
+    return out;
+}
+
+function computeDailyKwhTotalsUncached(host: ChartHost): Map<number, number>
 {
     const out = new Map<number, number>();
     if (!host._timeRange)
