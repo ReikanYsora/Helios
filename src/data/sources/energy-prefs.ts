@@ -177,17 +177,37 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         return;
     }
     fetchEnergyPrefs(host);
-    try
+    //`subscribeEvents` resolves its UnsubscribeFunc asynchronously. Install a synchronous canceller now so the
+    //re-entry guard above holds and a teardown that lands before the promise resolves still unsubscribes once it
+    //does; storing the raw promise as the unsub would silently leak the subscription (a promise is not callable).
+    let unsub: (() => void) | null = null;
+    let live = true;
+    host._energyPrefsUnsub = () =>
     {
-        host._energyPrefsUnsub = host.hass.connection.subscribeEvents(
-            () => fetchEnergyPrefs(host),
-            'energy_preferences_updated',
-        );
-    }
-    catch (_)
-    {
-        //Event subscription unsupported on this core; the one-shot fetch above already populated the cache.
-    }
+        live = false;
+        unsub?.();
+    };
+    Promise.resolve(host.hass.connection.subscribeEvents(
+        () => fetchEnergyPrefs(host),
+        'energy_preferences_updated',
+    ))
+        .then((fn: () => void) =>
+        {
+            unsub = fn;
+            if (!live)
+            {
+                fn();
+            }
+        })
+        .catch(() =>
+        {
+            //Event subscription unsupported on this core; the one-shot fetch above already populated the cache.
+            //Clear the canceller (only if not already torn down) so a later attempt can re-subscribe.
+            if (live)
+            {
+                host._energyPrefsUnsub = undefined;
+            }
+        });
 }
 
 
