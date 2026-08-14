@@ -50,6 +50,30 @@ export const sk: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Poveternostné efekty",
+    weatherEnabledHint:
+      "Vykreslí skutočnú oblohu nad scénou: slnko, oblaky, dážď, sneh a búrky podľa vášho miestneho počasia, pričom sleduje časovú os pri jej posúvaní. Vypnuté zachová jasnú scénu.",
+    temperatureEntity: "Senzor teploty",
+    temperatureEntityHelp:
+      "Voliteľné. Použite miestny senzor vonkajšej teploty (°C) namiesto hodnoty z Open-Meteo pre čip teploty. Jeho aktuálny stav a história z rekordéra sa použijú pre aktuálne + minulé; hodiny predpovede zostávajú na modeli.",
+    humidityEntity: "Senzor vlhkosti",
+    humidityEntityHelp:
+      "Voliteľné. Použite miestny senzor relatívnej vlhkosti (%) namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    cloudCoverEntity: "Senzor oblačnosti",
+    cloudCoverEntityHelp:
+      "Voliteľné. Použite miestny senzor oblačnosti (%) na riadenie odtieňa oblohy (slnko, sivnutie) namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    precipitationEntity: "Senzor zrážok",
+    precipitationEntityHelp:
+      "Voliteľné. Použite miestny senzor zrážok (mm) na riadenie vrstvy dažďa namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    snowfallEntity: "Senzor sneženia",
+    snowfallEntityHelp:
+      "Voliteľné. Použite miestny senzor sneženia (cm) na riadenie vrstvy snehu namiesto hodnoty z Open-Meteo pre aktuálne + minulé.",
+    weatherEntity: "Entita počasia",
+    weatherEntityHelp:
+      "Voliteľné. Použite entitu počasia Home Assistant na riadenie podmienok (dážď / sneh / búrka) namiesto hodnoty z Open-Meteo pre aktuálne + minulé. Hodiny predpovede zostávajú na modeli.",
+    chipTemperature: "Zobrazenie teploty",
+    chipHumidity: "Zobrazenie vlhkosti",
+    chipCost: "Zobrazenie nákladov",
     locationSection: "Poloha domova",
     homeLatitude: "Zemepisná šírka domova",
     homeLongitude: "Zemepisná dĺžka domova",
@@ -68,6 +92,10 @@ export const sk: Translations = {
     sunChipMode: "Zobrazenie čipu slnka",
     sunChipModeHelp:
       "Čo zobrazuje čip slnka: živé slnečné ožiarenie (predvolené) alebo polohu slnka (azimut a výšku). Poloha nepotrebuje senzor, pochádza z vlastných slnečných výpočtov karty.",
+      batteryChipMode: "Údaj čipu batérie",
+      batteryChipModeHelp: "Čo zobrazuje čip batérie: aktuálny výkon (predvolené) alebo stav nabitia (%). Prepne na hodnotu, ktorú batéria skutočne poskytuje.",
+      batteryChipModePower: "Výkon",
+      batteryChipModeSoc: "Stav nabitia",
     sunChipModeIrradiance: "Ožiarenie",
     sunChipModePosition: "Poloha slnka",
     displayUpdateFrequency: "Detail grafu",
@@ -103,9 +131,13 @@ export const sk: Translations = {
     showSunTimes: "Zobraziť čas východu / západu slnka",
     showSunTimesHint:
       "Zobrazí časy východu a západu slnka a ich značky pri pätách slnečného oblúka.",
+    showHorizonLine: "Zobraziť horizont terénu",
+    showHorizonLineHint: "Vykreslí líniu horizontu terénu okolo domu, vypočítanú z miestneho reliéfu. Horizont vždy realisticky stlmí slnko za kopcami; toto iba zobrazí alebo skryje vykreslenú líniu.",
+    horizonLineColor: "Farba horizontu terénu",
+    horizonLineColorHint: "Farba línie horizontu terénu.",
     lockRotation: "Uzamknúť natočenie",
     lockRotationHint:
-      "Nastav uhol pohľadu priamo v náhľade (ťahaním otáčaj a nakláňaj scénu), potom zapni uzamknutie, aby si ho zafixoval: ťahanie na otáčanie aj automatické obiehanie v nečinnosti sa vypnú a zostane nastavený uhol.",
+      "Potiahnutím v náhľade otočte a nakloňte scénu do požadovaného pohľadu a potom toto zapnite. Zámok tento pohľad zmrazí (otáčanie ťahaním a automatické otáčanie v pokoji sa vypnú) a uloží uhol do karty, takže úplne rovnaký pohľad sa zobrazí na každom zariadení a prehliadači. Vypnite ho pre opätovné voľné otáčanie.",
     chipsSection: "Zobrazenie entít",
     chipsIntro:
       "Zobraz alebo skry každú entitu a vyber jej ikonu a farbu. Domov nasleduje farbu vybraného čipu, prípadne tvoju primárnu farbu ako predvolenú.",
@@ -163,15 +195,12 @@ export const sk: Translations = {
     hiddenDevicesEmpty:
       "V tvojom Energy dashboarde zatiaľ nie sú sledované žiadne jednotlivé zariadenia. Pridaj tam spotrebu zariadení, aby si ich mohol ovládať tu.",
     deviceVisibilityLabel: "Zobraziť zariadenie",
-    deviceGroupLabel: "Sledovacia skupina",
     group: "Skupina",
     noGroup: "Bez skupiny",
     groupAssignHint:
       "Presuňte svoje zariadenia do skupiny. Čo zostane dole, nepatrí do žiadnej skupiny.",
     groupDropHere: "Sem presuňte zariadenie",
     backToLive: "Späť na naživo",
-    devicesEnergyNote:
-      "Toto sú jednotlivé zariadenia aktuálne nastavené v tvojom Energy dashboarde Home Assistant. Oko zobrazí alebo skryje každé z nich všade a štítok ho priradí do skupiny.",
     buildingClusterRadius: "Polomer zoskupovania domova",
     buildingClusterRadiusHelp:
       "Polomer okolo domova, v ktorom sa priľahlé prístavby (verandy, garáže, kôlne) považujú za súčasť domova: vykreslia sa v plnej nepriehľadnosti a farbe domova namiesto stlmených susedov. 0 ponechá iba hlavnú budovu.",

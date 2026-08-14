@@ -49,9 +49,11 @@ export function getSunPosition(date: Date, lat: number, lon: number):
 }
 
 
-//PV power estimate, 0..100% of STC (1000 W/m2). Reuses computeIrradianceWm2 (Haurwitz clear-sky GHI x Kasten-Czeplak cloud
-//attenuation) and maps effective ground-horizontal irradiance to % of STC (W/m2 / 10), clamped [0, 100]. Returns 0 below the horizon.
-export function computePvPower(
+//Ground-horizontal irradiance as a percentage of STC (1000 W/m²), clamped [0, 100]; 0 below the horizon.
+//This is the simple analytical indicator (Haurwitz GHI x Kasten-Czeplak cloud, via computeIrradianceWm2) that
+//drives the scene arc and the timeline irradiance fallback - NOT the integration's tilted per-panel PV model
+//(compute_pv_power there); the name is deliberately distinct to avoid conflating the two.
+export function computePvPercent(
     date:          Date,
     lat:           number,
     lon:           number,
@@ -62,7 +64,7 @@ export function computePvPower(
 }
 
 
-//Same physics as computePvPower but returns effective ground-horizontal irradiance in W/m² instead of the clamped 0-100% PV
+//Same physics as computePvPercent but returns effective ground-horizontal irradiance in W/m² instead of the clamped 0-100%
 //figure. Drives the solar-arc W/m² label and line-flow speed; returns 0 below the horizon as a "night" sentinel.
 export function computeIrradianceWm2(date: Date, lat: number, lon: number, cloudCoverPct: number): number
 {

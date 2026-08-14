@@ -50,6 +50,30 @@ export const isLocale: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Veðuráhrif",
+    weatherEnabledHint:
+      "Málar raunverulegan himininn yfir senuna: sólskin, ský, rigningu, snjó og þrumuveður frá veðrinu hjá þér, í takt við tímalínuna þegar þú flettir. Slökkt heldur senunni heiðskírri.",
+    temperatureEntity: "Hitaskynjari",
+    temperatureEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn útihitaskynjara (°C) í stað Open-Meteo gildisins fyrir hitastigsmerkið. Rauntímastaða hans og upptökusaga eru notuð fyrir rauntíma + fortíð; spátímar halda sig við líkanið.",
+    humidityEntity: "Rakaskynjari",
+    humidityEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn rakastigsskynjara (%) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    cloudCoverEntity: "Skýjahuluskynjari",
+    cloudCoverEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn skýjahuluskynjara (%) til að stýra himinstiginu (sól, grámi) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    precipitationEntity: "Úrkomuskynjari",
+    precipitationEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn úrkomuskynjara (mm) til að stýra rigningarlaginu í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    snowfallEntity: "Snjókomuskynjari",
+    snowfallEntityHelp:
+      "Valfrjálst. Notaðu staðbundinn snjókomuskynjara (cm) til að stýra snjólaginu í stað Open-Meteo gildisins, fyrir rauntíma + fortíð.",
+    weatherEntity: "Veðureining",
+    weatherEntityHelp:
+      "Valfrjálst. Notaðu Home Assistant veðureiningu til að stýra veðurskilyrðum (rigning / snjór / þrumuveður) í stað Open-Meteo gildisins, fyrir rauntíma + fortíð. Spátímar halda sig við líkanið.",
+    chipTemperature: "Hitastigsbirting",
+    chipHumidity: "Rakastigsbirting",
+    chipCost: "Kostnaðarbirting",
     locationSection: "Staðsetning",
     homeLatitude: "Breiddargráða heimilis",
     homeLongitude: "Lengdargráða heimilis",
@@ -68,6 +92,10 @@ export const isLocale: Translations = {
     sunChipMode: "Lestur sólarflögu",
     sunChipModeHelp:
       "Hvað sólarflagan sýnir: lifandi sólgeislun (sjálfgefið) eða stöðu sólarinnar (áttarhorn og hæð). Staðan þarf engan skynjara, hún kemur frá sólarreikningum kortsins sjálfs.",
+      batteryChipMode: "Aflestur rafhlöðukubbs",
+      batteryChipModeHelp: "Hvað rafhlöðukubburinn sýnir: rauntímaafl (sjálfgefið) eða hleðslustöðu (%). Hann fellur til baka á það gildi sem rafhlaðan þín gefur í raun.",
+      batteryChipModePower: "Afl",
+      batteryChipModeSoc: "Hleðslustaða",
     sunChipModeIrradiance: "Sólgeislun",
     sunChipModePosition: "Staða sólar",
     displayUpdateFrequency: "Nákvæmni grafs",
@@ -103,9 +131,13 @@ export const isLocale: Translations = {
     showSunTimes: "Sýna sólarupprás / sólsetur",
     showSunTimesHint:
       "Sýna tímasetningar sólarupprásar og sólseturs, ásamt merkjum þeirra við fætur sólarbogans.",
+    showHorizonLine: "Sýna sjóndeildarhring lands",
+    showHorizonLineHint: "Teiknar sjóndeildarlínu landslagsins í kringum heimilið, reiknaða út frá staðbundnu landslagi. Sjóndeildarhringurinn deyfir alltaf sólina raunsætt á bak við hæðir; þetta sýnir eða felur aðeins teiknuðu línuna.",
+    horizonLineColor: "Litur sjóndeildarhrings lands",
+    horizonLineColorHint: "Litur sjóndeildarlínu landslagsins.",
     lockRotation: "Læsa snúningi",
     lockRotationHint:
-      "Stilltu sjónarhornið beint í forskoðuninni (dragðu til að snúa og halla senunni), kveiktu svo á lásnum til að festa það: að draga til að snúa og sjálfvirki hvíldarsnúningurinn verða þá óvirk, og hornið sem þú stilltir helst.",
+      "Dragðu forskoðunina til að snúa og halla senunni að þeirri sýn sem þú vilt og kveiktu svo á þessu. Læsingin frystir þá sýn (snúningur með drætti og sjálfvirkur snúningur í hvíld eru gerð óvirk) og vistar hornið á spjaldið, þannig að nákvæmlega sama sýn birtist á öllum tækjum og vöfrum. Slökktu á henni til að snúa frjálst aftur.",
     chipsSection: "Birting einda",
     chipsIntro:
       "Sýndu eða feldu hverja eind, og veldu tákn og lit hennar. Heimilið fylgir valinni flögu, eða aðallitnum þínum sjálfgefið.",
@@ -162,15 +194,12 @@ export const isLocale: Translations = {
     hiddenDevicesEmpty:
       "Engin einstök tæki eru skráð í orkumælaborðinu þínu ennþá. Bættu notkun tækja þar við til að stjórna þeim hér.",
     deviceVisibilityLabel: "Sýna tæki",
-    deviceGroupLabel: "Vöktunarhópur",
     group: "Hópur",
     noGroup: "Enginn hópur",
     groupAssignHint:
       "Dragðu tækin þín í hóp. Það sem eftir verður neðar tilheyrir engum hópi.",
     groupDropHere: "Slepptu tæki hér",
     backToLive: "Til baka í beina útsendingu",
-    devicesEnergyNote:
-      "Þetta eru einstök tæki sem nú eru sett upp í orkumælaborði Home Assistant. Augað sýnir eða felur hvert tæki alls staðar, og hnappurinn úthlutar því í hóp.",
     buildingClusterRadius: "Klasaradíus heimilis",
     buildingClusterRadiusHelp:
       "Radíus umhverfis heimilið þar sem áfastar útibyggingar (verandir, bílskúrar, skúrar) eru meðhöndlaðar sem hluti af heimilinu: þær eru myndgerðar með fullri ógagnsæi og lit heimilisins í stað þess að birtast sem dofnir nágrannar. 0 heldur aðeins aðalbyggingunni.",

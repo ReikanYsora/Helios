@@ -50,6 +50,30 @@ export const hr: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Vremenski efekti",
+    weatherEnabledHint:
+      "Iscrtava stvarno nebo nad scenom: sunce, oblake, kišu, snijeg i grmljavinu prema vašem lokalnom vremenu, prateći vremensku crtu dok je pomičete. Isključeno zadržava vedru scenu.",
+    temperatureEntity: "Senzor temperature",
+    temperatureEntityHelp:
+      "Neobavezno. Koristite lokalni senzor vanjske temperature (°C) umjesto vrijednosti Open-Meteo za pločicu temperature. Njegovo trenutno stanje i povijest snimača koriste se za sadašnjost i prošlost; sati prognoze ostaju na modelu.",
+    humidityEntity: "Senzor vlažnosti",
+    humidityEntityHelp:
+      "Neobavezno. Koristite lokalni senzor relativne vlažnosti (%) umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    cloudCoverEntity: "Senzor naoblake",
+    cloudCoverEntityHelp:
+      "Neobavezno. Koristite lokalni senzor naoblake (%) za upravljanje izgledom neba (sunce, sivilo) umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    precipitationEntity: "Senzor oborina",
+    precipitationEntityHelp:
+      "Neobavezno. Koristite lokalni senzor oborina (mm) za upravljanje slojem kiše umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    snowfallEntity: "Senzor snježnih padalina",
+    snowfallEntityHelp:
+      "Neobavezno. Koristite lokalni senzor snježnih padalina (cm) za upravljanje slojem snijega umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost.",
+    weatherEntity: "Entitet vremena",
+    weatherEntityHelp:
+      "Neobavezno. Koristite Home Assistant entitet vremena za upravljanje uvjetima (kiša / snijeg / grmljavina) umjesto vrijednosti Open-Meteo, za sadašnjost i prošlost. Sati prognoze ostaju na modelu.",
+    chipTemperature: "Prikaz temperature",
+    chipHumidity: "Prikaz vlažnosti",
+    chipCost: "Prikaz troška",
     locationSection: "Lokacija doma",
     homeLatitude: "Zemljopisna širina doma",
     homeLongitude: "Zemljopisna dužina doma",
@@ -68,6 +92,10 @@ export const hr: Translations = {
     sunChipMode: "Očitanje čipa sunca",
     sunChipModeHelp:
       "Što čip sunca prikazuje: solarno ozračenje uživo (zadano) ili položaj sunca (azimut i visina). Položaj ne treba senzor, dolazi iz vlastitih sunčevih izračuna kartice.",
+      batteryChipMode: "Prikaz čipa baterije",
+      batteryChipModeHelp: "Što prikazuje čip baterije: trenutnu snagu (zadano) ili stanje napunjenosti (%). Vraća se na vrijednost koju baterija stvarno pruža.",
+      batteryChipModePower: "Snaga",
+      batteryChipModeSoc: "Stanje napunjenosti",
     sunChipModeIrradiance: "Ozračenje",
     sunChipModePosition: "Položaj sunca",
     displayUpdateFrequency: "Detalji grafa",
@@ -103,9 +131,13 @@ export const hr: Translations = {
     showSunTimes: "Prikaži vrijeme izlaska / zalaska sunca",
     showSunTimesHint:
       "Prikazuje vrijeme izlaska i zalaska sunca te njihove oznake u podnožju sunčevog luka.",
+    showHorizonLine: "Prikaži horizont terena",
+    showHorizonLineHint: "Crta liniju horizonta reljefa oko doma, izračunatu iz lokalnog terena. Horizont uvijek realistično prigušuje sunce iza brežuljaka; ovo samo prikazuje ili skriva nacrtanu liniju.",
+    horizonLineColor: "Boja horizonta terena",
+    horizonLineColorHint: "Boja linije horizonta terena.",
     lockRotation: "Zaključaj rotaciju",
     lockRotationHint:
-      "Postavi kut gledanja izravno u pregledu (povuci za rotaciju i nagib scene), zatim uključi zaključavanje da ga zamrzneš: povlačenje za rotaciju i automatska rotacija u mirovanju se isključuju, a postavljeni kut se zadržava.",
+      "Povucite pregled da biste zakrenuli i nagnuli scenu na željeni prikaz, a zatim uključite ovo. Zaključavanje zamrzava taj prikaz (zakretanje povlačenjem i automatsko okretanje u mirovanju se isključuju) i sprema kut u karticu, tako da se potpuno isti prikaz pojavljuje na svakom uređaju i pregledniku. Isključite ga za ponovno slobodno zakretanje.",
     chipsSection: "Prikaz entiteta",
     chipsIntro:
       "Prikaži ili sakrij svaki entitet te odaberi njegovu ikonu i boju. Dom prati odabrani čip, ili tvoju primarnu boju po zadanome.",
@@ -162,15 +194,12 @@ export const hr: Translations = {
     hiddenDevicesEmpty:
       "U tvojoj energetskoj nadzornoj ploči još nije praćen nijedan pojedinačni uređaj. Dodaj tamo potrošnju uređaja da bi ih ovdje mogao kontrolirati.",
     deviceVisibilityLabel: "Prikaži uređaj",
-    deviceGroupLabel: "Skupina praćenja",
     group: "Skupina",
     noGroup: "Bez skupine",
     groupAssignHint:
       "Povucite svoje uređaje u grupu. Ono što ostane ispod ne pripada nijednoj grupi.",
     groupDropHere: "Ovdje ispustite uređaj",
     backToLive: "Natrag na uživo",
-    devicesEnergyNote:
-      "Ovo su pojedinačni uređaji trenutno postavljeni u tvojoj energetskoj nadzornoj ploči Home Assistant. Oko prikazuje ili skriva svaki od njih posvuda, a pločica ga dodjeljuje skupini.",
     buildingClusterRadius: "Radijus grupiranja doma",
     buildingClusterRadiusHelp:
       "Radijus oko doma unutar kojeg se prislonjene pomoćne zgrade (verande, garaže, šupe) tretiraju kao dio doma: iscrtavaju se s punom neprozirnošću i bojom doma umjesto kao izblijedjeli susjedi. 0 zadržava samo glavnu zgradu.",

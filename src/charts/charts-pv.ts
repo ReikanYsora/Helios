@@ -9,6 +9,7 @@ import { buildTimelineModel } from '../timeline/timeline-model';
 import { sliceForRange } from '../data/unifiedStore';
 import { type ChartHost, chartIsDark } from './charts';
 import { interpAt, pvValueAtTime } from '../data/series-sample';
+import { CHART_W, CHART_H, emptyChartSvg, makeXOf, makeYOf } from './chart-scale';
 
 
 //Production graph above the main timeline chart. Shares the X axis (host._timeRange) so day boundaries and the
@@ -18,19 +19,19 @@ export function renderPvChart(host: ChartHost): TemplateResult
 {
     const el = host as unknown as Element; //live HA theme-token colour resolution
     const range = host._timeRange;
-    const W     = 1000;
-    const H     = 100;
+    const W     = CHART_W;
+    const H     = CHART_H;
 
     if (!range)
     {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+        return emptyChartSvg();
     }
 
     const startMs = range.start.getTime();
     const rangeMs = range.end.getTime() - startMs;
     if (rangeMs <= 0)
     {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+        return emptyChartSvg();
     }
 
     const pvColor = chipSlotColor(el, host.config, 'production');
@@ -53,8 +54,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
     const store = host._unifiedStore;
     const rangeSlice = store ? sliceForRange(store, startMs, endMsAbs) : null;
 
-    const xOf = (t: Date): number =>
-        ((t.getTime() - startMs) / rangeMs) * W;
+    const projectX = makeXOf(startMs, rangeMs);
+    const xOf = (t: Date): number => projectX(t.getTime());
 
     const samples: { t: Date; v: number }[] = [];
     if (rangeSlice)
@@ -85,10 +86,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     let yMax = 1;
     for (const s of samples)          { if (s.v > yMax) yMax = s.v; }
     for (const s of predictedSamples) { if (s.v > yMax) yMax = s.v; }
-    //Headroom at the top so the peak never kisses the top edge.
-    const TOP_HEADROOM_PX = 10;
-    const yOf = (v: number): number =>
-        H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
+    const yOf = makeYOf(0, yMax);
 
     const points = samples.map(s =>
         `${xOf(s.t).toFixed(2)},${yOf(s.v).toFixed(2)}`);
@@ -131,6 +129,12 @@ export function renderPvChart(host: ChartHost): TemplateResult
             }
             raw.push(arr);
         }
+        //Column totals once (O(S*N)); re-summing them inside the per-source loop made the stack O(S^2*N).
+        const colTotal = new Array<number>(N).fill(0);
+        for (let j = 0; j < N; j++)
+        {
+            for (let k = 0; k < S; k++) { colTotal[j] += raw[k][j]; }
+        }
         //Stack each source as its share of the aggregate, so the stack top tracks the aggregate curve exactly.
         const lower = new Array<number>(N).fill(0);
         for (let s = 0; s < S; s++)
@@ -139,8 +143,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
             const lo: string[] = [];
             for (let j = 0; j < N; j++)
             {
-                let total = 0;
-                for (let k = 0; k < S; k++) { total += raw[k][j]; }
+                const total = colTotal[j];
                 const share = total > 0 ? raw[s][j] / total : 0;
                 const y0 = lower[j];
                 const y1 = y0 + share * samples[j].v;

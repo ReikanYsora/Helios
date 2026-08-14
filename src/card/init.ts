@@ -3,6 +3,7 @@
 //
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
+import type { HassLike } from '../core/ha-types';
 import { homeColor, mapColorKey, mapShowKey, type HeliosConfig } from '../core/config/helios-config';
 import { resolveUiColor } from '../core/format/format';
 import { GROUND_LAYER_KEYS } from '../scene/ground-render';
@@ -107,7 +108,7 @@ let   _homeCoordsNoConfigCache: HomeCoordsCacheEntry | null = null;
 
 export function getHomeCoords(
     config: HeliosConfig | undefined,
-    hass:   any
+    hass:   HassLike
 ): { lat: number; lon: number } | null
 {
     const hassCfg    = hass?.config;
@@ -203,11 +204,18 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
 export interface InitHost extends HudHost
 {
     readonly config: HeliosConfig | undefined;
-    readonly hass:   any;
+    readonly hass:   HassLike;
     readonly preview?: boolean;
 
     _engine?:            HeliosEngine;
     _cloudCover:         number;
+    //"Your real sky" weather layers, resolved at the current live/scrub time (precip mm, snowfall cm, WMO code).
+    _precip:             number;
+    _snowfall:           number;
+    _weatherCode:        number;
+    //Temperature (°C) + humidity (%) at the current time, NaN when unavailable (temperature chip).
+    _temperature:        number;
+    _humidity:           number;
     //Active rolling window (days), so a fresh engine is seeded with the restored mode's span before its first
     //getTimelineRange().
     readonly _periodPastDays:   number;
@@ -371,6 +379,11 @@ function wireEngineCallbacks(host: InitHost): void
         //Per-layer cloud breakdown is owned by the engine (it stashes low/mid/high and projectCloudScene reads them back to size the
         //three bands); the card only needs the aggregate for the cloud chip label.
         host._cloudCover         = data.cloudCover;
+        host._precip             = data.precip;
+        host._snowfall           = data.snowfall;
+        host._weatherCode        = data.weatherCode;
+        host._temperature        = data.temperature;
+        host._humidity           = data.humidity;
         host._timeRange          = data.timeRange;
         host._isLiveMode         = data.isLiveTime;
         host._chartSeries        = host._engine?.getTimelineSeries() ?? null; //hourly series the chart canvas plots
@@ -398,6 +411,17 @@ function wireEngineCallbacks(host: InitHost): void
         {
             overlayRaf = null;
             refreshHud(host);
+            //In the editor preview, publish the live camera pose so the editor's "use current view" helper can
+            //capture the framed angle into the config. Composed + bubbling so it reaches the editor element.
+            if (host.preview)
+            {
+                const pose = host._engine?.getCameraPose();
+                if (pose)
+                {
+                    (host as unknown as HTMLElement).dispatchEvent(
+                        new CustomEvent('helios-camera-pose', { detail: pose, bubbles: true, composed: true }));
+                }
+            }
         });
     };
 }

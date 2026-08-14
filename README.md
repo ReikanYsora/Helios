@@ -7,7 +7,8 @@
 **Make your energy visible, in 2.5D.**
 
 A Home Assistant card that turns your Energy dashboard into a living scene:
-what your home produces, stores and consumes, as the sun crosses your sky.
+what your home produces, stores and consumes, as the sun and the real weather
+cross your sky.
 
 <img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/helios-preview.gif" alt="The Helios card: the sun crossing its arc over a home, the day's production curve rising around the house, and the live production and consumption chips following along." width="880">
 
@@ -20,6 +21,12 @@ what your home produces, stores and consumes, as the sun crosses your sky.
 [![Downloads](https://img.shields.io/github/downloads/ReikanYsora/Helios/total?style=for-the-badge&color=e0a106&label=downloads)](https://github.com/ReikanYsora/Helios/releases)
 [![Community: Discussions](https://img.shields.io/badge/community-discussions-e0a106?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ReikanYsora/Helios/discussions)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://www.buymeacoffee.com/reikanysora)
+
+<br>
+
+<a href="https://www.youtube.com/watch?v=KrGNsCsGLGg"><img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/trailer-thumb.jpg" alt="Watch the Helios 2026.9.0 trailer, 'Your real sky', on YouTube." width="820"></a>
+
+**[▶ Watch the 2026.9.0 trailer](https://www.youtube.com/watch?v=KrGNsCsGLGg)**
 
 </div>
 
@@ -59,10 +66,22 @@ home and your consumption; the production layers simply do not appear.
 * **The sun's real arc** over your own address, with the live sun disc, the
   incidence ray and the irradiance reading (or the sun's azimuth and elevation,
   if you prefer), sunrise and sunset placed where the arc meets your horizon.
+* **Your real horizon**, worked out from the terrain around your home, so the sun
+  dims the moment it drops behind a hill and not only at the flat horizon, with
+  the skyline drawn as a discreet ridge around the scene.
 * **Live flows**, production, grid and battery, each with a bead that travels to
   the home at the speed of the power it carries.
 * **A timeline you can scrub**, two days back and two days forward. The whole
-  scene follows: sun, shadows, clouds, every value.
+  scene follows: sun, shadows, weather, every value.
+* **Your real sky**, the local weather painted over the scene: clear-sky
+  sunshine that dims as the clouds build, then rain, snow or a thunderstorm,
+  each following the timeline as you scrub.
+* **Outdoor temperature and humidity**, as two chips with their own day curve,
+  and either can be pinned to your own weather-station sensor instead of the
+  forecast.
+* **What it costs**, a cost chip that reads out your energy spend right now in
+  your own currency (a negative rate means you're earning), with its own curve
+  to scrub across the day. Shown only when your Energy dashboard tracks a price.
 * **The day's curve**, your production or consumption standing on the sun's own
   path around the house, so where a point sits on it *is* the hour.
 * **Your devices, grouped**, up to four groups with their own name, colour and
@@ -70,7 +89,8 @@ home and your consumption; the production layers simply do not appear.
 * **Cast shadows** from the buildings around you, projected from real
   footprints, fading as the sun nears the horizon.
 * **Built for a wall**, an optional mode that fades the controls away after a
-  few seconds and leaves only the scene.
+  few seconds and leaves only the scene, with a locked viewing angle you can
+  set once and get identically on every device.
 
 Every option is in the visual editor, and the full reference is in the
 [documentation](https://helios-ha.org/help/).
@@ -106,7 +126,10 @@ Helios server, no account and no telemetry.
 
 Two open services are used, neither needs a key: [Open-Meteo](https://open-meteo.com/)
 for the weather, and [OpenFreeMap](https://openfreemap.org/) for the map tiles
-the ground is drawn from.
+the ground is drawn from. If you run a local weather station, you can point each
+weather reading (temperature, humidity, cloud cover, precipitation, snow, or the
+condition) at your own sensor, and it takes over from the forecast for the live
+and past hours.
 
 The scene is painted by a self-contained **2.5D engine with no WebGL**: a tilted
 vector basemap on a canvas with every overlay projected on top in SVG. Light
@@ -131,11 +154,13 @@ against.
 
 <br>
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.png" alt="Helios: the day's production curve arcing over the home along the sun's path, with the live chips and the timeline.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.jpg" alt="Helios at golden hour: the sun's arc and irradiance, the live production, home, grid and device chips, and the cost, temperature and humidity chips along the bottom.">
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png" alt="Helios: the live flow with the production, battery, grid, home and device chips around the house, and the sun's irradiance.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.jpg" alt="Helios: rain falling over an overcast scene, the sun dimmed behind the cloud, with the live chips and the timeline below.">
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.png" alt="Helios: a custom-themed scene with the chip cluster and the timeline below.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.jpg" alt="Helios: the week's consumption curve standing on the sun's own path around the house, over a golden-hour scene.">
+
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_04.jpg" alt="Helios at dusk: the day ring in blue with sunrise and sunset marked on the sun's path, and the buildings under a low sky.">
 
 An interactive live demo is at [helios-ha.org](https://helios-ha.org/helios/).
 

@@ -23,6 +23,7 @@
 //Only single-net-sensor installs are evaluated (the flattened prefs of every modern core produce exactly one
 //stat_rate per source; multi-source wirings keep the current behavior untouched).
 
+import type { HassLike } from '../../core/ha-types';
 import type { EnergyDefaults } from './energy-prefs';
 import {
     GUARD_REFRESH_MS, GUARD_WINDOW_MS, GUARD_MIN_EXPORT_KWH, GUARD_MAX_EXPORT_KWH,
@@ -156,7 +157,7 @@ export function nextGuardState(prev: GridGuardState, hours: GuardHour[]): GridGu
 
 export interface GridGuardHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     readonly _energyDefaults?: EnergyDefaults;
     _gridGuard: GridGuardState;
     requestUpdate(): void;
@@ -212,6 +213,10 @@ export function refreshGridGuard(host: GridGuardHost): void
     ])
         .then(([exportRes, rateRes]) =>
         {
+            //A prefs edit mid-fetch resets host._gridGuard to a fresh state for the NEW wiring; this late result is
+            //evidence for the OLD one. Bail rather than stamp the stale key back over the reset (which would blank
+            //the live chips for a cycle and force a re-reset next tick).
+            if (host._gridGuard.entityKey !== entityKey) { return; }
             const hours = buildGuardHours(
                 exportRes as Record<string, { start?: unknown; change?: number | null }[]>,
                 rateRes   as Record<string, { start?: unknown; min?: number | null; max?: number | null }[]>,
@@ -233,7 +238,9 @@ export function refreshGridGuard(host: GridGuardHost): void
         })
         .finally(() =>
         {
-            host._gridGuard.fetching = false;
+            //Only release the flag if this fetch still owns the live guard: a mid-fetch reset already installed a
+            //fresh state (fetching=false), and blindly clearing it could unlatch a newer fetch's guard.
+            if (host._gridGuard.entityKey === entityKey) { host._gridGuard.fetching = false; }
         });
 }
 

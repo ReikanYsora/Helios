@@ -50,6 +50,30 @@ export const fi: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Sääefektit",
+    weatherEnabledHint:
+      "Maalaa todellinen taivas näkymän päälle: auringonpaiste, pilvet, sade, lumi ja ukkosmyrskyt paikallisen sääsi mukaan, seuraten aikajanaa kelatessasi. Pois päältä pitää näkymän kirkkaana.",
+    temperatureEntity: "Lämpötila-anturi",
+    temperatureEntityHelp:
+      "Valinnainen. Käytä paikallista ulkolämpötila-anturia (°C) Open-Meteon arvon sijaan lämpötilamerkissä. Sen reaaliaikaista tilaa ja tallentimen historiaa käytetään nykyhetkeen ja menneeseen; ennustetunnit pysyvät mallissa.",
+    humidityEntity: "Ilmankosteusanturi",
+    humidityEntityHelp:
+      "Valinnainen. Käytä paikallista suhteellisen ilmankosteuden anturia (%) Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    cloudCoverEntity: "Pilvisyysanturi",
+    cloudCoverEntityHelp:
+      "Valinnainen. Käytä paikallista pilvisyysanturia (%) taivaan asteen (aurinko, harmaantuminen) ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    precipitationEntity: "Sademäärä-anturi",
+    precipitationEntityHelp:
+      "Valinnainen. Käytä paikallista sademäärä-anturia (mm) sadekerroksen ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    snowfallEntity: "Lumisadeanturi",
+    snowfallEntityHelp:
+      "Valinnainen. Käytä paikallista lumisadeanturia (cm) lumikerroksen ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen.",
+    weatherEntity: "Sääentiteetti",
+    weatherEntityHelp:
+      "Valinnainen. Käytä Home Assistant -sääentiteettiä olosuhteen (sade / lumi / ukkosmyrsky) ohjaamiseen Open-Meteon arvon sijaan nykyhetkeen ja menneeseen. Ennustetunnit pysyvät mallissa.",
+    chipTemperature: "Lämpötilan näyttö",
+    chipHumidity: "Ilmankosteuden näyttö",
+    chipCost: "Kustannusnäyttö",
     locationSection: "Kodin sijainti",
     homeLatitude: "Kodin leveysaste",
     homeLongitude: "Kodin pituusaste",
@@ -68,6 +92,10 @@ export const fi: Translations = {
     sunChipMode: "Aurinkosirun lukema",
     sunChipModeHelp:
       "Mitä aurinkosiru näyttää: reaaliaikaisen aurinkoirradianssin (oletus) tai auringon sijainnin (atsimuutti ja korkeus). Sijainti ei tarvitse anturia, se tulee kortin omista aurinkolaskelmista.",
+      batteryChipMode: "Akkusirun lukema",
+      batteryChipModeHelp: "Mitä akkusiru näyttää: reaaliaikaisen tehon (oletus) tai varaustason (%). Se palaa siihen arvoon, jonka akkusi todella tarjoaa.",
+      batteryChipModePower: "Teho",
+      batteryChipModeSoc: "Varaustaso",
     sunChipModeIrradiance: "Irradianssi",
     sunChipModePosition: "Auringon sijainti",
     displayUpdateFrequency: "Kaavion tarkkuus",
@@ -103,9 +131,13 @@ export const fi: Translations = {
     showSunTimes: "Näytä auringonnousu- ja -laskuajat",
     showSunTimesHint:
       "Näytä auringonnousun ja -laskun kellonajat sekä niiden merkit aurinkokaaren juurella.",
+    showHorizonLine: "Näytä maaston horisontti",
+    showHorizonLineHint: "Piirtää maaston horisonttiviivan kodin ympärille paikallisesta maastosta laskettuna. Horisontti himmentää auringon aina realistisesti kukkuloiden taakse; tämä vain näyttää tai piilottaa piirretyn viivan.",
+    horizonLineColor: "Maaston horisontin väri",
+    horizonLineColorHint: "Maaston horisonttiviivan väri.",
     lockRotation: "Lukitse kierto",
     lockRotationHint:
-      "Aseta katselukulma suoraan esikatselussa (vedä kiertääksesi ja kallistaaksesi näkymää) ja kytke sitten lukitus päälle jäädyttääksesi sen: vetämällä kiertäminen ja toimettomana tapahtuva automaattikierto poistetaan käytöstä, jolloin asettamasi kulma säilyy.",
+      "Vedä esikatselua kääntääksesi ja kallistaaksesi näkymää haluamaasi kulmaan ja ota tämä sitten käyttöön. Lukitus jäädyttää näkymän (vetämällä kääntäminen ja lepotilan automaattinen kierto poistetaan käytöstä) ja tallentaa kulman korttiin, joten täsmälleen sama näkymä näkyy jokaisella laitteella ja selaimella. Poista se käytöstä kääntääksesi taas vapaasti.",
     chipsSection: "Entiteettien näyttö",
     chipsIntro:
       "Näytä tai piilota kukin entiteetti, ja valitse sen kuvake ja väri. Koti seuraa valittua sirua tai oletuksena ensisijaista väriäsi.",
@@ -162,15 +194,12 @@ export const fi: Translations = {
     hiddenDevicesEmpty:
       "Yhtäkään yksittäistä laitetta ei vielä seurata Energia-kojelaudassasi. Lisää sinne laitekohtainen kulutus hallitaksesi niitä täällä.",
     deviceVisibilityLabel: "Näytä laite",
-    deviceGroupLabel: "Seurantaryhmä",
     group: "Ryhmä",
     noGroup: "Ei ryhmää",
     groupAssignHint:
       "Vedä laitteesi ryhmään. Alle jäävät eivät kuulu mihinkään ryhmään.",
     groupDropHere: "Pudota laite tähän",
     backToLive: "Takaisin reaaliaikaan",
-    devicesEnergyNote:
-      "Nämä ovat Home Assistantin Energia-kojelaudassasi tällä hetkellä määritetyt yksittäiset laitteet. Silmäkuvake näyttää tai piilottaa kunkin kaikkialla, ja pilleri määrittää sen ryhmään.",
     buildingClusterRadius: "Kodin klusterisäde",
     buildingClusterRadiusHelp:
       "Säde kodin ympärillä, jonka sisällä liittyvät ulkorakennukset (kuistit, autotallit, vajat) käsitellään osana kotia: ne renderöidään kodin täydellä läpinäkymättömyydellä ja värillä sen sijaan, että näkyisivät haalistuneina naapureina. 0 pitää mukana vain päärakennuksen.",

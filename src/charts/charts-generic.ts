@@ -7,12 +7,14 @@ import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarCol
 import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
+import { staticPrice, costRateAt } from '../data/sources/cost';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
 import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
+import { CHART_W, CHART_H, emptyChartSvg, makeXOf, makeYOf } from './chart-scale';
 import { HOUR_MS } from '../core/config/constants';
 
 
@@ -40,6 +42,9 @@ export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): stri
     if (target === 'production') { return chipSlotColor(el, host.config, 'production'); }
     if (target === 'consumption'){ return chipSlotColor(el, host.config, 'home'); }
     if (target === 'irradiance') { return chipSlotColor(el, host.config, 'irradiance'); }
+    if (target === 'temperature'){ return chipSlotColor(el, host.config, 'temperature'); }
+    if (target === 'humidity')   { return chipSlotColor(el, host.config, 'humidity'); }
+    if (target === 'cost')       { return chipSlotColor(el, host.config, 'cost'); }
     if (target === 'battery-soc'){ return chipSlotColor(el, host.config, 'batteryDischarge'); }
     if (isGroupTarget(target)) { return groupColorHex(el, host.config, groupOfTarget(target)); }
     const store = host._unifiedStore;
@@ -148,11 +153,14 @@ function stackedLines(
 //scaling, path building and hover.
 function buildTargetSeries(
     host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
-): { series: ChartLine[]; fixedMax: number; socHover: SocHover | null }
+): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
 {
     const { el, store, startMs, endMsAbs, toPts } = ctx;
     let series: ChartLine[];
     let fixedMax = 0;
+    //Bottom of the Y scale. 0 for every magnitude metric; temperature overrides it to the window's min so a
+    //signed, narrow-range curve reads by shape instead of crawling along the floor.
+    let fixedMin = 0;
     let socHover: SocHover | null = null;
     if (target === 'consumption')
     {
@@ -291,12 +299,71 @@ function buildTargetSeries(
             return { pts: toPts(watts, v => Math.abs(v)), color: deviceColorByIndex(el, dev.index) };
         });
     }
+    else if (target === 'temperature')
+    {
+        //Signed, narrow-range metric: scale to the window's own min..max (with a small pad) so the shape reads,
+        //rather than the fixed 0-based scale the magnitude metrics use.
+        const pts = toPts(store.temperature);
+        series = [{ pts, color: chipSlotColor(el, host.config, 'temperature') }];
+        let mn = Infinity;
+        let mx = -Infinity;
+        for (const p of pts) { if (p.v < mn) { mn = p.v; } if (p.v > mx) { mx = p.v; } }
+        if (!isFinite(mn) || !isFinite(mx)) { mn = 0; mx = 1; }
+        const pad = Math.max(1, (mx - mn) * 0.1);
+        fixedMin = mn - pad;
+        fixedMax = mx + pad;
+    }
+    else if (target === 'humidity')
+    {
+        series   = [{ pts: toPts(store.humidity), color: chipSlotColor(el, host.config, 'humidity') }];
+        fixedMin = 0;
+        fixedMax = 100;
+    }
+    else if (target === 'cost')
+    {
+        //Net cost RATE per bucket (currency/hour). Preferred source: HA's own cost statistics (correct for any
+        //tariff, incl. Tempo + a total-cost sensor), read at each bucket's time. Fallback: a single static price x
+        //grid energy (constant price, so exact across history; store powers are watts, hence /1000). Negative =
+        //earning (surplus sold), so the Y floor drops below zero to show it.
+        const ed = host._energyDefaults;
+        const hasStats = !!(host._costImportSeries || host._costExportSeries);
+        const impP = staticPrice(ed.gridImportPriceNumbers);
+        const expP = staticPrice(ed.gridExportPriceNumbers) ?? 0;
+        const pts: { t: number; v: number }[] = [];
+        if (hasStats || impP !== null)
+        {
+            for (let i = 0; i < store.gridImport.length; i++)
+            {
+                const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
+                if (tMs < startMs || tMs > endMsAbs) { continue; }
+                let v: number | null;
+                if (hasStats)
+                {
+                    v = costRateAt(host, tMs);
+                }
+                else
+                {
+                    const gi = store.gridImport[i];
+                    const ge = store.gridExport[i];
+                    v = (gi === null && ge === null) ? null : ((gi ?? 0) * (impP as number) - (ge ?? 0) * expP) / 1000;
+                }
+                if (v === null) { continue; }
+                pts.push({ t: tMs, v });
+            }
+        }
+        series = [{ pts, color: chipSlotColor(el, host.config, 'cost') }];
+        let mn = 0;
+        let mx = 0;
+        for (const p of pts) { if (p.v < mn) { mn = p.v; } if (p.v > mx) { mx = p.v; } }
+        fixedMin = mn;
+        fixedMax = mx > 0 ? mx : 0;
+    }
     else
     {
         series   = [{ pts: toPts(store.irradiance), color: chipSlotColor(el, host.config, 'irradiance') }];
         fixedMax = 1000;
     }
-    return { series, fixedMax, socHover };
+    return { series, fixedMax, fixedMin, socHover };
 }
 
 
@@ -307,20 +374,20 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     const el = host as unknown as Element; //live HA theme-token colour resolution
     const store = host._unifiedStore;
     const range = host._timeRange;
-    const W = 1000;
-    const H = 100;
+    const W = CHART_W;
+    const H = CHART_H;
     if (!store || !range)
     {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+        return emptyChartSvg();
     }
     const startMs  = range.start.getTime();
     const endMsAbs = range.end.getTime();
     const rangeMs  = endMsAbs - startMs;
     if (rangeMs <= 0)
     {
-        return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
+        return emptyChartSvg();
     }
-    const xOf = (tMs: number): number => ((tMs - startMs) / rangeMs) * W;
+    const xOf = makeXOf(startMs, rangeMs);
 
     //Store series to visible-range points: drop nulls, clip to the window. Bucket centre matches sliceForRange so
     //curves line up with the production chart's day separators.
@@ -337,25 +404,23 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
         return out;
     };
-    const sum = (pts: { v: number }[]): number => pts.reduce((a, p) => a + p.v, 0);
-
-    const { series, fixedMax, socHover } = buildTargetSeries(host, target, { el, store, startMs, endMsAbs, toPts });
+    const { series, fixedMax, fixedMin, socHover } = buildTargetSeries(host, target, { el, store, startMs, endMsAbs, toPts });
 
     //Y scale: fixed where set, else the per-series running max. No target stacks its own series; the cloud bands
-    //are an overlay of the irradiance view, stacked in their own percent scale below.
+    //are an overlay of the irradiance view, stacked in their own percent scale below. fixedMin is 0 for every
+    //magnitude metric; temperature sets it to the window's floor so its signed, narrow-range curve reads by shape.
+    const yMin = fixedMin;
     let yMax = fixedMax;
-    if (yMax <= 0)
+    if (yMax <= yMin)
     {
-        yMax = 1;
+        yMax = yMin + 1;
         for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
     }
-    //Headroom at the top so a curve's peak never kisses the top edge.
-    const TOP_HEADROOM_PX = 10;
-    const yOf = (v: number): number => H - Math.max(0, Math.min(1, v / yMax)) * (H - TOP_HEADROOM_PX);
+    const yOf = makeYOf(yMin, yMax);
 
     const drawn = series.map(s =>
     {
-        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, dashed: !!s.dashed, total: sum(s.pts) }; }
+        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, dashed: !!s.dashed }; }
         const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
         const x0 = xOf(s.pts[0].t);
         const xN = xOf(s.pts[s.pts.length - 1].t);
@@ -365,7 +430,6 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             line:  `M ${pp.join(' L ')}`,
             color: s.color,
             dashed: !!s.dashed,
-            total: sum(s.pts),
         };
     });
 
@@ -399,8 +463,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
         if (bands.length >= 2)
         {
-            const yOfPct = (pct: number): number =>
-                H - Math.max(0, Math.min(1, pct / 100)) * (H - TOP_HEADROOM_PX);
+            const yOfPct = makeYOf(0, 100);
             const layers: { pick: (b: { lo: number; mi: number; hi: number }) => number; color: string }[] = [
                 { pick: b => b.lo, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
                 { pick: b => b.mi, color: ENERGY_COLOR.cloud(el) },
@@ -447,8 +510,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         }
         if (pts.length >= 2 && fMax > 0)
         {
-            const yOfF = (v: number): number =>
-                H - Math.max(0, Math.min(1, v / fMax)) * (H - TOP_HEADROOM_PX);
+            const yOfF = makeYOf(0, fMax);
             forecastLine = `M ${pts.map(p => `${xOf(p.t.getTime()).toFixed(2)},${yOfF(p.v).toFixed(2)}`).join(' L ')}`;
             forecastHover = { pts: pts.map(p => ({ t: p.t.getTime(), v: p.v })), yOf: yOfF };
         }
@@ -479,7 +541,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             if (s.pts.length < 1 || s.noHoverDot) { continue; }
             const v = interpAt(s.pts.map(p => new Date(p.t)), s.pts.map(p => p.v), hoverMs);
             if (!isFinite(v)) { continue; }
-            hoverDots.push({ y: yOf(Math.max(0, v)), color: s.color });
+            //Plot the dot at the real value so it rides the curve. yOf already clamps to the axis, so the old
+            //Math.max(0, v) only detached the dot from the curve on signed targets (temperature below 0, cost when earning).
+            hoverDots.push({ y: yOf(v), color: s.color });
             showHover = true;
         }
         //Battery SoC: ONE dot per bank at the cursor, in the live flow colour, instead of one dot per colour run.
@@ -490,7 +554,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 if (pts.length < 1) { continue; }
                 const v = interpAt(pts.map(p => new Date(p.t)), pts.map(p => p.v), hoverMs);
                 if (!isFinite(v)) { continue; }
-                hoverDots.push({ y: yOf(Math.max(0, v)), color: socHover.flowColorAt(hoverMs, hoverMs) });
+                hoverDots.push({ y: yOf(v), color: socHover.flowColorAt(hoverMs, hoverMs) });
                 showHover = true;
             }
         }
@@ -633,10 +697,40 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeo
 
 
 
+//Memo for computeDailyKwhTotals. The tooltip calls it on every pointermove, but the result depends only on the
+//range + data, never the cursor. Key: the range, the store's data-version hash (which already folds in the pv
+//change series), a light pv signature for the store-null case, and a per-minute term so Pass 2's now-split stays
+//fresh. Stable across a hover session, so the whole per-day sum stops recomputing on every frame.
+let _dailyTotalsKey: string | null = null;
+let _dailyTotalsVal: Map<number, number> | null = null;
+
+function dailyTotalsKey(host: ChartHost): string
+{
+    const r = host._timeRange;
+    if (!r) { return 'norange'; }
+    const pv     = host._pvChangeSeries;
+    const pvLast = pv && pv.length ? pv[pv.length - 1] : null;
+    return `${r.start.getTime()}|${r.end.getTime()}`
+        + `|${host._unifiedStore?.dataVersion ?? 'nostore'}`
+        + `|pv${pv?.length ?? 0}:${pvLast?.endMs ?? 0}:${pvLast?.kwh ?? 0}`
+        + `|m${Math.floor(Date.now() / 60000)}`;
+}
+
 //kWh-per-day totals over the active range from two passes: past + today-so-far from the recorder `change` buckets,
 //today-remainder + future from the store's corrected forecast. Returns a Map keyed by each day's local-midnight ms
-//(kWh); days outside the range or without usable data are omitted.
+//(kWh); days outside the range or without usable data are omitted. Memoised on dailyTotalsKey; callers only read
+//the map (never mutate it), so a shared cached instance is safe.
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
+{
+    const key = dailyTotalsKey(host);
+    if (key === _dailyTotalsKey && _dailyTotalsVal) { return _dailyTotalsVal; }
+    const out = computeDailyKwhTotalsUncached(host);
+    _dailyTotalsKey = key;
+    _dailyTotalsVal = out;
+    return out;
+}
+
+function computeDailyKwhTotalsUncached(host: ChartHost): Map<number, number>
 {
     const out = new Map<number, number>();
     if (!host._timeRange)

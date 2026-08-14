@@ -50,6 +50,30 @@ export const lv: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Laikapstākļu efekti",
+    weatherEnabledHint:
+      "Uzzīmē reālas debesis virs ainas: saulains laiks, mākoņi, lietus, sniegs un pērkona negaiss no jūsu vietējiem laikapstākļiem, sekojot laika skalai, kad to pārvietojat. Izslēgts saglabā skaidru ainu.",
+    temperatureEntity: "Temperatūras sensors",
+    temperatureEntityHelp:
+      "Neobligāti. Izmantojiet vietējo āra temperatūras sensoru (°C) temperatūras rādītājam Open-Meteo vērtības vietā. Tā pašreizējais stāvoklis un ierakstītāja vēsture tiek izmantoti tagadnei un pagātnei; prognozes stundas paliek uz modeļa.",
+    humidityEntity: "Mitruma sensors",
+    humidityEntityHelp:
+      "Neobligāti. Izmantojiet vietējo relatīvā mitruma sensoru (%) Open-Meteo vērtības vietā tagadnei un pagātnei.",
+    cloudCoverEntity: "Mākoņainības sensors",
+    cloudCoverEntityHelp:
+      "Neobligāti. Izmantojiet vietējo mākoņainības sensoru (%), lai noteiktu debesu pakāpi (saule, pelēkošana) Open-Meteo vērtības vietā, tagadnei un pagātnei.",
+    precipitationEntity: "Nokrišņu sensors",
+    precipitationEntityHelp:
+      "Neobligāti. Izmantojiet vietējo nokrišņu sensoru (mm), lai noteiktu lietus slāni Open-Meteo vērtības vietā, tagadnei un pagātnei.",
+    snowfallEntity: "Snigšanas sensors",
+    snowfallEntityHelp:
+      "Neobligāti. Izmantojiet vietējo snigšanas sensoru (cm), lai noteiktu sniega slāni Open-Meteo vērtības vietā, tagadnei un pagātnei.",
+    weatherEntity: "Laikapstākļu entītija",
+    weatherEntityHelp:
+      "Neobligāti. Izmantojiet Home Assistant laikapstākļu entītiju, lai noteiktu apstākļus (lietus / sniegs / pērkona negaiss) Open-Meteo vērtības vietā, tagadnei un pagātnei. Prognozes stundas paliek uz modeļa.",
+    chipTemperature: "Temperatūras rādījums",
+    chipHumidity: "Mitruma rādījums",
+    chipCost: "Izmaksu attēlojums",
     locationSection: "Atrašanās vieta",
     homeLatitude: "Mājas platums",
     homeLongitude: "Mājas garums",
@@ -68,6 +92,10 @@ export const lv: Translations = {
     sunChipMode: "Saules mikroshēmas rādījums",
     sunChipModeHelp:
       "Ko rāda saules mikroshēma: dzīvo saules apstarojumu (noklusējums) vai saules stāvokli (azimutu un augstumu). Stāvoklim nav vajadzīgs sensors, tas nāk no pašas kartītes saules aprēķiniem.",
+      batteryChipMode: "Akumulatora mikroshēmas rādījums",
+      batteryChipModeHelp: "Ko rāda akumulatora mikroshēma: reāllaika jaudu (noklusējums) vai uzlādes līmeni (%). Tā atgriežas pie vērtības, ko akumulators patiešām sniedz.",
+      batteryChipModePower: "Jauda",
+      batteryChipModeSoc: "Uzlādes līmenis",
     sunChipModeIrradiance: "Apstarojums",
     sunChipModePosition: "Saules stāvoklis",
     displayUpdateFrequency: "Grafika detalizācija",
@@ -103,9 +131,13 @@ export const lv: Translations = {
     showSunTimes: "Rādīt saullēkta / saulrieta laikus",
     showSunTimesHint:
       "Rāda saullēkta un saulrieta laikus un to marķierus saules loka pamatnē.",
+    showHorizonLine: "Rādīt reljefa horizontu",
+    showHorizonLineHint: "Zīmē reljefa horizonta līniju ap māju, aprēķinātu no vietējā reljefa. Horizonts vienmēr reālistiski pieklusina sauli aiz pakalniem; tas tikai parāda vai paslēpj zīmēto līniju.",
+    horizonLineColor: "Reljefa horizonta krāsa",
+    horizonLineColorHint: "Reljefa horizonta līnijas krāsa.",
     lockRotation: "Fiksēt rotāciju",
     lockRotationHint:
-      "Iestati skata leņķi tieši priekšskatījumā (velc, lai pagrieztu un sagāztu ainu), tad ieslēdz fiksāciju, lai to iesaldētu: vilkšana rotācijai un neaktivitātes automātiskā orbīta tiek atspējota, saglabājot iestatīto leņķi.",
+      "Velciet priekšskatījumu, lai pagrieztu un sasvērtu ainu vēlamajā skatā, pēc tam ieslēdziet šo. Bloķēšana iesaldē šo skatu (pagriešana ar vilkšanu un automātiskā griešanās miera stāvoklī tiek atspējota) un saglabā leņķi kartē, tāpēc tieši tas pats skats parādās katrā ierīcē un pārlūkā. Izslēdziet to, lai atkal brīvi grieztu.",
     chipsSection: "Entītiju attēlojums",
     chipsIntro:
       "Rādi vai slēp katru entītiju un izvēlies tās ikonu un krāsu. Māja seko izvēlētajai mikroshēmai vai pēc noklusējuma tavai primārajai krāsai.",
@@ -163,15 +195,12 @@ export const lv: Translations = {
     hiddenDevicesEmpty:
       "Tavā enerģijas panelī vēl netiek izsekota neviena atsevišķa ierīce. Pievieno tur ierīču patēriņu, lai tās pārvaldītu šeit.",
     deviceVisibilityLabel: "Rādīt ierīci",
-    deviceGroupLabel: "Uzraudzības grupa",
     group: "Grupa",
     noGroup: "Bez grupas",
     groupAssignHint:
       "Velciet savas ierīces grupā. Tas, kas paliek zemāk, nepieder nevienai grupai.",
     groupDropHere: "Nometiet ierīci šeit",
     backToLive: "Atpakaļ uz tiešraidi",
-    devicesEnergyNote:
-      "Šīs ir atsevišķās ierīces, kas pašlaik iestatītas tavā Home Assistant enerģijas panelī. Acs ikona rāda vai slēpj katru no tām visur, bet zīmīte piešķir to grupai.",
     buildingClusterRadius: "Mājas klastera rādiuss",
     buildingClusterRadiusHelp:
       "Rādiuss ap māju, kura robežās piesaistītās palīgēkas (verandas, garāžas, šķūņi) tiek uzskatītas par mājas daļu: tās tiek renderētas ar mājas pilnu necaurspīdību un krāsu, nevis kā izbalējuši kaimiņi. 0 saglabā tikai galveno ēku.",

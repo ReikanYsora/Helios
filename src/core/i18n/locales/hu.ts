@@ -50,6 +50,30 @@ export const hu: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Időjárási effektek",
+    weatherEnabledHint:
+      "A valódi eget vetíti a jelenet fölé: napsütés, felhők, eső, hó és zivatar a helyi időjárás alapján, az idővonalat követve, ahogy azon mozogsz. Kikapcsolva tiszta marad a jelenet.",
+    temperatureEntity: "Hőmérséklet-szenzor",
+    temperatureEntityHelp:
+      "Opcionális. Egy helyi kültéri hőmérséklet-szenzort (°C) használ az Open-Meteo érték helyett a hőmérséklet-chiphez. Az élő állapotát és a recorder-előzményeit használja az élő + múlt adatokhoz; az előrejelzett órák a modellen maradnak.",
+    humidityEntity: "Páratartalom-szenzor",
+    humidityEntityHelp:
+      "Opcionális. Egy helyi relatív páratartalom-szenzort (%) használ az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    cloudCoverEntity: "Felhőzet-szenzor",
+    cloudCoverEntityHelp:
+      "Opcionális. Egy helyi felhőzet-szenzort (%) használ az égbolt fokozatának (napsütés, szürkülés) vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    precipitationEntity: "Csapadék-szenzor",
+    precipitationEntityHelp:
+      "Opcionális. Egy helyi csapadék-szenzort (mm) használ az esőréteg vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    snowfallEntity: "Hóesés-szenzor",
+    snowfallEntityHelp:
+      "Opcionális. Egy helyi hóesés-szenzort (cm) használ a hóréteg vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz.",
+    weatherEntity: "Időjárás-entitás",
+    weatherEntityHelp:
+      "Opcionális. Egy Home Assistant időjárás-entitást használ az időjárási állapot (eső / hó / zivatar) vezérléséhez az Open-Meteo érték helyett, az élő + múlt adatokhoz. Az előrejelzett órák a modellen maradnak.",
+    chipTemperature: "Hőmérséklet megjelenítése",
+    chipHumidity: "Páratartalom megjelenítése",
+    chipCost: "Költség megjelenítése",
     locationSection: "Otthon helye",
     homeLatitude: "Otthon szélességi foka",
     homeLongitude: "Otthon hosszúsági foka",
@@ -68,6 +92,10 @@ export const hu: Translations = {
     sunChipMode: "Nap chip kijelzése",
     sunChipModeHelp:
       "Mit mutat a nap chip: az élő napsugárzást (alapértelmezett) vagy a nap helyzetét (azimut és magasság). A helyzethez nem kell érzékelő, a kártya saját napszámításaiból származik.",
+      batteryChipMode: "Akkumulátor chip kijelzése",
+      batteryChipModeHelp: "Mit mutat az akkumulátor chip: az élő teljesítményt (alapértelmezett) vagy a töltöttségi szintet (%). Arra az értékre vált, amelyet az akkumulátor ténylegesen biztosít.",
+      batteryChipModePower: "Teljesítmény",
+      batteryChipModeSoc: "Töltöttségi szint",
     sunChipModeIrradiance: "Besugárzás",
     sunChipModePosition: "Nap helyzete",
     displayUpdateFrequency: "Grafikon részletessége",
@@ -103,9 +131,13 @@ export const hu: Translations = {
     showSunTimes: "Napkelte / napnyugta idejének megjelenítése",
     showSunTimesHint:
       "Megjeleníti a napkelte és napnyugta idejét, valamint ezek jelölőit a napív lábánál.",
+    showHorizonLine: "Domborzati horizont megjelenítése",
+    showHorizonLineHint: "Kirajzolja a domborzat horizontvonalát az otthon körül, a helyi terep alapján számítva. A horizont mindig valósághűen tompítja a napot a dombok mögött; ez csak megjeleníti vagy elrejti a kirajzolt vonalat.",
+    horizonLineColor: "Domborzati horizont színe",
+    horizonLineColorHint: "A domborzati horizontvonal színe.",
     lockRotation: "Forgatás zárolása",
     lockRotationHint:
-      "Állítsd be a nézőszöget közvetlenül az előnézetben (húzással forgatható és dönthető a jelenet), majd kapcsold be a zárolást, hogy rögzítsd: a húzással forgatás és a tétlenségi automatikus keringés kikapcsol, és a beállított szög megmarad.",
+      "Húzza az előnézetet a jelenet elforgatásához és megdöntéséhez a kívánt nézetig, majd kapcsolja be ezt. A zár rögzíti ezt a nézetet (a húzással forgatás és a nyugalmi automatikus forgatás kikapcsol), és elmenti a szöget a kártyába, így pontosan ugyanaz a nézet jelenik meg minden eszközön és böngészőben. Kapcsolja ki, hogy újra szabadon forgathasson.",
     chipsSection: "Entitások megjelenítése",
     chipsIntro:
       "Jelenítsd meg vagy rejtsd el az egyes entitásokat, és válaszd ki az ikonjukat és színüket. Az otthon a kiválasztott chipet követi, alapértelmezésben pedig az elsődleges színedet.",
@@ -163,15 +195,12 @@ export const hu: Translations = {
     hiddenDevicesEmpty:
       "Egyetlen eszköz sincs még nyomon követve az energia irányítópultodon. Adj hozzá ott eszközfogyasztást, hogy itt kezelhesd őket.",
     deviceVisibilityLabel: "Eszköz megjelenítése",
-    deviceGroupLabel: "Felügyeleti csoport",
     group: "Csoport",
     noGroup: "Nincs csoport",
     groupAssignHint:
       "Húzza az eszközeit egy csoportba. Ami alul marad, egyik csoporthoz sem tartozik.",
     groupDropHere: "Húzzon ide egy eszközt",
     backToLive: "Vissza az élőhöz",
-    devicesEnergyNote:
-      "Ezek a jelenleg a Home Assistant energia irányítópultodon beállított egyedi eszközök. A szem ikon mindenhol megjeleníti vagy elrejti az adott eszközt, a jelölő pedig egy csoporthoz rendeli.",
     buildingClusterRadius: "Otthon csoportosítási sugara",
     buildingClusterRadiusHelp:
       "Az otthon körüli sugár, amelyen belül a hozzáépített melléképületek (verandák, garázsok, fészerek) az otthon részének számítanak: az otthon teljes átlátszatlanságával és színével jelennek meg, nem elhalványult szomszédként. A 0 csak a főépületet tartja meg.",

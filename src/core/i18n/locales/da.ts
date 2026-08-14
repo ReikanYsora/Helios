@@ -50,6 +50,30 @@ export const da: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Vejreffekter",
+    weatherEnabledHint:
+      "Mal den rigtige himmel over scenen: solskin, skyer, regn, sne og tordenvejr fra dit lokale vejr, som følger tidslinjen, når du scrubber. Slået fra bevarer en klar scene.",
+    temperatureEntity: "Temperatursensor",
+    temperatureEntityHelp:
+      "Valgfrit. Brug en lokal udendørs temperatursensor (°C) i stedet for Open-Meteo-værdien til temperaturchippen. Dens aktuelle tilstand og optagerhistorik bruges til live + fortid; prognosetimer forbliver på modellen.",
+    humidityEntity: "Luftfugtighedssensor",
+    humidityEntityHelp:
+      "Valgfrit. Brug en lokal sensor for relativ luftfugtighed (%) i stedet for Open-Meteo-værdien til live + fortid.",
+    cloudCoverEntity: "Skydækkesensor",
+    cloudCoverEntityHelp:
+      "Valgfrit. Brug en lokal skydækkesensor (%) til at styre himlens grad (sol, gråtoning) i stedet for Open-Meteo-værdien til live + fortid.",
+    precipitationEntity: "Nedbørssensor",
+    precipitationEntityHelp:
+      "Valgfrit. Brug en lokal nedbørssensor (mm) til at styre regnlaget i stedet for Open-Meteo-værdien til live + fortid.",
+    snowfallEntity: "Snefaldssensor",
+    snowfallEntityHelp:
+      "Valgfrit. Brug en lokal snefaldssensor (cm) til at styre snelaget i stedet for Open-Meteo-værdien til live + fortid.",
+    weatherEntity: "Vejrenhed",
+    weatherEntityHelp:
+      "Valgfrit. Brug en Home Assistant-vejrenhed til at styre forholdet (regn / sne / tordenvejr) i stedet for Open-Meteo-værdien til live + fortid. Prognosetimer forbliver på modellen.",
+    chipTemperature: "Temperaturvisning",
+    chipHumidity: "Luftfugtighedsvisning",
+    chipCost: "Omkostningsvisning",
     locationSection: "Hjemmets placering",
     homeLatitude: "Hjemmets breddegrad",
     homeLongitude: "Hjemmets længdegrad",
@@ -68,6 +92,10 @@ export const da: Translations = {
     sunChipMode: "Solchip-aflæsning",
     sunChipModeHelp:
       "Hvad solchippen viser: live solirradians (standard) eller solens position (azimut og højde). Positionen kræver ingen sensor, den kommer fra kortets egne solberegninger.",
+      batteryChipMode: "Batterichip-visning",
+      batteryChipModeHelp: "Hvad batterichippen viser: den aktuelle effekt (standard) eller ladningstilstanden (%). Den falder tilbage til den værdi, dit batteri rent faktisk leverer.",
+      batteryChipModePower: "Effekt",
+      batteryChipModeSoc: "Ladningstilstand",
     sunChipModeIrradiance: "Irradians",
     sunChipModePosition: "Solens position",
     displayUpdateFrequency: "Grafdetaljer",
@@ -103,9 +131,13 @@ export const da: Translations = {
     showSunTimes: "Vis soltid for solopgang / solnedgang",
     showSunTimesHint:
       "Vis tidspunkterne for solopgang og solnedgang samt deres markører ved foden af solbuen.",
+    showHorizonLine: "Vis terrænhorisont",
+    showHorizonLineHint: "Tegner terrænets horisontlinje omkring hjemmet, beregnet ud fra det lokale terræn. Horisonten dæmper altid solen realistisk bag bakker; dette viser eller skjuler kun den tegnede linje.",
+    horizonLineColor: "Farve på terrænhorisonten",
+    horizonLineColorHint: "Farve på terrænhorisontlinjen.",
     lockRotation: "Lås rotation",
     lockRotationHint:
-      "Indstil visningsvinklen direkte i forhåndsvisningen (træk for at rotere og vippe scenen), og slå så låsen til for at fastfryse den: træk-for-at-rotere og automatisk rotation ved inaktivitet deaktiveres, så den valgte vinkel bevares.",
+      "Træk i forhåndsvisningen for at rotere og vippe scenen til den ønskede visning, og slå så dette til. Låsen fastfryser den visning (træk-for-at-rotere og den automatiske rotation i hvile deaktiveres) og gemmer vinklen i kortet, så nøjagtig samme visning vises på alle enheder og browsere. Slå det fra for at rotere frit igen.",
     chipsSection: "Entitetsvisning",
     chipsIntro:
       "Vis eller skjul hver entitet, og vælg dens ikon og farve. Hjemmet følger den valgte chip, eller din primærfarve som standard.",
@@ -161,15 +193,12 @@ export const da: Translations = {
     hiddenDevicesEmpty:
       "Ingen individuelle enheder spores endnu i dit energidashboard. Tilføj enhedsforbrug der for at styre dem her.",
     deviceVisibilityLabel: "Vis enhed",
-    deviceGroupLabel: "Overvågningsgruppe",
     group: "Gruppe",
     noGroup: "Ingen gruppe",
     groupAssignHint:
       "Træk dine enheder ind i en gruppe. Det, der bliver tilbage nedenfor, tilhører ingen gruppe.",
     groupDropHere: "Slip en enhed her",
     backToLive: "Tilbage til live",
-    devicesEnergyNote:
-      "Dette er de individuelle enheder, der aktuelt er opsat i dit Home Assistant energidashboard. Øjet viser eller skjuler hver enkelt overalt, og pillen tildeler den til en gruppe.",
     buildingClusterRadius: "Hjemmets klyngeradius",
     buildingClusterRadiusHelp:
       "Radius omkring hjemmet, inden for hvilken tilknyttede udhuse (verandaer, garager, skure) behandles som en del af hjemmet: de gengives med hjemmets fulde uigennemsigtighed og farve i stedet for som falmede naboer. 0 beholder kun hovedbygningen.",

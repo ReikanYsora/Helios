@@ -50,6 +50,30 @@ export const lt: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Oro efektai",
+    weatherEnabledHint:
+      "Piešia tikrą dangų virš scenos: saulę, debesis, lietų, sniegą ir perkūniją pagal jūsų vietinius orus, sekant laiko juostą jai slenkant. Išjungus scena lieka giedra.",
+    temperatureEntity: "Temperatūros jutiklis",
+    temperatureEntityHelp:
+      "Neprivaloma. Temperatūros ženkleliui naudoti vietinį lauko temperatūros jutiklį (°C) vietoje Open-Meteo reikšmės. Jo tiesioginė būsena ir įrašų istorija naudojama dabarčiai ir praeičiai; prognozės valandos lieka pagal modelį.",
+    humidityEntity: "Drėgmės jutiklis",
+    humidityEntityHelp:
+      "Neprivaloma. Naudoti vietinį santykinės drėgmės jutiklį (%) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    cloudCoverEntity: "Debesuotumo jutiklis",
+    cloudCoverEntityHelp:
+      "Neprivaloma. Naudoti vietinį debesuotumo jutiklį (%), kuris valdytų dangaus atspalvį (saulę, pilkėjimą) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    precipitationEntity: "Kritulių jutiklis",
+    precipitationEntityHelp:
+      "Neprivaloma. Naudoti vietinį kritulių jutiklį (mm), kuris valdytų lietaus sluoksnį vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    snowfallEntity: "Snygio jutiklis",
+    snowfallEntityHelp:
+      "Neprivaloma. Naudoti vietinį snygio jutiklį (cm), kuris valdytų sniego sluoksnį vietoje Open-Meteo reikšmės dabarčiai ir praeičiai.",
+    weatherEntity: "Orų objektas",
+    weatherEntityHelp:
+      "Neprivaloma. Naudoti Home Assistant orų objektą, kuris valdytų sąlygas (lietus / sniegas / perkūnija) vietoje Open-Meteo reikšmės dabarčiai ir praeičiai. Prognozės valandos lieka pagal modelį.",
+    chipTemperature: "Temperatūros rodymas",
+    chipHumidity: "Drėgmės rodymas",
+    chipCost: "Išlaidų rodymas",
     locationSection: "Namų vieta",
     homeLatitude: "Namų platuma",
     homeLongitude: "Namų ilguma",
@@ -68,6 +92,10 @@ export const lt: Translations = {
     sunChipMode: "Saulės lusto rodmuo",
     sunChipModeHelp:
       "Ką rodo saulės lustas: gyvą saulės apšvitą (numatytoji) arba saulės padėtį (azimutą ir aukštį). Padėčiai nereikia jokio jutiklio, ji gaunama iš pačios kortelės saulės skaičiavimų.",
+      batteryChipMode: "Baterijos lusto rodmuo",
+      batteryChipModeHelp: "Ką rodo baterijos lustas: tikralaikę galią (numatyta) arba įkrovos lygį (%). Grįžta prie tos reikšmės, kurią baterija iš tikrųjų pateikia.",
+      batteryChipModePower: "Galia",
+      batteryChipModeSoc: "Įkrovos lygis",
     sunChipModeIrradiance: "Apšvita",
     sunChipModePosition: "Saulės padėtis",
     displayUpdateFrequency: "Grafiko detalumas",
@@ -103,9 +131,13 @@ export const lt: Translations = {
     showSunTimes: "Rodyti saulėtekio / saulėlydžio laikus",
     showSunTimesHint:
       "Rodo saulėtekio ir saulėlydžio laikus bei jų žymeklius prie saulės lanko kojų.",
+    showHorizonLine: "Rodyti reljefo horizontą",
+    showHorizonLineHint: "Nubrėžia reljefo horizonto liniją aplink namus, apskaičiuotą pagal vietovės reljefą. Horizontas visada realistiškai pritemdo saulę už kalvų; tai tik parodo arba paslepia nubrėžtą liniją.",
+    horizonLineColor: "Reljefo horizonto spalva",
+    horizonLineColorHint: "Reljefo horizonto linijos spalva.",
     lockRotation: "Užrakinti kampą",
     lockRotationHint:
-      "Nustatyk žiūrėjimo kampą tiesiogiai peržiūroje (vilk, kad pasuktum ir pakreiptum sceną), tada įjunk užraktą, kad jį užfiksuotum: vilkimas-sukimas ir automatinis sukimasis neaktyvumo metu išjungiami, išlaikant tavo nustatytą kampą.",
+      "Vilkite peržiūrą, kad pasuktumėte ir pakreiptumėte sceną iki norimo vaizdo, tada įjunkite tai. Užraktas užfiksuoja tą vaizdą (sukimas velkant ir automatinis sukimasis ramybės būsenoje išjungiami) ir įrašo kampą į kortelę, todėl tiksliai tas pats vaizdas rodomas kiekviename įrenginyje ir naršyklėje. Išjunkite jį, kad vėl galėtumėte laisvai sukti.",
     chipsSection: "Objektų rodymas",
     chipsIntro:
       "Rodyk arba slėpk kiekvieną objektą, pasirink jo piktogramą ir spalvą. Namai seka pasirinktą lustą arba, numatytai, tavo pagrindinę spalvą.",
@@ -163,15 +195,12 @@ export const lt: Translations = {
     hiddenDevicesEmpty:
       "Tavo Energijos skydelyje kol kas nesekamas nė vienas pavienis prietaisas. Pridėk ten prietaiso suvartojimą, kad galėtum jį valdyti čia.",
     deviceVisibilityLabel: "Rodyti prietaisą",
-    deviceGroupLabel: "Stebėjimo grupė",
     group: "Grupė",
     noGroup: "Be grupės",
     groupAssignHint:
       "Vilkite savo įrenginius į grupę. Kas lieka apačioje, nepriklauso jokiai grupei.",
     groupDropHere: "Vilkite įrenginį čia",
     backToLive: "Grįžti į tiesioginį",
-    devicesEnergyNote:
-      "Tai pavieniai prietaisai, šiuo metu sukonfigūruoti tavo Home Assistant Energijos skydelyje. Akis rodo arba slepia kiekvieną iš jų visur, o žymeklis priskiria jį grupei.",
     buildingClusterRadius: "Namų sankaupos spindulys",
     buildingClusterRadiusHelp:
       "Spindulys aplink namus, kurio ribose prijungti pagalbiniai pastatai (verandos, garažai, sandėliukai) laikomi namų dalimi: jie atvaizduojami su namų nepermatomumu ir spalva, o ne kaip išblukę kaimynai. 0 palieka tik pagrindinį pastatą.",

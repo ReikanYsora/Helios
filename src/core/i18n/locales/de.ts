@@ -50,6 +50,30 @@ export const de: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Wettereffekte",
+    weatherEnabledHint:
+      "Zeichnet den echten Himmel über die Szene: Sonnenschein, Wolken, Regen, Schnee und Gewitter aus deinem lokalen Wetter, entlang der Zeitleiste, während du sie durchziehst. Ausgeschaltet bleibt die Szene klar.",
+    temperatureEntity: "Temperatursensor",
+    temperatureEntityHelp:
+      "Optional. Verwendet einen lokalen Außentemperatursensor (°C) anstelle des Open-Meteo-Werts für den Temperatur-Chip. Sein aktueller Zustand und der Recorder-Verlauf werden für Live und Vergangenheit genutzt; Vorhersagestunden bleiben beim Modell.",
+    humidityEntity: "Luftfeuchtigkeitssensor",
+    humidityEntityHelp:
+      "Optional. Verwendet einen lokalen Sensor für relative Luftfeuchtigkeit (%) anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    cloudCoverEntity: "Bewölkungssensor",
+    cloudCoverEntityHelp:
+      "Optional. Verwendet einen lokalen Bewölkungssensor (%), um die Himmelsabstufung (Sonne, Eintrübung) zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    precipitationEntity: "Niederschlagssensor",
+    precipitationEntityHelp:
+      "Optional. Verwendet einen lokalen Niederschlagssensor (mm), um die Regenebene zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    snowfallEntity: "Schneefallsensor",
+    snowfallEntityHelp:
+      "Optional. Verwendet einen lokalen Schneefallsensor (cm), um die Schneeebene zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit.",
+    weatherEntity: "Wetterentität",
+    weatherEntityHelp:
+      "Optional. Verwendet eine Home Assistant Wetterentität, um die Bedingung (Regen / Schnee / Gewitter) zu steuern, anstelle des Open-Meteo-Werts, für Live und Vergangenheit. Vorhersagestunden bleiben beim Modell.",
+    chipTemperature: "Temperaturanzeige",
+    chipHumidity: "Luftfeuchtigkeitsanzeige",
+    chipCost: "Kostenanzeige",
     locationSection: "Standort",
     homeLatitude: "Breitengrad des Zuhauses",
     homeLongitude: "Längengrad des Zuhauses",
@@ -68,6 +92,10 @@ export const de: Translations = {
     sunChipMode: "Sonnen-Chip-Anzeige",
     sunChipModeHelp:
       "Was der Sonnen-Chip zeigt: die Live-Bestrahlungsstärke (Standard) oder die Position der Sonne (Azimut und Höhe). Die Position braucht keinen Sensor, sie stammt aus den eigenen Sonnenberechnungen der Karte.",
+      batteryChipMode: "Batterie-Chip-Anzeige",
+      batteryChipModeHelp: "Was der Batterie-Chip zeigt: die Live-Leistung (Standard) oder den Ladezustand (%). Er weicht auf den Wert aus, den deine Batterie tatsächlich liefert.",
+      batteryChipModePower: "Leistung",
+      batteryChipModeSoc: "Ladezustand",
     sunChipModeIrradiance: "Bestrahlungsstärke",
     sunChipModePosition: "Sonnenposition",
     displayUpdateFrequency: "Diagrammdetail",
@@ -103,9 +131,13 @@ export const de: Translations = {
     showSunTimes: "Sonnenauf- / -untergangszeiten anzeigen",
     showSunTimesHint:
       "Zeigt die Zeiten für Sonnenauf- und -untergang sowie deren Markierungen an den Füßen des Sonnenbogens an.",
+    showHorizonLine: "Geländehorizont anzeigen",
+    showHorizonLineHint: "Zeichnet die Horizontlinie des Geländes rund um das Zuhause, aus dem lokalen Relief berechnet. Der Horizont dämpft die Sonne immer realistisch hinter Hügeln; dies blendet nur die gezeichnete Linie ein oder aus.",
+    horizonLineColor: "Farbe des Geländehorizonts",
+    horizonLineColorHint: "Farbe der Geländehorizontlinie.",
     lockRotation: "Drehung sperren",
     lockRotationHint:
-      "Stelle den Blickwinkel direkt in der Vorschau ein (ziehen zum Drehen und Neigen der Szene) und aktiviere dann die Sperre, um ihn einzufrieren: Ziehen-zum-Drehen und die automatische Ruhedrehung werden deaktiviert, sodass der eingestellte Winkel erhalten bleibt.",
+      "Ziehen Sie in der Vorschau, um die Szene zu drehen und zu neigen, bis Sie die gewünschte Ansicht haben, und schalten Sie dies dann ein. Die Sperre friert diese Ansicht ein (Drehen per Ziehen und die automatische Rotation im Leerlauf werden deaktiviert) und speichert den Winkel in der Karte, sodass genau dieselbe Ansicht auf jedem Gerät und in jedem Browser erscheint. Schalten Sie sie aus, um wieder frei zu drehen.",
     chipsSection: "Entitätenanzeige",
     chipsIntro:
       "Blende jede Entität ein oder aus und wähle ihr Symbol und ihre Farbe. Das Zuhause folgt dem ausgewählten Chip oder standardmäßig deiner Primärfarbe.",
@@ -162,15 +194,12 @@ export const de: Translations = {
     hiddenDevicesEmpty:
       "In deinem Energie-Dashboard werden noch keine einzelnen Geräte erfasst. Füge dort den Geräteverbrauch hinzu, um sie hier zu steuern.",
     deviceVisibilityLabel: "Gerät anzeigen",
-    deviceGroupLabel: "Überwachungsgruppe",
     group: "Gruppe",
     noGroup: "Keine Gruppe",
     groupAssignHint:
       "Zieh deine Geräte in eine Gruppe. Was unten übrig bleibt, gehört zu keiner Gruppe.",
     groupDropHere: "Gerät hier ablegen",
     backToLive: "Zurück zu Live",
-    devicesEnergyNote:
-      "Dies sind die einzelnen Geräte, die aktuell in deinem Home Assistant Energie-Dashboard eingerichtet sind. Das Auge blendet jedes überall ein oder aus, und die Pille weist es einer Gruppe zu.",
     buildingClusterRadius: "Cluster-Radius Zuhause",
     buildingClusterRadiusHelp:
       "Radius um das Zuhause, innerhalb dessen angebaute Nebengebäude (Wintergärten, Garagen, Schuppen) als Teil des Zuhauses behandelt werden: sie werden mit der vollen Deckkraft und Farbe des Zuhauses statt als ausgeblendete Nachbarn gerendert. 0 behält nur das Hauptgebäude.",

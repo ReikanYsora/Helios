@@ -16,7 +16,58 @@ import {
     GROWTH_RISE_MS,
     HOME_SQUASH_MS,
     HOME_GROW_MS,
+    GROUND_RADIUS,
+    TILE_PX,
 } from '../core/config/constants';
+
+//Edge of the square basemap canvas (px): (2*radius+1) tiles across. On the normal path this canvas is CSS
+//3D-transformed, so the compositor backs it as one layer of this size.
+const GROUND_CANVAS_EDGE_PX = (2 * GROUND_RADIUS + 1) * TILE_PX;
+
+//The GPU's max texture edge (px) and its unmasked renderer string, from a throwaway WebGL context released at
+//once. Both 0 / '' when they can't be read. The renderer is the GPU's own identity (via WEBGL_debug_renderer_info),
+//which some browsers mask for privacy, hence the empty-string fallback.
+interface GpuProbe { maxTex: number; renderer: string; }
+
+function probeGpu(): GpuProbe
+{
+    if (typeof document === 'undefined') { return { maxTex: 0, renderer: '' }; }
+    try
+    {
+        const canvas = document.createElement('canvas');
+        const gl = (canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+        if (!gl) { return { maxTex: 0, renderer: '' }; }
+        const max = gl.getParameter(gl.MAX_TEXTURE_SIZE) as unknown;
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? '') : '';
+        gl.getExtension('WEBGL_lose_context')?.loseContext();
+        return { maxTex: typeof max === 'number' && Number.isFinite(max) ? max : 0, renderer };
+    }
+    catch
+    {
+        return { maxTex: 0, renderer: '' };
+    }
+}
+
+//Entry / mid embedded GPUs that mis-composite the 3D basemap tilt (whole-view flicker, black kiosk screenshots).
+//There is no numeric WebGL cap that separates them — the composited-layer behaviour is deliberately not exposed to
+//JS (the same opacity that blacks out a kiosk screenshot of the layer) — so we key on the GPU string, exactly like
+//Chromium's own gpu_driver_bug_list.json (matched against GL_RENDERER). Chromium blocklists whole families for
+//severe bugs ("Mali.*", "Adreno.*", "PowerVR .*"); there is no per-model list, and a false positive is cheap (the
+//projected path is near-equivalent), so we match by family and only carve out the current flagships:
+//  - Imagination PowerVR (all): entry Android / MediaTek.
+//  - Broadcom VideoCore / V3D: Raspberry Pi, a common Home Assistant wall display.
+//  - Qualcomm Adreno 2xx-6xx: entry / mid; 7xx flagships stay on the fast path.
+//  - ARM Mali (all but the G7xx flagship line): the reported Mali-G52 reports an 8192 texture cap, so only the
+//    string separates it.
+function isEntryAndroidGpu(renderer: string): boolean
+{
+    if (/\bPowerVR\b/i.test(renderer))       { return true; }
+    if (/\b(?:VideoCore|V3D)\b/i.test(renderer)) { return true; }
+    if (/\bAdreno\b/i.test(renderer))        { return /\bAdreno[^0-9]*[2-6]\d\d\b/i.test(renderer); }
+    if (/\bMali\b/i.test(renderer))          { return !/\bMali-?G7\d\d\b/i.test(renderer); }
+    return false;
+}
 
 //Old iOS/iPadOS WebKit half-composites a flat layer over a CSS 3D-transformed one, clipping the whole scene to
 //its top half. Those devices render the ground on the projected compat path instead of a 3D
@@ -26,6 +77,25 @@ import {
 //positive only swaps in the near-equivalent compat render, so erring is cheap.
 function needsProjectedGround(): boolean
 {
+    //The normal path composites the whole basemap canvas as one CSS 3D-transformed layer, and two hardware cases
+    //can't handle that, so they render the ground on the projected compat path instead (a card-sized canvas, no
+    //3D layer, same 2.5D look). Checked first, before the Apple sniff below.
+    const { maxTex, renderer } = probeGpu();
+    //1. A GPU whose max texture edge is smaller than the canvas can't back the layer at all (old 2048-cap GPUs):
+    //   it drops to black / flickers.
+    if (maxTex > 0 && maxTex < GROUND_CANVAS_EDGE_PX) { return true; }
+    //2. An entry / mid Android GPU that mis-composites the 3D tilt even though its texture cap is ample (e.g. a
+    //   Mali-G52 reports 8192): keyed on the GPU string.
+    if (isEntryAndroidGpu(renderer)) { return true; }
+    //3. Renderer masked for privacy (empty): fall back to the one numeric hardware-tier signal we have. The devices
+    //   that choke are all low-memory (<= 4 GB); deviceMemory is coarse (Chrome-only, capped, rounded), so it is a
+    //   last resort, not the primary test.
+    if (renderer === '' && typeof navigator !== 'undefined')
+    {
+        const mem = (navigator as { deviceMemory?: number }).deviceMemory;
+        if (typeof mem === 'number' && mem <= 4) { return true; }
+    }
+
     if (typeof navigator === 'undefined') { return false; }
     const ua = navigator.userAgent || '';
     const appleTouch = /iPad|iPhone|iPod/.test(ua)
@@ -170,7 +240,9 @@ export class SceneRenderer
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
         const token = ++this._groundToken;
-        const built = await buildVectorGround(lat, lon, style, this._groundAltitude);
+        //On the projected compat path (the degraded mode for the GPUs that mis-render the basemap), back the ground
+        //canvas on the CPU to dodge the driver's GPU-canvas corruption.
+        const built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, this._projectedGround);
         if (!this._alive || token !== this._groundToken) { return; }
         this._groundStyleCur = style;
         this._ground         = built.ground;
@@ -224,11 +296,6 @@ export class SceneRenderer
     {
         this._sun = { azimuth, altitude };
         this.scheduleRedraw();
-    }
-
-    public setGrowth(growth: number): void
-    {
-        this._growth = Math.max(0, Math.min(1, growth));
     }
 
     //Play the one-off building rise: prisms grow from the ground to full height (0 -> 1, cubic-out),

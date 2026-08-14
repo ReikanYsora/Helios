@@ -46,7 +46,7 @@ export interface HeliosConfig
     'camera-bearing-deg'?:     unknown;
     //When true, drag-rotate/pitch and the idle orbit are disabled so the camera stays at the configured pose. Default false.
     'camera-locked'?:          unknown;
-    //Global display radius (m) around the home within which buildings and shadows render. Clamped [0,500],
+    //Global display radius (m) around the home within which buildings and shadows render. Clamped [0,250],
     //default 200. Lowering it is the main perf lever on weak hardware.
     'display-radius'?:         unknown;
     //Opacity 0..1 of surrounding buildings (home stays 1.0). Default 0.5.
@@ -95,6 +95,8 @@ export interface HeliosConfig
     'chip-grid-export-color'?:       unknown;
     'chip-battery-charge-color'?:    unknown;
     'chip-battery-discharge-color'?: unknown;
+    'chip-temperature-color'?:       unknown;
+    'chip-humidity-color'?:          unknown;
     //Home (consumption) chip colour; also the home pill's resting colour. Default 'primary'. The home building
     //otherwise follows the selected chip's colour.
     'chip-home-color'?:         unknown;
@@ -107,12 +109,20 @@ export interface HeliosConfig
     'chip-battery-charge-icon'?:       unknown;
     'chip-battery-discharge-icon'?:    unknown;
     'chip-home-icon'?:                unknown;
+    'chip-temperature-icon'?:         unknown;
+    'chip-humidity-icon'?:            unknown;
+    //Outdoor temperature + humidity chips (top-left column). Default shown when data is available.
+    'show-temperature'?:        unknown;
+    'show-humidity'?:           unknown;
     //Scene UI toggles (all default visible). show-timeline hides the timeline + the period selector; the detail
     //panel toggle hides the tap-to-open per-chip mini-panel; sun-times hides the sunrise/sunset markers at the arc.
     'show-timeline'?:           unknown;
     'show-detail-panel'?:       unknown;
     'show-sun-times'?:          unknown;
+    'show-horizon-line'?:       unknown;
+    'horizon-line-color'?:      unknown;
     'sun-chip-mode'?:           unknown;
+    'battery-chip-mode'?:       unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
@@ -123,6 +133,18 @@ export interface HeliosConfig
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
+    //"Your real sky" weather effects (cloud grade + rain / snow / thunderstorm), driven by the real weather at the
+    //live/scrub time. Default true.
+    'weather-enabled'?:        unknown;
+    //Local-sensor overrides for the weather variables: a configured entity beats Open-Meteo for the live + past
+    //window (forecast keeps the model). Temperature feeds the temperature chip; humidity the humidity readout.
+    'cloud-cover-entity'?:     unknown;
+    'precipitation-entity'?:   unknown;
+    'snowfall-entity'?:        unknown;
+    'temperature-entity'?:     unknown;
+    'humidity-entity'?:        unknown;
+    //A HA `weather` entity whose condition (rain / snow / thunderstorm) overrides the model for the live + past.
+    'weather-entity'?:         unknown;
     //"No UI" mode: when true, the timeline and the on-card controls fade away after a short idle and reappear on
     //any input (kiosk/immersive display). Default false. Idle delay set via 'no-ui-delay'.
     'auto-hide-ui'?:           unknown;
@@ -226,6 +248,13 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 }
 
 
+//"Your real sky" weather effects. Default on (explicit false disables).
+export function weatherEnabled(config: HeliosConfig | undefined): boolean
+{
+    return config?.['weather-enabled'] !== false;
+}
+
+
 //Scene UI element toggles (all default visible; explicit false hides). show-timeline covers the timeline band +
 //the period selector; detail-panel is the tap-to-open per-chip mini-panel; sun-times are the sunrise/sunset arc markers.
 export function showTimeline(config: HeliosConfig | undefined): boolean
@@ -240,6 +269,33 @@ export function showSunTimes(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-sun-times'] !== false;
 }
+//Drawn terrain-horizon ridge line. Default shown; hidden when explicitly false. The sun gate uses the terrain
+//regardless of this, so hiding the line never changes the realistic dimming behind hills.
+export function showHorizonLine(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-horizon-line'] !== false;
+}
+//Configured colour for the horizon ridge line, as a ui_color token or hex. Undefined falls back to the card CSS.
+export function horizonLineColor(config: HeliosConfig | undefined): string | undefined
+{
+    const v = config?.['horizon-line-color'];
+    return typeof v === 'string' && v.length > 0 ? v : undefined;
+}
+//Outdoor temperature + humidity chips (top-left column). Default shown; hidden when explicitly false or no data.
+export function showTemperature(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-temperature'] !== false;
+}
+export function showHumidity(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-humidity'] !== false;
+}
+//Cost chip: shown by default, but only actually renders when a cost is configured in the Energy dashboard (the
+//card gates on a resolvable live rate). Hidden when explicitly turned off.
+export function showCost(config: HeliosConfig | undefined): boolean
+{
+    return config?.['show-cost'] !== false;
+}
 
 export type SunChipMode = 'irradiance' | 'position';
 //What the sun chip reads out: live irradiance (default) or the sun's position (azimuth + elevation).
@@ -249,12 +305,22 @@ export function sunChipMode(config: HeliosConfig | undefined): SunChipMode
     return config?.['sun-chip-mode'] === 'position' ? 'position' : 'irradiance';
 }
 
+export type BatteryChipMode = 'power' | 'soc';
+//What the fused battery chip reads out: live power (default) or the state of charge (%). The other reading
+//still drives the icon, and the chip falls back to whichever value is actually available.
+export function batteryChipMode(config: HeliosConfig | undefined): BatteryChipMode
+{
+    return config?.['battery-chip-mode'] === 'soc' ? 'soc' : 'power';
+}
+
 
 //Idle delay (ms) before the No UI fade, from the 'no-ui-delay' config key (seconds, clamped to [MIN,MAX]).
 //Defaults to DEFAULT_NO_UI_DELAY_S when unset or invalid.
 export function noUiDelayMs(config: HeliosConfig | undefined): number
 {
-    const raw = Number(config?.['no-ui-delay']);
+    //parseFloat (not Number): Number('') and Number('  ') are 0, which would silently mean a 0 ms delay instead of
+    //the default; parseFloat yields NaN there and falls through to DEFAULT_NO_UI_DELAY_S.
+    const raw = Number.parseFloat(String(config?.['no-ui-delay'] ?? ''));
     const secs = Number.isFinite(raw)
         ? Math.min(MAX_NO_UI_DELAY_S, Math.max(MIN_NO_UI_DELAY_S, raw))
         : DEFAULT_NO_UI_DELAY_S;

@@ -1,6 +1,7 @@
 //Formatting/validation helpers shared between the card render path and the visual editor. Kept
 //dependency-free so any card-side module can pull them in without dragging Lit or engine symbols along.
 
+import type { HassLike } from '../ha-types';
 import { Xn, Yn, Zn, LAB_T0, LAB_T1, LAB_T2, LAB_T3, SUN_COLOR_HEX } from '../config/constants';
 import { mixHex, hexByte } from '../render-kit/hex';
 import { clamp } from '../render-kit/math';
@@ -10,7 +11,7 @@ import { clamp } from '../render-kit/math';
 //toFixed when Intl rejects the resolved locale, guarding against custom HA locales that aren't valid
 //BCP-47 tags. `integer = true` rounds to the nearest integer and drops fraction digits.
 export function formatLocalisedNumber(
-    hass: any,
+    hass: HassLike,
     value: number,
     fractionDigits: number,
     integer = false
@@ -69,7 +70,7 @@ function haUseAmPm(locale: { time_format?: string; language?: string } | undefin
 
 //Format a Date with the user's HA language + a caller-supplied options set, falling back to the runtime default
 //locale if the language tag is rejected. No time-zone conversion: callers pass a local Date for wall-clock display.
-function formatWithHaLocale(hass: any, date: Date, opts: Intl.DateTimeFormatOptions): string
+function formatWithHaLocale(hass: HassLike, date: Date, opts: Intl.DateTimeFormatOptions): string
 {
     const locale = hass?.locale as { time_format?: string; language?: string } | undefined;
     const withAmPm: Intl.DateTimeFormatOptions = { ...opts, hour12: haUseAmPm(locale) };
@@ -84,7 +85,7 @@ function formatWithHaLocale(hass: any, date: Date, opts: Intl.DateTimeFormatOpti
 }
 
 //Format a time like the HA frontend: hour + minute in the user's language, honouring their 12/24-hour setting.
-export function formatHaTime(hass: any, date: Date): string
+export function formatHaTime(hass: HassLike, date: Date): string
 {
     return formatWithHaLocale(hass, date, { hour: 'numeric', minute: '2-digit' });
 }
@@ -92,7 +93,7 @@ export function formatHaTime(hass: any, date: Date): string
 
 //Date + time like the HA frontend (day, short month, hour:minute, honouring 12/24h), for the timeline scrub readout
 //where the coarse axis labels (months on a year window) don't pin the exact instant.
-export function formatHaDateTime(hass: any, date: Date): string
+export function formatHaDateTime(hass: HassLike, date: Date): string
 {
     return formatWithHaLocale(hass, date, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 }
@@ -104,10 +105,13 @@ export type PowerUnit = 'W' | 'kW';
 //Uniform power readout in the card's configured unit, locale-aware. Input is watts. 'kW' divides by 1000 at the
 //caller's decimal count; 'W' prints whole watts (a fractional watt is meaningless). `signed` prefixes an explicit
 //+/- so battery charge reads apart from discharge.
-export function formatPower(hass: any, watts: number, decimals: number, unit: PowerUnit, signed = false): string
+export function formatPower(hass: HassLike, watts: number, decimals: number, unit: PowerUnit, signed = false): string
 {
-    const sign = signed ? (watts > 0 ? '+' : (watts < 0 ? '-' : '')) : '';
-    const mag  = signed ? Math.abs(watts) : watts;
+    const mag = signed ? Math.abs(watts) : watts;
+    //Sign from the ROUNDED display magnitude: a value that snaps to 0 at the shown precision prints no sign, so a
+    //tiny negative reading reads "0 kW", never "-0.0 kW".
+    const displayMag = unit === 'W' ? Math.round(mag) : Number((mag / 1000).toFixed(decimals));
+    const sign = signed && displayMag !== 0 ? (watts < 0 ? '-' : '+') : '';
     if (unit === 'W')
     {
         return `${sign}${formatLocalisedNumber(hass, Math.round(mag), 0)} W`;
@@ -116,27 +120,27 @@ export function formatPower(hass: any, watts: number, decimals: number, unit: Po
 }
 
 //Power readout defaulting to 'kW'. Callers that respect the user's power-unit setting pass it through.
-export function formatPowerKw(hass: any, watts: number, decimals: number, signed = false, unit: PowerUnit = 'kW'): string
+export function formatPowerKw(hass: HassLike, watts: number, decimals: number, signed = false, unit: PowerUnit = 'kW'): string
 {
     return formatPower(hass, watts, decimals, unit, signed);
 }
 
 //Irradiance (solar constant) readout in the configured unit. Input is W/m². 'W/m²' prints whole units; 'kW/m²'
 //divides by 1000 at the caller's decimal count (a typical peak reads ~1 kW/m²).
-export function formatIrradiance(hass: any, wPerM2: number, decimals: number, unit: 'W/m²' | 'kW/m²'): string
+export function formatIrradiance(hass: HassLike, wPerM2: number, decimals: number, unit: 'W/m²' | 'kW/m²'): string
 {
     const v = Math.max(0, wPerM2);
     if (unit === 'kW/m²')
     {
         return `${formatLocalisedNumber(hass, v / 1000, decimals)} kW/m²`;
     }
-    return `${Math.round(v)} W/m²`;
+    return `${formatLocalisedNumber(hass, Math.round(v), 0)} W/m²`;
 }
 
 
 //Uniform energy readout, locale-aware. Input is kWh. The card's power unit drives the energy scale too, so the
 //whole card stays SI-consistent: 'kW' keeps kWh at the caller's decimals; 'W' prints whole watt-hours (Wh).
-export function formatEnergyKwh(hass: any, kwh: number, decimals: number, unit: PowerUnit = 'kW'): string
+export function formatEnergyKwh(hass: HassLike, kwh: number, decimals: number, unit: PowerUnit = 'kW'): string
 {
     if (unit === 'W')
     {
@@ -205,7 +209,7 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 //locale-aware at the configured precision so chips read uniform regardless of the source sensor's native unit.
 //An unknown unit keeps the entity's own unit string but still honours the decimal setting. Callers add their
 //own null-handling / signing around this.
-export function formatEntityValue(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
+export function formatEntityValue(hass: HassLike, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
     const u  = (unit || '').trim();
     const lu = u.toLowerCase();
@@ -310,7 +314,9 @@ export function resolveUiColor(
 ): string
 {
     const t = (token ?? '').trim();
-    if (/^(#|rgb)/i.test(t))
+    //A literal colour passes through untouched: #hex, rgb()/rgba(), or a var() reference (else `var(--x)` would be
+    //wrapped into the meaningless `var(--var(--x)-color)`). Matches monitoringGroupColor so every colour input behaves the same.
+    if (/^(#|rgb|var)/i.test(t))
     {
         return t;
     }

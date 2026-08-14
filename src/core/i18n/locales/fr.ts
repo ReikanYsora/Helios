@@ -49,6 +49,30 @@ export const fr: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Effets météo",
+    weatherEnabledHint:
+      "Peint le vrai ciel au-dessus de la scène : soleil, nuages, pluie, neige et orages d'après votre météo locale, en suivant la chronologie à mesure que vous la parcourez. Désactivé, la scène reste dégagée.",
+    temperatureEntity: "Capteur de température",
+    temperatureEntityHelp:
+      "Facultatif. Utilisez un capteur de température extérieure local (°C) à la place de la valeur Open-Meteo pour la puce de température. Son état en direct et son historique d'enregistreur alimentent le direct et le passé ; les heures de prévision restent sur le modèle.",
+    humidityEntity: "Capteur d'humidité",
+    humidityEntityHelp:
+      "Facultatif. Utilisez un capteur d'humidité relative local (%) à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    cloudCoverEntity: "Capteur de couverture nuageuse",
+    cloudCoverEntityHelp:
+      "Facultatif. Utilisez un capteur de couverture nuageuse local (%) pour piloter le rendu du ciel (soleil, grisaille) à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    precipitationEntity: "Capteur de précipitations",
+    precipitationEntityHelp:
+      "Facultatif. Utilisez un capteur de précipitations local (mm) pour piloter la couche de pluie à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    snowfallEntity: "Capteur de chutes de neige",
+    snowfallEntityHelp:
+      "Facultatif. Utilisez un capteur de chutes de neige local (cm) pour piloter la couche de neige à la place de la valeur Open-Meteo, pour le direct et le passé.",
+    weatherEntity: "Entité météo",
+    weatherEntityHelp:
+      "Facultatif. Utilisez une entité météo Home Assistant pour piloter la condition (pluie / neige / orage) à la place de la valeur Open-Meteo, pour le direct et le passé. Les heures de prévision restent sur le modèle.",
+    chipTemperature: "Affichage de la température",
+    chipHumidity: "Affichage de l'humidité",
+    chipCost: "Affichage du coût",
     locationSection: "Emplacement de la maison",
     homeLatitude: "Latitude du domicile",
     homeLongitude: "Longitude du domicile",
@@ -73,6 +97,10 @@ export const fr: Translations = {
     sunChipMode: "Contenu de la puce soleil",
     sunChipModeHelp:
       "Ce qu'affiche la puce soleil : l'irradiance solaire en direct (par défaut) ou la position du soleil (azimut et élévation). La position ne nécessite aucun capteur, elle vient des calculs solaires de la carte.",
+      batteryChipMode: "Affichage du chip batterie",
+      batteryChipModeHelp: "Ce qu'affiche le chip batterie : la puissance en direct (par défaut) ou l'état de charge (%). Il bascule sur la valeur réellement fournie par votre batterie.",
+      batteryChipModePower: "Puissance",
+      batteryChipModeSoc: "État de charge",
     sunChipModeIrradiance: "Irradiance",
     sunChipModePosition: "Position du soleil",
     powerUnit: "Unité de puissance",
@@ -102,9 +130,13 @@ export const fr: Translations = {
     showSunTimes: "Afficher les heures de lever / coucher du soleil",
     showSunTimesHint:
       "Affiche les heures de lever et de coucher du soleil et leurs marqueurs aux pieds de l'arc solaire.",
+    showHorizonLine: "Afficher l'horizon du terrain",
+    showHorizonLineHint: "Dessine la ligne d'horizon du relief autour de la maison, calculée à partir du terrain local. L'horizon atténue toujours le soleil de façon réaliste derrière les collines ; ceci ne fait qu'afficher ou masquer la ligne.",
+    horizonLineColor: "Couleur de l'horizon du terrain",
+    horizonLineColorHint: "Couleur de la ligne d'horizon du terrain.",
     lockRotation: "Verrouiller la rotation",
     lockRotationHint:
-      "Réglez l'angle de vue directement dans l'aperçu (glissez pour tourner et incliner la scène), puis activez le verrou pour le figer : le glisser-tourner et l'auto-rotation au repos sont désactivés, l'angle réglé est conservé.",
+      "Faites glisser l'aperçu pour pivoter et incliner la scène jusqu'à la vue souhaitée, puis activez ceci. Le verrou fige cette vue (le glisser-pour-pivoter et l'auto-rotation au repos sont désactivés) et enregistre l'angle dans la carte, pour un rendu identique sur chaque appareil et navigateur. Désactivez-le pour pivoter à nouveau librement.",
     chipsSection: "Affichage des entités",
     chipsIntro:
       "Affichez ou masquez chaque entité, et choisissez son icône et sa couleur. La maison suit le chip sélectionné, ou votre couleur primaire par défaut.",
@@ -162,15 +194,12 @@ export const fr: Translations = {
     hiddenDevicesEmpty:
       "Aucun appareil individuel n'est encore suivi dans votre tableau de bord Énergie. Ajoutez-y la consommation par appareil pour les gérer ici.",
     deviceVisibilityLabel: "Afficher l'appareil",
-    deviceGroupLabel: "Groupe de suivi",
     group: "Groupe",
     noGroup: "Aucun groupe",
     groupAssignHint:
       "Glissez vos appareils dans un groupe. Ce qui reste en bas n'appartient à aucun groupe.",
     groupDropHere: "Déposez un appareil ici",
     backToLive: "Retour au live",
-    devicesEnergyNote:
-      "Voici les appareils individuels actuellement configurés dans votre tableau de bord Énergie Home Assistant. L'œil affiche ou masque chacun partout, et la pastille l'assigne à un groupe.",
     buildingClusterRadius: "Rayon de regroupement maison",
     buildingClusterRadiusHelp:
       "Rayon autour de la maison dans lequel les dépendances attenantes (vérandas, garages, abris) sont considérées comme faisant partie de la maison : elles sont rendues à la pleine opacité et couleur de la maison, et non en voisines estompées. À 0, seul le bâtiment principal est conservé.",

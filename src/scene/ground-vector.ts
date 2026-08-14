@@ -66,8 +66,11 @@ export async function fetchGroundVector(
                 const res = await fetchWithWatchdog(url, signal);
                 if (!res.ok) { throw new Error(String(res.status)); }
                 const buf = new Uint8Array(await res.arrayBuffer());
+                //Only count the tile as decoded once decodeVectorTile returns: a garbage 200 (captive portal, proxy
+                //error page) throws here, and must leave anyOk false so the caller gets null, not an empty [].
+                const layers = decodeVectorTile(buf);
                 anyOk = true;
-                for (const layer of decodeVectorTile(buf))
+                for (const layer of layers)
                 {
                     if (!GROUND_LAYERS.has(layer.name)) { continue; }
                     for (const feature of layer.features)

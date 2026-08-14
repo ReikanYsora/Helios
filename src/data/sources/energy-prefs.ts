@@ -1,6 +1,7 @@
 //HA Energy dashboard preferences subscription. All sensors resolve from the dashboard's global settings (no per-card
 //entity slots). Subscribed once per card; HA's `energy_preferences_updated` event triggers a fresh fetch.
 
+import type { HassLike } from '../../core/ha-types';
 import { HA_DAILY_TOTALS_TTL_MS, DAY_MS } from '../../core/config/constants';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
@@ -20,6 +21,16 @@ export interface EnergyDefaults
     //Grid import kWh meters (`stat_energy_from`). Drives scrub past derivation and `imported today`.
     gridStatEnergyFroms:    string[];
     gridStatEnergyTos:      string[]; //Grid export kWh meters (`stat_energy_to`).
+    //Cost tracking (all optional; empty unless the user configured cost in the Energy dashboard). Import side lives
+    //on flow_from, export/compensation on flow_to. Live price = a €/kWh entity (`entity_energy_price`) or a static
+    //number (`number_energy_price`); the cumulative money statistics are `stat_cost` (import) / `stat_compensation`
+    //(export). The cost chip stays hidden when all of these are empty.
+    gridImportPrices:       string[]; //Live import price entities (€/kWh), current value read live.
+    gridImportPriceNumbers: number[]; //Static import prices (€/kWh) for flows configured with a fixed price.
+    gridExportPrices:       string[]; //Live export/compensation price entities (€/kWh).
+    gridExportPriceNumbers: number[]; //Static export prices (€/kWh).
+    gridStatCosts:          string[]; //Cumulative import-cost statistics (`stat_cost`), for the durable curve/panel.
+    gridStatCompensations:  string[]; //Cumulative export-revenue statistics (`stat_compensation`).
     //Battery live power sensors (`power_config`). After `invertedRateEntities` sign flips: charge positive / discharge negative.
     batteryStatRates:       string[];
     batteryStatEnergyFroms: string[]; //Battery discharge kWh meters (`stat_energy_from`). Drives `discharged today`.
@@ -42,6 +53,9 @@ export interface EnergyDefaults
     //displayed instead of the entities' friendly names wherever the family is titled.
     gridName:               string;
     batteryName:            string;
+    //Per-source battery names (the Energy dashboard `name` field, in source order; '' when unset). Drives the
+    //battery detail chart's per-bank labels so a multi-bank install reads its own names, not "Battery N".
+    batteryNames:           string[];
     //Individual devices from the dashboard's per-device tracking (`device_consumption`), in dashboard order. NOT part
     //of the source flows above (they are sub-measurements of the home load), kept separately for the monitoring
     //groups so summing them never touches the solar/grid/battery identity.
@@ -92,6 +106,12 @@ export function freshEnergyDefaults(): EnergyDefaults
         gridStatRates:          [],
         gridStatEnergyFroms:    [],
         gridStatEnergyTos:      [],
+        gridImportPrices:       [],
+        gridImportPriceNumbers: [],
+        gridExportPrices:       [],
+        gridExportPriceNumbers: [],
+        gridStatCosts:          [],
+        gridStatCompensations:  [],
         batteryStatRates:       [],
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
@@ -101,6 +121,7 @@ export function freshEnergyDefaults(): EnergyDefaults
         solarForecastEntryIds:  [],
         gridName:               '',
         batteryName:            '',
+        batteryNames:           [],
         devices:                [],
     };
 }
@@ -110,7 +131,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults = freshEnergyDefaults();
 
 export interface EnergyPrefsHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     _energyDefaults: EnergyDefaults;
     //True once `fetchEnergyPrefs` lands a parsed snapshot (including the empty "no energy_sources" case), so boot
     //gating stops blocking on a never-arriving prefs payload when no HA Energy dashboard is configured.
@@ -157,17 +178,37 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         return;
     }
     fetchEnergyPrefs(host);
-    try
+    //`subscribeEvents` resolves its UnsubscribeFunc asynchronously. Install a synchronous canceller now so the
+    //re-entry guard above holds and a teardown that lands before the promise resolves still unsubscribes once it
+    //does; storing the raw promise as the unsub would silently leak the subscription (a promise is not callable).
+    let unsub: (() => void) | null = null;
+    let live = true;
+    host._energyPrefsUnsub = () =>
     {
-        host._energyPrefsUnsub = host.hass.connection.subscribeEvents(
-            () => fetchEnergyPrefs(host),
-            'energy_preferences_updated',
-        );
-    }
-    catch (_)
-    {
-        //Event subscription unsupported on this core; the one-shot fetch above already populated the cache.
-    }
+        live = false;
+        unsub?.();
+    };
+    Promise.resolve(host.hass.connection.subscribeEvents(
+        () => fetchEnergyPrefs(host),
+        'energy_preferences_updated',
+    ))
+        .then((fn: () => void) =>
+        {
+            unsub = fn;
+            if (!live)
+            {
+                fn();
+            }
+        })
+        .catch(() =>
+        {
+            //Event subscription unsupported on this core; the one-shot fetch above already populated the cache.
+            //Clear the canceller (only if not already torn down) so a later attempt can re-subscribe.
+            if (live)
+            {
+                host._energyPrefsUnsub = undefined;
+            }
+        });
 }
 
 
@@ -192,7 +233,7 @@ export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
 //prefers it over local integration for today's produced-kWh headline.
 export interface HaDailyTotalsHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     readonly _energyDefaults: EnergyDefaults;
     _haSolarTodayKwh:          number | null;
     requestUpdate(): void;
@@ -361,6 +402,39 @@ export function parseEnergyPrefs(prefs: {
             {
                 pushStrings(f['stat_energy_to'], out.gridStatEnergyTos);
             }
+            //Cost tracking (optional). HA's real multi-tariff shape carries the price + cost stat INSIDE each flow
+            //item; the simplified/single shape carries them top-level. Read both so any config maps; all empty when
+            //no cost is tracked (the cost chip then stays hidden). Import price/cost live on flow_from + top-level;
+            //export compensation on flow_to (top-level entity_energy_price is the IMPORT price, never read as export).
+            //Import flows: price (entity/number) + cost statistic. When no explicit `stat_cost` is set, Home
+            //Assistant auto-generates one named `<stat_energy_from>_cost` as soon as a price is configured.
+            //Deriving it gives an exact, per-tariff cost with zero extra config, so a multi-tariff grid (several
+            //priced flows) just works. The fetch is graceful if the id doesn't exist.
+            for (const f of [src, ...asRecordArray(src['flow_from'])])
+            {
+                const meter = pickFirstString(f['stat_energy_from']);
+                const p = pickFirstString(f['entity_energy_price']);
+                const n = Number(f['number_energy_price']);
+                const hasPrice = !!p || Number.isFinite(n);
+                if (p) { out.gridImportPrices.push(p); }
+                if (Number.isFinite(n)) { out.gridImportPriceNumbers.push(n); }
+                const explicit = pickFirstString(f['stat_cost']);
+                if (explicit) { out.gridStatCosts.push(explicit); }
+                else if (hasPrice && meter) { out.gridStatCosts.push(`${meter}_cost`); }
+            }
+            //Export flows: compensation statistic (explicit, else HA's auto `<stat_energy_to>_compensation`) + the
+            //export price (its own `_export` fields, never the import price).
+            for (const f of [src, ...asRecordArray(src['flow_to'])])
+            {
+                const meter = pickFirstString(f['stat_energy_to']);
+                const explicit = pickFirstString(f['stat_compensation']);
+                if (explicit) { out.gridStatCompensations.push(explicit); }
+                else if (meter) { out.gridStatCompensations.push(`${meter}_compensation`); }
+                const p = pickFirstString(f['entity_energy_price_export']);
+                const n = Number(f['number_energy_price_export']);
+                if (p) { out.gridExportPrices.push(p); }
+                if (Number.isFinite(n)) { out.gridExportPriceNumbers.push(n); }
+            }
             const directRate = pickFirstString(src['stat_rate']);
             if (directRate)
             {
@@ -380,9 +454,12 @@ export function parseEnergyPrefs(prefs: {
         }
         else if (type === 'battery')
         {
+            const battName = pickFirstString(src['name']) ?? '';
+            //Per-source name, in battery-source order, for the detail chart's per-bank labels.
+            out.batteryNames.push(battName);
             if (!out.batteryName)
             {
-                out.batteryName = pickFirstString(src['name']) ?? '';
+                out.batteryName = battName;
             }
             pushStrings(src['stat_energy_from'], out.batteryStatEnergyFroms);
             pushStrings(src['stat_energy_to'], out.batteryStatEnergyTos);

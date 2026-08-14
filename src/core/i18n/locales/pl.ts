@@ -50,6 +50,30 @@ export const pl: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Efekty pogodowe",
+    weatherEnabledHint:
+      "Maluje prawdziwe niebo nad sceną: słońce, chmury, deszcz, śnieg i burze na podstawie lokalnej pogody, podążając za osią czasu podczas przewijania. Wyłączenie utrzymuje czystą scenę.",
+    temperatureEntity: "Czujnik temperatury",
+    temperatureEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika temperatury zewnętrznej (°C) zamiast wartości z Open-Meteo dla wskaźnika temperatury. Jego bieżący stan oraz historia z rejestratora są używane dla teraźniejszości i przeszłości; godziny prognozy pozostają oparte na modelu.",
+    humidityEntity: "Czujnik wilgotności",
+    humidityEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika wilgotności względnej (%) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    cloudCoverEntity: "Czujnik zachmurzenia",
+    cloudCoverEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika zachmurzenia (%), aby sterować wyglądem nieba (słońce, szarzenie) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    precipitationEntity: "Czujnik opadów",
+    precipitationEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika opadów (mm), aby sterować warstwą deszczu zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    snowfallEntity: "Czujnik opadów śniegu",
+    snowfallEntityHelp:
+      "Opcjonalne. Użyj lokalnego czujnika opadów śniegu (cm), aby sterować warstwą śniegu zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości.",
+    weatherEntity: "Encja pogody",
+    weatherEntityHelp:
+      "Opcjonalne. Użyj encji pogody Home Assistant, aby sterować warunkami (deszcz / śnieg / burza) zamiast wartości z Open-Meteo, dla teraźniejszości i przeszłości. Godziny prognozy pozostają oparte na modelu.",
+    chipTemperature: "Wyświetlanie temperatury",
+    chipHumidity: "Wyświetlanie wilgotności",
+    chipCost: "Wyświetlanie kosztu",
     locationSection: "Lokalizacja domu",
     homeLatitude: "Szerokość geograficzna domu",
     homeLongitude: "Długość geograficzna domu",
@@ -68,6 +92,10 @@ export const pl: Translations = {
     sunChipMode: "Odczyt chipa słońca",
     sunChipModeHelp:
       "Co pokazuje chip słońca: nasłonecznienie solarne na żywo (domyślnie) lub pozycję słońca (azymut i wysokość). Pozycja nie potrzebuje czujnika, pochodzi z własnych obliczeń słonecznych karty.",
+      batteryChipMode: "Odczyt chipa baterii",
+      batteryChipModeHelp: "Co pokazuje chip baterii: moc na żywo (domyślnie) lub stan naładowania (%). Wraca do wartości, którą faktycznie udostępnia bateria.",
+      batteryChipModePower: "Moc",
+      batteryChipModeSoc: "Stan naładowania",
     sunChipModeIrradiance: "Nasłonecznienie",
     sunChipModePosition: "Pozycja słońca",
     displayUpdateFrequency: "Szczegółowość wykresu",
@@ -103,9 +131,13 @@ export const pl: Translations = {
     showSunTimes: "Pokaż godziny wschodu / zachodu słońca",
     showSunTimesHint:
       "Pokazuje godziny wschodu i zachodu słońca oraz ich znaczniki u podstawy łuku słonecznego.",
+    showHorizonLine: "Pokaż horyzont terenu",
+    showHorizonLineHint: "Rysuje linię horyzontu terenu wokół domu, obliczoną na podstawie lokalnego ukształtowania. Horyzont zawsze realistycznie przygasza słońce za wzniesieniami; to tylko włącza lub wyłącza rysowaną linię.",
+    horizonLineColor: "Kolor horyzontu terenu",
+    horizonLineColorHint: "Kolor linii horyzontu terenu.",
     lockRotation: "Zablokuj obrót",
     lockRotationHint:
-      "Ustaw kąt widoku bezpośrednio w podglądzie (przeciągnij, aby obracać i pochylać scenę), a następnie włącz blokadę, aby go zamrozić: przeciąganie w celu obrotu oraz automatyczny obrót przy bezczynności zostają wyłączone, zachowując ustawiony kąt.",
+      "Przeciągnij podgląd, aby obrócić i pochylić scenę do żądanego widoku, a następnie włącz tę opcję. Blokada zamraża ten widok (obracanie przeciąganiem i automatyczne obracanie w spoczynku zostają wyłączone) i zapisuje kąt w karcie, dzięki czemu dokładnie ten sam widok pojawia się na każdym urządzeniu i w każdej przeglądarce. Wyłącz ją, aby ponownie swobodnie obracać.",
     chipsSection: "Wyświetlanie encji",
     chipsIntro:
       "Pokaż lub ukryj każdą encję i wybierz jej ikonę oraz kolor. Dom podąża za wybranym chipem lub domyślnie za Twoim kolorem podstawowym.",
@@ -162,15 +194,12 @@ export const pl: Translations = {
     hiddenDevicesEmpty:
       "W panelu Energia nie są jeszcze śledzone żadne pojedyncze urządzenia. Dodaj tam zużycie urządzeń, aby zarządzać nimi tutaj.",
     deviceVisibilityLabel: "Pokaż urządzenie",
-    deviceGroupLabel: "Grupa monitorowania",
     group: "Grupa",
     noGroup: "Brak grupy",
     groupAssignHint:
       "Przeciągnij urządzenia do grupy. To, co zostanie na dole, nie należy do żadnej grupy.",
     groupDropHere: "Upuść tutaj urządzenie",
     backToLive: "Powrót do trybu na żywo",
-    devicesEnergyNote:
-      "To pojedyncze urządzenia obecnie skonfigurowane w panelu Energia Twojego Home Assistant. Oko pokazuje lub ukrywa każde z nich wszędzie, a pigułka przypisuje je do grupy.",
     buildingClusterRadius: "Promień grupowania domu",
     buildingClusterRadiusHelp:
       "Promień wokół domu, w którym przylegające zabudowania (werandy, garaże, szopy) są traktowane jako część domu: są renderowane z pełną nieprzezroczystością i kolorem domu zamiast jako przygaszeni sąsiedzi. 0 zachowuje tylko budynek główny.",

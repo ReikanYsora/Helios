@@ -292,7 +292,7 @@ export const editorStyles = css`
         opacity: 0.85;
         margin-bottom: 8px;
     }
-    /*  Shared action button (reset cache / reset options / …): icon + label, tinted by --btn-color (set inline),
+    /*  Shared action button (reset cache / reset options / ...): icon + label, tinted by --btn-color (set inline),
         full width so every action button reads as one consistent row. The filled variant inverts to a solid fill
         for a destructive confirm. */
     .action-btn
@@ -341,10 +341,13 @@ export const editorStyles = css`
         background: var(--btn-color, var(--error-color, #ef4444));
         color: var(--text-primary-color, #fff);
     }
-    /*  Disabled field (a dependent control kept visible but inert, e.g. the No-UI delay when the mode is off). */
+    /*  Disabled field (a dependent control kept visible but inert, e.g. the No-UI delay when the mode is off, or the
+        horizon colour when the horizon line is hidden). pointer-events off covers rich controls like the colour
+        picker that have no native disabled attribute. */
     .field-disabled
     {
         opacity: 0.45;
+        pointer-events: none;
     }
     .field-disabled input
     {
@@ -423,40 +426,11 @@ export const editorStyles = css`
         padding-top: 14px;
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  Device list: one row per dashboard-tracked device, colour dot + name on the left, the group pill and the
-        show/hide toggle on the right. Framed as a soft card so the list reads as a distinct block within the
-        section. */
-    .device-list
-    {
-        display: flex;
-        flex-direction: column;
-        margin-top: 8px;
-        margin-bottom: 16px;
-        border: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.12));
-        border-radius: var(--ha-border-radius-md, 6px);
-        overflow: hidden;
-    }
-    .device-row
-    {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 10px;
-    }
-    .device-row + .device-row
-    {
-        border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0,0,0,0.08));
-    }
     /*  Device icon tinted in the entity's dashboard colour (set inline), standing in for the old colour dot. */
     .device-icon
     {
         flex: none;
         --mdc-icon-size: 20px;
-    }
-    .device-row.is-hidden .device-icon,
-    .device-row.is-hidden .device-group
-    {
-        opacity: 0.5;
     }
     .device-name
     {
@@ -467,11 +441,6 @@ export const editorStyles = css`
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-    }
-    /*  When a device is hidden, its row dims. */
-    .device-row.is-hidden .device-name
-    {
-        opacity: 0.5;
     }
     /*  Icon-only state toggles, HA-style: no button chrome. The icon carries the state through colour alone: normal
         text colour when active, the dimmed "disabled" colour when inactive. */
@@ -509,43 +478,6 @@ export const editorStyles = css`
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
         border-radius: var(--ha-border-radius-sm, 4px);
-    }
-    /*  Monitoring-group pill: a small circle showing the group number (1..4) filled in the group's colour, or an
-        X in a dim outlined circle for "No group". Click cycles No group -> 1 -> ... -> 4 -> No group. */
-    .device-group
-    {
-        flex: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px;
-        height: 24px;
-        padding: 0;
-        border-radius: 50%;
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
-        background: none;
-        color: var(--disabled-text-color, #bdbdbd);
-        font-size: var(--ha-font-size-xs, 12px);
-        font-weight: 700;
-        line-height: 1;
-        cursor: pointer;
-        transition: color 0.15s, background 0.15s, border-color 0.15s;
-        --mdc-icon-size: 16px;
-    }
-    .device-group.active
-    {
-        color: #fff;
-        border-color: transparent;
-        background: var(--group-pill-color, var(--primary-color, #03a9f4));
-    }
-    .device-group:hover
-    {
-        border-color: var(--primary-color, #03a9f4);
-    }
-    .device-group:focus-visible
-    {
-        outline: 2px solid var(--primary-color, #03a9f4);
-        outline-offset: 2px;
     }
     /*  One group's identity in a framed block: line 1 = badge + name, line 2 = colour + icon pickers (each half). */
     .group-block

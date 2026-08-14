@@ -7,6 +7,154 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.0
+
+The weather release, "Your real sky": the scene now reflects the weather over
+your home, and the outdoor temperature and humidity join the card.
+
+### Added: the terrain horizon
+
+Helios now knows the shape of the land around your home. It works out the local
+skyline from the surrounding terrain (worldwide, with no setup on your part) and
+uses it two ways: the sun **dims realistically the moment it drops behind a hill
+or a mountain**, not only at the flat horizon, and a discreet **horizon ridge** is
+drawn around the house. The realistic dimming is always on, so the scene stays
+true to where you live; the drawn line can be shown or hidden and recoloured in
+the editor. A perfect match for anyone in a valley or the mountains.
+
+### Added: state of charge on the battery chip
+
+The battery chip now has a readout option: keep showing live **power** (the
+default), or switch it to the battery's **state of charge (%)**, so a wall
+dashboard can show how full the battery is at a glance. It falls back to whichever
+value your battery actually provides.
+
+### Added: a cost chip
+
+When your Home Assistant Energy dashboard tracks a price, a new **cost chip**
+joins the card: it reads out what your energy is costing you **right now**, in
+your own currency per hour (net of any export revenue), and behaves like every
+other chip. Tap it to bring its cost curve up on the timeline and around the
+house, and scrub the day to read the cost at any moment. Like the weather chips
+it sits along the bottom as secondary information, and you'll only see it if a
+price is set in the Energy dashboard, Helios never invents one. It has a fixed,
+configurable colour and icon, and a negative rate simply means you're earning
+(selling your surplus). It reads Home Assistant's own cost statistics whenever
+they exist, so **any tariff is handled** out of the box, a flat price, peak /
+off-peak, Tempo, or a whole-home cost sensor from an integration, each already
+priced correctly hour by hour by Home Assistant. A fixed price with no cost
+statistic still works, computed as energy times price. **Multi-tariff grids
+(peak / off-peak, Tempo)** are detected automatically, even when you only set a
+price per tariff and never an explicit cost sensor: Helios finds Home Assistant's
+own per-tariff cost statistics and sums them. And the chip is **fully in the
+editor** now, show or hide it, and pick its colour and icon, like every other
+chip. The chip **follows the timeline** as you scrub (the cost at the hovered
+moment, like the other chips), and its **day curve around the house** now draws
+for multi-tariff grids too, not just a fixed price. Open its detail panel for the
+cumulative total over the selected period, what you spent, what you earned, and
+the net.
+
+### Added: the real weather, painted over the scene
+
+The card now shows the weather at your home, resolved for the moment on the
+timeline: clear-sky sunshine that dims as the cloud cover builds, an overcast
+grey, then rain, snow or a thunderstorm on top. Each layer is driven by a real
+measured value (cloud cover, precipitation, snowfall, the weather code), never a
+guess, and the whole thing follows the scrub, so you can watch a front arrive
+across the day. The sun glow now also fades as the sun nears the horizon, so
+sunrise and sunset read honestly.
+
+### Added: outdoor temperature and humidity
+
+Two new chips show the outdoor temperature and humidity, grouped along the bottom
+of the scene as secondary readings, and behave exactly like the other chips: tap
+one to bring its day curve up around the house and its series onto the timeline,
+tap again to toggle the curve, with the same detail panel (min / mean / max) and
+hover readout.
+Temperature scales to its own range so a two-degree swing is legible; humidity
+sits on a fixed 0-100 % scale. Thanks to @tfriberg for the suggestion (#332).
+
+### Added: local weather sensors override the forecast
+
+If you run a weather station, you can point each weather reading at your own
+sensor, temperature, humidity, cloud cover, precipitation, snowfall, or the
+condition from a Home Assistant `weather` entity, and it takes over from
+Open-Meteo for the live and past hours, while the forecast stays on the model.
+
+### Added: a locked view that is the same on every device
+
+The viewing angle of a locked card lived in the browser, so it differed from one
+device to the next. Turning on **Lock rotation** now captures the current angle
+into the card's configuration in one step: frame the scene in the preview, enable
+the lock, and the exact same view is saved and frozen on every device and
+browser. Thanks to @ferreto1978 (#310, #353) and @roumano (#363).
+
+### Fixed: the grid import/export arrow, definitively
+
+The 2026.8.3 fix for the swapped grid tower icons was itself the wrong way round,
+because the MDI icon names are the opposite of what they draw. The arrow now
+follows the real flow, points into the grid when exporting and away from it when
+importing, everywhere it appears, with a code note so it can't be "corrected"
+back. Thanks to @7oku (#356).
+
+### Fixed: the battery detail chart now shows your battery names
+
+On a multi-bank install, the battery detail chart labelled its banks "Battery 1,
+2, 3…" instead of the names you gave each battery in the Energy dashboard. It now
+uses your configured names throughout the per-bank charge, discharge and
+state-of-charge rows. Thanks to @tfriberg (#365).
+
+### Fixed: cloud shadows stayed round on a narrow card
+
+The drifting cloud shadows were sized to the card's width and height, so on a
+narrow or portrait card they stretched into tall ovals. They're now sized to the
+card's width on both axes, staying round at any card shape. Thanks to @tfriberg
+(#332).
+
+### Fixed: the forecast curve could be shifted by the wrong time zone
+
+When your device or Home Assistant server sat in a different time zone from your
+home's coordinates (a "server time" setup, or simply browsing from elsewhere),
+the weather forecast curve was displaced by the difference between the two zones,
+so it no longer lined up with your live production. The forecast times are now
+anchored to a fixed reference regardless of where you view the card from, so the
+curve always aligns with the moment it belongs to. Thanks to @m1chaelmichael for
+the precise report (#366).
+
+### Fixed: the production curve could read above your real power
+
+On installations whose production meter reports its energy less often than the
+graph's detail (or at an uneven pace), the past-production curve could briefly
+climb **above the real power your panels can produce** - a 2.5 kW-capped array
+plotting more than 2.5 kW for a moment. The curve is reconstructed from the
+Energy dashboard's energy, and a long report landing in a short slice made the
+computed average too high. Helios now spreads each reading across the interval it
+actually covers, so the curve never resolves finer than your meter reports and
+can no longer overshoot - while the totals still match the Energy dashboard
+exactly. Thanks to @ritonbrunis-lab for the clear screenshots (#371).
+
+### Fixed: flicker and black screen on some entry-level tablets
+
+On a few low-end wall tablets the whole view could shimmer or recompose between
+frames, and a kiosk screenshot came back black. The cause was the same family as
+the old half-3D iPad issue: the device's graphics couldn't correctly compose the
+tilted 3D ground layer. Helios now recognises those graphics chips and switches
+them to a lighter drawing path automatically - no setting to touch, and the 2.5D
+look is kept. Thanks to @Richaaldo and @charleslales for the detailed reports (#370).
+
+### Changed: the battery now connects to the home, not the solar
+
+The battery used to show a line from the solar chip while charging, which quietly
+claimed the charge came from your panels. That isn't always true - an AC-coupled
+battery, or one charged from the grid overnight, would be drawn charging "from
+solar" even with no sun. The battery is now a single connection to the home, like
+every other chip: the flow runs from the battery to the home while discharging and
+from the home to the battery while charging, without claiming a source. As always,
+the flow's value is your real measured battery power - nothing is invented. Thanks
+to @addinsella for the sharp, fair pushback (#355).
+
+---
+
 ## 2026.8.3
 
 A small release on top of 2026.8.2: a new sun-chip readout, a fairer flow

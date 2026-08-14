@@ -24,8 +24,16 @@ export interface SampleHourly
     cloudMid:    number[];
     cloudHigh:   number[];
     shortwave:   number[];
+    //Precipitation total (mm) and snowfall (cm) per hour, plus the WMO weather code, for the "Your real sky"
+    //weather layers (rain / snow / thunderstorm). All gap-fill to 0 (missing = dry / clear).
+    precip:      number[];
+    snowfall:    number[];
+    weatherCode: number[];
+    //Air temperature (°C) and relative humidity (%) at 2 m, for the temperature chip and humidity readout.
+    //Gap-fill to NaN (0 is a legitimate value for both), so consumers can tell "no data" from a real reading.
+    temperature: number[];
+    humidity:    number[];
 }
-export { RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS } from '../core/config/constants';
 
 
 //Median ignoring null/undefined/NaN. Combines concurrent multi-model forecasts into one robust value per timestep.
@@ -132,13 +140,22 @@ interface CachedPayload
         cloudMid:    number[];
         cloudHigh:   number[];
         shortwave:   number[];
+        precip:      number[];
+        snowfall:    number[];
+        weatherCode: number[];
+        temperature: number[];
+        humidity:    number[];
     };
 }
+
+//Schema version: bumped whenever the stored payload gains fields, so an older cached entry (missing the new
+//series) is treated as a miss and refetched instead of feeding NaN/empty arrays downstream.
+const CACHE_SCHEMA = 'v2';
 
 //The precision tag is part of the key so payloads at different precisions never collide.
 function cacheKey(lat: number, lon: number, precision: 'standard' | 'high'): string
 {
-    return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(CACHE_KEY_DECIMALS)},${lon.toFixed(CACHE_KEY_DECIMALS)}`;
+    return `${CACHE_KEY_PREFIX}${CACHE_SCHEMA}:${precision}:${lat.toFixed(CACHE_KEY_DECIMALS)},${lon.toFixed(CACHE_KEY_DECIMALS)}`;
 }
 
 
@@ -203,6 +220,12 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudMid:    p.cloudMid    ?? [],
             cloudHigh:   p.cloudHigh   ?? [],
             shortwave:   p.shortwave   ?? [],
+            precip:      p.precip      ?? [],
+            snowfall:    p.snowfall    ?? [],
+            weatherCode: p.weatherCode ?? [],
+            //JSON turns NaN into null on write; map back so a cached "no data" hour stays NaN, not 0.
+            temperature: (p.temperature ?? []).map((v: number | null) => v == null ? NaN : v),
+            humidity:    (p.humidity    ?? []).map((v: number | null) => v == null ? NaN : v),
         };
     }
     catch
@@ -227,6 +250,11 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 cloudMid:    data.cloudMid,
                 cloudHigh:   data.cloudHigh,
                 shortwave:   data.shortwave,
+                precip:      data.precip,
+                snowfall:    data.snowfall,
+                weatherCode: data.weatherCode,
+                temperature: data.temperature,
+                humidity:    data.humidity,
             }
         };
         window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -241,18 +269,44 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //Variables requested from Open-Meteo. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged
 //over the preceding one), matching the visual time cursor; it powers the live irradiance chip and sun-arc colouring.
 //The low/mid/high cloud layers are combined client-side into cloudEffective for rendering (and let us detect the
-//low-layer "fog spike" failure mode); the API's raw total cloud_cover is not used. Only the irradiance (shortwave)
-//+ split cloud series are requested; the PV forecast is read natively from Home Assistant.
+//low-layer "fog spike" failure mode); the API's raw total cloud_cover is not used. precipitation (mm), snowfall
+//(cm) and weather_code (WMO) drive the "Your real sky" weather layers (rain / snow / thunderstorm). The PV
+//forecast is read natively from Home Assistant.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover_low',
     'cloud_cover_mid',
     'cloud_cover_high',
+    'precipitation',
+    'snowfall',
+    'weather_code',
+    'temperature_2m',
+    'relative_humidity_2m',
 ];
 
 //Multi-model responses suffix the variable key with the model name (e.g. shortwave_radiation_instant_<model>);
 //"best_match" mode uses bare keys. Try the bare key first then the suffixed ones so one code path handles both.
-function readSeries(row: any, varName: string, models: string[]): (number | null)[]
+//Categorical fuse for weather_code: a median of WMO codes is meaningless (rain 63 and cloudy 3 average to 33, a
+//code that maps to neither model's sky). Take the first model that reported a code - the primary regional model,
+//first in pickModelsForLocation - so the FX layers always reflect one real forecast.
+function firstFinite(vals: (number | null)[]): number | null
+{
+    for (const v of vals)
+    {
+        if (v != null && Number.isFinite(v))
+        {
+            return v;
+        }
+    }
+    return null;
+}
+
+function readSeries(
+    row:     any,
+    varName: string,
+    models:  string[],
+    fuse:    (vals: (number | null)[]) => number | null = medianOfNumbers,
+): (number | null)[]
 {
     const direct = row?.hourly?.[varName];
     if (Array.isArray(direct))
@@ -277,7 +331,7 @@ function readSeries(row: any, varName: string, models: string[]): (number | null
     const out = new Array<number | null>(len);
     for (let i = 0; i < len; i++)
     {
-        out[i] = medianOfNumbers(series.map(s => s[i]));
+        out[i] = fuse(series.map(s => s[i]));
     }
     return out;
 }
@@ -285,12 +339,32 @@ function readSeries(row: any, varName: string, models: string[]): (number | null
 //Gap fills: cloud -> 0 (missing = clear); shortwave -> -1 (0 is a valid night value).
 const fillCloud     = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : v);
 const fillShortwave = (arr: (number | null)[]): number[] => arr.map(v => v == null ? -1  : v);
+//Precip (mm) / snowfall (cm) -> 0 (missing = dry). Weather code -> 0 (clear); Math.round is a safety on an already
+//integer code (weather_code is fused by first-reporting model, never averaged - see firstFinite).
+const fillZero      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.max(0, v));
+const fillCode      = (arr: (number | null)[]): number[] => arr.map(v => v == null ? 0   : Math.round(v));
+//Temperature (°C, can be negative) and humidity (%) keep NaN for missing hours: 0 is a real reading for both.
+const fillNaN       = (arr: (number | null)[]): number[] => arr.map(v => (v == null || !isFinite(v)) ? NaN : v);
+
+
+//Layer-weighted effective cloud cover (spec decision B): each layer clamped to [0, 100] before weighting so an
+//upstream > 100 quirk doesn't bleed in with the wrong relative contribution. Low cloud attenuates far more than high
+//cirrus. THE single source: the per-hour precompute here and weather-resolve's at-instant recompute both call it, so
+//the effective cover is always a function of the layers at that instant (never a separately-interpolated value that
+//would drift from the layers once the min(100) clamp bites).
+export function cloudEffective(low: number, mid: number, high: number): number
+{
+    const lc = Math.max(0, Math.min(100, low));
+    const mc = Math.max(0, Math.min(100, mid));
+    const hc = Math.max(0, Math.min(100, high));
+    return Math.min(100, lc + 0.6 * mc + 0.2 * hc);
+}
 
 
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
 //fusion (median per timestep), user elevation via &elevation= for sharper boundary conditions, and a layer-weighted
 //effective cloud cover matching both ground perception and shortwave attenuation:
-//  effective = low + 0.6·mid + 0.2·high  (capped at 100%)
+//  effective = low + 0.6*mid + 0.2*high  (capped at 100%)
 //This replaces the API's raw cloud_cover (satellite-view total), which over-counts high cirrus on otherwise clear days.
 //Returns null on any failure so the caller can degrade gracefully.
 export async function fetchHomePointData(
@@ -333,7 +407,10 @@ export async function fetchHomePointData(
             `&hourly=${HOURLY_VARS.join(',')}` +
             `&models=${models.join(',')}` +
             `&past_days=${PAST_DAYS}&forecast_days=${FORECAST_DAYS}` +
-            `&timezone=auto`;
+            //UTC, not timezone=auto: the hourly time strings come back with NO offset, so parsing must know the
+            //zone. UTC lets us pin each instant explicitly (below) instead of it defaulting to the device zone,
+            //which shifts the whole axis when the device/server zone differs from the home coordinates.
+            `&timezone=UTC`;
 
         if (elevation !== undefined)
         {
@@ -360,31 +437,31 @@ export async function fetchHomePointData(
             const row = Array.isArray(json) ? json[0] : json;
 
             const tArr  = row?.hourly?.time ?? [];
-            const times: Date[] = tArr.map((t: string) => new Date(t));
+            //Append 'Z' so the offset-free UTC strings parse as UTC instants (see the timezone=UTC note above),
+            //not in the device zone. new Date on a bare 'YYYY-MM-DDTHH:mm' would otherwise use local time.
+            const times: Date[] = tArr.map((t: string) => new Date(`${t}Z`));
 
             const lowSeries  = fillCloud(readSeries(row, 'cloud_cover_low',  models));
             const midSeries  = fillCloud(readSeries(row, 'cloud_cover_mid',  models));
             const highSeries = fillCloud(readSeries(row, 'cloud_cover_high', models));
 
-            //Clamp each layer to [0, 100] before weighting so an upstream > 100 quirk doesn't bleed into the weighted sum
-            //with the wrong relative contribution (the final Math.min catches the total but the mix would already be wrong).
-            const cloudEffective = lowSeries.map((lo, i) =>
-            {
-                const lc = Math.max(0, Math.min(100, lo ?? 0));
-                const mc = Math.max(0, Math.min(100, midSeries[i]  ?? 0));
-                const hc = Math.max(0, Math.min(100, highSeries[i] ?? 0));
-                return Math.min(100, lc + 0.6 * mc + 0.2 * hc);
-            });
+            const cloudEffectiveSeries = lowSeries.map((lo, i) =>
+                cloudEffective(lo ?? 0, midSeries[i] ?? 0, highSeries[i] ?? 0));
 
             const data: SampleHourly = {
                 lat: fLat,
                 lon: fLon,
                 times,
-                cloudCover:  cloudEffective,
+                cloudCover:  cloudEffectiveSeries,
                 cloudLow:    lowSeries,
                 cloudMid:    midSeries,
                 cloudHigh:   highSeries,
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
+                precip:      fillZero(readSeries(row, 'precipitation', models)),
+                snowfall:    fillZero(readSeries(row, 'snowfall',      models)),
+                weatherCode: fillCode(readSeries(row, 'weather_code',  models, firstFinite)),
+                temperature: fillNaN(readSeries(row, 'temperature_2m',       models)),
+                humidity:    fillNaN(readSeries(row, 'relative_humidity_2m', models)),
             };
 
             writeCache(fLat, fLon, precision, data);

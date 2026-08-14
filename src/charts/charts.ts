@@ -2,6 +2,7 @@
 //modules read off, plus re-exports of the render + sampling concerns living in sibling modules. Charts only read;
 //state mutations live elsewhere.
 
+import type { HassLike } from '../core/ha-types';
 import { type HeliosConfig, monitoringGroupName } from '../core/config/helios-config';
 import type { ChipSlot } from '../core/config/chip-appearance';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
@@ -18,6 +19,9 @@ export interface ChartSeries
     cloudLow:     number[];
     cloudMid:     number[];
     cloudHigh:    number[];
+    //Hourly outdoor temperature (°C) + relative humidity (%); NaN where the model/sensor gave no value.
+    temperature:  number[];
+    humidity:     number[];
 }
 
 //Monitoring-group chart targets (one per group 1..4): the chart draws one curve per device of the group.
@@ -27,7 +31,7 @@ export type GroupTarget = typeof GROUP_TARGETS[number];
 //Re-targetable bottom-chart target: the single series-set the chart draws at a time. 'production' (default) adds
 //the dashed forecast + per-source breakdown; 'grid'/'battery' draw two-direction flows (accent = dominant side);
 //'irradiance' draws W/m2 on a fixed 0..1000 scale; 'group-N' draws the group's per-device consumption curves.
-export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | GroupTarget;
+export type ChartTarget = 'production' | 'consumption' | 'grid' | 'battery' | 'battery-soc' | 'irradiance' | 'temperature' | 'humidity' | 'cost' | GroupTarget;
 
 //How a day-curve strand takes its colour, resolved live against the theme by resolveStrandColour so a theme flip
 //is never baked into the data memo. `token` is a fixed chip-slot colour (production, grid import/export, ...);
@@ -83,6 +87,9 @@ export function gridSourceName(host: ChartHost, index: number, dir: 'import' | '
 export function batterySourceName(host: ChartHost, index: number, dir: 'charge' | 'discharge'): string
 {
     const ed = host._energyDefaults;
+    //Prefer the Energy dashboard's configured per-source name; else the meter friendly name, then a generic.
+    const configured = ed.batteryNames[index];
+    if (configured) { return configured; }
     const id = (dir === 'charge' ? ed.batteryStatEnergyTos : ed.batteryStatEnergyFroms)[index];
     return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `Battery ${index + 1}`;
 }
@@ -91,11 +98,13 @@ export function batterySourceName(host: ChartHost, index: number, dir: 'charge' 
 //editable name (or "Group N"); everything else comes from here or from statFriendly.
 const TARGET_LABELS_EN: Record<Exclude<ChartTarget, GroupTarget>, string> = {
     production: 'Production', consumption: 'Consumption', grid: 'Grid', battery: 'Battery',
-    'battery-soc': 'Battery charge', irradiance: 'Irradiance',
+    'battery-soc': 'Battery charge', irradiance: 'Irradiance', temperature: 'Temperature', humidity: 'Humidity',
+    cost: 'Cost',
 };
 const TARGET_LABELS_FR: Record<Exclude<ChartTarget, GroupTarget>, string> = {
     production: 'Production', consumption: 'Consommation', grid: 'Réseau', battery: 'Batterie',
-    'battery-soc': 'Charge batterie', irradiance: 'Irradiance',
+    'battery-soc': 'Charge batterie', irradiance: 'Irradiance', temperature: 'Température', humidity: 'Humidité',
+    cost: 'Coût',
 };
 export function targetLabel(host: ChartHost, target: ChartTarget): string
 {
@@ -113,7 +122,7 @@ export function targetLabel(host: ChartHost, target: ChartTarget): string
 export interface ChartHost
 {
     readonly config:         HeliosConfig | undefined;
-    readonly hass:           any;
+    readonly hass:           HassLike;
     readonly _energyDefaults: EnergyDefaults;
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
@@ -133,6 +142,10 @@ export interface ChartHost
     //Unified 5-day data source, single point of truth for the production + forecast curves. Null only between mount
     //and first build, when the chart degrades to an empty curve.
     readonly _unifiedStore: UnifiedDataStore | null;
+    //Cost + compensation `change` series (net money per bucket), for the cost target's curve (any tariff). Null
+    //until fetched or when no cost statistic is configured.
+    readonly _costImportSeries: ChangeBucket[] | null;
+    readonly _costExportSeries: ChangeBucket[] | null;
     //Battery state-of-charge history over the active range (times + %). Drives the 'battery-soc' chart
     //target, read directly here because the store only carries a live SoC sample at the current bucket.
     readonly _batterySocHistory: { times: Date[]; values: number[] } | null;

@@ -50,6 +50,30 @@ export const et: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Ilmaefektid",
+    weatherEnabledHint:
+      "Kuvab stseeni kohal päris taeva: päikesepaiste, pilved, vihm, lumi ja äikesetormid sinu kohaliku ilma põhjal, järgides ajajoont selle kerimisel. Väljalülitatuna jääb stseen selgeks.",
+    temperatureEntity: "Temperatuuriandur",
+    temperatureEntityHelp:
+      "Valikuline. Kasuta temperatuurikiibi jaoks Open-Meteo väärtuse asemel kohalikku välistemperatuuri andurit (°C). Selle reaalajas olek ja salvestaja ajalugu on kasutusel reaalaja + mineviku jaoks; prognoositunnid jäävad mudelile.",
+    humidityEntity: "Niiskusandur",
+    humidityEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku suhtelise õhuniiskuse andurit (%) reaalaja + mineviku jaoks.",
+    cloudCoverEntity: "Pilvisuse andur",
+    cloudCoverEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku pilvisuse andurit (%), et juhtida taeva astet (päike, hallistumine) reaalaja + mineviku jaoks.",
+    precipitationEntity: "Sademete andur",
+    precipitationEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku sademete andurit (mm), et juhtida vihmakihti reaalaja + mineviku jaoks.",
+    snowfallEntity: "Lumesaju andur",
+    snowfallEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel kohalikku lumesaju andurit (cm), et juhtida lumekihti reaalaja + mineviku jaoks.",
+    weatherEntity: "Ilmaolem",
+    weatherEntityHelp:
+      "Valikuline. Kasuta Open-Meteo väärtuse asemel Home Assistanti ilmaolemit, et juhtida ilmastikutingimusi (vihm / lumi / äike) reaalaja + mineviku jaoks. Prognoositunnid jäävad mudelile.",
+    chipTemperature: "Temperatuuri kuva",
+    chipHumidity: "Niiskuse kuva",
+    chipCost: "Kulude kuva",
     locationSection: "Kodu asukoht",
     homeLatitude: "Kodu laiuskraad",
     homeLongitude: "Kodu pikkuskraad",
@@ -68,6 +92,10 @@ export const et: Translations = {
     sunChipMode: "Päikesekiibi näit",
     sunChipModeHelp:
       "Mida päikesekiip näitab: otsest päikesekiirgust (vaikimisi) või päikese asendit (asimuut ja kõrgus). Asend ei vaja andurit, see tuleb kaardi enda päikesearvutustest.",
+      batteryChipMode: "Aku kiibi näit",
+      batteryChipModeHelp: "Mida aku kiip näitab: reaalajas võimsust (vaikimisi) või laetuse taset (%). See langeb tagasi väärtusele, mida su aku tegelikult pakub.",
+      batteryChipModePower: "Võimsus",
+      batteryChipModeSoc: "Laetuse tase",
     sunChipModeIrradiance: "Kiirgustugevus",
     sunChipModePosition: "Päikese asend",
     displayUpdateFrequency: "Graafiku detailsus",
@@ -103,9 +131,13 @@ export const et: Translations = {
     showSunTimes: "Näita päikesetõusu ja -loojangu aegu",
     showSunTimesHint:
       "Näita päikesetõusu ja -loojangu aegu ning nende markereid päikesekaare jalamil.",
+    showHorizonLine: "Näita maastiku horisonti",
+    showHorizonLineHint: "Joonistab maastiku horisondijoone kodu ümber, arvutatuna kohalikust reljeefist. Horisont summutab päikest alati realistlikult küngaste taga; see üksnes näitab või peidab joonistatud joone.",
+    horizonLineColor: "Maastiku horisondi värv",
+    horizonLineColorHint: "Maastiku horisondijoone värv.",
     lockRotation: "Lukusta pööramine",
     lockRotationHint:
-      "Sea vaatenurk otse eelvaates (lohista stseeni pööramiseks ja kallutamiseks), seejärel lülita lukustus sisse, et see fikseerida: lohistamisega pööramine ja automaatne tiirlemine tegevusetuse ajal keelatakse, säilitades sinu seatud nurga.",
+      "Lohistage eelvaadet, et pöörata ja kallutada stseeni soovitud vaateni, seejärel lülitage see sisse. Lukk külmutab selle vaate (lohistamisega pööramine ja jõudeoleku automaatne pööramine lülitatakse välja) ja salvestab nurga kaardile, nii et täpselt sama vaade kuvatakse igas seadmes ja brauseris. Lülitage see välja, et taas vabalt pöörata.",
     chipsSection: "Olemite kuvamine",
     chipsIntro:
       "Näita või peida iga olem ning vali selle ikoon ja värv. Kodu järgib valitud kiipi, või vaikimisi sinu põhivärvi.",
@@ -162,15 +194,12 @@ export const et: Translations = {
     hiddenDevicesEmpty:
       "Sinu energiapaneelis pole veel jälgitavaid üksikuid seadmeid. Lisa sinna seadme tarbimine, et neid siin juhtida.",
     deviceVisibilityLabel: "Näita seadet",
-    deviceGroupLabel: "Jälgimisrühm",
     group: "Rühm",
     noGroup: "Rühm puudub",
     groupAssignHint:
       "Lohistage oma seadmed rühma. See, mis jääb alla, ei kuulu ühtegi rühma.",
     groupDropHere: "Lohistage seade siia",
     backToLive: "Tagasi reaalaega",
-    devicesEnergyNote:
-      "Need on hetkel sinu Home Assistanti energiapaneelis seadistatud üksikud seadmed. Silm näitab või peidab iga seadme kõikjal, pill määrab selle rühma.",
     buildingClusterRadius: "Kodu klastri raadius",
     buildingClusterRadiusHelp:
       "Raadius kodu ümber, mille sees külgnevaid kõrvalhooneid (verandad, garaažid, kuurid) käsitletakse kodu osana: need renderdatakse kodu täieliku läbipaistmatuse ja värviga, mitte tuhmunud naabritena. 0 jätab alles ainult peahoone.",

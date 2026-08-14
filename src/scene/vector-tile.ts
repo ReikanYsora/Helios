@@ -47,6 +47,13 @@ class Reader
         let shift   = 0;
         for (;;)
         {
+            //Bounds guard: past the end `buf[pos]` is undefined -> `undefined % 128` is NaN -> `NaN < 128` is false,
+            //so a truncated or non-tile payload (an HTML error/captive-portal page served with 200) would loop
+            //forever and hang the main thread. Throwing lets the fetch caller's catch fall through to the next tile.
+            if (this.pos >= this.buf.length)
+            {
+                throw new Error('mvt: varint past end of buffer');
+            }
             const byte = this.buf[this.pos++];
             result += (byte % 128) * 2 ** shift;
             if (byte < 128)

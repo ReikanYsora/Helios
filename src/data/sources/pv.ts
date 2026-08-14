@@ -3,6 +3,7 @@
 //Functions operate on a "host" (the card) that owns the @state PV fields. Writing back through the card's setters preserves
 //Lit reactivity, so calling refreshPv(this) from a lifecycle hook re-renders.
 
+import type { HassLike } from '../../core/ha-types';
 import type { HeliosConfig } from '../../core/config/helios-config';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { formatEntityValue, parseNumericState, type PowerUnit } from '../../core/format/format';
@@ -37,7 +38,7 @@ export interface PvRate
 export interface PvHost
 {
     readonly config:     HeliosConfig | undefined;
-    readonly hass:       any;
+    readonly hass:       HassLike;
     readonly _timeRange: { start: Date; end: Date } | null;
     readonly _energyDefaults: EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
@@ -215,7 +216,7 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 //Narrow host for the live PV read: just the live chip fields, no history/store surface.
 export interface PvLiveHost
 {
-    readonly hass:            any;
+    readonly hass:            HassLike;
     readonly _energyDefaults: EnergyDefaults;
     _pvCurrent: number | null;
     _pvUnit:    string;
@@ -243,7 +244,7 @@ export function currentPvRate(host: PvLiveHost): PvRate | null
 
 //Format a PV reading for the chip below the home. Power prints in the card's configured unit (W or kW); energy keeps
 //its native unit. Thin wrapper over the shared formatter.
-export function formatPvValue(hass: any, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
+export function formatPvValue(hass: HassLike, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
     return formatEntityValue(hass, value, unit, decimals, powerU);
 }

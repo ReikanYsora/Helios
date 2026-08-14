@@ -1,7 +1,7 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode } from '../core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
@@ -213,7 +213,7 @@ export class SceneHudController
         //Home anchor: the hollow ring stays while a chip that DOCKS A LEADER on it is visible (production, grid,
         //battery, device groups). The sun/irradiance chip sits by the sun disc with no leader to the home, so it
         //does NOT hold the ring: a sun-position card (home hidden, only the sun chip) drops the ring and leaves
-        //just the sun + location, e.g. a shutter/climate page keyed on the sun (#310). Config-driven so it stays
+        //just the sun + location, e.g. a shutter/climate page keyed on the sun. Config-driven so it stays
         //stable across scrubbing.
         const anyHomeLeaderChipVisible = showChipProduction || showChipGrid || showChipBattery
             || activeGroups(this.host.config, this.host._energyDefaults).some(g => groupChipVisible(cfg, g) && keeps(groupTarget(g)));
@@ -397,7 +397,6 @@ export class SceneHudController
         //~5 kW. The dual-tone leader colour tracks the physical direction, independent of the chip's HA-sign
         //flip above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
-        const batteryDischarging = showPowerChip && (activeBatteryPower! < 0);
         const batteryChargeColor    = chipSlotColor(this.host, cfg, 'batteryCharge');
         const batteryDischargeColor = chipSlotColor(this.host, cfg, 'batteryDischarge');
         const batteryLeaderColor = batteryCharging ? batteryChargeColor : batteryDischargeColor;
@@ -405,7 +404,7 @@ export class SceneHudController
         const batteryWattsForFlow = showPowerChip
             ? Math.abs(pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
             : 0;
-        //Idle: power within sensor-noise margin of zero (±5 W). The leader is still drawn (keeps the
+        //Idle: power within sensor-noise margin of zero (+/-5 W). The leader is still drawn (keeps the
         //spatial relationship) but the dash flow is frozen and the arrow hidden, since any motion would
         //be misleading.
         const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
@@ -426,38 +425,18 @@ export class SceneHudController
         //batteryLevelIcon falls back to a neutral battery. The chip value is the power, or the SoC percentage
         //on a SoC-only install.
         const batteryChipIcon = chipSlotIcon(cfg, batteryCharging ? 'batteryCharge' : 'batteryDischarge', batteryLevelIcon(showSocChip ? activeBatterySoc : null, batteryCharging));
-        const batteryChipText = showPowerChip ? batteryPowerText : batterySocText;
-        //Leader anchoring on the battery chip. The home connector is always present; the PV charge lead only
-        //while charging. When BOTH show they'd merge at the centre, so split them vertically: PV charge at 35%
-        //of the chip height (above centre), home connector at 65% (below centre). When the home connector is
-        //alone it sits back at the centre (50%). +/-15% of the full height off centre.
-        const BATTERY_CHIP_HALF_HEIGHT_PX = 14;
-        const batteryTwoLeads    = !!(layout && batteryCharging && showPvLabel);
-        const batteryPvArriveY   = batteryChipY - BATTERY_CHIP_HALF_HEIGHT_PX * 0.30;
-        const batteryHomeAnchorY = batteryTwoLeads
-            ? batteryChipY + BATTERY_CHIP_HALF_HEIGHT_PX * 0.30
-            : batteryChipY;
-        //Battery -> home: the discharge flow (rounded L + bead) while discharging, else a static connector so
-        //the chip is always tied to the home hub like every other chip.
-        const dischargeLeaderPath = (layout && showBatteryChip && batteryDischarging)
-            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY)
-            : '';
-        const batteryHomeLeaderPath = (layout && showBatteryChip && !batteryDischarging)
-            ? this._buildLPathToHome(layout, batteryChipX, batteryHomeAnchorY)
-            : '';
-        //PV -> battery chip, only while charging: an inverted L dropping from the PV chip then right into the
-        //battery chip's left edge, PV-coloured bead toward the battery. Removed the instant it discharges.
-        //Its drop starts halfway between the PV->home leg (chip centre) and the chip's right edge so the two
-        //leaders leaving the PV chip don't overlap at their root.
-        const PV_TO_BATTERY_NUDGE_X = 30;
-        const pvToBatteryPath = (layout && batteryCharging && showPvLabel)
-            ? this._buildLPath(
-                layout.pvLabel.x + PV_HALF_WIDTH_PX / 2,
-                layout.pvLabel.y + PV_HALF_HEIGHT_PX,
-                batteryChipX - PV_TO_BATTERY_NUDGE_X,
-                batteryPvArriveY,
-                true
-            )
+        //Readout follows the configured mode (power by default, or SoC), each falling back to the other when its
+        //own value is unavailable, so a power-only or SoC-only install still shows something.
+        const batteryChipText = batteryChipMode(cfg) === 'soc'
+            ? (showSocChip ? batterySocText : batteryPowerText)
+            : (showPowerChip ? batteryPowerText : batterySocText);
+        //Single battery <-> home lead: the battery is just a node on the home hub, like every other chip. The bead
+        //runs battery -> home while discharging (it feeds the house) and home -> battery while charging; idle leaves
+        //a static connector. We deliberately draw NO PV -> battery lead: whether a charge comes from solar or the
+        //grid is not measured (an AC-coupled or grid-charged battery would make that source wrong), and inventing
+        //that split is the one thing the card never does. The lead's magnitude is still the real battery power.
+        const batteryHomeLeaderPath = (layout && showBatteryChip)
+            ? this._buildLPathToHome(layout, batteryChipX, batteryChipY)
             : '';
         const gridLeaderPath       = this._buildLPathToHome(layout, layout?.gridLabel.x ?? 0, layout?.gridLabel.y ?? 0);
 
@@ -640,7 +619,7 @@ export class SceneHudController
 
         //Live irradiance for the W/m² label above the sun disc, also driving the inner-disc fill ratio: at
         //STC (1000 W/m²) the fill reaches the rim, at zero it vanishes. The sqrt mapping linearises AREA
-        //perception (area ∝ r²) so a 50% reading covers half the rim's area, not its radius.
+        //perception (area prop to r²) so a 50% reading covers half the rim's area, not its radius.
         const sunWm2          = sunScene?.sun.irradiance ?? 0;
         const sunIrradText    = formatIrradiance(this.host.hass, sunWm2, valueDec, irradU);
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
@@ -648,7 +627,7 @@ export class SceneHudController
         const chipMode        = sunChipMode(cfg);
         const sunAlt          = sunScene?.sun.altitude ?? 0;
         const sunAz           = sunScene?.sun.azimuth ?? 0;
-        const sunPositionText = formatSunPosition(sunAz, sunAlt, pickTranslations(this.host.hass?.language).compass ?? 'N,NE,E,SE,S,SW,W,NW');
+        const sunPositionText = formatSunPosition(sunAz, sunAlt, pickTranslations(this.host.hass?.language).compass);
         //Irradiance (and its cloud chip) are weather; hidden when weather is off (month/year). Sun position
         //is pure geometry and needs none, so position mode stays visible without it. The sun disc/arc (also
         //pure geometry) stays regardless.
@@ -713,7 +692,23 @@ export class SceneHudController
                 { minX: clipRect.minX - 80, minY: clipRect.minY - 80, maxX: clipRect.maxX + 80, maxY: clipRect.maxY + 80 },
             );
 
+        //Terrain-horizon ridge: a discrete relief silhouette as a CLOSED ring around the home (empty on flat
+        //terrain). Drawn as a polygon so it encircles the house; the sun crosses the crest at its azimuth.
+        const ridgePts = sunScene?.ridge ?? [];
+        const showRidge = ridgePts.length >= 3;
+        const ridgeLine = showRidge
+            ? ridgePts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+            : '';
+
         return html`
+                <!--  Terrain-horizon ridge: distant relief silhouette encircling the home, behind the arc + chips.  -->
+                ${showRidge ? html`
+                    <svg class="solar-svg horizon-ridge-svg">
+                        <polygon class="horizon-ridge-line-outline" points=${ridgeLine}></polygon>
+                        <polygon class="horizon-ridge-line" points=${ridgeLine}></polygon>
+                    </svg>
+                ` : nothing}
+
                 <!--  Solar arc, BACK pass: only the dotted below-horizon segments (the sun's path under the
                       celestial sphere), so the home + chips read in front of the night half of the loop.
                       Above-horizon segments, ray, disc and W/m² readout are in the FRONT pass below.  -->
@@ -800,24 +795,16 @@ export class SceneHudController
 
                 ${showBatteryChip ? html`
                     <svg class="battery-leader-svg">
-                        <!--  Battery -> home static connector: keeps the chip tied to the home hub whenever it
-                              is not actively discharging (the discharge flow below docks it then).  -->
+                        <!--  Single battery <-> home lead. A static connector when idle; a bead runs battery -> home
+                              while discharging (feeding the house) and home -> battery while charging. No source is
+                              claimed on the charge side, so the card never asserts where the charge came from.  -->
                         ${batteryHomeLeaderPath ? svg`
                             <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${batteryHomeLeaderPath}"
                             ></path>
-                        ` : nothing}
-                        <!--  Battery -> home discharge flow: solid rounded-L + bead toward the home, drawn only
-                              while the battery is discharging to feed the house.  -->
-                        ${dischargeLeaderPath ? svg`
-                            <path
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryLeaderColor}"
-                                d="${dischargeLeaderPath}"
-                            ></path>
-                            ${!batteryIdle ? svg`
+                            ${(showPowerChip && !batteryIdle) ? svg`
                                 <circle
                                     class="battery-leader-bead"
                                     r="3"
@@ -826,30 +813,9 @@ export class SceneHudController
                                     <animateMotion
                                         dur="${batteryFlowDuration}s"
                                         repeatCount="indefinite"
-                                        path="${dischargeLeaderPath}"
-                                    ></animateMotion>
-                                </circle>
-                            ` : nothing}
-                        ` : nothing}
-                        <!--  PV -> battery chip, only while charging: an inverted L (down then right) in the PV
-                              colour, bead flowing toward the battery so the user sees PV feeding it.  -->
-                        ${pvToBatteryPath ? svg`
-                            <path
-                                class="pv-home-leader-line"
-                                style="--pv-leader-color:${pvColor}"
-                                fill="none"
-                                d="${pvToBatteryPath}"
-                            ></path>
-                            ${!batteryIdle ? svg`
-                                <circle
-                                    class="pv-home-leader-bead"
-                                    r="3"
-                                    fill="${pvColor}"
-                                >
-                                    <animateMotion
-                                        dur="${batteryFlowDuration}s"
-                                        repeatCount="indefinite"
-                                        path="${pvToBatteryPath}"
+                                        path="${batteryHomeLeaderPath}"
+                                        keyPoints=${batteryCharging ? '1;0' : nothing}
+                                        keyTimes=${batteryCharging ? '0;1' : nothing}
                                     ></animateMotion>
                                 </circle>
                             ` : nothing}
@@ -1031,10 +997,10 @@ export class SceneHudController
                     >
                         ${(() => {
                             //Sun disc, four layers back-to-front:
-                            //  0. Halo, radial-gradient glow whose radius (3× disc) and opacity scale with
+                            //  0. Halo, radial-gradient glow whose radius (3x disc) and opacity scale with
                             //     irradiance, feathering into the basemap with no hard edge.
                             //  1. Background fill (SUN_FILL_OPACITY_BG) so the empty disc reads as tinted glass.
-                            //  2. Inner fill, radius = sunFillRatio × outer; conveys irradiance (sub-px radii
+                            //  2. Inner fill, radius = sunFillRatio x outer; conveys irradiance (sub-px radii
                             //     vanish, the correct visual for "no sun").
                             //  3. Outer rim (darkened sun colour) for a clear edge against the basemap.
                             //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc
@@ -1053,10 +1019,19 @@ export class SceneHudController
                             //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.
                             const haloR        = r * 3;
                             const haloAlphaMax = sunFillRatio * 0.55;
+                            //Radiant-heat aura: a warm glow that breathes (a CSS opacity + scale pulse, a heat
+                            //wave emanating from the disc), fading in with irradiance so a low / hazy sun stays
+                            //calm. `--heat` (0..1) is the gate the CSS pulse multiplies.
+                            const heat = Math.max(0, Math.min(1, (sunFillRatio - 0.15) / 0.55));
                             return svg`
                                 <defs>
                                     <radialGradient id="solar-halo-grad-${this.host._instanceId}">
                                         <stop offset="0%"   stop-color="${sunColor}" stop-opacity="${haloAlphaMax}"></stop>
+                                        <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"></stop>
+                                    </radialGradient>
+                                    <radialGradient id="solar-heat-grad-${this.host._instanceId}">
+                                        <stop offset="0%"   stop-color="${sunColor}" stop-opacity="0.9"></stop>
+                                        <stop offset="55%"  stop-color="${sunColor}" stop-opacity="0.35"></stop>
                                         <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"></stop>
                                     </radialGradient>
                                 </defs>
@@ -1065,6 +1040,13 @@ export class SceneHudController
                                     cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
                                     r="${haloR}"
                                     fill="url(#solar-halo-grad-${this.host._instanceId})"
+                                ></circle>
+                                <circle
+                                    class="solar-sun-heat"
+                                    cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
+                                    r="${r * 2.6}"
+                                    fill="url(#solar-heat-grad-${this.host._instanceId})"
+                                    style="--heat:${heat}"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"

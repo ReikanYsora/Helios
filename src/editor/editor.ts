@@ -3,6 +3,7 @@ import { LitElement, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
+import type { HassLike } from '../core/ha-types';
 import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
@@ -56,19 +57,12 @@ import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardH
 import { batteryLiveIsBucketSourced } from '../data/sources/battery';
 
 
-// English fallback labels for the configurable basemap layers (localised via t.mapConfig when present).
-const MAP_LAYER_EN: Record<GroundLayerKey, string> = {
-    land: 'Background', water: 'Water', wood: 'Woodland', grass: 'Greenery', sand: 'Sand',
-    wetland: 'Wetland', ice: 'Ice & snow', landuse: 'Built-up land',
-    roadMajor: 'Major roads', roadMinor: 'Minor roads', roadCasing: 'Road outline', path: 'Paths & tracks',
-    rail: 'Railways', building: 'Buildings', boundary: 'Boundaries',
-};
 
 // Visual editor exposing every config option through native HA form controls.
 @customElement('helios-card-editor')
 export class HeliosCardEditor extends LitElement
 {
-    @property({ attribute: false }) public hass?: any;
+    @property({ attribute: false }) public hass?: HassLike;
     @state()                        private _cfg: HeliosConfig = {};
     @state()                        private _pickerReady = false;
     //Bumped whenever a colour picker is cleared with its X, to force that picker to be re-created (via keyed) so
@@ -88,9 +82,35 @@ export class HeliosCardEditor extends LitElement
     private static readonly RESET_FEEDBACK_MS = 2000;
     private _sliderDebounce = new Map<string, number>();
 
+    //Latest camera pose published by the live preview (helios-camera-pose event). Captured into the config when
+    //the user turns on the camera lock. Null until the preview has published a pose (fires on init + every move).
+    private _livePose: { bearing: number; pitch: number } | null = null;
+    private readonly _onCameraPose = (e: Event): void =>
+    {
+        const d = (e as CustomEvent).detail;
+        if (!d || typeof d.bearing !== 'number' || typeof d.pitch !== 'number') { return; }
+        this._livePose = { bearing: d.bearing, pitch: d.pitch };
+    };
+    //Turning the lock on freezes AND saves the current framed angle into the config, so the exact view propagates
+    //to every device/browser (the drag-set pose otherwise lives only in per-device localStorage). One write.
+    private _lockCameraToCurrentView(): void
+    {
+        const pose = this._livePose;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        next['camera-locked'] = true;
+        if (pose)
+        {
+            next['camera-bearing-deg'] = Math.round(((pose.bearing % 360) + 360) % 360);
+            next['camera-pitch-deg']   = Math.round(pose.pitch);
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+    }
+
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
+        window.removeEventListener('helios-camera-pose', this._onCameraPose);
         unsubscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
         for (const t of this._sliderDebounce.values())
         {
@@ -161,6 +181,7 @@ export class HeliosCardEditor extends LitElement
     public connectedCallback(): void
     {
         super.connectedCallback();
+        window.addEventListener('helios-camera-pose', this._onCameraPose);
         this._ensureEntityPicker();
         subscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
     }
@@ -293,7 +314,7 @@ export class HeliosCardEditor extends LitElement
         return html`
             <a class="live-status-link" href="/config/energy/dashboard" target="_blank" rel="noopener noreferrer">
                 <ha-icon icon="mdi:open-in-new"></ha-icon>
-                <span>${t.editor.openEnergyConfig ?? 'Open Energy configuration'}</span>
+                <span>${t.editor.openEnergyConfig}</span>
             </a>
         `;
     }
@@ -325,32 +346,32 @@ export class HeliosCardEditor extends LitElement
 
         return html`
             <div class="live-data-panel">
-                <div class="section-title"><ha-icon class="section-icon" icon="mdi:list-status"></ha-icon>${t.editor.liveDataTitle ?? 'Configuration status'}</div>
-                <div class="hint">${t.editor.liveDataIntro ?? 'Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source; curves and totals always come from your meters.'}</div>
+                <div class="section-title"><ha-icon class="section-icon" icon="mdi:list-status"></ha-icon>${t.editor.liveDataTitle}</div>
+                <div class="hint">${t.editor.liveDataIntro}</div>
 
                 ${solarWired
                     ? this._liveStatusLine(solarLive, false, solarLive
-                        ? (t.editor.liveSolarOk ?? 'Solar: live power sensor detected.')
-                        : (t.editor.liveSolarMissing ?? 'Solar: no live power sensor, the production chip stays hidden. Add one under Settings > Dashboards > Energy > Solar panels.'))
-                    : this._liveStatusLine(false, false, t.editor.liveSolarAbsent ?? 'Solar: not set up in your Energy dashboard. Add solar panels there to get the production chip.')}
+                        ? (t.editor.liveSolarOk)
+                        : (t.editor.liveSolarMissing))
+                    : this._liveStatusLine(false, false, t.editor.liveSolarAbsent)}
 
                 ${gridWired
                     ? this._liveStatusLine(gridLive, gridFlagged, gridFlagged
-                        ? (t.editor.liveGridMiswired ?? 'Grid: the live power sensor contradicts your meters (it seems to measure a single direction). The chips stay hidden; configure a signed sensor or the Two sensors mode.')
+                        ? (t.editor.liveGridMiswired)
                         : (gridLive
-                            ? (t.editor.liveGridOk ?? 'Grid: live power sensor detected.')
-                            : (t.editor.liveGridMissing ?? 'Grid: no live power sensor, the import/export chips stay hidden. Add one under Settings > Dashboards > Energy > Grid.')))
-                    : this._liveStatusLine(false, false, t.editor.liveGridAbsent ?? 'Grid: not set up in your Energy dashboard. Add the grid there to get the import and export chips.')}
+                            ? (t.editor.liveGridOk)
+                            : (t.editor.liveGridMissing)))
+                    : this._liveStatusLine(false, false, t.editor.liveGridAbsent)}
 
                 ${batteryWired
                     ? this._liveStatusLine(batteryLive, false, batteryLive
-                        ? (t.editor.liveBatteryOk ?? 'Battery: live power sensors cover every battery.')
-                        : (t.editor.liveBatteryMissing ?? 'Battery: live power missing on at least one battery, the power chip stays hidden. Add the power sensor(s) under Settings > Dashboards > Energy > Battery.'))
-                    : this._liveStatusLine(false, false, t.editor.liveBatteryAbsent ?? 'Battery: not set up in your Energy dashboard. Add a battery there to get the charge and discharge chip.')}
+                        ? (t.editor.liveBatteryOk)
+                        : (t.editor.liveBatteryMissing))
+                    : this._liveStatusLine(false, false, t.editor.liveBatteryAbsent)}
 
                 ${this._liveStatusLine(homeReady, false, homeReady
-                    ? (t.editor.liveHomeOk ?? 'Home consumption: shown, derived from the live families above.')
-                    : (t.editor.liveHomeNote ?? 'Home consumption: appears once every configured family above has its live sensor.'))}
+                    ? (t.editor.liveHomeOk)
+                    : (t.editor.liveHomeNote))}
 
                 <div class="live-config-link-row">${this._energyConfigLink()}</div>
             </div>
@@ -472,7 +493,12 @@ export class HeliosCardEditor extends LitElement
     {
         const el  = e.currentTarget as HTMLElement;
         const key = el.dataset.key as keyof HeliosConfig | undefined;
-        if (key) { this._update(key, el.dataset.value === 'true'); }
+        if (!key) { return; }
+        const value = el.dataset.value === 'true';
+        //Locking the camera also snapshots the current preview angle into the config (see _lockCameraToCurrentView),
+        //so a frozen view is identical on every device. Unlocking is a plain toggle.
+        if (key === 'camera-locked' && value) { this._lockCameraToCurrentView(); return; }
+        this._update(key, value);
     };
     //Toggle a device's presence in the hidden-devices list (presence = hidden). Stored back trimmed to undefined
     //when empty so the YAML drops the key.
@@ -553,12 +579,14 @@ export class HeliosCardEditor extends LitElement
                         <button
                             type="button"
                             class="seg-option ${on ? 'active' : ''}"
+                            aria-pressed=${on ? 'true' : 'false'}
                             data-key=${key} data-value="true"
                             @click=${this._onBoolToggleClick}
                         >${onLabel ?? t.editor.autoRotateOn}</button>
                         <button
                             type="button"
                             class="seg-option ${!on ? 'active' : ''}"
+                            aria-pressed=${!on ? 'true' : 'false'}
                             data-key=${key} data-value="false"
                             @click=${this._onBoolToggleClick}
                         >${offLabel ?? t.editor.autoRotateOff}</button>
@@ -567,12 +595,34 @@ export class HeliosCardEditor extends LitElement
                 ${hint ? html`<div class="hint">${hint}</div>` : nothing}`;
     }
 
-    //One ui_color picker field (label + ha-selector + help). Same markup for every colour config key.
-    private _renderColorPicker(key: string, label: string, help: string, defaultColor: string): TemplateResult
+    //One entity-picker field (label + ha-entity-picker + help). Used for the optional local weather-override
+    //sensors; `domains` defaults to the numeric sensor domains, overridden for the `weather` entity picker.
+    private _renderSensorPicker(key: string, label: string, help: string, domains: string[] = ['sensor', 'input_number']): TemplateResult
     {
         const c = this._cfg as Record<string, unknown>;
         return html`
                 <div class="field field-block">
+                    <span class="label">${label}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass=${this.hass}
+                            .value=${String(c[key] ?? '')}
+                            .includeDomains=${domains}
+                            data-key=${key}
+                            @value-changed=${this._onEntityValueChanged}
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                ${help ? html`<div class="field-help">${help}</div>` : nothing}`;
+    }
+
+    //One ui_color picker field (label + ha-selector + help). Same markup for every colour config key.
+    private _renderColorPicker(key: string, label: string, help: string, defaultColor: string, disabled = false): TemplateResult
+    {
+        const c = this._cfg as Record<string, unknown>;
+        return html`
+                <div class="field field-block ${disabled ? 'field-disabled' : ''}">
                     <span class="label">${label}</span>
                     ${this._pickerReady ? html`
                         ${keyed(this._colorNonce, html`<ha-selector
@@ -684,8 +734,7 @@ export class HeliosCardEditor extends LitElement
 
     private _renderGroupAssignment(t: Translations): TemplateResult
     {
-        const hint = t.editor.groupAssignHint
-            ?? 'Drag your devices into a group. Anything left below belongs to no group.';
+        const hint = t.editor.groupAssignHint;
         const devices = this._orderedDevices();
         const hidden  = hiddenDevices(this._cfg);
 
@@ -694,7 +743,7 @@ export class HeliosCardEditor extends LitElement
             return html`
                 <div class="hint">${hint}</div>
                 <div class="live-config-link-row">${this._energyConfigLink()}</div>
-                <div class="device-empty">${t.editor.hiddenDevicesEmpty ?? 'No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.'}</div>`;
+                <div class="device-empty">${t.editor.hiddenDevicesEmpty}</div>`;
         }
 
         const groups  = monitoringGroups(this._cfg);
@@ -718,8 +767,8 @@ export class HeliosCardEditor extends LitElement
     {
         const isNone = group === 0;
         const name   = isNone
-            ? (t.editor.noGroup ?? 'No group')
-            : (monitoringGroupName(this._cfg, group) || `${t.editor.group ?? 'Group'} ${group}`);
+            ? (t.editor.noGroup)
+            : (monitoringGroupName(this._cfg, group) || `${t.editor.group} ${group}`);
         const icon   = isNone ? '' : monitoringGroupIcon(this._cfg, group);
         const color  = isNone ? '' : monitoringGroupColor(this._cfg, group);
         return html`
@@ -747,7 +796,7 @@ export class HeliosCardEditor extends LitElement
                     <div class="group-zone-body">
                         ${devs.length
                             ? repeat(devs, d => d.statConsumption, d => this._renderDeviceChip(d, hidden, t))
-                            : html`<div class="group-zone-empty">${t.editor.groupDropHere ?? 'Drop a device here'}</div>`}
+                            : html`<div class="group-zone-empty">${t.editor.groupDropHere}</div>`}
                     </div>
                 </ha-sortable>
             </div>`;
@@ -771,7 +820,7 @@ export class HeliosCardEditor extends LitElement
                     class="device-toggle ${shown ? 'active' : ''}"
                     data-stat=${stat}
                     aria-pressed=${shown ? 'true' : 'false'}
-                    aria-label=${t.editor.deviceVisibilityLabel ?? 'Show device'}
+                    aria-label=${t.editor.deviceVisibilityLabel}
                     @click=${this._onDeviceToggleClick}
                 >
                     <ha-icon icon=${shown ? 'mdi:eye' : 'mdi:eye-off'}></ha-icon>
@@ -786,14 +835,14 @@ export class HeliosCardEditor extends LitElement
         const mode = mapThemeMode(this._cfg);
         const mc   = t.mapConfig;
         const opt  = (val: MapThemeMode, label: string): TemplateResult => html`
-            <button type="button" class="seg-option ${mode === val ? 'active' : ''}" data-value=${val} @click=${this._onMapModeClick}>${label}</button>`;
+            <button type="button" class="seg-option ${mode === val ? 'active' : ''}" aria-pressed=${mode === val ? 'true' : 'false'} data-value=${val} @click=${this._onMapModeClick}>${label}</button>`;
         return html`
-            <div class="field-help">${mc?.intro ?? 'The basemap is drawn from OpenStreetMap vector tiles. Auto follows your theme, Dark / Light force one, Custom lets you set every colour and hide any layer.'}</div>
+            <div class="field-help">${mc.intro}</div>
             <div class="segmented-toggle map-mode-toggle">
-                ${opt('auto', mc?.modeAuto ?? 'Auto')}
-                ${opt('dark', mc?.modeDark ?? 'Dark')}
-                ${opt('light', mc?.modeLight ?? 'Light')}
-                ${opt('custom', mc?.modeCustom ?? 'Custom')}
+                ${opt('auto', mc.modeAuto)}
+                ${opt('dark', mc.modeDark)}
+                ${opt('light', mc.modeLight)}
+                ${opt('custom', mc.modeCustom)}
             </div>
             ${mode === 'custom' ? GROUND_LAYER_KEYS.map((key) => this._renderMapLayerBlock(t, key)) : nothing}`;
     }
@@ -822,7 +871,7 @@ export class HeliosCardEditor extends LitElement
 
     private _mapLayerLabel(t: Translations, key: GroundLayerKey): string
     {
-        return t.mapConfig?.[key] ?? MAP_LAYER_EN[key];
+        return t.mapConfig[key];
     }
 
     //One configurable map layer: colour pill + name + show/hide toggle + the HA ui_color picker.
@@ -839,8 +888,8 @@ export class HeliosCardEditor extends LitElement
                         <span class="group-name-badge" style="--group-pill-color:${pill}"></span>
                         <span class="chip-box-name">${this._mapLayerLabel(t, key)}</span>
                         <div class="segmented-toggle">
-                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-key=${mapShowKey(key)} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
-                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-key=${mapShowKey(key)} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" aria-pressed=${on ? 'true' : 'false'} data-key=${mapShowKey(key)} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" aria-pressed=${!on ? 'true' : 'false'} data-key=${mapShowKey(key)} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
                     ${this._pickerReady ? html`
@@ -860,12 +909,15 @@ export class HeliosCardEditor extends LitElement
     private _renderChipsSection(t: Translations): TemplateResult
     {
         return html`
-            <div class="hint">${t.editor.chipsIntro ?? 'Show or hide each entity, and pick its icon and colour. The home follows the selected chip, or your primary colour by default.'}</div>
-            ${this._renderChipBox(t.editor.chipIrradiance ?? 'Irradiance display', 'chip-irradiance-visible', ['irradiance'])}
-            ${this._renderChipBox(t.editor.chipProduction ?? 'Production display', 'chip-production-visible', ['production'])}
-            ${this._renderChipBox(t.editor.chipGrid ?? 'Grid display', 'chip-grid-visible', ['gridImport', 'gridExport'])}
-            ${this._renderChipBox(t.editor.chipBattery ?? 'Battery display', 'chip-battery-visible', ['batteryCharge', 'batteryDischarge'])}
-            ${this._renderChipBox(t.editor.chipHome ?? 'Home consumption display', 'chip-home-visible', ['home'])}
+            <div class="hint">${t.editor.chipsIntro}</div>
+            ${this._renderChipBox(t.editor.chipIrradiance, 'chip-irradiance-visible', ['irradiance'])}
+            ${this._renderChipBox(t.editor.chipProduction, 'chip-production-visible', ['production'])}
+            ${this._renderChipBox(t.editor.chipGrid, 'chip-grid-visible', ['gridImport', 'gridExport'])}
+            ${this._renderChipBox(t.editor.chipBattery, 'chip-battery-visible', ['batteryCharge', 'batteryDischarge'])}
+            ${this._renderChipBox(t.editor.chipHome, 'chip-home-visible', ['home'])}
+            ${this._renderChipBox(t.editor.chipTemperature, 'show-temperature', ['temperature'])}
+            ${this._renderChipBox(t.editor.chipHumidity, 'show-humidity', ['humidity'])}
+            ${this._renderChipBox(t.editor.chipCost, 'show-cost', ['cost'])}
             ${Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1).map(g => this._renderGroupChipBox(t, g))}
         `;
     }
@@ -886,8 +938,8 @@ export class HeliosCardEditor extends LitElement
                         <span class="group-name-badge" style="--group-pill-color:${badge}"><ha-icon icon=${badgeIcon}></ha-icon></span>
                         <span class="chip-box-name">${label}</span>
                         <div class="segmented-toggle">
-                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-key=${visKey} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
-                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-key=${visKey} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" aria-pressed=${on ? 'true' : 'false'} data-key=${visKey} data-value="true" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" aria-pressed=${!on ? 'true' : 'false'} data-key=${visKey} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
                     ${this._pickerReady ? slots.map(slot => {
@@ -930,13 +982,13 @@ export class HeliosCardEditor extends LitElement
                             class="group-name-input"
                             type="text"
                             .value=${monitoringGroupName(this._cfg, g)}
-                            placeholder=${`${t.editor.group ?? 'Group'} ${g}`}
+                            placeholder=${`${t.editor.group} ${g}`}
                             data-group=${String(g)}
                             @change=${this._onGroupNameChanged}
                         />
                         <div class="segmented-toggle">
-                            <button type="button" class="seg-option ${on ? 'active' : ''}" data-group=${String(g)} data-value="true" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOn}</button>
-                            <button type="button" class="seg-option ${!on ? 'active' : ''}" data-group=${String(g)} data-value="false" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOff}</button>
+                            <button type="button" class="seg-option ${on ? 'active' : ''}" aria-pressed=${on ? 'true' : 'false'} data-group=${String(g)} data-value="true" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOn}</button>
+                            <button type="button" class="seg-option ${!on ? 'active' : ''}" aria-pressed=${!on ? 'true' : 'false'} data-group=${String(g)} data-value="false" @click=${this._onGroupVisibleClick}>${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
                     ${this._pickerReady ? html`
@@ -1063,34 +1115,37 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="map" ?open=${this._openSection === 'map'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:tune"></ha-icon>${t.editor.uiAndMapSection}</summary>
-                ${this._renderToggle('show-timeline', t.editor.showTimeline ?? 'Show timeline', t.editor.showTimelineHint ?? 'Show the timeline and the period selector below the scene. Off keeps just the scene.', undefined, undefined, true)}
-                ${this._renderToggle('show-detail-panel', t.editor.showDetailPanel ?? 'Show additional info', t.editor.showDetailPanelHint ?? 'Allow the per-chip mini-panel (aggregated metrics) to open top-right when a chip is tapped. Off never shows it.', undefined, undefined, true)}
-                ${this._renderToggle('show-sun-times', t.editor.showSunTimes ?? 'Show sunrise / sunset times', t.editor.showSunTimesHint ?? 'Show the sunrise and sunset times and their markers at the feet of the solar arc.', undefined, undefined, true)}
-                ${this._renderToggle('auto-hide-ui', t.editor.noUiMode ?? 'No UI mode', t.editor.noUiModeHint ?? 'Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.')}
-                ${this._renderSlider('no-ui-delay', t.editor.noUiDelay ?? 'Idle delay before hiding', MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}
-                <div class="field-help">${t.editor.noUiDelayHint ?? 'Seconds of inactivity before the timeline and controls fade away in No UI mode. 0 keeps the UI hidden permanently. Only used when No UI mode is on.'}</div>
+                ${this._renderToggle('show-timeline', t.editor.showTimeline, t.editor.showTimelineHint, undefined, undefined, true)}
+                ${this._renderToggle('show-detail-panel', t.editor.showDetailPanel, t.editor.showDetailPanelHint, undefined, undefined, true)}
+                ${this._renderToggle('show-sun-times', t.editor.showSunTimes, t.editor.showSunTimesHint, undefined, undefined, true)}
+                ${this._renderToggle('show-horizon-line', t.editor.showHorizonLine, t.editor.showHorizonLineHint, undefined, undefined, true)}
+                ${this._renderColorPicker('horizon-line-color', t.editor.horizonLineColor, t.editor.horizonLineColorHint, 'blue-grey', c['show-horizon-line'] === false)}
+                ${this._renderToggle('weather-enabled', t.editor.weatherEnabled, t.editor.weatherEnabledHint, undefined, undefined, true)}
+                ${this._renderToggle('auto-hide-ui', t.editor.noUiMode, t.editor.noUiModeHint)}
+                ${this._renderSlider('no-ui-delay', t.editor.noUiDelay, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}
+                <div class="field-help">${t.editor.noUiDelayHint}</div>
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
-                ${this._renderToggle('camera-locked', t.editor.lockRotation ?? 'Lock rotation', t.editor.lockRotationHint ?? 'Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set.')}
+                ${this._renderToggle('camera-locked', t.editor.lockRotation, t.editor.lockRotationHint)}
 
                 </details>
 
                 <details class="advanced-section" data-section="mapconfig" ?open=${this._openSection === 'mapconfig'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.mapConfig?.section ?? 'Map configuration'}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.mapConfig.section}</summary>
                 ${this._renderMapSection(t)}
                 </details>
 
                 <details class="advanced-section" data-section="chips" ?open=${this._openSection === 'chips'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:palette-swatch-outline"></ha-icon>${t.editor.chipsSection ?? 'Entity display'}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:palette-swatch-outline"></ha-icon>${t.editor.chipsSection}</summary>
                 ${this._renderChipsSection(t)}
                 </details>
 
                 <details class="advanced-section" data-section="groups" ?open=${this._openSection === 'groups'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:select-group"></ha-icon>${t.editor.groupsConfigTitle ?? 'Group configuration'}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:select-group"></ha-icon>${t.editor.groupsConfigTitle}</summary>
                 ${this._renderGroupAssignment(t)}
                 </details>
 
                 <details class="advanced-section" data-section="sensors" ?open=${this._openSection === 'sensors'} @toggle=${this._onSectionToggleEvt}>
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:sun-wireless-outline"></ha-icon>${t.editor.optionalSensors ?? 'Optional sensors'}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:sun-wireless-outline"></ha-icon>${t.editor.optionalSensors}</summary>
                 <div class="field field-block">
                     <span class="label">${t.editor.solarIrradianceEntity}</span>
                     ${this._pickerReady ? html`
@@ -1106,46 +1161,56 @@ export class HeliosCardEditor extends LitElement
                     ` : nothing}
                 </div>
                 <div class="field-help">${t.editor.solarIrradianceEntityHelp}</div>
+                ${this._renderSensorPicker('temperature-entity',   t.editor.temperatureEntity,   t.editor.temperatureEntityHelp)}
+                ${this._renderSensorPicker('humidity-entity',      t.editor.humidityEntity,      t.editor.humidityEntityHelp)}
+                ${this._renderSensorPicker('cloud-cover-entity',   t.editor.cloudCoverEntity,   t.editor.cloudCoverEntityHelp)}
+                ${this._renderSensorPicker('precipitation-entity', t.editor.precipitationEntity, t.editor.precipitationEntityHelp)}
+                ${this._renderSensorPicker('snowfall-entity',      t.editor.snowfallEntity,      t.editor.snowfallEntityHelp)}
+                ${this._renderSensorPicker('weather-entity',       t.editor.weatherEntity,       t.editor.weatherEntityHelp, ['weather'])}
                 </details>
 
                 <details class="advanced-section" data-section="dataDisplay" ?open=${this._openSection === 'dataDisplay'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gauge"></ha-icon>${t.editor.dataDisplaySection}</summary>
                 ${this._renderSlider('display-update-frequency-per-hour', t.editor.displayUpdateFrequency, MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, 1, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, ' / h')}
                 <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
-                ${this._renderSlider('value-decimals', t.editor.valueDecimals ?? 'Value decimals', MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}
-                <div class="field-help">${t.editor.valueDecimalsHelp ?? 'Number of decimals shown on every value (power in kW, energy in kWh). 0 to 3.'}</div>
-                ${this._renderSlider('max-expected-power', t.editor.maxExpectedPower ?? 'Max expected power', MIN_MAX_EXPECTED_POWER_W, MAX_MAX_EXPECTED_POWER_W, 500, DEFAULT_MAX_EXPECTED_POWER_W, ' W')}
-                <div class="field-help">${t.editor.maxExpectedPowerHelp ?? 'The power at which a flow animates at full speed, so a bigger flow always reads as faster. Raise it for a large installation, lower it for a small one.'}</div>
-                ${this._renderSelect('power-unit', t.editor.powerUnit ?? 'Power unit',
+                ${this._renderSlider('value-decimals', t.editor.valueDecimals, MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS, 1, DEFAULT_VALUE_DECIMALS)}
+                <div class="field-help">${t.editor.valueDecimalsHelp}</div>
+                ${this._renderSlider('max-expected-power', t.editor.maxExpectedPower, MIN_MAX_EXPECTED_POWER_W, MAX_MAX_EXPECTED_POWER_W, 500, DEFAULT_MAX_EXPECTED_POWER_W, ' W')}
+                <div class="field-help">${t.editor.maxExpectedPowerHelp}</div>
+                ${this._renderSelect('power-unit', t.editor.powerUnit,
                     [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }], 'kW',
-                    t.editor.powerUnitHelp ?? 'Unit for every power readout on the card. Energy always stays in kWh.')}
-                ${this._renderSelect('irradiance-unit', t.editor.irradianceUnit ?? 'Solar constant unit',
+                    t.editor.powerUnitHelp)}
+                ${this._renderSelect('irradiance-unit', t.editor.irradianceUnit,
                     [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }], 'W/m²',
-                    t.editor.irradianceUnitHelp ?? 'Unit for the solar constant (irradiance) readout.')}
-                ${this._renderSelect('sun-chip-mode', t.editor.sunChipMode ?? 'Sun chip readout',
-                    [{ value: 'irradiance', label: t.editor.sunChipModeIrradiance ?? 'Irradiance' },
-                     { value: 'position', label: t.editor.sunChipModePosition ?? 'Sun position' }], 'irradiance',
-                    t.editor.sunChipModeHelp ?? "What the sun chip shows: irradiance (default) or the sun's position (azimuth and elevation). Position needs no sensor.")}
-                ${this._renderSelect('battery-sign', t.editor.batterySign ?? 'Battery sign', [
-                        { value: 'default',  label: t.editor.batterySignDefault ?? 'Default' },
-                        { value: 'inverted', label: t.editor.batterySignInverted ?? 'Inverted' },
-                        { value: 'hidden',   label: t.editor.batterySignHidden ?? 'Hidden' },
+                    t.editor.irradianceUnitHelp)}
+                ${this._renderSelect('sun-chip-mode', t.editor.sunChipMode,
+                    [{ value: 'irradiance', label: t.editor.sunChipModeIrradiance },
+                     { value: 'position', label: t.editor.sunChipModePosition }], 'irradiance',
+                    t.editor.sunChipModeHelp)}
+                ${this._renderSelect('battery-chip-mode', t.editor.batteryChipMode,
+                    [{ value: 'power', label: t.editor.batteryChipModePower },
+                     { value: 'soc', label: t.editor.batteryChipModeSoc }], 'power',
+                    t.editor.batteryChipModeHelp)}
+                ${this._renderSelect('battery-sign', t.editor.batterySign, [
+                        { value: 'default',  label: t.editor.batterySignDefault },
+                        { value: 'inverted', label: t.editor.batterySignInverted },
+                        { value: 'hidden',   label: t.editor.batterySignHidden },
                     ], 'default',
-                    t.editor.batterySignHelp ?? 'Sign shown on the battery chip: default (minus while charging), inverted (plus while charging), or hidden.')}
+                    t.editor.batterySignHelp)}
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
-                ${this._renderSlider('display-radius', t.editor.displayRadius ?? 'Display radius', MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
-                <div class="hint">${t.editor.displayRadiusHelp ?? 'Radius around the home in which buildings are fetched and drawn, up to the edge of the faded map disc. Lower it to lighten rendering on a slow device; 0 shows just the home.'}</div>
-                ${this._renderSlider('building-count', t.editor.buildingCount ?? 'Building count', MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}
-                <div class="hint">${t.editor.buildingCountHelp ?? 'Maximum number of nearby buildings to draw. Lower it to lighten rendering on a slow device.'}</div>
-                ${this._renderToggle('building-real-size', t.editor.buildingRealSize ?? 'Real building heights', t.editor.buildingRealSizeHint ?? 'On: use real OpenStreetMap heights (capped to keep the framing readable). Off: give every building the same fixed height below.', t.editor.buildingRealSizeOn ?? 'On', t.editor.buildingRealSizeOff ?? 'Off', true)}
+                ${this._renderSlider('display-radius', t.editor.displayRadius, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
+                <div class="hint">${t.editor.displayRadiusHelp}</div>
+                ${this._renderSlider('building-count', t.editor.buildingCount, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}
+                <div class="hint">${t.editor.buildingCountHelp}</div>
+                ${this._renderToggle('building-real-size', t.editor.buildingRealSize, t.editor.buildingRealSizeHint, t.editor.buildingRealSizeOn, t.editor.buildingRealSizeOff, true)}
                 ${c['building-real-size'] === false
-                    ? this._renderSlider('building-height', t.editor.buildingHeight ?? 'Building height', MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
+                    ? this._renderSlider('building-height', t.editor.buildingHeight, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
                     : nothing}
                 ${this._renderSlider('building-cluster-radius', t.editor.buildingClusterRadius, 0, 100, 1, DEFAULT_BUILDING_CLUSTER_RADIUS_M, ' m')}
-                <div class="hint">${t.editor.buildingClusterRadiusHelp ?? 'Radius around the home within which attached outbuildings (verandas, garages, sheds) are treated as part of the home: they render at the home\'s full opacity and colour instead of as faded neighbours. 0 keeps only the main building.'}</div>
+                <div class="hint">${t.editor.buildingClusterRadiusHelp}</div>
                 ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
                 <div class="hint">${t.editor.buildingsHint}</div>
                 ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
@@ -1172,10 +1237,10 @@ export class HeliosCardEditor extends LitElement
                         color: 'var(--error-color, #ef4444)',
                         onClick: this._onResetCacheClick.bind(this),
                     })}
-                    <div class="hint reset-warning">${t.editor.resetOptionsWarning ?? 'Warning: this resets ALL of this card\'s options to their defaults (chip visibility, colours and icons, group names/colours/icons, buildings, shadows, units and every other setting). Your Home Assistant data is untouched, but your customisation is cleared. Click again to confirm.'}</div>
+                    <div class="hint reset-warning">${t.editor.resetOptionsWarning}</div>
                     ${this._renderActionButton({
                         icon: 'mdi:cog-refresh-outline',
-                        label: this._optionsResetFeedback ?? (this._optionsResetArmed ? (t.editor.resetOptionsConfirm ?? 'Click again to confirm') : (t.editor.resetOptionsButton ?? 'Reset options to defaults')),
+                        label: this._optionsResetFeedback ?? (this._optionsResetArmed ? (t.editor.resetOptionsConfirm) : (t.editor.resetOptionsButton)),
                         color: 'var(--error-color, #ef4444)',
                         onClick: this._onResetOptionsClick.bind(this),
                         filled: this._optionsResetArmed,
@@ -1270,7 +1335,7 @@ export class HeliosCardEditor extends LitElement
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
         const t = this._t();
-        this._optionsResetFeedback = t.editor.resetOptionsDone ?? 'Options reset ✓';
+        this._optionsResetFeedback = t.editor.resetOptionsDone;
         if (this._optionsResetFeedbackTimer !== undefined) { window.clearTimeout(this._optionsResetFeedbackTimer); }
         this._optionsResetFeedbackTimer = window.setTimeout(() =>
         {

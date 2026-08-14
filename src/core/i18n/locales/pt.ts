@@ -50,6 +50,30 @@ export const pt: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Efeitos meteorológicos",
+    weatherEnabledHint:
+      "Pinta o céu real sobre a cena: sol, nuvens, chuva, neve e trovoadas a partir da meteorologia local, acompanhando a linha temporal à medida que a percorre. Desativado mantém a cena limpa.",
+    temperatureEntity: "Sensor de temperatura",
+    temperatureEntityHelp:
+      "Opcional. Use um sensor local de temperatura exterior (°C) em vez do valor do Open-Meteo para o chip de temperatura. O seu estado em tempo real e o histórico do gravador são usados para o tempo real + passado; as horas de previsão continuam a usar o modelo.",
+    humidityEntity: "Sensor de humidade",
+    humidityEntityHelp:
+      "Opcional. Use um sensor local de humidade relativa (%) em vez do valor do Open-Meteo, para o tempo real + passado.",
+    cloudCoverEntity: "Sensor de nebulosidade",
+    cloudCoverEntityHelp:
+      "Opcional. Use um sensor local de nebulosidade (%) para controlar o aspeto do céu (sol, tons cinzentos) em vez do valor do Open-Meteo, para o tempo real + passado.",
+    precipitationEntity: "Sensor de precipitação",
+    precipitationEntityHelp:
+      "Opcional. Use um sensor local de precipitação (mm) para controlar a camada de chuva em vez do valor do Open-Meteo, para o tempo real + passado.",
+    snowfallEntity: "Sensor de queda de neve",
+    snowfallEntityHelp:
+      "Opcional. Use um sensor local de queda de neve (cm) para controlar a camada de neve em vez do valor do Open-Meteo, para o tempo real + passado.",
+    weatherEntity: "Entidade de meteorologia",
+    weatherEntityHelp:
+      "Opcional. Use uma entidade de meteorologia do Home Assistant para controlar a condição (chuva / neve / trovoada) em vez do valor do Open-Meteo, para o tempo real + passado. As horas de previsão continuam a usar o modelo.",
+    chipTemperature: "Mostrar temperatura",
+    chipHumidity: "Mostrar humidade",
+    chipCost: "Visualização do custo",
     locationSection: "Localização da casa",
     homeLatitude: "Latitude de casa",
     homeLongitude: "Longitude de casa",
@@ -68,6 +92,10 @@ export const pt: Translations = {
     sunChipMode: "Leitura do chip do sol",
     sunChipModeHelp:
       "O que o chip do sol mostra: a irradiância solar ao vivo (predefinição) ou a posição do sol (azimute e elevação). A posição não precisa de sensor, vem dos próprios cálculos solares do cartão.",
+      batteryChipMode: "Leitura do chip da bateria",
+      batteryChipModeHelp: "O que o chip da bateria mostra: a potência em tempo real (predefinição) ou o estado de carga (%). Recorre ao valor que a sua bateria realmente fornece.",
+      batteryChipModePower: "Potência",
+      batteryChipModeSoc: "Estado de carga",
     sunChipModeIrradiance: "Irradiância",
     sunChipModePosition: "Posição do sol",
     displayUpdateFrequency: "Detalhe do gráfico",
@@ -103,9 +131,13 @@ export const pt: Translations = {
     showSunTimes: "Mostrar horas do nascer / pôr do sol",
     showSunTimesHint:
       "Mostra as horas do nascer e do pôr do sol e os respetivos marcadores na base do arco solar.",
+    showHorizonLine: "Mostrar horizonte do terreno",
+    showHorizonLineHint: "Desenha a linha do horizonte do relevo à volta da casa, calculada a partir do terreno local. O horizonte atenua sempre o sol de forma realista atrás das colinas; isto apenas mostra ou oculta a linha.",
+    horizonLineColor: "Cor do horizonte do terreno",
+    horizonLineColorHint: "Cor da linha do horizonte do terreno.",
     lockRotation: "Bloquear rotação",
     lockRotationHint:
-      "Define o ângulo de visualização diretamente na pré-visualização (arrasta para rodar e inclinar a cena) e depois ativa o bloqueio para o fixar: o arrastar para rodar e a auto-orbita em inatividade ficam desativados, mantendo o ângulo definido.",
+      "Arraste a pré-visualização para girar e inclinar a cena até à vista que quer e depois ative isto. O bloqueio congela essa vista (a rotação por arrasto e a rotação automática em repouso são desativadas) e guarda o ângulo no cartão, para que exatamente a mesma vista apareça em todos os dispositivos e navegadores. Desative-o para voltar a girar livremente.",
     chipsSection: "Apresentação de entidades",
     chipsIntro:
       "Mostra ou oculta cada entidade, e escolhe o seu ícone e cor. A casa segue o chip selecionado, ou a tua cor primária por predefinição.",
@@ -163,15 +195,12 @@ export const pt: Translations = {
     hiddenDevicesEmpty:
       "Ainda não há dispositivos individuais monitorizados no teu dashboard de Energia. Adiciona lá o consumo por dispositivo para os controlares aqui.",
     deviceVisibilityLabel: "Mostrar dispositivo",
-    deviceGroupLabel: "Grupo de monitorização",
     group: "Grupo",
     noGroup: "Sem grupo",
     groupAssignHint:
       "Arraste os seus dispositivos para um grupo. O que ficar em baixo não pertence a nenhum grupo.",
     groupDropHere: "Largue aqui um dispositivo",
     backToLive: "Voltar ao direto",
-    devicesEnergyNote:
-      "Estes são os dispositivos individuais atualmente configurados no teu dashboard de Energia do Home Assistant. O olho mostra ou oculta cada um em todo o lado, e a pastilha atribui-o a um grupo.",
     buildingClusterRadius: "Raio de agrupamento da casa",
     buildingClusterRadiusHelp:
       "Raio à volta da casa dentro do qual os anexos contíguos (varandas, garagens, alpendres) são tratados como parte da casa: são renderizados com a opacidade e cor totais da casa em vez de vizinhos esbatidos. 0 mantém apenas o edifício principal.",

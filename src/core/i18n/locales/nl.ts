@@ -50,6 +50,30 @@ export const nl: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Weereffecten",
+    weatherEnabledHint:
+      "Toont de echte lucht boven de scène: zon, wolken, regen, sneeuw en onweer op basis van je lokale weer, die de tijdlijn volgen terwijl je scrubt. Uit houdt de scène helder.",
+    temperatureEntity: "Temperatuursensor",
+    temperatureEntityHelp:
+      "Optioneel. Gebruik een lokale buitentemperatuursensor (°C) in plaats van de Open-Meteo-waarde voor de temperatuurchip. De actuele status en recordergeschiedenis worden gebruikt voor nu + verleden; voorspelde uren blijven van het model.",
+    humidityEntity: "Luchtvochtigheidssensor",
+    humidityEntityHelp:
+      "Optioneel. Gebruik een lokale sensor voor relatieve luchtvochtigheid (%) in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    cloudCoverEntity: "Bewolkingssensor",
+    cloudCoverEntityHelp:
+      "Optioneel. Gebruik een lokale bewolkingssensor (%) om de luchtgradatie (zon, grijs worden) aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    precipitationEntity: "Neerslagsensor",
+    precipitationEntityHelp:
+      "Optioneel. Gebruik een lokale neerslagsensor (mm) om de regenlaag aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    snowfallEntity: "Sneeuwvalsensor",
+    snowfallEntityHelp:
+      "Optioneel. Gebruik een lokale sneeuwvalsensor (cm) om de sneeuwlaag aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden.",
+    weatherEntity: "Weerentiteit",
+    weatherEntityHelp:
+      "Optioneel. Gebruik een Home Assistant-weerentiteit om de conditie (regen / sneeuw / onweer) aan te sturen in plaats van de Open-Meteo-waarde, voor nu + verleden. Voorspelde uren blijven van het model.",
+    chipTemperature: "Temperatuurweergave",
+    chipHumidity: "Luchtvochtigheidsweergave",
+    chipCost: "Kostenweergave",
     locationSection: "Locatie",
     homeLatitude: "Breedtegraad van het huis",
     homeLongitude: "Lengtegraad van het huis",
@@ -68,6 +92,10 @@ export const nl: Translations = {
     sunChipMode: "Weergave zonchip",
     sunChipModeHelp:
       "Wat de zonchip toont: de live zonne-instraling (standaard) of de positie van de zon (azimut en hoogte). De positie heeft geen sensor nodig, ze komt uit de eigen zonneberekening van de kaart.",
+      batteryChipMode: "Batterijchip-weergave",
+      batteryChipModeHelp: "Wat de batterijchip toont: het live vermogen (standaard) of de laadtoestand (%). Valt terug op de waarde die je batterij daadwerkelijk levert.",
+      batteryChipModePower: "Vermogen",
+      batteryChipModeSoc: "Laadtoestand",
     sunChipModeIrradiance: "Instraling",
     sunChipModePosition: "Zonpositie",
     displayUpdateFrequency: "Grafiekdetail",
@@ -103,9 +131,13 @@ export const nl: Translations = {
     showSunTimes: "Zonsopgang- / zonsondergangtijden tonen",
     showSunTimesHint:
       "Toon de zonsopgang- en zonsondergangtijden en hun markeringen aan de voet van de zonneboog.",
+    showHorizonLine: "Terreinhorizon tonen",
+    showHorizonLineHint: "Tekent de horizonlijn van het reliëf rond het huis, berekend op basis van het lokale terrein. De horizon dempt de zon altijd realistisch achter heuvels; dit toont of verbergt alleen de getekende lijn.",
+    horizonLineColor: "Kleur van de terreinhorizon",
+    horizonLineColorHint: "Kleur van de terreinhorizonlijn.",
     lockRotation: "Rotatie vergrendelen",
     lockRotationHint:
-      "Stel de kijkhoek rechtstreeks in de voorvertoning in (sleep om de scène te draaien en te kantelen) en zet daarna de vergrendeling aan om hem vast te zetten: slepen om te draaien en de automatische rotatie bij inactiviteit worden uitgeschakeld, zodat de ingestelde hoek behouden blijft.",
+      "Sleep in het voorbeeld om de scène te draaien en te kantelen naar de gewenste weergave en zet dit vervolgens aan. De vergrendeling zet die weergave vast (draaien via slepen en de automatische rotatie in rust worden uitgeschakeld) en slaat de hoek op in de kaart, zodat exact dezelfde weergave op elk apparaat en in elke browser verschijnt. Zet het uit om weer vrij te draaien.",
     chipsSection: "Entiteitweergave",
     chipsIntro:
       "Toon of verberg elke entiteit en kies het bijbehorende icoon en de kleur. Het huis volgt de geselecteerde chip, of standaard je primaire kleur.",
@@ -162,15 +194,12 @@ export const nl: Translations = {
     hiddenDevicesEmpty:
       "Er worden nog geen individuele apparaten bijgehouden in je Energiedashboard. Voeg daar apparaatverbruik toe om ze hier te beheren.",
     deviceVisibilityLabel: "Apparaat tonen",
-    deviceGroupLabel: "Bewakingsgroep",
     group: "Groep",
     noGroup: "Geen groep",
     groupAssignHint:
       "Sleep je apparaten naar een groep. Wat onderaan overblijft, hoort bij geen enkele groep.",
     groupDropHere: "Sleep hier een apparaat naartoe",
     backToLive: "Terug naar live",
-    devicesEnergyNote:
-      "Dit zijn de individuele apparaten die momenteel zijn ingesteld in je Home Assistant Energiedashboard. Het oog toont of verbergt elk apparaat overal, en de pil wijst het aan een groep toe.",
     buildingClusterRadius: "Clusterstraal huis",
     buildingClusterRadiusHelp:
       "Straal rond het huis waarbinnen aangebouwde bijgebouwen (veranda's, garages, schuren) als deel van het huis worden behandeld: ze worden weergegeven met de volledige dekking en kleur van het huis in plaats van als vervaagde buren. 0 houdt alleen het hoofdgebouw over.",

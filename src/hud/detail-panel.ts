@@ -34,11 +34,6 @@ interface DetailMetric
     label?: string;
 }
 
-//English fallbacks for the period title, mirroring the selector: a locale may omit some period strings.
-const PERIOD_FALLBACK: Record<TimelineMode, string> = {
-    forecast: 'Forecast', yesterday: 'Yesterday', today: 'Today', week: 'Week', month: 'Month',
-};
-
 //Number of whole days the window spans, for the per-day averages. At least 1 so a same-day window never divides
 //by zero.
 function windowDays(startMs: number, endMs: number): number
@@ -65,6 +60,29 @@ function aggWatts(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly
         count++;
     }
     return { peak, avg: count ? sum / count : 0, count };
+}
+
+//Min / mean / max over a store series inside the window, allowing negative values (temperature). Same bucket-time
+//iteration as aggWatts.
+function aggRange(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly (number | null)[], startMs: number, endMs: number):
+    { min: number; avg: number; max: number; count: number }
+{
+    let min = Infinity;
+    let max = -Infinity;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < arr.length; i++)
+    {
+        const raw = arr[i];
+        if (raw === null || !isFinite(raw)) { continue; }
+        const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
+        if (tMs < startMs || tMs > endMs) { continue; }
+        if (raw < min) { min = raw; }
+        if (raw > max) { max = raw; }
+        sum += raw;
+        count++;
+    }
+    return { min: count ? min : 0, avg: count ? sum / count : 0, max: count ? max : 0, count };
 }
 
 //Min / mean / max over a percent PeriodData layer's 24 hour-of-day values (state of charge). Empty when there is
@@ -122,6 +140,53 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
                 { glyph: 'Ø',              value: irr(a.avg) },
             );
         }
+        return rows;
+    }
+
+    //Temperature / humidity are weather metrics like irradiance: aggregate the store's own series over the window
+    //as max / mean / min (temperature keeps its sign; humidity is a percent).
+    if (target === 'temperature' || target === 'humidity')
+    {
+        const store = host._unifiedStore;
+        const rows: DetailMetric[] = [];
+        if (store)
+        {
+            const arr = target === 'temperature' ? store.temperature : store.humidity;
+            const a   = aggRange(store, arr, startMs, endMs);
+            if (a.count > 0)
+            {
+                const fmt = target === 'temperature'
+                    ? (v: number): string => `${v.toFixed(1)} °C`
+                    : (v: number): string => `${Math.round(v)} %`;
+                rows.push(
+                    { icon: 'mdi:trending-up',   value: fmt(a.max) },
+                    { glyph: 'Ø',                value: fmt(a.avg) },
+                    { icon: 'mdi:trending-down', value: fmt(a.min) },
+                );
+            }
+        }
+        return rows;
+    }
+
+    //Cost: total money over the window, summed from HA's cost statistics (import cost minus export compensation).
+    //Spent / earned / net / per-day, in the user's currency. Absent when no cost statistic is loaded.
+    if (target === 'cost')
+    {
+        if (!host._costImportSeries && !host._costExportSeries) { return []; }
+        const cur = String(hass?.config?.currency ?? '€');
+        const money = (v: number): string =>
+            `${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`;
+        const sumWin = (s: { startMs: number; kwh: number }[] | null): number =>
+            (s ?? []).reduce((acc, b) => (b.startMs >= startMs && b.startMs < endMs ? acc + b.kwh : acc), 0);
+        const spent  = sumWin(host._costImportSeries);
+        const earned = sumWin(host._costExportSeries);
+        const net    = spent - earned;
+        const rows: DetailMetric[] = [{ icon: 'mdi:cash-minus', value: money(spent) }];
+        if (earned > 0) { rows.push({ icon: 'mdi:cash-plus', value: money(earned) }); }
+        rows.push(
+            { icon: 'mdi:scale-balance', value: money(net) },
+            { icon: 'mdi:calendar-today', value: money(days > 0 ? net / days : net) },
+        );
         return rows;
     }
 
@@ -211,7 +276,7 @@ export function renderDetailPanel(host: DetailHost): TemplateResult | typeof not
     }
     //Title = the selected rolling period, so the aggregates below read as "over this period", not a live value.
     const t = pickTranslations(host.hass?.language);
-    const periodLabel = t.period?.[host._timelineMode] ?? PERIOD_FALLBACK[host._timelineMode] ?? '';
+    const periodLabel = t.period[host._timelineMode];
     return html`
         <div class="detail-panel">
             ${periodLabel ? html`<div class="dp-title">${periodLabel}</div>` : nothing}

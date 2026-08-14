@@ -307,6 +307,14 @@ export const heliosCardStyles = css`
     {
         stroke-linecap: round;
     }
+    /*  Contrast halo drawn UNDER each curve (2 px wider = ~1 px each side), in the card background (white in a light
+        theme, near-black in a dark one) so it detaches the curve from any ground tint or building. */
+    .helios-day-curve-line-outline
+    {
+        stroke: var(--card-background-color, #ffffff);
+        stroke-linecap: round;
+        stroke-opacity: 0.25;
+    }
     /*  The drop from the sun to the curve beneath it. Its colour is the metric's, set per element; everything else
         is the same for every one of them, so it lives here. */
     .helios-day-curve-leader
@@ -319,17 +327,26 @@ export const heliosCardStyles = css`
     /*  Forecast: same curve, same colour, dashed. What changes after the present moment is not the metric but its
         certainty, so the line carries straight on and only its stroke gives way - the same language the timeline's
         own predicted curve already speaks. */
-    .helios-day-curve-line.is-predicted
+    .helios-day-curve-line.is-predicted,
+    .helios-day-curve-line-outline.is-predicted
     {
         stroke-dasharray: 1 5;
         stroke-opacity: 0.85;
     }
     /*  A level rather than a flow (the battery state of charge): dashed the whole way. Longer dashes than the
         forecast pattern so a state of charge and a solar forecast never read as the same thing. */
-    .helios-day-curve-line.is-dashed
+    .helios-day-curve-line.is-dashed,
+    .helios-day-curve-line-outline.is-dashed
     {
         stroke-dasharray: 5 4;
         stroke-opacity: 0.9;
+    }
+    /*  The halo stays faint even on dashed/forecast curves (the shared rules above set a high opacity for the
+        coloured line; the outline must keep its low contrast value). */
+    .helios-day-curve-line-outline.is-predicted,
+    .helios-day-curve-line-outline.is-dashed
+    {
+        stroke-opacity: 0.25;
     }
 
     /*  Per-chip detail panel: a compact vertical readout top-right, opened by any chip tap and closed by tapping
@@ -492,7 +509,9 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         pointer-events: none;
-        z-index: 5;
+        /*  z 7: above the weather veil (z 6) so fog never dims the leaders while the chips (z 8) stay lit -
+            the leaders are data, not scenery - yet still below the chip cluster so the dashes pass behind it. */
+        z-index: 7;
     }
     /*  Group leader: a thin static line from the home pill down to the group chip, in the group's colour. */
     .group-leader-line
@@ -510,8 +529,8 @@ export const heliosCardStyles = css`
         fill: none;
     }
 
-    /*  PV to home leader: vertical dashed line from the PV chip down to the home, in the PV colour. z 5,
-        below the chip cluster so the dashes pass behind the chips. */
+    /*  PV to home leader: vertical dashed line from the PV chip down to the home, in the PV colour. On the
+        leader layer (z 7, above the weather veil, below the chip cluster) so the dashes pass behind the chips. */
     .pv-home-leader-line
     {
         stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
@@ -564,6 +583,29 @@ export const heliosCardStyles = css`
         /* Daylight fade via the --solar-daylight variable (0..1, set inline). */
         opacity: var(--solar-daylight, 1);
         transition: opacity 600ms ease-out;
+    }
+    /*  Terrain-horizon ridge: a discrete distant-relief silhouette under the sun path, behind the arc + chips
+        (z 3). A hazy blue-grey reads on the map without fighting the scene; the fill fades downward to nothing. */
+    .horizon-ridge-svg { z-index: 3; opacity: 1; }
+    /*  Contrast halo under the crest line, in the card background (white light / near-black dark), so the ridge
+        detaches from any ground/building. */
+    .horizon-ridge-line-outline
+    {
+        fill: none;
+        stroke: var(--card-background-color, #ffffff);
+        stroke-width: 3.4;
+        stroke-opacity: 0.25;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+    }
+    .horizon-ridge-line
+    {
+        fill: none;
+        stroke: var(--helios-horizon-line-color, var(--blue-grey-color, #607d8b));
+        stroke-opacity: 0.75;
+        stroke-width: 1.4;
+        stroke-linejoin: round;
+        stroke-linecap: round;
     }
     /*  Central home pill at the projected home centre. Every chip leader docks against its border so
         the home reads as the single energy hub, like HA's Energy distribution card. */
@@ -627,6 +669,30 @@ export const heliosCardStyles = css`
     .solar-svg-front-near { z-index: 11; }
     .solar-svg-sun-far    { z-index: 5;  }
     .solar-svg-sun-near   { z-index: 12; }
+    /*  Radiant-heat aura around the sun disc: a warm halo that slowly breathes so a strong sun visibly
+        shimmers with heat. Only the scale animates; the inline opacity gates it on irradiance (0 when the sun
+        is weak). transform-box + centre origin so it pulses around its own centre wherever the sun sits;
+        screen blend adds warmth without darkening. */
+    .solar-sun-heat
+    {
+        transform-box: fill-box;
+        transform-origin: center;
+        mix-blend-mode: screen;
+        opacity: var(--heat, 0);
+        animation: solar-heat-pulse 2.4s ease-in-out infinite;
+        will-change: transform, opacity;
+    }
+    /*  A heat wave: the warm aura swells and fades outward, then settles. Opacity is scaled by --heat (the
+        irradiance gate) so the whole thing vanishes when the sun is weak. */
+    @keyframes solar-heat-pulse
+    {
+        0%, 100% { transform: scale(0.9);  opacity: var(--heat, 0); }
+        50%      { transform: scale(1.28); opacity: calc(var(--heat, 0) * 0.25); }
+    }
+    @media (prefers-reduced-motion: reduce)
+    {
+        .solar-sun-heat { animation: none; opacity: var(--heat, 0); }
+    }
     /*  Sun to PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the ray
         endpoint at the chip border. */
     .solar-ray-svg        { z-index: 7;  }
@@ -772,6 +838,166 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
+    /*  "Your real sky" weather overlay. The scene is graded by a filter on #map-container (--wx-map-filter); the
+        overlay layers fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain / --wx-snow / --wx-flash, all set from
+        JS by the resolved weather. Sits UNDER the chips (z 8).  */
+    :host([data-wx-on]) #map-container { filter: var(--wx-map-filter, none); transition: filter 0.18s linear; }
 
+    .helios-wx { position: absolute; inset: 0; z-index: 6; pointer-events: none; border-radius: inherit; overflow: hidden; display: none; }
+    :host([data-wx-on]) .helios-wx { display: block; }
+    .helios-wx-warm, .helios-wx-shafts, .helios-wx-veil-grey, .helios-wx-veil-dark, .helios-wx-clouds, .helios-wx-wet, .helios-wx-rain, .helios-wx-snow, .helios-wx-flash
+    {
+        position: absolute;
+        inset: 0;
+    }
+    .helios-wx-rain, .helios-wx-snow { z-index: 7; width: 100%; height: 100%; }
+    .helios-wx-snow { opacity: var(--wx-snow, 0); }
+
+    /*  CLEAR: a broad warm wash over the WHOLE card (not one patch) + a bloom that breathes + faint warm shafts.  */
+    .helios-wx-warm
+    {
+        opacity: var(--wx-sun, 0);
+        background:
+            radial-gradient(150% 140% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%),
+                rgba(255, 206, 130, 0.36),
+                rgba(255, 184, 96, 0.20) 45%,
+                rgba(255, 170, 80, 0.10) 100%);
+    }
+    .helios-wx-shafts
+    {
+        opacity: calc(var(--wx-sun, 0) * 0.45);
+        background: repeating-conic-gradient(from 200deg at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%),
+            rgba(255, 232, 170, 0.14) 0deg, rgba(255, 232, 170, 0) 5deg 13deg);
+        -webkit-mask-image: radial-gradient(120% 120% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%), #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 80%);
+        mask-image: radial-gradient(120% 120% at var(--wx-sun-x, 40%) var(--wx-sun-y, 14%), #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 80%);
+    }
+    /*  GREY (overcast) + DARK (rain) veils, stacked, each faded by its own amount.  */
+    .helios-wx-veil-grey { opacity: calc(var(--wx-grey, 0) * 0.5); background: linear-gradient(180deg, rgb(200, 205, 212), rgb(170, 176, 184)); }
+    .helios-wx-veil-dark { opacity: calc(var(--wx-rain, 0) * 0.55); background: linear-gradient(180deg, rgb(66, 74, 86), rgb(40, 47, 58)); }
+
+    .helios-wx-clouds { opacity: var(--wx-cloud, 0); }
+    .helios-wx-cloud
+    {
+        position: absolute;
+        border-radius: 50%;
+        will-change: transform;
+        background: radial-gradient(circle, rgba(30, 35, 42, 0.45), rgba(30, 35, 42, 0) 68%);
+    }
+    /*  Sized in cqw (share of the card's WIDTH, via ha-card's container-type: inline-size) for BOTH axes, so the
+        shadows stay round at any card shape. Percent height made them tall ovals on a narrow card: 55% of a small
+        width vs 70% of a tall height. left/top keep % for placement; the sweep is element-relative. */
+    .helios-wx-cloud.k1 { width: 55cqw; height: 55cqw; left: -30%; top: -10%; animation: helios-wx-sweep 22s linear infinite; }
+    .helios-wx-cloud.k2 { width: 42cqw; height: 42cqw; left: -30%; top: 20%; animation: helios-wx-sweep 30s linear infinite; animation-delay: -8s; }
+    .helios-wx-cloud.k3 { width: 66cqw; height: 66cqw; left: -45%; top: -20%; animation: helios-wx-sweep 40s linear infinite; animation-delay: -16s; }
+    @keyframes helios-wx-sweep { from { transform: translate(0, 0); } to { transform: translate(230%, 18%); } }
+
+    .helios-wx-wet
+    {
+        opacity: var(--wx-rain, 0);
+        background:
+            radial-gradient(40% 30% at 30% 60%, rgba(150, 180, 215, 0.16), transparent 70%),
+            radial-gradient(35% 25% at 70% 78%, rgba(150, 180, 215, 0.14), transparent 70%);
+    }
+
+    /*  Corner chips (cost, temperature, humidity): a centered row pinned along the BOTTOM of the scene, so they
+        read as secondary info and group with the home/grid/battery pill family rather than fighting the irradiance
+        chip up top. Below the timeline's z-index (1000) so the timeline always wins on overlap. Each icon is tinted
+        by --chip-color.  */
+    .helios-corner-chips
+    {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 12px;
+        z-index: 8;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        pointer-events: none;
+    }
+    /*  When the timeline is shown, lift the row clear of it: period band (33px) + scrubber height + a small gap.
+        The scrubber clamp mirrors .time-bar in helios-timeline-css.ts (bottom: 33px; height: clamp(54px,18%,90px));
+        keep the two in sync if that changes.  */
+    .helios-corner-chips.has-timeline
+    {
+        bottom: calc(33px + clamp(54px, 18%, 90px) + 10px);
+    }
+    /*  Same shared pill recipe as the HUD chips: fixed width, 2px border in the chip's colour, card-background fill,
+        icon + text in --primary-text-color. Only the border colour differs per chip (via --chip-color).  */
+    .helios-corner-chip
+    {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        box-sizing: border-box;
+        width: 106px;
+        padding: 3px 10px;
+        border: 2px solid var(--chip-color, #e53935);
+        border-radius: 999px;
+        background: var(--card-background-color, #ffffff);
+        background-clip: padding-box;
+        color: var(--primary-text-color, #212121);
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        box-shadow: var(--helios-shadow-chip);
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+        /*  Glow accent for the active-target halo below (same language as the scene chips).  */
+        --chip-glow: var(--chip-color, #e53935);
+    }
+    .helios-corner-chip ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    /*  Clickable + active states, mirroring the scene chips: [role=button] re-enables events (the row is
+        pointer-events:none), .is-chart-active raises the halo, .is-curve-on fills the pill with the metric colour.  */
+    .helios-corner-chip[role="button"] { pointer-events: auto; cursor: pointer; }
+    /*  Day-curve open: each non-active corner chip becomes an inert, invisible placeholder. It still reserves its
+        slot width so the centered row does not shift the surviving chip when its siblings drop out.  */
+    .helios-corner-chip.is-slot-hidden { visibility: hidden; pointer-events: none; }
+    .helios-corner-chip::after
+    {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: 0 0 12px 1px color-mix(in srgb, var(--chip-glow, transparent) 90%, transparent);
+        opacity: 0;
+        /*  Same grow-synced fade as the scene chips (HOME_GROW_MS), so a corner chip's glow settles like the rest
+            instead of snapping on. */
+        transition: opacity ${unsafeCSS(HOME_GROW_MS)}ms ease;
+    }
+    .helios-corner-chip.is-chart-active::after { opacity: 1; }
+    .helios-corner-chip.is-curve-on
+    {
+        background: var(--chip-glow, var(--primary-color, #ff9800));
+        color: var(--ha-card-background, var(--card-background-color, #fff));
+        transition: background ${unsafeCSS(HOME_GROW_MS)}ms ease, color ${unsafeCSS(HOME_GROW_MS)}ms ease;
+    }
+    .helios-corner-chip.is-curve-on ha-icon { color: var(--ha-card-background, var(--card-background-color, #fff)); }
+
+    /*  THUNDERSTORM lightning: a top-weighted blue-white flash pushed by the storm controller via --wx-flash.
+        Plain opacity compositing (no mix-blend-mode): screen-blend forces a stacking-context blend group that some
+        Android WebViews flicker/recompose the whole view under, and the near-white flash reads almost the same
+        through straight opacity. */
+    .helios-wx-flash
+    {
+        z-index: 7;
+        opacity: var(--wx-flash, 0);
+        background:
+            radial-gradient(120% 80% at 50% -10%, rgba(226, 236, 255, 0.9), rgba(200, 216, 255, 0.35) 40%, transparent 75%);
+    }
 
 `;

@@ -2,7 +2,8 @@
 //that are assigned to a group AND not hidden are fetched, on the same store window + cadence as the source meters.
 //Keyed so an unchanged (id-set, window) is a no-op.
 
-import { fetchChangeById, mergeChangeSeries, changeRefreshAnchorMs, wattsAtFromChangeSeries, type ChangeBucket, type StatPeriod } from './energy-stats';
+import type { HassLike } from '../../core/ha-types';
+import { fetchChangeById, extractPerEntity, changeRefreshAnchorMs, wattsAtFromChangeSeries, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { cssHex, resolveUiColor } from '../../core/format/format';
 import type { EnergyDefaults, DeviceConsumption } from './energy-prefs';
@@ -12,7 +13,7 @@ import { localMidnightMinusDays } from '../../core/time/timezone';
 
 export interface DeviceConsumptionHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     readonly config: HeliosConfig | undefined;
     readonly _energyDefaults: EnergyDefaults;
     //Rolling-window past days (period selector), so the change fetch spans the whole store window.
@@ -67,13 +68,13 @@ export function groupColorHex(el: Element | null | undefined, config: HeliosConf
 }
 
 //Friendly name of a device: its dashboard name, else the entity's friendly name, else the stat id.
-export function deviceName(hass: any, dev: DeviceConsumption): string
+export function deviceName(hass: HassLike, dev: DeviceConsumption): string
 {
     return dev.name || String(hass?.states?.[dev.statConsumption]?.attributes?.friendly_name ?? '') || dev.statConsumption;
 }
 
 //The device entity's configured MDI icon, else a generic energy glyph.
-export function deviceIcon(hass: any, dev: DeviceConsumption): string
+export function deviceIcon(hass: HassLike, dev: DeviceConsumption): string
 {
     const icon = hass?.states?.[dev.statConsumption]?.attributes?.icon;
     return (typeof icon === 'string' && icon) || 'mdi:flash';
@@ -139,13 +140,8 @@ export function refreshDeviceConsumption(host: DeviceConsumptionHost): void
             .then((byId) =>
             {
                 if (byId === null) { return; }
-                const next = new Map<string, ChangeBucket[]>();
-                for (const id of sorted)
-                {
-                    const s = mergeChangeSeries(byId, [id]);
-                    if (s !== null) { next.set(id, s); }
-                }
-                host._deviceChangeSeries = next;
+                //Per-device split of the shared fetch: each id's own buckets (already sorted), in one pass.
+                host._deviceChangeSeries = extractPerEntity(byId, sorted);
                 host.requestUpdate();
             }));
 }

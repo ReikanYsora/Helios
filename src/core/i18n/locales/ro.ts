@@ -50,6 +50,30 @@ export const ro: Translations = {
   },
 
   editor: {
+    weatherEnabled: "Efecte meteo",
+    weatherEnabledHint:
+      "Pictează cerul real peste scenă: soare, nori, ploaie, ninsoare și furtuni pe baza vremii tale locale, urmărind cronologia pe măsură ce o parcurgi. Dezactivat, scena rămâne senină.",
+    temperatureEntity: "Senzor de temperatură",
+    temperatureEntityHelp:
+      "Opțional. Folosește un senzor local de temperatură exterioară (°C) în locul valorii Open-Meteo pentru indicatorul de temperatură. Starea sa în timp real și istoricul din recorder sunt folosite pentru prezent + trecut; orele de prognoză rămân pe model.",
+    humidityEntity: "Senzor de umiditate",
+    humidityEntityHelp:
+      "Opțional. Folosește un senzor local de umiditate relativă (%) în locul valorii Open-Meteo, pentru prezent + trecut.",
+    cloudCoverEntity: "Senzor de nebulozitate",
+    cloudCoverEntityHelp:
+      "Opțional. Folosește un senzor local de nebulozitate (%) pentru a controla nuanța cerului (soare, înnorare) în locul valorii Open-Meteo, pentru prezent + trecut.",
+    precipitationEntity: "Senzor de precipitații",
+    precipitationEntityHelp:
+      "Opțional. Folosește un senzor local de precipitații (mm) pentru a controla stratul de ploaie în locul valorii Open-Meteo, pentru prezent + trecut.",
+    snowfallEntity: "Senzor de ninsoare",
+    snowfallEntityHelp:
+      "Opțional. Folosește un senzor local de ninsoare (cm) pentru a controla stratul de zăpadă în locul valorii Open-Meteo, pentru prezent + trecut.",
+    weatherEntity: "Entitate meteo",
+    weatherEntityHelp:
+      "Opțional. Folosește o entitate meteo Home Assistant pentru a controla condiția (ploaie / ninsoare / furtună) în locul valorii Open-Meteo, pentru prezent + trecut. Orele de prognoză rămân pe model.",
+    chipTemperature: "Afișare temperatură",
+    chipHumidity: "Afișare umiditate",
+    chipCost: "Afișare cost",
     locationSection: "Locatie",
     homeLatitude: "Latitudinea casei",
     homeLongitude: "Longitudinea casei",
@@ -68,6 +92,10 @@ export const ro: Translations = {
     sunChipMode: "Citirea cipului soarelui",
     sunChipModeHelp:
       "Ce afiseaza cipul soarelui: iradianta solara live (implicit) sau pozitia soarelui (azimut si altitudine). Pozitia nu are nevoie de senzor, provine din propriile calcule solare ale cardului.",
+      batteryChipMode: "Afișajul cipului de baterie",
+      batteryChipModeHelp: "Ce afișează cipul bateriei: puterea în timp real (implicit) sau starea de încărcare (%). Revine la valoarea pe care bateria o oferă efectiv.",
+      batteryChipModePower: "Putere",
+      batteryChipModeSoc: "Stare de încărcare",
     sunChipModeIrradiance: "Iradianta",
     sunChipModePosition: "Pozitia soarelui",
     displayUpdateFrequency: "Detaliul graficului",
@@ -103,9 +131,13 @@ export const ro: Translations = {
     showSunTimes: "Arata orele de rasarit / apus",
     showSunTimesHint:
       "Arata orele de rasarit si apus si marcajele lor la baza arcului solar.",
+    showHorizonLine: "Afișează orizontul terenului",
+    showHorizonLineHint: "Desenează linia orizontului reliefului în jurul casei, calculată din terenul local. Orizontul estompează întotdeauna soarele în mod realist în spatele dealurilor; aceasta doar afișează sau ascunde linia desenată.",
+    horizonLineColor: "Culoarea orizontului terenului",
+    horizonLineColorHint: "Culoarea liniei orizontului terenului.",
     lockRotation: "Blocheaza rotirea",
     lockRotationHint:
-      "Seteaza unghiul de vizualizare direct in previzualizare (glisati pentru a roti si inclina scena), apoi porniti blocarea pentru a-l fixa: rotirea prin glisare si auto-orbitarea la inactivitate sunt dezactivate, pastrand unghiul setat.",
+      "Trageți de previzualizare pentru a roti și înclina scena la vederea dorită, apoi activați această opțiune. Blocarea îngheață acea vedere (rotirea prin tragere și rotația automată în repaus sunt dezactivate) și salvează unghiul în card, astfel încât exact aceeași vedere apare pe fiecare dispozitiv și browser. Dezactivați-o pentru a roti din nou liber.",
     chipsSection: "Afisarea entitatilor",
     chipsIntro:
       "Arata sau ascunde fiecare entitate si alege-i pictograma si culoarea. Casa urmeaza cipul selectat sau, implicit, culoarea ta principala.",
@@ -161,15 +193,12 @@ export const ro: Translations = {
     hiddenDevicesEmpty:
       "Niciun dispozitiv individual nu este inca urmarit in tabloul tau de bord Energie. Adauga acolo consumul dispozitivelor pentru a le controla aici.",
     deviceVisibilityLabel: "Arata dispozitivul",
-    deviceGroupLabel: "Grup de monitorizare",
     group: "Grup",
     noGroup: "Fara grup",
     groupAssignHint:
       "Trageți dispozitivele într-un grup. Ce rămâne mai jos nu aparține niciunui grup.",
     groupDropHere: "Trageți un dispozitiv aici",
     backToLive: "Înapoi la live",
-    devicesEnergyNote:
-      "Acestea sunt dispozitivele individuale configurate momentan in tabloul tau de bord Energie din Home Assistant. Ochiul arata sau ascunde fiecare dispozitiv peste tot, iar eticheta il atribuie unui grup.",
     buildingClusterRadius: "Raza de grupare a casei",
     buildingClusterRadiusHelp:
       "Raza din jurul casei in care anexele atasate (verande, garaje, soproane) sunt tratate ca parte a casei: sunt redate la opacitatea si culoarea completa a casei, in loc de vecini estompati. 0 pastreaza doar cladirea principala.",

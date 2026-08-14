@@ -84,6 +84,10 @@ export const en: Translations = {
     sunChipMode: "Sun chip readout",
     sunChipModeHelp:
       "What the sun chip shows: live solar irradiance (default) or the sun's position (azimuth and elevation). The position needs no sensor, it comes from the card's own sun maths.",
+      batteryChipMode: "Battery chip readout",
+      batteryChipModeHelp: "What the battery chip shows: live power (default) or the state of charge (%). It falls back to whichever value your battery actually provides.",
+      batteryChipModePower: "Power",
+      batteryChipModeSoc: "State of charge",
     sunChipModeIrradiance: "Irradiance",
     sunChipModePosition: "Sun position",
     powerUnit: "Power unit",
@@ -98,6 +102,9 @@ export const en: Translations = {
     batterySignDefault: "Default",
     batterySignInverted: "Inverted",
     batterySignHidden: "Hidden",
+    weatherEnabled: "Weather effects",
+    weatherEnabledHint:
+      "Paint the real sky over the scene: sunshine, clouds, rain, snow and thunderstorms from your local weather, following the timeline as you scrub. Off keeps a clear scene.",
     noUiMode: "No UI mode",
     noUiModeHint:
       "Fade the timeline and the on-card controls after a few seconds of inactivity. Any tap or move brings them back. Great for a wall display.",
@@ -113,9 +120,13 @@ export const en: Translations = {
     showSunTimes: "Show sunrise / sunset times",
     showSunTimesHint:
       "Show the sunrise and sunset times and their markers at the feet of the solar arc.",
+    showHorizonLine: "Show terrain horizon",
+    showHorizonLineHint: "Draw the terrain skyline around the home, computed from the local relief. The horizon always dims the sun realistically behind hills; this only toggles the drawn line.",
+    horizonLineColor: "Terrain horizon colour",
+    horizonLineColorHint: "Colour of the terrain horizon line.",
     lockRotation: "Lock rotation",
     lockRotationHint:
-      "Set the viewing angle directly in the preview (drag to rotate and tilt the scene), then turn on the lock to freeze it: drag-to-rotate and the idle auto-orbit are disabled, keeping the angle you set.",
+      "Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.",
     chipsSection: "Entity display",
     chipsIntro:
       "Show or hide each entity, and pick its icon and colour. The home follows the selected chip, or your primary colour by default.",
@@ -124,11 +135,32 @@ export const en: Translations = {
     chipGrid: "Grid display",
     chipBattery: "Battery display",
     chipHome: "Home consumption display",
+    chipTemperature: "Temperature display",
+    chipHumidity: "Humidity display",
+    chipCost: "Cost display",
     groupsConfigTitle: "Group configuration",
     optionalSensors: "Optional sensors",
     solarIrradianceEntity: "Solar irradiance entity",
     solarIrradianceEntityHelp:
       "Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours stay on Open-Meteo since a sensor cannot carry future values.",
+    temperatureEntity: "Temperature sensor",
+    temperatureEntityHelp:
+      "Optional. Use a local outdoor temperature sensor (°C) instead of the Open-Meteo value for the temperature chip. Its live state and recorder history are used for the live + past; forecast hours stay on the model.",
+    humidityEntity: "Humidity sensor",
+    humidityEntityHelp:
+      "Optional. Use a local relative-humidity sensor (%) instead of the Open-Meteo value, for the live + past.",
+    cloudCoverEntity: "Cloud cover sensor",
+    cloudCoverEntityHelp:
+      "Optional. Use a local cloud-cover sensor (%) to drive the sky grade (sun, greying) instead of the Open-Meteo value, for the live + past.",
+    precipitationEntity: "Precipitation sensor",
+    precipitationEntityHelp:
+      "Optional. Use a local precipitation sensor (mm) to drive the rain layer instead of the Open-Meteo value, for the live + past.",
+    snowfallEntity: "Snowfall sensor",
+    snowfallEntityHelp:
+      "Optional. Use a local snowfall sensor (cm) to drive the snow layer instead of the Open-Meteo value, for the live + past.",
+    weatherEntity: "Weather entity",
+    weatherEntityHelp:
+      "Optional. Use a Home Assistant weather entity to drive the condition (rain / snow / thunderstorm) instead of the Open-Meteo value, for the live + past. Forecast hours stay on the model.",
     liveDataTitle: "Configuration status",
     liveDataIntro:
       "Live chips show measured sensors only. Each family needs the optional live power sensor of its energy dashboard source - curves and totals always come from your meters.",
@@ -172,15 +204,12 @@ export const en: Translations = {
     hiddenDevicesEmpty:
       "No individual devices are tracked in your Energy dashboard yet. Add device consumption there to control them here.",
     deviceVisibilityLabel: "Show device",
-    deviceGroupLabel: "Monitoring group",
     group: "Group",
     noGroup: "No group",
     groupAssignHint:
       "Drag your devices into a group. Anything left below belongs to no group.",
     groupDropHere: "Drop a device here",
     backToLive: "Back to live",
-    devicesEnergyNote:
-      "These are the individual devices currently set up in your Home Assistant Energy dashboard. The eye shows or hides each one everywhere, and the pill assigns it to a group.",
     buildingClusterRadius: "Home cluster radius",
     buildingClusterRadiusHelp:
       "Radius around the home within which attached outbuildings (verandas, garages, sheds) are treated as part of the home: they render at the home's full opacity and colour instead of as faded neighbours. 0 keeps only the main building.",
@@ -201,7 +230,7 @@ export const en: Translations = {
       "Maintenance tools: refetch the card's cached data, or reset every option to its default.",
     resetCacheButton: "Reset data cache",
     resetCacheWarning:
-      "Warning: this refetches everything the card has cached - the Open-Meteo weather, every in-memory energy series (production, grid, battery, devices, irradiance), the refined forecast's calibration, and the OpenFreeMap building footprints - for every Helios card open on this page. Use it to clear stuck calibration or stale weather/map data - a full refetch takes a few minutes depending on your HA server. Your data inside Home Assistant is never touched.",
+      "Warning: this refetches everything the card has cached - the Open-Meteo weather, every in-memory energy series (production, grid, battery, devices, irradiance), the refined forecast's calibration, and the OpenFreeMap building footprints - for every Helios card open on this page. Use it to clear stuck calibration or stale weather/map data - a full refetch takes a few minutes depending on your Home Assistant server. Your data inside Home Assistant is never touched.",
     resetCacheDone: "Cache cleared ✓",
     resetOptionsButton: "Reset options to defaults",
     resetOptionsConfirm: "Click again to confirm",

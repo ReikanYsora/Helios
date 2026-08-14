@@ -2,6 +2,7 @@
 //host, a throttle / in-flight guard so duplicate cards don't hammer the call, and a requestUpdate once the parsed
 //result lands.
 
+import type { HassLike } from '../core/ha-types';
 import type { EnergyDefaults } from './sources/energy-prefs';
 import { FORECAST_THROTTLE_MS, HOUR_MS } from '../core/config/constants';
 import { localMidnightMinusDays } from '../core/time/timezone';
@@ -25,7 +26,7 @@ export interface SolarForecastPoint
 
 export interface EnergyForecastHost
 {
-    readonly hass: any;
+    readonly hass: HassLike;
     //Read for the solar-forecast provider config entry ids (config_entry_solar_forecast).
     readonly _energyDefaults: EnergyDefaults;
     //Rolling-window span (same seed the store uses), so the detail fetch covers the whole visible range instead of a

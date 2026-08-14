@@ -284,6 +284,11 @@ export async function buildVectorGround(
     style:    GroundStyle,
     altitude: number,
     signal?:  AbortSignal,
+    //Force the basemap canvas onto the CPU raster backend (willReadFrequently). Set on the projected compat path,
+    //which is the degraded mode entry-level GPUs (Mali/Adreno) fall into: their GPU-accelerated 2D canvas renders
+    //corrupted memory (bands of RGB noise), and a CPU-backed canvas sidesteps that driver bug while keeping the
+    //full map. No cost worth caring about here: the ground repaints only on a camera move or a theme change.
+    cpuRaster = false,
 ): Promise<VectorGround>
 {
     const zoom   = GROUND_ZOOM;
@@ -304,7 +309,7 @@ export async function buildVectorGround(
     el.width     = size;
     el.height    = size;
     el.className = 'ground';
-    const ctx = el.getContext('2d');
+    const ctx = el.getContext('2d', cpuRaster ? { willReadFrequently: true } : undefined);
 
     const toPx = (lon: number, la: number): [number, number] =>
     {

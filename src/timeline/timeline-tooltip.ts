@@ -10,6 +10,7 @@ import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { valueAt } from '../data/unifiedStore';
 import { wattsAtFromChangeSeries, type ChangeBucket } from '../data/sources/energy-stats';
 import { groupDevices, deviceName, deviceIcon } from '../data/sources/device-consumption';
+import { staticPrice, costRateAt } from '../data/sources/cost';
 import { pickTranslations } from '../core/i18n';
 import { resolveRangeMs } from './timeline-model';
 import {
@@ -57,6 +58,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const atMs = startMs + (pct / 100) * rangeMs;
 
     const irrV = series ? interpAt(series.times, series.irradiance, atMs) : NaN;
+    const tempV = series ? interpAt(series.times, series.temperature, atMs) : NaN;
+    const humV  = series ? interpAt(series.times, series.humidity,    atMs) : NaN;
     const cloudLowV  = series ? interpAt(series.times, series.cloudLow,  atMs) : NaN;
     const cloudMidV  = series ? interpAt(series.times, series.cloudMid,  atMs) : NaN;
     const cloudHighV = series ? interpAt(series.times, series.cloudHigh, atMs) : NaN;
@@ -88,6 +91,19 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const powerU = powerUnit(host.config);
     const irradU = irradianceUnit(host.config);
     const kw = (w: number): string => formatPower(host.hass, w, dec, powerU);
+
+    //Cost at the hovered instant (currency/hour): import kW x import price - export kW x export price. Static price
+    //only (matches the cost curve); NaN when no static price is set. gridImpW/gridExpW are watts, hence /1000.
+    const costImpP = host._energyDefaults ? staticPrice(host._energyDefaults.gridImportPriceNumbers) : null;
+    const costExpP = host._energyDefaults ? (staticPrice(host._energyDefaults.gridExportPriceNumbers) ?? 0) : 0;
+    const costCur  = String(host.hass?.config?.currency ?? '€');
+    //Prefer HA's cost statistics at the cursor (any tariff); else a single static price x power at that instant.
+    const costFromStats = costRateAt(host, atMs);
+    const costV    = costFromStats !== null
+        ? costFromStats
+        : (costImpP !== null && (isFinite(gridImpW) || isFinite(gridExpW)))
+            ? ((isFinite(gridImpW) ? gridImpW : 0) * costImpP - (isFinite(gridExpW) ? gridExpW : 0) * costExpP) / 1000
+            : NaN;
 
     //Per-entity breakdown rows for multi-source installs. Each row carries the friendly name + a hue-rotated colour
     //pastille matching its per-source curve. Single-source installs skip it (the lone entry equals the aggregate,
@@ -365,7 +381,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     ${socBankVals.map((v, i) => isFinite(v) ? html`
                         <div class="tb-hover-tooltip-row">
                             <ha-icon class="tb-hover-tooltip-icon" style="color:${socBeamColor}" icon="mdi:battery"></ha-icon>
-                            <span class="tb-hover-tooltip-name">${socLabel}${socBankVals.length > 1 ? ` ${i + 1}` : ''}</span>
+                            <span class="tb-hover-tooltip-name">${host._energyDefaults?.batteryNames?.[i] || `${socLabel}${socBankVals.length > 1 ? ` ${i + 1}` : ''}`}</span>
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, v)))} %</span>
                         </div>
                     ` : nothing)}
@@ -420,6 +436,27 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                             <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cloudLowV)))} %</span>
                         </div>
                     ` : nothing}
+                ` : nothing}
+                ${target === 'temperature' && isFinite(tempV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'temperature')}" icon=${chipSlotIcon(host.config, 'temperature', 'mdi:thermometer')}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${tempV.toFixed(1)} °C</span>
+                    </div>
+                ` : nothing}
+                ${target === 'humidity' && isFinite(humV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'humidity')}" icon=${chipSlotIcon(host.config, 'humidity', 'mdi:water-percent')}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${Math.round(humV)} %</span>
+                    </div>
+                ` : nothing}
+                ${target === 'cost' && isFinite(costV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'cost')}" icon=${chipSlotIcon(host.config, 'cost', 'mdi:cash')}></ha-icon>
+                        <span class="tb-hover-tooltip-name">${tgtName}</span>
+                        <span class="tb-hover-tooltip-value">${costV.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${costCur}/h</span>
+                    </div>
                 ` : nothing}
             </div>
         </div>

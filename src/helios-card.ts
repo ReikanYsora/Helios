@@ -2,7 +2,8 @@ import type { PropertyValues, TemplateResult} from 'lit';
 import { LitElement, html, svg, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
-import type { HeliosEngine } from './scene/helios-engine';
+import type { HassLike } from './core/ha-types';
+import type { HeliosEngine, WeatherOverrideVar } from './scene/helios-engine';
 import
 {
     type HeliosConfig,
@@ -11,16 +12,24 @@ import
     showTimeline,
     showDetailPanel,
     cacheId,
+    weatherEnabled,
+    showTemperature,
+    showHumidity,
+    showCost,
+    showHorizonLine,
+    horizonLineColor,
 } from './core/config/helios-config';
+import { chipSlotColor, chipSlotIcon } from './core/config/chip-appearance';
 import { buildDayProfile, daySlots, type ProfileStrand } from './data/period-totals/day-profile';
 import { buildSunGroundTrack, slotOfMs, type DayCurveInput, type DayStrand, type DayCurvePass, type DayCurveScene, type SunTrackPoint } from './scene/day-curve';
 import { type TimelineMode, TIMELINE_MODES, TIMELINE_MODE_ORDER, modeFetchPeriod, modePastDays, modeFutureDays } from './timeline/timeline-modes';
 import { pickTranslations } from './core/i18n';
 import { DAY_CURVE_SWEEP_MS } from './core/config/constants';
 import { heliosCardStyles } from './css/helios-card-scene-css';
+import { weatherOverlay, WeatherRain, WeatherSnow, WeatherStorm, weatherLayers, type WxInput } from './scene/weather-fx';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { setServerTimeZone, serverMsOfDay } from './core/time/timezone';
-import { isDarkFromCss } from './core/format/format';
+import { isDarkFromCss, resolveUiColor } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
 import
 {
@@ -28,6 +37,7 @@ import
     clearBatteryModuleCaches
 } from './data/sources/battery';
 import { refreshIrradiance, clearIrradianceModuleCaches } from './data/sources/irradiance';
+import { refreshWeatherOverrides, clearWeatherOverrideCaches } from './data/sources/weather-override';
 import
 {
     renderBottomChart,
@@ -43,6 +53,7 @@ import
     onChartHoverMove,
     onChartHoverLeave
 } from './charts/charts';
+import { firstAvailableChartTarget } from './charts/chart-target-availability';
 import { renderDetailPanel } from './hud/detail-panel';
 import { refreshHud } from './hud/hud';
 import type { ArcSegment, SunScene, LabelLayout } from './hud/hud';
@@ -55,6 +66,7 @@ import
     returnTimelineToLive
 } from './timeline/timeline';
 import { refreshGrid } from './data/sources/grid';
+import { refreshCostLive, refreshCostSeries } from './data/sources/cost';
 import { refreshDeviceConsumption } from './data/sources/device-consumption';
 import { createGridGuard, type GridGuardState } from './data/sources/grid-guard';
 import {
@@ -99,7 +111,7 @@ const _cacheIdRegistry = new Map<string, HeliosCard[]>();
 @customElement('helios-card')
 export class HeliosCard extends LitElement
 {
-    @property({ attribute: false }) public hass!: any;
+    @property({ attribute: false }) public hass!: HassLike;
     @property({ attribute: false }) config!: HeliosConfig;
     //Set by HA on the editor's live-preview card. HA rebuilds that card on every keystroke, so intro
     //animations (prism rise, timeline curve grow) are suppressed while it is true.
@@ -114,6 +126,24 @@ export class HeliosCard extends LitElement
     @state() _now             = new Date();
     //Cloud-cover values shown in the on-ground disc hover popup.
     @state() _cloudCover      = -1;
+    //"Your real sky" weather layers, resolved at the current live/scrub time and pushed by the engine:
+    //precipitation (mm), snowfall (cm) and the WMO weather code (drives rain / snow / thunderstorm).
+    @state() _precip          = 0;
+    @state() _snowfall        = 0;
+    @state() _weatherCode     = 0;
+    //Outdoor temperature (°C) + relative humidity (%) at the current time; NaN until data / when unavailable.
+    @state() _temperature     = NaN;
+    @state() _humidity        = NaN;
+    //Net live cost rate in `_currency` per hour (positive = spending, negative = earning), from refreshCostLive.
+    //Null when no cost is configured in the Energy dashboard (the cost chip then hides).
+    @state() _costRate: number | null = null;
+    //User currency from hass.config.currency; set alongside _costRate.
+    _currency = '€';
+    //Recorder `change` series for the cost + compensation statistics (net money per bucket), driving the cost
+    //chip's live rate + its curve for ANY tariff (Tempo, HC/HP, a total-cost integration sensor). Null until fetched.
+    @state() _costImportSeries: ChangeBucket[] | null = null;
+    @state() _costExportSeries: ChangeBucket[] | null = null;
+    _costFetch = new KeyedFetch();
     //Screen-space layout of the always-visible labels + leaders, recomputed via
     //engine.projectHomeLabelLayout() on every map transform. null while the map is loading.
     @state() _labelLayout: LabelLayout | null = null;
@@ -191,6 +221,13 @@ export class HeliosCard extends LitElement
     _irradianceHistory: { times: Date[]; values: number[] } | null = null;
     _irradianceFetchKey = '';
     _irradianceFetching = false;
+    //Per-variable fetch/merge state for the local-sensor weather overrides (cloud/precip/snow/temp/humidity).
+    //Plain field (no @state): the engine owns the lookup, render never reads it. Keyed by weather variable.
+    _weatherOverrideState = new Map<WeatherOverrideVar, {
+        history: { times: Date[]; values: number[] } | null;
+        fetchKey: string; fetching: boolean;
+        pushedHist: unknown; pushedState: unknown; pushedEntity: string;
+    }>();
     //Screen-space layout of the solar arc, sun and incidence ray. Recomputed via engine.projectSunScene()
     //on every map transform and periodic tick (sun moves with time).
     @state() _sunScene: SunScene | null = null;
@@ -214,6 +251,10 @@ export class HeliosCard extends LitElement
     //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
     //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
     @state() _chartTarget: ChartTarget = 'production';
+    //True once the user has picked a chip or a saved pick was restored. Until then the target tracks the first
+    //available chip as the Energy config resolves (see updated()), so a card with no solar never sits on an empty
+    //production selection at load.
+    private _chartTargetExplicit = false;
     //Detail panel (scene mode): a compact top-right readout aggregating the selected metric over the window. Any
     //chip tap opens it (alongside re-pointing the chart) and a tap on the scene closes it. Bound to the active
     //chip, not a target, so switching chips while open just re-points it.
@@ -255,6 +296,28 @@ export class HeliosCard extends LitElement
     @state() private _uiHidden = false;
     private _uiHideTimer: number | undefined;
     @query('ha-card') _haCard?: HTMLElement;
+
+    //"Your real sky": on-card weather driven by the real weather resolved at the live/scrub time. Independent
+    //layers stack (cloud grade + rain / snow / thunderstorm), each fed by weatherLayers() and rendered by the
+    //CSS overlay + the rain/snow canvases + the lightning controller.
+    @state() private _wxOn = true;
+    @query('.helios-wx-rain') private _wxRainCanvas?: HTMLCanvasElement;
+    @query('.helios-wx-snow') private _wxSnowCanvas?: HTMLCanvasElement;
+    private readonly _wxRainCtl  = new WeatherRain((): HTMLCanvasElement | undefined => this._wxRainCanvas);
+    private readonly _wxSnowCtl  = new WeatherSnow((): HTMLCanvasElement | undefined => this._wxSnowCanvas);
+    private readonly _wxStormCtl = new WeatherStorm((v: number): void => this.style.setProperty('--wx-flash', v.toFixed(3)));
+    //Weather driving the layers right now: the resolved live/scrub weather (cloud/precip/snow/code + sun altitude).
+    private get _wxInput(): WxInput
+    {
+        const sun = this._sunScene?.sun;
+        return {
+            cloud:       Math.max(0, this._cloudCover),
+            precip:      this._precip,
+            snowfall:    this._snowfall,
+            code:        this._weatherCode,
+            sunAltitude: sun ? sun.altitude : 45,
+        };
+    }
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -263,6 +326,9 @@ export class HeliosCard extends LitElement
         cloudLow:     number[];
         cloudMid:     number[];
         cloudHigh:    number[];
+        //Hourly outdoor temperature (°C) + relative humidity (%), for their chart targets + day curves.
+        temperature:  number[];
+        humidity:     number[];
     } | null = null;
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
@@ -296,7 +362,10 @@ export class HeliosCard extends LitElement
 
     //Cached theme polarity. The fallback path (getComputedStyle + regex) forces a style flush, too costly
     //per render. Result only changes on theme polarity flip / style reload, so cache by themesObj identity.
-    private _cachedIsDarkThemesRef: unknown = undefined;
+    //The empty-cache marker is a private symbol, not undefined, so a genuinely-undefined themesObj still
+    //resolves through the CSS fallback instead of colliding with "not cached yet".
+    private static readonly _UNCACHED_THEMES = Symbol('theme-cache-empty');
+    private _cachedIsDarkThemesRef: unknown = HeliosCard._UNCACHED_THEMES;
     private _cachedIsDark = false;
     //Last resolved home-colour token, so the :host consumption var is only re-derived when it changes.
     //Read + written by publishConsumptionColor (card/init.ts), so not TS-private.
@@ -330,6 +399,8 @@ export class HeliosCard extends LitElement
         this.config = { ...config };
         //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, so
         //setConfig doesn't seed it.
+        //"Your real sky" master switch follows the config (default on); the layers re-apply via updated().
+        this._wxOn = weatherEnabled(this.config);
         //Re-arm (or stop) the "No UI" idle fade when the option changes.
         this._scheduleUiHide();
     }
@@ -366,10 +437,14 @@ export class HeliosCard extends LitElement
         const spec = TIMELINE_MODES[mode];
         this._periodPastDays   = modePastDays(mode);
         this._periodFutureDays = modeFutureDays(mode);
-        //Entering a no-weather mode: retarget the chart off the weather metric.
-        if (!spec.weather && this._chartTarget === 'irradiance')
+        //Entering a no-weather mode: retarget the chart off any weather metric (irradiance / temperature / humidity)
+        //onto the first configured + visible energy chip (consumption -> production -> grid -> battery -> groups).
+        //Never force production, which the user may have hidden or have no solar source for; if nothing qualifies,
+        //keep the current target and let the chart draw nothing.
+        if (!spec.weather && (this._chartTarget === 'irradiance' || this._chartTarget === 'temperature' || this._chartTarget === 'humidity'))
         {
-            this._chartTarget = 'production';
+            const fallback = firstAvailableChartTarget(this.config, this._energyDefaults);
+            if (fallback) { this._chartTarget = fallback; }
         }
         this._applyPeriod();
         this.persistUiState();
@@ -396,6 +471,8 @@ export class HeliosCard extends LitElement
     //Chip -> bottom-chart re-targeting. Points the chart at the clicked metric; no-op when already there.
     setChartTarget = (target: ChartTarget): void =>
     {
+        //A deliberate pick: from here the target is the user's, never re-resolved to the default.
+        this._chartTargetExplicit = true;
         if (this._chartTarget !== target)
         {
             this._chartTarget = target;
@@ -607,6 +684,14 @@ export class HeliosCard extends LitElement
             ${pass.risers ? svg`<path class="helios-day-curve-riser" d=${pass.risers} fill="none"></path>` : nothing}
             ${pass.strands.map(st => st.spans.map(s => svg`
                 <path
+                    class="helios-day-curve-line-outline ${st.dashed ? 'is-dashed' : ''} ${s.predicted ? 'is-predicted' : ''}"
+                    d=${s.d}
+                    fill="none"
+                    stroke-width=${s.w + 2}
+                ></path>
+            `))}
+            ${pass.strands.map(st => st.spans.map(s => svg`
+                <path
                     class="helios-day-curve-line ${st.dashed ? 'is-dashed' : ''} ${s.predicted ? 'is-predicted' : ''}"
                     d=${s.d}
                     fill="none"
@@ -636,17 +721,17 @@ export class HeliosCard extends LitElement
     {
         const t = pickTranslations(this.hass?.language);
         const labels: Record<TimelineMode, string> = {
-            forecast:  t.period?.forecast  ?? 'Forecast',
-            yesterday: t.period?.yesterday ?? 'Yesterday',
-            today:     t.period?.today     ?? 'Today',
-            week:      t.period?.week      ?? 'Week',
-            month:     t.period?.month     ?? 'Month',
+            forecast:  t.period.forecast,
+            yesterday: t.period.yesterday,
+            today:     t.period.today,
+            week:      t.period.week,
+            month:     t.period.month,
         };
         return html`
             <div
                 class="tb-period-selector"
                 role="group"
-                aria-label=${t.period?.rangeLabel ?? 'Time range'}
+                aria-label=${t.period.rangeLabel}
                 @pointerdown=${this._stopPropagation}
             >
                 ${TIMELINE_MODE_ORDER.map(m => html`
@@ -742,6 +827,7 @@ export class HeliosCard extends LitElement
         this._deviceChangeFetch.reset();
         this._irradianceHistory           = null;
         this._irradianceFetchKey          = '';
+        this._weatherOverrideState        = new Map();
         //Drop the unified store so the next paint rebuilds it from the refetched series rather than from the data
         //the user just cleared.
         this._unifiedStore                = null;
@@ -749,6 +835,7 @@ export class HeliosCard extends LitElement
         //the exact stale entry the user just cleared.
         clearBatteryModuleCaches();
         clearIrradianceModuleCaches();
+        clearWeatherOverrideCaches();
         clearEnergyStatsCache();
         clearDurable();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot, refetches.
@@ -871,8 +958,12 @@ export class HeliosCard extends LitElement
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
+        this._wxRainCtl.stop();
+        this._wxSnowCtl.stop();
+        this._wxStormCtl.stop();
         liveCards.delete(this);
         window.clearInterval(this._timer);
+        if (this._dayCurveRaf) { cancelAnimationFrame(this._dayCurveRaf); this._dayCurveRaf = 0; }
         this.removeEventListener('pointerdown', this._onUiActivity);
         this.removeEventListener('pointermove', this._onUiActivity);
         this.removeEventListener('wheel', this._onUiActivity);
@@ -938,10 +1029,106 @@ export class HeliosCard extends LitElement
         }
     }
 
+    //Corner weather chips (top-left column): outdoor temperature + humidity, resolved at the current live/scrub
+    //time (Open-Meteo or the matching local sensor override). Each is hidden when turned off or without a reading.
+    private _renderTempChip(): TemplateResult | typeof nothing
+    {
+        if (!showTemperature(this.config) || !isFinite(this._temperature)) { return nothing; }
+        //When a day curve is up, only the active chip is visible; the other stays in the DOM as an invisible
+        //placeholder so the visible chip keeps its slot (the centered row must not shift when its sibling drops).
+        const hidden = this._dayCurveOpen && this._chartTarget !== 'temperature';
+        return this._cornerChip('temperature', `${this._temperature.toFixed(1)} °C`, hidden);
+    }
+    private _renderHumidityChip(): TemplateResult | typeof nothing
+    {
+        if (!showHumidity(this.config) || !isFinite(this._humidity)) { return nothing; }
+        const hidden = this._dayCurveOpen && this._chartTarget !== 'humidity';
+        return this._cornerChip('humidity', `${Math.round(this._humidity)} %`, hidden);
+    }
+    private _cornerChip(slot: 'temperature' | 'humidity' | 'cost', text: string, hidden: boolean): TemplateResult
+    {
+        const color   = chipSlotColor(this, this.config, slot);
+        const icon    = chipSlotIcon(this.config, slot);
+        //Same re-targeting gesture as the scene chips: one tap points the chart + around-house curve at this
+        //metric, a second tap on the active chip toggles its day curve (onChartTargetClick).
+        const active  = this._chartTarget === slot;
+        const curveOn = active && this._dayCurveOpen;
+        //A hidden chip carries is-slot-hidden (visibility:hidden): it reserves its width but is automatically
+        //inert, unfocusable and out of the a11y tree, so role/tabindex/click can stay static.
+        return html`
+            <div
+                class="helios-corner-chip ${active ? 'is-chart-active' : ''} ${curveOn ? 'is-curve-on' : ''} ${hidden ? 'is-slot-hidden' : ''}"
+                style=${`--chip-color:${color}`}
+                role="button"
+                tabindex="0"
+                data-target=${slot}
+                @click=${this.onChartTargetClick}
+            >
+                <ha-icon icon=${icon}></ha-icon>
+                <span>${text}</span>
+            </div>`;
+    }
+
+    //Cost chip: the live NET money rate in the user's currency per hour. Fixed, user-configurable colour
+    //+ icon like every other chip (no sign-driven colour); spend vs earn is carried by the value's sign (a negative
+    //rate means you are earning). Tap it like any chip to bring up its cost curve. Hidden when turned off or when no
+    //cost is configured (no resolvable rate).
+    private _renderCostChip(): TemplateResult | typeof nothing
+    {
+        if (!showCost(this.config) || this._costRate === null) { return nothing; }
+        const hidden = this._dayCurveOpen && this._chartTarget !== 'cost';
+        const val = this._costRate
+            .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return this._cornerChip('cost', `${val} ${this._currency}/h`, hidden);
+    }
+
+    //Push the resolved weather onto the host as --wx-* vars (scene grade + overlay strengths) and drive the
+    //rain/snow/storm controllers. Source is the resolved live/scrub weather (any local sensor overrides are
+    //already folded in upstream). The sun glow is anchored on the real sun position and gated on daylight.
+    private _applyWeather(): void
+    {
+        this.toggleAttribute('data-wx-on', this._wxOn);
+
+        if (!this._wxOn)
+        {
+            this._wxRainCtl.setIntensity(0);
+            this._wxSnowCtl.setIntensity(0);
+            this._wxStormCtl.setStrength(0);
+            return;
+        }
+
+        const sun = this._sunScene?.sun;
+        const p = weatherLayers(this._wxInput);
+        this.style.setProperty('--wx-sun', p.sun.toFixed(3));
+        if (sun)
+        {
+            this.style.setProperty('--wx-sun-x', `${sun.x.toFixed(1)}px`);
+            this.style.setProperty('--wx-sun-y', `${sun.y.toFixed(1)}px`);
+        }
+        this.style.setProperty('--wx-grey',  p.grey.toFixed(3));
+        this.style.setProperty('--wx-cloud', p.cloud.toFixed(3));
+        this.style.setProperty('--wx-rain',  p.rain.toFixed(3));
+        this.style.setProperty('--wx-snow',  p.snow.toFixed(3));
+        this.style.setProperty('--wx-map-filter', `saturate(${p.sat.toFixed(3)}) brightness(${p.bright.toFixed(3)})`);
+        this._wxRainCtl.setIntensity(p.rain);
+        this._wxSnowCtl.setIntensity(p.snow);
+        this._wxStormCtl.setStrength(p.storm);
+    }
+
     protected updated(_changedProperties: PropertyValues): void
     {
         //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
         this.toggleAttribute('data-ui-hidden', this._uiHidden);
+
+        //"Your real sky": recompute the weather layers whenever the resolved weather, the master switch or the sun
+        //(glow anchor + day/night) changes.
+        if (_changedProperties.has('_cloudCover') || _changedProperties.has('_precip')
+            || _changedProperties.has('_snowfall') || _changedProperties.has('_weatherCode')
+            || _changedProperties.has('_wxOn') || _changedProperties.has('_sunScene')
+            || _changedProperties.has('config'))
+        {
+            this._applyWeather();
+        }
 
         //With the timeline hidden there's no period selector or scrub: pin the mode to Today so the scene reads
         //as "right now", and snap any active scrub back to live (a frozen past instant would otherwise stick).
@@ -954,12 +1141,29 @@ export class HeliosCard extends LitElement
         //Publish the home (consumption) colour as a :host CSS var so every consumption readout reads it.
         publishConsumptionColor(this);
 
+        //Terrain-horizon ridge: show/hide the drawn line (the sun gate always uses the terrain), and publish its
+        //colour as a :host var, resolved through the shared ui_color resolver so a token, hex or rgb all work.
+        this._engine?.setHorizonLineVisible(showHorizonLine(this.config));
+        this.style.setProperty(
+            '--helios-horizon-line-color',
+            resolveUiColor(this, horizonLineColor(this.config), '#607d8b', 'blue-grey')
+        );
+
         //Restore the saved selected chip once coords resolve (idempotent; retries until ready).
         this._restoreUiState();
 
+        //Default chart target: until the user has picked a chip (or a saved pick was restored), track the first
+        //configured + visible target as the Energy config resolves (consumption -> production -> grid -> battery
+        //-> groups), so a card with no solar never opens on an empty production selection.
+        if (!this._chartTargetExplicit && _changedProperties.has('_energyDefaults'))
+        {
+            const resolved = firstAvailableChartTarget(this.config, this._energyDefaults);
+            if (resolved && resolved !== this._chartTarget) { this._chartTarget = resolved; }
+        }
+
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
-        //(one hash compare), ~50 ms for a full 480 × 7 bucketization + forecast pass on a real refresh.
+        //(one hash compare), ~50 ms for a full 480 x 7 bucketization + forecast pass on a real refresh.
         this._maybeRebuildUnifiedStore();
 
         //Drive the home prism's colour from the active chip. The squash/grow plays only when the chip
@@ -1118,7 +1322,12 @@ export class HeliosCard extends LitElement
         refreshPv(this);
         refreshBattery(this);
         refreshGrid(this);
+        //Cost: kick the cost-statistics fetch (gated), then recompute the live rate (from those stats when loaded,
+        //else a configured price x the grid live values just computed above).
+        refreshCostSeries(this);
+        refreshCostLive(this);
         refreshIrradiance(this);
+        refreshWeatherOverrides(this);
         //Per-device consumption series for the monitoring groups (fire-and-forget; keyed so an unchanged id-set +
         //window is a no-op; clears itself when no device is grouped).
         refreshDeviceConsumption(this);
@@ -1146,7 +1355,7 @@ export class HeliosCard extends LitElement
     {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible')
         {
-            this._cachedIsDarkThemesRef = undefined;
+            this._cachedIsDarkThemesRef = HeliosCard._UNCACHED_THEMES;
             this.requestUpdate();
         }
     };
@@ -1162,7 +1371,7 @@ export class HeliosCard extends LitElement
     private _stopPointer    = (e: Event): void => { e.stopPropagation(); };
     private get _backToLiveLabel(): string
     {
-        return pickTranslations(this.hass?.language).editor.backToLive ?? 'Back to live';
+        return pickTranslations(this.hass?.language).editor.backToLive;
     }
 
 
@@ -1240,6 +1449,8 @@ export class HeliosCard extends LitElement
         //Selected-chip accent for the timeline + period-selector top borders (always), plus the detail-panel
         //accent (same colour) only when the panel is open.
         const cardStyle = `--tb-accent:${activeChipColor}${infoOpen ? `; --detail-accent:${activeChipColor}` : ''}`;
+        //Whether the bottom timeline chrome is on screen. Also lifts the weather chips clear of it (.has-timeline).
+        const timelineShown = hasHomeCoords && this._timeRange && showTimeline(this.config);
 
         return html`
             <ha-card class=${cardClasses} style=${cardStyle}>
@@ -1250,7 +1461,16 @@ export class HeliosCard extends LitElement
                     @pointerup=${this._onSceneTapEnd}
                 ></div>
 
-                ${hasHomeCoords && this._timeRange && showTimeline(this.config) ? html`
+                <!--  "Your real sky": weather overlay layers, then the weather chips (temperature, humidity),
+                      grouped along the bottom with the scene pill family (lifted above the timeline when shown).  -->
+                ${weatherOverlay()}
+                <div class="helios-corner-chips ${timelineShown ? 'has-timeline' : ''}">
+                    ${this._renderCostChip()}
+                    ${this._renderTempChip()}
+                    ${this._renderHumidityChip()}
+                </div>
+
+                ${timelineShown ? html`
                     <div
                         class="time-bar"
                         @pointerdown=${this._onTimelinePointerDown}
@@ -1502,10 +1722,12 @@ export class HeliosCard extends LitElement
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object')
             {
-                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', ...GROUP_TARGETS];
+                const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'temperature', 'humidity', 'cost', ...GROUP_TARGETS];
                 if (typeof parsed.chartTarget === 'string' && valid.includes(parsed.chartTarget as ChartTarget))
                 {
+                    //A restored pick is the user's own, so it stands and is never re-resolved to the default.
                     this._chartTarget = parsed.chartTarget as ChartTarget;
+                    this._chartTargetExplicit = true;
                 }
                 if (typeof parsed.timelineMode === 'string' && parsed.timelineMode in TIMELINE_MODES)
                 {

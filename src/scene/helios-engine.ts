@@ -1,18 +1,21 @@
 import { SceneRenderer } from './renderer';
 import { renderDayCurve, type DayCurveInput as CurveInput, type DayCurveScene } from './day-curve';
 import type { Building, RawBuilding } from './buildings';
-import { getSunPosition, computePvPower, computeIrradianceWm2 } from '../core/time/sun';
-import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from '../data/weather';
+import { getSunPosition, computePvPercent, computeIrradianceWm2 } from '../core/time/sun';
+import { fetchHomePointData, clearWeatherCache, type SampleHourly } from '../data/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './buildings';
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
 import { resolveWeatherAtTime } from '../data/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './hud-layout';
-import { sunSpherePoint, daylightRamp } from './sun-arc';
+import { sunSpherePoint, daylightRamp, horizonSpherePoint } from './sun-arc';
+import { buildTimeSamples, timeSamplesEqual, nearestSampleAt, type TimeSample } from '../core/nearest-series';
+import { fetchHorizonProfile, horizonAltAt, horizonPeak, HORIZON_MIN_PEAK_DEG, type HorizonProfile } from '../data/sources/horizon';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
-    BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS} from '../core/config/constants';
+    BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS,
+    RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS} from '../core/config/constants';
 import
 {
     type HeliosConfig,
@@ -48,6 +51,13 @@ const _sharedBuildingsCache = new Map<string, SharedBuildingsCacheEntry>();
 //near-fresh without lagging a model cycle, well within free-tier quotas.
 const WEATHER_REFRESH_INTERVAL_MS = 600_000;
 
+//Terrain horizon is visual-only and cached for months, so it is kicked a beat after the scene first paints (its
+//elevation requests must not burst into the cold-start weather + tile + building fetches), and retried a bounded
+//few times on failure (a cold-start Open-Meteo 429) instead of leaving the flat horizon until the next reload.
+const HORIZON_INITIAL_DELAY_MS = 2500;
+const HORIZON_RETRY_DELAY_MS   = 60_000;
+const HORIZON_MAX_RETRIES      = 3;
+
 
 function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 {
@@ -75,12 +85,22 @@ function sharedBuildingsCacheGet(key: string): RawBuilding[] | null
 //              it wins, but only in live mode (scrubbing past/forecast falls back to shortwave/haurwitz).
 export type IrradianceSource = 'haurwitz' | 'shortwave' | 'sensor';
 
+//Weather variables a local sensor can override (keys match the resolved-weather fields). A configured sensor beats
+//the Open-Meteo model for the live + past portions; the forecast (future) always falls back to the model, since a
+//sensor has no future data (the nearest-neighbour window below returns null past its reach).
+export type WeatherOverrideVar = 'cloudCover' | 'precip' | 'snowfall' | 'temperature' | 'humidity' | 'code';
+
 export interface WeatherData
 {
     cloudCover:     number;
     cloudLow:       number;        //%, low-level clouds (<= 3 km)
     cloudMid:       number;        //%, mid-level clouds (3 to 8 km)
     cloudHigh:      number;        //%, high-level clouds (>= 8 km)
+    precip:         number;        //mm of precipitation this hour ("Your real sky" rain layer)
+    snowfall:       number;        //cm of snowfall this hour (snow layer)
+    weatherCode:    number;        //WMO weather code (thunderstorm 95/96/99 drives the storm layer)
+    temperature:    number;        //°C outdoor temperature (temperature chip); NaN when unavailable
+    humidity:       number;        //% relative humidity; NaN when unavailable
     timeRange:      { start: Date; end: Date } | null;
     isLiveTime:     boolean;
     pvPower:        number;        //primary value, normalised 0..100 (~ GHI/10 W/m²)
@@ -115,7 +135,7 @@ export class HeliosEngine
     private _homeHourlyData: SampleHourly | null = null;
     private _selectedTime:  Date | null       = null;
 
-    //Skip atmosphere repaint when the sun moved less than 0.5° since last call (~ 2 min).
+    //Skip atmosphere repaint when the sun moved less than 1.5° since last call (~6 min).
     private _lastAtmosphereAlt = -999;
     //Sun altitude at the last ground re-tint. Coarser step than the wash (the vector ground re-raster is heavier
     //than the cheap full-frame wash), so the day/night grade on the map updates every few degrees.
@@ -128,6 +148,17 @@ export class HeliosEngine
     private _otherErrorStreak = 0;
 
     private _fetchAbortController?: AbortController;
+
+    //Terrain horizon (visual only): the ridge elevation per azimuth, so the sun hides behind relief. Null until
+    //resolved or on flat terrain. Its own abort controller since it fetches independently of the weather. The
+    //profile ALWAYS refines the sun gate (realism); `_horizonLineVisible` only toggles the drawn ridge line.
+    private _horizonProfile: HorizonProfile | null = null;
+    private _horizonLineVisible = true;
+    private _horizonAbort?: AbortController;
+    //Deferred initial kick + bounded retry share one timer; the counter resets on a real new request (setHome).
+    private _horizonTimer?: number;
+    private _horizonRetryCount = 0;
+
     //Last container size the observer acted on, so a no-op resize notification can't loop into a repaint.
     private _obsW = -1;
     private _obsH = -1;
@@ -157,116 +188,59 @@ export class HeliosEngine
     //ground-truth shortwave irradiance at the home in the same units as the model's shortwave field, so it
     //slots into the pipeline unscaled. Lookup is nearest-neighbour within a strict +/-30 min window; outside
     //it (and always for forecast time) fall through to the model rather than extrapolate stale values.
-    private _sensorIrradianceSamples: { tMs: number; wm2: number }[] | null = null;
+    private _sensorIrradianceSamples: TimeSample[] | null = null;
     private static readonly SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1000;
     public setSolarIrradianceSamples(
         samples: { time: Date; wm2: number }[] | null
     ): void
     {
-        if (!samples || samples.length === 0)
-        {
-            if (this._sensorIrradianceSamples === null)
-            {
-                return;
-            }
-            this._sensorIrradianceSamples = null;
-            this._arcInputsCache = undefined;
-            this._renderForCurrentSelection();
-            return;
-        }
-        const cleaned: { tMs: number; wm2: number }[] = [];
-        for (const s of samples)
-        {
-            const ms = s.time.getTime();
-            if (!isFinite(ms))
-            {
-                continue;
-            }
-            if (!isFinite(s.wm2) || s.wm2 < 0)
-            {
-                continue;
-            }
-            cleaned.push({ tMs: ms, wm2: s.wm2 });
-        }
-        cleaned.sort((a, b) => a.tMs - b.tMs);
-        const next = cleaned.length > 0 ? cleaned : null;
-
-        //Skip the re-render when the dataset is unchanged. The card pushes samples every Lit cycle; without
-        //this guard each push fires onWeatherUpdate -> updated() -> push again, an infinite loop that
-        //freezes the dashboard the moment an irradiance entity is selected.
-        if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next))
-        {
-            return;
-        }
+        //Drop non-finite and negative readings; build -> null when empty, so the equality guard below covers both
+        //the "cleared" and "unchanged" cases. The card re-pushes every Lit cycle; without the guard each push
+        //fires onWeatherUpdate -> updated() -> push again, an infinite loop that freezes the dashboard the moment
+        //an irradiance entity is selected.
+        const next = buildTimeSamples(samples, (s) => s.time.getTime(), (s) => s.wm2, (v) => v >= 0);
+        if (timeSamplesEqual(this._sensorIrradianceSamples, next)) { return; }
         this._sensorIrradianceSamples = next;
         //Invalidate the arc cache so the next projectSunScene rebuilds with the new sensor ground truth.
         this._arcInputsCache = undefined;
         this._renderForCurrentSelection();
     }
 
-    private _sensorSamplesEqual(
-        a: { tMs: number; wm2: number }[] | null,
-        b: { tMs: number; wm2: number }[] | null
-    ): boolean
-    {
-        if (a === b)
-        {
-            return true;
-        }
-        if (a === null || b === null)
-        {
-            return false;
-        }
-        if (a.length !== b.length)
-        {
-            return false;
-        }
-        for (let i = 0; i < a.length; i++)
-        {
-            if (a[i].tMs !== b[i].tMs)
-            {
-                return false;
-            }
-            if (a[i].wm2 !== b[i].wm2)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    //Nearest-neighbour lookup over the sensor history; returns the W/m² reading closest to `t` within the
-    //window, else null (caller falls back to the model). Linear scan is fine for ~hourly few-day samples.
+    //Nearest-neighbour reading closest to `t` within the +/-30 min window, else null (caller falls back to the model).
     private _sensorIrradianceAt(t: Date): number | null
     {
-        const samples = this._sensorIrradianceSamples;
-        if (!samples || samples.length === 0)
-        {
-            return null;
-        }
-        const tMs = t.getTime();
-        let bestIdx = -1;
-        let bestDelta = Number.POSITIVE_INFINITY;
-        for (let i = 0; i < samples.length; i++)
-        {
-            const d = Math.abs(samples[i].tMs - tMs);
-            if (d < bestDelta)
-            {
-                bestDelta = d;
-                bestIdx   = i;
-            }
-            //Samples are sorted: once delta grows again the rest is monotonically worse, so stop.
-            else if (d > bestDelta)
-            {
-                break;
-            }
-        }
-        if (bestIdx < 0 || bestDelta > HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS)
-        {
-            return null;
-        }
-        return samples[bestIdx].wm2;
+        return nearestSampleAt(this._sensorIrradianceSamples, t.getTime(), HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS);
     }
+
+    //Local-sensor weather overrides: per-variable sample series (sorted ascending), pushed by the card from a
+    //configured entity's history + live state. Nearest-neighbour within the window replaces the model value at
+    //resolve time; empty/absent = model unchanged.
+    private _weatherOverrideSamples = new Map<WeatherOverrideVar, TimeSample[]>();
+    private static readonly SENSOR_WEATHER_WINDOW_MS = 30 * 60 * 1000;
+
+    public setWeatherOverrideSamples(
+        variable: WeatherOverrideVar,
+        samples: { time: Date; value: number }[] | null
+    ): void
+    {
+        const prev = this._weatherOverrideSamples.get(variable) ?? null;
+        //Overrides keep every finite value (a temperature override is legitimately negative).
+        const next = buildTimeSamples(samples, (s) => s.time.getTime(), (s) => s.value, () => true);
+        //Same re-render guard as the irradiance setter (the card pushes every Lit cycle).
+        if (timeSamplesEqual(prev, next)) { return; }
+        if (next === null) { this._weatherOverrideSamples.delete(variable); }
+        else               { this._weatherOverrideSamples.set(variable, next); }
+        this._arcInputsCache = undefined;
+        this._renderForCurrentSelection();
+    }
+
+    //Nearest-neighbour override value for `variable` at `t`, or null (outside the window / no samples), in which
+    //case the caller keeps the model value.
+    private _weatherOverrideAt(variable: WeatherOverrideVar, t: Date): number | null
+    {
+        return nearestSampleAt(this._weatherOverrideSamples.get(variable) ?? null, t.getTime(), HeliosEngine.SENSOR_WEATHER_WINDOW_MS);
+    }
+
     //Map transform changed: card recomputes screen-space projections (arc, chips, leaders) from this hook.
     public onMapTransform?:  () => void;
 
@@ -322,12 +296,17 @@ export class HeliosEngine
     //Resting pose at init: the stored bearing/pitch from localStorage (the drag-set angle) first, then the YAML
     //camera-*-deg keys, then the hemisphere-aware default (south up in NH, north up in SH). Wrapped/clamped
     //against stale reads.
+    //Locked + a configured angle: the config pose WINS over the per-device localStorage pose, so a locked view is
+    //identical on every device/browser. Unlocked (or no config angle): the drag-set localStorage pose leads, then
+    //config, then the hemisphere default, keeping the per-device behaviour for free-rotating cards.
     private _initialBearing(): number
     {
         const stored = this._readStoredPose();
         const rawStored = stored && typeof stored.bearing === 'number' ? stored.bearing : NaN;
         const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
-        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
+        const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
+            ? rawCfg
+            : (Number.isFinite(rawStored) ? rawStored : rawCfg);
         if (Number.isFinite(raw))
         {
             return ((raw % 360) + 360) % 360;
@@ -339,7 +318,9 @@ export class HeliosEngine
         const stored = this._readStoredPose();
         const rawStored = stored && typeof stored.pitch === 'number' ? stored.pitch : NaN;
         const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
-        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
+        const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
+            ? rawCfg
+            : (Number.isFinite(rawStored) ? rawStored : rawCfg);
         if (Number.isFinite(raw))
         {
             return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw));
@@ -355,6 +336,14 @@ export class HeliosEngine
     //Persist the camera's CURRENT bearing/pitch to localStorage, so reopening the dashboard restores the exact
     //view. Called on drag-end and by the card on teardown (captures an auto-rotated bearing too). No-op before
     //the renderer exists.
+    //Current camera pose (bearing/pitch in degrees), or null before the renderer exists. Used by the editor's
+    //"use current view" helper to capture the framed angle into the config.
+    public getCameraPose(): { bearing: number; pitch: number } | null
+    {
+        if (!this._renderer) { return null; }
+        return { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
+    }
+
     public persistCameraPose(): void
     {
         if (!this._renderer)
@@ -521,7 +510,7 @@ export class HeliosEngine
     private _arcInputsCache?: {
         dayStartMs: number;
         cloudPctInt: number;
-        //Sun-arc scale baked into the points below (×100, rounded). In the key so a resize/zoom rebuilds
+        //Sun-arc scale baked into the points below (x100, rounded). In the key so a resize/zoom rebuilds
         //the arc at the new size.
         scaleKey: number;
         samples: ({
@@ -529,6 +518,7 @@ export class HeliosEngine
             lat: number;
             altitudeM: number;
             altitudeDeg: number;
+            azimuthDeg: number;
             wm2: number;
             belowHorizon: boolean;
         } | null)[];
@@ -561,7 +551,7 @@ export class HeliosEngine
 
         //Create the map immediately regardless of container size: in some layouts (Masonry) neither the
         //ResizeObserver nor the IntersectionObserver fires, so deferring until one reports "ready" would
-        //leave the map null. The post-load resize handling covers any 0×0-at-init case.
+        //leave the map null. The post-load resize handling covers any 0x0-at-init case.
         this._initMapInstance(container);
     }
 
@@ -802,6 +792,9 @@ export class HeliosEngine
         this._dragRotateHandlers = { canvas: container, onDown, onMove, onEnd, onDragStart };
 
         this._refreshWeather();
+        //The terrain horizon gets its own initial kick (weather has several triggers, the horizon only re-fetches
+        //on a real home change), but deferred to _onRendererReady so it lands after the first paint, off the
+        //cold-start burst.
     }
 
     //Async bootstrap: resolve the basemap for the home, then mark ready, feed buildings + sun, and kick off
@@ -865,9 +858,20 @@ export class HeliosEngine
 
         this._startAutoRotateLoop();
 
-        if (this._homeHourlyData)
+        //Paint the scene as soon as the renderer is ready, weather or not: the sun arc, home, buildings and the day
+        //curve need none of it, and _renderForCurrentSelection already falls back to Haurwitz when the forecast is
+        //absent. Waiting on _homeHourlyData left the whole scene blank through a slow / rate-limited weather fetch
+        //whenever auto-rotate was off (nothing else repaints). Weather repaints on arrival, gated by sunSceneEq.
+        this._renderForCurrentSelection();
+
+        //Deferred horizon kick: a beat past the first paint so its elevation requests never burst into the
+        //cold-start weather + tile + building fetches. Skipped if a profile already resolved (cache hit).
+        if (!this._horizonProfile)
         {
-            this._renderForCurrentSelection();
+            window.clearTimeout(this._horizonTimer);
+            this._horizonTimer = window.setTimeout(
+                () => { if (this._renderer) { this._refreshHorizon(this.homeLat, this.homeLon); } },
+                HORIZON_INITIAL_DELAY_MS);
         }
     }
 
@@ -946,9 +950,27 @@ export class HeliosEngine
         cloudMid:       number;
         cloudHigh:      number;
         shortwave:      number;
+        precip:         number;
+        snowfall:       number;
+        weatherCode:    number;
+        temperature:    number;
+        humidity:       number;
     }
     {
-        return resolveWeatherAtTime(this._homeHourlyData, t);
+        const w = resolveWeatherAtTime(this._homeHourlyData, t);
+        //Local-sensor overrides beat the model for the live + past window; forecast time falls through (the
+        //nearest-neighbour lookup returns null beyond its window). Cloud also feeds the Haurwitz irradiance/PV
+        //fallback, so a local cloud sensor sharpens that too.
+        if (this._weatherOverrideSamples.size > 0)
+        {
+            const cloud = this._weatherOverrideAt('cloudCover',  t); if (cloud !== null) { w.cloudCover  = Math.max(0, Math.min(100, cloud)); }
+            const prec  = this._weatherOverrideAt('precip',      t); if (prec  !== null) { w.precip      = Math.max(0, prec); }
+            const snow  = this._weatherOverrideAt('snowfall',    t); if (snow  !== null) { w.snowfall    = Math.max(0, snow); }
+            const temp  = this._weatherOverrideAt('temperature', t); if (temp  !== null) { w.temperature = temp; }
+            const hum   = this._weatherOverrideAt('humidity',    t); if (hum   !== null) { w.humidity    = Math.max(0, Math.min(100, hum)); }
+            const code  = this._weatherOverrideAt('code',        t); if (code  !== null) { w.weatherCode = Math.round(code); }
+        }
+        return w;
     }
 
     //Public wrapper for _getTimeRange so the card's 30 s tick can re-fetch the window after midnight rollover.
@@ -999,8 +1021,9 @@ export class HeliosEngine
         const w = this._getWeatherAtTime(t);
 
         //Compute every irradiance candidate; priority sensor > shortwave > Haurwitz (see IrradianceSource).
-        //These are GHI (horizontal); the tilt/azimuth transposition lives in the card-side PV helpers.
-        const pvPowerHaurwitz = computePvPower(t, this.homeLat, this.homeLon, w.cloudCover);
+        //These are ground-horizontal (GHI): the scene shows irradiance, not per-panel production (that comes
+        //measured from the recorder, and modelled by the Helios-Forecast integration).
+        const pvPowerHaurwitz = computePvPercent(t, this.homeLat, this.homeLon, w.cloudCover);
 
         let pvPowerShortwave = -1;
         if (w.shortwave >= 0)
@@ -1039,6 +1062,11 @@ export class HeliosEngine
             cloudLow:         w.cloudLow,
             cloudMid:         w.cloudMid,
             cloudHigh:        w.cloudHigh,
+            precip:           w.precip,
+            snowfall:         w.snowfall,
+            weatherCode:      w.weatherCode,
+            temperature:      w.temperature,
+            humidity:         w.humidity,
             timeRange:        this._getTimeRange(),
             isLiveTime:       this._selectedTime === null,
             pvPower,
@@ -1260,7 +1288,7 @@ export class HeliosEngine
 
     //Drive the renderer's sun position for the current (live or scrubbed) time. The renderer paints the
     //building face shading and cast shadows itself from this azimuth/altitude via one setter, and the ground
-    //re-tints through the graded day/night palette. The ≥1.5° altitude throttle (~6 min of motion) avoids needless redraws.
+    //re-tints through the graded day/night palette. The >=1.5° altitude throttle (~6 min of motion) avoids needless redraws.
     private _refreshShadowsAndAtmosphere(): void
     {
         if (!this._renderer)
@@ -1346,6 +1374,11 @@ export class HeliosEngine
                 cloudLow:         0,
                 cloudMid:         0,
                 cloudHigh:        0,
+                precip:           0,
+                snowfall:         0,
+                weatherCode:      0,
+                temperature:      NaN,
+                humidity:         NaN,
                 timeRange:        this._getTimeRange(),
                 isLiveTime:       this._selectedTime === null,
                 pvPower:          0,
@@ -1473,11 +1506,63 @@ export class HeliosEngine
         this.homeLon   = lon;
         this._fetchLat = lat;
         this._fetchLon = lon;
+        //Both arc caches bake the projection around the home: the scale probe and the per-sample sun points.
+        //Drop them so the arc rebuilds at the new position instead of reusing the old location's geometry.
+        this._arcScaleMemo   = undefined;
+        this._arcInputsCache = undefined;
         void this._renderer?.setLocation(lat, lon, this._groundStyle());
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
         void this._refreshWeather(lat, lon);
+        //New location: fresh retry budget, and drop any pending initial/retry kick for the old one.
+        window.clearTimeout(this._horizonTimer);
+        this._horizonRetryCount = 0;
+        this._refreshHorizon(lat, lon);
+    }
+
+    //Show / hide the drawn horizon ridge line (visual only). The sun gate keeps using the terrain either way, so
+    //this just repaints with or without the crest.
+    public setHorizonLineVisible(visible: boolean): void
+    {
+        if (visible === this._horizonLineVisible) { return; }
+        this._horizonLineVisible = visible;
+        this._renderForCurrentSelection();
+    }
+
+    //Resolve the terrain horizon for the home, off the render path. On success it stores the profile, drops the
+    //arc-sample cache so belowHorizon recomputes against the relief, and repaints. Failure leaves the flat horizon.
+    private _refreshHorizon(lat: number, lon: number): void
+    {
+        this._horizonAbort?.abort();
+        this._horizonAbort = new AbortController();
+        void fetchHorizonProfile(lat, lon, this._horizonAbort.signal).then((profile) =>
+        {
+            if (!profile)
+            {
+                //Cold-start Open-Meteo 429 or a network blip: retry a bounded few times, spaced out, so a transient
+                //failure does not leave the flat horizon until the next home change / reload.
+                if (this._renderer && this._horizonRetryCount < HORIZON_MAX_RETRIES)
+                {
+                    this._horizonRetryCount++;
+                    window.clearTimeout(this._horizonTimer);
+                    this._horizonTimer = window.setTimeout(
+                        () => { if (this._renderer) { this._refreshHorizon(this.homeLat, this.homeLon); } },
+                        HORIZON_RETRY_DELAY_MS);
+                }
+                return;
+            }
+            this._horizonRetryCount = 0;
+            this._horizonProfile = profile;
+            this._arcInputsCache = undefined;
+            this._renderForCurrentSelection();
+        });
+    }
+
+    //Local horizon elevation (deg) at an azimuth, or 0 (flat) when unresolved.
+    private _horizonAt(azimuthDeg: number): number
+    {
+        return horizonAltAt(this._horizonProfile, azimuthDeg);
     }
 
     //Screen-space layout of the on-map readout chips and their leader lines. Returns positions (CSS px
@@ -1670,6 +1755,9 @@ export class HeliosEngine
         sun:      { x: number; y: number; irradiance: number; altitude: number; azimuth: number; nearness: number };
         home:     { x: number; y: number };
         daylight: number;
+        //Terrain-horizon ridge polyline (screen px), the relief silhouette under the sun path. Empty on flat
+        //terrain or when the feature is off.
+        ridge:    { x: number; y: number }[];
         //Horizon crossings on the day's arc, with local tangent angle (rad) so the card draws a ring
         //perpendicular to the arc. Either may be null at high latitudes (polar summer/winter).
         sunrise:  { x: number; y: number; angleRad: number; time: Date } | null;
@@ -1692,8 +1780,7 @@ export class HeliosEngine
         //at the user's actual midnight regardless of timezone).
         const dayStart = new Date(now);
         dayStart.setHours(0, 0, 0, 0);
-        const dayMs = 24 * 60 * 60 * 1000;
-        const stepMs = dayMs / SUN_ARC_SAMPLES;
+        const stepMs = DAY_MS / SUN_ARC_SAMPLES;
 
         //Live cloud cover colours the whole arc; with no reading yet treat as clear (0%) so the arc still
         //shows clear-sky intensity before the first weather fetch.
@@ -1723,6 +1810,7 @@ export class HeliosEngine
                 lat: number;
                 altitudeM: number;
                 altitudeDeg: number;
+                azimuthDeg: number;
                 wm2: number;
                 belowHorizon: boolean;
             } | null)[] = [];
@@ -1735,7 +1823,7 @@ export class HeliosEngine
                     samples.push(null);
                     continue;
                 }
-                //Per-sample: sensor reading within the window, else the analytical clear-sky × cloud model.
+                //Per-sample: sensor reading within the window, else the analytical clear-sky x cloud model.
                 //Mixing along the arc is fine since sensor samples are sparse and the gradient is smooth.
                 const sensorWm2 = this._sensorIrradianceAt(t);
                 const wm2 = sensorWm2 !== null
@@ -1746,10 +1834,12 @@ export class HeliosEngine
                     lat:          sun3D.lat,
                     altitudeM:    sun3D.altitudeM,
                     altitudeDeg:  sun3D.altitudeDeg,
+                    azimuthDeg:   sun3D.azimuthDeg,
                     wm2,
-                    //altitudeM is R·sin(α), same sign as α, so < 0 means below the horizon. Surface a flag,
-                    //not the value, since the card only switches render mode (solid vs dotted).
-                    belowHorizon: sun3D.altitudeM < 0
+                    //Below the LOCAL horizon: the terrain elevation at this azimuth (0 = flat, so this reduces
+                    //to altitude < 0 when no relief profile). Surface a flag, not the value, since the card only
+                    //switches render mode (solid vs dotted).
+                    belowHorizon: sun3D.altitudeDeg <= this._horizonAt(sun3D.azimuthDeg)
                 });
             }
             cache = { dayStartMs, cloudPctInt, scaleKey: arcScaleKey, samples };
@@ -1802,7 +1892,7 @@ export class HeliosEngine
             //Keep a defined sun position even at night so the incidence ray has an anchor and downstream
             //maths stays finite (the ray just isn't drawn). Borrow home's depth so nearness degrades
             //gracefully.
-            sunScreen = { ...homeScreen, depth: homeScreen.depth };
+            sunScreen = { ...homeScreen };
         }
 
         //Depth range across the full arc + the sun, so every element shares one perspective scale. Spans the
@@ -1829,8 +1919,28 @@ export class HeliosEngine
             belowHorizon: p.belowHorizon
         }));
 
-        //daylight: smooth 0..1 ramp on solar altitude (pure ramp in engine/sun-arc).
-        const daylight = daylightRamp(sunNowAlt, SUN_ARC_NIGHT_OPACITY);
+        //Terrain-horizon ridge: the relief silhouette as a CLOSED ring around the home (full 360°, not just the
+        //sun's path, so it encircles the house). Same celestial projection as the arc (horizonSpherePoint) so the
+        //sun meets the crest exactly. Empty on flat terrain or when the feature is off; the card closes the loop.
+        const ridge: { x: number; y: number }[] = [];
+        if (this._horizonLineVisible && horizonPeak(this._horizonProfile) >= HORIZON_MIN_PEAK_DEG)
+        {
+            const ridgeScale = this._sunArcScale();
+            //Fine enough for a smooth ring once projected (the profile itself is interpolated between its buckets).
+            const HORIZON_RIDGE_STEP_DEG = 5;
+            for (let az = 0; az < 360; az += HORIZON_RIDGE_STEP_DEG)
+            {
+                const hp = horizonSpherePoint(this.homeLat, this.homeLon, ridgeScale, az, this._horizonAt(az));
+                const px = this._projectScenePoint(hp.lon, hp.lat, hp.altitudeM);
+                if (px) { ridge.push({ x: px.x, y: px.y }); }
+            }
+        }
+
+        //daylight: smooth 0..1 ramp on solar altitude, but snap to night once the sun drops behind the local
+        //terrain horizon (visual only, the glow fades behind the ridge; production is never touched).
+        const daylight = sunNowAlt <= this._horizonAt(sunNowPos.azimuth)
+            ? SUN_ARC_NIGHT_OPACITY
+            : daylightRamp(sunNowAlt, SUN_ARC_NIGHT_OPACITY);
 
         //Horizon crossings: walk the cached samples for below->above (sunrise) and above->below (sunset)
         //transitions, interpolating linearly between brackets. The tangent comes from the bracketing points
@@ -1901,6 +2011,7 @@ export class HeliosEngine
             },
             home:     { x: homeScreen.x, y: homeScreen.y },
             daylight,
+            ridge,
             sunrise,
             sunset
         };
@@ -1909,7 +2020,7 @@ export class HeliosEngine
     //date -> 3D point on the celestial hemisphere (centred on home) for _projectScenePoint; the pure
     //geometry lives in engine/sun-arc, fed the current kiosk arc scale.
     private _sunSpherePoint(date: Date): {
-        lon: number; lat: number; altitudeM: number; altitudeDeg: number
+        lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number
     } | null
     {
         return sunSpherePoint(date, this.homeLat, this.homeLon, this._sunArcScale());
@@ -1960,6 +2071,9 @@ export class HeliosEngine
         cloudLow:     number[];
         cloudMid:     number[];
         cloudHigh:    number[];
+        //Per-hour temperature (°C) + humidity (%), local sensor override applied where present, else the model.
+        temperature:  number[];
+        humidity:     number[];
     } | null
     {
         const home = this._homeHourlyData;
@@ -1982,8 +2096,8 @@ export class HeliosEngine
             {
                 return sw;
             }
-            //Haurwitz returns a normalised PV %; rescale to W/m² (×10, since 1000 = STC) for one chart unit.
-            const pct = computePvPower(home.times[i], this.homeLat, this.homeLon, home.cloudCover[i] ?? 0);
+            //Haurwitz returns a normalised irradiance %; rescale to W/m² (x10, since 1000 = STC) for one chart unit.
+            const pct = computePvPercent(home.times[i], this.homeLat, this.homeLon, home.cloudCover[i] ?? 0);
             return pct * 10;
         });
 
@@ -1991,12 +2105,19 @@ export class HeliosEngine
         const cloudMid  = home.times.map((_, i) => home.cloudMid[i]  ?? 0);
         const cloudHigh = home.times.map((_, i) => home.cloudHigh[i] ?? 0);
 
+        //Local sensor override beats the model for the live + past hours; forecast hours carry no sample and fall
+        //through to the model value (NaN where the model itself has none).
+        const temperature = home.times.map((_, i) => this._weatherOverrideAt('temperature', home.times[i]) ?? (home.temperature[i] ?? NaN));
+        const humidity    = home.times.map((_, i) => this._weatherOverrideAt('humidity',    home.times[i]) ?? (home.humidity[i]    ?? NaN));
+
         return {
             times:       home.times.slice(),
             irradiance,
             cloudLow,
             cloudMid,
             cloudHigh,
+            temperature,
+            humidity,
         };
     }
 
@@ -2075,6 +2196,8 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
+        this._horizonAbort?.abort();
+        window.clearTimeout(this._horizonTimer);
         this._clearBuildingsRetry();
         this._arcInputsCache         = undefined;
         this._resizeObserver?.disconnect();
