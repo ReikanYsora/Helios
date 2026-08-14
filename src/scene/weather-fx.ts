@@ -42,8 +42,8 @@ export function weatherLayers(w: WxInput): WxLayers
     const storm   = isStormCode(w.code) ? (w.code === 95 ? 0.7 : 1) : 0;
 
     //sqrt gives low-amount sensitivity (a light drizzle/flurry still shows) while saturating at heavy rates.
-    const rain = snowing ? 0 : clamp01(Math.sqrt(Math.max(0, w.precip)) / 2);      //0.25mm→0.25, 1mm→0.5, 4mm→1
-    const snow = snowing ? clamp01(Math.sqrt(Math.max(0, w.snowfall)) / 1.3) : 0;  //0.1cm→0.24, 0.5cm→0.54, 1.7cm→1
+    const rain = snowing ? 0 : clamp01(Math.sqrt(Math.max(0, w.precip)) / 2);      //0.25mm->0.25, 1mm->0.5, 4mm->1
+    const snow = snowing ? clamp01(Math.sqrt(Math.max(0, w.snowfall)) / 1.3) : 0;  //0.1cm->0.24, 0.5cm->0.54, 1.7cm->1
 
     //Day factor fades the sun glow out as the sun nears the horizon (0 at/below horizon, full by ~18°) so sunrise
     //and sunset don't paint a full midday bloom, and night is dark.
@@ -53,8 +53,8 @@ export function weatherLayers(w: WxInput): WxLayers
         sun:    dayFactor * clamp01(1 - cloud01 / 0.85),   //full sun in a clear high sky, gone under cloud or near the horizon
         grey:   clamp01((cloud01 - 0.25) / 0.60),            //grey veil builds in from ~25% cloud
         cloud:  clamp01((cloud01 - 0.30) / 0.55),            //moving cloud shadows from ~30%
-        sat:    1.10 - 0.60 * cloud01,                        //scene saturation: 1.10 → 0.50
-        bright: 1.05 - 0.33 * cloud01,                        //scene brightness: 1.05 → 0.72
+        sat:    1.10 - 0.60 * cloud01,                        //scene saturation: 1.10 -> 0.50
+        bright: 1.05 - 0.33 * cloud01,                        //scene brightness: 1.05 -> 0.72
         rain,
         snow,
         storm,

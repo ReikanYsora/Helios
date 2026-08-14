@@ -351,7 +351,7 @@ const fillNaN       = (arr: (number | null)[]): number[] => arr.map(v => (v == n
 //Single-point hourly forecast at the home location. Reads fresh browser cache, else fetches Open-Meteo with multi-model
 //fusion (median per timestep), user elevation via &elevation= for sharper boundary conditions, and a layer-weighted
 //effective cloud cover matching both ground perception and shortwave attenuation:
-//  effective = low + 0.6·mid + 0.2·high  (capped at 100%)
+//  effective = low + 0.6*mid + 0.2*high  (capped at 100%)
 //This replaces the API's raw cloud_cover (satellite-view total), which over-counts high cirrus on otherwise clear days.
 //Returns null on any failure so the caller can degrade gracefully.
 export async function fetchHomePointData(

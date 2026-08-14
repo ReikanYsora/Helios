@@ -404,7 +404,7 @@ export class SceneHudController
         const batteryWattsForFlow = showPowerChip
             ? Math.abs(pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
             : 0;
-        //Idle: power within sensor-noise margin of zero (±5 W). The leader is still drawn (keeps the
+        //Idle: power within sensor-noise margin of zero (+/-5 W). The leader is still drawn (keeps the
         //spatial relationship) but the dash flow is frozen and the arrow hidden, since any motion would
         //be misleading.
         const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
@@ -619,7 +619,7 @@ export class SceneHudController
 
         //Live irradiance for the W/m² label above the sun disc, also driving the inner-disc fill ratio: at
         //STC (1000 W/m²) the fill reaches the rim, at zero it vanishes. The sqrt mapping linearises AREA
-        //perception (area ∝ r²) so a 50% reading covers half the rim's area, not its radius.
+        //perception (area prop to r²) so a 50% reading covers half the rim's area, not its radius.
         const sunWm2          = sunScene?.sun.irradiance ?? 0;
         const sunIrradText    = formatIrradiance(this.host.hass, sunWm2, valueDec, irradU);
         const sunFillRatio    = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1000)));
@@ -997,10 +997,10 @@ export class SceneHudController
                     >
                         ${(() => {
                             //Sun disc, four layers back-to-front:
-                            //  0. Halo, radial-gradient glow whose radius (3× disc) and opacity scale with
+                            //  0. Halo, radial-gradient glow whose radius (3x disc) and opacity scale with
                             //     irradiance, feathering into the basemap with no hard edge.
                             //  1. Background fill (SUN_FILL_OPACITY_BG) so the empty disc reads as tinted glass.
-                            //  2. Inner fill, radius = sunFillRatio × outer; conveys irradiance (sub-px radii
+                            //  2. Inner fill, radius = sunFillRatio x outer; conveys irradiance (sub-px radii
                             //     vanish, the correct visual for "no sun").
                             //  3. Outer rim (darkened sun colour) for a clear edge against the basemap.
                             //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc

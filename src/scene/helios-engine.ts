@@ -499,7 +499,7 @@ export class HeliosEngine
     private _arcInputsCache?: {
         dayStartMs: number;
         cloudPctInt: number;
-        //Sun-arc scale baked into the points below (×100, rounded). In the key so a resize/zoom rebuilds
+        //Sun-arc scale baked into the points below (x100, rounded). In the key so a resize/zoom rebuilds
         //the arc at the new size.
         scaleKey: number;
         samples: ({
@@ -540,7 +540,7 @@ export class HeliosEngine
 
         //Create the map immediately regardless of container size: in some layouts (Masonry) neither the
         //ResizeObserver nor the IntersectionObserver fires, so deferring until one reports "ready" would
-        //leave the map null. The post-load resize handling covers any 0×0-at-init case.
+        //leave the map null. The post-load resize handling covers any 0x0-at-init case.
         this._initMapInstance(container);
     }
 
@@ -1267,7 +1267,7 @@ export class HeliosEngine
 
     //Drive the renderer's sun position for the current (live or scrubbed) time. The renderer paints the
     //building face shading and cast shadows itself from this azimuth/altitude via one setter, and the ground
-    //re-tints through the graded day/night palette. The ≥1.5° altitude throttle (~6 min of motion) avoids needless redraws.
+    //re-tints through the graded day/night palette. The >=1.5° altitude throttle (~6 min of motion) avoids needless redraws.
     private _refreshShadowsAndAtmosphere(): void
     {
         if (!this._renderer)
@@ -1782,7 +1782,7 @@ export class HeliosEngine
                     samples.push(null);
                     continue;
                 }
-                //Per-sample: sensor reading within the window, else the analytical clear-sky × cloud model.
+                //Per-sample: sensor reading within the window, else the analytical clear-sky x cloud model.
                 //Mixing along the arc is fine since sensor samples are sparse and the gradient is smooth.
                 const sensorWm2 = this._sensorIrradianceAt(t);
                 const wm2 = sensorWm2 !== null
@@ -2055,7 +2055,7 @@ export class HeliosEngine
             {
                 return sw;
             }
-            //Haurwitz returns a normalised irradiance %; rescale to W/m² (×10, since 1000 = STC) for one chart unit.
+            //Haurwitz returns a normalised irradiance %; rescale to W/m² (x10, since 1000 = STC) for one chart unit.
             const pct = computePvPercent(home.times[i], this.homeLat, this.homeLon, home.cloudCover[i] ?? 0);
             return pct * 10;
         });

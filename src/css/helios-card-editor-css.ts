@@ -292,7 +292,7 @@ export const editorStyles = css`
         opacity: 0.85;
         margin-bottom: 8px;
     }
-    /*  Shared action button (reset cache / reset options / …): icon + label, tinted by --btn-color (set inline),
+    /*  Shared action button (reset cache / reset options / ...): icon + label, tinted by --btn-color (set inline),
         full width so every action button reads as one consistent row. The filled variant inverts to a solid fill
         for a destructive confirm. */
     .action-btn

@@ -520,7 +520,7 @@ function pathOf(pts: [number, number][], hole = false): string
     return ring.map((q, k) => `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('') + 'Z';
 }
 
-//Build an even-odd path (`M…L…Z` per ring) from projected rings, each clipped to the card box. Rings that fall
+//Build an even-odd path (`M...L...Z` per ring) from projected rings, each clipped to the card box. Rings that fall
 //fully off-card are dropped; returns '' when nothing survives.
 function ringsPath(rings: Point[][], r: ClipRect): string
 {

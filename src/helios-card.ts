@@ -1139,7 +1139,7 @@ export class HeliosCard extends LitElement
 
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
-        //(one hash compare), ~50 ms for a full 480 × 7 bucketization + forecast pass on a real refresh.
+        //(one hash compare), ~50 ms for a full 480 x 7 bucketization + forecast pass on a real refresh.
         this._maybeRebuildUnifiedStore();
 
         //Drive the home prism's colour from the active chip. The squash/grow plays only when the chip
