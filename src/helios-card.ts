@@ -251,6 +251,10 @@ export class HeliosCard extends LitElement
     //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
     //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
     @state() _chartTarget: ChartTarget = 'production';
+    //True once the user has picked a chip or a saved pick was restored. Until then the target tracks the first
+    //available chip as the Energy config resolves (see updated()), so a card with no solar never sits on an empty
+    //production selection at load.
+    private _chartTargetExplicit = false;
     //Detail panel (scene mode): a compact top-right readout aggregating the selected metric over the window. Any
     //chip tap opens it (alongside re-pointing the chart) and a tap on the scene closes it. Bound to the active
     //chip, not a target, so switching chips while open just re-points it.
@@ -467,6 +471,8 @@ export class HeliosCard extends LitElement
     //Chip -> bottom-chart re-targeting. Points the chart at the clicked metric; no-op when already there.
     setChartTarget = (target: ChartTarget): void =>
     {
+        //A deliberate pick: from here the target is the user's, never re-resolved to the default.
+        this._chartTargetExplicit = true;
         if (this._chartTarget !== target)
         {
             this._chartTarget = target;
@@ -1146,6 +1152,15 @@ export class HeliosCard extends LitElement
         //Restore the saved selected chip once coords resolve (idempotent; retries until ready).
         this._restoreUiState();
 
+        //Default chart target: until the user has picked a chip (or a saved pick was restored), track the first
+        //configured + visible target as the Energy config resolves (consumption -> production -> grid -> battery
+        //-> groups), so a card with no solar never opens on an empty production selection.
+        if (!this._chartTargetExplicit && _changedProperties.has('_energyDefaults'))
+        {
+            const resolved = firstAvailableChartTarget(this.config, this._energyDefaults);
+            if (resolved && resolved !== this._chartTarget) { this._chartTarget = resolved; }
+        }
+
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
         //(one hash compare), ~50 ms for a full 480 x 7 bucketization + forecast pass on a real refresh.
@@ -1710,7 +1725,9 @@ export class HeliosCard extends LitElement
                 const valid: ChartTarget[] = ['production', 'consumption', 'grid', 'battery', 'battery-soc', 'irradiance', 'temperature', 'humidity', 'cost', ...GROUP_TARGETS];
                 if (typeof parsed.chartTarget === 'string' && valid.includes(parsed.chartTarget as ChartTarget))
                 {
+                    //A restored pick is the user's own, so it stands and is never re-resolved to the default.
                     this._chartTarget = parsed.chartTarget as ChartTarget;
+                    this._chartTargetExplicit = true;
                 }
                 if (typeof parsed.timelineMode === 'string' && parsed.timelineMode in TIMELINE_MODES)
                 {
