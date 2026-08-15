@@ -44,6 +44,23 @@ only a display preference for how the chip shows `+` / `-`; it never affects the
 flow, which is why it could not fix the direction. It is now labelled to make
 that clear.
 
+### Fixed: no more phantom rain under a clear sky
+
+The scene drew rain from the faintest trace of forecast precipitation, so a
+hundredth of a millimetre in an hour, the kind a clear-sky forecast still
+reports, could sprinkle rain across a cloudless scene. Precipitation below a
+light-rain threshold now stays dry; real rain and snow are unchanged. Thanks to
+@FoxP and @MatCos.
+
+### Fixed: border locations get the right regional weather model
+
+Helios pairs a global weather model with the best regional high-resolution one
+for your location. The regional coverage areas overlap at national borders, and
+the first area listed used to win, so a place near a border, or anywhere inside a
+smaller area enclosed by a larger one, could be read with a neighbour's model.
+The card now picks the area your location sits most centrally within, so the
+regional model matches where you actually are. Thanks to @MatCos.
+
 ---
 
 ## 2026.9.0

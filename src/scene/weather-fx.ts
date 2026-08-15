@@ -32,18 +32,24 @@ export interface WxLayers
 const isSnowCode  = (c: number): boolean => (c >= 71 && c <= 77) || c === 85 || c === 86;
 const isStormCode = (c: number): boolean => c === 95 || c === 96 || c === 99;
 
+//A forecast can report a hair of precipitation (0.05 mm in an hour, from rounding or dew) under an otherwise clear
+//sky. That is a trace, not weather to draw, so below these floors the precipitation layers stay off; real light rain
+//(>= 0.1 mm/h) and light snow still paint. Without the floor the sqrt curve turns 0.05 mm into visible rain.
+const RAIN_MIN_MM = 0.1;
+const SNOW_MIN_CM = 0.1;
+
 //Map real weather to layer strengths. The sun's brightness derives from the cloud cover; precipitation falls as
 //rain unless it's snowing (snowfall or a snow code), in which case the snow layer takes over; thunderstorm codes
 //add the storm/lightning layer on top of whatever precipitation is falling.
 export function weatherLayers(w: WxInput): WxLayers
 {
     const cloud01 = clamp01(w.cloud / 100);
-    const snowing = w.snowfall > 0 || isSnowCode(w.code);
+    const snowing = w.snowfall >= SNOW_MIN_CM || isSnowCode(w.code);
     const storm   = isStormCode(w.code) ? (w.code === 95 ? 0.7 : 1) : 0;
 
     //sqrt gives low-amount sensitivity (a light drizzle/flurry still shows) while saturating at heavy rates.
-    const rain = snowing ? 0 : clamp01(Math.sqrt(Math.max(0, w.precip)) / 2);      //0.25mm->0.25, 1mm->0.5, 4mm->1
-    const snow = snowing ? clamp01(Math.sqrt(Math.max(0, w.snowfall)) / 1.3) : 0;  //0.1cm->0.24, 0.5cm->0.54, 1.7cm->1
+    const rain = (snowing || w.precip < RAIN_MIN_MM) ? 0 : clamp01(Math.sqrt(w.precip) / 2); //0.25mm->0.25, 1mm->0.5, 4mm->1
+    const snow = snowing ? clamp01(Math.sqrt(Math.max(0, w.snowfall)) / 1.3) : 0;            //0.1cm->0.24, 0.5cm->0.54, 1.7cm->1
 
     //Day factor fades the sun glow out as the sun nears the horizon (0 at/below horizon, full by ~18°) so sunrise
     //and sunset don't paint a full midday bloom, and night is dark.
