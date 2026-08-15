@@ -87,11 +87,17 @@ function needsProjectedGround(): boolean
     //2. An entry / mid Android GPU that mis-composites the 3D tilt even though its texture cap is ample (e.g. a
     //   Mali-G52 reports 8192): keyed on the GPU string.
     if (isEntryAndroidGpu(renderer)) { return true; }
-    //3. Renderer masked for privacy (empty): fall back to the one numeric hardware-tier signal we have. The devices
-    //   that choke are all low-memory (<= 4 GB); deviceMemory is coarse (Chrome-only, capped, rounded), so it is a
-    //   last resort, not the primary test.
+    //3. Renderer masked for privacy (empty). On Android this is the WebView case (the Home Assistant app, the Kiosk
+    //   app): they hide the GPU name, so isEntryAndroidGpu above can never fire there even on the exact entry GPUs it
+    //   targets, and the flicker / colored-noise goes unfixed. With the name hidden we cannot rule out an affected
+    //   GPU and there is no other runtime signal that separates entry from flagship (both report an ample texture cap
+    //   and coarse memory), so we err onto the projected path whenever the name is hidden on Android: it is
+    //   near-equivalent and the alternative leaves the WebViews broken.
     if (renderer === '' && typeof navigator !== 'undefined')
     {
+        if (/\bAndroid\b/i.test(navigator.userAgent || '')) { return true; }
+        //Non-Android with a masked name: fall back to the one numeric hardware-tier signal we have. The devices that
+        //choke are all low-memory (<= 4 GB); deviceMemory is coarse (Chrome-only, capped, rounded), a last resort.
         const mem = (navigator as { deviceMemory?: number }).deviceMemory;
         if (typeof mem === 'number' && mem <= 4) { return true; }
     }

@@ -5,7 +5,7 @@ import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, irradianceUnit } from '../core/config/helios-config';
 import { consumptionLoad } from '../core/energy';
-import { ENERGY_COLOR, energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
+import { ENERGY_COLOR, energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, formatTemperature, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { valueAt } from '../data/unifiedStore';
 import { wattsAtFromChangeSeries, type ChangeBucket } from '../data/sources/energy-stats';
@@ -441,7 +441,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" style="color:${chipSlotColor(el, host.config, 'temperature')}" icon=${chipSlotIcon(host.config, 'temperature', 'mdi:thermometer')}></ha-icon>
                         <span class="tb-hover-tooltip-name">${tgtName}</span>
-                        <span class="tb-hover-tooltip-value">${tempV.toFixed(1)} °C</span>
+                        <span class="tb-hover-tooltip-value">${formatTemperature(host.hass, tempV)}</span>
                     </div>
                 ` : nothing}
                 ${target === 'humidity' && isFinite(humV) ? html`

@@ -61,9 +61,36 @@ export function medianOfNumbers(values: readonly (number | null | undefined)[]):
 }
 
 
-//Pick the Open-Meteo models for a coordinate: always one global model (ECMWF IFS 0.25°) plus the best regional model if
-//the point falls inside its (deliberately conservative) coverage box.
-//Order matters: regions whose box is enclosed by a larger neighbour (e.g. Korea inside Japan) MUST be tested first.
+//A regional high-resolution model and its (deliberately conservative) coverage box.
+interface RegionalModel { model: string; latMin: number; latMax: number; lonMin: number; lonMax: number; }
+
+const REGIONAL_MODELS: RegionalModel[] = [
+    //France métropolitaine + Corsica. AROME-France HD at 1.3 km.
+    { model: 'meteofrance_seamless',        latMin: 41.3, latMax: 51.2, lonMin: -5.5,   lonMax: 8.5 },
+    //United Kingdom & Ireland. UKMO UK 2 km.
+    { model: 'ukmo_seamless',               latMin: 49.5, latMax: 61.0, lonMin: -10.5,  lonMax: 2.0 },
+    //Central Europe, DE/AT/CH/CZ/PL/Benelux. ICON-D2 at 2 km.
+    { model: 'dwd_icon_seamless',           latMin: 46.0, latMax: 56.0, lonMin: 5.0,    lonMax: 22.0 },
+    //Italy proper (peninsula + islands).
+    { model: 'italia_meteo_arpae_icon_2i',  latMin: 36.5, latMax: 47.0, lonMin: 10.0,   lonMax: 18.5 },
+    //Nordics, Norway/Sweden/Finland/Denmark. MET Nordic at 1 km.
+    { model: 'metno_seamless',              latMin: 54.5, latMax: 71.5, lonMin: 4.0,    lonMax: 32.0 },
+    //Continental US (CONUS). NOAA HRRR 3 km via gfs_seamless.
+    { model: 'gfs_seamless',                latMin: 24.5, latMax: 49.5, lonMin: -125.0, lonMax: -66.5 },
+    //Korea. KMA at 1.5 km. Its box sits inside the Japan box; the resolver below picks it anyway.
+    { model: 'kma_seamless',                latMin: 33.0, latMax: 39.0, lonMin: 124.5,  lonMax: 132.0 },
+    //Japan. JMA MSM 5 km.
+    { model: 'jma_seamless',                latMin: 24.0, latMax: 46.0, lonMin: 122.0,  lonMax: 146.0 },
+    //Australia & NZ. BOM ACCESS-G 15 km.
+    { model: 'bom_access_global',           latMin: -47.5, latMax: -10.0, lonMin: 112.0, lonMax: 179.0 },
+];
+
+//Pick the Open-Meteo models for a coordinate: always one global model (ECMWF IFS 0.25°) plus the best regional model
+//if the point falls inside its coverage box. The boxes overlap (national borders are fuzzy: eastern France also sits
+//in the Central-Europe box, southern England in the France box, Korea entirely inside Japan). Of every box the point
+//falls in, we keep the one it sits most centrally inside, measured as a fraction of each box's own size. That single
+//rule resolves both a partial border overlap (deepest of the two neighbours wins) and a fully enclosed box (Korea's
+//small box scores higher than the vast Japan box at the same point), with no reliance on declaration order.
 export function pickModelsForLocation(lat: number, lon: number, precision: 'standard' | 'high'): string[]
 {
     if (precision === 'standard')
@@ -73,50 +100,32 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 
     const GLOBAL = 'ecmwf_ifs025';
 
-    //France métropolitaine + Corsica. AROME-France HD at 1.3 km.
-    if (lat >= 41.3 && lat <= 51.2 && lon >= -5.5 && lon <= 8.5)
+    let best: RegionalModel | undefined;
+    let bestScore = -Infinity;
+    for (const r of REGIONAL_MODELS)
     {
-        return ['meteofrance_seamless', GLOBAL];
+        if (lat < r.latMin || lat > r.latMax || lon < r.lonMin || lon > r.lonMax)
+        {
+            continue;
+        }
+        //Distance to the nearest edge as a fraction of the box's extent (0 on an edge, 0.5 dead centre). The
+        //fraction, not the raw margin, is what lets a small enclosed box outscore a large enclosing one.
+        const score = Math.min(
+            (lat - r.latMin) / (r.latMax - r.latMin),
+            (r.latMax - lat) / (r.latMax - r.latMin),
+            (lon - r.lonMin) / (r.lonMax - r.lonMin),
+            (r.lonMax - lon) / (r.lonMax - r.lonMin),
+        );
+        if (score > bestScore)
+        {
+            bestScore = score;
+            best = r;
+        }
     }
-    //United Kingdom & Ireland. UKMO UK 2 km.
-    if (lat >= 49.5 && lat <= 61.0 && lon >= -10.5 && lon <= 2.0)
+
+    if (best)
     {
-        return ['ukmo_seamless', GLOBAL];
-    }
-    //Central Europe, DE/AT/CH/CZ/PL/Benelux. ICON-D2 at 2 km.
-    if (lat >= 46.0 && lat <= 56.0 && lon >= 5.0 && lon <= 22.0)
-    {
-        return ['dwd_icon_seamless', GLOBAL];
-    }
-    //Italy proper (peninsula + islands).
-    if (lat >= 36.5 && lat <= 47.0 && lon >= 10.0 && lon <= 18.5)
-    {
-        return ['italia_meteo_arpae_icon_2i', GLOBAL];
-    }
-    //Nordics, Norway/Sweden/Finland/Denmark. MET Nordic at 1 km.
-    if (lat >= 54.5 && lat <= 71.5 && lon >= 4.0 && lon <= 32.0)
-    {
-        return ['metno_seamless', GLOBAL];
-    }
-    //Continental US (CONUS). NOAA HRRR 3 km via gfs_seamless.
-    if (lat >= 24.5 && lat <= 49.5 && lon >= -125.0 && lon <= -66.5)
-    {
-        return ['gfs_seamless', GLOBAL];
-    }
-    //Korea, must be tested before Japan (the JMA box encloses Korea).
-    if (lat >= 33.0 && lat <= 39.0 && lon >= 124.5 && lon <= 132.0)
-    {
-        return ['kma_seamless', GLOBAL];
-    }
-    //Japan. JMA MSM 5 km.
-    if (lat >= 24.0 && lat <= 46.0 && lon >= 122.0 && lon <= 146.0)
-    {
-        return ['jma_seamless', GLOBAL];
-    }
-    //Australia & NZ. BOM ACCESS-G 15 km.
-    if (lat >= -47.5 && lat <= -10.0 && lon >= 112.0 && lon <= 179.0)
-    {
-        return ['bom_access_global', GLOBAL];
+        return [best.model, GLOBAL];
     }
     //Anywhere else: ECMWF + GFS in parallel, two independent global models median better than one.
     return [GLOBAL, 'gfs_seamless'];

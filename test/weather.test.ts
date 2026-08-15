@@ -58,10 +58,20 @@ describe('pickModelsForLocation', () =>
         expect(pickModelsForLocation(52.52, 13.40, 'high')).toEqual(['dwd_icon_seamless', 'ecmwf_ifs025']);       //Berlin
     });
 
-    it('tests Korea before Japan (the JMA box encloses Korea)', () =>
+    it('picks the enclosed box over the enclosing one (Korea sits inside Japan)', () =>
     {
         expect(pickModelsForLocation(37.5665, 126.9780, 'high')).toEqual(['kma_seamless', 'ecmwf_ifs025']); //Seoul
         expect(pickModelsForLocation(35.6762, 139.6503, 'high')).toEqual(['jma_seamless', 'ecmwf_ifs025']); //Tokyo
+    });
+
+    it('resolves overlapping border boxes by which one the point sits most centrally inside', () =>
+    {
+        //Southern England is inside both the France and the UK box; it belongs to UK.
+        expect(pickModelsForLocation(50.9, -1.4, 'high')).toEqual(['ukmo_seamless', 'ecmwf_ifs025']); //Southampton
+        //Western Germany is inside both the France and the Central-Europe box; it belongs to Central Europe.
+        expect(pickModelsForLocation(50.94, 6.96, 'high')).toEqual(['dwd_icon_seamless', 'ecmwf_ifs025']); //Cologne
+        //Eastern France stays with France even though it also falls in the Central-Europe box.
+        expect(pickModelsForLocation(47.24, 6.02, 'high')).toEqual(['meteofrance_seamless', 'ecmwf_ifs025']); //Besançon
     });
 
     it('falls back to two independent globals outside every box', () =>

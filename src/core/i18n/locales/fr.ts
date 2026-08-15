@@ -109,12 +109,12 @@ export const fr: Translations = {
     irradianceUnit: "Unité de constante solaire",
     irradianceUnitHelp:
       "Unité de la constante solaire (irradiance) affichée au-dessus du soleil.",
-    batterySign: "Signe batterie",
+    batterySign: "Badge batterie : charge affichée en",
     batterySignHelp:
-      "Signe affiché sur le chip batterie. Par défaut : moins en charge, plus en décharge. Inversé : l'inverse. Masqué : la valeur sans signe.",
-    batterySignDefault: "Par défaut",
-    batterySignInverted: "Inversé",
-    batterySignHidden: "Masqué",
+      "Ce réglage change seulement l'affichage du badge (le signe + ou -), pas le flux : le sens charge/décharge est déterminé automatiquement à partir des compteurs de votre dashboard Énergie.",
+    batterySignDefault: "- en charge",
+    batterySignInverted: "+ en charge",
+    batterySignHidden: "Masqué (magnitude seule)",
     noUiMode: "Mode sans interface",
     noUiModeHint:
       "Fait disparaître la timeline et les contrôles de la carte après quelques secondes d'inactivité. Le moindre appui ou mouvement les fait revenir. Idéal pour un affichage mural.",

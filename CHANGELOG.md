@@ -7,6 +7,83 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.1
+
+A follow-up to 2026.9.0 that sharpens the details: the card follows your Home
+Assistant units, the weather reads truer (no phantom rain, real rain and snow
+intensity, and the right regional model at borders), the live cost chip stays
+honest when a price source lags, the battery flow self-corrects, and the
+entry-tablet fix now reaches the Home Assistant app.
+
+### Added: follow your Home Assistant units (temperature, and W/ft2)
+
+The temperature readouts (chip, detail panel, timeline tooltip) now follow your
+**Home Assistant unit system**, so an imperial install reads Fahrenheit like
+every other entity. A local `temperature-entity` in `°F` or `K` is normalised at
+ingest too, fixing a case where its readings were stored as if they were Celsius
+and polluted the curve. The irradiance unit gains **`W/ft²`** alongside `W/m²`
+and `kW/m²`. Thanks to @danswett.
+
+### Fixed: the live cost chip no longer freezes on a stale price
+
+When a cost statistic lags (a utility integration that backfills a day at a time
+can sit hours behind), the live cost chip could freeze on an old bucket and show
+it as "now". It now falls back to price times power when the statistics go stale,
+checked per direction, so the chip stays live. Thanks to @danswett.
+
+### Fixed: the battery flow direction now self-corrects
+
+The live battery chip and its flow take their direction from the battery's power
+sensor, assuming Home Assistant's discharge-positive convention. Some batteries
+report the opposite, so the flow (and the animated dot) ran backwards even though
+the Energy dashboard was right. Helios now cross-checks the live sensor against
+your directional charge and discharge energy meters and **corrects the direction
+automatically**, with nothing to configure.
+
+**If you had set the battery sign option to work around this, your chip may now
+read backwards: set it back to the default.** That option is, and always was,
+only a display preference for how the chip shows `+` / `-`; it never affects the
+flow, which is why it could not fix the direction. It is now labelled to make
+that clear.
+
+### Fixed: no more phantom rain under a clear sky
+
+The scene drew rain from the faintest trace of forecast precipitation, so a
+hundredth of a millimetre in an hour, the kind a clear-sky forecast still
+reports, could sprinkle rain across a cloudless scene. Precipitation below a
+light-rain threshold now stays dry; real rain and snow still paint. Thanks to
+@FoxP and @MatCos.
+
+### Changed: rain and snow show their real intensity
+
+The amount of rain or snow the scene drew climbed too fast and then flattened
+out: a trace already looked like steady rain, and everything from a moderate
+shower upward drew the same, so a downpour and a violent storm were
+indistinguishable. Rain and snow density now follow the standard meteorological
+intensity classes, so a drizzle reads light and a storm reads heavy, across the
+full range. Thanks to @MatCos.
+
+### Fixed: border locations get the right regional weather model
+
+Helios pairs a global weather model with the best regional high-resolution one
+for your location. The regional coverage areas overlap at national borders, and
+the first area listed used to win, so a place near a border, or anywhere inside a
+smaller area enclosed by a larger one, could be read with a neighbour's model.
+The card now picks the area your location sits most centrally within, so the
+regional model matches where you actually are. Thanks to @MatCos.
+
+### Fixed: the entry-tablet flicker fix now reaches the Home Assistant app
+
+2026.9.0 moved entry-level tablets onto a lighter drawing path to stop the whole
+view flickering, but it recognised the affected graphics only when the browser
+exposed the chip name. The Home Assistant app and kiosk WebViews hide that name
+for privacy, so the flicker returned inside them even though Chrome on the very
+same tablet was fine. On Android, Helios now treats a hidden graphics name as
+reason enough to use the lighter path, so the app and kiosk views are covered too.
+Thanks to @charleslales and @Richaaldo (#370).
+
+---
+
 ## 2026.9.0
 
 The weather release, "Your real sky": the scene now reflects the weather over

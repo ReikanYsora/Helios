@@ -96,12 +96,12 @@ export const en: Translations = {
     irradianceUnit: "Solar constant unit",
     irradianceUnitHelp:
       "Unit for the solar constant (irradiance) readout above the sun.",
-    batterySign: "Battery sign",
+    batterySign: "Battery chip: charge shown as",
     batterySignHelp:
-      "Sign shown on the battery chip. Default is minus while charging and plus while discharging. Inverted flips it. Hidden shows the value with no sign.",
-    batterySignDefault: "Default",
-    batterySignInverted: "Inverted",
-    batterySignHidden: "Hidden",
+      "This only changes how the badge is shown (the + or - sign), not the flow: the charge and discharge direction is detected automatically from your Energy dashboard meters.",
+    batterySignDefault: "- when charging",
+    batterySignInverted: "+ when charging",
+    batterySignHidden: "Hidden (magnitude only)",
     weatherEnabled: "Weather effects",
     weatherEnabledHint:
       "Paint the real sky over the scene: sunshine, clouds, rain, snow and thunderstorms from your local weather, following the timeline as you scrub. Off keeps a clear scene.",

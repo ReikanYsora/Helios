@@ -80,6 +80,12 @@ export const HA_DAILY_TOTALS_TTL_MS = 25_000;
 export const FORECAST_THROTTLE_MS   = 5 * 60_000;
 export const WS_DEFAULT_TIMEOUT_MS  = 30_000;
 export const WS_MAX_CONCURRENT_FETCHES = 2;
+//Freshness ceiling on HA's cost statistics when they drive the LIVE cost chip. Cost statistics are hourly, so the
+//current hour's bucket only commits once that hour closes: up to ~1 h of lag is normal and must not trip this.
+//Past it the source is genuinely behind - a utility integration (Opower and friends) syncs a day at a time and can
+//sit 16 h back - and its newest bucket is a stale number, not "now". Scrubbing is unaffected: a hovered instant
+//asks for a past bucket, where age is the point rather than a problem.
+export const COST_STAT_MAX_AGE_MS   = 2 * HOUR_MS;
 
 //=== Misc thresholds ===
 export const EQ_EPS_PX = 0.25;
@@ -123,6 +129,16 @@ export const GUARD_NEGATIVE_BAND_W    = -50;
 export const GUARD_RELATIVE_BAND      = 0.2;
 export const GUARD_CONTRADICTION_HOURS = 3;
 export const GUARD_CLEAN_EVALS        = 3;
+
+//Battery-sign guard: the live battery `stat_rate` is assumed discharge-positive and flipped to the card's
+//charge-positive convention, but some sensors report the opposite, so the flow ran backwards. The guard cross-checks
+//the raw rate's dominant sign each hour against the structural direction from the directional charge/discharge meters
+//(reusing GUARD_REFRESH_MS + GUARD_WINDOW_MS). An hour counts only when its net battery energy clears MIN_KWH; the
+//sensor is judged inverted after INVERT_HOURS such hours contradict the assumption, and self-clears after CLEAN_EVALS
+//agreeing evaluations.
+export const BATTERY_GUARD_MIN_KWH     = 0.05;
+export const BATTERY_GUARD_INVERT_HOURS = 3;
+export const BATTERY_GUARD_CLEAN_EVALS = 3;
 
 
 //=== Buildings / OpenFreeMap ===
