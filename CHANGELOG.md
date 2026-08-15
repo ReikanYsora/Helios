@@ -9,9 +9,11 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.1
 
-A follow-up to 2026.9.0: the card follows your Home Assistant units, the live
-cost chip stays honest when a price source lags, and the battery flow corrects
-its own direction.
+A follow-up to 2026.9.0 that sharpens the details: the card follows your Home
+Assistant units, the weather reads truer (no phantom rain, real rain and snow
+intensity, and the right regional model at borders), the live cost chip stays
+honest when a price source lags, the battery flow self-corrects, and the
+entry-tablet fix now reaches the Home Assistant app.
 
 ### Added: follow your Home Assistant units (temperature, and W/ft2)
 
