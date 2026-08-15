@@ -29,7 +29,7 @@ import { heliosCardStyles } from './css/helios-card-scene-css';
 import { weatherOverlay, WeatherRain, WeatherSnow, WeatherStorm, weatherLayers, type WxInput } from './scene/weather-fx';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { setServerTimeZone, serverMsOfDay } from './core/time/timezone';
-import { isDarkFromCss, resolveUiColor } from './core/format/format';
+import { isDarkFromCss, resolveUiColor, formatTemperature } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
 import
 {
@@ -1037,7 +1037,7 @@ export class HeliosCard extends LitElement
         //When a day curve is up, only the active chip is visible; the other stays in the DOM as an invisible
         //placeholder so the visible chip keeps its slot (the centered row must not shift when its sibling drops).
         const hidden = this._dayCurveOpen && this._chartTarget !== 'temperature';
-        return this._cornerChip('temperature', `${this._temperature.toFixed(1)} °C`, hidden);
+        return this._cornerChip('temperature', formatTemperature(this.hass, this._temperature), hidden);
     }
     private _renderHumidityChip(): TemplateResult | typeof nothing
     {

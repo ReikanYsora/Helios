@@ -128,7 +128,7 @@ export interface HeliosConfig
     'cache-id'?:                unknown;
     //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW'. Energy always stays kWh.
     'power-unit'?:             unknown;
-    //Irradiance (solar constant) readout unit: 'W/m²' or 'kW/m²'. Default 'W/m²'.
+    //Irradiance (solar constant) readout unit: 'W/m²', 'kW/m²' or 'W/ft²'. Default 'W/m²'.
     'irradiance-unit'?:        unknown;
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
@@ -226,10 +226,13 @@ export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 }
 
 
-//Resolved irradiance (solar constant) readout unit ('W/m²' or 'kW/m²'). Default 'W/m²'.
-export function irradianceUnit(config: HeliosConfig | undefined): 'W/m²' | 'kW/m²'
+//Resolved irradiance (solar constant) readout unit ('W/m²', 'kW/m²' or 'W/ft²'). Default 'W/m²'.
+export function irradianceUnit(config: HeliosConfig | undefined): 'W/m²' | 'kW/m²' | 'W/ft²'
 {
-    return config?.['irradiance-unit'] === 'kW/m²' ? 'kW/m²' : 'W/m²';
+    const raw = config?.['irradiance-unit'];
+    if (raw === 'kW/m²') { return 'kW/m²'; }
+    if (raw === 'W/ft²') { return 'W/ft²'; }
+    return 'W/m²';
 }
 
 

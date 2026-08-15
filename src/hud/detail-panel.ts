@@ -5,7 +5,7 @@
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { formatEnergyKwh, formatIrradiance } from '../core/format/format';
+import { formatEnergyKwh, formatIrradiance, formatTemperature } from '../core/format/format';
 import { powerUnit, valueDecimals, irradianceUnit } from '../core/config/helios-config';
 import { chipSlotIcon } from '../core/config/chip-appearance';
 import { buildPeriodData, layerPeriodTotal, periodTotal, hourlyOf, type PeriodHost, type PeriodData } from '../data/period-totals/period-totals';
@@ -156,7 +156,7 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
             if (a.count > 0)
             {
                 const fmt = target === 'temperature'
-                    ? (v: number): string => `${v.toFixed(1)} °C`
+                    ? (v: number): string => formatTemperature(hass, v)
                     : (v: number): string => `${Math.round(v)} %`;
                 rows.push(
                     { icon: 'mdi:trending-up',   value: fmt(a.max) },

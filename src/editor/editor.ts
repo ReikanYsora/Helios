@@ -1181,7 +1181,7 @@ export class HeliosCardEditor extends LitElement
                     [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }], 'kW',
                     t.editor.powerUnitHelp)}
                 ${this._renderSelect('irradiance-unit', t.editor.irradianceUnit,
-                    [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }], 'W/m²',
+                    [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }, { value: 'W/ft²', label: 'W/ft²' }], 'W/m²',
                     t.editor.irradianceUnitHelp)}
                 ${this._renderSelect('sun-chip-mode', t.editor.sunChipMode,
                     [{ value: 'irradiance', label: t.editor.sunChipModeIrradiance },

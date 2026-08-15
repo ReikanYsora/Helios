@@ -92,7 +92,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `display-update-frequency-per-hour` | 1-6 | `4` | Storage + render cadence (buckets per hour) for the data store, every graph and the day curve's own resolution. `4` = 15-minute granularity (the HA Energy bucket size); raise for smoother curves, lower to save memory. Live numeric chips bypass this and stay on the direct `hass.states` path. |
 | `value-decimals` | 0-3 | `1` | Decimal places on every kW / kWh / % readout. |
 | `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips). Energy follows it, so `kW` pairs with `kWh` and `W` with `Wh`. |
-| `irradiance-unit` | `W/m²` \| `kW/m²` | `W/m²` | Unit for the solar-constant (irradiance) readout above the sun. |
+| `irradiance-unit` | `W/m²` \| `kW/m²` \| `W/ft²` | `W/m²` | Unit for the solar-constant (irradiance) readout above the sun. |
 | `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
 | `max-expected-power` | 500-30000 W | `5000` | Reference power at which a flow animates at full speed, so every flow shares one honest pace. Raise it for a large installation, lower it for a small one. |
 
@@ -115,9 +115,11 @@ The card paints the real weather over the scene (see the README). Everything her
 
 Point any weather reading at your own station; it takes over from Open-Meteo for the live and past hours, while the forecast stays on the model.
 
+Readings are normalised from the unit the entity declares, so a `°F` or `K` probe is handled the same as a `°C` one. The temperature readout itself follows your Home Assistant unit system (Settings > System > General), not the sensor's unit.
+
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `temperature-entity` | entity_id | none | Local outdoor-temperature sensor. |
+| `temperature-entity` | entity_id | none | Local outdoor-temperature sensor (`°C`, `°F` or `K`). |
 | `humidity-entity` | entity_id | none | Local relative-humidity sensor. |
 | `cloud-cover-entity` | entity_id | none | Local cloud-cover sensor (%). |
 | `precipitation-entity` | entity_id | none | Local precipitation sensor (mm). |
