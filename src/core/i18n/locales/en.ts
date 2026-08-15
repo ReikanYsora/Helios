@@ -98,7 +98,7 @@ export const en: Translations = {
       "Unit for the solar constant (irradiance) readout above the sun.",
     batterySign: "Battery chip: charge shown as",
     batterySignHelp:
-      "Display only, it does not change the flow. The charge and discharge direction is detected automatically from your Energy dashboard meters.",
+      "This only changes how the badge is shown (the + or - sign), not the flow: the charge and discharge direction is detected automatically from your Energy dashboard meters.",
     batterySignDefault: "- when charging",
     batterySignInverted: "+ when charging",
     batterySignHidden: "Hidden (magnitude only)",

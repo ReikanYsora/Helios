@@ -111,7 +111,7 @@ export const fr: Translations = {
       "Unité de la constante solaire (irradiance) affichée au-dessus du soleil.",
     batterySign: "Badge batterie : charge affichée en",
     batterySignHelp:
-      "Affichage seulement, ça ne change pas le flux. Le sens charge/décharge est détecté automatiquement depuis les compteurs de ton dashboard Énergie.",
+      "Ce réglage change seulement l'affichage du badge (le signe + ou -), pas le flux : le sens charge/décharge est déterminé automatiquement à partir des compteurs de votre dashboard Énergie.",
     batterySignDefault: "- en charge",
     batterySignInverted: "+ en charge",
     batterySignHidden: "Masqué (magnitude seule)",

@@ -638,7 +638,7 @@ export class HeliosCardEditor extends LitElement
     }
 
     //One box-select field (label + ha-selector + help). Same markup for every enumerated config key.
-    private _renderSelect(key: string, label: string, options: { value: string; label: string }[], dflt: string, help: string): TemplateResult
+    private _renderSelect(key: string, label: string, options: { value: string; label: string }[], dflt: string, help: string, mode: 'box' | 'dropdown' = 'box'): TemplateResult
     {
         const c = this._cfg as Record<string, unknown>;
         return html`
@@ -647,7 +647,7 @@ export class HeliosCardEditor extends LitElement
                     ${this._pickerReady ? html`
                         <ha-selector
                             .hass=${this.hass}
-                            .selector=${{ select: { mode: 'box', options } }}
+                            .selector=${{ select: { mode, options } }}
                             .value=${String(c[key] ?? dflt)}
                             data-key=${key}
                             @value-changed=${this._onEntityValueChanged}
@@ -1196,7 +1196,7 @@ export class HeliosCardEditor extends LitElement
                         { value: 'inverted', label: t.editor.batterySignInverted },
                         { value: 'hidden',   label: t.editor.batterySignHidden },
                     ], 'default',
-                    t.editor.batterySignHelp)}
+                    t.editor.batterySignHelp, 'dropdown')}
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
