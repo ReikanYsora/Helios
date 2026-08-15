@@ -70,6 +70,16 @@ smaller area enclosed by a larger one, could be read with a neighbour's model.
 The card now picks the area your location sits most centrally within, so the
 regional model matches where you actually are. Thanks to @MatCos.
 
+### Fixed: the entry-tablet flicker fix now reaches the Home Assistant app
+
+2026.9.0 moved entry-level tablets onto a lighter drawing path to stop the whole
+view flickering, but it recognised the affected graphics only when the browser
+exposed the chip name. The Home Assistant app and kiosk WebViews hide that name
+for privacy, so the flicker returned inside them even though Chrome on the very
+same tablet was fine. On Android, Helios now treats a hidden graphics name as
+reason enough to use the lighter path, so the app and kiosk views are covered too.
+Thanks to @charleslales and @Richaaldo (#370).
+
 ---
 
 ## 2026.9.0
