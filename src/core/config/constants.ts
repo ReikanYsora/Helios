@@ -80,6 +80,12 @@ export const HA_DAILY_TOTALS_TTL_MS = 25_000;
 export const FORECAST_THROTTLE_MS   = 5 * 60_000;
 export const WS_DEFAULT_TIMEOUT_MS  = 30_000;
 export const WS_MAX_CONCURRENT_FETCHES = 2;
+//Freshness ceiling on HA's cost statistics when they drive the LIVE cost chip. Cost statistics are hourly, so the
+//current hour's bucket only commits once that hour closes: up to ~1 h of lag is normal and must not trip this.
+//Past it the source is genuinely behind - a utility integration (Opower and friends) syncs a day at a time and can
+//sit 16 h back - and its newest bucket is a stale number, not "now". Scrubbing is unaffected: a hovered instant
+//asks for a past bucket, where age is the point rather than a problem.
+export const COST_STAT_MAX_AGE_MS   = 2 * HOUR_MS;
 
 //=== Misc thresholds ===
 export const EQ_EPS_PX = 0.25;
