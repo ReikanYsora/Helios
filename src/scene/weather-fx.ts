@@ -34,9 +34,36 @@ const isStormCode = (c: number): boolean => c === 95 || c === 96 || c === 99;
 
 //A forecast can report a hair of precipitation (0.05 mm in an hour, from rounding or dew) under an otherwise clear
 //sky. That is a trace, not weather to draw, so below these floors the precipitation layers stay off; real light rain
-//(>= 0.1 mm/h) and light snow still paint. Without the floor the sqrt curve turns 0.05 mm into visible rain.
+//(>= 0.1 mm/h) and light snow still paint. Without the floor the intensity curve turns 0.05 mm into visible rain.
 const RAIN_MIN_MM = 0.1;
 const SNOW_MIN_CM = 0.1;
+
+//Precipitation rate -> particle density [0,1], as a piecewise-linear curve through the meteorological intensity
+//classes (WMO / DWD / Met Office) rather than a single sqrt. A sqrt both over-drew a trace (0.1 mm/h read as 16 %
+//of full density) and saturated at 4 mm/h, so a downpour and a violent storm looked identical. The breakpoints are
+//the class ceilings, so a drizzle, moderate rain, a downpour and a storm each read as a distinct density. Piecewise
+//linear is a couple of comparisons plus one interpolation, cheap enough for the per-frame call.
+type IntensityCurve = readonly (readonly [number, number])[];
+
+function intensityDensity(x: number, curve: IntensityCurve): number
+{
+    if (x <= curve[0][0]) { return curve[0][1]; }
+    for (let i = 1; i < curve.length; i++)
+    {
+        const [x1, y1] = curve[i];
+        if (x <= x1)
+        {
+            const [x0, y0] = curve[i - 1];
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+        }
+    }
+    return curve[curve.length - 1][1];
+}
+
+//mm/h -> drop density. Classes: light (<= 2.5), moderate (<= 10), heavy building to violent, saturating at 50 mm/h.
+const RAIN_CURVE: IntensityCurve = [[0.1, 0.05], [2.5, 0.30], [10, 0.60], [50, 1.0]];
+//cm/h -> flake density. Same class shape: light (<= 1), moderate (<= 4), heavy building to a blizzard at 10 cm/h.
+const SNOW_CURVE: IntensityCurve = [[0.1, 0.08], [1, 0.35], [4, 0.70], [10, 1.0]];
 
 //Map real weather to layer strengths. The sun's brightness derives from the cloud cover; precipitation falls as
 //rain unless it's snowing (snowfall or a snow code), in which case the snow layer takes over; thunderstorm codes
@@ -47,9 +74,9 @@ export function weatherLayers(w: WxInput): WxLayers
     const snowing = w.snowfall >= SNOW_MIN_CM || isSnowCode(w.code);
     const storm   = isStormCode(w.code) ? (w.code === 95 ? 0.7 : 1) : 0;
 
-    //sqrt gives low-amount sensitivity (a light drizzle/flurry still shows) while saturating at heavy rates.
-    const rain = (snowing || w.precip < RAIN_MIN_MM) ? 0 : clamp01(Math.sqrt(w.precip) / 2); //0.25mm->0.25, 1mm->0.5, 4mm->1
-    const snow = snowing ? clamp01(Math.sqrt(Math.max(0, w.snowfall)) / 1.3) : 0;            //0.1cm->0.24, 0.5cm->0.54, 1.7cm->1
+    //Rain and snow share the trace floor: below it a trace draws nothing, at/above it the class curve sets density.
+    const rain = (snowing || w.precip < RAIN_MIN_MM)      ? 0 : intensityDensity(w.precip, RAIN_CURVE);
+    const snow = (snowing && w.snowfall >= SNOW_MIN_CM)   ? intensityDensity(w.snowfall, SNOW_CURVE) : 0;
 
     //Day factor fades the sun glow out as the sun nears the horizon (0 at/below horizon, full by ~18°) so sunrise
     //and sunset don't paint a full midday bloom, and night is dark.

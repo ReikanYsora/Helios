@@ -49,8 +49,17 @@ that clear.
 The scene drew rain from the faintest trace of forecast precipitation, so a
 hundredth of a millimetre in an hour, the kind a clear-sky forecast still
 reports, could sprinkle rain across a cloudless scene. Precipitation below a
-light-rain threshold now stays dry; real rain and snow are unchanged. Thanks to
+light-rain threshold now stays dry; real rain and snow still paint. Thanks to
 @FoxP and @MatCos.
+
+### Changed: rain and snow show their real intensity
+
+The amount of rain or snow the scene drew climbed too fast and then flattened
+out: a trace already looked like steady rain, and everything from a moderate
+shower upward drew the same, so a downpour and a violent storm were
+indistinguishable. Rain and snow density now follow the standard meteorological
+intensity classes, so a drizzle reads light and a storm reads heavy, across the
+full range. Thanks to @MatCos.
 
 ### Fixed: border locations get the right regional weather model
 
