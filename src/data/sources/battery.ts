@@ -13,6 +13,7 @@ import { warnOnce } from '../log';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, extractPerEntity, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, quantizedAnchorMs, type KeyedFetch } from '../source-fetch';
+import { refreshBatteryGuard, batteryLiveInverted, type BatteryGuardState } from './battery-guard';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
 import { localMidnightMinusDays } from '../../core/time/timezone';
 
@@ -101,6 +102,9 @@ export interface BatteryHost
     _batteryChargeChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
     _batteryDischargeChangeSeriesPerEntity: Map<string, ChangeBucket[]>;
     _batteryChangeFetch:           KeyedFetch;
+    //Battery-sign guard state: proves whether the live rate sensor's convention is inverted vs HA's assumed
+    //discharge-positive, so the live read below can be corrected (battery-guard.ts).
+    _batteryGuard:                 BatteryGuardState;
 }
 
 
@@ -178,7 +182,14 @@ export function refreshBattery(host: BatteryHost): void
     }
 
     const socEntities = host._energyDefaults.batteryStatSocs;
-    const { soc: nextSoc, power: nextPower, unit: nextUnit } = computeBatteryLive(host.hass, host._energyDefaults);
+    //Battery-sign guard: cross-check the live rate's convention against the directional meters (see battery-guard).
+    refreshBatteryGuard(host);
+    const live      = computeBatteryLive(host.hass, host._energyDefaults);
+    const nextSoc   = live.soc;
+    const nextUnit  = live.unit;
+    //When the guard has proven the sensor inverted, the sumLiveWatts flip produced the wrong sign; negate the live
+    //read so the chip value AND the flow direction match the structural meters and the Energy dashboard.
+    const nextPower = (live.power !== null && batteryLiveInverted(host._batteryGuard)) ? -live.power : live.power;
     if (nextSoc   !== host._batterySoc)
     {
         host._batterySoc       = nextSoc;

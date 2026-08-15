@@ -130,6 +130,16 @@ export const GUARD_RELATIVE_BAND      = 0.2;
 export const GUARD_CONTRADICTION_HOURS = 3;
 export const GUARD_CLEAN_EVALS        = 3;
 
+//Battery-sign guard: the live battery `stat_rate` is assumed discharge-positive and flipped to the card's
+//charge-positive convention, but some sensors report the opposite, so the flow ran backwards. The guard cross-checks
+//the raw rate's dominant sign each hour against the structural direction from the directional charge/discharge meters
+//(reusing GUARD_REFRESH_MS + GUARD_WINDOW_MS). An hour counts only when its net battery energy clears MIN_KWH; the
+//sensor is judged inverted after INVERT_HOURS such hours contradict the assumption, and self-clears after CLEAN_EVALS
+//agreeing evaluations.
+export const BATTERY_GUARD_MIN_KWH     = 0.05;
+export const BATTERY_GUARD_INVERT_HOURS = 3;
+export const BATTERY_GUARD_CLEAN_EVALS = 3;
+
 
 //=== Buildings / OpenFreeMap ===
 //Fixed prism height (m) used when real heights are off (tall buildings break the 2.5D framing), the cap

@@ -7,6 +7,45 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.1
+
+A follow-up to 2026.9.0: the card follows your Home Assistant units, the live
+cost chip stays honest when a price source lags, and the battery flow corrects
+its own direction.
+
+### Added: follow your Home Assistant units (temperature, and W/ft2)
+
+The temperature readouts (chip, detail panel, timeline tooltip) now follow your
+**Home Assistant unit system**, so an imperial install reads Fahrenheit like
+every other entity. A local `temperature-entity` in `°F` or `K` is normalised at
+ingest too, fixing a case where its readings were stored as if they were Celsius
+and polluted the curve. The irradiance unit gains **`W/ft²`** alongside `W/m²`
+and `kW/m²`. Thanks to @danswett.
+
+### Fixed: the live cost chip no longer freezes on a stale price
+
+When a cost statistic lags (a utility integration that backfills a day at a time
+can sit hours behind), the live cost chip could freeze on an old bucket and show
+it as "now". It now falls back to price times power when the statistics go stale,
+checked per direction, so the chip stays live. Thanks to @danswett.
+
+### Fixed: the battery flow direction now self-corrects
+
+The live battery chip and its flow take their direction from the battery's power
+sensor, assuming Home Assistant's discharge-positive convention. Some batteries
+report the opposite, so the flow (and the animated dot) ran backwards even though
+the Energy dashboard was right. Helios now cross-checks the live sensor against
+your directional charge and discharge energy meters and **corrects the direction
+automatically**, with nothing to configure.
+
+**If you had set the battery sign option to work around this, your chip may now
+read backwards: set it back to the default.** That option is, and always was,
+only a display preference for how the chip shows `+` / `-`; it never affects the
+flow, which is why it could not fix the direction. It is now labelled to make
+that clear.
+
+---
+
 ## 2026.9.0
 
 The weather release, "Your real sky": the scene now reflects the weather over

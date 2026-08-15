@@ -69,6 +69,7 @@ import { refreshGrid } from './data/sources/grid';
 import { refreshCostLive, refreshCostSeries } from './data/sources/cost';
 import { refreshDeviceConsumption } from './data/sources/device-consumption';
 import { createGridGuard, type GridGuardState } from './data/sources/grid-guard';
+import { createBatteryGuard, type BatteryGuardState } from './data/sources/battery-guard';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -188,6 +189,9 @@ export class HeliosCard extends LitElement
     //Mis-scope guard for the live grid sensor (grid-guard.ts). Plain field: transitions are pushed through
     //requestUpdate() by the guard itself, so no @state on the mutable object.
     _gridGuard: GridGuardState = createGridGuard();
+    //Sign guard for the live battery rate sensor (battery-guard.ts): corrects an inverted convention so the flow
+    //direction matches the meters. Same plain-field pattern as the grid guard.
+    _batteryGuard: BatteryGuardState = createBatteryGuard();
     //Historical series for the active timeline range. Both battery entities fetched in one
     //history/history_during_period WS call when both are set.
     @state() _batterySocHistory: {
@@ -816,6 +820,7 @@ export class HeliosCard extends LitElement
         this._gridImportFetch.reset();
         this._gridExportFetch.reset();
         this._gridGuard                   = createGridGuard();
+        this._batteryGuard                = createBatteryGuard();
         this._batterySocHistory           = null;
         this._batteryFetchKey             = '';
         this._batteryChargeChangeSeries   = null;
