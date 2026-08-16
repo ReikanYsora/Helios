@@ -1132,6 +1132,22 @@ export class HeliosCard extends LitElement
         this._wxStormCtl.setStrength(p.storm);
     }
 
+    //Off-screen / hidden-tab pause for the weather canvases (their rAF loops aren't covered by the CSS animation
+    //pause). Stop halts the three loops; resume re-applies the current weather, which restarts whatever is falling.
+    public pauseWeather(paused: boolean): void
+    {
+        if (paused)
+        {
+            this._wxRainCtl.stop();
+            this._wxSnowCtl.stop();
+            this._wxStormCtl.stop();
+        }
+        else
+        {
+            this._applyWeather();
+        }
+    }
+
     protected updated(_changedProperties: PropertyValues): void
     {
         //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.

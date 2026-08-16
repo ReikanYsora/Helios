@@ -230,6 +230,10 @@ export interface InitHost extends HudHost
     //Document visibilitychange listener, stored on the host so disconnectedCallback can removeEventListener cleanly.
     _onVisibilityChange?: (() => void) | undefined;
 
+    //Pause/resume the weather particle canvases (rain/snow/storm) alongside the engine when the card is off-screen
+    //or its tab is hidden - their rAF loops are not covered by the CSS/SMIL animation pause.
+    pauseWeather?(paused: boolean): void;
+
     //Current HA theme polarity, used to seed a new engine so its basemap builds at the right style first time.
     themeIsDark(): boolean;
     requestUpdate(): void;
@@ -257,6 +261,7 @@ export function initVisibilityObserver(host: InitHost): void
         const paused    = !intersecting || tabHidden;
         setAnimationsPaused(host, paused);
         host._engine?.setPaused(paused);
+        host.pauseWeather?.(paused);
         //Coming back from ANY pause, not just a tab returning: put the basemap back. It is a canvas painted once
         //and thereafter only CSS-transformed, so a backing store the browser dropped while we were away would stay
         //blank forever, leaving the SVG buildings floating over nothing. Cheap (cached features, no network) and

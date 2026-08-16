@@ -38,6 +38,14 @@ the standard `RENDERER` where the browser exposes it (Firefox) and no longer
 force-frees its throwaway context, so the console stays clean. No change on other
 browsers. Thanks to @FoxP.
 
+### Changed: a lighter idle and cheaper redraws
+
+First pass of a performance sweep. The rain and snow canvases now pause when the
+card scrolls off-screen (they kept animating before), the particle loops no longer
+measure the layout on every frame, and the buildings and shadows are redrawn only
+when the scene actually changed instead of on every frame. The card runs cooler
+and lighter, especially on a wall tablet or a busy dashboard.
+
 ---
 
 ## 2026.9.1

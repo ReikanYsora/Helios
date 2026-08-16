@@ -169,6 +169,10 @@ export class SceneRenderer
         camera: SceneCamera, w: number, h: number, style: GroundStyle, altitude: number,
     ) => void;
     private _projectedPose = '';
+    //Pose signature of the last buildings+shadows SVG rebuild, so an unchanged scene skips the reparse (see _draw).
+    private _lastScenePose = '';
+    //Bumped by setBuildings/setPalette so the pose guard rebuilds when the scene DATA (not just the pose) changes.
+    private _sceneRev = 0;
     //Ground render path, decided once per device: false = normal CSS-3D transform, true = projected compat path
     //for the old iOS/iPadOS WebKit that would otherwise clip the scene to its top half.
     private _projectedGround = needsProjectedGround();
@@ -304,6 +308,7 @@ export class SceneRenderer
     public setBuildings(buildings: Building[]): void
     {
         this._buildings = buildings;
+        this._sceneRev++;
         this.scheduleRedraw();
     }
 
@@ -344,6 +349,7 @@ export class SceneRenderer
     public setPalette(p: Partial<ScenePaletteFull>): void
     {
         this._palette = { ...this._palette, ...p };
+        this._sceneRev++;
         this.scheduleRedraw();
     }
 
@@ -474,19 +480,30 @@ export class SceneRenderer
         }
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-        const alt = this._sun.altitude;
-        const drawn = this._buildings;
-        //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
-        //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
-        //Each pass in its own group. A <g> changes nothing about the picture, and it makes the two passes
-        //addressable from a stylesheet - which is the only way to hold one of them off, since this innerHTML is
-        //rebuilt on every frame and anything done to the nodes themselves is gone by the next one.
-        this._sceneSvg.innerHTML =
-            `<g class="scene-shadows">`
-            + renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity)
-            + `</g><g class="scene-buildings">`
-            + renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home, this._sun.azimuth)
-            + `</g>`;
+        //The buildings + shadows layer is a full innerHTML rebuild + reparse, the heaviest per-frame cost. Skip it
+        //when nothing it reads changed since the last draw (camera pose, sun, growth, home, and a revision bumped by
+        //setBuildings/setPalette), mirroring the ground compat path's own pose guard above. Anything below the SVG
+        //that must run every frame (onAfterDraw) stays outside this gate.
+        const scenePose = `${width}x${height}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}`
+            + `|${this._sun.azimuth.toFixed(2)}|${this._sun.altitude.toFixed(2)}|${this._growth.toFixed(3)}`
+            + `|${this._home.color ?? ''}|${(this._home.growth ?? 1).toFixed(3)}|${this._sceneRev}`;
+        if (scenePose !== this._lastScenePose)
+        {
+            this._lastScenePose = scenePose;
+            const alt = this._sun.altitude;
+            const drawn = this._buildings;
+            //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
+            //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
+            //Each pass in its own group. A <g> changes nothing about the picture, and it makes the two passes
+            //addressable from a stylesheet - which is the only way to hold one of them off, since this innerHTML is
+            //rebuilt whole and anything done to the nodes themselves is gone by the next rebuild.
+            this._sceneSvg.innerHTML =
+                `<g class="scene-shadows">`
+                + renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity)
+                + `</g><g class="scene-buildings">`
+                + renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home, this._sun.azimuth)
+                + `</g>`;
+        }
 
         this.onAfterDraw?.();
     }
