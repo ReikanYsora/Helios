@@ -1,17 +1,18 @@
 //Battery-sign guard: detect a live `stat_rate` whose sign convention is the opposite of the card's assumption.
 //
-//The card assumes HA's documented battery convention (stat_rate discharge-positive) and flips the live rate to its
-//own charge-positive convention (see energy-prefs.ts). Some integrations report the opposite (charge-positive), so
-//the flip makes the live power, the chip and the flow direction run backwards even though the Energy dashboard is
-//right (the dashboard reads the directional charge/discharge energy meters, whose sign is structural).
+//The card puts the live rate into its own charge-positive convention: it negates a standard-slot sensor (HA's
+//discharge-positive assumption) and keeps an inverted-slot sensor as-is (see energy-prefs.ts, invertedRateEntities).
+//Either way a sensor can still report the opposite of what its slot declares, making the live power, chip and flow
+//run backwards even though the Energy dashboard is right (it reads the directional charge/discharge meters, whose
+//sign is structural).
 //
-//This guard cross-checks the raw rate against that structural truth. Over a rolling window it fetches, per hour, the
-//charge meter `change`, the discharge meter `change`, and the rate sensor's raw `min`/`max`. For each hour with real
-//battery activity it asks whether the rate's dominant raw sign agrees with the assumption (negative while charging,
-//positive while discharging). If it is systematically the other way round, the sensor is charge-positive, the
-//assumption is wrong, and the guard flags it inverted; battery.ts then negates the live read to restore the correct
-//direction and flow. It self-clears if later evidence agrees (a reconfigured sensor). `battery-sign` stays a
-//display-only preference and is untouched by any of this.
+//This guard cross-checks the EFFECTIVE rate (what the card shows: the raw sensor already negated when its slot flips
+//it) against that structural truth. Over a rolling window it fetches, per hour, the charge meter `change`, the
+//discharge meter `change`, and the rate sensor's `mean` (min/max as a fallback). For each hour with real activity it
+//asks whether the effective sign is charge-positive (positive while charging, negative while discharging). If it is
+//systematically the other way round the sensor contradicts its slot, and the guard flags it inverted; battery.ts
+//then negates the live read to restore the correct direction and flow. It self-clears if later evidence agrees (a
+//reconfigured sensor). `battery-sign` stays a display-only preference and is untouched by this.
 //
 //Only a single-net-rate install with BOTH directional meters is evaluated (the structural truth needs both); every
 //other wiring keeps the current behaviour.
@@ -53,10 +54,13 @@ export function batteryLiveInverted(state: BatteryGuardState): boolean
 }
 
 
-//One hour of evidence: net battery energy (charge - discharge, kWh) and the raw rate sensor's min/max (W) that hour.
+//One hour of evidence: net battery energy (charge - discharge, kWh) and the raw rate sensor's mean + min/max (W)
+//that hour. The mean is an integral, directly comparable to the net energy; min/max is the fallback when a
+//non-measurement sensor records no mean.
 export interface BatteryHour
 {
     netKwh: number | null;
+    meanW:  number | null;
     minW:   number | null;
     maxW:   number | null;
 }
@@ -72,24 +76,39 @@ interface BatteryEvaluation
 }
 
 
-//Pure evidence evaluation over the window's hours. Exported for tests.
-export function evaluateBatteryHours(hours: BatteryHour[]): BatteryEvaluation
+//Pure evidence evaluation over the window's hours. `flipped` is whether the card already negates this rate (the
+//standard slot; the inverted slot keeps it as-is), so the guard judges the EFFECTIVE sign the card shows, not the
+//raw sensor. Exported for tests.
+export function evaluateBatteryHours(hours: BatteryHour[], flipped: boolean): BatteryEvaluation
 {
     let invertedHours = 0;
     let okHours = 0;
     for (const h of hours)
     {
-        if (h.netKwh === null || h.minW === null || h.maxW === null) { continue; }
+        if (h.netKwh === null) { continue; }
         if (Math.abs(h.netKwh) < BATTERY_GUARD_MIN_KWH) { continue; }
-        //Which sign dominated the raw rate this hour: the larger excursion wins. A flat/ambiguous hour (neither
-        //excursion meaningful) carries no evidence.
-        const posExc = Math.max(0, h.maxW);
-        const negExc = Math.max(0, -h.minW);
-        if (posExc === 0 && negExc === 0) { continue; }
-        const ratePositive = posExc >= negExc;
+        //Effective rate sign this hour = the raw sensor, negated when the card flips it. Prefer the mean (an
+        //integral, directly comparable to the net energy, so a brief opposite spike in a mixed hour can't outvote
+        //the real flow); fall back to the dominant min/max excursion only when no mean is recorded. A flat /
+        //ambiguous hour carries no evidence.
+        let effectivePositive: boolean;
+        if (h.meanW !== null)
+        {
+            if (h.meanW === 0) { continue; }
+            effectivePositive = (flipped ? -h.meanW : h.meanW) > 0;
+        }
+        else
+        {
+            if (h.minW === null || h.maxW === null) { continue; }
+            const posExc = Math.max(0, h.maxW);
+            const negExc = Math.max(0, -h.minW);
+            if (posExc === 0 && negExc === 0) { continue; }
+            const rawPositive = posExc >= negExc;
+            effectivePositive = flipped ? !rawPositive : rawPositive;
+        }
+        //The card's convention is charge-positive: the effective sign should be positive while charging.
         const charging = h.netKwh > 0;
-        //Assumption = discharge-positive: a charging hour should read negative, a discharging hour positive.
-        const contradicts = charging ? ratePositive : !ratePositive;
+        const contradicts = charging ? !effectivePositive : effectivePositive;
         if (contradicts) { invertedHours++; }
         else { okHours++; }
     }
@@ -98,9 +117,9 @@ export function evaluateBatteryHours(hours: BatteryHour[]): BatteryEvaluation
 
 
 //Pure state transition from one evaluation. Exported for tests.
-export function nextBatteryGuardState(prev: BatteryGuardState, hours: BatteryHour[]): BatteryGuardState
+export function nextBatteryGuardState(prev: BatteryGuardState, hours: BatteryHour[], flipped: boolean): BatteryGuardState
 {
-    const ev = evaluateBatteryHours(hours);
+    const ev = evaluateBatteryHours(hours, flipped);
     if (prev.status !== 'inverted')
     {
         if (ev.invertedHours >= BATTERY_GUARD_INVERT_HOURS && ev.invertedHours > ev.okHours)
@@ -178,7 +197,7 @@ export function refreshBatteryGuard(host: BatteryGuardHost): void
             end_time:      new Date(endMs).toISOString(),
             statistic_ids: [rateId],
             period:        'hour',
-            types:         ['min', 'max'],
+            types:         ['mean', 'min', 'max'],
             units:         { power: 'W' },
         }),
     ])
@@ -189,10 +208,13 @@ export function refreshBatteryGuard(host: BatteryGuardHost): void
             if (host._batteryGuard.entityKey !== entityKey) { return; }
             const hours = buildBatteryHours(
                 energyRes as Record<string, { start?: unknown; change?: number | null }[]>,
-                rateRes   as Record<string, { start?: unknown; min?: number | null; max?: number | null }[]>,
+                rateRes   as Record<string, { start?: unknown; mean?: number | null; min?: number | null; max?: number | null }[]>,
                 chargeIds, dischargeIds, rateId,
             );
-            const next = nextBatteryGuardState(host._batteryGuard, hours);
+            //The card negates a standard-slot rate but keeps an inverted-slot one; judge the sign the card actually
+            //shows, so a correctly-declared inverted sensor is not mistaken for a contradiction.
+            const flipped = (ed?.invertedRateEntities ?? []).includes(rateId);
+            const next = nextBatteryGuardState(host._batteryGuard, hours, flipped);
             if (next !== host._batteryGuard)
             {
                 const changed = next.status !== host._batteryGuard.status;
@@ -218,7 +240,7 @@ export function refreshBatteryGuard(host: BatteryGuardHost): void
 //Exported for tests.
 export function buildBatteryHours(
     energyRes:    Record<string, { start?: unknown; change?: number | null }[]>,
-    rateRes:      Record<string, { start?: unknown; min?: number | null; max?: number | null }[]>,
+    rateRes:      Record<string, { start?: unknown; mean?: number | null; min?: number | null; max?: number | null }[]>,
     chargeIds:    string[],
     dischargeIds: string[],
     rateId:       string,
@@ -230,7 +252,7 @@ export function buildBatteryHours(
         let h = byStart.get(startMs);
         if (!h)
         {
-            h = { netKwh: null, minW: null, maxW: null };
+            h = { netKwh: null, meanW: null, minW: null, maxW: null };
             byStart.set(startMs, h);
         }
         return h;
@@ -256,8 +278,9 @@ export function buildBatteryHours(
         const startMs = parseStatBoundary(b?.start);
         if (startMs === null) { continue; }
         const h = slot(startMs);
-        if (typeof b?.min === 'number' && Number.isFinite(b.min)) { h.minW = b.min; }
-        if (typeof b?.max === 'number' && Number.isFinite(b.max)) { h.maxW = b.max; }
+        if (typeof b?.mean === 'number' && Number.isFinite(b.mean)) { h.meanW = b.mean; }
+        if (typeof b?.min  === 'number' && Number.isFinite(b.min))  { h.minW  = b.min; }
+        if (typeof b?.max  === 'number' && Number.isFinite(b.max))  { h.maxW  = b.max; }
     }
     return [...byStart.entries()].sort((a, b) => a[0] - b[0]).map(([, h]) => h);
 }

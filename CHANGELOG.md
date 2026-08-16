@@ -7,6 +7,21 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.2
+
+### Fixed: an inverted battery power sensor no longer reads backwards
+
+2026.9.1 added an automatic correction for battery power sensors reported with
+the opposite sign. It could turn on a battery you had already set to **"Inverted"**
+in the Home Assistant Energy dashboard: it re-flipped the already-correct reading,
+so the battery ran backwards and the live home-consumption chip was inflated. The
+correction now judges the sign the card actually shows (honoring your Energy
+dashboard's normal / inverted choice) rather than the raw sensor, so a correctly
+configured inverted sensor is left alone while a genuinely mislabeled one is still
+fixed. Thanks to @FoxP.
+
+---
+
 ## 2026.9.1
 
 A follow-up to 2026.9.0 that sharpens the details: the card follows your Home
