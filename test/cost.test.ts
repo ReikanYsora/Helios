@@ -82,3 +82,55 @@ describe('latestCostRate freshness gate', () =>
         expect(latestCostRate(host([b]), NOW)).toBeCloseTo(1, 6);
     });
 });
+
+describe('latestCostRate on a coarse meter (flat newest bucket)', () =>
+{
+    const MIN = 60_000;
+    //A stepped *_cost sensor as HA derives it from a 15-minute meter recorded at 5-minute resolution: the meter
+    //reports once, then two buckets pass with no change, then it reports again. Newest bucket is flat.
+    function steppedSeries(): ChangeBucket[]
+    {
+        const out: ChangeBucket[] = [];
+        for (let i = 12; i >= 1; i--)
+        {
+            const endMs = NOW - (i - 1) * 5 * MIN;
+            //Movement lands every third bucket: 0.0625 currency per 15 min = 0.25/h.
+            out.push({ startMs: endMs - 5 * MIN, endMs, kwh: i % 3 === 0 ? 0.0625 : 0 });
+        }
+        return out;
+    }
+
+    it('does not publish the flat bucket as a zero rate', () =>
+    {
+        //Before: the newest bucket is Δ0, so the chip read 0.00/h between meter reports even while importing.
+        const rate = latestCostRate(host(steppedSeries()), NOW);
+        expect(rate).not.toBeNull();
+        expect(rate).not.toBe(0);
+    });
+
+    it('averages the coarse window like the scrub path, so it reads the true rate', () =>
+    {
+        //0.0625 per 15 min is 0.25/h; the window average must land there, not on the flat bucket's 0.
+        expect(latestCostRate(host(steppedSeries()), NOW)).toBeCloseTo(0.25, 6);
+    });
+
+    it('still reads a genuinely idle meter as zero', () =>
+    {
+        //Every bucket flat: no sampling artefact to correct, and no rate to invent. The window averages to 0.
+        const idle = steppedSeries().map((b) => ({ ...b, kwh: 0 }));
+        expect(latestCostRate(host(idle), NOW)).toBe(0);
+    });
+
+    it('nets import against export across the window', () =>
+    {
+        //Import 0.25/h and export 0.10/h on the same coarse cadence: net spend is 0.15/h.
+        const exp = steppedSeries().map((b) => ({ ...b, kwh: b.kwh * 0.4 }));
+        expect(latestCostRate(host(steppedSeries(), exp), NOW)).toBeCloseTo(0.15, 6);
+    });
+
+    it('leaves the dense-meter path untouched', () =>
+    {
+        //A fine meter with a non-flat newest bucket takes the original single-bucket read: 2.5 currency/h.
+        expect(latestCostRate(host([bucket(0, 2.5)]), NOW)).toBeCloseTo(2.5, 6);
+    });
+});

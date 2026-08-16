@@ -10,7 +10,7 @@ import { parseNumericState, pvNormalizeToWatts } from '../../core/format/format'
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { localMidnightMinusDays } from '../../core/time/timezone';
-import { COST_STAT_MAX_AGE_MS } from '../../core/config/constants';
+import { COST_STAT_MAX_AGE_MS, COARSE_PROBE_MS } from '../../core/config/constants';
 import type { KeyedFetch } from '../source-fetch';
 
 
@@ -109,7 +109,23 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
     };
     const impR = imp && imp.length > 0 ? bucketRate(imp[imp.length - 1]) : 0;
     const expR = exp && exp.length > 0 ? bucketRate(exp[exp.length - 1]) : 0;
-    return impR - expR;
+    if (impR !== 0 || expR !== 0) { return impR - expR; }
+
+    //Both newest buckets are flat. That is not evidence of a zero rate: HA's *_cost sensors only step when the
+    //energy sensor they derive from updates, so a meter that reports every 15 min leaves most 5-minute buckets
+    //at Δ0 while the house is genuinely importing - and publishing that 0 pins the chip at zero between updates.
+    //Re-read the way the scrub path already does for coarse meters: wattsAtFromChangeSeries probes a
+    //COARSE_PROBE_MS window around an instant and averages it when few buckets carry movement. At the live edge
+    //that window must look BACKWARD - centred on the newest end itself, half of it would hang past the last
+    //committed bucket into empty future and see only the flat tail - so it is centred half a window back, which
+    //places the whole probe over committed buckets ending exactly at the instant the freshness gate vouched for.
+    //A meter that is genuinely idle averages to 0 across that window too, so a real zero still reads zero; only
+    //the sampling artefact changes. Null when even the window is empty - the caller then falls through to
+    //price x power, exactly as it does for a stale or absent series.
+    const newestEnd = Math.max(
+        imp && imp.length > 0 ? imp[imp.length - 1].endMs : 0,
+        exp && exp.length > 0 ? exp[exp.length - 1].endMs : 0);
+    return costRateAt(host, newestEnd - COARSE_PROBE_MS / 2);
 }
 
 
