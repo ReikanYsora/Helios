@@ -20,6 +20,15 @@ dashboard's normal / inverted choice) rather than the raw sensor, so a correctly
 configured inverted sensor is left alone while a genuinely mislabeled one is still
 fixed. Thanks to @FoxP.
 
+### Fixed: the house and timeline follow the live flow direction
+
+The home tint and the timeline border take the colour of the selected chip, but
+for the grid and battery chips they used the period's dominant direction. So the
+house could read "discharging" (blue) while the battery was charging right now
+(purple), and the same for grid import versus export. They now follow the live,
+instant direction, matching the chip and the flow, in both live and scrub. Thanks
+to @FoxP.
+
 ---
 
 ## 2026.9.1

@@ -517,13 +517,25 @@ export class HeliosCard extends LitElement
 
     //Push the home prism's appearance to the renderer (via the engine): a solid block in the active chip's accent
     //colour. `animate` plays the squash/grow on a chip change.
+    //The active chip's LIVE colour, the single source every "active chip" accent reads (home prism, timeline
+    //border, detail panel). The directional chips (grid, battery) flip tint with the INSTANTANEOUS flow, so this
+    //reuses the HUD's live/scrub-aware leader colours rather than chartAccentColor, whose window-dominant direction
+    //makes no sense for a live view (it would show the day's net while the scene shows now). Non-directional targets
+    //carry no direction, so chartAccentColor already matches.
+    private _activeChipColor(): string
+    {
+        return this._chartTarget === 'grid' ? this._hud._gridLeaderColor
+            : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? this._hud._batteryLeaderColor
+            : chartAccentColor(this);
+    }
+
     updateHomeAppearance(animate: boolean): void
     {
         if (!this._engine)
         {
             return;
         }
-        const color = chartAccentColor(this);
+        const color = this._activeChipColor();
         //No squash on the very first paint (no prior target to grow away from).
         const play  = animate && this._lastHomeTarget !== undefined;
         this._lastHomeTarget = this._chartTarget;
@@ -1439,13 +1451,8 @@ export class HeliosCard extends LitElement
         //Detail panel accent (from the active chip) drives both the panel border and the little "i" badge on the
         //open chip, so it lives as a card-level class + CSS var.
         const infoOpen = this._infoPanelOpen;
-        //Detail-panel accent = the ACTIVE chip's live colour. The directional chips (grid, battery) flip their
-        //tint with the instantaneous flow, so reuse those same leader colours rather than chartAccentColor (which
-        //is the window-dominant direction); the non-directional targets already agree with chartAccentColor.
-        const activeChipColor =
-            this._chartTarget === 'grid' ? this._hud._gridLeaderColor
-            : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? this._hud._batteryLeaderColor
-            : chartAccentColor(this);
+        //Detail-panel + timeline accent = the ACTIVE chip's live colour (see _activeChipColor).
+        const activeChipColor = this._activeChipColor();
         const cardClasses = [
             cardThemeClass,
             cameraLocked      ? 'camera-locked'  : '',
@@ -1503,7 +1510,7 @@ export class HeliosCard extends LitElement
                               cursors. The day-label strip sits below so it never covers the curves.  -->
                         <div
                             class="tb-chart-stack"
-                            style="--chart-accent:${chartAccentColor(this)}"
+                            style="--chart-accent:${this._activeChipColor()}"
                         >
                             <div
                                 class="tb-chart-card"
