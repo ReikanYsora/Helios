@@ -133,4 +133,33 @@ describe('latestCostRate on a coarse meter (flat newest bucket)', () =>
         //A fine meter with a non-flat newest bucket takes the original single-bucket read: 2.5 currency/h.
         expect(latestCostRate(host([bucket(0, 2.5)]), NOW)).toBeCloseTo(2.5, 6);
     });
+
+    //A fine meter that moves every bucket. Its newest zero is REAL - import just stopped - and must be reported now,
+    //not averaged away with the activity that preceded it. This is the transition case a naive average gets wrong.
+    function denseSeriesThenStop(): ChangeBucket[]
+    {
+        const out: ChangeBucket[] = [];
+        for (let i = 12; i >= 2; i--)
+        {
+            const endMs = NOW - (i - 1) * 5 * MIN;
+            out.push({ startMs: endMs - 5 * MIN, endMs, kwh: 0.5 / 12 });   //0.5/h, every bucket
+        }
+        out.push({ startMs: NOW - 5 * MIN, endMs: NOW, kwh: 0 });          //then it stops
+        return out;
+    }
+
+    it('keeps a genuine newest zero on a dense meter (import just stopped)', () =>
+    {
+        //Every earlier bucket in the window is nonzero, so this meter is dense: the flat newest bucket is real news.
+        expect(latestCostRate(host(denseSeriesThenStop()), NOW)).toBe(0);
+    });
+
+    it('does not let a dense export series vote a sparse import series into a zero', () =>
+    {
+        //Import is coarse (flat newest bucket, sparse window); export is dense and has just stopped. The import
+        //side must still be averaged rather than the whole chip collapsing to 0 because one side is dense.
+        const rate = latestCostRate(host(steppedSeries(), denseSeriesThenStop()), NOW);
+        expect(rate).not.toBeNull();
+        expect(rate).toBeGreaterThan(0);
+    });
 });

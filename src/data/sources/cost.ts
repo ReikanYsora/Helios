@@ -10,7 +10,7 @@ import { parseNumericState, pvNormalizeToWatts } from '../../core/format/format'
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { localMidnightMinusDays } from '../../core/time/timezone';
-import { COST_STAT_MAX_AGE_MS, COARSE_PROBE_MS } from '../../core/config/constants';
+import { COST_STAT_MAX_AGE_MS, COARSE_PROBE_MS, DENSE_FRACTION } from '../../core/config/constants';
 import type { KeyedFetch } from '../source-fetch';
 
 
@@ -111,21 +111,52 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
     const expR = exp && exp.length > 0 ? bucketRate(exp[exp.length - 1]) : 0;
     if (impR !== 0 || expR !== 0) { return impR - expR; }
 
-    //Both newest buckets are flat. That is not evidence of a zero rate: HA's *_cost sensors only step when the
-    //energy sensor they derive from updates, so a meter that reports every 15 min leaves most 5-minute buckets
-    //at Δ0 while the house is genuinely importing - and publishing that 0 pins the chip at zero between updates.
-    //Re-read the way the scrub path already does for coarse meters: wattsAtFromChangeSeries probes a
-    //COARSE_PROBE_MS window around an instant and averages it when few buckets carry movement. At the live edge
-    //that window must look BACKWARD - centred on the newest end itself, half of it would hang past the last
-    //committed bucket into empty future and see only the flat tail - so it is centred half a window back, which
-    //places the whole probe over committed buckets ending exactly at the instant the freshness gate vouched for.
-    //A meter that is genuinely idle averages to 0 across that window too, so a real zero still reads zero; only
-    //the sampling artefact changes. Null when even the window is empty - the caller then falls through to
-    //price x power, exactly as it does for a stale or absent series.
+    //Both newest buckets are flat. Whether that means "zero" depends on the meter. HA's *_cost sensors only step
+    //when the energy sensor they derive from updates, so a meter that reports every 15 min, recorded at 5-minute
+    //resolution, leaves two of every three buckets at Δ0 while the house is genuinely importing - and publishing
+    //that 0 pins the chip at zero between reports. On a FINE meter, though, a flat newest bucket is real news:
+    //import just stopped, and the chip must say so now, not 10 minutes later.
+    //
+    //Tell the two apart the way the scrub path already does: probe the trailing COARSE_PROBE_MS window and count
+    //how many of its buckets carry movement. A sparse window (flat buckets are this meter's normal rhythm) is
+    //averaged - the same coarse-meter read wattsAtFromChangeSeries applies when scrubbing, so live and scrub agree.
+    //A dense window (this meter usually moves every bucket) keeps the zero, exactly as before this change.
+    //
+    //The probe looks BACKWARD from the newest committed end. Centred on the end itself, half of it would hang past
+    //the last bucket into empty future and see only the flat tail; ending at newestEnd places all of it over
+    //committed buckets - the very instant the freshness gate above just vouched for.
     const newestEnd = Math.max(
         imp && imp.length > 0 ? imp[imp.length - 1].endMs : 0,
         exp && exp.length > 0 ? exp[exp.length - 1].endMs : 0);
-    return costRateAt(host, newestEnd - COARSE_PROBE_MS / 2);
+    //Decided PER DIRECTION, and only the sparse side is averaged. A dense side that has genuinely stopped keeps
+    //its exact newest zero; averaging it alongside a sparse partner would smear its earlier activity back into
+    //"now" and let that stale value dominate the net (a dense export that just ended must not read as still
+    //earning while a coarse import is being estimated). Neither side sparse means both zeros are real: net 0.
+    const impSparse = isSparseWindow(imp, newestEnd);
+    const expSparse = isSparseWindow(exp, newestEnd);
+    if (!impSparse && !expSparse) { return 0; }
+    const probeMs = newestEnd - COARSE_PROBE_MS / 2;
+    const impAvg  = impSparse ? (wattsAtFromChangeSeries(imp, probeMs) ?? 0) / 1000 : impR;
+    const expAvg  = expSparse ? (wattsAtFromChangeSeries(exp, probeMs) ?? 0) / 1000 : expR;
+    return impAvg - expAvg;
+}
+
+//True when, over the COARSE_PROBE_MS ending at endMs, fewer than DENSE_FRACTION of a series' buckets carry
+//movement - i.e. this meter's normal rhythm has flat buckets in it, so one more flat bucket says nothing about
+//"now". Empty or absent series are not sparse: there is nothing to average, and absence must not vote.
+function isSparseWindow(buckets: ChangeBucket[] | null, endMs: number): boolean
+{
+    if (!buckets || buckets.length === 0) { return false; }
+    const loMs = endMs - COARSE_PROBE_MS;
+    let total = 0;
+    let nonZero = 0;
+    for (const b of buckets)
+    {
+        if (b.endMs <= loMs || b.startMs >= endMs) { continue; }
+        total++;
+        if (b.kwh > 0) { nonZero++; }
+    }
+    return total > 0 && nonZero < Math.ceil(total * DENSE_FRACTION);
 }
 
 
