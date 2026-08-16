@@ -84,52 +84,52 @@ function isEntryAndroidGpu(renderer: string): boolean
 //(including iPadOS masquerading as macOS Safari) on Safari <= 16, the WebKit generation that carries the bug and
 //the ceiling for the old hardware it runs on. A miss on a newer device keeps the (perfect) normal path; a false
 //positive only swaps in the near-equivalent compat render, so erring is cheap.
-function needsProjectedGround(): boolean
+//How the basemap is drawn, decided once per device.
+//  'normal'    : GPU-rasterized canvas + CSS 3D transform (fast, correct) - capable devices.
+//  'transform' : CPU-rasterized canvas (willReadFrequently) STILL under the CSS 3D transform. Entry Android GPUs
+//                (Mali/Adreno) corrupt a GPU-rasterized canvas into colored noise, but the CPU raster has correct
+//                pixels and a plain texture composites fine on them (the 3D-transformed SVG scene already does). So
+//                the rotation stays a cheap GPU transform instead of a per-frame CPU reprojection.
+//  'projected' : CPU canvas repainted already-projected every frame, no 3D layer - for devices where the 3D
+//                transform itself is broken (texture cap too small to back the layer; old iOS half-3D compositor).
+//A debug flag (localStorage 'helios-ground' = normal|transform|projected) forces any mode for A/B on a real device.
+type GroundMode = 'normal' | 'transform' | 'projected';
+
+function groundMode(): GroundMode
 {
-    //The normal path composites the whole basemap canvas as one CSS 3D-transformed layer, and two hardware cases
-    //can't handle that, so they render the ground on the projected compat path instead (a card-sized canvas, no
-    //3D layer, same 2.5D look). Checked first, before the Apple sniff below.
+    if (typeof localStorage !== 'undefined')
+    {
+        const forced = localStorage.getItem('helios-ground');
+        if (forced === 'normal' || forced === 'transform' || forced === 'projected') { return forced; }
+    }
     const { maxTex, renderer } = probeGpu();
-    //1. A GPU whose max texture edge is smaller than the canvas can't back the layer at all (old 2048-cap GPUs):
-    //   it drops to black / flickers.
-    if (maxTex > 0 && maxTex < GROUND_CANVAS_EDGE_PX) { return true; }
-    //2. An entry / mid Android GPU that mis-composites the 3D tilt even though its texture cap is ample (e.g. a
-    //   Mali-G52 reports 8192): keyed on the GPU string.
-    if (isEntryAndroidGpu(renderer)) { return true; }
-    //3. Renderer masked for privacy (empty). On Android this is the WebView case (the Home Assistant app, the Kiosk
-    //   app): they hide the GPU name, so isEntryAndroidGpu above can never fire there even on the exact entry GPUs it
-    //   targets, and the flicker / colored-noise goes unfixed. With the name hidden we cannot rule out an affected
-    //   GPU and there is no other runtime signal that separates entry from flagship (both report an ample texture cap
-    //   and coarse memory), so we err onto the projected path whenever the name is hidden on Android: it is
-    //   near-equivalent and the alternative leaves the WebViews broken.
+    //Texture cap smaller than the canvas: the 3D-transformed layer can't be backed at all (old 2048-cap GPUs) -> reproject.
+    if (maxTex > 0 && maxTex < GROUND_CANVAS_EDGE_PX) { return 'projected'; }
+    //Entry / mid Android GPU (e.g. Mali-G52, ample texture cap): corrupts a GPU canvas -> CPU raster, keep the transform.
+    if (isEntryAndroidGpu(renderer)) { return 'transform'; }
+    //Renderer masked (Android WebView: the HA app, kiosk apps hide the GPU name): can't tell entry from flagship, so
+    //on Android treat it as the corruption class and take the CPU-raster transform path.
     if (renderer === '' && typeof navigator !== 'undefined')
     {
-        if (/\bAndroid\b/i.test(navigator.userAgent || '')) { return true; }
-        //Non-Android with a masked name: fall back to the one numeric hardware-tier signal we have. The devices that
-        //choke are all low-memory (<= 4 GB); deviceMemory is coarse (Chrome-only, capped, rounded), a last resort.
+        if (/\bAndroid\b/i.test(navigator.userAgent || '')) { return 'transform'; }
+        //Non-Android masked + low memory (<= 4 GB, coarse Chrome-only signal): unknown weakness, stay on the safe reproject.
         const mem = (navigator as { deviceMemory?: number }).deviceMemory;
-        if (typeof mem === 'number' && mem <= 4) { return true; }
+        if (typeof mem === 'number' && mem <= 4) { return 'projected'; }
     }
 
-    if (typeof navigator === 'undefined') { return false; }
+    if (typeof navigator === 'undefined') { return 'normal'; }
     const ua = navigator.userAgent || '';
     const appleTouch = /iPad|iPhone|iPod/.test(ua)
         || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (!appleTouch) { return false; }
-    //Safari carries "Version/NN"; an in-app WKWebView (the Home Assistant app, the Kiosk app) usually does NOT,
-    //but still carries the OS token "CPU OS 16_x". Read whichever is present, so the compat path also reaches the
-    //HA apps on old hardware and not just Safari (the earlier fix only checked "Version/", so it never
-    //fired inside the in-app WebViews).
+    if (!appleTouch) { return 'normal'; }
+    //Old iOS/iPadOS WebKit (Safari <= 16, or an in-app WKWebView on that hardware) half-composites the 3D layer and
+    //clips the scene to its top half, so the transform itself is broken there -> reproject. Read "Version/NN" or the
+    //"CPU OS NN" token; a stripped WebView UA with neither errs to the reprojected path.
     const safari = ua.match(/Version\/(\d+)/);
     const os     = ua.match(/(?:CPU|iPhone) OS (\d+)/);
     const major  = (safari ? parseInt(safari[1], 10) : 0) || (os ? parseInt(os[1], 10) : 0);
-    if (major > 0) { return major <= 16; }
-    //No readable version at all on an Apple touch device: a stripped in-app WebView UA. The HAkiosk app reports a
-    //truncated desktop-Safari UA ("Macintosh; Intel Mac OS X 10_15_7", no Version/, no "CPU OS"), so both reads
-    //above come up empty. We cannot tell the iOS version, so err toward the compat path: it is near-equivalent and
-    //fixes the old devices that land here, while Safari, the HA app and iOS Chrome all expose a version and decide
-    //precisely.
-    return true;
+    if (major > 0) { return major <= 16 ? 'projected' : 'normal'; }
+    return 'projected';
 }
 
 //Honour the OS "reduce motion" setting: the rise + squash/grow animations resolve instantly when set.
@@ -173,9 +173,9 @@ export class SceneRenderer
     private _lastScenePose = '';
     //Bumped by setBuildings/setPalette so the pose guard rebuilds when the scene DATA (not just the pose) changes.
     private _sceneRev = 0;
-    //Ground render path, decided once per device: false = normal CSS-3D transform, true = projected compat path
-    //for the old iOS/iPadOS WebKit that would otherwise clip the scene to its top half.
-    private _projectedGround = needsProjectedGround();
+    //Ground render path, decided once per device (see groundMode): 'normal' / 'transform' both use the CSS 3D
+    //transform; 'projected' repaints the ground already-projected each frame.
+    private _groundMode: GroundMode = groundMode();
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;
     private _groundAltitude  = 45;
@@ -259,12 +259,15 @@ export class SceneRenderer
     {
         this.camera.pxPerMetre = pxPerMetreFor(lat);
         const token = ++this._groundToken;
-        //On the projected compat path (the degraded mode for the GPUs that mis-render the basemap), back the ground
-        //canvas on the CPU to dodge the driver's GPU-canvas corruption.
-        const built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, this._projectedGround);
+        //Any compat mode ('transform' or 'projected') backs the ground canvas on the CPU (willReadFrequently) to
+        //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas.
+        const built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, this._groundMode !== 'normal');
         if (!this._alive || token !== this._groundToken) { return; }
         this._groundStyleCur = style;
         this._ground         = built.ground;
+        //Layer-promotion hint for the CPU-raster transform path: stabilizes the tilted canvas's compositing layer on
+        //the entry GPUs that would otherwise be prone to mis-compositing it.
+        if (this._groundMode === 'transform') { built.ground.el.style.backfaceVisibility = 'hidden'; }
         this._groundRepaint  = built.repaint;
         this._groundRepaintProjected = built.repaintProjected;
         this._projectedPose = '';
@@ -461,11 +464,11 @@ export class SceneRenderer
 
         this.camera.setViewport(width, height);
 
-        //Tilt + turn the basemap about the home, then translate the home onto the screen-space centre.
-        //On the compat path there is no transform at all: the ground is repainted already projected.
+        //Tilt + turn the basemap about the home, then translate the home onto the screen-space centre. 'projected'
+        //repaints already-projected (no transform); 'normal' and 'transform' both ride the cheap CSS 3D transform.
         if (this._ground)
         {
-            if (this._projectedGround) { this._paintProjectedGround(width, height); }
+            if (this._groundMode === 'projected') { this._paintProjectedGround(width, height); }
             else
             {
                 const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);

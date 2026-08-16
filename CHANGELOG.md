@@ -46,6 +46,16 @@ measure the layout on every frame, and the buildings and shadows are redrawn onl
 when the scene actually changed instead of on every frame. The card runs cooler
 and lighter, especially on a wall tablet or a busy dashboard.
 
+### Changed: smooth rotation on entry-level tablets
+
+Entry Android GPUs (and the Home Assistant app / kiosk WebViews) fall back to a
+compatibility renderer because a GPU-drawn basemap corrupts into colored noise on
+those drivers. That path re-projected the whole map on the CPU every frame, so
+rotating the scene dropped to a few frames per second. It now keeps the fast GPU
+rotation on a **CPU-rasterized** basemap, which dodges the corruption while staying
+pixel-correct, so the scene turns smoothly on those devices too. Thanks to
+@beatschubser (#383).
+
 ---
 
 ## 2026.9.1
