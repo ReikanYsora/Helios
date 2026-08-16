@@ -24,9 +24,9 @@ import {
 //3D-transformed, so the compositor backs it as one layer of this size.
 const GROUND_CANVAS_EDGE_PX = (2 * GROUND_RADIUS + 1) * TILE_PX;
 
-//The GPU's max texture edge (px) and its unmasked renderer string, from a throwaway WebGL context released at
-//once. Both 0 / '' when they can't be read. The renderer is the GPU's own identity (via WEBGL_debug_renderer_info),
-//which some browsers mask for privacy, hence the empty-string fallback.
+//The GPU's max texture edge (px) and its renderer string, from a throwaway WebGL context. Both 0 / '' when they
+//can't be read. The renderer is the GPU's own identity: the standard RENDERER when the browser fills it (Firefox),
+//else the unmasked WEBGL_debug_renderer_info extension (Chrome masks RENDERER); '' when both are masked for privacy.
 interface GpuProbe { maxTex: number; renderer: string; }
 
 function probeGpu(): GpuProbe
@@ -38,9 +38,18 @@ function probeGpu(): GpuProbe
         const gl = (canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
         if (!gl) { return { maxTex: 0, renderer: '' }; }
         const max = gl.getParameter(gl.MAX_TEXTURE_SIZE) as unknown;
-        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-        const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? '') : '';
-        gl.getExtension('WEBGL_lose_context')?.loseContext();
+        //Prefer the standard RENDERER: Firefox exposes the real GPU there and DEPRECATES WEBGL_debug_renderer_info,
+        //so touching that extension logs a console warning. Only fall back to the (deprecated) unmasked extension
+        //when the standard value names no known GPU family, which is Chrome's case (it masks RENDERER) - so Chrome
+        //still identifies the chip while Firefox never hits the deprecated path.
+        let renderer = String(gl.getParameter(gl.RENDERER) ?? '');
+        if (!/\b(?:Adreno|Mali|PowerVR|VideoCore|V3D|Apple|NVIDIA|GeForce|AMD|Radeon|Intel|Iris|ANGLE)\b/i.test(renderer))
+        {
+            const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+            if (dbg) { renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? renderer); }
+        }
+        //No WEBGL_lose_context/loseContext(): it logs a "WebGL context was lost" console warning, and this throwaway
+        //context (created once per renderer, never per frame) is reclaimed by the GC.
         return { maxTex: typeof max === 'number' && Number.isFinite(max) ? max : 0, renderer };
     }
     catch

@@ -29,6 +29,15 @@ house could read "discharging" (blue) while the battery was charging right now
 instant direction, matching the chip and the flow, in both live and scrub. Thanks
 to @FoxP.
 
+### Fixed: no more Firefox console warnings from the GPU probe
+
+On Firefox the card logged two console messages, a deprecation warning for
+`WEBGL_debug_renderer_info` and a "WebGL context was lost" notice, from the one-off
+probe that reads your GPU to choose the right rendering path. The probe now reads
+the standard `RENDERER` where the browser exposes it (Firefox) and no longer
+force-frees its throwaway context, so the console stays clean. No change on other
+browsers. Thanks to @FoxP.
+
 ---
 
 ## 2026.9.1
