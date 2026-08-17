@@ -179,6 +179,40 @@ describe('latestCostRate on a coarse meter (flat newest bucket)', () =>
         expect(latestCostRate(host(stopped), NOW)).toBe(0);           //overdue: real zero
     });
 
+    //A coarse meter on an arbitrary cadence: `n` buckets between reports, `flatTail` flat buckets at the end.
+    function coarseSeries(n: number, perReport: number, flatTail: number): ChangeBucket[]
+    {
+        const out: ChangeBucket[] = [];
+        const total = 24;
+        for (let k = 0; k < total; k++)
+        {
+            const endMs = NOW - (total - 1 - k) * 5 * MIN;
+            const isReport = k % n === 0 && k < total - flatTail;
+            out.push({ startMs: endMs - 5 * MIN, endMs, kwh: isReport ? perReport : 0 });
+        }
+        return out;
+    }
+
+    it('estimates across the whole interval of a slower (30-min) meter, not just a fixed 15-min window', () =>
+    {
+        //Cadence 6 buckets. A flat run of 5 is still between reports, but a fixed 15-min probe would see only
+        //the last three flat buckets and average to zero. 0.5 per 30 min is 1.0/h, and it must hold all the way
+        //to the next report.
+        for (const flat of [1, 2, 3, 4, 5])
+        {
+            expect(latestCostRate(host(coarseSeries(6, 0.5, flat)), NOW)).toBeCloseTo(1.0, 6);
+        }
+        //Once the run reaches the cadence, a report was due: genuinely stopped, zero.
+        expect(latestCostRate(host(coarseSeries(6, 0.5, 6)), NOW)).toBe(0);
+    });
+
+    it('recognises negative deltas as reports (negative dynamic tariff)', () =>
+    {
+        //Paid to import: every report is a negative Δ. It is still a report, and between reports the chip must
+        //carry the negative rate rather than flipping to zero. -0.06 per 15 min is -0.24/h.
+        expect(latestCostRate(host(coarseSeries(3, -0.06, 2)), NOW)).toBeCloseTo(-0.24, 6);
+    });
+
     it('does not let a dense export series vote a sparse import series into a zero', () =>
     {
         //Import is coarse (flat newest bucket, sparse window); export is dense and has just stopped. The import
