@@ -154,6 +154,31 @@ describe('latestCostRate on a coarse meter (flat newest bucket)', () =>
         expect(latestCostRate(host(denseSeriesThenStop()), NOW)).toBe(0);
     });
 
+    it('keeps the zero once a dense meter has been stopped for TWO buckets', () =>
+    {
+        //[nonzero, 0, 0]: the trailing window is now mostly flat, so a density check would flip this meter to
+        //"sparse" and average its old rate back in. Cadence is measured on reports, which the idle run cannot
+        //change: this meter reports every bucket, so its first flat bucket already met the cadence. Still 0.
+        const s = denseSeriesThenStop();
+        s[s.length - 2] = { ...s[s.length - 2], kwh: 0 };
+        expect(latestCostRate(host(s), NOW)).toBe(0);
+        //And after three flat buckets, still 0 - however long it stays stopped.
+        s[s.length - 3] = { ...s[s.length - 3], kwh: 0 };
+        expect(latestCostRate(host(s), NOW)).toBe(0);
+    });
+
+    it('lets a coarse meter that has genuinely stopped fall to zero once a report is overdue', () =>
+    {
+        //A 15-min meter (cadence 3 buckets) whose last report was 3+ buckets ago: a report was due and none came,
+        //so this is a real stop, not the silence between reports. The estimate must not persist indefinitely.
+        const s = steppedSeries();
+        //steppedSeries has movement in the bucket at i%3===0 (i=12,9,6,3), newest (i=1) flat: flat run = 2 < 3.
+        expect(latestCostRate(host(s), NOW)).toBeCloseTo(0.25, 6);      //between reports: estimated
+        //Blank the last report so the flat run becomes 5 buckets: past cadence, report overdue.
+        const stopped = s.map((b, i) => (i === s.length - 3 ? { ...b, kwh: 0 } : b));
+        expect(latestCostRate(host(stopped), NOW)).toBe(0);           //overdue: real zero
+    });
+
     it('does not let a dense export series vote a sparse import series into a zero', () =>
     {
         //Import is coarse (flat newest bucket, sparse window); export is dense and has just stopped. The import

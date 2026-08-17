@@ -10,7 +10,7 @@ import { parseNumericState, pvNormalizeToWatts } from '../../core/format/format'
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { localMidnightMinusDays } from '../../core/time/timezone';
-import { COST_STAT_MAX_AGE_MS, COARSE_PROBE_MS, DENSE_FRACTION } from '../../core/config/constants';
+import { COST_STAT_MAX_AGE_MS, COARSE_PROBE_MS, COARSE_MAX_SPREAD_BUCKETS, COARSE_CADENCE_REPORTS } from '../../core/config/constants';
 import type { KeyedFetch } from '../source-fetch';
 
 
@@ -117,46 +117,74 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
     //that 0 pins the chip at zero between reports. On a FINE meter, though, a flat newest bucket is real news:
     //import just stopped, and the chip must say so now, not 10 minutes later.
     //
-    //Tell the two apart the way the scrub path already does: probe the trailing COARSE_PROBE_MS window and count
-    //how many of its buckets carry movement. A sparse window (flat buckets are this meter's normal rhythm) is
-    //averaged - the same coarse-meter read wattsAtFromChangeSeries applies when scrubbing, so live and scrub agree.
-    //A dense window (this meter usually moves every bucket) keeps the zero, exactly as before this change.
+    //Tell the two apart from the meter's REPORT CADENCE, not from how the last few buckets look. The cadence is
+    //the typical gap between consecutive nonzero reports in the recent history (the same signal
+    //smoothCoarseReports reads to un-sawtooth a coarse meter), and an idle stretch cannot redefine it: zeros are
+    //not reports. A flat run SHORTER than one cadence interval is the ordinary silence between two reports of a
+    //coarse meter - the true rate is the last report spread over its interval, exactly what the scrub path's
+    //coarse read produces, so live and scrub agree. A flat run that has REACHED the cadence means a report was
+    //due and none came: the meter has genuinely stopped, and the zero is real - keep it. A dense meter's cadence
+    //is one bucket, so its very first flat bucket already reaches it: unchanged from the pre-change read.
     //
-    //The probe looks BACKWARD from the newest committed end. Centred on the end itself, half of it would hang past
-    //the last bucket into empty future and see only the flat tail; ending at newestEnd places all of it over
-    //committed buckets - the very instant the freshness gate above just vouched for.
+    //Decided PER DIRECTION, and only the between-reports side is estimated. A side that has genuinely stopped
+    //keeps its exact newest zero; estimating it alongside a coarse partner would smear its earlier activity back
+    //into "now" and let that stale value dominate the net.
     const newestEnd = Math.max(
         imp && imp.length > 0 ? imp[imp.length - 1].endMs : 0,
         exp && exp.length > 0 ? exp[exp.length - 1].endMs : 0);
-    //Decided PER DIRECTION, and only the sparse side is averaged. A dense side that has genuinely stopped keeps
-    //its exact newest zero; averaging it alongside a sparse partner would smear its earlier activity back into
-    //"now" and let that stale value dominate the net (a dense export that just ended must not read as still
-    //earning while a coarse import is being estimated). Neither side sparse means both zeros are real: net 0.
-    const impSparse = isSparseWindow(imp, newestEnd);
-    const expSparse = isSparseWindow(exp, newestEnd);
-    if (!impSparse && !expSparse) { return 0; }
+    const impBetween = isBetweenCoarseReports(imp, newestEnd);
+    const expBetween = isBetweenCoarseReports(exp, newestEnd);
+    if (!impBetween && !expBetween) { return 0; }
+    //The probe looks BACKWARD from the newest committed end: centred on the end itself, half of it would hang past
+    //the last bucket into empty future and see only the flat tail; ending at newestEnd places all of it over
+    //committed buckets - the very instant the freshness gate above just vouched for.
     const probeMs = newestEnd - COARSE_PROBE_MS / 2;
-    const impAvg  = impSparse ? (wattsAtFromChangeSeries(imp, probeMs) ?? 0) / 1000 : impR;
-    const expAvg  = expSparse ? (wattsAtFromChangeSeries(exp, probeMs) ?? 0) / 1000 : expR;
+    const impAvg  = impBetween ? (wattsAtFromChangeSeries(imp, probeMs) ?? 0) / 1000 : impR;
+    const expAvg  = expBetween ? (wattsAtFromChangeSeries(exp, probeMs) ?? 0) / 1000 : expR;
     return impAvg - expAvg;
 }
 
-//True when, over the COARSE_PROBE_MS ending at endMs, fewer than DENSE_FRACTION of a series' buckets carry
-//movement - i.e. this meter's normal rhythm has flat buckets in it, so one more flat bucket says nothing about
-//"now". Empty or absent series are not sparse: there is nothing to average, and absence must not vote.
-function isSparseWindow(buckets: ChangeBucket[] | null, endMs: number): boolean
+//True when a series' newest buckets are flat but its meter is merely BETWEEN two of its coarse reports - i.e. the
+//current flat run is shorter than the meter's cadence, so a report is not yet due and the silence carries no news.
+//
+//Cadence = the median gap between consecutive nonzero reports among the last COARSE_CADENCE_REPORTS reports, capped
+//at COARSE_MAX_SPREAD_BUCKETS so a long genuine gap (an overnight lull) never inflates it. Measured on REPORTS only,
+//so the idle stretch under test cannot vote itself "normal" - which is what a window density check gets wrong once
+//a stopped fine meter has been flat for two buckets. Needs two reports to know a gap; a lone spike or an empty
+//series is not "between reports", and a series that has never been coarse (cadence = one bucket) never is either.
+function isBetweenCoarseReports(buckets: ChangeBucket[] | null, endMs: number): boolean
 {
-    if (!buckets || buckets.length === 0) { return false; }
-    const loMs = endMs - COARSE_PROBE_MS;
-    let total = 0;
-    let nonZero = 0;
-    for (const b of buckets)
+    if (!buckets || buckets.length < 2) { return false; }
+    //Index of the last nonzero report, and the length of the flat run after it, in buckets.
+    let last = -1;
+    for (let i = buckets.length - 1; i >= 0; i--)
     {
-        if (b.endMs <= loMs || b.startMs >= endMs) { continue; }
-        total++;
-        if (b.kwh > 0) { nonZero++; }
+        if (buckets[i].endMs > endMs) { continue; }
+        if (buckets[i].kwh > 0) { last = i; break; }
     }
-    return total > 0 && nonZero < Math.ceil(total * DENSE_FRACTION);
+    if (last < 0) { return false; }
+    let flatRun = 0;
+    for (let i = last + 1; i < buckets.length; i++)
+    {
+        if (buckets[i].endMs <= endMs) { flatRun++; }
+    }
+    if (flatRun === 0) { return false; }
+    //Gaps between the last few reports, newest first.
+    const gaps: number[] = [];
+    let prev = last;
+    for (let i = last - 1; i >= 0 && gaps.length < COARSE_CADENCE_REPORTS; i--)
+    {
+        if (buckets[i].kwh > 0)
+        {
+            gaps.push(Math.min(prev - i, COARSE_MAX_SPREAD_BUCKETS));
+            prev = i;
+        }
+    }
+    if (gaps.length === 0) { return false; }
+    gaps.sort((a, b) => a - b);
+    const cadence = gaps[Math.floor(gaps.length / 2)];
+    //Between reports while the flat run has not yet reached the cadence; at or past it, a report was due.
+    return cadence > 1 && flatRun < cadence;
 }
 
 

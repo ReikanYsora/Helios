@@ -111,6 +111,9 @@ export const DENSE_FRACTION    = 0.6;
 //across. Past it, the buckets before a report keep their zero, so a long genuine gap (an overnight lull before the
 //first daytime reading) is never smeared into the reading that follows it.
 export const COARSE_MAX_SPREAD_BUCKETS = 6;
+//Live cost chip: how many recent nonzero reports establish a coarse meter's cadence (median of their gaps). Few
+//enough to track a meter whose interval changes, many enough that one odd gap does not redefine it.
+export const COARSE_CADENCE_REPORTS = 6;
 
 
 //=== Grid mis-scope guard ===
