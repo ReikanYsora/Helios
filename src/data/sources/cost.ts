@@ -10,7 +10,7 @@ import { parseNumericState, pvNormalizeToWatts } from '../../core/format/format'
 import type { EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { localMidnightMinusDays } from '../../core/time/timezone';
-import { COST_STAT_MAX_AGE_MS } from '../../core/config/constants';
+import { COST_STAT_MAX_AGE_MS, COARSE_MAX_SPREAD_BUCKETS, COARSE_CADENCE_REPORTS } from '../../core/config/constants';
 import type { KeyedFetch } from '../source-fetch';
 
 
@@ -109,7 +109,91 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
     };
     const impR = imp && imp.length > 0 ? bucketRate(imp[imp.length - 1]) : 0;
     const expR = exp && exp.length > 0 ? bucketRate(exp[exp.length - 1]) : 0;
-    return impR - expR;
+    if (impR !== 0 || expR !== 0) { return impR - expR; }
+
+    //Both newest buckets are flat. Whether that means "zero" depends on the meter. HA's *_cost sensors only step
+    //when the energy sensor they derive from updates, so a meter that reports every 15 min, recorded at 5-minute
+    //resolution, leaves two of every three buckets at Δ0 while the house is genuinely importing - and publishing
+    //that 0 pins the chip at zero between reports. On a FINE meter, though, a flat newest bucket is real news:
+    //import just stopped, and the chip must say so now, not 10 minutes later.
+    //
+    //Tell the two apart from the meter's REPORT CADENCE, not from how the last few buckets look. The cadence is
+    //the typical gap between consecutive reports in the recent history (the same signal smoothCoarseReports reads
+    //to un-sawtooth a coarse meter), and an idle stretch cannot redefine it: zeros are not reports. A flat run
+    //SHORTER than one cadence is the ordinary silence between two reports of a coarse meter; a flat run that has
+    //REACHED the cadence means a report was due and none came - the meter has genuinely stopped, and the zero is
+    //real. A dense meter's cadence is one bucket, so its very first flat bucket already reaches it: unchanged from
+    //the pre-change read, however long it stays stopped.
+    //
+    //Between reports, the live rate is the LAST REPORT SPREAD OVER ITS OWN INTERVAL - exactly the quantity
+    //smoothCoarseReports assigns those buckets in the store, so live and curve agree - rather than a probe over a
+    //fixed window, which is wrong in both directions: too short and it sees only the flat tail of a 30-min meter
+    //and averages to zero; too long and it smears an earlier report in. Signed, so a negative dynamic tariff (paid
+    //to import) is preserved rather than clamped away.
+    //
+    //Decided PER DIRECTION, and only the between-reports side is estimated. A side that has genuinely stopped
+    //keeps its exact newest zero; estimating it alongside a coarse partner would smear its earlier activity back
+    //into "now" and let that stale value dominate the net.
+    const newestEnd = Math.max(
+        imp && imp.length > 0 ? imp[imp.length - 1].endMs : 0,
+        exp && exp.length > 0 ? exp[exp.length - 1].endMs : 0);
+    const impEst = betweenReportsRate(imp, newestEnd);
+    const expEst = betweenReportsRate(exp, newestEnd);
+    if (impEst === null && expEst === null) { return 0; }
+    return (impEst ?? impR) - (expEst ?? expR);
+}
+
+//A report is any bucket whose Δ is nonzero in EITHER direction: a coarse import series under a negative dynamic
+//tariff (paid to import) steps downward on every report and must still be recognised as reporting.
+function isReport(b: ChangeBucket): boolean { return b.kwh !== 0; }
+
+//When a series' newest buckets are flat but its meter is merely BETWEEN two of its coarse reports, the live rate
+//it should be showing: the last report spread over its own interval (currency/h, signed). Null when the series is
+//not between reports - it has genuinely stopped, or was never coarse, or is empty - so the caller keeps the zero.
+//
+//Cadence = the median gap between consecutive reports among the last COARSE_CADENCE_REPORTS reports, capped at
+//COARSE_MAX_SPREAD_BUCKETS so a long genuine gap (an overnight lull) never inflates it. Measured on REPORTS only,
+//so the idle stretch under test cannot vote itself "normal" - which a window density check gets wrong once a
+//stopped fine meter has been flat for two buckets. Needs two reports to know a gap; a lone spike or an empty
+//series is not "between reports", and a series that has never been coarse (cadence = one bucket) never is either.
+function betweenReportsRate(buckets: ChangeBucket[] | null, endMs: number): number | null
+{
+    if (!buckets || buckets.length < 2) { return null; }
+    //Index of the last report, and the length of the flat run after it, in buckets.
+    let last = -1;
+    for (let i = buckets.length - 1; i >= 0; i--)
+    {
+        if (buckets[i].endMs > endMs) { continue; }
+        if (isReport(buckets[i])) { last = i; break; }
+    }
+    if (last < 0) { return null; }
+    let flatRun = 0;
+    for (let i = last + 1; i < buckets.length; i++)
+    {
+        if (buckets[i].endMs <= endMs) { flatRun++; }
+    }
+    if (flatRun === 0) { return null; }
+    //Gaps between the last few reports, newest first.
+    const gaps: number[] = [];
+    let prev = last;
+    for (let i = last - 1; i >= 0 && gaps.length < COARSE_CADENCE_REPORTS; i--)
+    {
+        if (isReport(buckets[i]))
+        {
+            gaps.push(Math.min(prev - i, COARSE_MAX_SPREAD_BUCKETS));
+            prev = i;
+        }
+    }
+    if (gaps.length === 0) { return null; }
+    gaps.sort((a, b) => a - b);
+    const cadence = gaps[Math.floor(gaps.length / 2)];
+    //Between reports only while the flat run has not yet reached the cadence; at or past it, a report was due.
+    if (cadence <= 1 || flatRun >= cadence) { return null; }
+    //The last report's Δ, spread over the interval it accumulated across (its own bucket plus the gap before it,
+    //capped like smoothCoarseReports), as a per-hour rate. Uses the buckets' real durations, not an assumed period.
+    const first  = Math.max(0, last - cadence + 1);
+    const spanMs = buckets[last].endMs - buckets[first].startMs;
+    return spanMs > 0 ? buckets[last].kwh / (spanMs / 3_600_000) : null;
 }
 
 
