@@ -56,6 +56,31 @@ rotation on a **CPU-rasterized** basemap, which dodges the corruption while stay
 pixel-correct, so the scene turns smoothly on those devices too. Thanks to
 @beatschubser (#383).
 
+### Fixed: no more flicker on Android tablets when the map rotates
+
+On Android WebViews (the Home Assistant app, kiosk browsers) the scene could flicker
+heavily while rotating or panning. The "your real sky" weather grade was applied as a
+CSS filter over the map, which forced the whole 3D scene to re-draw every frame on
+those devices. The grade is now painted straight into the ground and buildings, so the
+map turns cleanly. This also removes a small per-frame cost on every device. Thanks to
+@Aaroneisele55 (#396) and @charleslales (#370).
+
+### Fixed: the energy diagram stays readable while the scene turns
+
+With auto-rotation on, the sun path and the irradiance readout swept in front of the
+day's energy diagram, so you had to wait for the rotation to come round before you
+could read it. The diagram now always draws on top of the sun path. Thanks to
+@beatschubser (#397).
+
+### Fixed: the cost chip no longer flips to zero between meter reports
+
+For a grid meter that reports on a coarse cadence (every 15 minutes, say), Home
+Assistant's cost sensor only steps when the meter does, leaving the buckets in between
+at zero. The cost chip read those as a real 0.00/h, so it flickered between the true
+rate and zero while you were genuinely importing. It now recognises the meter's
+reporting cadence and holds the last report's rate between updates, while a meter that
+has genuinely stopped still falls to zero. Thanks to @Rag30 (#395).
+
 ---
 
 ## 2026.9.1

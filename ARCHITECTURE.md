@@ -243,9 +243,12 @@ moment, dashed, as its own line: the same shape, only its certainty gives way.
 
 The curve is projected by the engine but rendered as a **HUD layer**, not scene
 geometry, and deliberately: `#map-container` is its own stacking context, so
-anything the renderer draws is pinned below the chips. Like the sun arc it is
-layered in two depth passes around them (far behind at z 5, near over at z 11),
-which also puts it clear of the buildings it would otherwise cut through. The engine
+anything the renderer draws is pinned below the chips. It is layered in two depth
+passes (far and near) so the curve self-occludes at its own crossings, and both
+passes sit **above** the solar overlays (sun disc, arc, incidence ray, irradiance
+label): with auto-rotation the sun would otherwise sweep across the curve and hide
+the reading, so the diagram wins that overlap. It stays below the per-chip detail
+panel and the timeline, and clear of the buildings it would otherwise cut through. The engine
 stamps the radius on because it owns the arc scale, so the card hands over everything
 but that.
 
@@ -302,7 +305,11 @@ altitude), and rain, snow and thunderstorm stack on top. The overlay is CSS
 layers plus two particle canvases (`WeatherRain`, `WeatherSnow`) and a scripted
 lightning flash (`WeatherStorm`), driven by `--wx-*` custom properties the card
 sets from the layer strengths. It sits between the scene and the chips, so weather
-tints the map, never the data.
+tints the map, never the data. The scene grade itself (saturation + brightness for
+cloud cover) is **baked into the ground and building paint** by the renderer
+(`SceneRenderer.setWeatherGrade`), not applied as a CSS `filter` on the map layer:
+a filter there wraps the CSS 3D-transformed basemap and forces the whole scene to
+re-flatten every frame while rotating, which flickers hard on Android WebViews.
 
 ### Weather overrides, `data/sources/irradiance.ts`, `data/sources/weather-override.ts`
 
