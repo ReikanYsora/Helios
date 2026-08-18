@@ -9,8 +9,9 @@
 
 import { SceneCamera } from './projection';
 import { pxPerMetreFor, type Ground } from './tiles';
-import { buildVectorGround, type GroundStyle } from './ground-render';
+import { buildVectorGround, GROUND_LAYER_KEYS, type GroundStyle, type GroundPalette } from './ground-render';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
+import { gradeColor } from '../core/render-kit/colors';
 import {
     SVG_NS,
     GROWTH_RISE_MS,
@@ -179,6 +180,11 @@ export class SceneRenderer
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;
     private _groundAltitude  = 45;
+    //"Your real sky" weather grade, baked into the ground + building colours instead of a CSS filter on the whole
+    //map layer (which re-flattens the 3D-transformed scene every frame -> flicker on Android WebViews). saturate
+    //then brightness, 1/1 = neutral. Only the paint carries it, so rotation stays a pure GPU transform.
+    private _wxSat    = 1;
+    private _wxBright = 1;
     //Increments per build so a slower in-flight tile fetch can't overwrite a newer one (guards a rapid
     //home-position change landing while the previous tile grid is still fetching).
     private _groundToken = 0;
@@ -271,6 +277,8 @@ export class SceneRenderer
         this._groundRepaint  = built.repaint;
         this._groundRepaintProjected = built.repaintProjected;
         this._projectedPose = '';
+        //buildVectorGround painted the ground ungraded; if a weather grade is already active, repaint it graded.
+        if (this._wxSat !== 1 || this._wxBright !== 1) { this._repaintGroundFromCache(); }
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
         //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
         //pixels. A browser may drop a canvas's backing store while the page sits idle, and nothing here would put
@@ -290,22 +298,48 @@ export class SceneRenderer
     public setGroundStyle(style: GroundStyle): void
     {
         this._groundStyleCur = style;
-        if (this._groundRepaint)
-        {
-            this._groundRepaint(style, this._groundAltitude);
-            this.scheduleRedraw();
-        }
+        this._repaintGroundFromCache();
+        this.scheduleRedraw();
     }
 
     //Repaint the ground for a new sun altitude (the day/night colour grade), from the cached features, no fetch.
     public setGroundAltitude(altitude: number): void
     {
         this._groundAltitude = altitude;
-        if (this._groundRepaint && this._groundStyleCur)
-        {
-            this._groundRepaint(this._groundStyleCur, altitude);
-            this.scheduleRedraw();
-        }
+        this._repaintGroundFromCache();
+        this.scheduleRedraw();
+    }
+
+    //Set the "your real sky" weather grade (saturate/brightness). Baked into the ground + building colours, not a
+    //CSS filter, so a static scene rotates as a pure GPU transform. A no-op when unchanged; a change repaints the
+    //ground from its cache and rebuilds the scene SVG (both pose-guarded on the grade below).
+    public setWeatherGrade(sat: number, bright: number): void
+    {
+        if (sat === this._wxSat && bright === this._wxBright) { return; }
+        this._wxSat    = sat;
+        this._wxBright = bright;
+        this._repaintGroundFromCache();
+        this.scheduleRedraw();
+    }
+
+    //The current ground style with the weather grade baked into its palette (the same style object when neutral, so
+    //the common path allocates nothing). Grading the palette before the altitude tint keeps the ground consistent
+    //with the buildings, which grade the same way.
+    private _gradedGroundStyle(): GroundStyle | undefined
+    {
+        if (!this._groundStyleCur) { return undefined; }
+        if (this._wxSat === 1 && this._wxBright === 1) { return this._groundStyleCur; }
+        const src     = this._groundStyleCur.palette;
+        const palette = {} as GroundPalette;
+        for (const key of GROUND_LAYER_KEYS) { palette[key] = gradeColor(src[key], this._wxSat, this._wxBright); }
+        return { palette, hidden: this._groundStyleCur.hidden };
+    }
+
+    //Repaint the ground canvas from its cached vector features at the current style + grade + altitude.
+    private _repaintGroundFromCache(): void
+    {
+        const style = this._gradedGroundStyle();
+        if (this._groundRepaint && style) { this._groundRepaint(style, this._groundAltitude); }
     }
 
     public setBuildings(buildings: Building[]): void
@@ -438,10 +472,11 @@ export class SceneRenderer
     private _paintProjectedGround(w: number, h: number): void
     {
         if (!this._ground || !this._groundRepaintProjected || !this._groundStyleCur) { return; }
-        const pose = `${w}x${h}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}`;
+        const pose = `${w}x${h}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
         if (pose === this._projectedPose) { return; }
         this._projectedPose = pose;
-        this._groundRepaintProjected(this.camera, w, h, this._groundStyleCur, this._groundAltitude);
+        const style = this._gradedGroundStyle() ?? this._groundStyleCur;
+        this._groundRepaintProjected(this.camera, w, h, style, this._groundAltitude);
         //Compat path carries no CSS transform; clear any left over from the normal path (matters when toggling).
         this._ground.el.style.transform = '';
         this._ground.el.style.transformOrigin = '';
@@ -489,12 +524,26 @@ export class SceneRenderer
         //that must run every frame (onAfterDraw) stays outside this gate.
         const scenePose = `${width}x${height}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}`
             + `|${this._sun.azimuth.toFixed(2)}|${this._sun.altitude.toFixed(2)}|${this._growth.toFixed(3)}`
-            + `|${this._home.color ?? ''}|${(this._home.growth ?? 1).toFixed(3)}|${this._sceneRev}`;
+            + `|${this._home.color ?? ''}|${(this._home.growth ?? 1).toFixed(3)}|${this._sceneRev}`
+            + `|${this._wxSat}|${this._wxBright}`;
         if (scenePose !== this._lastScenePose)
         {
             this._lastScenePose = scenePose;
             const alt = this._sun.altitude;
             const drawn = this._buildings;
+            //Bake the weather grade into the building + shadow colours (identity at 1/1, so the neutral path is
+            //byte-identical to before). Opacities are untouched - the grade is a colour transform, like the CSS
+            //filter it replaces, but without wrapping the 3D-transformed layer in a per-frame re-flatten.
+            const s = this._wxSat;
+            const br = this._wxBright;
+            const gradedPalette: ScenePalette = {
+                home:     gradeColor(this._palette.home, s, br),
+                neighbor: gradeColor(this._palette.neighbor, s, br),
+            };
+            const gradedShadow = gradeColor(this._palette.shadow, s, br);
+            const gradedHome: HomeAppearance = this._home.color
+                ? { ...this._home, color: gradeColor(this._home.color, s, br) }
+                : this._home;
             //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
             //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
             //Each pass in its own group. A <g> changes nothing about the picture, and it makes the two passes
@@ -502,9 +551,9 @@ export class SceneRenderer
             //rebuilt whole and anything done to the nodes themselves is gone by the next rebuild.
             this._sceneSvg.innerHTML =
                 `<g class="scene-shadows">`
-                + renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity)
+                + renderShadows(this.camera, drawn, this._sun, gradedShadow, this._palette.shadowOpacity)
                 + `</g><g class="scene-buildings">`
-                + renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home, this._sun.azimuth)
+                + renderBuildings(this.camera, drawn, alt, gradedPalette, this._growth, this._palette.neighborOpacity, gradedHome, this._sun.azimuth)
                 + `</g>`;
         }
 

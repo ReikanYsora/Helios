@@ -1111,6 +1111,7 @@ export class HeliosCard extends LitElement
             this._wxRainCtl.setIntensity(0);
             this._wxSnowCtl.setIntensity(0);
             this._wxStormCtl.setStrength(0);
+            this._engine?.setWeatherGrade(1, 1);
             return;
         }
 
@@ -1126,7 +1127,7 @@ export class HeliosCard extends LitElement
         this.style.setProperty('--wx-cloud', p.cloud.toFixed(3));
         this.style.setProperty('--wx-rain',  p.rain.toFixed(3));
         this.style.setProperty('--wx-snow',  p.snow.toFixed(3));
-        this.style.setProperty('--wx-map-filter', `saturate(${p.sat.toFixed(3)}) brightness(${p.bright.toFixed(3)})`);
+        this._engine?.setWeatherGrade(p.sat, p.bright);
         this._wxRainCtl.setIntensity(p.rain);
         this._wxSnowCtl.setIntensity(p.snow);
         this._wxStormCtl.setStrength(p.storm);

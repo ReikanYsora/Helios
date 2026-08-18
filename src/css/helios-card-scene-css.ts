@@ -838,10 +838,11 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  "Your real sky" weather overlay. The scene is graded by a filter on #map-container (--wx-map-filter); the
-        overlay layers fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain / --wx-snow / --wx-flash, all set from
-        JS by the resolved weather. Sits UNDER the chips (z 8).  */
-    :host([data-wx-on]) #map-container { filter: var(--wx-map-filter, none); transition: filter 0.18s linear; }
+    /*  "Your real sky" weather overlay. The scene grade (saturate/brightness) is baked into the ground + building
+        PAINT by the renderer (SceneRenderer.setWeatherGrade), not a CSS filter here: a filter on #map-container wraps
+        the CSS 3D-transformed basemap, forcing the whole scene to re-flatten every frame while rotating - heavy
+        flicker on Android WebViews. The overlay layers still fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain /
+        --wx-snow / --wx-flash, all set from JS by the resolved weather. Sits UNDER the chips (z 8).  */
 
     .helios-wx { position: absolute; inset: 0; z-index: 6; pointer-events: none; border-radius: inherit; overflow: hidden; display: none; }
     :host([data-wx-on]) .helios-wx { display: block; }

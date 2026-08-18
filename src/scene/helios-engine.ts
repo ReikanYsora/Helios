@@ -234,6 +234,13 @@ export class HeliosEngine
         this._renderForCurrentSelection();
     }
 
+    //"Your real sky" scene grade (saturate/brightness from the resolved weather). Baked into the ground + building
+    //paint by the renderer, not a CSS filter on the map layer - the card computes it, the renderer carries it.
+    public setWeatherGrade(sat: number, bright: number): void
+    {
+        this._renderer?.setWeatherGrade(sat, bright);
+    }
+
     //Nearest-neighbour override value for `variable` at `t`, or null (outside the window / no samples), in which
     //case the caller keeps the model value.
     private _weatherOverrideAt(variable: WeatherOverrideVar, t: Date): number | null
