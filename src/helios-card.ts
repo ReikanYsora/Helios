@@ -37,6 +37,7 @@ import
     clearBatteryModuleCaches
 } from './data/sources/battery';
 import { refreshIrradiance, clearIrradianceModuleCaches } from './data/sources/irradiance';
+import { refreshVanTracker, type VanFix } from './data/sources/van-tracker';
 import { refreshWeatherOverrides, clearWeatherOverrideCaches } from './data/sources/weather-override';
 import
 {
@@ -225,6 +226,9 @@ export class HeliosCard extends LitElement
     _irradianceHistory: { times: Date[]; values: number[] } | null = null;
     _irradianceFetchKey = '';
     _irradianceFetching = false;
+    //Vehicle mode: recent GPS fixes for the configured van-tracker entity, owned by van-tracker.ts. Plain
+    //field (no @state): render never reads it, refreshVanTracker owns it entirely.
+    _vanFixBuffer: VanFix[] = [];
     //Per-variable fetch/merge state for the local-sensor weather overrides (cloud/precip/snow/temp/humidity).
     //Plain field (no @state): the engine owns the lookup, render never reads it. Keyed by weather variable.
     _weatherOverrideState = new Map<WeatherOverrideVar, {
@@ -1332,6 +1336,7 @@ export class HeliosCard extends LitElement
         refreshCostSeries(this);
         refreshCostLive(this);
         refreshIrradiance(this);
+        refreshVanTracker(this);
         refreshWeatherOverrides(this);
         //Per-device consumption series for the monitoring groups (fire-and-forget; keyed so an unchanged id-set +
         //window is a no-op; clears itself when no device is grouped).

@@ -72,6 +72,28 @@ export interface Translations
         homeLatitude:             string;
         homeLongitude:            string;
         locationHint:             string;
+        //Vehicle mode: draws a live-tracked van instead of the fixed house. Optional -- English-only for now
+        //(pickTranslations falls every locale back to English for these), so adding it needs no changes to
+        //the other 26 locale files.
+        structureMode?:           string;
+        structureModeHouse?:      string;
+        structureModeVan?:        string;
+        structureModeHelp?:       string;
+        locationVanHint?:         string;
+        vehicleSection?:          string;
+        vanTrackerEntity?:        string;
+        vanTrackerEntityHelp?:    string;
+        vanSpeedEntity?:          string;
+        vanSpeedEntityHelp?:      string;
+        vanHeadingEntity?:        string;
+        vanHeadingEntityHelp?:    string;
+        vanLength?:               string;
+        vanWidth?:                string;
+        vanHeight?:               string;
+        roadSnapEnabled?:         string;
+        roadSnapEnabledHint?:     string;
+        roadSnapMaxDistance?:     string;
+        roadSnapMinSpeed?:        string;
         //Display radius + camera auto-rotate, titled "UI & map".
         uiAndMapSection:          string;
         autoRotate:               string;
@@ -281,7 +303,7 @@ const FALLBACK: Translations = en;
 
 //Adding a locale: create ./locales/xx.ts exporting `xx: Translations`, import it here and add to
 //LOCALES; pickTranslations then resolves `xx-YY` -> `xx-yy` -> `xx` -> `en`.
-export function pickTranslations(haLanguage: string | undefined): Translations
+function resolveLocale(haLanguage: string | undefined): Translations
 {
     if (!haLanguage)
     {
@@ -302,4 +324,17 @@ export function pickTranslations(haLanguage: string | undefined): Translations
     }
 
     return FALLBACK;
+}
+
+export function pickTranslations(haLanguage: string | undefined): Translations
+{
+    const picked = resolveLocale(haLanguage);
+    if (picked === FALLBACK)
+    {
+        return picked;
+    }
+    //Newer optional `editor.*` keys (vehicle mode) are only ever populated in English; every other locale
+    //transparently reads English for them instead of `undefined`, so a translated locale never needs a
+    //change just because a new English-only key was added.
+    return { ...picked, editor: { ...FALLBACK.editor, ...picked.editor } };
 }

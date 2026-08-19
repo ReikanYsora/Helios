@@ -43,6 +43,20 @@ export class SceneCamera
     //the seed centre (0,0), which would briefly throw the whole HUD into the top-left corner.
     public hasViewport = false;
 
+    //Local-metre pan offset, subtracted from every projected point before the camera basis is applied. Lets
+    //the whole scene slide under a fixed screen anchor (vehicle mode's van) between the coarser re-tile
+    //origin jumps, without touching any other projection math. House mode never calls setPan, so panE/panN
+    //stay 0 and every projection is byte-identical to before.
+    public panE = 0;
+    public panN = 0;
+
+    //Set the local-metre pan offset (see panE/panN above).
+    public setPan(eastM: number, northM: number): void
+    {
+        this.panE = eastM;
+        this.panN = northM;
+    }
+
     //Cached trig basis, recomputed by setViewport. Seeded to the default pose so a project() before the
     //first setViewport() still returns a sane value rather than NaN.
     private _cosB = Math.cos(DEFAULT_BEARING * DEG);
@@ -77,8 +91,8 @@ export class SceneCamera
     //Project a local-metric point (east, north, up) to screen px. `depth` is the camera-space Z.
     public project3(eastM: number, northM: number, upM: number): ProjectedPoint
     {
-        const x = eastM  * this.pxPerMetre;
-        const y = -northM * this.pxPerMetre;
+        const x = (eastM  - this.panE) * this.pxPerMetre;
+        const y = -(northM - this.panN) * this.pxPerMetre;
         const z = upM    * this.pxPerMetre;
         const rx = x * this._cosB - y * this._sinB;
         const ry = x * this._sinB + y * this._cosB;

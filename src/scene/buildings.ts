@@ -355,6 +355,11 @@ export interface InterpretBuildingsOptions
     realSize:       boolean;
     fixedHeightM:   number;
     clusterRadiusM: number;
+    //Whether the nearest building is boosted to "home" (full opacity/brightness) + clustered with its
+    //attached outbuildings. Default true. Vehicle mode passes false: nearby real buildings still render for
+    //context, but the van itself (not a building) is the focal point, and there is no fallback house to draw
+    //when the area has no mapped buildings.
+    markHome?: boolean;
 }
 
 //Turn option-independent RawBuilding[] into render-ready Building[] per the options. Pure and cheap: filter
@@ -434,10 +439,13 @@ export function interpretBuildings(
     opts: InterpretBuildingsOptions
 ): Building[]
 {
-    //No raw data (offline, tile fetch failed, or no mapped buildings): the single fallback house.
+    const markHome = opts.markHome !== false;
+
+    //No raw data (offline, tile fetch failed, or no mapped buildings): the single fallback house -- unless
+    //nothing should be marked "home" (vehicle mode), where an empty area simply renders no buildings.
     if (raw.length === 0)
     {
-        return [fallbackHouse()];
+        return markHome ? [fallbackHouse()] : [];
     }
 
     //Filter to the display radius (raw is distance-sorted, so this is a prefix). Radius 0 leaves nothing, so
@@ -469,23 +477,28 @@ export function interpretBuildings(
 
     //Mark the home: the smallest-distanceM building (first after the sort), then every other kept building
     //whose centroid is within clusterRadiusM of it (attached outbuildings join the home set). 0 = home only.
-    const homeIdx = 0;
-    buildings[homeIdx].isHome = true;
-    const home    = buildings[homeIdx];
-    const cluster = Math.max(0, opts.clusterRadiusM);
-    if (cluster > 0)
+    //Skipped in vehicle mode (markHome false): nearby buildings still render for context, but none is
+    //boosted to "home" opacity/brightness -- the van itself is the focal point.
+    if (markHome)
     {
-        for (let i = 0; i < buildings.length; i++)
+        const homeIdx = 0;
+        buildings[homeIdx].isHome = true;
+        const home    = buildings[homeIdx];
+        const cluster = Math.max(0, opts.clusterRadiusM);
+        if (cluster > 0)
         {
-            if (i === homeIdx)
+            for (let i = 0; i < buildings.length; i++)
             {
-                continue;
-            }
-            const dx = buildings[i].centerX - home.centerX;
-            const dy = buildings[i].centerY - home.centerY;
-            if (Math.hypot(dx, dy) <= cluster)
-            {
-                buildings[i].isHome = true;
+                if (i === homeIdx)
+                {
+                    continue;
+                }
+                const dx = buildings[i].centerX - home.centerX;
+                const dy = buildings[i].centerY - home.centerY;
+                if (Math.hypot(dx, dy) <= cluster)
+                {
+                    buildings[i].isHome = true;
+                }
             }
         }
     }

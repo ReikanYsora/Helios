@@ -68,6 +68,13 @@ const ROAD_WIDTH_M: Record<string, number> = {
     minor: 6, residential: 6, unclassified: 6, living_street: 5, pedestrian: 5,
     service: 4, track: 3, path: 2, footway: 2, cycleway: 2, steps: 2,
 };
+
+//A drivable road centreline (not rail, not a path/footway/cycleway/steps/track). Shared with vehicle mode's
+//road-snap, so "what counts as a road to paint" and "what counts as a road to snap onto" never drift apart.
+export function isDrivableRoad(f: GroundFeature): boolean
+{
+    return f.line && f.layer === 'transportation' && f.cls !== 'rail' && !/^path|footway|cycleway|steps|track/.test(f.cls);
+}
 const ROAD_CASING_M = 1.4;
 //Global multiplier on every road width, so the whole network thins/thickens in one knob while we tune the look.
 const ROAD_SCALE = 0.4;
@@ -203,7 +210,7 @@ function paint(
     }
 
     //Roads: rank so minor draws under major; a casing pass under a fill pass gives the classic outlined road.
-    const roads = features.filter((f) => f.line && f.layer === 'transportation' && f.cls !== 'rail' && !/^path|footway|cycleway|steps|track/.test(f.cls));
+    const roads = features.filter(isDrivableRoad);
     const rank  = (c: string): number => ROAD_WIDTH_M[c] ?? 6;
     roads.sort((a, b) => rank(a.cls) - rank(b.cls));
     const roadWidth = (c: string): number => (ROAD_WIDTH_M[c] ?? 6) * pxPerMetre * ROAD_SCALE;
@@ -274,6 +281,9 @@ export interface VectorGround
         style: GroundStyle,
         altitude: number,
     ) => void;
+    //Every decoded ground feature (not just roads), retained so vehicle mode can query road geometry for
+    //snapping without a second fetch. Painting already holds this in a closure; this just also hands it out.
+    features: GroundFeature[];
 }
 
 //Build the basemap canvas for a home position. Never rejects: a tile outage yields a blank themed fill (the home
@@ -412,5 +422,5 @@ export async function buildVectorGround(
     fade.style.width  = `${size}px`;
     fade.style.height = `${size}px`;
 
-    return { ground: { el, fade, homeX, homeY, size }, repaint, repaintProjected };
+    return { ground: { el, fade, homeX, homeY, size }, repaint, repaintProjected, features };
 }

@@ -9,8 +9,10 @@
 
 import { SceneCamera } from './projection';
 import { pxPerMetreFor, type Ground } from './tiles';
-import { buildVectorGround, type GroundStyle } from './ground-render';
+import { buildVectorGround, isDrivableRoad, type GroundStyle } from './ground-render';
+import type { GroundFeature } from './ground-vector';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
+import { renderVan, type VanPose } from './van';
 import {
     SVG_NS,
     GROWTH_RISE_MS,
@@ -170,6 +172,11 @@ export class SceneRenderer
     //home-position change landing while the previous tile grid is still fetching).
     private _groundToken = 0;
     private _buildings: Building[] = [];
+    //Vehicle mode: the van's current pose, or null (house mode, or no fix yet -- nothing drawn either way).
+    private _van: VanPose | null = null;
+    //Drivable-road centrelines from the last-built ground (a subset of its full feature set), retained so
+    //vehicle mode's road-snap can query them without a second fetch. Empty in house mode (never read there).
+    private _roadFeatures: GroundFeature[] = [];
     private _sun = { azimuth: 0, altitude: 0 };
     private _growth = 1;
     //Home prism appearance (colour, squash multiplier). Empty colour falls back to palette.home.
@@ -254,6 +261,7 @@ export class SceneRenderer
         this._ground         = built.ground;
         this._groundRepaint  = built.repaint;
         this._groundRepaintProjected = built.repaintProjected;
+        this._roadFeatures   = built.features.filter(isDrivableRoad);
         this._projectedPose = '';
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
         //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
@@ -296,6 +304,28 @@ export class SceneRenderer
     {
         this._buildings = buildings;
         this.scheduleRedraw();
+    }
+
+    //Vehicle mode: set (or clear, with null) the van's current pose. Cleared automatically only by the host;
+    //the renderer itself never invents or drops a pose on its own.
+    public setVan(pose: VanPose | null): void
+    {
+        this._van = pose;
+        this.scheduleRedraw();
+    }
+
+    //Vehicle mode: local-metre offset the whole scene pans by (see SceneCamera.setPan). House mode never
+    //calls this, so its rendering stays byte-identical.
+    public setPan(eastM: number, northM: number): void
+    {
+        this.camera.setPan(eastM, northM);
+        this.scheduleRedraw();
+    }
+
+    //Drivable-road centrelines from the currently loaded ground, for vehicle mode's road-snap.
+    public getRoadFeatures(): GroundFeature[]
+    {
+        return this._roadFeatures;
     }
 
     public setSun(azimuth: number, altitude: number): void
@@ -453,7 +483,12 @@ export class SceneRenderer
             if (this._projectedGround) { this._paintProjectedGround(width, height); }
             else
             {
-                const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
+                //Vehicle mode pans the pivot by the live local-metre offset (panE/panN, in ground-canvas px at
+                //the ground's own scale, which camera.pxPerMetre already carries) so the basemap visually
+                //slides under the van between the coarser setHome() re-tile jumps. Always 0 in house mode.
+                const pivotX = this._ground.homeX + this.camera.panE * this.camera.pxPerMetre;
+                const pivotY = this._ground.homeY - this.camera.panN * this.camera.pxPerMetre;
+                const { transform, transformOrigin } = this.camera.groundTransform(pivotX, pivotY);
                 this._ground.el.style.transformOrigin = transformOrigin;
                 this._ground.el.style.transform = transform;
                 this._ground.fade.style.display = '';
@@ -472,12 +507,18 @@ export class SceneRenderer
         //Each pass in its own group. A <g> changes nothing about the picture, and it makes the two passes
         //addressable from a stylesheet - which is the only way to hold one of them off, since this innerHTML is
         //rebuilt on every frame and anything done to the nodes themselves is gone by the next one.
+        const vanSvg = this._van
+            ? `<g class="scene-van">`
+              + renderVan(this.camera, this._van, alt, this._home.color ?? this._palette.home, this._sun.azimuth)
+              + `</g>`
+            : '';
         this._sceneSvg.innerHTML =
             `<g class="scene-shadows">`
             + renderShadows(this.camera, drawn, this._sun, this._palette.shadow, this._palette.shadowOpacity)
             + `</g><g class="scene-buildings">`
             + renderBuildings(this.camera, drawn, alt, this._palette, this._growth, this._palette.neighborOpacity, this._home, this._sun.azimuth)
-            + `</g>`;
+            + `</g>`
+            + vanSvg;
 
         this.onAfterDraw?.();
     }

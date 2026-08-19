@@ -47,6 +47,21 @@ import
     mapColorKey,
     mapShowKey,
     type MapThemeMode,
+    DEFAULT_VAN_LENGTH_M,
+    MIN_VAN_LENGTH_M,
+    MAX_VAN_LENGTH_M,
+    DEFAULT_VAN_WIDTH_M,
+    MIN_VAN_WIDTH_M,
+    MAX_VAN_WIDTH_M,
+    DEFAULT_VAN_HEIGHT_M,
+    MIN_VAN_HEIGHT_M,
+    MAX_VAN_HEIGHT_M,
+    DEFAULT_ROAD_SNAP_MAX_DISTANCE_M,
+    MIN_ROAD_SNAP_MAX_DISTANCE_M,
+    MAX_ROAD_SNAP_MAX_DISTANCE_M,
+    DEFAULT_ROAD_SNAP_MIN_SPEED_KMH,
+    MIN_ROAD_SNAP_MIN_SPEED_KMH,
+    MAX_ROAD_SNAP_MIN_SPEED_KMH,
 } from '../core/config/helios-config';
 import { CHIP_SLOTS, chipSlotColor, chipSlotIcon, type ChipSlot } from '../core/config/chip-appearance';
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundLayerKey } from '../scene/ground-render';
@@ -1110,6 +1125,28 @@ export class HeliosCardEditor extends LitElement
                     />
                 </label>
                 <div class="hint">${t.editor.locationHint}</div>
+                ${c['structure-mode'] === 'van' ? html`<div class="hint">${t.editor.locationVanHint ?? ''}</div>` : nothing}
+
+                </details>
+
+                <details class="advanced-section" data-section="vehicle" ?open=${this._openSection === 'vehicle'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:rv-truck"></ha-icon>${t.editor.vehicleSection ?? 'Vehicle'}</summary>
+                ${this._renderSelect('structure-mode', t.editor.structureMode ?? 'Structure',
+                    [
+                        { value: 'house', label: t.editor.structureModeHouse ?? 'House' },
+                        { value: 'van',   label: t.editor.structureModeVan   ?? 'Van' },
+                    ], 'house', t.editor.structureModeHelp ?? '')}
+                ${c['structure-mode'] === 'van' ? html`
+                    ${this._renderSensorPicker('van-tracker-entity', t.editor.vanTrackerEntity ?? 'Van location (device_tracker / person)', t.editor.vanTrackerEntityHelp ?? '', ['device_tracker', 'person'])}
+                    ${this._renderSensorPicker('van-speed-entity', t.editor.vanSpeedEntity ?? 'Speed sensor (optional)', t.editor.vanSpeedEntityHelp ?? '')}
+                    ${this._renderSensorPicker('van-heading-entity', t.editor.vanHeadingEntity ?? 'Heading sensor (optional)', t.editor.vanHeadingEntityHelp ?? '')}
+                    ${this._renderSlider('van-length-m', t.editor.vanLength ?? 'Van length', MIN_VAN_LENGTH_M, MAX_VAN_LENGTH_M, 0.5, DEFAULT_VAN_LENGTH_M, ' m')}
+                    ${this._renderSlider('van-width-m', t.editor.vanWidth ?? 'Van width', MIN_VAN_WIDTH_M, MAX_VAN_WIDTH_M, 0.1, DEFAULT_VAN_WIDTH_M, ' m')}
+                    ${this._renderSlider('van-height-m', t.editor.vanHeight ?? 'Van height', MIN_VAN_HEIGHT_M, MAX_VAN_HEIGHT_M, 0.1, DEFAULT_VAN_HEIGHT_M, ' m')}
+                    ${this._renderToggle('road-snap-enabled', t.editor.roadSnapEnabled ?? 'Snap to road while driving', t.editor.roadSnapEnabledHint ?? '', undefined, undefined, true)}
+                    ${this._renderSlider('road-snap-max-distance', t.editor.roadSnapMaxDistance ?? 'Max snap distance', MIN_ROAD_SNAP_MAX_DISTANCE_M, MAX_ROAD_SNAP_MAX_DISTANCE_M, 1, DEFAULT_ROAD_SNAP_MAX_DISTANCE_M, ' m', c['road-snap-enabled'] === false)}
+                    ${this._renderSlider('road-snap-min-speed', t.editor.roadSnapMinSpeed ?? 'Min. speed to snap', MIN_ROAD_SNAP_MIN_SPEED_KMH, MAX_ROAD_SNAP_MIN_SPEED_KMH, 1, DEFAULT_ROAD_SNAP_MIN_SPEED_KMH, ' km/h', c['road-snap-enabled'] === false)}
+                ` : nothing}
 
                 </details>
 

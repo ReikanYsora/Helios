@@ -10,6 +10,11 @@ import {
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
     DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
+    DEFAULT_VAN_LENGTH_M, MIN_VAN_LENGTH_M, MAX_VAN_LENGTH_M,
+    DEFAULT_VAN_WIDTH_M, MIN_VAN_WIDTH_M, MAX_VAN_WIDTH_M,
+    DEFAULT_VAN_HEIGHT_M, MIN_VAN_HEIGHT_M, MAX_VAN_HEIGHT_M,
+    DEFAULT_ROAD_SNAP_MAX_DISTANCE_M, MIN_ROAD_SNAP_MAX_DISTANCE_M, MAX_ROAD_SNAP_MAX_DISTANCE_M,
+    DEFAULT_ROAD_SNAP_MIN_SPEED_KMH, MIN_ROAD_SNAP_MIN_SPEED_KMH, MAX_ROAD_SNAP_MIN_SPEED_KMH,
 } from './constants';
 import { clamp } from '../render-kit/math';
 
@@ -24,6 +29,11 @@ export {
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
     DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
+    DEFAULT_VAN_LENGTH_M, MIN_VAN_LENGTH_M, MAX_VAN_LENGTH_M,
+    DEFAULT_VAN_WIDTH_M, MIN_VAN_WIDTH_M, MAX_VAN_WIDTH_M,
+    DEFAULT_VAN_HEIGHT_M, MIN_VAN_HEIGHT_M, MAX_VAN_HEIGHT_M,
+    DEFAULT_ROAD_SNAP_MAX_DISTANCE_M, MIN_ROAD_SNAP_MAX_DISTANCE_M, MAX_ROAD_SNAP_MAX_DISTANCE_M,
+    DEFAULT_ROAD_SNAP_MIN_SPEED_KMH, MIN_ROAD_SNAP_MIN_SPEED_KMH, MAX_ROAD_SNAP_MIN_SPEED_KMH,
 } from './constants';
 
 
@@ -69,6 +79,24 @@ export interface HeliosConfig
     //to hass.config. The window.__heliosLocationOverride debug hook still wins over this.
     'home-latitude'?:          unknown;
     'home-longitude'?:         unknown;
+    //Vehicle mode: 'van' replaces the fixed house with a van tracked live from `van-tracker-entity`. Default
+    //'house' keeps today's behaviour unchanged.
+    'structure-mode'?:         unknown;
+    //A device_tracker/person entity carrying live `attributes.latitude`/`longitude`. Required for van mode;
+    //until it resolves a fix, the van simply doesn't render (no misleading default-location placeholder).
+    'van-tracker-entity'?:     unknown;
+    //Optional sensors overriding the GPS-derived speed (m/s) and heading (deg from north). Absent falls back
+    //to the tracker's own `speed`/`course` attributes, then to fixes derived from recent GPS history.
+    'van-speed-entity'?:       unknown;
+    'van-heading-entity'?:     unknown;
+    //Van body extents (m), clamped to sane ranges, defaulting to a mid-size campervan.
+    'van-length-m'?:           unknown;
+    'van-width-m'?:            unknown;
+    'van-height-m'?:           unknown;
+    //Snap the van onto the nearest road centreline while it's moving and close enough to one. Default true.
+    'road-snap-enabled'?:      unknown;
+    'road-snap-max-distance'?: unknown;
+    'road-snap-min-speed'?:    unknown;
     //Live irradiance sensor (W/m²) at the home, preferred over the model for the live "now" reading. Past +
     //forecast still come from the model.
     'solar-irradiance-entity'?: unknown;
@@ -488,4 +516,69 @@ export function buildingRealSize(config: HeliosConfig | undefined): boolean
 export function buildingFixedHeightM(config: HeliosConfig | undefined): number
 {
     return resolveClampedInt(config, 'building-height', FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M);
+}
+
+
+//=== Vehicle mode (van) ===
+
+//Which structure the scene draws: the fixed house (default) or a live-tracked van.
+export function structureMode(config: HeliosConfig | undefined): 'house' | 'van'
+{
+    return config?.['structure-mode'] === 'van' ? 'van' : 'house';
+}
+
+//Trimmed entity id from a string config key, '' when unset/blank.
+function trimmedEntityId(config: HeliosConfig | undefined, key: string): string
+{
+    const raw = (config as Record<string, unknown> | undefined)?.[key];
+    return typeof raw === 'string' ? raw.trim() : '';
+}
+
+export function vanTrackerEntity(config: HeliosConfig | undefined): string
+{
+    return trimmedEntityId(config, 'van-tracker-entity');
+}
+export function vanSpeedEntity(config: HeliosConfig | undefined): string
+{
+    return trimmedEntityId(config, 'van-speed-entity');
+}
+export function vanHeadingEntity(config: HeliosConfig | undefined): string
+{
+    return trimmedEntityId(config, 'van-heading-entity');
+}
+
+//Read a non-negative float config value, defaulting to `def` when missing/non-finite/negative, clamped [min,max].
+function resolveClampedFloat(config: HeliosConfig | undefined, key: string, def: number, min: number, max: number): number
+{
+    const raw = (config as Record<string, unknown> | undefined)?.[key];
+    const parsed = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(parsed) || parsed < 0) { return def; }
+    return clamp(parsed, min, max);
+}
+
+export function vanLengthM(config: HeliosConfig | undefined): number
+{
+    return resolveClampedFloat(config, 'van-length-m', DEFAULT_VAN_LENGTH_M, MIN_VAN_LENGTH_M, MAX_VAN_LENGTH_M);
+}
+export function vanWidthM(config: HeliosConfig | undefined): number
+{
+    return resolveClampedFloat(config, 'van-width-m', DEFAULT_VAN_WIDTH_M, MIN_VAN_WIDTH_M, MAX_VAN_WIDTH_M);
+}
+export function vanHeightM(config: HeliosConfig | undefined): number
+{
+    return resolveClampedFloat(config, 'van-height-m', DEFAULT_VAN_HEIGHT_M, MIN_VAN_HEIGHT_M, MAX_VAN_HEIGHT_M);
+}
+
+//Road-snap master toggle. Default true.
+export function roadSnapEnabled(config: HeliosConfig | undefined): boolean
+{
+    return config?.['road-snap-enabled'] !== false;
+}
+export function roadSnapMaxDistanceM(config: HeliosConfig | undefined): number
+{
+    return resolveClampedFloat(config, 'road-snap-max-distance', DEFAULT_ROAD_SNAP_MAX_DISTANCE_M, MIN_ROAD_SNAP_MAX_DISTANCE_M, MAX_ROAD_SNAP_MAX_DISTANCE_M);
+}
+export function roadSnapMinSpeedKmh(config: HeliosConfig | undefined): number
+{
+    return resolveClampedFloat(config, 'road-snap-min-speed', DEFAULT_ROAD_SNAP_MIN_SPEED_KMH, MIN_ROAD_SNAP_MIN_SPEED_KMH, MAX_ROAD_SNAP_MIN_SPEED_KMH);
 }

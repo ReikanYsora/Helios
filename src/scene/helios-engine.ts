@@ -14,7 +14,8 @@ import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
-    BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS,
+    BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS, DEG, MAX_DISPLAY_RADIUS_M,
+    VAN_RECENTER_FRACTION, VAN_RECENTER_MIN_INTERVAL_MS, VAN_STATIONARY_DEADZONE_M,
     RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS} from '../core/config/constants';
 import
 {
@@ -30,8 +31,16 @@ import
     mapThemeMode,
     mapLayerColor,
     mapLayerVisible,
+    structureMode,
+    vanLengthM,
+    vanWidthM,
+    vanHeightM,
+    roadSnapEnabled,
+    roadSnapMaxDistanceM,
+    roadSnapMinSpeedKmh,
 } from '../core/config/helios-config';
 import { isDarkFromCss, cssHex, resolveUiColor } from '../core/format/format';
+import { snapToRoad, roadFeaturesToSegments, type RoadSegment } from './road-snap';
 
 
 //Module-scope cache for the RAW (option-independent) building footprints. HA re-creates the card element
@@ -111,6 +120,17 @@ export interface WeatherData
 
 //Cloud disc, chip cluster, camera target and sun-arc tunables live in constants.ts.
 
+//Vehicle mode: one live GPS fix, as van-tracker.ts resolves it (speed/heading already reconciled from the
+//configured sensors, the tracker's own attributes, or recent-fix derivation). `headingDeg`/`speedMps` null
+//means "not currently known" -- the engine keeps whatever it last had rather than snapping to a default.
+export interface VanFixInput
+{
+    lat:        number;
+    lon:        number;
+    headingDeg: number | null;
+    speedMps:   number | null;
+}
+
 
 //Engine
 
@@ -129,6 +149,20 @@ export class HeliosEngine
 
     private _fetchLat = 0;
     private _fetchLon = 0;
+
+    //Vehicle mode: the van's own precise live position, decoupled from homeLat/homeLon (the coarser,
+    //lazily-updated tile-fetch origin). Null until the first fix lands or after a mode flip. Set only by
+    //setVanPosition(); nothing else moves them.
+    vanLat: number | null = null;
+    vanLon: number | null = null;
+    private _vanHeadingDeg: number | null = null;
+    private _vanSpeedMps = 0;
+    //Local-metre offset of the last position actually drawn, for the stationary GPS-jitter dead-zone check.
+    private _vanLastDrawn: { e: number; n: number } | null = null;
+    private _lastVanRecenterAt = 0;
+    //Drivable-road centrelines from the current ground, converted to local metres relative to homeLat/homeLon.
+    //Refreshed once per re-tile (see _refreshRoadSegments), not per GPS fix.
+    private _roadSegmentsLocal: RoadSegment[] = [];
 
     private _mapReady     = false;
     //Single source of truth for hourly forecast data; null until the first successful fetch.
@@ -819,6 +853,7 @@ export class HeliosEngine
         {
             return;
         }
+        this._refreshRoadSegments();
         this._onRendererReady();
     }
 
@@ -1259,6 +1294,9 @@ export class HeliosEngine
             realSize:       buildingRealSize(this.cfg),
             fixedHeightM:   buildingFixedHeightM(this.cfg),
             clusterRadiusM: this._buildingClusterRadiusMeters(),
+            //Vehicle mode: nearby real buildings still render for context, but none is boosted to "home" --
+            //the van itself is the focal point.
+            markHome:       structureMode(this.cfg) !== 'van',
         });
         this._pushRenderableSources();
     }
@@ -1510,7 +1548,7 @@ export class HeliosEngine
         //Drop them so the arc rebuilds at the new position instead of reusing the old location's geometry.
         this._arcScaleMemo   = undefined;
         this._arcInputsCache = undefined;
-        void this._renderer?.setLocation(lat, lon, this._groundStyle());
+        void this._renderer?.setLocation(lat, lon, this._groundStyle()).then(() => this._refreshRoadSegments());
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
@@ -1519,6 +1557,114 @@ export class HeliosEngine
         window.clearTimeout(this._horizonTimer);
         this._horizonRetryCount = 0;
         this._refreshHorizon(lat, lon);
+    }
+
+    //Drivable-road centrelines from the renderer's current ground, converted to local metres relative to the
+    //(possibly just-changed) home origin. Called once per re-tile (initial bootstrap + every setHome), not
+    //per GPS fix -- road-snap only ever needs to be as fresh as the loaded basemap itself.
+    private _refreshRoadSegments(): void
+    {
+        if (!this._renderer) { return; }
+        this._roadSegmentsLocal = roadFeaturesToSegments(this._renderer.getRoadFeatures(), this.homeLat, this.homeLon);
+    }
+
+    //Vehicle mode: the point every scene projection centres on -- the van's own live position once one has
+    //arrived, else the (house-mode) home. Both projectHomeLabelLayout and projectSunScene route through this,
+    //which is the whole of what makes chips/leaders/the sun arc dock to the van instead of the house: they
+    //are plain screen-space math over whatever point this returns.
+    private _focalLonLat(): { lat: number; lon: number }
+    {
+        if (structureMode(this.cfg) === 'van' && this.vanLat !== null && this.vanLon !== null)
+        {
+            return { lat: this.vanLat, lon: this.vanLon };
+        }
+        return { lat: this.homeLat, lon: this.homeLon };
+    }
+
+    //Vehicle mode: push one live GPS fix. No-op outside van mode. `null` freezes the van at its last-drawn
+    //position (van-tracker.ts pushes null when the configured entity is unavailable) -- never hidden, never
+    //snapped to a default location, since a van drawn in the wrong place is worse than a stale one.
+    public setVanPosition(fix: VanFixInput | null): void
+    {
+        if (structureMode(this.cfg) !== 'van' || !this._renderer)
+        {
+            return;
+        }
+        if (fix === null)
+        {
+            return;
+        }
+
+        this.vanLat = fix.lat;
+        this.vanLon = fix.lon;
+        if (fix.headingDeg !== null) { this._vanHeadingDeg = fix.headingDeg; }
+        this._vanSpeedMps = fix.speedMps ?? 0;
+
+        //Local-metre offset of the van from the CURRENT origin (homeLat/homeLon); a closure so it can be
+        //re-evaluated after a possible setHome() below moves that origin.
+        const offsetFromOrigin = (): { e: number; n: number } =>
+        {
+            const perLon = METRES_PER_DEGREE * Math.cos(this.homeLat * DEG);
+            return {
+                e: (this.vanLon! - this.homeLon) * perLon,
+                n: (this.vanLat! - this.homeLat) * METRES_PER_DEGREE,
+            };
+        };
+
+        let { e, n } = offsetFromOrigin();
+
+        //Re-centre the loaded tile window (re-tile basemap, re-fetch buildings/weather/horizon, via the same
+        //setHome() house mode uses) once the van has drifted far enough from it, rate-limited so rapid GPS
+        //jitter cannot thrash the network.
+        const recenterThresholdM = VAN_RECENTER_FRACTION * MAX_DISPLAY_RADIUS_M;
+        const now = Date.now();
+        if (Math.hypot(e, n) > recenterThresholdM && now - this._lastVanRecenterAt >= VAN_RECENTER_MIN_INTERVAL_MS)
+        {
+            this._lastVanRecenterAt = now;
+            this.setHome(fix.lat, fix.lon);
+            ({ e, n } = offsetFromOrigin());
+        }
+
+        //Stationary GPS-jitter dead-zone: below the moving threshold, a fix within a few metres of the last
+        //drawn position is noise, not real movement -- skip the pan/redraw so a parked van doesn't tremble.
+        const movingKmh = this._vanSpeedMps * 3.6;
+        if (this._vanLastDrawn
+            && movingKmh < roadSnapMinSpeedKmh(this.cfg)
+            && Math.hypot(e - this._vanLastDrawn.e, n - this._vanLastDrawn.n) < VAN_STATIONARY_DEADZONE_M)
+        {
+            return;
+        }
+        this._vanLastDrawn = { e, n };
+
+        let poseE = e;
+        let poseN = n;
+        let headingDeg = this._vanHeadingDeg ?? 0;
+        if (roadSnapEnabled(this.cfg))
+        {
+            const snap = snapToRoad(
+                { eastM: e, northM: n },
+                this._roadSegmentsLocal,
+                roadSnapMaxDistanceM(this.cfg),
+                this._vanSpeedMps,
+                roadSnapMinSpeedKmh(this.cfg),
+                this._vanHeadingDeg,
+            );
+            if (snap)
+            {
+                poseE       = snap.e;
+                poseN       = snap.n;
+                headingDeg  = snap.headingDeg;
+            }
+        }
+
+        this._renderer.setPan(poseE, poseN);
+        this._renderer.setVan({
+            e: poseE, n: poseN, headingDeg,
+            lengthM: vanLengthM(this.cfg),
+            widthM:  vanWidthM(this.cfg),
+            heightM: vanHeightM(this.cfg),
+        });
+        this._renderForCurrentSelection();
     }
 
     //Show / hide the drawn horizon ridge line (visual only). The sun gate keeps using the terrain either way, so
@@ -1588,7 +1734,8 @@ export class HeliosEngine
             return null;
         }
 
-        const home = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+        const focal = this._focalLonLat();
+        const home = this._projectScenePoint(focal.lon, focal.lat, 0);
         if (!home)
         {
             return null;
@@ -1769,8 +1916,10 @@ export class HeliosEngine
             return null;
         }
 
-        //Ground-level home projection: the SVG anchor for the incidence ray.
-        const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+        //Ground-level home projection: the SVG anchor for the incidence ray. In vehicle mode this is the
+        //van's own live position (see _focalLonLat), so the ray still lands on the focal point.
+        const focal = this._focalLonLat();
+        const homeScreen = this._projectScenePoint(focal.lon, focal.lat, 0);
         if (!homeScreen)
         {
             return null;
@@ -2128,6 +2277,7 @@ export class HeliosEngine
         const prevShadowsOn   = this._shadowsEnabled();
         const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
         const prevCameraLocked = this.isCameraLocked();
+        const prevStructureMode = structureMode(this.cfg);
         this.cfg = { ...cfg };
 
         //Re-arm the auto-rotate rAF loop when the flags transition back to rotation-permitting (the loop
@@ -2156,6 +2306,19 @@ export class HeliosEngine
         if (!this._renderer)
         {
             return;
+        }
+
+        //Vehicle-mode flip (editor preview toggling structure-mode live): drop the stale van state so no
+        //leftover pan/pose bleeds into the other mode.
+        if (structureMode(this.cfg) !== prevStructureMode)
+        {
+            this.vanLat          = null;
+            this.vanLon          = null;
+            this._vanHeadingDeg  = null;
+            this._vanSpeedMps    = 0;
+            this._vanLastDrawn   = null;
+            this._renderer.setPan(0, 0);
+            this._renderer.setVan(null);
         }
 
         //Building option updates (radius/count/real-size/height/cluster): re-interpret the cached raw

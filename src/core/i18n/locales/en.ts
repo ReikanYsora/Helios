@@ -65,6 +65,31 @@ export const en: Translations = {
     homeLongitude: "Home longitude",
     locationHint:
       "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates.",
+    structureMode: "Structure",
+    structureModeHouse: "House",
+    structureModeVan: "Van",
+    structureModeHelp:
+      "House draws the fixed home from OpenStreetMap (today's behaviour). Van instead draws a vehicle tracked live from the entity below, and the scene follows it as it moves.",
+    locationVanHint:
+      "Used as the starting point before the tracker's first fix lands, and as a fallback if it becomes unavailable.",
+    vehicleSection: "Vehicle",
+    vanTrackerEntity: "Van location (device_tracker / person)",
+    vanTrackerEntityHelp:
+      "An entity reporting live latitude/longitude, e.g. from the Home Assistant Companion App, OwnTracks, or a GPS tracker integration.",
+    vanSpeedEntity: "Speed sensor (optional)",
+    vanSpeedEntityHelp:
+      "Overrides the GPS-derived speed (m/s). Leave empty to use the tracker's own speed attribute, or derive it from recent fixes.",
+    vanHeadingEntity: "Heading sensor (optional)",
+    vanHeadingEntityHelp:
+      "Overrides the GPS-derived heading (degrees from north). Leave empty to use the tracker's own course attribute, or derive it from recent fixes.",
+    vanLength: "Van length",
+    vanWidth: "Van width",
+    vanHeight: "Van height",
+    roadSnapEnabled: "Snap to road while driving",
+    roadSnapEnabledHint:
+      "When moving and close enough to a mapped road, the van is drawn exactly on it instead of the raw (noisier) GPS position. Parked or off-road, it shows its real position.",
+    roadSnapMaxDistance: "Max snap distance",
+    roadSnapMinSpeed: "Min. speed to snap",
     uiAndMapSection: "UI",
     autoRotate: "Camera auto-rotation",
     autoRotateHint:

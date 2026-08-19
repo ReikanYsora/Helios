@@ -247,3 +247,35 @@ export const MAX_SHADOW_M    = 50;
 export const GROWTH_RISE_MS  = 500;
 export const HOME_SQUASH_MS  = 220;
 export const HOME_GROW_MS    = 300;
+
+//=== Vehicle mode (van) ===
+//Van body extents (m); defaults suit a mid-size campervan/RV.
+export const DEFAULT_VAN_LENGTH_M = 6;
+export const MIN_VAN_LENGTH_M     = 3;
+export const MAX_VAN_LENGTH_M     = 12;
+export const DEFAULT_VAN_WIDTH_M  = 2.2;
+export const MIN_VAN_WIDTH_M      = 1.8;
+export const MAX_VAN_WIDTH_M      = 3.0;
+export const DEFAULT_VAN_HEIGHT_M = 2.8;
+export const MIN_VAN_HEIGHT_M     = 1.8;
+export const MAX_VAN_HEIGHT_M     = 4.0;
+//Road-snap: how close (m) the van must be to a road centreline to snap onto it, and how fast (km/h) it
+//must be moving before a snap is attempted at all (stationary/parked never forces onto a nearby road).
+export const DEFAULT_ROAD_SNAP_MAX_DISTANCE_M = 25;
+export const MIN_ROAD_SNAP_MAX_DISTANCE_M     = 5;
+export const MAX_ROAD_SNAP_MAX_DISTANCE_M     = 60;
+export const DEFAULT_ROAD_SNAP_MIN_SPEED_KMH  = 3;
+export const MIN_ROAD_SNAP_MIN_SPEED_KMH      = 0;
+export const MAX_ROAD_SNAP_MIN_SPEED_KMH      = 15;
+//Re-tile trigger: fraction of MAX_DISPLAY_RADIUS_M the van may drift from the loaded tile origin before the
+//scene re-centres (fetches a fresh basemap/buildings/weather/horizon window around it), and the minimum time
+//between re-centres so rapid GPS jitter cannot thrash the network.
+export const VAN_RECENTER_FRACTION        = 0.6;
+export const VAN_RECENTER_MIN_INTERVAL_MS = 15_000;
+//How many recent GPS fixes are kept to derive speed/heading when the tracker entity doesn't report them
+//itself; speed/heading are computed oldest-vs-newest across the buffer rather than consecutive pairs, which
+//damps single-fix GPS jitter.
+export const VAN_GPS_FIX_BUFFER_SIZE = 5;
+//Below this speed a new fix within this many metres of the last drawn position is treated as noise and
+//skipped (no pan/redraw), so a parked van doesn't visibly tremble from GPS jitter.
+export const VAN_STATIONARY_DEADZONE_M = 4;
