@@ -56,14 +56,24 @@ rotation on a **CPU-rasterized** basemap, which dodges the corruption while stay
 pixel-correct, so the scene turns smoothly on those devices too. Thanks to
 @beatschubser (#383).
 
-### Fixed: no more flicker on Android tablets when the map rotates
+### Changed: a lighter map that flickers less on Android tablets
 
 On Android WebViews (the Home Assistant app, kiosk browsers) the scene could flicker
-heavily while rotating or panning. The "your real sky" weather grade was applied as a
-CSS filter over the map, which forced the whole 3D scene to re-draw every frame on
-those devices. The grade is now painted straight into the ground and buildings, so the
-map turns cleanly. This also removes a small per-frame cost on every device. Thanks to
-@Aaroneisele55 (#396) and @charleslales (#370).
+while rotating or panning. The "your real sky" weather grade was applied as a CSS filter
+over the map, which forced the whole 3D scene to re-draw every frame on those devices.
+The grade is now painted straight into the ground and buildings, which removes that
+per-frame cost on every device and calms the flicker on many of them. Some phones and
+tablets still flicker on the 3D-transformed map, though, which is what the new
+compatibility rendering option below is for. Thanks to @Aaroneisele55 (#396) and
+@charleslales (#370).
+
+### Added: a compatibility rendering option for devices that still flicker
+
+If the map still flickers or tears while you rotate it, the new **Compatibility
+rendering** toggle in the card options draws the ground with a simpler, more compatible
+method (no 3D transform, a per-frame redraw instead) that avoids the glitch, in exchange
+for slightly less smooth rotation. It is off by default: the automatic detection handles
+most devices on its own, and this is the manual fallback for the ones it misses.
 
 ### Fixed: the energy diagram stays readable while the scene turns
 

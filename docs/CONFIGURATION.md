@@ -58,6 +58,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `camera-pitch-deg` | 0-65 | `50` | Optional fixed pitch at boot. Drag still works unless locked. |
 | `camera-bearing-deg` | 0-359 | hemisphere | Optional fixed bearing at boot. |
 | `camera-locked` | boolean | `false` | Disable drag-rotate and the idle orbit; the camera stays at the configured pose. Also toggled live from the lock button on the card. |
+| `degraded-render` | boolean | `false` | Compatibility rendering: force the simpler "projected" ground path (no CSS 3D transform, a per-frame redraw instead). Turn on only if the map flickers or tears while rotating on your device and the automatic detection didn't catch it. Slightly heavier, less smooth rotation. |
 
 > The card also remembers the live camera pose, the selected period, the selected chip and the lock per home (or per `cache-id`), so reopening the dashboard restores exactly what you left.
 

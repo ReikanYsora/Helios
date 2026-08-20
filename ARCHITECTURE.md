@@ -87,6 +87,15 @@ cached features whenever it comes back from a pause: a browser is free to drop a
 canvas's backing store while a tab sits in the background, and nothing in the draw
 loop would ever put those pixels back.
 
+That CSS 3D transform is the fast path, but some hardware can't composite it: entry
+Android GPUs corrupt a GPU-drawn canvas into colored noise, and a few old WebViews
+mis-layer the tilted plane. `renderer.ts` sniffs those (GPU string, texture cap, UA)
+and falls back on its own, either to a CPU-rasterized canvas still under the transform,
+or, for the broken-3D cases, to a **projected** path that repaints the ground
+already-projected every frame with no 3D layer at all. When the sniff misses a device
+(a WebView that hides its GPU name, and still flickers), the `degraded-render` option
+forces that projected path by hand.
+
 ### Camera + projection, `scene/projection.ts`
 
 `SceneCamera` is the keystone. All scene coordinates are **local metres relative
