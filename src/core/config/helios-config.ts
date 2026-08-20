@@ -257,6 +257,14 @@ export function weatherEnabled(config: HeliosConfig | undefined): boolean
     return config?.['weather-enabled'] !== false;
 }
 
+//Force the compatibility ("degraded") renderer: the projected ground path, with no CSS 3D transform on the
+//basemap. Opt-in (default off), for devices whose WebView flickers on the 3D-transformed ground even though the
+//auto-detection left them on a transform path. Trades the cheap GPU rotation for a per-frame CPU reproject.
+export function degradedRender(config: HeliosConfig | undefined): boolean
+{
+    return config?.['degraded-render'] === true;
+}
+
 
 //Scene UI element toggles (all default visible; explicit false hides). show-timeline covers the timeline band +
 //the period selector; detail-panel is the tap-to-open per-chip mini-panel; sun-times are the sunrise/sunset arc markers.

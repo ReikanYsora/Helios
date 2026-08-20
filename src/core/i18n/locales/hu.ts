@@ -85,6 +85,9 @@ export const hu: Translations = {
       "Néhány másodperc tétlenség után a kamera lassan az otthon körül kering (körülbelül 1,5°/s, a nap látszólagos mozgásával ellentétesen). Egyujjas húzás azonnal megállítja, és folytatódik, amint elengeded. Kerüld nagyon régi eszközökön: az automatikus forgatás másodpercenként újrarajzolásra kényszerít.",
     autoRotateOn: "Be",
     autoRotateOff: "Ki",
+    degradedRender: "Kompatibilitási megjelenítés",
+    degradedRenderHint:
+      "A térképet egyszerűbb, jobban kompatibilis módszerrel rajzolja. Kapcsolja be, ha a jelenet vibrál vagy szakadozik forgatás vagy húzás közben. Kijavítja a hibát egyes telefonokon és táblagépeken, kissé kevésbé folyamatos mozgás árán.",
     dataDisplaySection: "Adatmegjelenítés",
     maxExpectedPower: "Maximális várható teljesítmény",
     maxExpectedPowerHelp:

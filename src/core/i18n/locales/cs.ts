@@ -85,6 +85,9 @@ export const cs: Translations = {
       "Po několika sekundách nečinnosti kamera pomalu obíhá kolem domova (přibližně 1.5°/s, opačně k zdánlivému pohybu slunce). Tažení jedním prstem ji okamžitě pozastaví a obnoví se, jakmile prst zvedneš. Na velmi starých zařízeních se tomu vyhni: automatické otáčení vynutí vykreslení každou sekundu.",
     autoRotateOn: "Zapnuto",
     autoRotateOff: "Vypnuto",
+    degradedRender: "Vykreslování v režimu kompatibility",
+    degradedRenderHint:
+      "Vykresluje mapu jednodušší a kompatibilnější metodou. Zapněte, pokud scéna při otáčení nebo posouvání bliká nebo se trhá. Odstraní to závadu na některých telefonech a tabletech za cenu o něco méně plynulého pohybu.",
     dataDisplaySection: "Zobrazení dat",
     maxExpectedPower: "Maximální očekávaný výkon",
     maxExpectedPowerHelp:

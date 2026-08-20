@@ -71,6 +71,9 @@ export const en: Translations = {
       "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go. Avoid it on very old devices: auto-rotation forces a render every second.",
     autoRotateOn: "On",
     autoRotateOff: "Off",
+    degradedRender: "Compatibility rendering",
+    degradedRenderHint:
+      "Draws the map with a simpler, more compatible method. Turn this on if the scene flickers or tears while you rotate or pan it. It fixes the glitch on some phones and tablets, at the cost of slightly less smooth motion.",
     dataDisplaySection: "Data display",
     displayUpdateFrequency: "Graph detail",
     displayUpdateFrequencyHelp:

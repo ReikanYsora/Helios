@@ -133,6 +133,9 @@ export interface Translations
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
         lockRotation:                string;
         lockRotationHint:            string;
+        //Compatibility ("degraded") renderer toggle: a last resort for devices whose WebView flickers.
+        degradedRender:              string;
+        degradedRenderHint:          string;
         //"Chips & colours" section: per-chip show/hide toggles + colour pickers.
         chipsSection:                string;
         chipsIntro:                  string;

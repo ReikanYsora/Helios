@@ -85,6 +85,9 @@ export const lt: Translations = {
       "Kai kelias sekundes neaktyvi, kamera lėtai sukasi aplink namus (apie 1,5°/s, priešingai matomam saulės judėjimui). Vilkimas vienu pirštu ją iškart pristabdo, ir ji atsinaujina, kai atleidi. Venk to labai senuose įrenginiuose: automatinis sukimasis priverčia atvaizduoti kas sekundę.",
     autoRotateOn: "Įjungta",
     autoRotateOff: "Išjungta",
+    degradedRender: "Suderinamumo atvaizdavimas",
+    degradedRenderHint:
+      "Žemėlapį piešia paprastesniu, labiau suderinamu būdu. Įjunkite, jei sukant ar stumdant sceną ji mirga arba plyšta. Tai pašalina triktį kai kuriuose telefonuose ir planšetėse, šiek tiek mažiau sklandaus judesio sąskaita.",
     dataDisplaySection: "Duomenų rodymas",
     maxExpectedPower: "Didžiausia numatoma galia",
     maxExpectedPowerHelp:

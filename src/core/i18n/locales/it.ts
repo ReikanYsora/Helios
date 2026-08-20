@@ -85,6 +85,9 @@ export const it: Translations = {
       "Dopo qualche secondo di inattività, la camera ruota lentamente intorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un trascinamento con un dito la mette in pausa all'istante e riprende appena lasci. Da evitare su dispositivi molto vecchi: la rotazione automatica forza un rendering ogni secondo.",
     autoRotateOn: "Attiva",
     autoRotateOff: "Disattiva",
+    degradedRender: "Rendering di compatibilità",
+    degradedRenderHint:
+      "Disegna la mappa con un metodo più semplice e compatibile. Attivalo se la scena sfarfalla o si strappa quando la ruoti o la sposti. Corregge il difetto su alcuni telefoni e tablet, a costo di un movimento un po' meno fluido.",
     dataDisplaySection: "Visualizzazione dati",
     maxExpectedPower: "Potenza massima prevista",
     maxExpectedPowerHelp:

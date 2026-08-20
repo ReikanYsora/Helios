@@ -85,6 +85,9 @@ export const et: Translations = {
       "Kui ollakse paar sekundit tegevusetu, tiirleb kaamera aeglaselt kodu ümber (umbes 1,5°/s, vastupidi päikese näivale liikumisele). Ühe sõrmega lohistamine peatab selle koheselt ja see jätkub, kui lahti lased. Väldi seda väga vanadel seadmetel: automaatne pööramine sunnib renderdamise iga sekund.",
     autoRotateOn: "Sees",
     autoRotateOff: "Väljas",
+    degradedRender: "Ühilduvusrežiim",
+    degradedRenderHint:
+      "Joonistab kaardi lihtsama ja ühilduvama meetodiga. Lülitage sisse, kui stseen vilgub või rebeneb pööramisel või lohistamisel. See parandab tõrke mõnes telefonis ja tahvelarvutis veidi vähem sujuva liikumise arvelt.",
     dataDisplaySection: "Andmete kuvamine",
     maxExpectedPower: "Maksimaalne oodatav võimsus",
     maxExpectedPowerHelp:

@@ -85,6 +85,9 @@ export const nl: Translations = {
       "Na een paar seconden inactiviteit draait de camera langzaam om het huis (ongeveer 1.5°/s, tegengesteld aan de schijnbare beweging van de zon). Een sleepbeweging met één vinger pauzeert het meteen en het hervat zodra je loslaat. Vermijd het op heel oude apparaten: de automatische rotatie forceert elke seconde een render.",
     autoRotateOn: "Aan",
     autoRotateOff: "Uit",
+    degradedRender: "Compatibiliteitsweergave",
+    degradedRenderHint:
+      "Tekent de kaart met een eenvoudigere, beter compatibele methode. Schakel dit in als de scène flikkert of scheurt terwijl u draait of sleept. Het lost de storing op sommige telefoons en tablets op, ten koste van iets minder vloeiende beweging.",
     dataDisplaySection: "Entiteiten en gegevensweergave",
     maxExpectedPower: "Max verwacht vermogen",
     maxExpectedPowerHelp:

@@ -85,6 +85,9 @@ export const ro: Translations = {
       "Dupa cateva secunde de inactivitate, camera se roteste lent in jurul casei (aproximativ 1.5°/s, in sens opus miscarii aparente a soarelui). O glisare cu un deget o opreste instantaneu, iar rotirea reia indata ce ridici degetul. Evit-o pe dispozitive foarte vechi: rotirea automata forteaza o redare in fiecare secunda.",
     autoRotateOn: "Pornit",
     autoRotateOff: "Oprit",
+    degradedRender: "Randare de compatibilitate",
+    degradedRenderHint:
+      "Desenează harta cu o metodă mai simplă și mai compatibilă. Activați dacă scena pâlpâie sau se rupe când o rotiți sau o deplasați. Remediază problema pe unele telefoane și tablete, cu prețul unei mișcări puțin mai puțin fluide.",
     dataDisplaySection: "Afisarea datelor",
     maxExpectedPower: "Putere maxima asteptata",
     maxExpectedPowerHelp:

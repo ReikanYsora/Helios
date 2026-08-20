@@ -85,6 +85,9 @@ export const es: Translations = {
       "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (unos 1.5°/s, en sentido contrario al movimiento aparente del sol). Un arrastre con un dedo la pausa al instante y se reanuda en cuanto sueltas. Evítala en dispositivos muy antiguos: la rotación automática fuerza un renderizado cada segundo.",
     autoRotateOn: "Activada",
     autoRotateOff: "Desactivada",
+    degradedRender: "Renderizado de compatibilidad",
+    degradedRenderHint:
+      "Dibuja el mapa con un método más sencillo y compatible. Actívalo si la escena parpadea o se rompe al girarla o desplazarla. Corrige el fallo en algunos teléfonos y tabletas, a costa de un movimiento algo menos fluido.",
     dataDisplaySection: "Visualización de datos",
     maxExpectedPower: "Potencia máxima esperada",
     maxExpectedPowerHelp:

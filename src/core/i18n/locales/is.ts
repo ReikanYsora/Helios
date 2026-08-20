@@ -85,6 +85,9 @@ export const isLocale: Translations = {
       "Þegar ekkert hefur gerst í nokkrar sekúndur, snýst myndavélin hægt um heimilið (um það bil 1.5°/s, andstætt sýnilegri hreyfingu sólarinnar). Að draga með einum fingri stöðvar hann samstundis og hann heldur áfram þegar þú sleppir. Forðastu hann á mjög gömlum tækjum: sjálfvirkur snúningur þvingar fram myndgerð á hverri sekúndu.",
     autoRotateOn: "Kveikt",
     autoRotateOff: "Slökkt",
+    degradedRender: "Samhæfnisútlit",
+    degradedRenderHint:
+      "Teiknar kortið með einfaldari og samhæfðari aðferð. Kveiktu á þessu ef sviðið flöktir eða rifnar þegar þú snýrð eða dregur það. Það lagar gallann í sumum símum og spjaldtölvum á kostnað örlítið minna mjúkrar hreyfingar.",
     dataDisplaySection: "Birting gagna",
     maxExpectedPower: "Hámarksafl sem búist er við",
     maxExpectedPowerHelp:

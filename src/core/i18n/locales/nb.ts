@@ -85,6 +85,9 @@ export const nb: Translations = {
       "Når det er inaktivt i noen sekunder, sirkler kameraet sakte rundt hjemmet (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). Et dra med én finger setter den umiddelbart på pause, og den fortsetter når du slipper. Unngå det på svært gamle enheter: automatisk rotasjon tvinger frem en gjengivelse hvert sekund.",
     autoRotateOn: "På",
     autoRotateOff: "Av",
+    degradedRender: "Kompatibilitetsgjengivelse",
+    degradedRenderHint:
+      "Tegner kartet med en enklere, mer kompatibel metode. Slå på hvis scenen flimrer eller revner når du roterer eller drar den. Det retter feilen på enkelte telefoner og nettbrett, på bekostning av litt mindre jevn bevegelse.",
     dataDisplaySection: "Datavisning",
     maxExpectedPower: "Maks forventet effekt",
     maxExpectedPowerHelp:

@@ -85,6 +85,9 @@ export const sl: Translations = {
       "Po nekaj sekundah nedejavnosti kamera počasi kroži okoli doma (približno 1,5°/s, nasprotno navideznemu gibanju sonca). Poteg z enim prstom jo takoj zaustavi in se nadaljuje, ko spustiš. Izogibaj se mu na zelo starih napravah: samodejno vrtenje vsako sekundo prisili izris.",
     autoRotateOn: "Vklopljeno",
     autoRotateOff: "Izklopljeno",
+    degradedRender: "Izris v načinu združljivosti",
+    degradedRenderHint:
+      "Zemljevid izriše z enostavnejšo in bolj združljivo metodo. Vklopite, če scena med vrtenjem ali premikanjem utripa ali se trga. To odpravi napako na nekaterih telefonih in tablicah za ceno nekoliko manj gladkega gibanja.",
     dataDisplaySection: "Prikaz podatkov",
     maxExpectedPower: "Največja pričakovana moč",
     maxExpectedPowerHelp:

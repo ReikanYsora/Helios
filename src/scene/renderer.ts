@@ -96,13 +96,16 @@ function isEntryAndroidGpu(renderer: string): boolean
 //A debug flag (localStorage 'helios-ground' = normal|transform|projected) forces any mode for A/B on a real device.
 type GroundMode = 'normal' | 'transform' | 'projected';
 
-function groundMode(): GroundMode
+function groundMode(degraded = false): GroundMode
 {
     if (typeof localStorage !== 'undefined')
     {
         const forced = localStorage.getItem('helios-ground');
         if (forced === 'normal' || forced === 'transform' || forced === 'projected') { return forced; }
     }
+    //User opt-in compatibility mode (config `degraded-render`): force the projected path, which drops the CSS 3D
+    //transform entirely and is the most compatible render, for a device whose WebView flickers on the 3D layer.
+    if (degraded) { return 'projected'; }
     const { maxTex, renderer } = probeGpu();
     //Texture cap smaller than the canvas: the 3D-transformed layer can't be backed at all (old 2048-cap GPUs) -> reproject.
     if (maxTex > 0 && maxTex < GROUND_CANVAS_EDGE_PX) { return 'projected'; }
@@ -142,6 +145,9 @@ export interface SceneRendererOptions
     //Shadow colour/opacity for the painted geometry, merged into the palette.
     shadow?:        string;
     shadowOpacity?: number;
+    //Force the compatibility ("degraded") ground path (projected, no CSS 3D transform). User opt-in for a device
+    //the auto-detection missed. The localStorage debug flag still wins over it.
+    degraded?:      boolean;
 }
 
 export interface ScenePaletteFull extends ScenePalette
@@ -218,6 +224,8 @@ export class SceneRenderer
         this._container = container;
         if (opts.shadow)        { this._palette.shadow = opts.shadow; }
         if (opts.shadowOpacity != null) { this._palette.shadowOpacity = opts.shadowOpacity; }
+        //Compatibility mode re-decides the ground path as 'projected' (the localStorage debug flag still wins).
+        if (opts.degraded === true) { this._groundMode = groundMode(true); }
 
         this._groundHolder = document.createElement('div');
         this._groundHolder.className = 'scene-ground-holder';

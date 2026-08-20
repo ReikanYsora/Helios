@@ -84,6 +84,9 @@ export const fr: Translations = {
       "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que vous lâchez. À éviter sur les appareils très anciens : la rotation auto force un rendu chaque seconde.",
     autoRotateOn: "Activée",
     autoRotateOff: "Désactivée",
+    degradedRender: "Rendu de compatibilité",
+    degradedRenderHint:
+      "Dessine la carte avec une méthode plus simple et plus compatible. Activez-le si la scène scintille ou se déchire quand vous la faites pivoter ou que vous la déplacez. Cela corrige le défaut sur certains téléphones et tablettes, au prix d'un mouvement un peu moins fluide.",
     dataDisplaySection: "Affichage des données",
     displayUpdateFrequency: "Détail du graphique",
     displayUpdateFrequencyHelp:

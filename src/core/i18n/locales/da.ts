@@ -85,6 +85,9 @@ export const da: Translations = {
       "Når der er inaktivt i et par sekunder, kredser kameraet langsomt om hjemmet (cirka 1,5°/s, modsat solens tilsyneladende bevægelse). Et træk med en finger sætter det straks på pause, og det fortsætter, når du slipper. Undgå det på meget gamle enheder: automatisk rotation tvinger en gengivelse hvert sekund.",
     autoRotateOn: "Til",
     autoRotateOff: "Fra",
+    degradedRender: "Kompatibilitetsgengivelse",
+    degradedRenderHint:
+      "Tegner kortet med en enklere, mere kompatibel metode. Slå til, hvis scenen flimrer eller går i stykker, når du roterer eller trækker i den. Det retter fejlen på nogle telefoner og tablets på bekostning af en lidt mindre jævn bevægelse.",
     dataDisplaySection: "Datavisning",
     maxExpectedPower: "Maks. forventet effekt",
     maxExpectedPowerHelp:

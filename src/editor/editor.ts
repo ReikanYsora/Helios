@@ -1126,6 +1126,7 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${t.editor.noUiDelayHint}</div>
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
                 ${this._renderToggle('camera-locked', t.editor.lockRotation, t.editor.lockRotationHint)}
+                ${this._renderToggle('degraded-render', t.editor.degradedRender, t.editor.degradedRenderHint)}
 
                 </details>
 

@@ -85,6 +85,9 @@ export const lv: Translations = {
       "Kad dažas sekundes esi neaktīvs, kamera lēni riņķo ap māju (apmēram 1.5°/s, pretēji saules šķietamajai kustībai). Vilkšana ar vienu pirkstu to nekavējoties aptur, un tā atsākas, tiklīdz atlaid. Izvairies no tā ļoti vecās ierīcēs: automātiskā rotācija piespiež renderēšanu katru sekundi.",
     autoRotateOn: "Ieslēgts",
     autoRotateOff: "Izslēgts",
+    degradedRender: "Saderības renderēšana",
+    degradedRenderHint:
+      "Zīmē karti ar vienkāršāku, saderīgāku metodi. Ieslēdziet, ja aina mirgo vai plīst, to griežot vai pārvietojot. Tas novērš kļūdu dažos tālruņos un planšetdatoros uz nedaudz mazāk plūstošas kustības rēķina.",
     dataDisplaySection: "Datu attēlojums",
     maxExpectedPower: "Maksimālā gaidāmā jauda",
     maxExpectedPowerHelp:

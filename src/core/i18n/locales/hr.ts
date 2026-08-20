@@ -85,6 +85,9 @@ export const hr: Translations = {
       "Nakon nekoliko sekundi mirovanja kamera polako kruži oko doma (oko 1,5°/s, suprotno prividnom kretanju sunca). Povlačenje jednim prstom je odmah zaustavlja, a nastavlja se čim pustiš. Izbjegavaj na vrlo starim uređajima: automatska rotacija svaku sekundu prisiljava iscrtavanje.",
     autoRotateOn: "Uključeno",
     autoRotateOff: "Isključeno",
+    degradedRender: "Prikaz u načinu kompatibilnosti",
+    degradedRenderHint:
+      "Kartu iscrtava jednostavnijom i kompatibilnijom metodom. Uključite ako scena treperi ili se kida dok je okrećete ili pomičete. Ispravlja grešku na nekim telefonima i tabletima, uz nešto manje glatko kretanje.",
     dataDisplaySection: "Prikaz podataka",
     maxExpectedPower: "Najveća očekivana snaga",
     maxExpectedPowerHelp:
