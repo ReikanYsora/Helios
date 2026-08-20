@@ -1555,9 +1555,10 @@ export class HeliosCard extends LitElement
 
                 ${hud}
 
-                <!--  Day curve, in two depth passes around the chip cluster, exactly as the solar arc is layered:
-                      the far half behind them (z 5), the near half over the top (z 11). Above the buildings either
-                      way, because it is a reading of the data and not a wall standing in the street.  -->
+                <!--  Day curve, in two depth passes. Both sit ABOVE the solar overlays (sun, arc, irradiance, z 14/15)
+                      so auto-rotation never sweeps them over the reading (#397); near stays over far so the curve
+                      self-occludes at its own crossings. Above the buildings either way, because it is a reading of
+                      the data and not a wall standing in the street.  -->
                 ${this._dayCurveScene ? html`
                     <svg class="helios-day-curve-svg helios-day-curve-far">
                         ${this._renderDayCurvePass(this._dayCurveScene.far)}
