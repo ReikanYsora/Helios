@@ -91,6 +91,19 @@ rate and zero while you were genuinely importing. It now recognises the meter's
 reporting cadence and holds the last report's rate between updates, while a meter that
 has genuinely stopped still falls to zero. Thanks to @Rag30 (#395).
 
+### Fixed: switching to Yesterday could still show a narrower forecast window
+
+With a [Helios-Forecast](https://github.com/ReikanYsora/Helios-Forecast) source
+configured, switching to a period reaching further into the past than the one
+already loaded, most commonly the **Yesterday** tab, could keep showing the
+forecast fetched for the narrower period for up to five minutes: the fetch was
+throttled purely by elapsed time, not by whether the cached data actually
+covered the newly needed window. The card now re-fetches immediately whenever
+the requested past window grows, instead of waiting the throttle out on stale
+data. Home Assistant's built-in solar forecast (Forecast.Solar, Solcast, ...)
+is unaffected either way: that API never returns past days, so it still cannot
+show a forecast for a day already gone. Thanks to @FoxP (#406).
+
 ---
 
 ## 2026.9.1

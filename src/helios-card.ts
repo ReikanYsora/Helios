@@ -164,6 +164,10 @@ export class HeliosCard extends LitElement
     _haSolarForecastLoaded    = false;
     _haSolarForecastFetching  = false;
     _haSolarForecastFetchedAt = 0;
+    //Past-days window actually covered by the last successful fetch. Lets the throttle below tell "nothing new
+    //to ask for" apart from "too soon to ask again": switching to a mode wanting more past days (e.g. Yesterday)
+    //bypasses the throttle even seconds after a narrower fetch, instead of silently keeping that narrower result.
+    _haSolarForecastCoveredPastDays = 0;
     //Home-battery state, set when the HA Energy dashboard exposes a battery source (stat_rate,
     //stat_energy_from/to or stat_soc). Live readings; historical series in the *History fields below.
     //Units kept alongside values so the chip formats kW vs W without re-reading the state.
@@ -825,6 +829,7 @@ export class HeliosCard extends LitElement
         this._haSolarForecastLoaded       = false;
         this._haSolarForecastFetching     = false;
         this._haSolarForecastFetchedAt    = 0;
+        this._haSolarForecastCoveredPastDays = 0;
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;
         this._gridImportChangeSeriesPerEntity = new Map();
