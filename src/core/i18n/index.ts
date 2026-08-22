@@ -98,9 +98,13 @@ export interface Translations
         batteryChipModeHelp:         string;
         batteryChipModePower:        string;
         batteryChipModeSoc:          string;
-        //Power unit selector (W / kW) and solar-constant unit selector (W/m2 / kW/m2).
+        //Power unit selector (W / kW), energy unit selector (auto / Wh / kWh, defaults to following the power
+        //unit above), and solar-constant unit selector (W/m2 / kW/m2).
         powerUnit:                   string;
         powerUnitHelp:               string;
+        energyUnit:                  string;
+        energyUnitHelp:              string;
+        energyUnitAuto:              string;
         irradianceUnit:              string;
         irradianceUnitHelp:          string;
         //Battery-sign selector + home-consumption override entity.

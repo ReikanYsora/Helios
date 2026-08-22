@@ -110,6 +110,10 @@ export const isLocale: Translations = {
     powerUnit: "Afleining",
     powerUnitHelp:
       "Eining fyrir hverja aflmælingu á kortinu (flögur, ábendingar á grafi). Orkan fylgir henni líka, svo kortið haldist samræmt: kW parast við kWh, W við Wh.",
+    energyUnit: "Orkueining",
+    energyUnitHelp:
+      "Eining fyrir allar orkusamtölur (dagferilinn, nánari upplýsingar spjaldið, dagsamtölur tímalínunnar). Sjálfvirkt fylgir aflseiningunni hér að ofan; veldu Wh eða kWh til að stilla hana sérstaklega.",
+    energyUnitAuto: "Sjálfvirkt",
     irradianceUnit: "Eining sólfastans",
     irradianceUnitHelp:
       "Eining fyrir mælingu sólfastans (sólgeislunar) fyrir ofan sólina.",

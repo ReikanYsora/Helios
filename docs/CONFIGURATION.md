@@ -92,7 +92,8 @@ The visual editor exposes every option below. Direct YAML editing also works.
 |---|---|---|---|
 | `display-update-frequency-per-hour` | 1-6 | `4` | Storage + render cadence (buckets per hour) for the data store, every graph and the day curve's own resolution. `4` = 15-minute granularity (the HA Energy bucket size); raise for smoother curves, lower to save memory. Live numeric chips bypass this and stay on the direct `hass.states` path. |
 | `value-decimals` | 0-3 | `1` | Decimal places on every kW / kWh / % readout. |
-| `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips). Energy follows it, so `kW` pairs with `kWh` and `W` with `Wh`. |
+| `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips). Energy totals follow it by default (`kW` pairs with `kWh`, `W` with `Wh`), unless `energy-unit` below sets one of its own. |
+| `energy-unit` | `auto` \| `Wh` \| `kWh` | `auto` | Unit for every energy total (the day curve, the detail panel, the timeline's day totals). `auto` follows `power-unit`; set `Wh` or `kWh` to pick one independently of the power unit above, e.g. precise `W` chips alongside `kWh` totals. |
 | `irradiance-unit` | `W/m²` \| `kW/m²` \| `W/ft²` | `W/m²` | Unit for the solar-constant (irradiance) readout above the sun. |
 | `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
 | `max-expected-power` | 500-30000 W | `5000` | Reference power at which a flow animates at full speed, so every flow shares one honest pace. Raise it for a large installation, lower it for a small one. |

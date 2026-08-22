@@ -110,6 +110,10 @@ export const pl: Translations = {
     powerUnit: "Jednostka mocy",
     powerUnitHelp:
       "Jednostka dla każdego odczytu mocy na karcie (chipy, dymki wykresu). Energia też za nią podąża, aby karta pozostała spójna: kW łączy się z kWh, W z Wh.",
+    energyUnit: "Jednostka energii",
+    energyUnitHelp:
+      "Jednostka dla wszystkich sum energii (krzywa dnia, panel szczegółów, dzienne sumy na osi czasu). Automatyczna podąża za jednostką mocy powyżej; wybierz Wh lub kWh, aby ustawić ją niezależnie.",
+    energyUnitAuto: "Automatyczna",
     irradianceUnit: "Jednostka stałej słonecznej",
     irradianceUnitHelp:
       "Jednostka odczytu stałej słonecznej (nasłonecznienia) nad słońcem.",

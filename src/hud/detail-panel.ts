@@ -6,7 +6,7 @@
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { formatEnergyKwh, formatIrradiance, formatTemperature } from '../core/format/format';
-import { powerUnit, valueDecimals, irradianceUnit } from '../core/config/helios-config';
+import { energyUnit, valueDecimals, irradianceUnit } from '../core/config/helios-config';
 import { chipSlotIcon } from '../core/config/chip-appearance';
 import { buildPeriodData, layerPeriodTotal, periodTotal, hourlyOf, type PeriodHost, type PeriodData } from '../data/period-totals/period-totals';
 import { type ChartTarget, isGroupTarget, groupOfTarget } from '../charts/charts';
@@ -120,10 +120,10 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 
     const hass = host.hass;
     const dec  = valueDecimals(host.config);
-    const pu   = powerUnit(host.config);
+    const eu   = energyUnit(host.config);
     const iu   = irradianceUnit(host.config);
     const days = windowDays(startMs, endMs);
-    const energy = (kwh: number): string => formatEnergyKwh(hass, kwh, dec, pu);
+    const energy = (kwh: number): string => formatEnergyKwh(hass, kwh, dec, eu);
 
     //Irradiance is weather, not a period aggregation metric: aggregate the store's own W/m2 series + read the astro
     //from the sun scene. Everything else routes through buildPeriodData so it matches the period total exactly.

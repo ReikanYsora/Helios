@@ -110,6 +110,10 @@ export const sv: Translations = {
     powerUnit: "Effektenhet",
     powerUnitHelp:
       "Enhet för varje effektutläsning på kortet (chips, grafverktygstips). Energin följer den också, så kortet förblir konsekvent: kW hör ihop med kWh, W med Wh.",
+    energyUnit: "Energienhet",
+    energyUnitHelp:
+      "Enhet för alla energitotaler (dagskurvan, detaljpanelen, tidslinjens dagstotaler). Auto följer effektenheten ovan; välj Wh eller kWh för att ställa in den separat.",
+    energyUnitAuto: "Auto",
     irradianceUnit: "Enhet för solkonstant",
     irradianceUnitHelp:
       "Enhet för utläsningen av solkonstanten (irradians) ovanför solen.",

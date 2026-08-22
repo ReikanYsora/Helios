@@ -110,6 +110,10 @@ export const cs: Translations = {
     powerUnit: "Jednotka výkonu",
     powerUnitHelp:
       "Jednotka pro každý údaj výkonu na kartě (čipy, popisky grafu). Energie ji také následuje, takže karta zůstává konzistentní: kW se pojí s kWh, W s Wh.",
+    energyUnit: "Jednotka energie",
+    energyUnitHelp:
+      "Jednotka pro všechny součty energie (denní křivka, panel podrobností, denní součty na časové ose). Automaticky se řídí jednotkou výkonu výše; zvolte Wh nebo kWh pro její samostatné nastavení.",
+    energyUnitAuto: "Automaticky",
     irradianceUnit: "Jednotka sluneční konstanty",
     irradianceUnitHelp:
       "Jednotka pro údaj sluneční konstanty (ozáření) nad sluncem.",

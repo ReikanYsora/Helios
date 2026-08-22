@@ -95,7 +95,11 @@ export const en: Translations = {
     sunChipModePosition: "Sun position",
     powerUnit: "Power unit",
     powerUnitHelp:
-      "Unit for every power readout on the card (chips, graph tooltips). Energy follows it too, so the card stays consistent: kW pairs with kWh, W with Wh.",
+      "Unit for every power readout on the card (chips, graph tooltips). Energy follows it by default too (kW pairs with kWh, W with Wh), unless you set an energy unit of its own below.",
+    energyUnit: "Energy unit",
+    energyUnitHelp:
+      "Unit for every energy total (the day curve, the detail panel, the timeline's day totals). Auto follows the power unit above; pick Wh or kWh to set it on its own.",
+    energyUnitAuto: "Auto",
     irradianceUnit: "Solar constant unit",
     irradianceUnitHelp:
       "Unit for the solar constant (irradiance) readout above the sun.",

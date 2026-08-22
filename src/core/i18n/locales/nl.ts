@@ -110,6 +110,10 @@ export const nl: Translations = {
     powerUnit: "Vermogenseenheid",
     powerUnitHelp:
       "Eenheid voor elke vermogensweergave op de kaart (chips, grafiektooltips). Energie volgt deze ook, zodat de kaart consistent blijft: kW hoort bij kWh, W bij Wh.",
+    energyUnit: "Energie-eenheid",
+    energyUnitHelp:
+      "Eenheid voor elk energietotaal (de dagcurve, het detailpaneel, de dagtotalen van de tijdlijn). Automatisch volgt de vermogenseenheid hierboven; kies Wh of kWh om deze apart in te stellen.",
+    energyUnitAuto: "Automatisch",
     irradianceUnit: "Eenheid van de zonneconstante",
     irradianceUnitHelp:
       "Eenheid voor de weergave van de zonneconstante (instraling) boven de zon.",

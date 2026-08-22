@@ -110,6 +110,10 @@ export const lt: Translations = {
     powerUnit: "Galios vienetas",
     powerUnitHelp:
       "Vienetas kiekvienam galios rodmeniui kortelėje (lustai, grafiko debesėliai). Energija taip pat jo laikosi, kad kortelė liktų nuosekli: kW poruojasi su kWh, W su Wh.",
+    energyUnit: "Energijos vienetas",
+    energyUnitHelp:
+      "Vienetas visoms energijos sumoms (dienos kreivei, informacijos skydeliui, laiko juostos dienos sumoms). „Automatinis“ seka aukščiau esantį galios vienetą; pasirinkite Wh arba kWh, kad nustatytumėte jį atskirai.",
+    energyUnitAuto: "Automatinis",
     irradianceUnit: "Saulės konstantos vienetas",
     irradianceUnitHelp:
       "Vienetas saulės konstantos (apšvitos) rodmeniui virš saulės.",

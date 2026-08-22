@@ -104,6 +104,16 @@ data. Home Assistant's built-in solar forecast (Forecast.Solar, Solcast, ...)
 is unaffected either way: that API never returns past days, so it still cannot
 show a forecast for a day already gone. Thanks to @FoxP (#406).
 
+### Added: a separate unit for energy totals
+
+`power-unit` (W / kW) used to set the energy totals' unit too, kW pairing with
+kWh and W with Wh, with no way to pick one independently of the other. A new
+**`energy-unit`** option (Wh / kWh / Auto, the visual editor's "Energy unit")
+lets you set the day curve, the detail panel and the timeline's day totals on
+their own, for example precise W chips alongside kWh totals. Auto (the
+default) keeps today's behaviour, so an existing card reads exactly the same
+until you pick a unit here. Thanks to @zigomatichub (#407).
+
 ---
 
 ## 2026.9.1

@@ -110,6 +110,10 @@ export const pt: Translations = {
     powerUnit: "Unidade de potência",
     powerUnitHelp:
       "Unidade para cada leitura de potência no cartão (chips, dicas do gráfico). A energia também a segue, para que o cartão se mantenha consistente: kW combina com kWh, W com Wh.",
+    energyUnit: "Unidade de energia",
+    energyUnitHelp:
+      "Unidade para cada total de energia (a curva do dia, o painel de detalhes, os totais diários da linha do tempo). Automático segue a unidade de potência acima; escolha Wh ou kWh para defini-la separadamente.",
+    energyUnitAuto: "Automático",
     irradianceUnit: "Unidade da constante solar",
     irradianceUnitHelp:
       "Unidade para a leitura da constante solar (irradiância) acima do sol.",

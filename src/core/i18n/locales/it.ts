@@ -110,6 +110,10 @@ export const it: Translations = {
     powerUnit: "Unità di potenza",
     powerUnitHelp:
       "Unità per ogni lettura di potenza sulla scheda (chip, tooltip del grafico). Anche l'energia la segue, così la scheda resta coerente: kW si abbina a kWh, W a Wh.",
+    energyUnit: "Unità di energia",
+    energyUnitHelp:
+      "Unità per ogni totale di energia (la curva del giorno, il pannello dei dettagli, i totali giornalieri della timeline). Automatico segue l'unità di potenza sopra; scegli Wh o kWh per impostarla separatamente.",
+    energyUnitAuto: "Automatico",
     irradianceUnit: "Unità della costante solare",
     irradianceUnitHelp:
       "Unità per la lettura della costante solare (irraggiamento) sopra il sole.",

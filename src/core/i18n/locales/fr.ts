@@ -108,7 +108,11 @@ export const fr: Translations = {
     sunChipModePosition: "Position du soleil",
     powerUnit: "Unité de puissance",
     powerUnitHelp:
-      "Unité de tous les affichages de puissance de la carte (chips, infobulles du graphe). L'énergie suit aussi, pour que la carte reste cohérente : kW va avec kWh, W avec Wh.",
+      "Unité de tous les affichages de puissance de la carte (chips, infobulles du graphe). Par défaut, l'énergie suit aussi (kW va avec kWh, W avec Wh), sauf si vous choisissez sa propre unité ci-dessous.",
+    energyUnit: "Unité d'énergie",
+    energyUnitHelp:
+      "Unité de tous les totaux d'énergie (la courbe du jour, le panneau de détail, les totaux du jour dans la timeline). Auto suit l'unité de puissance ci-dessus ; choisissez Wh ou kWh pour la régler séparément.",
+    energyUnitAuto: "Auto",
     irradianceUnit: "Unité de constante solaire",
     irradianceUnitHelp:
       "Unité de la constante solaire (irradiance) affichée au-dessus du soleil.",

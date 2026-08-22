@@ -110,6 +110,10 @@ export const et: Translations = {
     powerUnit: "Võimsuse ühik",
     powerUnitHelp:
       "Ühik iga võimsuse näidu jaoks kaardil (kiibid, graafiku kohtspikrid). Energia järgib seda samuti, nii et kaart jääb ühtseks: kW sobib kWh-ga, W Wh-ga.",
+    energyUnit: "Energia ühik",
+    energyUnitHelp:
+      "Ühik kõigi energiakogusummade jaoks (päevakõver, üksikasjade paneel, ajajoone päevasummad). Automaatne järgib ülalolevat võimsuse ühikut; valige Wh või kWh, et seada see eraldi.",
+    energyUnitAuto: "Automaatne",
     irradianceUnit: "Päikesekonstandi ühik",
     irradianceUnitHelp:
       "Ühik päikesekonstandi (kiirgustugevuse) näidu jaoks päikese kohal.",

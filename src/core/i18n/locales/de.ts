@@ -110,6 +110,10 @@ export const de: Translations = {
     powerUnit: "Leistungseinheit",
     powerUnitHelp:
       "Einheit für jede Leistungsanzeige auf der Karte (Chips, Diagramm-Tooltips). Energie folgt ihr ebenfalls, damit die Karte konsistent bleibt: kW passt zu kWh, W zu Wh.",
+    energyUnit: "Energieeinheit",
+    energyUnitHelp:
+      "Einheit für alle Energiesummen (die Tageskurve, das Detailpanel, die Tagessummen der Zeitleiste). „Automatisch“ folgt der Leistungseinheit oben; wählen Sie Wh oder kWh, um sie unabhängig festzulegen.",
+    energyUnitAuto: "Automatisch",
     irradianceUnit: "Einheit der Solarkonstante",
     irradianceUnitHelp:
       "Einheit für die Anzeige der Solarkonstante (Bestrahlungsstärke) über der Sonne.",

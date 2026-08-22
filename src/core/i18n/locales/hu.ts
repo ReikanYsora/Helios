@@ -110,6 +110,10 @@ export const hu: Translations = {
     powerUnit: "Teljesítmény mértékegysége",
     powerUnitHelp:
       "A kártya minden teljesítménykijelzésének mértékegysége (chipek, grafikon buboréksúgók). Az energia is ezt követi, így a kártya következetes marad: a kW a kWh-val, a W a Wh-val párosul.",
+    energyUnit: "Energia mértékegysége",
+    energyUnitHelp:
+      "Mértékegység minden energiaösszeghez (napi görbe, részletek panel, az idővonal napi összegei). Az Automatikus a fenti teljesítmény mértékegységét követi; válasszon Wh-t vagy kWh-t a különálló beállításhoz.",
+    energyUnitAuto: "Automatikus",
     irradianceUnit: "Napállandó mértékegysége",
     irradianceUnitHelp:
       "A nap fölött megjelenő napállandó (besugárzás) kijelzésének mértékegysége.",

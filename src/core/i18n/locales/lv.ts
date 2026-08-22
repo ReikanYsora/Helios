@@ -110,6 +110,10 @@ export const lv: Translations = {
     powerUnit: "Jaudas mērvienība",
     powerUnitHelp:
       "Mērvienība katram jaudas rādījumam kartītē (mikroshēmas, grafika rīka padomi). Enerģija tai arī seko, tāpēc kartīte paliek konsekventa: kW veido pāri ar kWh, W ar Wh.",
+    energyUnit: "Enerģijas mērvienība",
+    energyUnitHelp:
+      "Mērvienība visām enerģijas kopsummām (dienas līknei, detalizētās informācijas panelim, laika skalas dienas kopsummām). Automātiski seko iepriekš norādītajai jaudas mērvienībai; izvēlieties Wh vai kWh, lai iestatītu to atsevišķi.",
+    energyUnitAuto: "Automātiski",
     irradianceUnit: "Saules konstantes mērvienība",
     irradianceUnitHelp:
       "Mērvienība saules konstantes (apstarojuma) rādījumam virs saules.",

@@ -110,6 +110,10 @@ export const hr: Translations = {
     powerUnit: "Jedinica snage",
     powerUnitHelp:
       "Jedinica za svako očitanje snage na kartici (čipovi, opisi u grafu). Energija je slijedi, pa kartica ostaje dosljedna: kW ide uz kWh, W uz Wh.",
+    energyUnit: "Jedinica energije",
+    energyUnitHelp:
+      "Jedinica za sve ukupne vrijednosti energije (dnevna krivulja, ploča s detaljima, dnevni zbrojevi na vremenskoj traci). Automatski prati jedinicu snage iznad; odaberite Wh ili kWh za zasebno postavljanje.",
+    energyUnitAuto: "Automatski",
     irradianceUnit: "Jedinica solarne konstante",
     irradianceUnitHelp:
       "Jedinica za očitanje solarne konstante (ozračenja) iznad sunca.",
