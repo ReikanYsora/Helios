@@ -9,6 +9,16 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.2
 
+A performance and reliability release, mostly about running clean on real devices:
+Android WebViews stop flickering during rotation, with a manual Compatibility
+rendering option for the phones and tablets the automatic detection still misses,
+and the scene turns smoothly again on entry-level hardware while drawing lighter
+overall. Alongside it, a handful of correctness fixes settle real edge cases (an
+inverted battery sign, the live flow direction, a coarse-cadence cost chip, a
+Firefox console warning, a stale Helios-Forecast curve after switching to
+Yesterday), and energy totals can now be set to their own Wh/kWh unit, independent
+of live power.
+
 ### Fixed: an inverted battery power sensor no longer reads backwards
 
 2026.9.1 added an automatic correction for battery power sensors reported with
