@@ -260,8 +260,12 @@ export const heliosCardStyles = css`
         overflow: visible;
         pointer-events: none;
     }
-    .helios-day-curve-far  { z-index: 5;  }
-    .helios-day-curve-near { z-index: 11; }
+    /*  The energy diagram always reads ON TOP of the solar overlays (sun disc z 12, irradiance label z 13, arc, ray):
+        with auto-rotation the sun sweeps over the curve and hides the numbers you are trying to read, so the diagram
+        wins the overlap. Both halves clear the solar layers; near stays above far so the curve still self-occludes at
+        its side crossings. Detail panel (z 40) and timeline (z 1000) still sit above it. */
+    .helios-day-curve-far  { z-index: 14; }
+    .helios-day-curve-near { z-index: 15; }
 
     /*  Any chip with its day curve up: its second notch, pressed. The chip is an outline in the metric's colour on
         the card's background, so ON simply swaps the two - the universal switch language, outlined off / filled on.
@@ -838,10 +842,11 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  "Your real sky" weather overlay. The scene is graded by a filter on #map-container (--wx-map-filter); the
-        overlay layers fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain / --wx-snow / --wx-flash, all set from
-        JS by the resolved weather. Sits UNDER the chips (z 8).  */
-    :host([data-wx-on]) #map-container { filter: var(--wx-map-filter, none); transition: filter 0.18s linear; }
+    /*  "Your real sky" weather overlay. The scene grade (saturate/brightness) is baked into the ground + building
+        PAINT by the renderer (SceneRenderer.setWeatherGrade), not a CSS filter here: a filter on #map-container wraps
+        the CSS 3D-transformed basemap, forcing the whole scene to re-flatten every frame while rotating - heavy
+        flicker on Android WebViews. The overlay layers still fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain /
+        --wx-snow / --wx-flash, all set from JS by the resolved weather. Sits UNDER the chips (z 8).  */
 
     .helios-wx { position: absolute; inset: 0; z-index: 6; pointer-events: none; border-radius: inherit; overflow: hidden; display: none; }
     :host([data-wx-on]) .helios-wx { display: block; }

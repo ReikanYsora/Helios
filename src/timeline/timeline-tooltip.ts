@@ -3,7 +3,7 @@
 
 import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
-import { valueDecimals, powerUnit, irradianceUnit } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, energyUnit, irradianceUnit } from '../core/config/helios-config';
 import { consumptionLoad } from '../core/energy';
 import { ENERGY_COLOR, energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, formatTemperature, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
@@ -89,6 +89,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //User decimals apply to every kW/kWh readout; raw watts stay integers.
     const dec = valueDecimals(host.config);
     const powerU = powerUnit(host.config);
+    const energyU = energyUnit(host.config);
     const irradU = irradianceUnit(host.config);
     const kw = (w: number): string => formatPower(host.hass, w, dec, powerU);
 
@@ -238,7 +239,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     //forecast day total, which has no other home in the UI.
     const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
-        ? formatEnergyKwh(host.hass, dayKwh, dec, powerU)
+        ? formatEnergyKwh(host.hass, dayKwh, dec, energyU)
         : '';
 
     //Magnet-snap detection: when the scrub lands in a narrow band around the live cursor, applyTimelinePointer

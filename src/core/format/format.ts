@@ -186,11 +186,15 @@ export function formatTemperature(hass: HassLike, celsius: number, decimals = 1)
 }
 
 
-//Uniform energy readout, locale-aware. Input is kWh. The card's power unit drives the energy scale too, so the
-//whole card stays SI-consistent: 'kW' keeps kWh at the caller's decimals; 'W' prints whole watt-hours (Wh).
-export function formatEnergyKwh(hass: HassLike, kwh: number, decimals: number, unit: PowerUnit = 'kW'): string
+//Energy total display unit for the whole card, resolved from config (see energyUnit()). Independent of PowerUnit:
+//defaults to following it (kW -> kWh, W -> Wh) but can be set on its own.
+export type EnergyUnit = 'Wh' | 'kWh';
+
+//Uniform energy readout, locale-aware. Input is kWh. 'kWh' keeps it at the caller's decimals; 'Wh' prints whole
+//watt-hours.
+export function formatEnergyKwh(hass: HassLike, kwh: number, decimals: number, unit: EnergyUnit = 'kWh'): string
 {
-    if (unit === 'W')
+    if (unit === 'Wh')
     {
         return `${formatLocalisedNumber(hass, Math.round(kwh * 1000), 0)} Wh`;
     }
@@ -268,7 +272,9 @@ export function formatEntityValue(hass: HassLike, value: number, unit: string, d
     }
     if (lu === 'wh' || lu === 'kwh' || lu === 'mwh')
     {
-        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals, powerU);
+        //A live entity chip stays tied to the power unit, never the separate energy-total setting: a chip is
+        //always read as "now", and "now" is power, whichever family the source entity happens to report in.
+        return formatEnergyKwh(hass, energyToKwh(value, unit), decimals, powerU === 'W' ? 'Wh' : 'kWh');
     }
     const formatted = formatLocalisedNumber(hass, value, decimals);
     return u ? `${formatted} ${u}` : formatted;

@@ -41,6 +41,10 @@ export interface EnergyForecastHost
     _haSolarForecastFetching: boolean;
     //Date.now() of the last fetch attempt, for throttling.
     _haSolarForecastFetchedAt: number;
+    //Past-days window the last successful fetch actually asked for (0 until one lands). Read alongside the time
+    //throttle below so a mode switch wanting MORE past days (e.g. Forecast -> Yesterday) is never served the
+    //narrower window a previous fetch cached, just because it happened less than the throttle window ago.
+    _haSolarForecastCoveredPastDays: number;
     requestUpdate(): void;
 }
 
@@ -57,8 +61,14 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
     {
         return;
     }
-    //Throttle: once settled, skip further attempts until the window elapses.
-    if (host._haSolarForecastLoaded && (Date.now() - (host._haSolarForecastFetchedAt ?? 0)) < FORECAST_THROTTLE_MS)
+    //Throttle: once settled AND the last fetch's past-days window already covers what this call needs, skip
+    //further attempts until the window elapses. A mode switch asking for MORE past days than that (e.g. Forecast's
+    //0 -> Yesterday's 1) bypasses the throttle outright: the cached array was fetched for a narrower window and
+    //genuinely lacks those points (the Helios-Forecast series command filters server-side on the requested
+    //`start`), so waiting out the throttle would just keep serving stale, too-narrow data instead of refetching it.
+    const pastDaysCovered = host._haSolarForecastCoveredPastDays >= host._periodPastDays;
+    if (host._haSolarForecastLoaded && pastDaysCovered
+        && (Date.now() - (host._haSolarForecastFetchedAt ?? 0)) < FORECAST_THROTTLE_MS)
     {
         return;
     }
@@ -80,12 +90,17 @@ export async function fetchHaSolarForecast(host: EnergyForecastHost): Promise<vo
             host._haSolarForecast = mergeSolarForecast(raw);
         }
         host._haSolarForecastLoaded = true;
+        //Record the window this fetch actually asked for, win or not: even the generic fallback (no past window
+        //of its own) resolves the request the caller had, so a later mode switch asking for the same or a
+        //narrower past window is a legitimate throttle skip next time, not a stale-data trap.
+        host._haSolarForecastCoveredPastDays = host._periodPastDays;
         host.requestUpdate();
     }
     catch (_)
     {
         //Transient WS error, RBAC denied, or nothing configured: leave the forecast empty but flip loaded so the boot
-        //spinner doesn't block on a payload that may never arrive.
+        //spinner doesn't block on a payload that may never arrive. Coverage is deliberately NOT recorded here: the
+        //request never actually resolved, so the next attempt should retry regardless of the throttle window.
         host._haSolarForecastLoaded = true;
     }
     finally

@@ -85,6 +85,9 @@ export const fi: Translations = {
       "Kun on oltu käyttämättömänä muutaman sekunnin, kamera kiertää hitaasti kodin ympäri (noin 1,5°/s, vastakkaiseen suuntaan kuin auringon näennäinen liike). Yhden sormen veto keskeyttää sen heti, ja se jatkuu, kun päästät irti. Vältä sitä hyvin vanhoilla laitteilla: automaattinen kierto pakottaa renderöinnin joka sekunti.",
     autoRotateOn: "Päällä",
     autoRotateOff: "Pois",
+    degradedRender: "Yhteensopivuustila",
+    degradedRenderHint:
+      "Piirtää kartan yksinkertaisemmalla, yhteensopivammalla tavalla. Ota käyttöön, jos näkymä välkkyy tai repeää, kun sitä kääntää tai vierittää. Se korjaa häiriön joissakin puhelimissa ja tableteissa hieman vähemmän sujuvan liikkeen kustannuksella.",
     dataDisplaySection: "Tietojen näyttö",
     maxExpectedPower: "Suurin odotettu teho",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const fi: Translations = {
     powerUnit: "Tehon yksikkö",
     powerUnitHelp:
       "Yksikkö jokaiselle kortin teholukemalle (sirut, kaavion työkaluvihjeet). Energia noudattaa sitä myös, joten kortti pysyy yhtenäisenä: kW yhdistyy kWh:hon, W Wh:hon.",
+    energyUnit: "Energiayksikkö",
+    energyUnitHelp:
+      "Yksikkö kaikille energian summille (päiväkäyrä, tietopaneeli, aikajanan päiväsummat). Automaattinen noudattaa yllä olevaa tehon yksikköä; valitse Wh tai kWh asettaaksesi sen erikseen.",
+    energyUnitAuto: "Automaattinen",
     irradianceUnit: "Aurinkovakion yksikkö",
     irradianceUnitHelp:
       "Yksikkö auringon yläpuolella olevalle aurinkovakion (irradianssin) lukemalle.",

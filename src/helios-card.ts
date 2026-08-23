@@ -164,6 +164,10 @@ export class HeliosCard extends LitElement
     _haSolarForecastLoaded    = false;
     _haSolarForecastFetching  = false;
     _haSolarForecastFetchedAt = 0;
+    //Past-days window actually covered by the last successful fetch. Lets the throttle below tell "nothing new
+    //to ask for" apart from "too soon to ask again": switching to a mode wanting more past days (e.g. Yesterday)
+    //bypasses the throttle even seconds after a narrower fetch, instead of silently keeping that narrower result.
+    _haSolarForecastCoveredPastDays = 0;
     //Home-battery state, set when the HA Energy dashboard exposes a battery source (stat_rate,
     //stat_energy_from/to or stat_soc). Live readings; historical series in the *History fields below.
     //Units kept alongside values so the chip formats kW vs W without re-reading the state.
@@ -517,13 +521,25 @@ export class HeliosCard extends LitElement
 
     //Push the home prism's appearance to the renderer (via the engine): a solid block in the active chip's accent
     //colour. `animate` plays the squash/grow on a chip change.
+    //The active chip's LIVE colour, the single source every "active chip" accent reads (home prism, timeline
+    //border, detail panel). The directional chips (grid, battery) flip tint with the INSTANTANEOUS flow, so this
+    //reuses the HUD's live/scrub-aware leader colours rather than chartAccentColor, whose window-dominant direction
+    //makes no sense for a live view (it would show the day's net while the scene shows now). Non-directional targets
+    //carry no direction, so chartAccentColor already matches.
+    private _activeChipColor(): string
+    {
+        return this._chartTarget === 'grid' ? this._hud._gridLeaderColor
+            : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? this._hud._batteryLeaderColor
+            : chartAccentColor(this);
+    }
+
     updateHomeAppearance(animate: boolean): void
     {
         if (!this._engine)
         {
             return;
         }
-        const color = chartAccentColor(this);
+        const color = this._activeChipColor();
         //No squash on the very first paint (no prior target to grow away from).
         const play  = animate && this._lastHomeTarget !== undefined;
         this._lastHomeTarget = this._chartTarget;
@@ -813,6 +829,7 @@ export class HeliosCard extends LitElement
         this._haSolarForecastLoaded       = false;
         this._haSolarForecastFetching     = false;
         this._haSolarForecastFetchedAt    = 0;
+        this._haSolarForecastCoveredPastDays = 0;
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;
         this._gridImportChangeSeriesPerEntity = new Map();
@@ -1099,6 +1116,7 @@ export class HeliosCard extends LitElement
             this._wxRainCtl.setIntensity(0);
             this._wxSnowCtl.setIntensity(0);
             this._wxStormCtl.setStrength(0);
+            this._engine?.setWeatherGrade(1, 1);
             return;
         }
 
@@ -1114,10 +1132,26 @@ export class HeliosCard extends LitElement
         this.style.setProperty('--wx-cloud', p.cloud.toFixed(3));
         this.style.setProperty('--wx-rain',  p.rain.toFixed(3));
         this.style.setProperty('--wx-snow',  p.snow.toFixed(3));
-        this.style.setProperty('--wx-map-filter', `saturate(${p.sat.toFixed(3)}) brightness(${p.bright.toFixed(3)})`);
+        this._engine?.setWeatherGrade(p.sat, p.bright);
         this._wxRainCtl.setIntensity(p.rain);
         this._wxSnowCtl.setIntensity(p.snow);
         this._wxStormCtl.setStrength(p.storm);
+    }
+
+    //Off-screen / hidden-tab pause for the weather canvases (their rAF loops aren't covered by the CSS animation
+    //pause). Stop halts the three loops; resume re-applies the current weather, which restarts whatever is falling.
+    public pauseWeather(paused: boolean): void
+    {
+        if (paused)
+        {
+            this._wxRainCtl.stop();
+            this._wxSnowCtl.stop();
+            this._wxStormCtl.stop();
+        }
+        else
+        {
+            this._applyWeather();
+        }
     }
 
     protected updated(_changedProperties: PropertyValues): void
@@ -1439,13 +1473,8 @@ export class HeliosCard extends LitElement
         //Detail panel accent (from the active chip) drives both the panel border and the little "i" badge on the
         //open chip, so it lives as a card-level class + CSS var.
         const infoOpen = this._infoPanelOpen;
-        //Detail-panel accent = the ACTIVE chip's live colour. The directional chips (grid, battery) flip their
-        //tint with the instantaneous flow, so reuse those same leader colours rather than chartAccentColor (which
-        //is the window-dominant direction); the non-directional targets already agree with chartAccentColor.
-        const activeChipColor =
-            this._chartTarget === 'grid' ? this._hud._gridLeaderColor
-            : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? this._hud._batteryLeaderColor
-            : chartAccentColor(this);
+        //Detail-panel + timeline accent = the ACTIVE chip's live colour (see _activeChipColor).
+        const activeChipColor = this._activeChipColor();
         const cardClasses = [
             cardThemeClass,
             cameraLocked      ? 'camera-locked'  : '',
@@ -1503,7 +1532,7 @@ export class HeliosCard extends LitElement
                               cursors. The day-label strip sits below so it never covers the curves.  -->
                         <div
                             class="tb-chart-stack"
-                            style="--chart-accent:${chartAccentColor(this)}"
+                            style="--chart-accent:${this._activeChipColor()}"
                         >
                             <div
                                 class="tb-chart-card"
@@ -1531,9 +1560,10 @@ export class HeliosCard extends LitElement
 
                 ${hud}
 
-                <!--  Day curve, in two depth passes around the chip cluster, exactly as the solar arc is layered:
-                      the far half behind them (z 5), the near half over the top (z 11). Above the buildings either
-                      way, because it is a reading of the data and not a wall standing in the street.  -->
+                <!--  Day curve, in two depth passes. Both sit ABOVE the solar overlays (sun, arc, irradiance, z 14/15)
+                      so auto-rotation never sweeps them over the reading (#397); near stays over far so the curve
+                      self-occludes at its own crossings. Above the buildings either way, because it is a reading of
+                      the data and not a wall standing in the street.  -->
                 ${this._dayCurveScene ? html`
                     <svg class="helios-day-curve-svg helios-day-curve-far">
                         ${this._renderDayCurvePass(this._dayCurveScene.far)}

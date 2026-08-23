@@ -82,3 +82,143 @@ describe('latestCostRate freshness gate', () =>
         expect(latestCostRate(host([b]), NOW)).toBeCloseTo(1, 6);
     });
 });
+
+describe('latestCostRate on a coarse meter (flat newest bucket)', () =>
+{
+    const MIN = 60_000;
+    //A stepped *_cost sensor as HA derives it from a 15-minute meter recorded at 5-minute resolution: the meter
+    //reports once, then two buckets pass with no change, then it reports again. Newest bucket is flat.
+    function steppedSeries(): ChangeBucket[]
+    {
+        const out: ChangeBucket[] = [];
+        for (let i = 12; i >= 1; i--)
+        {
+            const endMs = NOW - (i - 1) * 5 * MIN;
+            //Movement lands every third bucket: 0.0625 currency per 15 min = 0.25/h.
+            out.push({ startMs: endMs - 5 * MIN, endMs, kwh: i % 3 === 0 ? 0.0625 : 0 });
+        }
+        return out;
+    }
+
+    it('does not publish the flat bucket as a zero rate', () =>
+    {
+        //Before: the newest bucket is Δ0, so the chip read 0.00/h between meter reports even while importing.
+        const rate = latestCostRate(host(steppedSeries()), NOW);
+        expect(rate).not.toBeNull();
+        expect(rate).not.toBe(0);
+    });
+
+    it('averages the coarse window like the scrub path, so it reads the true rate', () =>
+    {
+        //0.0625 per 15 min is 0.25/h; the window average must land there, not on the flat bucket's 0.
+        expect(latestCostRate(host(steppedSeries()), NOW)).toBeCloseTo(0.25, 6);
+    });
+
+    it('still reads a genuinely idle meter as zero', () =>
+    {
+        //Every bucket flat: no sampling artefact to correct, and no rate to invent. The window averages to 0.
+        const idle = steppedSeries().map((b) => ({ ...b, kwh: 0 }));
+        expect(latestCostRate(host(idle), NOW)).toBe(0);
+    });
+
+    it('nets import against export across the window', () =>
+    {
+        //Import 0.25/h and export 0.10/h on the same coarse cadence: net spend is 0.15/h.
+        const exp = steppedSeries().map((b) => ({ ...b, kwh: b.kwh * 0.4 }));
+        expect(latestCostRate(host(steppedSeries(), exp), NOW)).toBeCloseTo(0.15, 6);
+    });
+
+    it('leaves the dense-meter path untouched', () =>
+    {
+        //A fine meter with a non-flat newest bucket takes the original single-bucket read: 2.5 currency/h.
+        expect(latestCostRate(host([bucket(0, 2.5)]), NOW)).toBeCloseTo(2.5, 6);
+    });
+
+    //A fine meter that moves every bucket. Its newest zero is REAL - import just stopped - and must be reported now,
+    //not averaged away with the activity that preceded it. This is the transition case a naive average gets wrong.
+    function denseSeriesThenStop(): ChangeBucket[]
+    {
+        const out: ChangeBucket[] = [];
+        for (let i = 12; i >= 2; i--)
+        {
+            const endMs = NOW - (i - 1) * 5 * MIN;
+            out.push({ startMs: endMs - 5 * MIN, endMs, kwh: 0.5 / 12 });   //0.5/h, every bucket
+        }
+        out.push({ startMs: NOW - 5 * MIN, endMs: NOW, kwh: 0 });          //then it stops
+        return out;
+    }
+
+    it('keeps a genuine newest zero on a dense meter (import just stopped)', () =>
+    {
+        //Every earlier bucket in the window is nonzero, so this meter is dense: the flat newest bucket is real news.
+        expect(latestCostRate(host(denseSeriesThenStop()), NOW)).toBe(0);
+    });
+
+    it('keeps the zero once a dense meter has been stopped for TWO buckets', () =>
+    {
+        //[nonzero, 0, 0]: the trailing window is now mostly flat, so a density check would flip this meter to
+        //"sparse" and average its old rate back in. Cadence is measured on reports, which the idle run cannot
+        //change: this meter reports every bucket, so its first flat bucket already met the cadence. Still 0.
+        const s = denseSeriesThenStop();
+        s[s.length - 2] = { ...s[s.length - 2], kwh: 0 };
+        expect(latestCostRate(host(s), NOW)).toBe(0);
+        //And after three flat buckets, still 0 - however long it stays stopped.
+        s[s.length - 3] = { ...s[s.length - 3], kwh: 0 };
+        expect(latestCostRate(host(s), NOW)).toBe(0);
+    });
+
+    it('lets a coarse meter that has genuinely stopped fall to zero once a report is overdue', () =>
+    {
+        //A 15-min meter (cadence 3 buckets) whose last report was 3+ buckets ago: a report was due and none came,
+        //so this is a real stop, not the silence between reports. The estimate must not persist indefinitely.
+        const s = steppedSeries();
+        //steppedSeries has movement in the bucket at i%3===0 (i=12,9,6,3), newest (i=1) flat: flat run = 2 < 3.
+        expect(latestCostRate(host(s), NOW)).toBeCloseTo(0.25, 6);      //between reports: estimated
+        //Blank the last report so the flat run becomes 5 buckets: past cadence, report overdue.
+        const stopped = s.map((b, i) => (i === s.length - 3 ? { ...b, kwh: 0 } : b));
+        expect(latestCostRate(host(stopped), NOW)).toBe(0);           //overdue: real zero
+    });
+
+    //A coarse meter on an arbitrary cadence: `n` buckets between reports, `flatTail` flat buckets at the end.
+    function coarseSeries(n: number, perReport: number, flatTail: number): ChangeBucket[]
+    {
+        const out: ChangeBucket[] = [];
+        const total = 24;
+        for (let k = 0; k < total; k++)
+        {
+            const endMs = NOW - (total - 1 - k) * 5 * MIN;
+            const isReport = k % n === 0 && k < total - flatTail;
+            out.push({ startMs: endMs - 5 * MIN, endMs, kwh: isReport ? perReport : 0 });
+        }
+        return out;
+    }
+
+    it('estimates across the whole interval of a slower (30-min) meter, not just a fixed 15-min window', () =>
+    {
+        //Cadence 6 buckets. A flat run of 5 is still between reports, but a fixed 15-min probe would see only
+        //the last three flat buckets and average to zero. 0.5 per 30 min is 1.0/h, and it must hold all the way
+        //to the next report.
+        for (const flat of [1, 2, 3, 4, 5])
+        {
+            expect(latestCostRate(host(coarseSeries(6, 0.5, flat)), NOW)).toBeCloseTo(1.0, 6);
+        }
+        //Once the run reaches the cadence, a report was due: genuinely stopped, zero.
+        expect(latestCostRate(host(coarseSeries(6, 0.5, 6)), NOW)).toBe(0);
+    });
+
+    it('recognises negative deltas as reports (negative dynamic tariff)', () =>
+    {
+        //Paid to import: every report is a negative Δ. It is still a report, and between reports the chip must
+        //carry the negative rate rather than flipping to zero. -0.06 per 15 min is -0.24/h.
+        expect(latestCostRate(host(coarseSeries(3, -0.06, 2)), NOW)).toBeCloseTo(-0.24, 6);
+    });
+
+    it('does not let a dense export series vote a sparse import series into a zero', () =>
+    {
+        //Import is coarse (flat newest bucket, sparse window); export is dense and has just stopped. The import
+        //side must still be averaged rather than the whole chip collapsing to 0 because one side is dense.
+        const rate = latestCostRate(host(steppedSeries(), denseSeriesThenStop()), NOW);
+        expect(rate).not.toBeNull();
+        expect(rate).toBeGreaterThan(0);
+    });
+});

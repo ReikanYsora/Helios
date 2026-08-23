@@ -143,6 +143,7 @@ export class WeatherRain
     private _intensity = 0;
     private readonly _max = 430;
     private readonly _ringCap = 20;
+    private _ro?: ResizeObserver;
 
     constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined) {}
 
@@ -154,7 +155,7 @@ export class WeatherRain
         //Resize only when (re)starting the loop, never on every call: a caller that drives setIntensity every
         //animation frame would otherwise clear the canvas (c.width reset) each frame and wipe the rain. The loop
         //itself re-resizes when the canvas size actually changes.
-        if (!this._raf) { this._resize(); }
+        if (!this._raf) { this._resize(); this._observeResize(); }
         while (this._drops.length < target) { this._drops.push(this._newDrop(true)); }
         if (this._drops.length > target) { this._drops.length = target; }
         if (!this._raf) { this._last = 0; this._raf = requestAnimationFrame(this._loop); }
@@ -163,6 +164,7 @@ export class WeatherRain
     stop(): void
     {
         if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+        this._ro?.disconnect(); this._ro = undefined;
         this._rings = [];
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
@@ -194,14 +196,21 @@ export class WeatherRain
         };
     }
 
+    //Re-measure only when the canvas actually resizes, instead of forcing a layout read every frame in the loop.
+    private _observeResize(): void
+    {
+        if (this._ro || typeof ResizeObserver === 'undefined') { return; }
+        const c = this._getCanvas();
+        if (!c) { return; }
+        this._ro = new ResizeObserver((): void => { if (this._raf) { this._resize(); } });
+        this._ro.observe(c);
+    }
+
     private readonly _loop = (ts: number): void =>
     {
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
         if (!c || !ctx) { this._raf = 0; return; }
-        const rect = c.getBoundingClientRect();
-        if (Math.round(rect.width) !== Math.round(this._w) || Math.round(rect.height) !== Math.round(this._h)) { this._resize(); }
-
         if (!this._last) { this._last = ts; }
         let dt = (ts - this._last) / 1000;
         this._last = ts;
@@ -265,6 +274,7 @@ export class WeatherSnow
     private _last = 0;
     private _intensity = 0;
     private readonly _max = 340;
+    private _ro?: ResizeObserver;
 
     constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined) {}
 
@@ -273,7 +283,7 @@ export class WeatherSnow
         this._intensity = clamp01(amt);
         const target = Math.round(this._intensity * this._max);
         if (target <= 0) { this.stop(); return; }
-        if (!this._raf) { this._resize(); }
+        if (!this._raf) { this._resize(); this._observeResize(); }
         while (this._flakes.length < target) { this._flakes.push(this._newFlake(true)); }
         if (this._flakes.length > target) { this._flakes.length = target; }
         if (!this._raf) { this._last = 0; this._raf = requestAnimationFrame(this._loop); }
@@ -282,6 +292,7 @@ export class WeatherSnow
     stop(): void
     {
         if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+        this._ro?.disconnect(); this._ro = undefined;
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
         if (c && ctx) { ctx.clearRect(0, 0, c.width, c.height); }
@@ -314,14 +325,21 @@ export class WeatherSnow
         };
     }
 
+    //Re-measure only when the canvas actually resizes, instead of forcing a layout read every frame in the loop.
+    private _observeResize(): void
+    {
+        if (this._ro || typeof ResizeObserver === 'undefined') { return; }
+        const c = this._getCanvas();
+        if (!c) { return; }
+        this._ro = new ResizeObserver((): void => { if (this._raf) { this._resize(); } });
+        this._ro.observe(c);
+    }
+
     private readonly _loop = (ts: number): void =>
     {
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
         if (!c || !ctx) { this._raf = 0; return; }
-        const rect = c.getBoundingClientRect();
-        if (Math.round(rect.width) !== Math.round(this._w) || Math.round(rect.height) !== Math.round(this._h)) { this._resize(); }
-
         if (!this._last) { this._last = ts; }
         let dt = (ts - this._last) / 1000;
         this._last = ts;

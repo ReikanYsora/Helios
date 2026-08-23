@@ -85,6 +85,9 @@ export const hu: Translations = {
       "Néhány másodperc tétlenség után a kamera lassan az otthon körül kering (körülbelül 1,5°/s, a nap látszólagos mozgásával ellentétesen). Egyujjas húzás azonnal megállítja, és folytatódik, amint elengeded. Kerüld nagyon régi eszközökön: az automatikus forgatás másodpercenként újrarajzolásra kényszerít.",
     autoRotateOn: "Be",
     autoRotateOff: "Ki",
+    degradedRender: "Kompatibilitási megjelenítés",
+    degradedRenderHint:
+      "A térképet egyszerűbb, jobban kompatibilis módszerrel rajzolja. Kapcsolja be, ha a jelenet vibrál vagy szakadozik forgatás vagy húzás közben. Kijavítja a hibát egyes telefonokon és táblagépeken, kissé kevésbé folyamatos mozgás árán.",
     dataDisplaySection: "Adatmegjelenítés",
     maxExpectedPower: "Maximális várható teljesítmény",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const hu: Translations = {
     powerUnit: "Teljesítmény mértékegysége",
     powerUnitHelp:
       "A kártya minden teljesítménykijelzésének mértékegysége (chipek, grafikon buboréksúgók). Az energia is ezt követi, így a kártya következetes marad: a kW a kWh-val, a W a Wh-val párosul.",
+    energyUnit: "Energia mértékegysége",
+    energyUnitHelp:
+      "Mértékegység minden energiaösszeghez (napi görbe, részletek panel, az idővonal napi összegei). Az Automatikus a fenti teljesítmény mértékegységét követi; válasszon Wh-t vagy kWh-t a különálló beállításhoz.",
+    energyUnitAuto: "Automatikus",
     irradianceUnit: "Napállandó mértékegysége",
     irradianceUnitHelp:
       "A nap fölött megjelenő napállandó (besugárzás) kijelzésének mértékegysége.",

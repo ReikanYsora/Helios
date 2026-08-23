@@ -85,6 +85,9 @@ export const it: Translations = {
       "Dopo qualche secondo di inattività, la camera ruota lentamente intorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un trascinamento con un dito la mette in pausa all'istante e riprende appena lasci. Da evitare su dispositivi molto vecchi: la rotazione automatica forza un rendering ogni secondo.",
     autoRotateOn: "Attiva",
     autoRotateOff: "Disattiva",
+    degradedRender: "Rendering di compatibilità",
+    degradedRenderHint:
+      "Disegna la mappa con un metodo più semplice e compatibile. Attivalo se la scena sfarfalla o si strappa quando la ruoti o la sposti. Corregge il difetto su alcuni telefoni e tablet, a costo di un movimento un po' meno fluido.",
     dataDisplaySection: "Visualizzazione dati",
     maxExpectedPower: "Potenza massima prevista",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const it: Translations = {
     powerUnit: "Unità di potenza",
     powerUnitHelp:
       "Unità per ogni lettura di potenza sulla scheda (chip, tooltip del grafico). Anche l'energia la segue, così la scheda resta coerente: kW si abbina a kWh, W a Wh.",
+    energyUnit: "Unità di energia",
+    energyUnitHelp:
+      "Unità per ogni totale di energia (la curva del giorno, il pannello dei dettagli, i totali giornalieri della timeline). Automatico segue l'unità di potenza sopra; scegli Wh o kWh per impostarla separatamente.",
+    energyUnitAuto: "Automatico",
     irradianceUnit: "Unità della costante solare",
     irradianceUnitHelp:
       "Unità per la lettura della costante solare (irraggiamento) sopra il sole.",

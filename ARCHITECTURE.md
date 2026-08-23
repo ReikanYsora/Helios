@@ -87,6 +87,15 @@ cached features whenever it comes back from a pause: a browser is free to drop a
 canvas's backing store while a tab sits in the background, and nothing in the draw
 loop would ever put those pixels back.
 
+That CSS 3D transform is the fast path, but some hardware can't composite it: entry
+Android GPUs corrupt a GPU-drawn canvas into colored noise, and a few old WebViews
+mis-layer the tilted plane. `renderer.ts` sniffs those (GPU string, texture cap, UA)
+and falls back on its own, either to a CPU-rasterized canvas still under the transform,
+or, for the broken-3D cases, to a **projected** path that repaints the ground
+already-projected every frame with no 3D layer at all. When the sniff misses a device
+(a WebView that hides its GPU name, and still flickers), the `degraded-render` option
+forces that projected path by hand.
+
 ### Camera + projection, `scene/projection.ts`
 
 `SceneCamera` is the keystone. All scene coordinates are **local metres relative
@@ -243,9 +252,12 @@ moment, dashed, as its own line: the same shape, only its certainty gives way.
 
 The curve is projected by the engine but rendered as a **HUD layer**, not scene
 geometry, and deliberately: `#map-container` is its own stacking context, so
-anything the renderer draws is pinned below the chips. Like the sun arc it is
-layered in two depth passes around them (far behind at z 5, near over at z 11),
-which also puts it clear of the buildings it would otherwise cut through. The engine
+anything the renderer draws is pinned below the chips. It is layered in two depth
+passes (far and near) so the curve self-occludes at its own crossings, and both
+passes sit **above** the solar overlays (sun disc, arc, incidence ray, irradiance
+label): with auto-rotation the sun would otherwise sweep across the curve and hide
+the reading, so the diagram wins that overlap. It stays below the per-chip detail
+panel and the timeline, and clear of the buildings it would otherwise cut through. The engine
 stamps the radius on because it owns the arc scale, so the card hands over everything
 but that.
 
@@ -271,7 +283,14 @@ cumulative energy meter. The past curves read the recorder's pre-computed `chang
 metric, the exact numbers the Energy dashboard shows, so the two surfaces agree to
 the watt-hour. `data/sources/pv.ts`, `battery.ts`, `grid.ts`, `irradiance.ts` own
 the live + history resolution per source; `data/energy-forecast.ts` reads the
-dashboard's configured solar-forecast provider. `data/sources/cost.ts` reads the
+dashboard's configured solar-forecast provider, preferring the
+[Helios-Forecast](https://github.com/ReikanYsora/Helios-Forecast) integration's own
+detail series (`helios_forecast/series`) when it is configured and falling back to
+HA's generic `energy/solar_forecast` otherwise. Only the Helios-Forecast path carries
+a past window (its hourly archive, residual-corrected against real production); HA's
+generic forecast is future-only by design of the underlying providers (Forecast.Solar,
+Solcast, ...), so a period reaching into the past (Yesterday, Week, ...) only draws a
+forecast curve there with Helios-Forecast configured. `data/sources/cost.ts` reads the
 grid flows' configured prices (`entity_energy_price` / `number_energy_price`) and
 cost statistics (`stat_cost` / `stat_compensation`) to drive the cost chip: a live
 net rate (price x power) and, for a fixed price, a cost curve derived as energy x
@@ -302,7 +321,11 @@ altitude), and rain, snow and thunderstorm stack on top. The overlay is CSS
 layers plus two particle canvases (`WeatherRain`, `WeatherSnow`) and a scripted
 lightning flash (`WeatherStorm`), driven by `--wx-*` custom properties the card
 sets from the layer strengths. It sits between the scene and the chips, so weather
-tints the map, never the data.
+tints the map, never the data. The scene grade itself (saturation + brightness for
+cloud cover) is **baked into the ground and building paint** by the renderer
+(`SceneRenderer.setWeatherGrade`), not applied as a CSS `filter` on the map layer:
+a filter there wraps the CSS 3D-transformed basemap and forces the whole scene to
+re-flatten every frame while rotating, which flickers hard on Android WebViews.
 
 ### Weather overrides, `data/sources/irradiance.ts`, `data/sources/weather-override.ts`
 

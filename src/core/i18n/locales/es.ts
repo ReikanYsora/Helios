@@ -85,6 +85,9 @@ export const es: Translations = {
       "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (unos 1.5°/s, en sentido contrario al movimiento aparente del sol). Un arrastre con un dedo la pausa al instante y se reanuda en cuanto sueltas. Evítala en dispositivos muy antiguos: la rotación automática fuerza un renderizado cada segundo.",
     autoRotateOn: "Activada",
     autoRotateOff: "Desactivada",
+    degradedRender: "Renderizado de compatibilidad",
+    degradedRenderHint:
+      "Dibuja el mapa con un método más sencillo y compatible. Actívalo si la escena parpadea o se rompe al girarla o desplazarla. Corrige el fallo en algunos teléfonos y tabletas, a costa de un movimiento algo menos fluido.",
     dataDisplaySection: "Visualización de datos",
     maxExpectedPower: "Potencia máxima esperada",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const es: Translations = {
     powerUnit: "Unidad de potencia",
     powerUnitHelp:
       "Unidad para cada lectura de potencia en la tarjeta (chips, información sobre herramientas del gráfico). La energía también la sigue, así que la tarjeta se mantiene coherente: kW se combina con kWh, y W con Wh.",
+    energyUnit: "Unidad de energía",
+    energyUnitHelp:
+      "Unidad para cada total de energía (la curva del día, el panel de detalle, los totales diarios de la línea de tiempo). Automático sigue la unidad de potencia de arriba; elige Wh o kWh para configurarla por separado.",
+    energyUnitAuto: "Automático",
     irradianceUnit: "Unidad de constante solar",
     irradianceUnitHelp:
       "Unidad para la lectura de la constante solar (irradiancia) sobre el sol.",

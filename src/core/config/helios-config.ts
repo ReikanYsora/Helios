@@ -126,8 +126,11 @@ export interface HeliosConfig
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
     //home coordinates, so two cards on the same home keep independent state. Empty = shared per-home cache.
     'cache-id'?:                unknown;
-    //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW'. Energy always stays kWh.
+    //Power readout unit for the whole card: 'W' or 'kW'. Default 'kW'. Energy totals follow it by default
+    //('energy-unit' absent or 'auto'), unless 'energy-unit' is set on its own.
     'power-unit'?:             unknown;
+    //Energy total unit: 'auto' (follow power-unit, the default), 'Wh' or 'kWh'.
+    'energy-unit'?:            unknown;
     //Irradiance (solar constant) readout unit: 'W/m²', 'kW/m²' or 'W/ft²'. Default 'W/m²'.
     'irradiance-unit'?:        unknown;
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
@@ -219,10 +222,22 @@ export function maxExpectedPowerW(config: HeliosConfig | undefined): number
 
 
 //Resolved power readout unit ('W' or 'kW') for every power value on the card. Default 'kW' so existing cards
-//are unchanged; energy readouts always stay kWh regardless.
+//are unchanged.
 export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 {
     return config?.['power-unit'] === 'W' ? 'W' : 'kW';
+}
+
+
+//Resolved energy total unit ('Wh' or 'kWh'). Explicit 'energy-unit' wins; absent or 'auto' mirrors powerUnit
+//(kW -> kWh, W -> Wh), exactly today's behaviour, so an existing card is unchanged until the user picks one on
+//its own.
+export function energyUnit(config: HeliosConfig | undefined): 'Wh' | 'kWh'
+{
+    const raw = config?.['energy-unit'];
+    if (raw === 'Wh')  { return 'Wh'; }
+    if (raw === 'kWh') { return 'kWh'; }
+    return powerUnit(config) === 'W' ? 'Wh' : 'kWh';
 }
 
 
@@ -255,6 +270,14 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 export function weatherEnabled(config: HeliosConfig | undefined): boolean
 {
     return config?.['weather-enabled'] !== false;
+}
+
+//Force the compatibility ("degraded") renderer: the projected ground path, with no CSS 3D transform on the
+//basemap. Opt-in (default off), for devices whose WebView flickers on the 3D-transformed ground even though the
+//auto-detection left them on a transform path. Trades the cheap GPU rotation for a per-frame CPU reproject.
+export function degradedRender(config: HeliosConfig | undefined): boolean
+{
+    return config?.['degraded-render'] === true;
 }
 
 

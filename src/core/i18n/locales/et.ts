@@ -85,6 +85,9 @@ export const et: Translations = {
       "Kui ollakse paar sekundit tegevusetu, tiirleb kaamera aeglaselt kodu ümber (umbes 1,5°/s, vastupidi päikese näivale liikumisele). Ühe sõrmega lohistamine peatab selle koheselt ja see jätkub, kui lahti lased. Väldi seda väga vanadel seadmetel: automaatne pööramine sunnib renderdamise iga sekund.",
     autoRotateOn: "Sees",
     autoRotateOff: "Väljas",
+    degradedRender: "Ühilduvusrežiim",
+    degradedRenderHint:
+      "Joonistab kaardi lihtsama ja ühilduvama meetodiga. Lülitage sisse, kui stseen vilgub või rebeneb pööramisel või lohistamisel. See parandab tõrke mõnes telefonis ja tahvelarvutis veidi vähem sujuva liikumise arvelt.",
     dataDisplaySection: "Andmete kuvamine",
     maxExpectedPower: "Maksimaalne oodatav võimsus",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const et: Translations = {
     powerUnit: "Võimsuse ühik",
     powerUnitHelp:
       "Ühik iga võimsuse näidu jaoks kaardil (kiibid, graafiku kohtspikrid). Energia järgib seda samuti, nii et kaart jääb ühtseks: kW sobib kWh-ga, W Wh-ga.",
+    energyUnit: "Energia ühik",
+    energyUnitHelp:
+      "Ühik kõigi energiakogusummade jaoks (päevakõver, üksikasjade paneel, ajajoone päevasummad). Automaatne järgib ülalolevat võimsuse ühikut; valige Wh või kWh, et seada see eraldi.",
+    energyUnitAuto: "Automaatne",
     irradianceUnit: "Päikesekonstandi ühik",
     irradianceUnitHelp:
       "Ühik päikesekonstandi (kiirgustugevuse) näidu jaoks päikese kohal.",

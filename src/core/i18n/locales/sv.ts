@@ -85,6 +85,9 @@ export const sv: Translations = {
       "När det är inaktivt i några sekunder kretsar kameran långsamt runt hemmet (cirka 1,5°/s, motsatt solens skenbara rörelse). En dragning med ett finger pausar den omedelbart och den återupptas när du släpper. Undvik det på mycket gamla enheter: automatisk rotation tvingar fram en rendering varje sekund.",
     autoRotateOn: "På",
     autoRotateOff: "Av",
+    degradedRender: "Kompatibilitetsrendering",
+    degradedRenderHint:
+      "Ritar kartan med en enklare, mer kompatibel metod. Slå på om scenen flimrar eller går sönder när du roterar eller drar i den. Det åtgärdar felet på vissa telefoner och surfplattor, till priset av en något mindre mjuk rörelse.",
     dataDisplaySection: "Datavisning",
     maxExpectedPower: "Max förväntad effekt",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const sv: Translations = {
     powerUnit: "Effektenhet",
     powerUnitHelp:
       "Enhet för varje effektutläsning på kortet (chips, grafverktygstips). Energin följer den också, så kortet förblir konsekvent: kW hör ihop med kWh, W med Wh.",
+    energyUnit: "Energienhet",
+    energyUnitHelp:
+      "Enhet för alla energitotaler (dagskurvan, detaljpanelen, tidslinjens dagstotaler). Auto följer effektenheten ovan; välj Wh eller kWh för att ställa in den separat.",
+    energyUnitAuto: "Auto",
     irradianceUnit: "Enhet för solkonstant",
     irradianceUnitHelp:
       "Enhet för utläsningen av solkonstanten (irradians) ovanför solen.",

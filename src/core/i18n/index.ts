@@ -98,9 +98,13 @@ export interface Translations
         batteryChipModeHelp:         string;
         batteryChipModePower:        string;
         batteryChipModeSoc:          string;
-        //Power unit selector (W / kW) and solar-constant unit selector (W/m2 / kW/m2).
+        //Power unit selector (W / kW), energy unit selector (auto / Wh / kWh, defaults to following the power
+        //unit above), and solar-constant unit selector (W/m2 / kW/m2).
         powerUnit:                   string;
         powerUnitHelp:               string;
+        energyUnit:                  string;
+        energyUnitHelp:              string;
+        energyUnitAuto:              string;
         irradianceUnit:              string;
         irradianceUnitHelp:          string;
         //Battery-sign selector + home-consumption override entity.
@@ -133,6 +137,9 @@ export interface Translations
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
         lockRotation:                string;
         lockRotationHint:            string;
+        //Compatibility ("degraded") renderer toggle: a last resort for devices whose WebView flickers.
+        degradedRender:              string;
+        degradedRenderHint:          string;
         //"Chips & colours" section: per-chip show/hide toggles + colour pickers.
         chipsSection:                string;
         chipsIntro:                  string;

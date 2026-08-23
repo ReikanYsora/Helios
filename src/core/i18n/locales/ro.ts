@@ -85,6 +85,9 @@ export const ro: Translations = {
       "Dupa cateva secunde de inactivitate, camera se roteste lent in jurul casei (aproximativ 1.5°/s, in sens opus miscarii aparente a soarelui). O glisare cu un deget o opreste instantaneu, iar rotirea reia indata ce ridici degetul. Evit-o pe dispozitive foarte vechi: rotirea automata forteaza o redare in fiecare secunda.",
     autoRotateOn: "Pornit",
     autoRotateOff: "Oprit",
+    degradedRender: "Randare de compatibilitate",
+    degradedRenderHint:
+      "Desenează harta cu o metodă mai simplă și mai compatibilă. Activați dacă scena pâlpâie sau se rupe când o rotiți sau o deplasați. Remediază problema pe unele telefoane și tablete, cu prețul unei mișcări puțin mai puțin fluide.",
     dataDisplaySection: "Afisarea datelor",
     maxExpectedPower: "Putere maxima asteptata",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const ro: Translations = {
     powerUnit: "Unitate de putere",
     powerUnitHelp:
       "Unitatea pentru fiecare citire a puterii de pe card (cipuri, indicii graficului). Energia o urmeaza si ea, astfel incat cardul ramane consecvent: kW se imperecheaza cu kWh, W cu Wh.",
+    energyUnit: "Unitate de energie",
+    energyUnitHelp:
+      "Unitate pentru fiecare total de energie (curba zilei, panoul de detalii, totalurile zilnice din cronologie). Automat urmează unitatea de putere de mai sus; alegeți Wh sau kWh pentru a o seta separat.",
+    energyUnitAuto: "Automat",
     irradianceUnit: "Unitatea constantei solare",
     irradianceUnitHelp:
       "Unitatea pentru citirea constantei solare (iradiere) de deasupra soarelui.",

@@ -85,6 +85,9 @@ export const lt: Translations = {
       "Kai kelias sekundes neaktyvi, kamera lėtai sukasi aplink namus (apie 1,5°/s, priešingai matomam saulės judėjimui). Vilkimas vienu pirštu ją iškart pristabdo, ir ji atsinaujina, kai atleidi. Venk to labai senuose įrenginiuose: automatinis sukimasis priverčia atvaizduoti kas sekundę.",
     autoRotateOn: "Įjungta",
     autoRotateOff: "Išjungta",
+    degradedRender: "Suderinamumo atvaizdavimas",
+    degradedRenderHint:
+      "Žemėlapį piešia paprastesniu, labiau suderinamu būdu. Įjunkite, jei sukant ar stumdant sceną ji mirga arba plyšta. Tai pašalina triktį kai kuriuose telefonuose ir planšetėse, šiek tiek mažiau sklandaus judesio sąskaita.",
     dataDisplaySection: "Duomenų rodymas",
     maxExpectedPower: "Didžiausia numatoma galia",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const lt: Translations = {
     powerUnit: "Galios vienetas",
     powerUnitHelp:
       "Vienetas kiekvienam galios rodmeniui kortelėje (lustai, grafiko debesėliai). Energija taip pat jo laikosi, kad kortelė liktų nuosekli: kW poruojasi su kWh, W su Wh.",
+    energyUnit: "Energijos vienetas",
+    energyUnitHelp:
+      "Vienetas visoms energijos sumoms (dienos kreivei, informacijos skydeliui, laiko juostos dienos sumoms). „Automatinis“ seka aukščiau esantį galios vienetą; pasirinkite Wh arba kWh, kad nustatytumėte jį atskirai.",
+    energyUnitAuto: "Automatinis",
     irradianceUnit: "Saulės konstantos vienetas",
     irradianceUnitHelp:
       "Vienetas saulės konstantos (apšvitos) rodmeniui virš saulės.",

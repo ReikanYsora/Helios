@@ -85,6 +85,9 @@ export const lv: Translations = {
       "Kad dažas sekundes esi neaktīvs, kamera lēni riņķo ap māju (apmēram 1.5°/s, pretēji saules šķietamajai kustībai). Vilkšana ar vienu pirkstu to nekavējoties aptur, un tā atsākas, tiklīdz atlaid. Izvairies no tā ļoti vecās ierīcēs: automātiskā rotācija piespiež renderēšanu katru sekundi.",
     autoRotateOn: "Ieslēgts",
     autoRotateOff: "Izslēgts",
+    degradedRender: "Saderības renderēšana",
+    degradedRenderHint:
+      "Zīmē karti ar vienkāršāku, saderīgāku metodi. Ieslēdziet, ja aina mirgo vai plīst, to griežot vai pārvietojot. Tas novērš kļūdu dažos tālruņos un planšetdatoros uz nedaudz mazāk plūstošas kustības rēķina.",
     dataDisplaySection: "Datu attēlojums",
     maxExpectedPower: "Maksimālā gaidāmā jauda",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const lv: Translations = {
     powerUnit: "Jaudas mērvienība",
     powerUnitHelp:
       "Mērvienība katram jaudas rādījumam kartītē (mikroshēmas, grafika rīka padomi). Enerģija tai arī seko, tāpēc kartīte paliek konsekventa: kW veido pāri ar kWh, W ar Wh.",
+    energyUnit: "Enerģijas mērvienība",
+    energyUnitHelp:
+      "Mērvienība visām enerģijas kopsummām (dienas līknei, detalizētās informācijas panelim, laika skalas dienas kopsummām). Automātiski seko iepriekš norādītajai jaudas mērvienībai; izvēlieties Wh vai kWh, lai iestatītu to atsevišķi.",
+    energyUnitAuto: "Automātiski",
     irradianceUnit: "Saules konstantes mērvienība",
     irradianceUnitHelp:
       "Mērvienība saules konstantes (apstarojuma) rādījumam virs saules.",

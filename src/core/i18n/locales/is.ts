@@ -85,6 +85,9 @@ export const isLocale: Translations = {
       "Þegar ekkert hefur gerst í nokkrar sekúndur, snýst myndavélin hægt um heimilið (um það bil 1.5°/s, andstætt sýnilegri hreyfingu sólarinnar). Að draga með einum fingri stöðvar hann samstundis og hann heldur áfram þegar þú sleppir. Forðastu hann á mjög gömlum tækjum: sjálfvirkur snúningur þvingar fram myndgerð á hverri sekúndu.",
     autoRotateOn: "Kveikt",
     autoRotateOff: "Slökkt",
+    degradedRender: "Samhæfnisútlit",
+    degradedRenderHint:
+      "Teiknar kortið með einfaldari og samhæfðari aðferð. Kveiktu á þessu ef sviðið flöktir eða rifnar þegar þú snýrð eða dregur það. Það lagar gallann í sumum símum og spjaldtölvum á kostnað örlítið minna mjúkrar hreyfingar.",
     dataDisplaySection: "Birting gagna",
     maxExpectedPower: "Hámarksafl sem búist er við",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const isLocale: Translations = {
     powerUnit: "Afleining",
     powerUnitHelp:
       "Eining fyrir hverja aflmælingu á kortinu (flögur, ábendingar á grafi). Orkan fylgir henni líka, svo kortið haldist samræmt: kW parast við kWh, W við Wh.",
+    energyUnit: "Orkueining",
+    energyUnitHelp:
+      "Eining fyrir allar orkusamtölur (dagferilinn, nánari upplýsingar spjaldið, dagsamtölur tímalínunnar). Sjálfvirkt fylgir aflseiningunni hér að ofan; veldu Wh eða kWh til að stilla hana sérstaklega.",
+    energyUnitAuto: "Sjálfvirkt",
     irradianceUnit: "Eining sólfastans",
     irradianceUnitHelp:
       "Eining fyrir mælingu sólfastans (sólgeislunar) fyrir ofan sólina.",

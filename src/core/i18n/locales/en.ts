@@ -71,6 +71,9 @@ export const en: Translations = {
       "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go. Avoid it on very old devices: auto-rotation forces a render every second.",
     autoRotateOn: "On",
     autoRotateOff: "Off",
+    degradedRender: "Compatibility rendering",
+    degradedRenderHint:
+      "Draws the map with a simpler, more compatible method. Turn this on if the scene flickers or tears while you rotate or pan it. It fixes the glitch on some phones and tablets, at the cost of slightly less smooth motion.",
     dataDisplaySection: "Data display",
     displayUpdateFrequency: "Graph detail",
     displayUpdateFrequencyHelp:
@@ -92,7 +95,11 @@ export const en: Translations = {
     sunChipModePosition: "Sun position",
     powerUnit: "Power unit",
     powerUnitHelp:
-      "Unit for every power readout on the card (chips, graph tooltips). Energy follows it too, so the card stays consistent: kW pairs with kWh, W with Wh.",
+      "Unit for every power readout on the card (chips, graph tooltips). Energy follows it by default too (kW pairs with kWh, W with Wh), unless you set an energy unit of its own below.",
+    energyUnit: "Energy unit",
+    energyUnitHelp:
+      "Unit for every energy total (the day curve, the detail panel, the timeline's day totals). Auto follows the power unit above; pick Wh or kWh to set it on its own.",
+    energyUnitAuto: "Auto",
     irradianceUnit: "Solar constant unit",
     irradianceUnitHelp:
       "Unit for the solar constant (irradiance) readout above the sun.",

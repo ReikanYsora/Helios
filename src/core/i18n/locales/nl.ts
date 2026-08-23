@@ -85,6 +85,9 @@ export const nl: Translations = {
       "Na een paar seconden inactiviteit draait de camera langzaam om het huis (ongeveer 1.5°/s, tegengesteld aan de schijnbare beweging van de zon). Een sleepbeweging met één vinger pauzeert het meteen en het hervat zodra je loslaat. Vermijd het op heel oude apparaten: de automatische rotatie forceert elke seconde een render.",
     autoRotateOn: "Aan",
     autoRotateOff: "Uit",
+    degradedRender: "Compatibiliteitsweergave",
+    degradedRenderHint:
+      "Tekent de kaart met een eenvoudigere, beter compatibele methode. Schakel dit in als de scène flikkert of scheurt terwijl u draait of sleept. Het lost de storing op sommige telefoons en tablets op, ten koste van iets minder vloeiende beweging.",
     dataDisplaySection: "Entiteiten en gegevensweergave",
     maxExpectedPower: "Max verwacht vermogen",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const nl: Translations = {
     powerUnit: "Vermogenseenheid",
     powerUnitHelp:
       "Eenheid voor elke vermogensweergave op de kaart (chips, grafiektooltips). Energie volgt deze ook, zodat de kaart consistent blijft: kW hoort bij kWh, W bij Wh.",
+    energyUnit: "Energie-eenheid",
+    energyUnitHelp:
+      "Eenheid voor elk energietotaal (de dagcurve, het detailpaneel, de dagtotalen van de tijdlijn). Automatisch volgt de vermogenseenheid hierboven; kies Wh of kWh om deze apart in te stellen.",
+    energyUnitAuto: "Automatisch",
     irradianceUnit: "Eenheid van de zonneconstante",
     irradianceUnitHelp:
       "Eenheid voor de weergave van de zonneconstante (instraling) boven de zon.",

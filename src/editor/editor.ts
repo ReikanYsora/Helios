@@ -1126,6 +1126,7 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${t.editor.noUiDelayHint}</div>
                 ${this._renderToggle('auto-rotate-enabled', t.editor.autoRotate, t.editor.autoRotateHint)}
                 ${this._renderToggle('camera-locked', t.editor.lockRotation, t.editor.lockRotationHint)}
+                ${this._renderToggle('degraded-render', t.editor.degradedRender, t.editor.degradedRenderHint)}
 
                 </details>
 
@@ -1180,6 +1181,9 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderSelect('power-unit', t.editor.powerUnit,
                     [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }], 'kW',
                     t.editor.powerUnitHelp)}
+                ${this._renderSelect('energy-unit', t.editor.energyUnit,
+                    [{ value: 'auto', label: t.editor.energyUnitAuto }, { value: 'kWh', label: 'kWh' }, { value: 'Wh', label: 'Wh' }], 'auto',
+                    t.editor.energyUnitHelp)}
                 ${this._renderSelect('irradiance-unit', t.editor.irradianceUnit,
                     [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }, { value: 'W/ft²', label: 'W/ft²' }], 'W/m²',
                     t.editor.irradianceUnitHelp)}

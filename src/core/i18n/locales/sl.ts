@@ -85,6 +85,9 @@ export const sl: Translations = {
       "Po nekaj sekundah nedejavnosti kamera počasi kroži okoli doma (približno 1,5°/s, nasprotno navideznemu gibanju sonca). Poteg z enim prstom jo takoj zaustavi in se nadaljuje, ko spustiš. Izogibaj se mu na zelo starih napravah: samodejno vrtenje vsako sekundo prisili izris.",
     autoRotateOn: "Vklopljeno",
     autoRotateOff: "Izklopljeno",
+    degradedRender: "Izris v načinu združljivosti",
+    degradedRenderHint:
+      "Zemljevid izriše z enostavnejšo in bolj združljivo metodo. Vklopite, če scena med vrtenjem ali premikanjem utripa ali se trga. To odpravi napako na nekaterih telefonih in tablicah za ceno nekoliko manj gladkega gibanja.",
     dataDisplaySection: "Prikaz podatkov",
     maxExpectedPower: "Največja pričakovana moč",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const sl: Translations = {
     powerUnit: "Enota moči",
     powerUnitHelp:
       "Enota za vsak prikaz moči na kartici (čipi, namigi grafa). Energija ji tudi sledi, da kartica ostane usklajena: kW se ujema s kWh, W z Wh.",
+    energyUnit: "Enota energije",
+    energyUnitHelp:
+      "Enota za vse skupne vrednosti energije (dnevna krivulja, podrobnostni pladenj, dnevni seštevki na časovnici). Samodejno sledi zgornji enoti moči; izberite Wh ali kWh za ločeno nastavitev.",
+    energyUnitAuto: "Samodejno",
     irradianceUnit: "Enota sončne konstante",
     irradianceUnitHelp:
       "Enota za prikaz sončne konstante (obsevanja) nad soncem.",

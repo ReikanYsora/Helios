@@ -85,6 +85,9 @@ export const pl: Translations = {
       "Po kilku sekundach bezczynności kamera powoli obraca się wokół domu (około 1,5°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją wstrzymuje, a wznawia się, gdy puścisz. Unikaj na bardzo starych urządzeniach: automatyczny obrót wymusza renderowanie co sekundę.",
     autoRotateOn: "Włączony",
     autoRotateOff: "Wyłączony",
+    degradedRender: "Renderowanie zgodności",
+    degradedRenderHint:
+      "Rysuje mapę prostszą, bardziej zgodną metodą. Włącz, jeśli scena miga lub rwie się podczas obracania lub przesuwania. Naprawia usterkę na niektórych telefonach i tabletach, kosztem nieco mniej płynnego ruchu.",
     dataDisplaySection: "Wyświetlanie danych",
     maxExpectedPower: "Maks. oczekiwana moc",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const pl: Translations = {
     powerUnit: "Jednostka mocy",
     powerUnitHelp:
       "Jednostka dla każdego odczytu mocy na karcie (chipy, dymki wykresu). Energia też za nią podąża, aby karta pozostała spójna: kW łączy się z kWh, W z Wh.",
+    energyUnit: "Jednostka energii",
+    energyUnitHelp:
+      "Jednostka dla wszystkich sum energii (krzywa dnia, panel szczegółów, dzienne sumy na osi czasu). Automatyczna podąża za jednostką mocy powyżej; wybierz Wh lub kWh, aby ustawić ją niezależnie.",
+    energyUnitAuto: "Automatyczna",
     irradianceUnit: "Jednostka stałej słonecznej",
     irradianceUnitHelp:
       "Jednostka odczytu stałej słonecznej (nasłonecznienia) nad słońcem.",

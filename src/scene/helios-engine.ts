@@ -30,6 +30,7 @@ import
     mapThemeMode,
     mapLayerColor,
     mapLayerVisible,
+    degradedRender,
 } from '../core/config/helios-config';
 import { isDarkFromCss, cssHex, resolveUiColor } from '../core/format/format';
 
@@ -232,6 +233,13 @@ export class HeliosEngine
         else               { this._weatherOverrideSamples.set(variable, next); }
         this._arcInputsCache = undefined;
         this._renderForCurrentSelection();
+    }
+
+    //"Your real sky" scene grade (saturate/brightness from the resolved weather). Baked into the ground + building
+    //paint by the renderer, not a CSS filter on the map layer - the card computes it, the renderer carries it.
+    public setWeatherGrade(sat: number, bright: number): void
+    {
+        this._renderer?.setWeatherGrade(sat, bright);
     }
 
     //Nearest-neighbour override value for `variable` at `t`, or null (outside the window / no samples), in which
@@ -564,6 +572,7 @@ export class HeliosEngine
         this._renderer = new SceneRenderer(container, {
             shadow:        '#000000',
             shadowOpacity: this._shadowOpacity(),
+            degraded:      degradedRender(this.cfg),
         });
         this._renderer.setCameraBearing(this._initialBearing());
         this._renderer.setCameraPitch(this._initialPitch());

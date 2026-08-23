@@ -85,6 +85,9 @@ export const de: Translations = {
       "Nach ein paar Sekunden Inaktivität dreht sich die Kamera langsam um das Zuhause (etwa 1.5°/s, entgegen der scheinbaren Sonnenbewegung). Ein Wischen mit einem Finger pausiert sie sofort und sie läuft weiter, sobald du loslässt. Auf sehr alten Geräten besser vermeiden: die Autodrehung erzwingt jede Sekunde ein Rendern.",
     autoRotateOn: "An",
     autoRotateOff: "Aus",
+    degradedRender: "Kompatibilitätsmodus",
+    degradedRenderHint:
+      "Zeichnet die Karte mit einer einfacheren, kompatibleren Methode. Aktivieren Sie dies, wenn die Szene beim Drehen oder Verschieben flackert oder reißt. Es behebt den Fehler auf einigen Smartphones und Tablets, allerdings zulasten einer etwas weniger flüssigen Bewegung.",
     dataDisplaySection: "Datenanzeige",
     maxExpectedPower: "Maximal erwartete Leistung",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const de: Translations = {
     powerUnit: "Leistungseinheit",
     powerUnitHelp:
       "Einheit für jede Leistungsanzeige auf der Karte (Chips, Diagramm-Tooltips). Energie folgt ihr ebenfalls, damit die Karte konsistent bleibt: kW passt zu kWh, W zu Wh.",
+    energyUnit: "Energieeinheit",
+    energyUnitHelp:
+      "Einheit für alle Energiesummen (die Tageskurve, das Detailpanel, die Tagessummen der Zeitleiste). „Automatisch“ folgt der Leistungseinheit oben; wählen Sie Wh oder kWh, um sie unabhängig festzulegen.",
+    energyUnitAuto: "Automatisch",
     irradianceUnit: "Einheit der Solarkonstante",
     irradianceUnitHelp:
       "Einheit für die Anzeige der Solarkonstante (Bestrahlungsstärke) über der Sonne.",

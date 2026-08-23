@@ -84,6 +84,9 @@ export const fr: Translations = {
       "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que vous lâchez. À éviter sur les appareils très anciens : la rotation auto force un rendu chaque seconde.",
     autoRotateOn: "Activée",
     autoRotateOff: "Désactivée",
+    degradedRender: "Rendu de compatibilité",
+    degradedRenderHint:
+      "Dessine la carte avec une méthode plus simple et plus compatible. Activez-le si la scène scintille ou se déchire quand vous la faites pivoter ou que vous la déplacez. Cela corrige le défaut sur certains téléphones et tablettes, au prix d'un mouvement un peu moins fluide.",
     dataDisplaySection: "Affichage des données",
     displayUpdateFrequency: "Détail du graphique",
     displayUpdateFrequencyHelp:
@@ -105,7 +108,11 @@ export const fr: Translations = {
     sunChipModePosition: "Position du soleil",
     powerUnit: "Unité de puissance",
     powerUnitHelp:
-      "Unité de tous les affichages de puissance de la carte (chips, infobulles du graphe). L'énergie suit aussi, pour que la carte reste cohérente : kW va avec kWh, W avec Wh.",
+      "Unité de tous les affichages de puissance de la carte (chips, infobulles du graphe). Par défaut, l'énergie suit aussi (kW va avec kWh, W avec Wh), sauf si vous choisissez sa propre unité ci-dessous.",
+    energyUnit: "Unité d'énergie",
+    energyUnitHelp:
+      "Unité de tous les totaux d'énergie (la courbe du jour, le panneau de détail, les totaux du jour dans la timeline). Auto suit l'unité de puissance ci-dessus ; choisissez Wh ou kWh pour la régler séparément.",
+    energyUnitAuto: "Auto",
     irradianceUnit: "Unité de constante solaire",
     irradianceUnitHelp:
       "Unité de la constante solaire (irradiance) affichée au-dessus du soleil.",

@@ -85,6 +85,9 @@ export const cs: Translations = {
       "Po několika sekundách nečinnosti kamera pomalu obíhá kolem domova (přibližně 1.5°/s, opačně k zdánlivému pohybu slunce). Tažení jedním prstem ji okamžitě pozastaví a obnoví se, jakmile prst zvedneš. Na velmi starých zařízeních se tomu vyhni: automatické otáčení vynutí vykreslení každou sekundu.",
     autoRotateOn: "Zapnuto",
     autoRotateOff: "Vypnuto",
+    degradedRender: "Vykreslování v režimu kompatibility",
+    degradedRenderHint:
+      "Vykresluje mapu jednodušší a kompatibilnější metodou. Zapněte, pokud scéna při otáčení nebo posouvání bliká nebo se trhá. Odstraní to závadu na některých telefonech a tabletech za cenu o něco méně plynulého pohybu.",
     dataDisplaySection: "Zobrazení dat",
     maxExpectedPower: "Maximální očekávaný výkon",
     maxExpectedPowerHelp:
@@ -107,6 +110,10 @@ export const cs: Translations = {
     powerUnit: "Jednotka výkonu",
     powerUnitHelp:
       "Jednotka pro každý údaj výkonu na kartě (čipy, popisky grafu). Energie ji také následuje, takže karta zůstává konzistentní: kW se pojí s kWh, W s Wh.",
+    energyUnit: "Jednotka energie",
+    energyUnitHelp:
+      "Jednotka pro všechny součty energie (denní křivka, panel podrobností, denní součty na časové ose). Automaticky se řídí jednotkou výkonu výše; zvolte Wh nebo kWh pro její samostatné nastavení.",
+    energyUnitAuto: "Automaticky",
     irradianceUnit: "Jednotka sluneční konstanty",
     irradianceUnitHelp:
       "Jednotka pro údaj sluneční konstanty (ozáření) nad sluncem.",

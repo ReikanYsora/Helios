@@ -7,6 +7,125 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.2
+
+A performance and reliability release, mostly about running clean on real devices:
+Android WebViews stop flickering during rotation, with a manual Compatibility
+rendering option for the phones and tablets the automatic detection still misses,
+and the scene turns smoothly again on entry-level hardware while drawing lighter
+overall. Alongside it, a handful of correctness fixes settle real edge cases (an
+inverted battery sign, the live flow direction, a coarse-cadence cost chip, a
+Firefox console warning, a stale Helios-Forecast curve after switching to
+Yesterday), and energy totals can now be set to their own Wh/kWh unit, independent
+of live power.
+
+### Fixed: an inverted battery power sensor no longer reads backwards
+
+2026.9.1 added an automatic correction for battery power sensors reported with
+the opposite sign. It could turn on a battery you had already set to **"Inverted"**
+in the Home Assistant Energy dashboard: it re-flipped the already-correct reading,
+so the battery ran backwards and the live home-consumption chip was inflated. The
+correction now judges the sign the card actually shows (honoring your Energy
+dashboard's normal / inverted choice) rather than the raw sensor, so a correctly
+configured inverted sensor is left alone while a genuinely mislabeled one is still
+fixed. Thanks to @FoxP.
+
+### Fixed: the house and timeline follow the live flow direction
+
+The home tint and the timeline border take the colour of the selected chip, but
+for the grid and battery chips they used the period's dominant direction. So the
+house could read "discharging" (blue) while the battery was charging right now
+(purple), and the same for grid import versus export. They now follow the live,
+instant direction, matching the chip and the flow, in both live and scrub. Thanks
+to @FoxP.
+
+### Fixed: no more Firefox console warnings from the GPU probe
+
+On Firefox the card logged two console messages, a deprecation warning for
+`WEBGL_debug_renderer_info` and a "WebGL context was lost" notice, from the one-off
+probe that reads your GPU to choose the right rendering path. The probe now reads
+the standard `RENDERER` where the browser exposes it (Firefox) and no longer
+force-frees its throwaway context, so the console stays clean. No change on other
+browsers. Thanks to @FoxP.
+
+### Changed: a lighter idle and cheaper redraws
+
+First pass of a performance sweep. The rain and snow canvases now pause when the
+card scrolls off-screen (they kept animating before), the particle loops no longer
+measure the layout on every frame, and the buildings and shadows are redrawn only
+when the scene actually changed instead of on every frame. The card runs cooler
+and lighter, especially on a wall tablet or a busy dashboard.
+
+### Changed: smooth rotation on entry-level tablets
+
+Entry Android GPUs (and the Home Assistant app / kiosk WebViews) fall back to a
+compatibility renderer because a GPU-drawn basemap corrupts into colored noise on
+those drivers. That path re-projected the whole map on the CPU every frame, so
+rotating the scene dropped to a few frames per second. It now keeps the fast GPU
+rotation on a **CPU-rasterized** basemap, which dodges the corruption while staying
+pixel-correct, so the scene turns smoothly on those devices too. Thanks to
+@beatschubser (#383).
+
+### Changed: a lighter map that flickers less on Android tablets
+
+On Android WebViews (the Home Assistant app, kiosk browsers) the scene could flicker
+while rotating or panning. The "your real sky" weather grade was applied as a CSS filter
+over the map, which forced the whole 3D scene to re-draw every frame on those devices.
+The grade is now painted straight into the ground and buildings, which removes that
+per-frame cost on every device and calms the flicker on many of them. Some phones and
+tablets still flicker on the 3D-transformed map, though, which is what the new
+compatibility rendering option below is for. Thanks to @Aaroneisele55 (#396) and
+@charleslales (#370).
+
+### Added: a compatibility rendering option for devices that still flicker
+
+If the map still flickers or tears while you rotate it, the new **Compatibility
+rendering** toggle in the card options draws the ground with a simpler, more compatible
+method (no 3D transform, a per-frame redraw instead) that avoids the glitch, in exchange
+for slightly less smooth rotation. It is off by default: the automatic detection handles
+most devices on its own, and this is the manual fallback for the ones it misses.
+
+### Fixed: the energy diagram stays readable while the scene turns
+
+With auto-rotation on, the sun path and the irradiance readout swept in front of the
+day's energy diagram, so you had to wait for the rotation to come round before you
+could read it. The diagram now always draws on top of the sun path. Thanks to
+@beatschubser (#397).
+
+### Fixed: the cost chip no longer flips to zero between meter reports
+
+For a grid meter that reports on a coarse cadence (every 15 minutes, say), Home
+Assistant's cost sensor only steps when the meter does, leaving the buckets in between
+at zero. The cost chip read those as a real 0.00/h, so it flickered between the true
+rate and zero while you were genuinely importing. It now recognises the meter's
+reporting cadence and holds the last report's rate between updates, while a meter that
+has genuinely stopped still falls to zero. Thanks to @Rag30 (#395).
+
+### Fixed: switching to Yesterday could still show a narrower forecast window
+
+With a [Helios-Forecast](https://github.com/ReikanYsora/Helios-Forecast) source
+configured, switching to a period reaching further into the past than the one
+already loaded, most commonly the **Yesterday** tab, could keep showing the
+forecast fetched for the narrower period for up to five minutes: the fetch was
+throttled purely by elapsed time, not by whether the cached data actually
+covered the newly needed window. The card now re-fetches immediately whenever
+the requested past window grows, instead of waiting the throttle out on stale
+data. Home Assistant's built-in solar forecast (Forecast.Solar, Solcast, ...)
+is unaffected either way: that API never returns past days, so it still cannot
+show a forecast for a day already gone. Thanks to @FoxP (#406).
+
+### Added: a separate unit for energy totals
+
+`power-unit` (W / kW) used to set the energy totals' unit too, kW pairing with
+kWh and W with Wh, with no way to pick one independently of the other. A new
+**`energy-unit`** option (Wh / kWh / Auto, the visual editor's "Energy unit")
+lets you set the day curve, the detail panel and the timeline's day totals on
+their own, for example precise W chips alongside kWh totals. Auto (the
+default) keeps today's behaviour, so an existing card reads exactly the same
+until you pick a unit here. Thanks to @zigomatichub (#407).
+
+---
+
 ## 2026.9.1
 
 A follow-up to 2026.9.0 that sharpens the details: the card follows your Home
