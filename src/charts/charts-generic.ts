@@ -417,6 +417,12 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
     }
     const yOf = makeYOf(yMin, yMax);
+    //Area fill closes at the screen Y of value 0, not unconditionally at the chart's bottom edge: a signed metric
+    //(cost, temperature) that dips below zero should shade the gap BETWEEN the curve and zero, not keep growing
+    //toward the floor as if the value stayed positive. Clamped into the drawable band so an all-positive or
+    //all-negative series still closes at its own edge exactly as before (every other target has fixedMin 0, where
+    //this clamps to H regardless, so this is a no-op change for them).
+    const zeroY = Math.max(0, Math.min(H, yOf(0)));
 
     const drawn = series.map(s =>
     {
@@ -426,7 +432,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         const xN = xOf(s.pts[s.pts.length - 1].t);
         return {
             //Line-only series (per-bank SoC) carry no filled area.
-            area:  s.lineOnly ? '' : `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
+            area:  s.lineOnly ? '' : `M ${x0},${zeroY} L ${pp.join(' L ')} L ${xN},${zeroY} Z`,
             line:  `M ${pp.join(' L ')}`,
             color: s.color,
             dashed: !!s.dashed,

@@ -9,6 +9,15 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.3
 
+### Fixed: a negative cost rate no longer shades as if it stayed positive
+
+The cost curve's filled area always closed at the bottom of the chart, so a
+rate that dipped below zero (selling surplus back to the grid) kept shading
+downward instead of shrinking toward zero, reading as if the cost stayed
+positive the whole time. The fill now closes at zero itself, so the shaded
+area actually shrinks as the rate crosses into negative and grows again on
+the other side. Thanks to @TCWORLD (#411).
+
 ### Fixed: the cost chip stays hidden when HA renamed its generated cost sensor
 
 Home Assistant auto-generates a cost statistic named `<meter>_cost` when a price is
