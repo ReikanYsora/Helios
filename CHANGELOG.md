@@ -7,6 +7,20 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.3
+
+### Fixed: the home building now occludes correctly against its neighbours
+
+The home prism always painted on top of every neighbouring building, whichever
+was actually closer to the camera. Neighbours used to be pre-composited as one
+faded group, entirely behind the home, so a neighbour genuinely standing between
+the camera and the home still appeared behind it instead of correctly hiding
+part of it. Every building now paints in one true depth order, home included, so
+a nearer neighbour occludes the home exactly as it would occlude another
+neighbour, and a farther one still sits behind it. Thanks to @vbtheory (#413).
+
+---
+
 ## 2026.9.2
 
 A performance and reliability release, mostly about running clean on real devices:

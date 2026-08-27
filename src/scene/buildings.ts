@@ -19,7 +19,7 @@ import * as polygonClipping from 'polygon-clipping';
 import type { SceneCamera} from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { tintedRgba, buildingColor } from '../core/render-kit/colors';
-import { mixHex, hexByte } from '../core/render-kit/hex';
+import { mixHex, hexByte, rgbaHex } from '../core/render-kit/hex';
 import { pointsAttr, clipPolygon, cardClipRect, type Point, type ClipRect } from '../core/render-kit/geometry';
 import { fetchOfmBuildingRings, type OfmRing } from './openfreemap';
 import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
@@ -850,9 +850,10 @@ export function renderBuildings(
     const order = paintOrder(cam, buildings, visible);
 
     //Neighbours are altitude-tinted like the home + the ground, so the whole scene grades through the day/night
-    //cycle together (there is no full-frame wash any more). They paint OPAQUE (walls a touch darker than the roof
-    //for shading); the user-set neighborOpacity is applied ONCE to the whole neighbour group below, so back faces
-    //and stacked prisms never show through each other (only the visible silhouette reads, then fades as a unit).
+    //cycle together (there is no full-frame wash any more). They paint a touch darker on the walls than the roof
+    //for shading, at the user-set neighborOpacity baked into each face's own fill/stroke as rgba (see faces below):
+    //not a wrapping <g opacity>, because the home now paints in true depth order interleaved with neighbours, so
+    //no single contiguous group can promise every neighbour face still sits together in the paint order.
     const nb       = buildingColor(palette.neighbor, altitude);
     //A wall is no longer one tint: it reads between AMBIENT (turned away from the sun, lit only by the sky) and LIT
     //(square on to it). Every wall took the ambient-ish middle before, so a block looked the same from every side
@@ -860,16 +861,17 @@ export function renderBuildings(
     const nbAmbient = mixHex(nb, '#000000', 0.34);
     const nbLit     = mixHex(nb, '#000000', 0.04);
     const nbStroke  = mixHex(nb, '#000000', 0.30);
+    const neighborOp = Math.max(0, Math.min(1, neighborOpacity));
 
-    //Faces split by group: neighbours (faded together) and the home (always full opacity, drawn on top). Each
-    //group is painted far-to-near by nearest-corner depth, so within a group two touching prisms interleave
-    //correctly at their shared wall.
-    const neighborFaces: { depth: number; svg: string }[] = [];
-    const homeFaces:     { depth: number; svg: string }[] = [];
+    //One face list for EVERY building, home included: the scene paints by true depth, so a neighbour nearer the
+    //camera than the home occludes it exactly as it would occlude another neighbour, and a farther one still
+    //sits behind. `order` (paintOrder, already a global far-to-near topological sort) decides insertion order;
+    //the stable sort below only re-settles it by the finer per-face depth, so a tie between two faces (touching
+    //buildings sharing a wall depth exactly) keeps the topological order's answer instead of an arbitrary one.
+    const faces: { depth: number; svg: string }[] = [];
     for (const { index } of order)
     {
         const b  = buildings[index];
-        const faces = b.isHome ? homeFaces : neighborFaces;
         const fp = simplifyFootprint(b.footprint);
         //Every ring of the block: the outline plus any courtyard. A hole's walls face into the yard, and the cull
         //below reads the PROJECTED quad, so their opposite winding sorts itself out.
@@ -885,8 +887,8 @@ export function renderBuildings(
         const topColor = home.color ?? palette.home;
         const roofFill = b.isHome
             ? tintedRgba(mixHex(topColor, '#ffffff', 0.18), altitude, 0.92)
-            : nb;
-        let stroke = nbStroke;
+            : rgbaHex(nb, neighborOp);
+        let stroke = rgbaHex(nbStroke, neighborOp);
         if (b.isHome)
         {
             const eg = mixHex(home.color ?? palette.home, '#ffffff', 0.5);
@@ -927,7 +929,7 @@ export function renderBuildings(
             const el = Math.hypot(ex, ey) || 1;
             const lit = Math.max(0, (ey / el) * sunE + (-ex / el) * sunN) * sunFade;
             const shade = mixHex(wallAmbient, wallLit, lit);
-            const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : shade;
+            const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : rgbaHex(shade, neighborOp);
             //One full-height wall quad per edge, clipped to the card box so an off-card wall never enlarges the
             //scene layer past the old-iOS compositor cap. The back-face cull above reads the true quad.
             const wq = clipPolygon([p0, p1, p2, p3], rect);
@@ -969,17 +971,11 @@ export function renderBuildings(
             faces.push({ depth: roofDepth, svg: roofSvg + detailSvg });
         }
     }
-    //Neighbours: opaque silhouette painted far-to-near, then faded as ONE group so layers never bleed through.
-    neighborFaces.sort((a, c) => a.depth - c.depth);
-    const op = Math.max(0, Math.min(1, neighborOpacity)).toFixed(3);
-    const neighborsSvg = neighborFaces.length
-        ? `<g opacity="${op}">${neighborFaces.map((f) => f.svg).join('')}</g>`
-        : '';
-
-    //Home on top at full opacity (the focal building). Far-to-near within its own parts.
-    homeFaces.sort((a, c) => a.depth - c.depth);
-    const homeSvg = homeFaces.map((f) => f.svg).join('');
-    return neighborsSvg + homeSvg;
+    //One stable sort, far-to-near, over every face from every building: this is what actually lets a nearer
+    //neighbour occlude the home (or a farther one stay behind it) instead of the whole neighbour set always
+    //painting as a block before the home. Stable, so exact ties fall back to `order`'s insertion sequence.
+    faces.sort((a, c) => a.depth - c.depth);
+    return faces.map((f) => f.svg).join('');
 }
 
 //---------------------------------------------------------------------------------------------------------
