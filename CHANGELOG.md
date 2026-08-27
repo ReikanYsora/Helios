@@ -9,6 +9,20 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.3
 
+### Fixed: the cost chip stays hidden when HA renamed its generated cost sensor
+
+Home Assistant auto-generates a cost statistic named `<meter>_cost` when a price is
+configured and no explicit one is set, and the card derived that same name to
+read it. But that name is only a suggestion: the sensor's real identity is a
+registry id, so re-registering the source meter (the integration re-added, a
+device replaced) can leave the clean `..._cost` id on a defunct entity while HA
+quietly moves on to `..._cost_2` and keeps it there for good. The card now
+prefers the exact mapping `energy/info` exposes (the same one HA's own frontend
+reads), falling back to the derived name only when that map has nothing for a
+given meter. Also: a dual-tariff grid whose flows share one live price entity
+no longer reads as two prices and bails to "no price found", it dedupes to one
+like it always should have. Thanks to the detailed write-up on #410.
+
 ### Fixed: the home building now occludes correctly against its neighbours
 
 The home prism always painted on top of every neighbouring building, whichever
