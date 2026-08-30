@@ -80,9 +80,6 @@ export const editorStyles = css`
         flex-shrink: 0;
     }
 
-    /*  Help-text margins stack with the section's 14 px flex gap: field-to-help 22 px, help-to-next-field
-        34 px (1.5x ratio), so the help reads as attached to the field above it. .hint adds italics. */
-
     /*  Measured-only status lines (one per configured energy family). */
     .live-status
     {
@@ -136,6 +133,8 @@ export const editorStyles = css`
         margin-top: 0;
     }
 
+    /*  Help-text margins stack with the section's 14 px flex gap: field-to-help 22 px, help-to-next-field
+        34 px (1.5x ratio), so the help reads as attached to the field above it. .hint adds italics. */
     .field-help,
     .hint
     {
