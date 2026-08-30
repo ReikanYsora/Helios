@@ -200,10 +200,45 @@ function stackedLines(
     return lines.reverse();
 }
 
-//Build the drawable series (plus the SoC-hover source + a fixed Y max where the target pins one) for a chart
-//target. Split out of renderTargetChart so each target's branch stays independently readable; the caller owns
-//scaling, path building and hover.
+//Memo for buildTargetSeries: renderTargetChart reruns on every hover-cursor render (the pointer position never
+//affects which series get drawn, only the hover dots), so recomputing the full O(bucketsTotal) series on each of
+//those is wasted, same reasoning as computeDailyKwhTotals below. Keyed on every input the builder actually reads:
+//target, visible range, the unified store (a fresh reference each time it rebuilds) and the other host series/maps
+//it consults per target - all of which Lit reassigns rather than mutates in place on a real change, so reference
+//equality alone is exact, no content hashing needed. Theme polarity is included too (colours are baked into the
+//cached lines) plus a coarse freshness term as a safety net for a live theme-token edit that doesn't flip
+//dark/light. Single slot, like the memo below: cheap, and a miss just costs one extra rebuild.
+let _targetSeriesInputs: readonly unknown[] | null = null;
+let _targetSeriesResult: { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null } | null = null;
+
 function buildTargetSeries(
+    host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
+): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
+{
+    const inputs: readonly unknown[] = [
+        host, target, ctx.store, ctx.startMs, ctx.endMsAbs, chartIsDark(host), host.config,
+        Math.floor(Date.now() / 10000),
+        host._batterySocHistory, host._batterySocPerBankHistory,
+        host._costImportSeries, host._costExportSeries,
+        host._gridImportChangeSeriesPerEntity, host._gridExportChangeSeriesPerEntity,
+        host._batteryChargeChangeSeriesPerEntity, host._batteryDischargeChangeSeriesPerEntity,
+        host._deviceChangeSeries,
+    ];
+    const prevInputs = _targetSeriesInputs;
+    const prevResult = _targetSeriesResult;
+    if (prevInputs && prevResult
+        && prevInputs.length === inputs.length
+        && inputs.every((v, i) => v === prevInputs[i]))
+    {
+        return prevResult;
+    }
+    const out = buildTargetSeriesUncached(host, target, ctx);
+    _targetSeriesInputs = inputs;
+    _targetSeriesResult = out;
+    return out;
+}
+
+function buildTargetSeriesUncached(
     host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
 ): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
 {
