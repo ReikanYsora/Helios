@@ -163,11 +163,35 @@ function tintPalette(palette: GroundPalette, altitude: number): GroundPalette
     return out;
 }
 
+//Bucket the fetched features by their source layer, once per fetch: paint() runs on every repaint (a theme
+//change, or every camera move on the projected compat path), and re-scanning the full array per layer/class
+//on each of those calls was the actual repeated cost. Grouped once here, each layer lookup below is a Map hit
+//over just that layer's own features instead of a full-array filter.
+export type GroundFeaturesByLayer = Map<string, GroundFeature[]>;
+
+function groupByLayer(features: GroundFeature[]): GroundFeaturesByLayer
+{
+    const byLayer: GroundFeaturesByLayer = new Map();
+    for (const f of features)
+    {
+        const bucket = byLayer.get(f.layer);
+        if (bucket)
+        {
+            bucket.push(f);
+        }
+        else
+        {
+            byLayer.set(f.layer, [f]);
+        }
+    }
+    return byLayer;
+}
+
 function paint(
     ctx:        CanvasRenderingContext2D,
     cw:         number,
     ch:         number,
-    features:   GroundFeature[],
+    featuresByLayer: GroundFeaturesByLayer,
     toPx:       (lon: number, lat: number) => [number, number],
     pxPerMetre: number,
     style:      GroundStyle,
@@ -179,6 +203,7 @@ function paint(
 {
     const p    = tintPalette(style.palette, altitude);
     const hide = (key: GroundLayerKey): boolean => style.hidden.has(key);
+    const layerFeatures = (layer: string): GroundFeature[] => featuresByLayer.get(layer) ?? [];
 
     ctx.clearRect(0, 0, cw, ch);
     if (!hide('land'))
@@ -213,9 +238,9 @@ function paint(
     };
 
     //Areas, bottom to top: greenery, land use, water on top of land.
-    for (const f of features)
+    for (const f of layerFeatures('landcover'))
     {
-        if (f.line || f.layer !== 'landcover')
+        if (f.line)
         {
             continue;
         }
@@ -225,9 +250,9 @@ function paint(
             fillFeature(f, p[key]);
         }
     }
-    for (const f of features)
+    for (const f of layerFeatures('landuse'))
     {
-        if (f.line || f.layer !== 'landuse')
+        if (f.line)
         {
             continue;
         }
@@ -239,9 +264,9 @@ function paint(
     }
     if (!hide('grass'))
     {
-        for (const f of features)
+        for (const f of layerFeatures('park'))
         {
-            if (!f.line && f.layer === 'park')
+            if (!f.line)
             {
                 fillFeature(f, p.grass);
             }
@@ -249,9 +274,9 @@ function paint(
     }
     if (!hide('roadCasing'))
     {
-        for (const f of features)
+        for (const f of layerFeatures('aeroway'))
         {
-            if (!f.line && f.layer === 'aeroway')
+            if (!f.line)
             {
                 fillFeature(f, p.roadCasing);
             }
@@ -259,16 +284,16 @@ function paint(
     }
     if (!hide('water'))
     {
-        for (const f of features)
+        for (const f of layerFeatures('water'))
         {
-            if (!f.line && f.layer === 'water')
+            if (!f.line)
             {
                 fillFeature(f, p.water);
             }
         }
-        for (const f of features)
+        for (const f of layerFeatures('waterway'))
         {
-            if (!f.line || f.layer !== 'waterway')
+            if (!f.line)
             {
                 continue;
             }
@@ -278,7 +303,7 @@ function paint(
     }
 
     //Roads: rank so minor draws under major; a casing pass under a fill pass gives the classic outlined road.
-    const roads = features.filter((f) => f.line && f.layer === 'transportation' && f.cls !== 'rail' && !/^path|footway|cycleway|steps|track/.test(f.cls));
+    const roads = layerFeatures('transportation').filter((f) => f.line && f.cls !== 'rail' && !/^path|footway|cycleway|steps|track/.test(f.cls));
     const rank  = (c: string): number => ROAD_WIDTH_M[c] ?? 6;
     roads.sort((a, b) => rank(a.cls) - rank(b.cls));
     const roadWidth = (c: string): number => (ROAD_WIDTH_M[c] ?? 6) * pxPerMetre * ROAD_SCALE;
@@ -303,9 +328,9 @@ function paint(
     ctx.setLineDash([Math.max(2, pxPerMetre), Math.max(2, pxPerMetre)]);
     if (!hide('path'))
     {
-        for (const f of features)
+        for (const f of layerFeatures('transportation'))
         {
-            if (!f.line || f.layer !== 'transportation' || !/^path|footway|cycleway|steps|track/.test(f.cls))
+            if (!f.line || !/^path|footway|cycleway|steps|track/.test(f.cls))
             {
                 continue;
             }
@@ -314,9 +339,9 @@ function paint(
     }
     if (!hide('rail'))
     {
-        for (const f of features)
+        for (const f of layerFeatures('transportation'))
         {
-            if (!f.line || f.layer !== 'transportation' || f.cls !== 'rail')
+            if (!f.line || f.cls !== 'rail')
             {
                 continue;
             }
@@ -328,9 +353,9 @@ function paint(
     //Building footprints under the 3D prisms.
     if (!hide('building'))
     {
-        for (const f of features)
+        for (const f of layerFeatures('building'))
         {
-            if (!f.line && f.layer === 'building')
+            if (!f.line)
             {
                 fillFeature(f, p.building);
             }
@@ -341,9 +366,9 @@ function paint(
     if (!hide('boundary'))
     {
         ctx.setLineDash([Math.max(3, 2 * pxPerMetre), Math.max(3, 2 * pxPerMetre)]);
-        for (const f of features)
+        for (const f of layerFeatures('boundary'))
         {
-            if (!f.line || f.layer !== 'boundary')
+            if (!f.line)
             {
                 continue;
             }
@@ -381,7 +406,7 @@ export async function buildVectorGround(
     altitude: number,
     signal?:  AbortSignal,
     //Force the basemap canvas onto the CPU raster backend (willReadFrequently). Set on the projected compat path,
-    //which is the degraded mode entry-level GPUs (Mali/Adreno) fall into: their GPU-accelerated 2D canvas renders
+    //which is the degraded mode certain Android GPUs fall into: their GPU-accelerated 2D canvas renders
     //corrupted memory (bands of RGB noise), and a CPU-backed canvas sidesteps that driver bug while keeping the
     //full map. No cost worth caring about here: the ground repaints only on a camera move or a theme change.
     cpuRaster = false,
@@ -400,6 +425,9 @@ export async function buildVectorGround(
     const groundRadiusM = (size / 2) / pxPerMetre * 1.15;
 
     const features = (await fetchGroundVector(lat, lng, groundRadiusM, signal)) ?? [];
+    //Grouped once for this fetch's lifetime, reused by every repaint (theme change, or every camera move on
+    //the projected compat path) below.
+    const featuresByLayer = groupByLayer(features);
 
     const el = document.createElement('canvas');
     el.width     = size;
@@ -416,7 +444,7 @@ export async function buildVectorGround(
     {
         if (ctx)
         {
-            paint(ctx, size, size, features, toPx, pxPerMetre, st, alt);
+            paint(ctx, size, size, featuresByLayer, toPx, pxPerMetre, st, alt);
         }
     };
     repaint(style, altitude);
@@ -478,7 +506,7 @@ export async function buildVectorGround(
         }
         landPath.closePath();
 
-        paint(ctx, w, h, features, toScreen, pxPerMetre, st, alt, landPath);
+        paint(ctx, w, h, featuresByLayer, toScreen, pxPerMetre, st, alt, landPath);
 
         //Edge fade, baked into the projected canvas instead of the face-on .ground-fade disc. The
         //ground-space fade circle (radius = the basemap's closest-side, transparent until GROUND_FADE_START%,

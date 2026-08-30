@@ -111,6 +111,19 @@ function pointInPolygon(x: number, y: number, polygon: Point[]): boolean
     return inside;
 }
 
+//Shoelace signed area: positive for a counter-clockwise ring. Shared by every winding-normalisation pass below,
+//so parsed OFM rings and painter paths agree on which sign means CCW.
+function signedArea(points: Point[]): number
+{
+    let area = 0;
+    for (let i = 0; i < points.length; i++)
+    {
+        const next = (i + 1) % points.length;
+        area += points[i][0] * points[next][1] - points[next][0] * points[i][1];
+    }
+    return area;
+}
+
 //Distance from the home (origin) to a footprint, 0 when the origin is INSIDE it. Ranks buildings and picks
 //the home: a large building containing the point ranks first even though its centroid may be far (which
 //would otherwise drop it or hand "home" to a closer-centroid neighbour).
@@ -216,13 +229,7 @@ export function parseOfmBuildings(
 
         //Force CCW winding so the painter's screen-space back-face cull has a consistent sign (tile rings mix
         //CW + CCW, which would otherwise flip walls inside-out).
-        let signedArea = 0;
-        for (let i = 0; i < footprint.length; i++)
-        {
-            const next = (i + 1) % footprint.length;
-            signedArea += footprint[i][0] * footprint[next][1] - footprint[next][0] * footprint[i][1];
-        }
-        if (signedArea < 0)
+        if (signedArea(footprint) < 0)
         {
             footprint.reverse();
         }
@@ -524,13 +531,7 @@ export function interpretBuildings(
 //where they met, and only the scraps that overlapped nothing survived. Normalising here means no caller can forget.
 function pathOf(pts: [number, number][], hole = false): string
 {
-    let area = 0;
-    for (let i = 0; i < pts.length; i++)
-    {
-        const j = (i + 1) % pts.length;
-        area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
-    }
-    const ccw  = area < 0 ? [...pts].reverse() : pts;
+    const ccw  = signedArea(pts) < 0 ? [...pts].reverse() : pts;
     //`hole` turns the cancelling that bit us into the tool: a ring wound AGAINST the rest subtracts instead of adding.
     const ring = hole ? [...ccw].reverse() : ccw;
     return ring.map((q, k) => `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('') + 'Z';
@@ -978,10 +979,10 @@ export function renderBuildings(
     for (const { index } of order)
     {
         const b  = buildings[index];
-        const fp = simplifyFootprint(b.footprint);
         //Every ring of the block: the outline plus any courtyard. A hole's walls face into the yard, and the cull
         //below reads the PROJECTED quad, so their opposite winding sorts itself out.
-        const rings = [fp, ...(b.holes ?? []).map(simplifyFootprint)];
+        const rings = simplifiedRings(b);
+        const fp    = rings[0];
         //Home prism height carries the extra squash/grow multiplier.
         const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);
 
@@ -1118,5 +1119,22 @@ function simplifyFootprint(points: Point[]): Point[]
         }
     }
     return out.length >= 3 ? out : points;
+}
+
+//A building's footprint/holes are invariant between data re-interprets, but renderBuildings runs every camera
+//frame during pan/orbit; mirrors separatingPlanes' own WeakMap cache (above) for the same reason: simplify each
+//building's rings once, not every frame.
+const _simplifyCache = new WeakMap<Building, Point[][]>();
+
+function simplifiedRings(b: Building): Point[][]
+{
+    const cached = _simplifyCache.get(b);
+    if (cached)
+    {
+        return cached;
+    }
+    const rings = [simplifyFootprint(b.footprint), ...(b.holes ?? []).map(simplifyFootprint)];
+    _simplifyCache.set(b, rings);
+    return rings;
 }
 
