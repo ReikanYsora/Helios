@@ -274,7 +274,7 @@ export class HeliosCardEditor extends LitElement
         this._pruneStaleDeviceIds();
     }
 
-    //Drop any hidden / order id whose device no longer exists in the Energy dashboard, so removing a
+    //Drop any hidden id whose device no longer exists in the Energy dashboard, so removing a
     //device there also cleans it from this card's YAML. Guarded on a NON-EMPTY loaded snapshot: an empty one can also
     //mean the prefs failed to load (RBAC), and wiping the lists then would silently lose the user's choices. Writes
     //only when something actually changed, so it converges after a single pass and never loops.
