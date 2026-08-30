@@ -32,7 +32,8 @@ export function renderBottomChart(host: ChartHost): TemplateResult
 
 
 //Accent colour for the active target, shared by chart border and active chip so re-targeting reads as one gesture.
-//Production/irradiance/cloud/soc are fixed; grid/battery take the colour of whichever side dominates the window.
+//Every target but grid/battery takes a fixed chip-slot colour (production, consumption, irradiance, temperature,
+//humidity, cost, battery-soc, groups); grid/battery instead take the colour of whichever side dominates the window.
 //`forTarget` asks for a metric other than the active chip's, so anything drawing a second metric alongside the
 //chart (the day curve) reads its colour off this one rule instead of keeping a private copy that drifts.
 export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): string
