@@ -75,9 +75,9 @@ function probeGpu(): GpuProbe
 //severe bugs ("Mali.*", "Adreno.*", "PowerVR .*"); there is no per-model list, and a false positive is cheap (the
 //projected path is near-equivalent), so we match by family and only carve out the current flagships:
 //  - Imagination PowerVR (all): entry Android / MediaTek.
-//  - Broadcom VideoCore / V3D: Raspberry Pi, a common Home Assistant wall display.
+//  - Broadcom VideoCore / V3D: common on the small single-board computers used as Home Assistant wall displays.
 //  - Qualcomm Adreno 2xx-6xx: entry / mid; 7xx flagships stay on the fast path.
-//  - ARM Mali (all but the G7xx flagship line): the reported Mali-G52 reports an 8192 texture cap, so only the
+//  - ARM Mali (all but the G7xx flagship line): entry/mid parts report an ample texture cap, so only the
 //    string separates it.
 function isEntryAndroidGpu(renderer: string): boolean
 {
@@ -139,7 +139,7 @@ function groundMode(degraded = false): GroundMode
     {
         return 'projected';
     }
-    //Entry / mid Android GPU (e.g. Mali-G52, ample texture cap): corrupts a GPU canvas -> CPU raster, keep the transform.
+    //Entry / mid Android GPU (ample texture cap): corrupts a GPU canvas -> CPU raster, keep the transform.
     if (isEntryAndroidGpu(renderer))
     {
         return 'transform';
