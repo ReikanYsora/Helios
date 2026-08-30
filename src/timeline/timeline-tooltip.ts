@@ -5,7 +5,7 @@ import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, energyUnit, irradianceUnit } from '../core/config/helios-config';
 import { consumptionLoad } from '../core/energy';
-import { ENERGY_COLOR, energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, formatTemperature, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
+import { energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, formatTemperature, pvNormalizeToWatts, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { valueAt } from '../data/unifiedStore';
 import { wattsAtFromChangeSeries, type ChangeBucket } from '../data/sources/energy-stats';
@@ -26,6 +26,9 @@ import {
     batterySourceName,
     isGroupTarget,
     groupOfTarget,
+    irradianceForecastColor,
+    cloudBandColors,
+    hasMultiSourceBreakdown,
 } from '../charts/charts';
 import { interpAt, pvValueAtTime } from '../data/series-sample';
 import { computeDailyKwhTotals } from '../charts/charts-generic';
@@ -157,19 +160,17 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
             };
         })
         : [];
-    const cloudBase      = ENERGY_COLOR.cloud(el);
-    const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
-    const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
+    const cloud          = cloudBandColors(el);
+    const cloudBase      = cloud.mid;
+    const cloudLowColor  = cloud.low;
+    const cloudHighColor = cloud.high;
     //Ghosted irradiance colour for the irradiance view's forecast row, identical to the dashed forecast curve + its hover dot.
-    const irradColor     = chipSlotColor(el, host.config, 'irradiance');
-    const forecastColor  = chartIsDark(host)
-        ? lerpHexToward(irradColor, '#ffffff', 0.75)
-        : lerpHexToward(irradColor, '#000000', 0.55);
+    const forecastColor  = irradianceForecastColor(host);
 
     //Multi-source breakdown rows for grid / battery, mirroring the solar perEntity rows: one row per configured meter,
-    //but only once 2+ sources each carry their own recorder series (the same guard stackedLines uses), so a
-    //single-source install stays exactly as before. Index and colour follow the source order the bands are painted in,
-    //so each row lines up with its own stacked band.
+    //but only once 2+ sources each carry their own recorder series (the shared hasMultiSourceBreakdown guard
+    //stackedLines also uses), so a single-source install stays exactly as before. Index and colour follow the
+    //source order the bands are painted in, so each row lines up with its own stacked band.
     const dark = chartIsDark(host);
     const ed   = host._energyDefaults;
     const breakdown = (
@@ -179,7 +180,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         colorFor: (i: number) => string
     ): { label: string; valueText: string; color: string }[] =>
     {
-        if (ids.length < 2 || !ids.every((id) => map.has(id)))
+        if (!hasMultiSourceBreakdown(ids, map))
         {
             return [];
         }
@@ -471,18 +472,32 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 }
 
 
-//Hover-cursor pointer handlers, attached per chart card (its bounding rect drives the fractional X). A press
-//(e.buttons !== 0) clears the hover so a scrub drag leaves no stale dot; the scrub itself lives on the time-bar
-//pointerdown and captures the pointer until release.
-export function onChartHoverMove(host: ChartHost, e: PointerEvent): void
+//Coalesces onChartHoverMove's writes to _chartHoverPct to at most one per animation frame: native pointermove
+//fires far faster than the display refreshes, and each write triggers a full card re-render (including the chart
+//rebuild above). One module-level slot is enough - only one pointer can be hovering a chart at a time - keyed on
+//the latest event, so a burst of moves within a frame all collapse into the single most recent one.
+let _hoverRafId:   number | null = null;
+let _hoverCard:    HTMLElement | null = null;
+let _hoverClientX = 0;
+let _hoverHost:    ChartHost | null = null;
+
+function cancelPendingHover(): void
 {
-    if (e.buttons !== 0)
+    if (_hoverRafId !== null)
     {
-        host._chartHoverPct = null;
-        return;
+        cancelAnimationFrame(_hoverRafId);
+        _hoverRafId = null;
     }
-    const card = e.currentTarget as HTMLElement | null;
-    if (!card)
+    _hoverHost = null;
+    _hoverCard = null;
+}
+
+function flushPendingHover(): void
+{
+    _hoverRafId = null;
+    const host = _hoverHost;
+    const card = _hoverCard;
+    if (!host || !card)
     {
         return;
     }
@@ -491,12 +506,41 @@ export function onChartHoverMove(host: ChartHost, e: PointerEvent): void
     {
         return;
     }
-    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const frac = Math.max(0, Math.min(1, (_hoverClientX - rect.left) / rect.width));
     host._chartHoverPct = frac * 100;
+}
+
+//Hover-cursor pointer handlers, attached per chart card (its bounding rect drives the fractional X). A press
+//(e.buttons !== 0) clears the hover so a scrub drag leaves no stale dot; the scrub itself lives on the time-bar
+//pointerdown and captures the pointer until release. The card element + clientX are captured synchronously
+//(currentTarget resets to null once the event finishes dispatching, so it can't be read back inside the deferred
+//rAF callback); only the bounding-rect read and the _chartHoverPct write are deferred to the next frame.
+export function onChartHoverMove(host: ChartHost, e: PointerEvent): void
+{
+    if (e.buttons !== 0)
+    {
+        cancelPendingHover();
+        host._chartHoverPct = null;
+        return;
+    }
+    const card = e.currentTarget as HTMLElement | null;
+    if (!card)
+    {
+        return;
+    }
+    _hoverHost    = host;
+    _hoverCard    = card;
+    _hoverClientX = e.clientX;
+    if (_hoverRafId !== null)
+    {
+        cancelAnimationFrame(_hoverRafId);
+    }
+    _hoverRafId = requestAnimationFrame(flushPendingHover);
 }
 
 
 export function onChartHoverLeave(host: ChartHost): void
 {
+    cancelPendingHover();
     host._chartHoverPct = null;
 }

@@ -3,14 +3,14 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarColor, energyGridColor, energyBatteryColor } from '../core/format/format';
+import { cssHex, deviceColorByIndex, energySolarColor, energyGridColor, energyBatteryColor } from '../core/format/format';
 import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import { staticPrice, costRateAt } from '../data/sources/cost';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
-import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
+import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark, irradianceForecastColor, cloudBandColors, hasMultiSourceBreakdown } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -32,7 +32,8 @@ export function renderBottomChart(host: ChartHost): TemplateResult
 
 
 //Accent colour for the active target, shared by chart border and active chip so re-targeting reads as one gesture.
-//Production/irradiance/cloud/soc are fixed; grid/battery take the colour of whichever side dominates the window.
+//Every target but grid/battery takes a fixed chip-slot colour (production, consumption, irradiance, temperature,
+//humidity, cost, battery-soc, groups); grid/battery instead take the colour of whichever side dominates the window.
 //`forTarget` asks for a metric other than the active chip's, so anything drawing a second metric alongside the
 //chart (the day curve) reads its colour off this one rule instead of keeping a private copy that drifts.
 export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): string
@@ -175,7 +176,7 @@ function stackedLines(
     colour: (idx: number) => string
 ): ChartLine[] | null
 {
-    if (ids.length < 2 || !ids.every((id) => map.has(id)))
+    if (!hasMultiSourceBreakdown(ids, map))
     {
         return null;
     }
@@ -199,10 +200,45 @@ function stackedLines(
     return lines.reverse();
 }
 
-//Build the drawable series (plus the SoC-hover source + a fixed Y max where the target pins one) for a chart
-//target. Split out of renderTargetChart so each target's branch stays independently readable; the caller owns
-//scaling, path building and hover.
+//Memo for buildTargetSeries: renderTargetChart reruns on every hover-cursor render (the pointer position never
+//affects which series get drawn, only the hover dots), so recomputing the full O(bucketsTotal) series on each of
+//those is wasted, same reasoning as computeDailyKwhTotals below. Keyed on every input the builder actually reads:
+//target, visible range, the unified store (a fresh reference each time it rebuilds) and the other host series/maps
+//it consults per target - all of which Lit reassigns rather than mutates in place on a real change, so reference
+//equality alone is exact, no content hashing needed. Theme polarity is included too (colours are baked into the
+//cached lines) plus a coarse freshness term as a safety net for a live theme-token edit that doesn't flip
+//dark/light. Single slot, like the memo below: cheap, and a miss just costs one extra rebuild.
+let _targetSeriesInputs: readonly unknown[] | null = null;
+let _targetSeriesResult: { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null } | null = null;
+
 function buildTargetSeries(
+    host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
+): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
+{
+    const inputs: readonly unknown[] = [
+        host, target, ctx.store, ctx.startMs, ctx.endMsAbs, chartIsDark(host), host.config,
+        Math.floor(Date.now() / 10000),
+        host._batterySocHistory, host._batterySocPerBankHistory,
+        host._costImportSeries, host._costExportSeries,
+        host._gridImportChangeSeriesPerEntity, host._gridExportChangeSeriesPerEntity,
+        host._batteryChargeChangeSeriesPerEntity, host._batteryDischargeChangeSeriesPerEntity,
+        host._deviceChangeSeries,
+    ];
+    const prevInputs = _targetSeriesInputs;
+    const prevResult = _targetSeriesResult;
+    if (prevInputs && prevResult
+        && prevInputs.length === inputs.length
+        && inputs.every((v, i) => v === prevInputs[i]))
+    {
+        return prevResult;
+    }
+    const out = buildTargetSeriesUncached(host, target, ctx);
+    _targetSeriesInputs = inputs;
+    _targetSeriesResult = out;
+    return out;
+}
+
+function buildTargetSeriesUncached(
     host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
 ): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
 {
@@ -611,10 +647,11 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         if (bands.length >= 2)
         {
             const yOfPct = makeYOf(0, 100);
+            const cloud  = cloudBandColors(el);
             const layers: { pick: (b: { lo: number; mi: number; hi: number }) => number; color: string }[] = [
-                { pick: b => b.lo, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
-                { pick: b => b.mi, color: ENERGY_COLOR.cloud(el) },
-                { pick: b => b.hi, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.50) },
+                { pick: b => b.lo, color: cloud.low },
+                { pick: b => b.mi, color: cloud.mid },
+                { pick: b => b.hi, color: cloud.high },
             ];
             const lower = new Array<number>(bands.length).fill(0);
             for (const layer of layers)
@@ -671,11 +708,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //Forecast dash on the irradiance view. It rides the near-identical shape of the amber irradiance area, so a
     //plain predicted shade blends in: push the contrast harder (toward white on dark, black on light) than the
     //production line so the dashed silhouette clearly separates from the fill under it.
-    const isDarkTheme  = chartIsDark(host);
-    const irradColor = chipSlotColor(el, host.config, 'irradiance');
-    const forecastColor = isDarkTheme
-        ? lerpHexToward(irradColor, '#ffffff', 0.75)
-        : lerpHexToward(irradColor, '#000000', 0.55);
+    const forecastColor = irradianceForecastColor(host);
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);

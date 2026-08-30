@@ -4,10 +4,11 @@
 
 import type { HassLike } from '../core/ha-types';
 import { type HeliosConfig, monitoringGroupName } from '../core/config/helios-config';
-import type { ChipSlot } from '../core/config/chip-appearance';
+import { type ChipSlot, chipSlotColor } from '../core/config/chip-appearance';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import type { UnifiedDataStore } from '../data/unifiedStore';
 import type { ChangeBucket } from '../data/sources/energy-stats';
+import { ENERGY_COLOR, lerpHexToward } from '../core/format/format';
 
 
 //Engine-resampled weather series, pushed to the card on every refresh.
@@ -192,6 +193,40 @@ export interface ChartHost
 //Active theme polarity (hass.themes.darkMode): drives whether the per-source colour ramp brightens or darkens off
 //the base solar token. Shared by the PV chart + the tooltip's per-source pastilles.
 export const chartIsDark = (host: ChartHost): boolean => !!host.hass?.themes?.darkMode;
+
+
+//Theme-aware "ghost forecast" colour for the irradiance view: the irradiance chip colour pushed toward white on a
+//dark theme, black on light, so the dashed forecast silhouette (and its hover dot / tooltip rows) clearly separates
+//from the near-identical amber fill under it. Shared by the chart and the tooltip so the two never drift apart.
+export function irradianceForecastColor(host: ChartHost): string
+{
+    const el = host as unknown as Element; //live HA theme-token colour resolution
+    const irradColor = chipSlotColor(el, host.config, 'irradiance');
+    return chartIsDark(host)
+        ? lerpHexToward(irradColor, '#ffffff', 0.75)
+        : lerpHexToward(irradColor, '#000000', 0.55);
+}
+
+//The three cloud-band tints (low/mid/high altitude), lerped off the base cloud token with the same fractions
+//everywhere they're drawn: shared by the chart's stacked overlay bands and the tooltip's three cloud rows so
+//they track each other by construction.
+export function cloudBandColors(el: Element | null | undefined): { low: string; mid: string; high: string }
+{
+    const base = ENERGY_COLOR.cloud(el);
+    return {
+        low:  lerpHexToward(base, '#ffffff', 0.55),
+        mid:  base,
+        high: lerpHexToward(base, '#000000', 0.50),
+    };
+}
+
+//Multi-source breakdown eligibility: 2+ configured sources, each with its own recorder change series fetched.
+//Below that the aggregate (or lone-entry) view is exact and a per-source breakdown would be redundant or
+//partly blank, so callers fall back to the aggregate curve/row instead.
+export function hasMultiSourceBreakdown(ids: readonly string[], map: ReadonlyMap<string, ChangeBucket[]>): boolean
+{
+    return ids.length >= 2 && ids.every((id) => map.has(id));
+}
 
 
 //Re-exports keeping the render concerns importable from this module, with the implementations in sibling files.
