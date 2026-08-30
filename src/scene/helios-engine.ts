@@ -353,9 +353,6 @@ export class HeliosEngine
     {
         return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
     }
-    //Persist the camera's CURRENT bearing/pitch to localStorage, so reopening the dashboard restores the exact
-    //view. Called on drag-end and by the card on teardown (captures an auto-rotated bearing too). No-op before
-    //the renderer exists.
     //Current camera pose (bearing/pitch in degrees), or null before the renderer exists. Used by the editor's
     //"use current view" helper to capture the framed angle into the config.
     public getCameraPose(): { bearing: number; pitch: number } | null
@@ -367,6 +364,9 @@ export class HeliosEngine
         return { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
     }
 
+    //Persist the camera's CURRENT bearing/pitch to localStorage, so reopening the dashboard restores the exact
+    //view. Called on drag-end and by the card on teardown (captures an auto-rotated bearing too). No-op before
+    //the renderer exists.
     public persistCameraPose(): void
     {
         if (!this._renderer)
@@ -640,20 +640,15 @@ export class HeliosEngine
         //Custom drag-rotate. Bound to the container (the renderer's host). touch-action stays pan-y so a ONE-finger
         //swipe still scrolls the dashboard page over the card, untouched and instant.
         //
-        //Rotation is left-click on a pointer device, and ONE finger on touch, locked to its direction.
+        //Rotation is left-click on a pointer device, and ONE finger on touch, locked to its direction. A finger
+        //going down alone means nothing (rotate and scroll start identically); a hold-timer can't disambiguate
+        //either (too short and the page scrolls away, too long and the scroll is swallowed), and two fingers are
+        //unambiguous but ask for a gesture nobody makes over a dashboard.
         //
-        //A finger going down means nothing on its own: rotate and scroll start identically. Two earlier answers
-        //both failed on that. A press-hold timer could not tell them apart either - hold too briefly and the card
-        //scrolled away under you, hold long enough and the scroll you wanted was swallowed. Two fingers were
-        //unambiguous but asked for a gesture nobody makes over a dashboard.
-        //
-        //The finger already says which, by its DIRECTION: sideways is a turn, up and down is the page. So the
-        //first few pixels decide, and after that the gesture is committed and cannot flip. pan-y makes the
-        //browser the referee rather than us: it keeps vertical panning for itself and hands us the horizontal, so
-        //a scroll is instant and untouched, and a turn never has to be stolen back with preventDefault.
-        //
-        //The lock says who OWNS the gesture, not which axis may move. Once a turn has won it, dy tilts as it does
-        //on the mouse: the vertical was only ever ambiguous at the first pixel.
+        //So the DIRECTION decides: sideways is a turn, up/down is the page. The first few pixels judge it, then
+        //the gesture is locked and cannot flip; pan-y leaves vertical panning to the browser and hands us the
+        //horizontal, so a turn never needs preventDefault stolen back. Once locked to a turn, dy tilts as on the
+        //mouse - the vertical was only ever ambiguous at the first pixel.
         container.style.touchAction = 'pan-y';
         //Firefox starts a native text/image drag on a left-mouse press over the canvas, which swallows the follow-up
         //pointermove stream so the scene never rotates (Chrome is lenient). Suppressing selection + the drag default
@@ -683,8 +678,6 @@ export class HeliosEngine
         let touchStartY = 0;
         let verdict: 'rotate' | 'page' | null = null;
 
-        //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
-        //two can never drift apart in direction or sensitivity.
         //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
         //two can never drift apart in direction or sensitivity. `pitch` is off only while a touch gesture is still
         //being judged.
@@ -798,7 +791,7 @@ export class HeliosEngine
                 }
                 //Both axes, now that the verdict is in. The vertical is only ambiguous at the START of a gesture,
                 //where a turn and a scroll look alike; past the lock the browser has passed on this one and it is
-                //ours, so there is nothing left for dy to fight over. It it changes its mind, pointercancel lands
+                //ours, so there is nothing left for dy to fight over. If it changes its mind, pointercancel lands
                 //on onEnd and we stand down.
                 applyDrag(e.clientX, e.clientY, true);
                 return;
