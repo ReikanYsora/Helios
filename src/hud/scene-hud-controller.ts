@@ -211,6 +211,14 @@ export class SceneHudController
         //override); nothing else in this render can project without them.
         const hasHomeCoords = getHomeCoords(this.host.config, this.host.hass) !== null;
 
+        //Shared scrub state, computed once and reused by every family below (PV, battery/grid, groups) instead
+        //of each recomputing the same live/scrub check and scrub-time-in-the-future check off the same host
+        //fields. Past scrub: a family reflects its actual reading at that instant. Future scrub has no data
+        //yet for most families, so they hide rather than show a stale/fake number.
+        const scrubbing   = !this.host._isLiveMode && this.host._selectedTime !== null;
+        const scrubFuture = scrubbing
+            && this.host._selectedTime!.getTime() > Date.now() + 60_000;
+
         //Chip interactivity: the card wires each chip as a button that re-points the bottom chart and glows when
         //active. A display-only host can set `_interactive = false` to drop the button role, tab focus, click
         //wiring and active-glow; unset reads as interactive.
@@ -260,16 +268,11 @@ export class SceneHudController
         //(not a CSS var) read it directly so colours stay in sync with the CSS rules using the same token.
         //The user's per-chip colour overrides it when set (resolved through the central chip-appearance table).
         const pvColor      = chipSlotColor(this.host, cfg, 'production');
-        //Past scrub: the chip reflects actual production at that instant (like the cloud/irradiance chips).
-        //Future scrub has no PV data yet, so we hide the chip rather than show a stale/fake number.
-        const pvScrubbing  = !this.host._isLiveMode && this.host._selectedTime !== null;
-        const pvScrubFuture = pvScrubbing
-            && this.host._selectedTime!.getTime() > Date.now() + 60_000;
 
         //The chip shows measured instantaneous production at the active instant: the power sensors' summed
         //state live, the meters' recorder change series at a scrubbed instant. No sensor, no chip.
         const pvRate = (pvEntityId !== '' && layout !== null)
-            ? (pvScrubbing
+            ? (scrubbing
                 ? pvRateAtTime(this.host, this.host._selectedTime!)
                 : (this.host._pvCurrent !== null ? currentPvRate(this.host) : null))
             : null;
@@ -278,7 +281,7 @@ export class SceneHudController
         //series the dotted timeline curve draws), so the chip never disagrees with its line. Null (hidden)
         //when the store isn't built or the instant has no forecast.
         let pvPredictedRate: { value: number; unit: string } | null = null;
-        if (pvScrubFuture && pvEntityId !== '' && layout !== null && this.host._unifiedStore)
+        if (scrubFuture && pvEntityId !== '' && layout !== null && this.host._unifiedStore)
         {
             const w = valueAt(this.host._unifiedStore.forecast, this.host._unifiedStore, this.host._selectedTime!.getTime());
             if (w !== null && w > 0)
@@ -287,7 +290,7 @@ export class SceneHudController
             }
         }
 
-        const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
+        const isPvPredicted = scrubFuture && pvPredictedRate !== null;
         const pvActiveRate  = isPvPredicted ? pvPredictedRate : pvRate;
 
         const showPvLabel = hasHomeCoords
@@ -295,10 +298,10 @@ export class SceneHudController
             && layout !== null
             && pvEntityId !== ''
             && pvActiveRate !== null
-            && (!pvScrubFuture || isPvPredicted)
+            && (!scrubFuture || isPvPredicted)
             //Scrub to an era with no production (no panels yet, or a flat 0) hides the chip AND its leader
             //together, so a stale 0 never leaves the leader dangling to the home.
-            && (!pvScrubbing || pvActiveRate.value > 0);
+            && (!scrubbing || pvActiveRate.value > 0);
 
         //User-configured decimal precision, applied to every chip readout (kW/kWh).
         const valueDec = valueDecimals(this.host.config);
@@ -325,13 +328,10 @@ export class SceneHudController
         const batteryEntities    = resolveBatteryEntities(this.host._energyDefaults);
         const hasAnyBankSoc      = batteryEntities.socEntity   !== null;
         const hasAnyBankPower    = batteryEntities.powerEntity !== null;
-        const batteryScrubbing   = !this.host._isLiveMode && this.host._selectedTime !== null;
-        const batteryScrubFuture = batteryScrubbing
-            && this.host._selectedTime!.getTime() > Date.now() + 60_000;
 
         //Grid IN/OUT past-scrub: average watts at the scrub instant from the recorder change series, so the
         //chip shows what flowed then. Skip in future scrub (no data) and live mode (live values already set).
-        const gridScrubTimeMs = batteryScrubbing && !batteryScrubFuture
+        const gridScrubTimeMs = scrubbing && !scrubFuture
             ? this.host._selectedTime!.getTime()
             : null;
         const rawImport = gridScrubTimeMs !== null
@@ -346,13 +346,13 @@ export class SceneHudController
         const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this.host._gridExportUnit;
 
         //Active SoC/power values for this render: historical samples in scrub mode, live state otherwise.
-        const activeBatterySoc: number | null = batteryScrubbing
+        const activeBatterySoc: number | null = scrubbing
             ? batterySampleAtTime(this.host._batterySocHistory, this.host._selectedTime!)
             : this.host._batterySoc;
         //Battery power scrub: net the charge/discharge change series (charge - discharge) for a structural
         //sign. Live mode reads the live signed value.
         let activeBatteryPower: number | null;
-        if (batteryScrubbing)
+        if (scrubbing)
         {
             const tMs = this.host._selectedTime!.getTime();
             const chargeW    = wattsAtFromChangeSeries(this.host._batteryChargeChangeSeries, tMs);
@@ -367,14 +367,14 @@ export class SceneHudController
         }
         //Power unit is watts on both paths (change series resolves to W, live read normalises to W), so the
         //chip formats consistently regardless of mode.
-        const activeBatteryUnit = batteryScrubbing ? 'W' : this.host._batteryPowerUnit;
+        const activeBatteryUnit = scrubbing ? 'W' : this.host._batteryPowerUnit;
 
         const showSocChip = (hasHomeCoords && layout !== null)
-            && !batteryScrubFuture
+            && !scrubFuture
             && hasAnyBankSoc
             && activeBatterySoc !== null;
         const showPowerChip = (hasHomeCoords && layout !== null)
-            && !batteryScrubFuture
+            && !scrubFuture
             && hasAnyBankPower
             && activeBatteryPower !== null;
 
@@ -395,7 +395,7 @@ export class SceneHudController
         //over the card's scrub-aware per-family values, so the chip follows the scrub.
         //Families contribute only when they have a reading; nothing wired -> chip hides. Clamped at zero
         //(a small negative is meter skew).
-        const usagePvW = (!pvScrubFuture && pvActiveRate !== null)
+        const usagePvW = (!scrubFuture && pvActiveRate !== null)
             ? pvNormalizeToWatts(pvActiveRate.value, pvActiveRate.unit)
             : null;
         const usageGridW = (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null)
@@ -409,7 +409,7 @@ export class SceneHudController
         //hides and the editor explains). Scrub mode keeps the bucket-domain balance: all terms share the
         //meters' cadence there, the same bookkeeping the HA Energy dashboard does.
         const d = this.host._energyDefaults;
-        const homeLiveComplete = batteryScrubbing || (
+        const homeLiveComplete = scrubbing || (
             (d.solarStatEnergyFroms.length === 0 || usagePvW !== null)
             && ((d.gridStatEnergyFroms.length === 0 && d.gridStatEnergyTos.length === 0) || usageGridW !== null)
             && ((d.batteryStatEnergyFroms.length === 0 && d.batteryStatEnergyTos.length === 0) || usageBatteryW !== null));
@@ -420,7 +420,7 @@ export class SceneHudController
                 : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0)));
         const showHomeUsageChip = hasHomeCoords
             && layout !== null
-            && !batteryScrubFuture
+            && !scrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
             ? formatGridValue(this.host.hass, homeUsageWatts, 'W', valueDec, powerU)
@@ -504,10 +504,10 @@ export class SceneHudController
         const groupRow1Y   = layout?.groupLabels[0]?.y ?? 0;
         const groupRow2Y   = layout?.groupLabels[1]?.y ?? 0;
         //Scrub-aware group value: at a past instant read each device's change series, else the live stat_rate sum.
-        const groupScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
+        const groupScrubMs = scrubbing ? this.host._selectedTime!.getTime() : null;
         //Group consumption has no forecast, so scrubbing into the future hides the group chips (and their leaders)
-        //entirely, the same way the PV chip drops out of a future scrub with no prediction (pvScrubFuture above).
-        const activeGroupList = (layout && !pvScrubFuture)
+        //entirely, the same way the PV chip drops out of a future scrub with no prediction (scrubFuture above).
+        const activeGroupList = (layout && !scrubFuture)
             ? activeGroups(this.host.config, this.host._energyDefaults).filter(g => groupChipVisible(cfg, g) && keeps(groupTarget(g)))
             : [];
         const groupCount      = activeGroupList.length;
@@ -875,7 +875,7 @@ export class SceneHudController
                 <!--  Grid chip on the LEFT of the home: one pill showing the ACTIVE flow only. Importing reads
                       consumption blue with a grid -> home bead; exporting flips to return purple with a
                       home -> grid bead. The dominant side wins when both are live.  -->
-                ${hasHomeCoords && showChipGrid && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
+                ${hasHomeCoords && showChipGrid && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !scrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d=${gridLeaderPath} />
                         <!--  Single bead on the active flow. Import
