@@ -7,6 +7,7 @@
 //once from the TileJSON and cached.
 
 import { decodeVectorTile } from './vector-tile';
+import { lonLatToTile as lonLatToTileTuple } from './tiles';
 import { DEG, METRES_PER_DEGREE, OFM_TILEJSON_URL, OFM_TILE_ZOOM, OFM_FETCH_TIMEOUT_MS, BUILDING_CACHE_TTL_MS } from '../core/config/constants';
 
 //One footprint ring from a tile: vertices in [lon, lat], plus the OSM render height (m) or null when untagged.
@@ -67,13 +68,11 @@ export async function resolveTemplate(signal?: AbortSignal): Promise<string | nu
 }
 
 
-//Longitude/latitude to fractional tile coordinates at zoom z (slippy-map forward transform).
+//Longitude/latitude to fractional tile coordinates at zoom z (slippy-map forward transform). The projection math
+//lives in tiles.ts; this just wraps its tuple into the {x, y} shape this module's callers use.
 export function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }
 {
-    const n   = 2 ** z;
-    const x   = ((lon + 180) / 360) * n;
-    const rad = lat * DEG;
-    const y   = ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n;
+    const [x, y] = lonLatToTileTuple(lon, lat, z);
     return { x, y };
 }
 

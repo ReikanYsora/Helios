@@ -130,25 +130,28 @@ export function weatherOverlay(): TemplateResult
 
 interface Drop { x: number; y: number; len: number; spd: number; wind: number; }
 interface Ring { x: number; y: number; r: number; a: number; }
+interface Flake { x: number; y: number; r: number; spd: number; amp: number; phase: number; sway: number; }
 
-//Rain particle loop on a single 2D canvas: one batched line stroke + a few capped ground ripples, delta-timed,
-//DPR-capped. `setIntensity(0..1)` scales the drop count and starts/stops the loop, so an idle card burns nothing.
-export class WeatherRain
+//Shared plumbing for a particle-canvas weather layer (rain, snow): canvas ref, DPR-aware sizing, resize
+//observation, and the start/stop lifecycle driven by `setIntensity(0..1)`, so an idle card burns nothing. A
+//subclass owns only its particle shape (`P`), its spawn rule (`_newParticle`) and the per-frame physics/drawing
+//in `_loop`; a subclass with state beyond the particle array (WeatherRain's ground ripples) overrides `stop()`,
+//chaining to `super.stop()`.
+abstract class WeatherParticleFx<P>
 {
-    private _raf = 0;
-    private _drops: Drop[] = [];
-    private _rings: Ring[] = [];
-    private _w = 0;
-    private _h = 0;
+    protected _raf = 0;
+    protected _particles: P[] = [];
+    protected _w = 0;
+    protected _h = 0;
     private _dpr = 1;
-    private _last = 0;
-    private _ripAcc = 0;
-    private _intensity = 0;
-    private readonly _max = 430;
-    private readonly _ringCap = 20;
+    protected _last = 0;
+    protected _intensity = 0;
     private _ro?: ResizeObserver;
 
-    constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined)
+    protected abstract readonly _max: number;
+    protected abstract readonly _loop: (ts: number) => void;
+
+    constructor(protected readonly _getCanvas: () => HTMLCanvasElement | undefined)
     {}
 
     setIntensity(amt: number): void
@@ -160,19 +163,19 @@ export class WeatherRain
             this.stop(); return;
         }
         //Resize only when (re)starting the loop, never on every call: a caller that drives setIntensity every
-        //animation frame would otherwise clear the canvas (c.width reset) each frame and wipe the rain. The loop
-        //itself re-resizes when the canvas size actually changes.
+        //animation frame would otherwise clear the canvas (c.width reset) each frame and wipe the particles. The
+        //loop itself re-resizes when the canvas size actually changes.
         if (!this._raf)
         {
             this._resize(); this._observeResize();
         }
-        while (this._drops.length < target)
+        while (this._particles.length < target)
         {
-            this._drops.push(this._newDrop(true));
+            this._particles.push(this._newParticle(true));
         }
-        if (this._drops.length > target)
+        if (this._particles.length > target)
         {
-            this._drops.length = target;
+            this._particles.length = target;
         }
         if (!this._raf)
         {
@@ -187,7 +190,6 @@ export class WeatherRain
             cancelAnimationFrame(this._raf); this._raf = 0;
         }
         this._ro?.disconnect(); this._ro = undefined;
-        this._rings = [];
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
         if (c && ctx)
@@ -195,6 +197,8 @@ export class WeatherRain
             ctx.clearRect(0, 0, c.width, c.height);
         }
     }
+
+    protected abstract _newParticle(anywhere: boolean): P;
 
     private _resize(): void
     {
@@ -214,17 +218,6 @@ export class WeatherRain
         {
             ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
         }
-    }
-
-    private _newDrop(anywhere: boolean): Drop
-    {
-        return {
-            x:    Math.random() * (this._w + 80) - 40,
-            y:    anywhere ? Math.random() * this._h : -20,
-            len:  7 + Math.random() * 15,
-            spd:  520 + Math.random() * 560,
-            wind: 60 + Math.random() * 40,
-        };
     }
 
     //Re-measure only when the canvas actually resizes, instead of forcing a layout read every frame in the loop.
@@ -248,8 +241,35 @@ export class WeatherRain
         });
         this._ro.observe(c);
     }
+}
 
-    private readonly _loop = (ts: number): void =>
+//Rain particle loop on a single 2D canvas: one batched line stroke + a few capped ground ripples, delta-timed,
+//DPR-capped, on top of the shared canvas/resize/lifecycle plumbing in WeatherParticleFx.
+export class WeatherRain extends WeatherParticleFx<Drop>
+{
+    protected readonly _max = 430;
+    private _rings: Ring[] = [];
+    private _ripAcc = 0;
+    private readonly _ringCap = 20;
+
+    override stop(): void
+    {
+        super.stop();
+        this._rings = [];
+    }
+
+    protected _newParticle(anywhere: boolean): Drop
+    {
+        return {
+            x:    Math.random() * (this._w + 80) - 40,
+            y:    anywhere ? Math.random() * this._h : -20,
+            len:  7 + Math.random() * 15,
+            spd:  520 + Math.random() * 560,
+            wind: 60 + Math.random() * 40,
+        };
+    }
+
+    protected readonly _loop = (ts: number): void =>
     {
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
@@ -275,14 +295,14 @@ export class WeatherRain
         ctx.lineWidth = 1.1;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        for (let i = 0; i < this._drops.length; i++)
+        for (let i = 0; i < this._particles.length; i++)
         {
-            const d = this._drops[i];
+            const d = this._particles[i];
             d.y += d.spd * dt;
             d.x += d.wind * dt;
             if (d.y > this._h + 20 || d.x > this._w + 40)
             {
-                this._drops[i] = this._newDrop(false); continue;
+                this._particles[i] = this._newParticle(false); continue;
             }
             ctx.moveTo(d.x, d.y);
             ctx.lineTo(d.x - d.wind * 0.02, d.y - d.len);
@@ -318,87 +338,13 @@ export class WeatherRain
     };
 }
 
-interface Flake { x: number; y: number; r: number; spd: number; amp: number; phase: number; sway: number; }
-
 //Snow particle loop, sibling to WeatherRain: soft round flakes drift down slowly with a horizontal sway, batched
-//into one fill. `setIntensity(0..1)` scales the flake count and starts/stops the loop.
-export class WeatherSnow
+//into one fill, on top of the shared canvas/resize/lifecycle plumbing in WeatherParticleFx.
+export class WeatherSnow extends WeatherParticleFx<Flake>
 {
-    private _raf = 0;
-    private _flakes: Flake[] = [];
-    private _w = 0;
-    private _h = 0;
-    private _dpr = 1;
-    private _last = 0;
-    private _intensity = 0;
-    private readonly _max = 340;
-    private _ro?: ResizeObserver;
+    protected readonly _max = 340;
 
-    constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined)
-    {}
-
-    setIntensity(amt: number): void
-    {
-        this._intensity = clamp01(amt);
-        const target = Math.round(this._intensity * this._max);
-        if (target <= 0)
-        {
-            this.stop(); return;
-        }
-        if (!this._raf)
-        {
-            this._resize(); this._observeResize();
-        }
-        while (this._flakes.length < target)
-        {
-            this._flakes.push(this._newFlake(true));
-        }
-        if (this._flakes.length > target)
-        {
-            this._flakes.length = target;
-        }
-        if (!this._raf)
-        {
-            this._last = 0; this._raf = requestAnimationFrame(this._loop);
-        }
-    }
-
-    stop(): void
-    {
-        if (this._raf)
-        {
-            cancelAnimationFrame(this._raf); this._raf = 0;
-        }
-        this._ro?.disconnect(); this._ro = undefined;
-        const c = this._getCanvas();
-        const ctx = c?.getContext('2d');
-        if (c && ctx)
-        {
-            ctx.clearRect(0, 0, c.width, c.height);
-        }
-    }
-
-    private _resize(): void
-    {
-        const c = this._getCanvas();
-        if (!c)
-        {
-            return;
-        }
-        const r = c.getBoundingClientRect();
-        this._dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-        this._w = r.width;
-        this._h = r.height;
-        c.width = Math.round(this._w * this._dpr);
-        c.height = Math.round(this._h * this._dpr);
-        const ctx = c.getContext('2d');
-        if (ctx)
-        {
-            ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
-        }
-    }
-
-    private _newFlake(anywhere: boolean): Flake
+    protected _newParticle(anywhere: boolean): Flake
     {
         return {
             x:     Math.random() * (this._w + 40) - 20,
@@ -411,29 +357,7 @@ export class WeatherSnow
         };
     }
 
-    //Re-measure only when the canvas actually resizes, instead of forcing a layout read every frame in the loop.
-    private _observeResize(): void
-    {
-        if (this._ro || typeof ResizeObserver === 'undefined')
-        {
-            return;
-        }
-        const c = this._getCanvas();
-        if (!c)
-        {
-            return;
-        }
-        this._ro = new ResizeObserver((): void =>
-        {
-            if (this._raf)
-            {
-                this._resize();
-            }
-        });
-        this._ro.observe(c);
-    }
-
-    private readonly _loop = (ts: number): void =>
+    protected readonly _loop = (ts: number): void =>
     {
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
@@ -455,15 +379,15 @@ export class WeatherSnow
         ctx.clearRect(0, 0, this._w, this._h);
         ctx.fillStyle = `rgba(248,250,255,${0.6 + this._intensity * 0.3})`;
         ctx.beginPath();
-        for (let i = 0; i < this._flakes.length; i++)
+        for (let i = 0; i < this._particles.length; i++)
         {
-            const f = this._flakes[i];
+            const f = this._particles[i];
             f.y += f.spd * dt;
             f.phase += f.sway * dt;
             const x = f.x + Math.sin(f.phase) * f.amp;
             if (f.y > this._h + 10)
             {
-                this._flakes[i] = this._newFlake(false); continue;
+                this._particles[i] = this._newParticle(false); continue;
             }
             ctx.moveTo(x + f.r, f.y);
             ctx.arc(x, f.y, f.r, 0, Math.PI * 2);

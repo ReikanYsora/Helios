@@ -75,9 +75,9 @@ function probeGpu(): GpuProbe
 //severe bugs ("Mali.*", "Adreno.*", "PowerVR .*"); there is no per-model list, and a false positive is cheap (the
 //projected path is near-equivalent), so we match by family and only carve out the current flagships:
 //  - Imagination PowerVR (all): entry Android / MediaTek.
-//  - Broadcom VideoCore / V3D: Raspberry Pi, a common Home Assistant wall display.
+//  - Broadcom VideoCore / V3D: common on the small single-board computers used as Home Assistant wall displays.
 //  - Qualcomm Adreno 2xx-6xx: entry / mid; 7xx flagships stay on the fast path.
-//  - ARM Mali (all but the G7xx flagship line): the reported Mali-G52 reports an 8192 texture cap, so only the
+//  - ARM Mali (all but the G7xx flagship line): entry/mid parts report an ample texture cap, so only the
 //    string separates it.
 function isEntryAndroidGpu(renderer: string): boolean
 {
@@ -112,8 +112,8 @@ function isEntryAndroidGpu(renderer: string): boolean
 //                (Mali/Adreno) corrupt a GPU-rasterized canvas into colored noise, but the CPU raster has correct
 //                pixels and a plain texture composites fine on them (the 3D-transformed SVG scene already does). So
 //                the rotation stays a cheap GPU transform instead of a per-frame CPU reprojection.
-//  'projected' : CPU canvas repainted already-projected every frame, no 3D layer - for devices where the 3D
-//                transform itself is broken (texture cap too small to back the layer; old iOS half-3D compositor).
+//  'projected' : CPU canvas repainted already-projected when the pose changes, no 3D layer - for devices where the
+//                3D transform itself is broken (texture cap too small to back the layer; old iOS half-3D compositor).
 //A debug flag (localStorage 'helios-ground' = normal|transform|projected) forces any mode for A/B on a real device.
 type GroundMode = 'normal' | 'transform' | 'projected';
 
@@ -139,7 +139,7 @@ function groundMode(degraded = false): GroundMode
     {
         return 'projected';
     }
-    //Entry / mid Android GPU (e.g. Mali-G52, ample texture cap): corrupts a GPU canvas -> CPU raster, keep the transform.
+    //Entry / mid Android GPU (ample texture cap): corrupts a GPU canvas -> CPU raster, keep the transform.
     if (isEntryAndroidGpu(renderer))
     {
         return 'transform';
@@ -300,24 +300,29 @@ export class SceneRenderer
         //Only redraw on a REAL size change: a draw repaints the HUD, which the host re-projects, and that DOM
         //write can fire the observer again. Without this guard the no-op notification re-draws, re-projects,
         //re-fires: an infinite ResizeObserver loop (visible as the scene flickering every frame).
-        this._resizeObserver = new ResizeObserver((entries) =>
+        //Feature-detected like the same API in the weather layer: a device without ResizeObserver just keeps the
+        //size it was seeded with instead of throwing out of the constructor.
+        if (typeof ResizeObserver !== 'undefined')
         {
-            const cr = entries[entries.length - 1]?.contentRect;
-            if (!cr)
+            this._resizeObserver = new ResizeObserver((entries) =>
             {
-                return;
-            }
-            const w = Math.round(cr.width);
-            const h = Math.round(cr.height);
-            if (w === this._obsW && h === this._obsH)
-            {
-                return;
-            }
-            this._obsW = w;
-            this._obsH = h;
-            this.scheduleRedraw();
-        });
-        this._resizeObserver.observe(container);
+                const cr = entries[entries.length - 1]?.contentRect;
+                if (!cr)
+                {
+                    return;
+                }
+                const w = Math.round(cr.width);
+                const h = Math.round(cr.height);
+                if (w === this._obsW && h === this._obsH)
+                {
+                    return;
+                }
+                this._obsW = w;
+                this._obsH = h;
+                this.scheduleRedraw();
+            });
+            this._resizeObserver.observe(container);
+        }
 
         //Seed the camera from the container's current size. The container is already laid out when the
         //renderer is built, so the camera projects against a real viewport from the first frame instead of
