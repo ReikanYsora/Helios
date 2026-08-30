@@ -22,18 +22,9 @@ export const heliosTimelineStyles = css`
         /*  Own stacking layer at the top of the card so the sun arc, home glow and overlay chips never
             cross over it during auto-rotate. */
         z-index: 1000;
-        /*  Height as a share of the CARD, not of its width.
-            It used to be the chart below that carried the size, via clamp(36px, 8cqw, 72px): width only. On a phone
-            (~380 px wide) 8cqw lands at ~30 px, under its floor, so the bar pinned to its minimum and stopped
-            tracking anything at all -- it looked fixed because it WAS fixed, and it took no notice of the vertical
-            room it had. A tall phone card and a squat one got the exact same bar.
-            Being position:absolute inside the ha-card makes the CARD this element's containing block, so a
-            percentage here resolves against the card's own height. That is what cqh would have given, without
-            switching the card to container-type:size -- which applies size containment, and the card's height is
-            already documented as collapsing under layouts that give it none.
-            The range deliberately REPRODUCES what the chart used to produce (36+18 .. 72+18): the point of this
-            rule is that the bar tracks the card's height instead of ignoring it, not that it grew. It was tried a
-            notch taller and put back, because the scene needs the room more than the curves do. */
+        /*  Height as a share of the CARD, not of its width. Being position:absolute inside ha-card makes the
+            card this element's containing block, so a percentage here resolves against the card's own height
+            rather than tracking width the way the old approach did. */
         height: clamp(54px, 18%, 90px);
         display: flex;
         flex-direction: column;
@@ -89,15 +80,10 @@ export const heliosTimelineStyles = css`
         min-height: 36px;
         overflow: hidden;
     }
-    /*  Pinned to the chart card, not sized by percentage. A percentage height resolves against the PARENT's
-        height, and .tb-chart-card takes its height from flex without ever stating one, which is not a height a
-        percentage can resolve against: the SVG fell back to its intrinsic ratio instead (the viewBox is 10:1) and
-        took width/10, leaving the floor of the card bare until a re-render settled it (hovering the chart). That
-        is also why it showed up on a WINDOW resize for a bar sized off the card's height: the fallback tracks the
-        width. It only became reachable once the bar started tracking the card instead of a width clamp, since the
-        chart card had a stated height of its own until then. Absolute + inset resolves against the padding box of
-        the positioned parent, which is definite by construction, so there is no chain left to break. Same recipe
-        as .ground / .ground-fade. */
+    /*  Pinned to the chart card via absolute + inset rather than a percentage height: .tb-chart-card takes its
+        height from flex without ever stating one, so a percentage would resolve against an indefinite height.
+        Absolute + inset instead resolves against the positioned parent's padding box, which is always definite,
+        same recipe as .ground / .ground-fade. */
     .hc-chart-svg
     {
         position: absolute;
