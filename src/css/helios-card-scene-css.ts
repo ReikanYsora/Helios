@@ -173,14 +173,23 @@ export const heliosCardStyles = css`
         -webkit-font-smoothing: antialiased;
     }
 
-    /*  PV production chip: pill tinted in the production colour (--pv-leader-color, set inline). Shares the
-        fixed width so the leader gap stays identical however wide the value reads. */
-    .pv-pct-label
+    /*  Shared per-chip state for the four value chips (PV, battery, grid, monitoring group): same tier,
+        centred, click-through, ink-coloured text. Only the border colour differs, set per chip below. */
+    .pv-pct-label,
+    .battery-pct-label,
+    .grid-label,
+    .group-label
     {
         z-index: 8;
         justify-content: center;
         pointer-events: none;
-        color:        var(--primary-text-color, #212121);
+        color: var(--primary-text-color, #212121);
+    }
+
+    /*  PV production chip: pill tinted in the production colour (--pv-leader-color, set inline). Shares the
+        fixed width so the leader gap stays identical however wide the value reads. */
+    .pv-pct-label
+    {
         border-color: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
     }
 
@@ -461,10 +470,6 @@ export const heliosCardStyles = css`
     /*  Battery SoC and Power chips, same compact pill recipe as the PV chip. */
     .battery-pct-label
     {
-        z-index: 8;
-        justify-content: center;
-        pointer-events: none;
-        color:        var(--primary-text-color, #212121);
         border-color: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
     }
 
@@ -472,20 +477,12 @@ export const heliosCardStyles = css`
         --grid-leader-color (blue importing, purple exporting), icon + value flip with it. */
     .grid-label
     {
-        z-index: 8;
-        justify-content: center;
-        pointer-events: none;
-        color:        var(--primary-text-color, #212121);
         border-color: var(--grid-leader-color, var(--energy-grid-consumption-color, #488fc2));
     }
     /*  Monitoring-group chip, same pill recipe; border in the group's colour. A small numbered disc carries the
         group id, placed on the chip's OUTER corner (away from the home) so it never sits over the lead's bead. */
     .group-label
     {
-        z-index: 8;
-        justify-content: center;
-        pointer-events: none;
-        color:        var(--primary-text-color, #212121);
         border-color: var(--group-color, var(--primary-color, #03a9f4));
     }
     /*  Group pastille glyph shown when the group has no configured icon: its number, sized + weighted like the
