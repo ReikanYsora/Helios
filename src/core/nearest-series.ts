@@ -58,26 +58,43 @@ export function timeSamplesEqual(a: TimeSample[] | null, b: TimeSample[] | null)
     return true;
 }
 
-//Value of the sample nearest `tMs` within +/- windowMs, else null. Samples must be ascending; the scan stops once
-//the delta grows again (the rest is monotonically worse).
+//Value of the sample nearest `tMs` within +/- windowMs, else null. Samples must be ascending: binary-search for
+//the insertion point, then compare the two bracketing neighbours (whichever of them is closer wins; a tie keeps
+//the earlier one, matching the old left-to-right scan).
 export function nearestSampleAt(samples: TimeSample[] | null, tMs: number, windowMs: number): number | null
 {
     if (!samples || samples.length === 0)
     {
         return null;
     }
+    let lo = 0;
+    let hi = samples.length;
+    while (lo < hi)
+    {
+        const mid = Math.floor((lo + hi) / 2);
+        if (samples[mid].tMs < tMs)
+        {
+            lo = mid + 1;
+        }
+        else
+        {
+            hi = mid;
+        }
+    }
     let bestIdx   = -1;
     let bestDelta = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < samples.length; i++)
+    if (lo > 0)
     {
-        const d = Math.abs(samples[i].tMs - tMs);
+        bestIdx   = lo - 1;
+        bestDelta = Math.abs(samples[lo - 1].tMs - tMs);
+    }
+    if (lo < samples.length)
+    {
+        const d = Math.abs(samples[lo].tMs - tMs);
         if (d < bestDelta)
         {
-            bestDelta = d; bestIdx = i;
-        }
-        else if (d > bestDelta)
-        {
-            break;
+            bestIdx   = lo;
+            bestDelta = d;
         }
     }
     if (bestIdx < 0 || bestDelta > windowMs)
