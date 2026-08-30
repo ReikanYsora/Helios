@@ -13,6 +13,10 @@ function zigzag(n: number): number
     return n % 2 === 0 ? n / 2 : -(n + 1) / 2;
 }
 
+//Shared across every Reader.string() call (one tile decode reads many strings): a TextDecoder is reusable and
+//stateless between decode() calls, so constructing a fresh one per string is pure per-call overhead.
+const textDecoder = new TextDecoder();
+
 export interface MvtFeature
 {
     //1 = point, 2 = linestring, 3 = polygon (only polygons are used downstream).
@@ -78,7 +82,7 @@ class Reader
 
     public string(): string
     {
-        return new TextDecoder().decode(this.bytes());
+        return textDecoder.decode(this.bytes());
     }
 
     //IEEE-754 little-endian, for MVT Value float/double columns.
