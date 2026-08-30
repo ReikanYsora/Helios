@@ -300,24 +300,29 @@ export class SceneRenderer
         //Only redraw on a REAL size change: a draw repaints the HUD, which the host re-projects, and that DOM
         //write can fire the observer again. Without this guard the no-op notification re-draws, re-projects,
         //re-fires: an infinite ResizeObserver loop (visible as the scene flickering every frame).
-        this._resizeObserver = new ResizeObserver((entries) =>
+        //Feature-detected like the same API in the weather layer: a device without ResizeObserver just keeps the
+        //size it was seeded with instead of throwing out of the constructor.
+        if (typeof ResizeObserver !== 'undefined')
         {
-            const cr = entries[entries.length - 1]?.contentRect;
-            if (!cr)
+            this._resizeObserver = new ResizeObserver((entries) =>
             {
-                return;
-            }
-            const w = Math.round(cr.width);
-            const h = Math.round(cr.height);
-            if (w === this._obsW && h === this._obsH)
-            {
-                return;
-            }
-            this._obsW = w;
-            this._obsH = h;
-            this.scheduleRedraw();
-        });
-        this._resizeObserver.observe(container);
+                const cr = entries[entries.length - 1]?.contentRect;
+                if (!cr)
+                {
+                    return;
+                }
+                const w = Math.round(cr.width);
+                const h = Math.round(cr.height);
+                if (w === this._obsW && h === this._obsH)
+                {
+                    return;
+                }
+                this._obsW = w;
+                this._obsH = h;
+                this.scheduleRedraw();
+            });
+            this._resizeObserver.observe(container);
+        }
 
         //Seed the camera from the container's current size. The container is already laid out when the
         //renderer is built, so the camera projects against a real viewport from the first frame instead of
