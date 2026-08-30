@@ -771,7 +771,7 @@ export class SceneHudController
                                   template runs on every hass tick, most of which touch none of these values, and
                                   rewriting a live SMIL <animateMotion>'s attributes re-arms its clock even when
                                   the rewritten value is identical - real, sustained main-thread cost on a card
-                                  with any flow running, independent of scene size (#417).  -->
+                                  with any flow running, independent of scene size.  -->
                             <circle
                                 class="pv-home-leader-bead"
                                 r="3"
