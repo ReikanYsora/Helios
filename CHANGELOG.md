@@ -9,6 +9,18 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.3
 
+### Fixed: sustained CPU load from the animated flow beads
+
+The travelling dots on the PV/grid/battery/monitoring-group flow lines are
+native SVG animations (SMIL), not JavaScript, but their speed and path were
+recomputed and rewritten on every single Home Assistant state change, several
+times a second on a live house, whether or not that specific flow had actually
+changed. Rewriting a running animation's attributes forces the browser to
+re-arm its animation clock every time, real, sustained main-thread cost that
+scales with nothing but time, not scene size, which is why it showed up even
+on capable hardware. Each bead now only recomputes when its own speed, path or
+direction genuinely changes. Thanks to @mifritscher2 (#417).
+
 ### Fixed: sunrise and sunset times stay readable under real weather
 
 The sunrise/sunset marker sat on the same layer as the far side of the sun arc,

@@ -1,5 +1,6 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
+import { guard } from 'lit/directives/guard.js';
 import type { HeliosCard } from '../helios-card';
 import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode } from '../core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
@@ -761,9 +762,14 @@ export class SceneHudController
                             x2=${pvHomeEnd.x}
                             y2=${pvHomeEnd.y}
                         ></line>
-                        ${!pvIdle ? svg`
+                        ${!pvIdle ? guard([pvColor, pvFlowDuration, pvX1, pvY1, pvHomeEnd.x, pvHomeEnd.y], () => svg`
                             <!--  Filled disc riding the leader from the PV chip to the home, speed
-                                  proportional to live production. No rotate="auto": a disc has no orientation.  -->
+                                  proportional to live production. No rotate="auto": a disc has no orientation.
+                                  guard()ed on its own inputs, same reason as every flow bead below: this whole
+                                  template runs on every hass tick, most of which touch none of these values, and
+                                  rewriting a live SMIL <animateMotion>'s attributes re-arms its clock even when
+                                  the rewritten value is identical - real, sustained main-thread cost on a card
+                                  with any flow running, independent of scene size (#417).  -->
                             <circle
                                 class="pv-home-leader-bead"
                                 r="3"
@@ -775,7 +781,7 @@ export class SceneHudController
                                     path="M ${pvX1},${pvY1} L ${pvHomeEnd.x},${pvHomeEnd.y}"
                                 ></animateMotion>
                             </circle>
-                        ` : nothing}
+                        `) : nothing}
                     </svg>`;
                 })() : nothing}
 
@@ -804,7 +810,7 @@ export class SceneHudController
                                 style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${batteryHomeLeaderPath}"
                             ></path>
-                            ${(showPowerChip && !batteryIdle) ? svg`
+                            ${(showPowerChip && !batteryIdle) ? guard([batteryLeaderColor, batteryFlowDuration, batteryHomeLeaderPath, batteryCharging], () => svg`
                                 <circle
                                     class="battery-leader-bead"
                                     r="3"
@@ -818,7 +824,7 @@ export class SceneHudController
                                         keyTimes=${batteryCharging ? '0;1' : nothing}
                                     ></animateMotion>
                                 </circle>
-                            ` : nothing}
+                            `) : nothing}
                         ` : nothing}
                     </svg>
                     <div
@@ -845,7 +851,7 @@ export class SceneHudController
                               export flows home -> grid (keyPoints 1;0
                               reverses it). Dropped when the active side
                               is idle, no misleading motion.           -->
-                        ${gridBeadDur !== null ? (gridImporting ? svg`
+                        ${gridBeadDur !== null ? guard([gridLeaderColor, gridBeadDur, gridLeaderPath, gridImporting], () => gridImporting ? svg`
                             <circle class="grid-leader-bead" r="3" style="fill:${gridLeaderColor}">
                                 <animateMotion dur="${gridBeadDur.toFixed(2)}s" repeatCount="indefinite"
                                                path="${gridLeaderPath}" />
@@ -874,16 +880,20 @@ export class SceneHudController
                 <!--  Monitoring-group chips (dynamic placement by active-group count). Each shows the group's live
                       total with a number badge; clicking one points the chart at that group's per-device curves.
                       The bead runs home -> chip; horizontal leads are reversed (keyPoints) to keep that direction.  -->
-                ${hasHomeCoords && layout !== null ? groupChips.map(gc => html`
+                ${hasHomeCoords && layout !== null ? groupChips.map((gc) => {
+                    //Narrowed to a local so guard()'s callback keeps TS's `!== null` narrowing (a property
+                    //access like gc.beadDur loses it across the closure boundary).
+                    const beadDur = gc.beadDur;
+                    return html`
                     <svg class="group-leader-svg">
                         <path class="group-leader-line" style="stroke:${gc.color}" d=${gc.leadPath} />
-                        ${gc.beadDur !== null ? svg`
+                        ${beadDur !== null ? guard([gc.color, beadDur, gc.leadPath, gc.reverse], () => svg`
                             <circle class="group-leader-bead" r="3" style="fill:${gc.color}">
-                                <animateMotion dur="${gc.beadDur.toFixed(2)}s" repeatCount="indefinite"
+                                <animateMotion dur="${beadDur.toFixed(2)}s" repeatCount="indefinite"
                                                keyPoints=${gc.reverse ? '1;0' : nothing} keyTimes=${gc.reverse ? '0;1' : nothing}
                                                path="${gc.leadPath}" />
                             </circle>
-                        ` : nothing}
+                        `) : nothing}
                     </svg>
                     <div
                         class="group-label ${interactive && this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''} ${curveOn && active === groupTarget(gc.g) ? 'is-curve-on' : ''}"
@@ -898,7 +908,8 @@ export class SceneHudController
                             : html`<span class="group-glyph-num">${gc.g}</span>`}
                         <span>${gc.watts === null ? '' : formatPvValue(this.host.hass, gc.watts, 'W', valueDec, powerU)}</span>
                     </div>
-                `) : nothing}
+                `;
+                }) : nothing}
 
                 <!--  Solar arc, FAR-FRONT pass: above-horizon segments with nearness below the 0.5 midpoint
                       (arched away from the eye but still ahead of the sky dome's back wall). These render
@@ -976,17 +987,19 @@ export class SceneHudController
                         ></line>
                         <!--  Bead rides an absolute-coordinate path with cx / cy at the default 0 origin.
                               Single-attribute updates keep the SMIL animation continuous during rotation.  -->
-                        <circle
-                            class="solar-ray-bead"
-                            r="3"
-                            fill=${sunColor}
-                        >
-                            <animateMotion
-                                dur="${sunFlowDuration}s"
-                                repeatCount="indefinite"
-                                path="M ${rayX1},${rayY1} L ${rayX2},${rayY2}"
-                            ></animateMotion>
-                        </circle>
+                        ${guard([sunColor, sunFlowDuration, rayX1, rayY1, rayX2, rayY2], () => svg`
+                            <circle
+                                class="solar-ray-bead"
+                                r="3"
+                                fill=${sunColor}
+                            >
+                                <animateMotion
+                                    dur="${sunFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    path="M ${rayX1},${rayY1} L ${rayX2},${rayY2}"
+                                ></animateMotion>
+                            </circle>
+                        `)}
                     </svg>
                 ` : nothing}
 
