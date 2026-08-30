@@ -555,6 +555,25 @@ export class HeliosEngine
     //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
     //change, not per arc sample per frame. Bearing/pitch invariant, so auto-rotation never refreshes it.
     private _arcScaleMemo?: { w: number; h: number; zoom: number; scale: number };
+    //Memo for getTimelineSeries, keyed on the object references it actually reads: the hourly forecast, the
+    //irradiance-sensor samples and the temperature/humidity override samples. Every scrub tick calls this via
+    //onWeatherUpdate/setSelectedTime, but those references only change on a real fetch/override update (the
+    //setters early-return on an unchanged value), so a reference match means the built series is still valid.
+    private _timelineSeriesCache?: {
+        home:      SampleHourly;
+        sensorRef: TimeSample[] | null;
+        tempRef:   TimeSample[] | null;
+        humRef:    TimeSample[] | null;
+        series: {
+            times:       Date[];
+            irradiance:  number[];
+            cloudLow:    number[];
+            cloudMid:    number[];
+            cloudHigh:   number[];
+            temperature: number[];
+            humidity:    number[];
+        };
+    };
 
     constructor(
         container:    HTMLElement,
@@ -2216,6 +2235,16 @@ export class HeliosEngine
             return null;
         }
 
+        const sensorRef = this._sensorIrradianceSamples;
+        const tempRef    = this._weatherOverrideSamples.get('temperature') ?? null;
+        const humRef     = this._weatherOverrideSamples.get('humidity')    ?? null;
+
+        const cache = this._timelineSeriesCache;
+        if (cache && cache.home === home && cache.sensorRef === sensorRef && cache.tempRef === tempRef && cache.humRef === humRef)
+        {
+            return cache.series;
+        }
+
         const irradiance = home.times.map((_, i) =>
         {
             //Per-hour priority sensor -> shortwave -> Haurwitz. Forecast hours carry no sensor sample, so
@@ -2244,7 +2273,7 @@ export class HeliosEngine
         const temperature = home.times.map((_, i) => this._weatherOverrideAt('temperature', home.times[i]) ?? (home.temperature[i] ?? NaN));
         const humidity    = home.times.map((_, i) => this._weatherOverrideAt('humidity',    home.times[i]) ?? (home.humidity[i]    ?? NaN));
 
-        return {
+        const series = {
             times:       home.times.slice(),
             irradiance,
             cloudLow,
@@ -2253,6 +2282,8 @@ export class HeliosEngine
             temperature,
             humidity,
         };
+        this._timelineSeriesCache = { home, sensorRef, tempRef, humRef, series };
+        return series;
     }
 
     public updateConfig(cfg: HeliosConfig): void
