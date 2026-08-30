@@ -1614,7 +1614,7 @@ export class HeliosCard extends LitElement
                               cursors. The day-label strip sits below so it never covers the curves.  -->
                         <div
                             class="tb-chart-stack"
-                            style="--chart-accent:${this._activeChipColor()}"
+                            style="--chart-accent:${activeChipColor}"
                         >
                             <div
                                 class="tb-chart-card"
