@@ -757,7 +757,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
         /*  z 5 (the far arc's own layer) used to leave this UNDER the weather overlay (z 6) and the rain/snow
             canvases (z 7), so the time read as barely legible under real precipitation - weather is meant to
-            tint the map, never the data, exactly like the chips it now shares a tier with (#416). */
+            tint the map, never the data, exactly like the chips it now shares a tier with. */
         z-index: 8;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     }
