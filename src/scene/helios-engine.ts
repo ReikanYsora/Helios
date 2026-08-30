@@ -1522,9 +1522,9 @@ export class HeliosEngine
             {
                 //Back-off slot for the current streak, capped at the last entry. setTimeout (not setInterval)
                 //so exactly one retry fires: success resets the streak, another failure bumps it.
-                const idx = Math.min(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS.length - 1);
-                retryDelay = RATE_LIMIT_BACKOFF_MS[idx];
-                this._rateLimitStreak++;
+                const backoff = this._nextBackoffDelay(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS);
+                retryDelay = backoff.delay;
+                this._rateLimitStreak = backoff.streak;
 
                 this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
@@ -1535,15 +1535,24 @@ export class HeliosEngine
             {
                 //Non-rate-limit error (network, 500, parse): graduated back-off (1/5/15/60 min cap) via
                 //setTimeout, so one retry is scheduled; success resets the streak, failure picks the next slot.
-                const idx = Math.min(this._otherErrorStreak, OTHER_ERROR_BACKOFF_MS.length - 1);
-                retryDelay = OTHER_ERROR_BACKOFF_MS[idx];
-                this._otherErrorStreak++;
+                const backoff = this._nextBackoffDelay(this._otherErrorStreak, OTHER_ERROR_BACKOFF_MS);
+                retryDelay = backoff.delay;
+                this._otherErrorStreak = backoff.streak;
+
                 this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
                     retryDelay
                 );
             }
         }
+    }
+
+    //Backoff-table lookup shared by _refreshWeather's 429 / non-429 retry branches: the delay for the current
+    //streak, clamped to the table's last slot, plus the streak advanced by one.
+    private _nextBackoffDelay(streak: number, table: readonly number[]): { delay: number; streak: number }
+    {
+        const idx = Math.min(streak, table.length - 1);
+        return { delay: table[idx], streak: streak + 1 };
     }
 
     //Wipe cached Open-Meteo payloads, drop the in-memory snapshot, and re-fetch (editor's "reset data
