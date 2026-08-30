@@ -83,6 +83,17 @@ part of it. Every building now paints in one true depth order, home included, so
 a nearer neighbour occludes the home exactly as it would occlude another
 neighbour, and a farther one still sits behind it. Thanks to @vbtheory (#413).
 
+### Fixed: a battery without long-term statistics could misread its own history
+
+A battery power sensor with no long-term statistics or state class falls back
+to raw recorder history instead, and that fallback path had drifted from the
+weather and irradiance history readers it was modelled on: it always treated a
+numeric timestamp as seconds, misreading a millisecond one, and never carried
+a timestamp forward when Home Assistant's own compaction omitted it on a
+repeated identical sample, silently dropping that point. Unified onto the same
+parser the other two readers already use, so all three read a battery's
+history the same correct way.
+
 ---
 
 ## 2026.9.2

@@ -87,6 +87,11 @@ cached features whenever it comes back from a pause: a browser is free to drop a
 canvas's backing store while a tab sits in the background, and nothing in the draw
 loop would ever put those pixels back.
 
+Features are grouped by layer once, right after the fetch, not re-filtered from
+the flat array on every paint: a repaint (theme change, or every camera move on
+the projected fallback) walks each layer's own slice instead of scanning the
+whole tile set once per layer.
+
 That CSS 3D transform is the fast path, but some hardware can't composite it: entry
 Android GPUs corrupt a GPU-drawn canvas into colored noise, and a few old WebViews
 mis-layer the tilted plane. `renderer.ts` sniffs those (GPU string, texture cap, UA)
@@ -331,9 +336,12 @@ and exponential back-off on HTTP 429.
 `weatherLayers()` maps the resolved weather to independent overlay strengths: the
 cloud cover sets the sun/grey grade (the sun also fading near the horizon by
 altitude), and rain, snow and thunderstorm stack on top. The overlay is CSS
-layers plus two particle canvases (`WeatherRain`, `WeatherSnow`) and a scripted
-lightning flash (`WeatherStorm`), driven by `--wx-*` custom properties the card
-sets from the layer strengths. It sits between the scene and the chips, so weather
+layers plus two particle canvases (`WeatherRain`, `WeatherSnow`, both extending
+a shared `WeatherParticleFx` base that owns the canvas, DPR-aware resize and the
+start/stop lifecycle, leaving each subclass only its particle shape and per-tick
+physics) and a scripted lightning flash (`WeatherStorm`, a different enough shape
+- no canvas, CSS-var driven - that it stays outside that shared base), driven by
+`--wx-*` custom properties the card sets from the layer strengths. It sits between the scene and the chips, so weather
 tints the map, never the data. The scene grade itself (saturation + brightness for
 cloud cover) is **baked into the ground and building paint** by the renderer
 (`SceneRenderer.setWeatherGrade`), not applied as a CSS `filter` on the map layer:
@@ -421,6 +429,15 @@ citizen and a stalled fetch never blanks the card:
   own ids (`mergeChangeSeries`). The home-consumption identity (`production +
   import - export - net battery`, clamped) lives once in
   `core/energy.ts`.
+* **One raw-history parser for the sensors that need it**: battery, irradiance and
+  the weather overrides all fall back to `history`/`history_during_period` when a
+  sensor carries no long-term statistics, decoding the same compact/verbose payload
+  shape (`s`/`state`, `lu`/`lc`/`last_updated`/`last_changed`) with only the
+  value-extraction step differing per source; one shared parser (magnitude-checked
+  ms-vs-seconds timestamps, carrying the last timestamp forward across a compacted
+  repeat) backs all three. Irradiance and the weather overrides also share the
+  "try `statistics_during_period`, fall back to raw history on an empty result"
+  fetch shape that wraps it.
 
 ---
 
