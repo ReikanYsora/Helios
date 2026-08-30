@@ -112,8 +112,8 @@ function isEntryAndroidGpu(renderer: string): boolean
 //                (Mali/Adreno) corrupt a GPU-rasterized canvas into colored noise, but the CPU raster has correct
 //                pixels and a plain texture composites fine on them (the 3D-transformed SVG scene already does). So
 //                the rotation stays a cheap GPU transform instead of a per-frame CPU reprojection.
-//  'projected' : CPU canvas repainted already-projected every frame, no 3D layer - for devices where the 3D
-//                transform itself is broken (texture cap too small to back the layer; old iOS half-3D compositor).
+//  'projected' : CPU canvas repainted already-projected when the pose changes, no 3D layer - for devices where the
+//                3D transform itself is broken (texture cap too small to back the layer; old iOS half-3D compositor).
 //A debug flag (localStorage 'helios-ground' = normal|transform|projected) forces any mode for A/B on a real device.
 type GroundMode = 'normal' | 'transform' | 'projected';
 
