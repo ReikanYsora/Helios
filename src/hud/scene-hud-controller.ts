@@ -8,7 +8,7 @@ import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
-import { buildArcSegments, flowDuration, type LabelLayout } from './hud';
+import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
 import { clipSegment, cardClipRect, pointOutside, type ClipRect } from '../core/render-kit/geometry';
 import { formatGridValue } from '../data/sources/grid';
@@ -68,6 +68,38 @@ export class SceneHudController
     //must reuse the live leader colour rather than the window-dominant chartAccentColor).
     public _gridLeaderColor    = 'var(--energy-grid-consumption-color, #488fc2)';
     public _batteryLeaderColor = 'var(--energy-battery-out-color, #4db6ac)';
+
+    //Arc-segment + ridge-polygon memo, both keyed on the sunScene object reference: refreshHud's sunSceneEq()
+    //already keeps that reference stable across renders when nothing about the sun/ridge geometry changed, so a
+    //plain identity compare here skips the buildArcSegments() rebuild (an arcColor() computation per segment)
+    //and the ridge points map+join on every hass tick, the same way the flow beads below are guard()ed against
+    //rebuilding on inputs that haven't moved.
+    private _arcSegmentsSunScene: SunScene | null = null;
+    private _arcSegmentsCache: ArcSegment[] = [];
+    private _ridgeLineSunScene: SunScene | null = null;
+    private _ridgeLineCache = '';
+
+    private _buildArcSegmentsCached(sunScene: SunScene, sunColor: string): ArcSegment[]
+    {
+        if (this._arcSegmentsSunScene !== sunScene)
+        {
+            this._arcSegmentsSunScene = sunScene;
+            this._arcSegmentsCache    = buildArcSegments(sunScene.arc, sunColor);
+        }
+        return this._arcSegmentsCache;
+    }
+
+    private _buildRidgeLineCached(sunScene: SunScene): string
+    {
+        if (this._ridgeLineSunScene !== sunScene)
+        {
+            this._ridgeLineSunScene = sunScene;
+            this._ridgeLineCache    = sunScene.ridge.length >= 3
+                ? sunScene.ridge.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+                : '';
+        }
+        return this._ridgeLineCache;
+    }
 
     //Land a chip's leader endpoint on the home pill's stadium outline so every leader docks against the same
     //focal energy node.
@@ -574,7 +606,7 @@ export class SceneHudController
         //The on-ground cloud disc is painted engine-side, so no cloud hex is needed here.
         const sunColor      = ENERGY_COLOR.sun(this.host);
         const sunRimColor   = darkenHex(sunColor, 0.20);
-        const arcSegments   = showSun ? buildArcSegments(sunScene!.arc, sunColor) : [];
+        const arcSegments   = showSun ? this._buildArcSegmentsCached(sunScene!, sunColor) : [];
         //Z-order split: below-horizon (dotted) segments render BEHIND the home chip cluster, above-horizon
         //in front so the live sun dominates. Single-pass split into reused scratch buffers (no filter()
         //allocations per cycle).
@@ -698,9 +730,7 @@ export class SceneHudController
         //terrain). Drawn as a polygon so it encircles the house; the sun crosses the crest at its azimuth.
         const ridgePts = sunScene?.ridge ?? [];
         const showRidge = ridgePts.length >= 3;
-        const ridgeLine = showRidge
-            ? ridgePts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-            : '';
+        const ridgeLine = sunScene ? this._buildRidgeLineCached(sunScene) : '';
 
         return html`
                 <!--  Terrain-horizon ridge: distant relief silhouette encircling the home, behind the arc + chips.  -->
