@@ -341,8 +341,9 @@ export class HeliosCard extends LitElement
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
-    //Active timeline mode (forecast / week / month / year). Drives the window + store cadence + fetch period +
-    //scrub snapping (see card/timeline-modes.ts). Persisted per card; the toggle lives in the bottom band.
+    //Active timeline mode (Forecast / Yesterday / Today / Week / Month). Drives the window + store cadence +
+    //fetch period + scrub snapping (see card/timeline-modes.ts). Persisted per card; the toggle lives in the
+    //bottom band.
     @state() _timelineMode: TimelineMode = 'forecast';
     //Active rolling-window span (days of history/forecast around today), derived from the mode. Pushed to the
     //engine via setPeriodDays(), read by buildUnifiedStore. Single runtime source of truth for the window.
@@ -436,8 +437,8 @@ export class HeliosCard extends LitElement
         this.requestUpdate();
     }
 
-    //Timeline mode selector (Forecast / 1 week / 1 month / 1 year). Derives the window from the mode spec, applies
-    //it (drops + rebuilds the store at the mode's cadence) and persists.
+    //Timeline mode selector (Forecast / Yesterday / Today / Week / Month). Derives the window from the mode spec,
+    //applies it (drops + rebuilds the store at the mode's cadence) and persists.
     private _setTimelineMode(mode: TimelineMode): void
     {
         if (this._timelineMode === mode)
@@ -481,13 +482,13 @@ export class HeliosCard extends LitElement
     };
 
     //Recorder period for the energy change-series, per the active mode (5-min for forecast, hourly for a week,
-    //daily for month/year), so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
+    //daily for month), so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
     get _storeFetchPeriod(): StatPeriod
     {
         return modeFetchPeriod(this._timelineMode, this.config);
     }
 
-    //Whether weather (irradiance + cloud) is offered in the active mode. Off for month/year (Open-Meteo only
+    //Whether weather (irradiance + cloud) is offered in the active mode. Off for month (Open-Meteo only
     //reaches ~16 days), where the focus is energy. Hides those chips + their chart targets.
     get _weatherAvailable(): boolean
     {
@@ -1613,7 +1614,7 @@ export class HeliosCard extends LitElement
                               cursors. The day-label strip sits below so it never covers the curves.  -->
                         <div
                             class="tb-chart-stack"
-                            style="--chart-accent:${this._activeChipColor()}"
+                            style="--chart-accent:${activeChipColor}"
                         >
                             <div
                                 class="tb-chart-card"
@@ -1632,7 +1633,7 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 <!--  Period-mode band: a separate strip BELOW the timeline (own card styling, same width,
-                      radius and themed border), holding the Forecast / 1 week / 1 month / 1 year selector.  -->
+                      radius and themed border), holding the Forecast / Yesterday / Today / Week / Month selector.  -->
                 ${hasHomeCoords && showTimeline(this.config) ? html`
                     <div class="tb-band">
                         ${this._renderPeriodSelector()}
@@ -1642,7 +1643,7 @@ export class HeliosCard extends LitElement
                 ${hud}
 
                 <!--  Day curve, in two depth passes. Both sit ABOVE the solar overlays (sun, arc, irradiance, z 14/15)
-                      so auto-rotation never sweeps them over the reading (#397); near stays over far so the curve
+                      so auto-rotation never sweeps them over the reading; near stays over far so the curve
                       self-occludes at its own crossings. Above the buildings either way, because it is a reading of
                       the data and not a wall standing in the street.  -->
                 ${this._dayCurveScene ? html`

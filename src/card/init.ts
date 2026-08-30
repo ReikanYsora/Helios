@@ -354,7 +354,7 @@ function scheduleEngineInit(host: InitHost): void
         host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host.effectiveCacheId?.() ?? '');
         wireEngineCallbacks(host);
         //Seed the engine with the active (possibly restored) window before getTimelineRange(), so a card that
-        //loads straight into week/month/year frames the right span from the first paint.
+        //loads straight into a week/month frame the right span from the first paint.
         host._engine.setPeriodDays(host._periodPastDays, host._periodFutureDays);
         //Seed the timeline window from the engine's synthetic fallback so the time-bar renders from the first
         //frame instead of staying hidden until the first weather push (which can be delayed on a slow load).
