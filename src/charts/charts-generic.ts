@@ -3,14 +3,14 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarColor, energyGridColor, energyBatteryColor } from '../core/format/format';
+import { cssHex, deviceColorByIndex, energySolarColor, energyGridColor, energyBatteryColor } from '../core/format/format';
 import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import { staticPrice, costRateAt } from '../data/sources/cost';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
-import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark, irradianceForecastColor } from './charts';
+import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark, irradianceForecastColor, cloudBandColors } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -647,10 +647,11 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         if (bands.length >= 2)
         {
             const yOfPct = makeYOf(0, 100);
+            const cloud  = cloudBandColors(el);
             const layers: { pick: (b: { lo: number; mi: number; hi: number }) => number; color: string }[] = [
-                { pick: b => b.lo, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
-                { pick: b => b.mi, color: ENERGY_COLOR.cloud(el) },
-                { pick: b => b.hi, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.50) },
+                { pick: b => b.lo, color: cloud.low },
+                { pick: b => b.mi, color: cloud.mid },
+                { pick: b => b.hi, color: cloud.high },
             ];
             const lower = new Array<number>(bands.length).fill(0);
             for (const layer of layers)

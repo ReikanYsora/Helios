@@ -8,7 +8,7 @@ import { type ChipSlot, chipSlotColor } from '../core/config/chip-appearance';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import type { UnifiedDataStore } from '../data/unifiedStore';
 import type { ChangeBucket } from '../data/sources/energy-stats';
-import { lerpHexToward } from '../core/format/format';
+import { ENERGY_COLOR, lerpHexToward } from '../core/format/format';
 
 
 //Engine-resampled weather series, pushed to the card on every refresh.
@@ -205,6 +205,19 @@ export function irradianceForecastColor(host: ChartHost): string
     return chartIsDark(host)
         ? lerpHexToward(irradColor, '#ffffff', 0.75)
         : lerpHexToward(irradColor, '#000000', 0.55);
+}
+
+//The three cloud-band tints (low/mid/high altitude), lerped off the base cloud token with the same fractions
+//everywhere they're drawn: shared by the chart's stacked overlay bands and the tooltip's three cloud rows so
+//they track each other by construction.
+export function cloudBandColors(el: Element | null | undefined): { low: string; mid: string; high: string }
+{
+    const base = ENERGY_COLOR.cloud(el);
+    return {
+        low:  lerpHexToward(base, '#ffffff', 0.55),
+        mid:  base,
+        high: lerpHexToward(base, '#000000', 0.50),
+    };
 }
 
 

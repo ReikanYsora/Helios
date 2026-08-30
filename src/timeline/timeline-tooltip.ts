@@ -5,7 +5,7 @@ import type { TemplateResult } from 'lit';
 import { html, nothing } from 'lit';
 import { valueDecimals, powerUnit, energyUnit, irradianceUnit } from '../core/config/helios-config';
 import { consumptionLoad } from '../core/energy';
-import { ENERGY_COLOR, energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, formatTemperature, pvNormalizeToWatts, lerpHexToward, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
+import { energySolarColor, energyGridColor, energyBatteryColor, formatPower, formatIrradiance, formatEnergyKwh, formatTemperature, pvNormalizeToWatts, cssHex, formatHaDateTime, deviceColorByIndex } from '../core/format/format';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { valueAt } from '../data/unifiedStore';
 import { wattsAtFromChangeSeries, type ChangeBucket } from '../data/sources/energy-stats';
@@ -27,6 +27,7 @@ import {
     isGroupTarget,
     groupOfTarget,
     irradianceForecastColor,
+    cloudBandColors,
 } from '../charts/charts';
 import { interpAt, pvValueAtTime } from '../data/series-sample';
 import { computeDailyKwhTotals } from '../charts/charts-generic';
@@ -158,9 +159,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
             };
         })
         : [];
-    const cloudBase      = ENERGY_COLOR.cloud(el);
-    const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
-    const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
+    const cloud          = cloudBandColors(el);
+    const cloudBase      = cloud.mid;
+    const cloudLowColor  = cloud.low;
+    const cloudHighColor = cloud.high;
     //Ghosted irradiance colour for the irradiance view's forecast row, identical to the dashed forecast curve + its hover dot.
     const forecastColor  = irradianceForecastColor(host);
 
