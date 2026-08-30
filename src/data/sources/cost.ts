@@ -109,12 +109,12 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
 
     //Freshness gate. HA's own price-driven cost sensors track the meter in real time and always pass; a utility
     //integration that backfills yesterday does not, and its last bucket would otherwise be rendered as the live
-    // rate - the same "invented" reading the card refuses everywhere else.
+    //rate - the same "invented" reading the card refuses everywhere else.
     //
-    // Each POPULATED direction is checked on its own. Taking the newest end ACROSS both would let a fresh
-    // compensation bucket vouch for a 16-hour-old import bucket, and the netting below would then publish that
-    // stale import rate as "now". An EMPTY direction is skipped rather than failed: an install that never exports
-    // has no compensation buckets at all, and absence is not staleness.
+    //Each POPULATED direction is checked on its own. Taking the newest end ACROSS both would let a fresh
+    //compensation bucket vouch for a 16-hour-old import bucket, and the netting below would then publish that
+    //stale import rate as "now". An EMPTY direction is skipped rather than failed: an install that never exports
+    //has no compensation buckets at all, and absence is not staleness.
     const stale = (s: ChangeBucket[] | null): boolean =>
         !!s && s.length > 0 && (nowMs - s[s.length - 1].endMs) > COST_STAT_MAX_AGE_MS;
     if (stale(imp) || stale(exp))
@@ -138,29 +138,27 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
         return impR - expR;
     }
 
-    //Both newest buckets are flat. Whether that means "zero" depends on the meter. HA's *_cost sensors only step
-    //when the energy sensor they derive from updates, so a meter that reports every 15 min, recorded at 5-minute
-    //resolution, leaves two of every three buckets at Δ0 while the house is genuinely importing - and publishing
-    //that 0 pins the chip at zero between reports. On a FINE meter, though, a flat newest bucket is real news:
-    //import just stopped, and the chip must say so now, not 10 minutes later.
+    //Both newest buckets are flat. Whether that means "zero" depends on the meter: HA's *_cost sensors only step
+    //when the energy sensor they derive from updates, so a meter reporting every 15 min but recorded at 5-minute
+    //resolution leaves two of every three buckets at Δ0 while genuinely importing - publishing that 0 would pin
+    //the chip at zero between reports. On a FINE meter, though, a flat newest bucket is real news: import just
+    //stopped, and the chip must say so now.
     //
-    //Tell the two apart from the meter's REPORT CADENCE, not from how the last few buckets look. The cadence is
-    //the typical gap between consecutive reports in the recent history (the same signal smoothCoarseReports reads
-    //to un-sawtooth a coarse meter), and an idle stretch cannot redefine it: zeros are not reports. A flat run
-    //SHORTER than one cadence is the ordinary silence between two reports of a coarse meter; a flat run that has
-    //REACHED the cadence means a report was due and none came - the meter has genuinely stopped, and the zero is
-    //real. A dense meter's cadence is one bucket, so its very first flat bucket already reaches it: unchanged from
-    //the pre-change read, however long it stays stopped.
+    //Tell the two apart from the meter's REPORT CADENCE (the typical gap between consecutive reports in recent
+    //history, the same signal smoothCoarseReports reads to un-sawtooth a coarse meter), not from how the last few
+    //buckets look - an idle stretch cannot redefine it, since zeros are not reports. A flat run SHORTER than one
+    //cadence is ordinary silence between two reports; one that has REACHED the cadence means a report was due and
+    //none came, so the zero is real. A dense meter's cadence is one bucket, so its very first flat bucket already
+    //reaches it.
     //
-    //Between reports, the live rate is the LAST REPORT SPREAD OVER ITS OWN INTERVAL - exactly the quantity
+    //Between reports, the live rate is the LAST REPORT SPREAD OVER ITS OWN INTERVAL - the same quantity
     //smoothCoarseReports assigns those buckets in the store, so live and curve agree - rather than a probe over a
-    //fixed window, which is wrong in both directions: too short and it sees only the flat tail of a 30-min meter
-    //and averages to zero; too long and it smears an earlier report in. Signed, so a negative dynamic tariff (paid
-    //to import) is preserved rather than clamped away.
+    //fixed window, which is wrong either way: too short sees only the flat tail of a 30-min meter and averages to
+    //zero, too long smears an earlier report in. Signed, so a negative dynamic tariff (paid to import) is
+    //preserved rather than clamped away.
     //
-    //Decided PER DIRECTION, and only the between-reports side is estimated. A side that has genuinely stopped
-    //keeps its exact newest zero; estimating it alongside a coarse partner would smear its earlier activity back
-    //into "now" and let that stale value dominate the net.
+    //Decided per direction, and only the between-reports side is estimated: a side that has genuinely stopped
+    //keeps its exact zero, since estimating it alongside a coarse partner would smear stale activity into "now".
     const newestEnd = Math.max(
         imp && imp.length > 0 ? imp[imp.length - 1].endMs : 0,
         exp && exp.length > 0 ? exp[exp.length - 1].endMs : 0);
