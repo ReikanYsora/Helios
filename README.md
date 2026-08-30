@@ -195,6 +195,14 @@ Every idea on the roadmap came from a user.
 
 ---
 
+## Special thanks
+
+- [antoineguilbert.fr](https://www.antoineguilbert.fr/helios-home-assistant-carte-3d-avec-lidar/) ([Helios Forecast](https://www.antoineguilbert.fr/prevision-solaire-home-assistant-avec-helios-forecast/))
+- [Glooob Domo](https://www.youtube.com/watch?v=bTg4mzb9jwA)
+- [Smart-Live](https://youtu.be/zFbppiAmCr0)
+
+---
+
 ## Credits
 
 Helios stands on open data, none of which requires an account or a key:
