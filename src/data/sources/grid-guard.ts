@@ -6,19 +6,10 @@
 //The evidence is physical: an hour in which the billing export meter recorded energy while the "net" sensor's
 //recorded minimum never went meaningfully negative is impossible for a correctly scoped sensor. The guard
 //fetches hourly recorder stats over a rolling window (export meter `change` + rate sensor `min`/`max`) and
-//flags the sensor once enough independent proven hours accumulate. While flagged, grid.ts leaves the
-//live chips EMPTY (measured-only: nothing is derived from the meters) and the editor explains the fix.
-//
-//Anti-false-positive rules, each earned against a concrete failure mode:
-//  - Bounds on the hourly export (MIN filters integration noise, MAX filters statistics-surgery artefacts).
-//  - The negative band scales with the hour's implied export power, so a brief -100 W dip cannot vouch for a
-//    sensor that missed kilowatts of export.
-//  - Transition guard: an hour adjacent to a genuinely-negative hour is never counted (a coarse export meter
-//    can land its delta one hour late, past the moment the sensor stopped reading negative).
-//  - Hours without min data are skipped, never treated as evidence (sensor unavailable, LTS missing, or a
-//    freshly created synthetic sensor with no history yet).
-//  - The flag self-clears after enough contradiction-free evaluations that contained real export, so a user
-//    who fixes their sensor in place (same entity id) gets the normal path back without touching the prefs.
+//flags the sensor once enough independent proven hours accumulate; see evaluateGuardHours for the
+//anti-false-positive rules. While flagged, grid.ts leaves the live chips EMPTY (measured-only) and the editor
+//explains the fix; it self-clears the same way, once enough later windows agree the sensor reports real
+//export correctly, so a user who fixes their wiring in place needs to touch nothing else.
 //
 //Only single-net-sensor installs are evaluated (the flattened prefs of every modern core produce exactly one
 //stat_rate per source; multi-source wirings keep the current behavior untouched).
@@ -79,10 +70,13 @@ export function evaluateGuardHours(hours: GuardHour[]): GuardEvaluation
     for (let i = 0; i < hours.length; i++)
     {
         const { exportKwh, minW } = hours[i];
+        //A missing side (sensor unavailable, LTS missing, or a freshly created synthetic sensor with no history
+        //yet) is not evidence either way, so the hour is skipped rather than treated as a contradiction.
         if (exportKwh === null || minW === null)
         {
             continue;
         }
+        //Bounds: MIN filters integration noise, MAX filters statistics-surgery artefacts.
         if (exportKwh <= GUARD_MIN_EXPORT_KWH || exportKwh >= GUARD_MAX_EXPORT_KWH)
         {
             continue;

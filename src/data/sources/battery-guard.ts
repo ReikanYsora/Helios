@@ -6,13 +6,11 @@
 //run backwards even though the Energy dashboard is right (it reads the directional charge/discharge meters, whose
 //sign is structural).
 //
-//This guard cross-checks the EFFECTIVE rate (what the card shows: the raw sensor already negated when its slot flips
-//it) against that structural truth. Over a rolling window it fetches, per hour, the charge meter `change`, the
-//discharge meter `change`, and the rate sensor's `mean` (min/max as a fallback). For each hour with real activity it
-//asks whether the effective sign is charge-positive (positive while charging, negative while discharging). If it is
-//systematically the other way round the sensor contradicts its slot, and the guard flags it inverted; battery.ts
-//then negates the live read to restore the correct direction and flow. It self-clears if later evidence agrees (a
-//reconfigured sensor). `battery-sign` stays a display-only preference and is untouched by this.
+//This guard cross-checks the EFFECTIVE rate (what the card shows) against that structural truth over a rolling
+//window of hourly recorder stats (charge/discharge `change` + rate `mean`, min/max as a fallback); see
+//evaluateBatteryHours for the per-hour evidence rules. A sensor found systematically backwards is flagged
+//inverted, and battery.ts negates the live read to restore the correct direction; it self-clears if later
+//evidence agrees (a reconfigured sensor). `battery-sign` stays a display-only preference, untouched by this.
 //
 //Only a single-net-rate install with BOTH directional meters is evaluated (the structural truth needs both); every
 //other wiring keeps the current behaviour.

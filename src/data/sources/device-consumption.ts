@@ -95,7 +95,11 @@ export function deviceWindowKwh(series: ChangeBucket[] | undefined, startMs: num
     for (const b of series)
     {
         const mid = (b.startMs + b.endMs) / 2;
-        if (mid >= startMs && mid <= endMs && isFinite(b.kwh))
+        if (mid > endMs)
+        {
+            break;
+        }
+        if (mid >= startMs && isFinite(b.kwh))
         {
             kwh += Math.abs(b.kwh);
         }
