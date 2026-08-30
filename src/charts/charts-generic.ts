@@ -10,7 +10,7 @@ import { consumptionLoad } from '../core/energy';
 import { staticPrice, costRateAt } from '../data/sources/cost';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
-import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
+import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark, irradianceForecastColor } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -707,11 +707,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //Forecast dash on the irradiance view. It rides the near-identical shape of the amber irradiance area, so a
     //plain predicted shade blends in: push the contrast harder (toward white on dark, black on light) than the
     //production line so the dashed silhouette clearly separates from the fill under it.
-    const isDarkTheme  = chartIsDark(host);
-    const irradColor = chipSlotColor(el, host.config, 'irradiance');
-    const forecastColor = isDarkTheme
-        ? lerpHexToward(irradColor, '#ffffff', 0.75)
-        : lerpHexToward(irradColor, '#000000', 0.55);
+    const forecastColor = irradianceForecastColor(host);
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);

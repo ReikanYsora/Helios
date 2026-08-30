@@ -26,6 +26,7 @@ import {
     batterySourceName,
     isGroupTarget,
     groupOfTarget,
+    irradianceForecastColor,
 } from '../charts/charts';
 import { interpAt, pvValueAtTime } from '../data/series-sample';
 import { computeDailyKwhTotals } from '../charts/charts-generic';
@@ -161,10 +162,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const cloudLowColor  = lerpHexToward(cloudBase, '#ffffff', 0.55);
     const cloudHighColor = lerpHexToward(cloudBase, '#000000', 0.50);
     //Ghosted irradiance colour for the irradiance view's forecast row, identical to the dashed forecast curve + its hover dot.
-    const irradColor     = chipSlotColor(el, host.config, 'irradiance');
-    const forecastColor  = chartIsDark(host)
-        ? lerpHexToward(irradColor, '#ffffff', 0.75)
-        : lerpHexToward(irradColor, '#000000', 0.55);
+    const forecastColor  = irradianceForecastColor(host);
 
     //Multi-source breakdown rows for grid / battery, mirroring the solar perEntity rows: one row per configured meter,
     //but only once 2+ sources each carry their own recorder series (the same guard stackedLines uses), so a

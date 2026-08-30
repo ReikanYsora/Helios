@@ -4,10 +4,11 @@
 
 import type { HassLike } from '../core/ha-types';
 import { type HeliosConfig, monitoringGroupName } from '../core/config/helios-config';
-import type { ChipSlot } from '../core/config/chip-appearance';
+import { type ChipSlot, chipSlotColor } from '../core/config/chip-appearance';
 import type { EnergyDefaults } from '../data/sources/energy-prefs';
 import type { UnifiedDataStore } from '../data/unifiedStore';
 import type { ChangeBucket } from '../data/sources/energy-stats';
+import { lerpHexToward } from '../core/format/format';
 
 
 //Engine-resampled weather series, pushed to the card on every refresh.
@@ -192,6 +193,19 @@ export interface ChartHost
 //Active theme polarity (hass.themes.darkMode): drives whether the per-source colour ramp brightens or darkens off
 //the base solar token. Shared by the PV chart + the tooltip's per-source pastilles.
 export const chartIsDark = (host: ChartHost): boolean => !!host.hass?.themes?.darkMode;
+
+
+//Theme-aware "ghost forecast" colour for the irradiance view: the irradiance chip colour pushed toward white on a
+//dark theme, black on light, so the dashed forecast silhouette (and its hover dot / tooltip rows) clearly separates
+//from the near-identical amber fill under it. Shared by the chart and the tooltip so the two never drift apart.
+export function irradianceForecastColor(host: ChartHost): string
+{
+    const el = host as unknown as Element; //live HA theme-token colour resolution
+    const irradColor = chipSlotColor(el, host.config, 'irradiance');
+    return chartIsDark(host)
+        ? lerpHexToward(irradColor, '#ffffff', 0.75)
+        : lerpHexToward(irradColor, '#000000', 0.55);
+}
 
 
 //Re-exports keeping the render concerns importable from this module, with the implementations in sibling files.
