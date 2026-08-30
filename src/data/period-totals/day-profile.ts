@@ -55,7 +55,10 @@ function forecastKw(host: PeriodHost, slots: number, win: PeriodWindow, nowMs: n
     const store = host._unifiedStore;
     const out = new Array<number | null>(slots).fill(null);
     //No forecast source configured leaves the series empty, and the curve simply stops where the readings do.
-    if (!store || !store.forecast) { return out; }
+    if (!store || !store.forecast)
+    {
+        return out;
+    }
     //Weighted by overlap and divided back out: the value is a POWER, so a slot reads the average power over its
     //own span, not a share of an energy.
     const sum = new Array<number>(slots).fill(0);
@@ -65,13 +68,25 @@ function forecastKw(host: PeriodHost, slots: number, win: PeriodWindow, nowMs: n
         //Only the part of the day still ahead: before now the meters have the answer, and a prediction of the past
         //is not a reading of it.
         const tMid = store.storeStartMs + (i + 0.5) * store.stepMs;
-        if (tMid <= nowMs) { return; }
+        if (tMid <= nowMs)
+        {
+            return;
+        }
         const w = store.forecast[i];
-        if (w === null || !isFinite(w)) { return; }
+        if (w === null || !isFinite(w))
+        {
+            return;
+        }
         sum[slot] += (w / 1000) * segMs;
         cov[slot] += segMs;
     });
-    for (let s = 0; s < slots; s++) { if (cov[s] > 0) { out[s] = sum[s] / cov[s]; } }
+    for (let s = 0; s < slots; s++)
+    {
+        if (cov[s] > 0)
+        {
+            out[s] = sum[s] / cov[s];
+        }
+    }
     return out;
 }
 
@@ -82,10 +97,16 @@ function coverageHours(host: PeriodHost, nowMs: number, slots: number, win: Peri
 {
     const store = host._unifiedStore;
     const cov   = new Array<number>(slots).fill(0);
-    if (!store) { return cov; }
+    if (!store)
+    {
+        return cov;
+    }
     //Clamped at now: buckets beyond it never happened, and that is what leaves today's later slots with nothing,
     //which is what lets a strand stop there instead of lying flat along the ground to midnight.
-    forEachBucketSlot(store, slots, win, nowMs, (_i, slot, segMs) => { cov[slot] += segMs / HOUR_MS; });
+    forEachBucketSlot(store, slots, win, nowMs, (_i, slot, segMs) =>
+    {
+        cov[slot] += segMs / HOUR_MS;
+    });
     return cov;
 }
 
@@ -94,15 +115,30 @@ function dropShortRuns(values: (number | null)[]): void
 {
     const n = values.length;
     const covered = (i: number): boolean => values[((i % n) + n) % n] !== null;
-    if (values.every((v) => v !== null)) { return; }
+    if (values.every((v) => v !== null))
+    {
+        return;
+    }
     for (let i = 0; i < n; i++)
     {
         //Only start measuring at a run's first slot, so each run is walked once.
-        if (!covered(i) || covered(i - 1)) { continue; }
+        if (!covered(i) || covered(i - 1))
+        {
+            continue;
+        }
         let k = 0;
-        while (k < n && covered(i + k)) { k++; }
-        if (k >= DAY_CURVE_MIN_RUN) { continue; }
-        for (let j = 0; j < k; j++) { values[(i + j) % n] = null; }
+        while (k < n && covered(i + k))
+        {
+            k++;
+        }
+        if (k >= DAY_CURVE_MIN_RUN)
+        {
+            continue;
+        }
+        for (let j = 0; j < k; j++)
+        {
+            values[(i + j) % n] = null;
+        }
     }
 }
 
@@ -114,7 +150,10 @@ function stackLayers(values: readonly { values: number[] }[], slots: number): nu
     const out = new Array<number>(slots).fill(0);
     for (const layer of values)
     {
-        for (let s = 0; s < slots; s++) { out[s] += Math.max(0, layer.values[s] ?? 0); }
+        for (let s = 0; s < slots; s++)
+        {
+            out[s] += Math.max(0, layer.values[s] ?? 0);
+        }
     }
     return out;
 }
@@ -133,7 +172,10 @@ function cumulativeStrands(layers: PeriodLayer[], toKw: (energy: number[]) => (n
         for (let s = 0; s < slots; s++)
         {
             const v = kw[s];
-            if (v === null) { continue; }
+            if (v === null)
+            {
+                continue;
+            }
             running[s] += v;
             vals[s]     = running[s];
         }
@@ -145,7 +187,13 @@ function cumulativeStrands(layers: PeriodLayer[], toKw: (energy: number[]) => (n
 function peakOf(values: (number | null)[]): number
 {
     let p = 0;
-    for (const v of values) { if (v !== null && isFinite(v) && v > p) { p = v; } }
+    for (const v of values)
+    {
+        if (v !== null && isFinite(v) && v > p)
+        {
+            p = v;
+        }
+    }
     return p;
 }
 
@@ -164,7 +212,10 @@ function socDay(hist: { times: Date[]; values: number[] } | null, slots: number,
 {
     const out = new Array<number | null>(slots).fill(null);
     const n = hist ? hist.times.length : 0;
-    if (!hist || n === 0) { return out; }
+    if (!hist || n === 0)
+    {
+        return out;
+    }
     const slotMs = DAY_MS / slots;
     const first  = hist.times[0].getTime();
     const last   = hist.times[n - 1].getTime();
@@ -173,14 +224,23 @@ function socDay(hist: { times: Date[]; values: number[] } | null, slots: number,
     {
         const t = dayStartMs + (s + 0.5) * slotMs;
         //Outside the history: no reading, so the line breaks rather than clamping to an end sample.
-        if (t < first || t > last) { continue; }
+        if (t < first || t > last)
+        {
+            continue;
+        }
         //Advance the bracket forward with the slots (both ascending), so the walk stays linear overall.
-        while (lo + 1 < n && hist.times[lo + 1].getTime() <= t) { lo++; }
+        while (lo + 1 < n && hist.times[lo + 1].getTime() <= t)
+        {
+            lo++;
+        }
         const a = hist.times[lo].getTime();
         const b = hist.times[Math.min(lo + 1, n - 1)].getTime();
         const va = hist.values[lo];
         const vb = hist.values[Math.min(lo + 1, n - 1)];
-        if (!isFinite(va) || !isFinite(vb)) { continue; }
+        if (!isFinite(va) || !isFinite(vb))
+        {
+            continue;
+        }
         out[s] = b > a ? va + (vb - va) * ((t - a) / (b - a)) : va;
     }
     return out;
@@ -197,7 +257,10 @@ function binSlotAvg(store: NonNullable<PeriodHost['_unifiedStore']>, series: (nu
     forEachBucketSlot(store, slots, win, undefined, (i, slot, segMs) =>
     {
         const v = series[i];
-        if (v === null || !isFinite(v)) { return; }
+        if (v === null || !isFinite(v))
+        {
+            return;
+        }
         sum[slot] += v * segMs;
         cov[slot] += segMs;
     });
@@ -210,19 +273,28 @@ function socFlow(host: PeriodHost, slots: number, win: PeriodWindow): (StrandFlo
 {
     const store = host._unifiedStore;
     const dir   = new Array<StrandFlowDir | null>(slots).fill(null);
-    if (!store) { return dir; }
+    if (!store)
+    {
+        return dir;
+    }
     const net = new Array<number>(slots).fill(0);
     const cov = new Array<number>(slots).fill(0);
     forEachBucketSlot(store, slots, win, undefined, (i, slot, segMs) =>
     {
         const v = store.battery[i];
-        if (v === null || !isFinite(v)) { return; }
+        if (v === null || !isFinite(v))
+        {
+            return;
+        }
         net[slot] += v * segMs;
         cov[slot] += segMs;
     });
     for (let s = 0; s < slots; s++)
     {
-        if (cov[s] <= 0) { continue; }
+        if (cov[s] <= 0)
+        {
+            continue;
+        }
         const a = net[s] / cov[s];
         dir[s] = Math.abs(a) < 5 ? 'idle' : (a > 0 ? 'charge' : 'discharge');
     }
@@ -236,7 +308,10 @@ function socFlow(host: PeriodHost, slots: number, win: PeriodWindow): (StrandFlo
 export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: number, nowMs: number = Date.now()): ProfileStrand[]
 {
     const slots = daySlots(host.config);
-    if (!host._timeRange) { return []; }
+    if (!host._timeRange)
+    {
+        return [];
+    }
 
     const dayStartMs = dayMs - serverMsOfDay(dayMs);
     const win: PeriodWindow = { fromMs: dayStartMs, toMs: dayStartMs + DAY_MS };
@@ -250,7 +325,10 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
     if (target === 'production')
     {
         const data = buildPeriodData(host, 'production', win, slots);
-        if (!data.layers.length) { return []; }
+        if (!data.layers.length)
+        {
+            return [];
+        }
         //Per-source when the aggregation split the meters (2+ configured, each with its own recorder series); one
         //aggregate strand otherwise (single source, or pre-fetch when the split has nothing to work from).
         const perSource = data.layers.length >= 2;
@@ -265,15 +343,27 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
             const predicted = noPred();
             for (let s = 0; s < slots; s++)
             {
-                if (values[s] !== null || fc[s] === null) { continue; }
+                if (values[s] !== null || fc[s] === null)
+                {
+                    continue;
+                }
                 values[s]    = fc[s];
                 predicted[s] = true;
             }
             dropShortRuns(values);
             //A run the floor swept away takes its forecast flag with it, or a span could read dashed with nothing under it.
-            for (let s = 0; s < slots; s++) { if (values[s] === null) { predicted[s] = false; } }
+            for (let s = 0; s < slots; s++)
+            {
+                if (values[s] === null)
+                {
+                    predicted[s] = false;
+                }
+            }
             const peak = peakOf(values);
-            if (peak <= 0) { return []; }
+            if (peak <= 0)
+            {
+                return [];
+            }
             return [{ values, predicted, peak, colour: { kind: 'token', token: 'production' } }];
         }
 
@@ -283,29 +373,47 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         //strand. Shared peak over the stack top AND the forecast, so both read on one kW scale.
         const stacked = cumulativeStrands(data.layers, toKw, slots);
         let peak = peakOf(fc);
-        for (const st of stacked) { peak = Math.max(peak, peakOf(st.values)); }
-        if (peak <= 0) { return []; }
+        for (const st of stacked)
+        {
+            peak = Math.max(peak, peakOf(st.values));
+        }
+        if (peak <= 0)
+        {
+            return [];
+        }
 
         const out: ProfileStrand[] = [];
         stacked.forEach((st) =>
         {
             dropShortRuns(st.values);
-            if (anyValue(st.values)) { out.push({ values: st.values, predicted: noPred(), peak, colour: { kind: 'solar', index: st.sourceIdx } }); }
+            if (anyValue(st.values))
+            {
+                out.push({ values: st.values, predicted: noPred(), peak, colour: { kind: 'solar', index: st.sourceIdx } });
+            }
         });
         const fcVals = fc.slice();
         dropShortRuns(fcVals);
-        if (anyValue(fcVals)) { out.push({ values: fcVals, predicted: new Array<boolean>(slots).fill(true), peak, colour: { kind: 'token', token: 'production' } }); }
+        if (anyValue(fcVals))
+        {
+            out.push({ values: fcVals, predicted: new Array<boolean>(slots).fill(true), peak, colour: { kind: 'token', token: 'production' } });
+        }
         return out;
     }
 
     if (target === 'consumption')
     {
         const data = buildPeriodData(host, 'consumption', win, slots);
-        if (!data.layers.length) { return []; }
+        if (!data.layers.length)
+        {
+            return [];
+        }
         const values = toKw(stackLayers(data.layers, slots));
         dropShortRuns(values);
         const peak = peakOf(values);
-        if (peak <= 0) { return []; }
+        if (peak <= 0)
+        {
+            return [];
+        }
         return [{ values, predicted: noPred(), peak, colour: { kind: 'token', token: 'home' } }];
     }
 
@@ -320,8 +428,14 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         const impStacked = cumulativeStrands(imp, toKw, slots);
         const expStacked = cumulativeStrands(exp, toKw, slots);
         let peak = 0;
-        for (const st of [...impStacked, ...expStacked]) { peak = Math.max(peak, peakOf(st.values)); }
-        if (peak <= 0) { return []; }
+        for (const st of [...impStacked, ...expStacked])
+        {
+            peak = Math.max(peak, peakOf(st.values));
+        }
+        if (peak <= 0)
+        {
+            return [];
+        }
         const out: ProfileStrand[] = [];
         const pushGrid = (stacked: { values: (number | null)[]; sourceIdx: number }[], layers: PeriodLayer[], dir: 'import' | 'export'): void =>
         {
@@ -330,7 +444,10 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
             for (const st of stacked)
             {
                 dropShortRuns(st.values);
-                if (!anyValue(st.values)) { continue; }
+                if (!anyValue(st.values))
+                {
+                    continue;
+                }
                 const colour: StrandColour = perSource ? { kind: 'grid', index: st.sourceIdx, dir } : { kind: 'token', token };
                 out.push({ values: st.values, predicted: noPred(), peak, colour });
             }
@@ -351,7 +468,10 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         const disStacked = cumulativeStrands(dis, toKw, slots);
         const chgStacked = cumulativeStrands(chg, toKw, slots);
         let peak = 0;
-        for (const st of [...disStacked, ...chgStacked]) { peak = Math.max(peak, peakOf(st.values)); }
+        for (const st of [...disStacked, ...chgStacked])
+        {
+            peak = Math.max(peak, peakOf(st.values));
+        }
 
         const out: ProfileStrand[] = [];
         if (peak > 0)
@@ -363,7 +483,10 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
                 for (const st of stacked)
                 {
                     dropShortRuns(st.values);
-                    if (!anyValue(st.values)) { continue; }
+                    if (!anyValue(st.values))
+                    {
+                        continue;
+                    }
                     const colour: StrandColour = perSource ? { kind: 'battery', index: st.sourceIdx, dir } : { kind: 'token', token };
                     out.push({ values: st.values, predicted: noPred(), peak, colour });
                 }
@@ -385,7 +508,10 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         for (const bank of banks)
         {
             const soc = socDay(bank, slots, dayStartMs);
-            if (anyValue(soc)) { out.push({ values: soc, predicted: noPred(), peak: 100, dashed: true, colour: { kind: 'flow', dir: socDir } }); }
+            if (anyValue(soc))
+            {
+                out.push({ values: soc, predicted: noPred(), peak: 100, dashed: true, colour: { kind: 'flow', dir: socDir } });
+            }
         }
         return out;
     }
@@ -393,9 +519,15 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
     if (isGroupTarget(target))
     {
         const store = host._unifiedStore;
-        if (!store) { return []; }
+        if (!store)
+        {
+            return [];
+        }
         const devs = groupDevices(host.config, host._energyDefaults, groupOfTarget(target));
-        if (!devs.length) { return []; }
+        if (!devs.length)
+        {
+            return [];
+        }
         //One strand per device, its recorder `change` series mapped onto the store grid as watts (magnitude), binned
         //to slot energy then back to average kW. Each device keeps its dashboard graph colour (by index).
         const built = devs.map((dev) =>
@@ -410,8 +542,17 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         //Shared peak across the group's devices, so a device that drew more stands taller than one that drew less,
         //on one scale rather than each filling its own height.
         let peak = 0;
-        for (const b of built) { const p = peakOf(b.values); if (p > peak) { peak = p; } }
-        if (peak <= 0) { return []; }
+        for (const b of built)
+        {
+            const p = peakOf(b.values); if (p > peak)
+            {
+                peak = p;
+            }
+        }
+        if (peak <= 0)
+        {
+            return [];
+        }
         return built
             .filter((b) => anyValue(b.values))
             .map((b) => ({ values: b.values, predicted: noPred(), peak, colour: { kind: 'device', index: b.index } as StrandColour }));
@@ -420,33 +561,63 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
     if (target === 'irradiance')
     {
         const store = host._unifiedStore;
-        if (!store) { return []; }
+        if (!store)
+        {
+            return [];
+        }
         //Only where the weather model reaches. Open-Meteo runs out around 16 days, and the month window is longer
         //and capped to hourly, so it carries no irradiance to draw - the same limit the irradiance chip honours by
         //dropping out of month mode. Gated on the mode's weather flag so the curve and the chip agree exactly.
-        if (!TIMELINE_MODES[host._timelineMode].weather) { return []; }
+        if (!TIMELINE_MODES[host._timelineMode].weather)
+        {
+            return [];
+        }
         //Average W/m2 per slot, forecast included (binSlotAvg is not clamped at now), on the strand's own peak like
         //every other day curve: a cloudy day fills its height and reads by SHAPE, rather than crawling along the
         //ground under a fixed 0..1000 scale the way the flat chart uses.
         const values = binSlotAvg(store, store.irradiance, slots, win);
         dropShortRuns(values);
         const peak = peakOf(values);
-        if (peak <= 0) { return []; }
+        if (peak <= 0)
+        {
+            return [];
+        }
         return [{ values, predicted: noPred(), peak, colour: { kind: 'token', token: 'irradiance' } }];
     }
 
     if (target === 'temperature')
     {
         const store = host._unifiedStore;
-        if (!store) { return []; }
-        if (!TIMELINE_MODES[host._timelineMode].weather) { return []; }
+        if (!store)
+        {
+            return [];
+        }
+        if (!TIMELINE_MODES[host._timelineMode].weather)
+        {
+            return [];
+        }
         //Signed, narrow-range metric: normalise the slot averages to the window's own min..max (peak 1) so the
         //strand reads by SHAPE, the same way the flat chart scales temperature. Flat/absent range -> no curve.
         const raw = binSlotAvg(store, store.temperature, slots, win);
         let mn = Infinity;
         let mx = -Infinity;
-        for (const v of raw) { if (v !== null && isFinite(v)) { if (v < mn) { mn = v; } if (v > mx) { mx = v; } } }
-        if (!isFinite(mn) || mx <= mn) { return []; }
+        for (const v of raw)
+        {
+            if (v !== null && isFinite(v))
+            {
+                if (v < mn)
+                {
+                    mn = v;
+                } if (v > mx)
+                {
+                    mx = v;
+                }
+            }
+        }
+        if (!isFinite(mn) || mx <= mn)
+        {
+            return [];
+        }
         const values = raw.map(v => (v === null || !isFinite(v)) ? null : (v - mn) / (mx - mn));
         dropShortRuns(values);
         return [{ values, predicted: noPred(), peak: 1, colour: { kind: 'token', token: 'temperature' } }];
@@ -455,13 +626,22 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
     if (target === 'humidity')
     {
         const store = host._unifiedStore;
-        if (!store) { return []; }
-        if (!TIMELINE_MODES[host._timelineMode].weather) { return []; }
+        if (!store)
+        {
+            return [];
+        }
+        if (!TIMELINE_MODES[host._timelineMode].weather)
+        {
+            return [];
+        }
         //Fixed 0..100 % scale (peak 1 = 100 %), so a humid day sits high and a dry one low on one honest axis.
         const raw = binSlotAvg(store, store.humidity, slots, win);
         const values = raw.map(v => (v === null || !isFinite(v)) ? null : Math.max(0, Math.min(1, v / 100)));
         dropShortRuns(values);
-        if (peakOf(values) <= 0) { return []; }
+        if (peakOf(values) <= 0)
+        {
+            return [];
+        }
         return [{ values, predicted: noPred(), peak: 1, colour: { kind: 'token', token: 'humidity' } }];
     }
 
@@ -485,22 +665,34 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
         else
         {
             const store = host._unifiedStore;
-            if (!store) { return []; }
+            if (!store)
+            {
+                return [];
+            }
             const impP = staticPrice(host._energyDefaults.gridImportPriceNumbers);
-            if (impP === null) { return []; }
+            if (impP === null)
+            {
+                return [];
+            }
             const expP = staticPrice(host._energyDefaults.gridExportPriceNumbers) ?? 0;
             const imp = binSlotAvg(store, store.gridImport, slots, win);
             const exp = binSlotAvg(store, store.gridExport, slots, win);
             values = imp.map((iv, i) =>
             {
                 const ev = exp[i];
-                if ((iv === null || !isFinite(iv)) && (ev === null || !isFinite(ev))) { return null; }
+                if ((iv === null || !isFinite(iv)) && (ev === null || !isFinite(ev)))
+                {
+                    return null;
+                }
                 return Math.max(0, ((iv ?? 0) * impP - (ev ?? 0) * expP) / 1000);
             });
         }
         dropShortRuns(values);
         const peak = peakOf(values);
-        if (peak <= 0) { return []; }
+        if (peak <= 0)
+        {
+            return [];
+        }
         return [{ values, predicted: noPred(), peak, colour: { kind: 'token', token: 'cost' } }];
     }
 

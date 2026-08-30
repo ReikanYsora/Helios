@@ -6,13 +6,25 @@ import { hexByte, mixHex } from './hex';
 //horizon, original colour in daylight.
 export function buildingColor(base: string, altitude: number): string
 {
-    if (altitude < -6) { return mixHex(base, '#0a0e1a', 0.85); }
+    if (altitude < -6)
+    {
+        return mixHex(base, '#0a0e1a', 0.85);
+    }
     const night = mixHex(base, '#0a0e1a', 0.85);
     const dusk  = mixHex(base, '#2a2540', 0.55);
     const warm  = mixHex(base, '#5a3220', 0.35);
-    if (altitude < 0)  { return mixHex(night, dusk, (altitude + 6) / 6); }
-    if (altitude < 6)  { return mixHex(dusk, warm, altitude / 6); }
-    if (altitude < 20) { return mixHex(warm, base, (altitude - 6) / 14); }
+    if (altitude < 0)
+    {
+        return mixHex(night, dusk, (altitude + 6) / 6);
+    }
+    if (altitude < 6)
+    {
+        return mixHex(dusk, warm, altitude / 6);
+    }
+    if (altitude < 20)
+    {
+        return mixHex(warm, base, (altitude - 6) / 14);
+    }
     return base;
 }
 
@@ -30,7 +42,10 @@ export function tintedRgba(base: string, altitude: number, opacity: number): str
 //definition); `brightness` is a per-channel multiply. Identity (1,1) returns the colour untouched.
 export function gradeColor(hex: string, sat: number, bright: number): string
 {
-    if (sat === 1 && bright === 1) { return hex; }
+    if (sat === 1 && bright === 1)
+    {
+        return hex;
+    }
     const r = hexByte(hex, 1);
     const g = hexByte(hex, 3);
     const b = hexByte(hex, 5);

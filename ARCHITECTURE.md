@@ -87,6 +87,11 @@ cached features whenever it comes back from a pause: a browser is free to drop a
 canvas's backing store while a tab sits in the background, and nothing in the draw
 loop would ever put those pixels back.
 
+Features are grouped by layer once, right after the fetch, not re-filtered from
+the flat array on every paint: a repaint (theme change, or every camera move on
+the projected fallback) walks each layer's own slice instead of scanning the
+whole tile set once per layer.
+
 That CSS 3D transform is the fast path, but some hardware can't composite it: entry
 Android GPUs corrupt a GPU-drawn canvas into colored noise, and a few old WebViews
 mis-layer the tilted plane. `renderer.ts` sniffs those (GPU string, texture cap, UA)
@@ -147,8 +152,14 @@ Three passes turn raw tile rings into a scene that paints correctly:
 - **Paint order.** With no z-buffer, order is everything. For each pair of nearby
   buildings a **separating plane** is sought between their real outlines; that plane
   says which of the two is in front from the current eye point. The pairwise
-  relations are topologically sorted (Kahn) into the paint order. This is exact for
-  vertical prisms on a common ground plane, which is what the scene is.
+  relations are topologically sorted (Kahn) into the paint order, HOME INCLUDED: one
+  face list for every building, painted far-to-near as a single stable sort (a
+  nearer neighbour occludes the home exactly as it would occlude another neighbour,
+  and vice versa), not two separate always-home-on-top groups. This is exact for
+  vertical prisms on a common ground plane, which is what the scene is. Neighbour
+  opacity is baked into each face's own fill/stroke as rgba rather than a wrapping
+  `<g opacity>`, since the home is now free to interleave between neighbour faces in
+  the paint order.
 
 Walls are shaded by Lambert from the footprint's own winding: a face square on to
 the sun takes the lit tint, one turned away falls to the ambient (sky) tint.
@@ -208,7 +219,14 @@ for the screen-space anchors of the home, the chip cluster and the sun scene eve
 frame (`onMapTransform`), resolves each chip's scrub-aware value, and returns the
 absolutely-positioned chips + SVG leaders at those coordinates. Each chip has a
 leader to the home with an animated **bead** whose direction and speed encode the
-live flow. Clicking a chip points the timeline at that metric.
+live flow: a native SVG SMIL `<animateMotion>`, not a JS/CSS animation. Its
+`dur`/`path`/`keyPoints` are wrapped in Lit's `guard()`, keyed on the handful of
+values that actually define the bead - rewriting a running SMIL element's
+attributes re-arms its animation clock even when the written value is identical,
+real main-thread cost that has nothing to do with scene size, and `render()` here
+runs on every `hass` change (`refreshHud`'s own projections use the same
+equal-content-keeps-identity guard for the same reason, see `hud.ts`). Clicking a
+chip points the timeline at that metric.
 
 **Tapping a chip** opens a compact **detail panel** top-right
 (`hud/detail-panel.ts`), tinted in the active chip's live colour: it aggregates
@@ -318,9 +336,12 @@ and exponential back-off on HTTP 429.
 `weatherLayers()` maps the resolved weather to independent overlay strengths: the
 cloud cover sets the sun/grey grade (the sun also fading near the horizon by
 altitude), and rain, snow and thunderstorm stack on top. The overlay is CSS
-layers plus two particle canvases (`WeatherRain`, `WeatherSnow`) and a scripted
-lightning flash (`WeatherStorm`), driven by `--wx-*` custom properties the card
-sets from the layer strengths. It sits between the scene and the chips, so weather
+layers plus two particle canvases (`WeatherRain`, `WeatherSnow`, both extending
+a shared `WeatherParticleFx` base that owns the canvas, DPR-aware resize and the
+start/stop lifecycle, leaving each subclass only its particle shape and per-tick
+physics) and a scripted lightning flash (`WeatherStorm`, a different enough shape
+- no canvas, CSS-var driven - that it stays outside that shared base), driven by
+`--wx-*` custom properties the card sets from the layer strengths. It sits between the scene and the chips, so weather
 tints the map, never the data. The scene grade itself (saturation + brightness for
 cloud cover) is **baked into the ground and building paint** by the renderer
 (`SceneRenderer.setWeatherGrade`), not applied as a CSS `filter` on the map layer:
@@ -408,6 +429,15 @@ citizen and a stalled fetch never blanks the card:
   own ids (`mergeChangeSeries`). The home-consumption identity (`production +
   import - export - net battery`, clamped) lives once in
   `core/energy.ts`.
+* **One raw-history parser for the sensors that need it**: battery, irradiance and
+  the weather overrides all fall back to `history`/`history_during_period` when a
+  sensor carries no long-term statistics, decoding the same compact/verbose payload
+  shape (`s`/`state`, `lu`/`lc`/`last_updated`/`last_changed`) with only the
+  value-extraction step differing per source; one shared parser (magnitude-checked
+  ms-vs-seconds timestamps, carrying the last timestamp forward across a compacted
+  repeat) backs all three. Irradiance and the weather overrides also share the
+  "try `statistics_during_period`, fall back to raw history on an empty result"
+  fetch shape that wraps it.
 
 ---
 

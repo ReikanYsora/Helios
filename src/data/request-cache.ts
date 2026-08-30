@@ -9,7 +9,8 @@ export class RequestCache<V>
 {
     private readonly _entries = new Map<string, { ts: number; result?: V; inflight?: Promise<V> }>();
 
-    constructor(private readonly _ttlMs: number) {}
+    constructor(private readonly _ttlMs: number)
+    {}
 
     //Fresh cached value, the in-flight promise for the same key, or run the fetcher and cache its result.
     get(key: string, fetcher: () => Promise<V>): Promise<V>
@@ -19,8 +20,14 @@ export class RequestCache<V>
         const cached = this._entries.get(key);
         if (cached)
         {
-            if (cached.inflight)                 { return cached.inflight; }
-            if (nowMs - cached.ts < this._ttlMs) { return Promise.resolve(cached.result as V); }
+            if (cached.inflight)
+            {
+                return cached.inflight;
+            }
+            if (nowMs - cached.ts < this._ttlMs)
+            {
+                return Promise.resolve(cached.result as V);
+            }
         }
         const inflight = fetcher();
         this._entries.set(key, { ts: nowMs, inflight });

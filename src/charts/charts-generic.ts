@@ -3,14 +3,14 @@
 
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
-import { ENERGY_COLOR, lerpHexToward, cssHex, deviceColorByIndex, energySolarColor, energyGridColor, energyBatteryColor } from '../core/format/format';
+import { cssHex, deviceColorByIndex, energySolarColor, energyGridColor, energyBatteryColor } from '../core/format/format';
 import { chipSlotColor } from '../core/config/chip-appearance';
 import { groupDevices, groupColorHex } from '../data/sources/device-consumption';
 import { consumptionLoad } from '../core/energy';
 import { staticPrice, costRateAt } from '../data/sources/cost';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
-import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark } from './charts';
+import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark, irradianceForecastColor, cloudBandColors, hasMultiSourceBreakdown } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -32,21 +32,46 @@ export function renderBottomChart(host: ChartHost): TemplateResult
 
 
 //Accent colour for the active target, shared by chart border and active chip so re-targeting reads as one gesture.
-//Production/irradiance/cloud/soc are fixed; grid/battery take the colour of whichever side dominates the window.
+//Every target but grid/battery takes a fixed chip-slot colour (production, consumption, irradiance, temperature,
+//humidity, cost, battery-soc, groups); grid/battery instead take the colour of whichever side dominates the window.
 //`forTarget` asks for a metric other than the active chip's, so anything drawing a second metric alongside the
 //chart (the day curve) reads its colour off this one rule instead of keeping a private copy that drifts.
 export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): string
 {
     const el = host as unknown as Element; //live HA theme-token colour resolution
     const target = forTarget ?? host._chartTarget ?? 'production';
-    if (target === 'production') { return chipSlotColor(el, host.config, 'production'); }
-    if (target === 'consumption'){ return chipSlotColor(el, host.config, 'home'); }
-    if (target === 'irradiance') { return chipSlotColor(el, host.config, 'irradiance'); }
-    if (target === 'temperature'){ return chipSlotColor(el, host.config, 'temperature'); }
-    if (target === 'humidity')   { return chipSlotColor(el, host.config, 'humidity'); }
-    if (target === 'cost')       { return chipSlotColor(el, host.config, 'cost'); }
-    if (target === 'battery-soc'){ return chipSlotColor(el, host.config, 'batteryDischarge'); }
-    if (isGroupTarget(target)) { return groupColorHex(el, host.config, groupOfTarget(target)); }
+    if (target === 'production')
+    {
+        return chipSlotColor(el, host.config, 'production');
+    }
+    if (target === 'consumption')
+    {
+        return chipSlotColor(el, host.config, 'home');
+    }
+    if (target === 'irradiance')
+    {
+        return chipSlotColor(el, host.config, 'irradiance');
+    }
+    if (target === 'temperature')
+    {
+        return chipSlotColor(el, host.config, 'temperature');
+    }
+    if (target === 'humidity')
+    {
+        return chipSlotColor(el, host.config, 'humidity');
+    }
+    if (target === 'cost')
+    {
+        return chipSlotColor(el, host.config, 'cost');
+    }
+    if (target === 'battery-soc')
+    {
+        return chipSlotColor(el, host.config, 'batteryDischarge');
+    }
+    if (isGroupTarget(target))
+    {
+        return groupColorHex(el, host.config, groupOfTarget(target));
+    }
     const store = host._unifiedStore;
     const range = host._timeRange;
     if (!store || !range)
@@ -61,9 +86,15 @@ export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): stri
         for (let i = 0; i < arr.length; i++)
         {
             const raw = arr[i];
-            if (raw === null || !isFinite(raw)) { continue; }
+            if (raw === null || !isFinite(raw))
+            {
+                continue;
+            }
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-            if (tMs < startMs || tMs > endMs) { continue; }
+            if (tMs < startMs || tMs > endMs)
+            {
+                continue;
+            }
             s += map ? map(raw) : raw;
         }
         return s;
@@ -87,11 +118,26 @@ export function chartAccentColor(host: ChartHost, forTarget?: ChartTarget): stri
 export function resolveStrandColour(host: ChartHost, sc: StrandColour): { colour: string; segColours?: (string | null)[] }
 {
     const el = host as unknown as Element; //live HA theme-token colour resolution
-    if (sc.kind === 'token')  { return { colour: chipSlotColor(el, host.config, sc.token) }; }
-    if (sc.kind === 'device') { return { colour: deviceColorByIndex(el, sc.index) }; }
-    if (sc.kind === 'solar')  { return { colour: energySolarColor(el, chartIsDark(host), sc.index) }; }
-    if (sc.kind === 'grid')    { return { colour: energyGridColor(el, chartIsDark(host), sc.index, sc.dir) }; }
-    if (sc.kind === 'battery') { return { colour: energyBatteryColor(el, chartIsDark(host), sc.index, sc.dir) }; }
+    if (sc.kind === 'token')
+    {
+        return { colour: chipSlotColor(el, host.config, sc.token) };
+    }
+    if (sc.kind === 'device')
+    {
+        return { colour: deviceColorByIndex(el, sc.index) };
+    }
+    if (sc.kind === 'solar')
+    {
+        return { colour: energySolarColor(el, chartIsDark(host), sc.index) };
+    }
+    if (sc.kind === 'grid')
+    {
+        return { colour: energyGridColor(el, chartIsDark(host), sc.index, sc.dir) };
+    }
+    if (sc.kind === 'battery')
+    {
+        return { colour: energyBatteryColor(el, chartIsDark(host), sc.index, sc.dir) };
+    }
     const chg  = chipSlotColor(el, host.config, 'batteryCharge');
     const dis  = chipSlotColor(el, host.config, 'batteryDischarge');
     const idle = cssHex(el, '--secondary-text-color', '#9e9e9e');
@@ -130,7 +176,10 @@ function stackedLines(
     colour: (idx: number) => string
 ): ChartLine[] | null
 {
-    if (ids.length < 2 || !ids.every((id) => map.has(id))) { return null; }
+    if (!hasMultiSourceBreakdown(ids, map))
+    {
+        return null;
+    }
     const nowMs   = Date.now();
     const running = new Array<number | null>(store.bucketsTotal).fill(null);
     const lines: ChartLine[] = [];
@@ -140,7 +189,10 @@ function stackedLines(
         for (let i = 0; i < store.bucketsTotal; i++)
         {
             const v = w[i];
-            if (v === null) { continue; }
+            if (v === null)
+            {
+                continue;
+            }
             running[i] = (running[i] ?? 0) + Math.max(0, v);
         }
         lines.push({ pts: toPts(running.slice()), color: colour(s) });
@@ -148,10 +200,45 @@ function stackedLines(
     return lines.reverse();
 }
 
-//Build the drawable series (plus the SoC-hover source + a fixed Y max where the target pins one) for a chart
-//target. Split out of renderTargetChart so each target's branch stays independently readable; the caller owns
-//scaling, path building and hover.
+//Memo for buildTargetSeries: renderTargetChart reruns on every hover-cursor render (the pointer position never
+//affects which series get drawn, only the hover dots), so recomputing the full O(bucketsTotal) series on each of
+//those is wasted, same reasoning as computeDailyKwhTotals below. Keyed on every input the builder actually reads:
+//target, visible range, the unified store (a fresh reference each time it rebuilds) and the other host series/maps
+//it consults per target - all of which Lit reassigns rather than mutates in place on a real change, so reference
+//equality alone is exact, no content hashing needed. Theme polarity is included too (colours are baked into the
+//cached lines) plus a coarse freshness term as a safety net for a live theme-token edit that doesn't flip
+//dark/light. Single slot, like the memo below: cheap, and a miss just costs one extra rebuild.
+let _targetSeriesInputs: readonly unknown[] | null = null;
+let _targetSeriesResult: { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null } | null = null;
+
 function buildTargetSeries(
+    host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
+): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
+{
+    const inputs: readonly unknown[] = [
+        host, target, ctx.store, ctx.startMs, ctx.endMsAbs, chartIsDark(host), host.config,
+        Math.floor(Date.now() / 10000),
+        host._batterySocHistory, host._batterySocPerBankHistory,
+        host._costImportSeries, host._costExportSeries,
+        host._gridImportChangeSeriesPerEntity, host._gridExportChangeSeriesPerEntity,
+        host._batteryChargeChangeSeriesPerEntity, host._batteryDischargeChangeSeriesPerEntity,
+        host._deviceChangeSeries,
+    ];
+    const prevInputs = _targetSeriesInputs;
+    const prevResult = _targetSeriesResult;
+    if (prevInputs && prevResult
+        && prevInputs.length === inputs.length
+        && inputs.every((v, i) => v === prevInputs[i]))
+    {
+        return prevResult;
+    }
+    const out = buildTargetSeriesUncached(host, target, ctx);
+    _targetSeriesInputs = inputs;
+    _targetSeriesResult = out;
+    return out;
+}
+
+function buildTargetSeriesUncached(
     host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
 ): { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null }
 {
@@ -174,9 +261,15 @@ function buildTargetSeries(
             const ge = store.gridExport[i];
             const b  = store.battery[i];
             //Skip buckets with no measured data, so a gap reads as a gap rather than a flat 0.
-            if (p === null && gi === null && ge === null && b === null) { continue; }
+            if (p === null && gi === null && ge === null && b === null)
+            {
+                continue;
+            }
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-            if (tMs < startMs || tMs > endMsAbs) { continue; }
+            if (tMs < startMs || tMs > endMsAbs)
+            {
+                continue;
+            }
             const v = consumptionLoad(p ?? 0, gi ?? 0, ge ?? 0, b ?? 0);
             cons.push({ t: tMs, v });
         }
@@ -211,7 +304,16 @@ function buildTargetSeries(
         //takes the battery FLOW colour (HA charge/discharge) at each instant, so a line runs pink while its pack
         //is charging and teal while discharging, tying the level back to the beams above it.
         let powerMax = 0;
-        for (const s of series) { for (const p of s.pts) { if (p.v > powerMax) { powerMax = p.v; } } }
+        for (const s of series)
+        {
+            for (const p of s.pts)
+            {
+                if (p.v > powerMax)
+                {
+                    powerMax = p.v;
+                }
+            }
+        }
         const banks = host._batterySocPerBankHistory.length > 0
             ? host._batterySocPerBankHistory
             : (host._batterySocHistory ? [host._batterySocHistory] : []);
@@ -227,7 +329,10 @@ function buildTargetSeries(
             {
                 const idx = Math.floor(((aMs + bMs) / 2 - store.storeStartMs) / store.stepMs);
                 const p   = (idx >= 0 && idx < store.battery.length) ? store.battery[idx] : null;
-                if (p === null || Math.abs(p) < 5) { return socIdleCol; }
+                if (p === null || Math.abs(p) < 5)
+                {
+                    return socIdleCol;
+                }
                 return p > 0 ? socChargeCol : socDischargeCol;
             };
             const socBanks: { t: number; v: number }[][] = [];
@@ -237,18 +342,30 @@ function buildTargetSeries(
                 for (let i = 0; i < bank.times.length; i++)
                 {
                     const tMs = bank.times[i].getTime();
-                    if (tMs < startMs || tMs > endMsAbs) { continue; }
+                    if (tMs < startMs || tMs > endMsAbs)
+                    {
+                        continue;
+                    }
                     const soc = bank.values[i];
-                    if (soc === undefined || !isFinite(soc)) { continue; }
+                    if (soc === undefined || !isFinite(soc))
+                    {
+                        continue;
+                    }
                     pts.push({ t: tMs, v: Math.max(0, Math.min(100, soc)) * socScale });
                 }
                 //Split the bank line into runs of same flow colour so a single line carries several colours along
                 //its charge/discharge portions. Adjacent runs share their boundary vertex, keeping the line gapless.
-                if (pts.length < 2) { continue; }
+                if (pts.length < 2)
+                {
+                    continue;
+                }
                 socBanks.push(pts);
                 const segCount = pts.length - 1;
                 const segCols: string[] = [];
-                for (let i = 0; i < segCount; i++) { segCols.push(flowColorAt(pts[i].t, pts[i + 1].t)); }
+                for (let i = 0; i < segCount; i++)
+                {
+                    segCols.push(flowColorAt(pts[i].t, pts[i + 1].t));
+                }
                 let runStart = 0;
                 for (let i = 1; i <= segCount; i++)
                 {
@@ -261,7 +378,10 @@ function buildTargetSeries(
                     }
                 }
             }
-            if (socBanks.length > 0) { socHover = { banks: socBanks, flowColorAt }; }
+            if (socBanks.length > 0)
+            {
+                socHover = { banks: socBanks, flowColorAt };
+            }
             fixedMax = powerMax > 0 ? powerMax : 100;
         }
     }
@@ -276,9 +396,15 @@ function buildTargetSeries(
             for (let i = 0; i < hist.times.length; i++)
             {
                 const tMs = hist.times[i].getTime();
-                if (tMs < startMs || tMs > endMsAbs) { continue; }
+                if (tMs < startMs || tMs > endMsAbs)
+                {
+                    continue;
+                }
                 const v = hist.values[i];
-                if (v === undefined || !isFinite(v)) { continue; }
+                if (v === undefined || !isFinite(v))
+                {
+                    continue;
+                }
                 pts.push({ t: tMs, v });
             }
         }
@@ -307,8 +433,20 @@ function buildTargetSeries(
         series = [{ pts, color: chipSlotColor(el, host.config, 'temperature') }];
         let mn = Infinity;
         let mx = -Infinity;
-        for (const p of pts) { if (p.v < mn) { mn = p.v; } if (p.v > mx) { mx = p.v; } }
-        if (!isFinite(mn) || !isFinite(mx)) { mn = 0; mx = 1; }
+        for (const p of pts)
+        {
+            if (p.v < mn)
+            {
+                mn = p.v;
+            } if (p.v > mx)
+            {
+                mx = p.v;
+            }
+        }
+        if (!isFinite(mn) || !isFinite(mx))
+        {
+            mn = 0; mx = 1;
+        }
         const pad = Math.max(1, (mx - mn) * 0.1);
         fixedMin = mn - pad;
         fixedMax = mx + pad;
@@ -335,7 +473,10 @@ function buildTargetSeries(
             for (let i = 0; i < store.gridImport.length; i++)
             {
                 const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-                if (tMs < startMs || tMs > endMsAbs) { continue; }
+                if (tMs < startMs || tMs > endMsAbs)
+                {
+                    continue;
+                }
                 let v: number | null;
                 if (hasStats)
                 {
@@ -347,14 +488,26 @@ function buildTargetSeries(
                     const ge = store.gridExport[i];
                     v = (gi === null && ge === null) ? null : ((gi ?? 0) * (impP as number) - (ge ?? 0) * expP) / 1000;
                 }
-                if (v === null) { continue; }
+                if (v === null)
+                {
+                    continue;
+                }
                 pts.push({ t: tMs, v });
             }
         }
         series = [{ pts, color: chipSlotColor(el, host.config, 'cost') }];
         let mn = 0;
         let mx = 0;
-        for (const p of pts) { if (p.v < mn) { mn = p.v; } if (p.v > mx) { mx = p.v; } }
+        for (const p of pts)
+        {
+            if (p.v < mn)
+            {
+                mn = p.v;
+            } if (p.v > mx)
+            {
+                mx = p.v;
+            }
+        }
         fixedMin = mn;
         fixedMax = mx > 0 ? mx : 0;
     }
@@ -397,9 +550,15 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         for (let i = 0; i < arr.length; i++)
         {
             const raw = arr[i];
-            if (raw === null || !isFinite(raw)) { continue; }
+            if (raw === null || !isFinite(raw))
+            {
+                continue;
+            }
             const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-            if (tMs < startMs || tMs > endMsAbs) { continue; }
+            if (tMs < startMs || tMs > endMsAbs)
+            {
+                continue;
+            }
             out.push({ t: tMs, v: map ? map(raw) : raw });
         }
         return out;
@@ -414,19 +573,37 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     if (yMax <= yMin)
     {
         yMax = yMin + 1;
-        for (const s of series) { for (const p of s.pts) { if (p.v > yMax) { yMax = p.v; } } }
+        for (const s of series)
+        {
+            for (const p of s.pts)
+            {
+                if (p.v > yMax)
+                {
+                    yMax = p.v;
+                }
+            }
+        }
     }
     const yOf = makeYOf(yMin, yMax);
+    //Area fill closes at the screen Y of value 0, not unconditionally at the chart's bottom edge: a signed metric
+    //(cost, temperature) that dips below zero should shade the gap BETWEEN the curve and zero, not keep growing
+    //toward the floor as if the value stayed positive. Clamped into the drawable band so an all-positive or
+    //all-negative series still closes at its own edge exactly as before (every other target has fixedMin 0, where
+    //this clamps to H regardless, so this is a no-op change for them).
+    const zeroY = Math.max(0, Math.min(H, yOf(0)));
 
     const drawn = series.map(s =>
     {
-        if (s.pts.length < 2) { return { area: '', line: '', color: s.color, dashed: !!s.dashed }; }
+        if (s.pts.length < 2)
+        {
+            return { area: '', line: '', color: s.color, dashed: !!s.dashed };
+        }
         const pp = s.pts.map(p => `${xOf(p.t).toFixed(2)},${yOf(p.v).toFixed(2)}`);
         const x0 = xOf(s.pts[0].t);
         const xN = xOf(s.pts[s.pts.length - 1].t);
         return {
             //Line-only series (per-bank SoC) carry no filled area.
-            area:  s.lineOnly ? '' : `M ${x0},${H} L ${pp.join(' L ')} L ${xN},${H} Z`,
+            area:  s.lineOnly ? '' : `M ${x0},${zeroY} L ${pp.join(' L ')} L ${xN},${zeroY} Z`,
             line:  `M ${pp.join(' L ')}`,
             color: s.color,
             dashed: !!s.dashed,
@@ -449,11 +626,17 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         for (let i = 0; i < cs.times.length; i++)
         {
             const tMs = cs.times[i].getTime();
-            if (tMs < startMs || tMs > endMsAbs) { continue; }
+            if (tMs < startMs || tMs > endMsAbs)
+            {
+                continue;
+            }
             const lo = cs.cloudLow[i];
             const mi = cs.cloudMid[i];
             const hi = cs.cloudHigh[i];
-            if (!(isFinite(lo) || isFinite(mi) || isFinite(hi))) { continue; }
+            if (!(isFinite(lo) || isFinite(mi) || isFinite(hi)))
+            {
+                continue;
+            }
             bands.push({
                 t:  tMs,
                 lo: isFinite(lo) ? Math.max(0, lo) : 0,
@@ -464,10 +647,11 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         if (bands.length >= 2)
         {
             const yOfPct = makeYOf(0, 100);
+            const cloud  = cloudBandColors(el);
             const layers: { pick: (b: { lo: number; mi: number; hi: number }) => number; color: string }[] = [
-                { pick: b => b.lo, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#ffffff', 0.55) },
-                { pick: b => b.mi, color: ENERGY_COLOR.cloud(el) },
-                { pick: b => b.hi, color: lerpHexToward(ENERGY_COLOR.cloud(el), '#000000', 0.50) },
+                { pick: b => b.lo, color: cloud.low },
+                { pick: b => b.mi, color: cloud.mid },
+                { pick: b => b.hi, color: cloud.high },
             ];
             const lower = new Array<number>(bands.length).fill(0);
             for (const layer of layers)
@@ -504,9 +688,15 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         for (let i = 0; i < slice.times.length; i++)
         {
             const v = slice.forecast[i];
-            if (v === null || !isFinite(v) || v <= 0) { continue; }
+            if (v === null || !isFinite(v) || v <= 0)
+            {
+                continue;
+            }
             pts.push({ t: slice.times[i], v });
-            if (v > fMax) { fMax = v; }
+            if (v > fMax)
+            {
+                fMax = v;
+            }
         }
         if (pts.length >= 2 && fMax > 0)
         {
@@ -518,11 +708,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //Forecast dash on the irradiance view. It rides the near-identical shape of the amber irradiance area, so a
     //plain predicted shade blends in: push the contrast harder (toward white on dark, black on light) than the
     //production line so the dashed silhouette clearly separates from the fill under it.
-    const isDarkTheme  = chartIsDark(host);
-    const irradColor = chipSlotColor(el, host.config, 'irradiance');
-    const forecastColor = isDarkTheme
-        ? lerpHexToward(irradColor, '#ffffff', 0.75)
-        : lerpHexToward(irradColor, '#000000', 0.55);
+    const forecastColor = irradianceForecastColor(host);
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
     const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
@@ -538,9 +724,15 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
         for (const s of series)
         {
-            if (s.pts.length < 1 || s.noHoverDot) { continue; }
+            if (s.pts.length < 1 || s.noHoverDot)
+            {
+                continue;
+            }
             const v = interpAt(s.pts.map(p => new Date(p.t)), s.pts.map(p => p.v), hoverMs);
-            if (!isFinite(v)) { continue; }
+            if (!isFinite(v))
+            {
+                continue;
+            }
             //Plot the dot at the real value so it rides the curve. yOf already clamps to the axis, so the old
             //Math.max(0, v) only detached the dot from the curve on signed targets (temperature below 0, cost when earning).
             hoverDots.push({ y: yOf(v), color: s.color });
@@ -551,9 +743,15 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
         {
             for (const pts of socHover.banks)
             {
-                if (pts.length < 1) { continue; }
+                if (pts.length < 1)
+                {
+                    continue;
+                }
                 const v = interpAt(pts.map(p => new Date(p.t)), pts.map(p => p.v), hoverMs);
-                if (!isFinite(v)) { continue; }
+                if (!isFinite(v))
+                {
+                    continue;
+                }
                 hoverDots.push({ y: yOf(v), color: socHover.flowColorAt(hoverMs, hoverMs) });
                 showHover = true;
             }
@@ -585,7 +783,10 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             const present = [isFinite(lo), isFinite(mi), isFinite(hi)];
             for (let k = 0; k < 3; k++)
             {
-                if (!present[k]) { continue; }
+                if (!present[k])
+                {
+                    continue;
+                }
                 hoverDots.push({ y: cloudHover.yOfPct(tops[k]), color: cloudHover.colors[k] });
                 showHover = true;
             }
@@ -707,7 +908,10 @@ let _dailyTotalsVal: Map<number, number> | null = null;
 function dailyTotalsKey(host: ChartHost): string
 {
     const r = host._timeRange;
-    if (!r) { return 'norange'; }
+    if (!r)
+    {
+        return 'norange';
+    }
     const pv     = host._pvChangeSeries;
     const pvLast = pv && pv.length ? pv[pv.length - 1] : null;
     return `${r.start.getTime()}|${r.end.getTime()}`
@@ -723,7 +927,10 @@ function dailyTotalsKey(host: ChartHost): string
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 {
     const key = dailyTotalsKey(host);
-    if (key === _dailyTotalsKey && _dailyTotalsVal) { return _dailyTotalsVal; }
+    if (key === _dailyTotalsKey && _dailyTotalsVal)
+    {
+        return _dailyTotalsVal;
+    }
     const out = computeDailyKwhTotalsUncached(host);
     _dailyTotalsKey = key;
     _dailyTotalsVal = out;
@@ -781,10 +988,19 @@ function computeDailyKwhTotalsUncached(host: ChartHost): Map<number, number>
         for (let i = 0; i < store.bucketsTotal; i++)
         {
             const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
-            if (mid < startMs || mid > endMsAbs) { continue; }
-            if (mid < nowMs) { continue; }   //past covered by Pass 1
+            if (mid < startMs || mid > endMsAbs)
+            {
+                continue;
+            }
+            if (mid < nowMs)
+            {
+                continue;
+            }   //past covered by Pass 1
             const w = store.forecast[i];
-            if (w === null || !isFinite(w) || w <= 0) { continue; }
+            if (w === null || !isFinite(w) || w <= 0)
+            {
+                continue;
+            }
             const dk = dayKey(mid);
             out.set(dk, (out.get(dk) ?? 0) + w * stepH / 1000);
         }

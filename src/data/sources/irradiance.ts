@@ -10,13 +10,10 @@
 import type { HassLike } from '../../core/ha-types';
 import type { HeliosConfig } from '../../core/config/helios-config';
 import type { HeliosEngine } from '../../scene/helios-engine';
-import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
-import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
-import { warnOnce } from '../log';
 import { quantizedAnchorMs } from '../source-fetch';
-import { parseStatBoundaryLoose } from './energy-stats';
-import { IRRADIANCE_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
+import { parseStatBoundaryLoose, parseRawHistorySeries, fetchStatsOrRawHistory } from './energy-stats';
+import { IRRADIANCE_CACHE_TTL_MS, HOUR_MS } from '../../core/config/constants';
 
 
 // Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip;
@@ -144,8 +141,14 @@ export function refreshIrradiance(host: IrradianceHost): void
     const durableKey = `irr:${entity}`;
     host._irradianceFetching = true;
     void _irradianceCache.get(fetchKey, () => fetchIrradiance(host.hass, entity, fetchStart, host._timeRange!.end, durableKey))
-        .then(h => { host._irradianceHistory = h ?? { times: [], values: [] }; pushIrradianceToEngine(host); })
-        .finally(() => { host._irradianceFetching = false; });
+        .then(h =>
+        {
+            host._irradianceHistory = h ?? { times: [], values: [] }; pushIrradianceToEngine(host);
+        })
+        .finally(() =>
+        {
+            host._irradianceFetching = false;
+        });
 }
 
 
@@ -208,11 +211,13 @@ export function pushIrradianceToEngine(host: IrradianceHost): void
 }
 
 
-// Pure irradiance history fetcher: no host mutation, no fetching flag, no module cache write, and it does NOT push to the
-// engine (the caller does that in the `.then`, since the engine owns the merged series). Defensive parsing across HA's
-// compaction / minimal_response variants; W/m² values are taken as-is, with no normalisation. Returns the fresh series on
-// success, the last-good durable copy on a failed fetch (so the curve survives an HA restart / timeout), or an empty
-// series for an empty window.
+// Irradiance history fetch: the shared single-entity stats-then-raw fetch (energy-stats.ts). Statistics
+// (`statistics_during_period` 'mean') first, since HA-convention irradiance sensors expose `state_class: measurement`
+// and land in LTS automatically at near-zero cost even at high frequency; falls back to raw history for non-LTS
+// custom sensors. W/m² values are taken as-is, with no normalisation. Returns the fresh series on success, the
+// last-good durable copy on a failed fetch (so the curve survives an HA restart / timeout), or an empty series for
+// an empty window; does NOT push to the engine (the caller does that in the `.then`, since the engine owns the
+// merged series).
 export async function fetchIrradiance(
     hass:       HassLike,
     entityId:   string,
@@ -221,128 +226,25 @@ export async function fetchIrradiance(
     durableKey: string,
 ): Promise<IrradianceHistory | null>
 {
-    if (!hass?.callWS)
-    {
-        return null;
-    }
-    try
-    {
-        const now = new Date();
-        const fetchEnd = end > now ? now : end;
-        if (start >= fetchEnd)
-        {
-            return { times: [], values: [] };
-        }
-
-        // Try statistics first. HA-convention irradiance sensors expose `state_class: measurement` and land in LTS automatically,
-        // so the stats path scales to high-frequency feeds at near-zero cost. Falls back to raw history for non-LTS custom sensors,
-        // at the cost of recorder bandwidth on the slim window.
-        let history: IrradianceHistory = { times: [], values: [] };
-        const statsResult: any = await callWS<any>(hass, {
-            type:           'recorder/statistics_during_period',
-            start_time:     start.toISOString(),
-            end_time:       fetchEnd.toISOString(),
-            statistic_ids:  [entityId],
-            period:         '5minute',
-            // Mean only. The parser refuses the cumulative `state` field (see parseIrradianceStats). Cumulative-counter entities
-            // land empty here and the raw-history fallback below takes over.
-            types:          ['mean'],
-        });
-        const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
-        if (statsArr.length > 0)
-        {
-            history = parseIrradianceStats(statsArr);
-        }
-        else
-        {
-            const rawResult: any = await callWS<any>(hass, {
-                type:                     'history/history_during_period',
-                start_time:               start.toISOString(),
-                end_time:                 fetchEnd.toISOString(),
-                entity_ids:               [entityId],
-                minimal_response:         true,
-                no_attributes:            true,
-                significant_changes_only: true,
-            });
-            history = parseRawIrradianceHistory((rawResult && rawResult[entityId]) ?? []);
-        }
-
-        // Persist the last-good series so a failed fetch on the next load restores it instead of blanking.
-        saveDurableSeries(durableKey, history);
-        return history;
-    }
-    catch (_e)
-    {
-        // Fetch timed out or failed (HA restart, recorder stall): restore the last-good durable series so the engine keeps
-        // real past irradiance rather than blanking back to Open-Meteo.
-        warnOnce('irradiance-fetch', 'irradiance fetch failed; showing cached data until it recovers');
-        return loadDurableSeries(durableKey, DAY_MS);
-    }
+    return fetchStatsOrRawHistory(hass, entityId, start, end, durableKey, {
+        parseStats:  parseIrradianceStats,
+        parseRaw:    parseRawIrradianceHistory,
+        warnKey:     'irradiance-fetch',
+        // Fetch timed out or failed (HA restart, recorder stall): restore the last-good durable series so the engine
+        // keeps real past irradiance rather than blanking back to Open-Meteo.
+        warnMessage: 'irradiance fetch failed; showing cached data until it recovers',
+    });
 }
 
 
-// Raw-history parser, the fallback when statistics is empty. Tolerates the compact `s`/`lu` and verbose `state`/`last_updated`
-// shapes, drops `unavailable`/`unknown`/empty samples, and falls back to the previous timestamp on a missing `lu` (HA compaction
-// can omit it on consecutive identical samples).
+// Raw-history parser, the fallback when statistics is empty, via the shared per-entity parser (energy-stats.ts).
+// Refuses a negative reading (irradiance is never negative) on top of the shared compact/verbose state + timestamp
+// handling.
 function parseRawIrradianceHistory(arr: any[]): IrradianceHistory
 {
-    const times:  Date[]   = [];
-    const values: number[] = [];
-    let lastTsMs: number | null = null;
-
-    for (const item of arr)
+    return parseRawHistorySeries(arr, (s) =>
     {
-        const sRaw = item?.s ?? item?.state;
-        if (sRaw === null
-            || sRaw === undefined
-            || sRaw === 'unavailable'
-            || sRaw === 'unknown'
-            || sRaw === '')
-        {
-            continue;
-        }
-        const v = parseFloat(String(sRaw));
-        if (!isFinite(v) || v < 0)
-        {
-            continue;
-        }
-
-        let ts: Date | null = null;
-        const tsRaw =
-            item?.lu             ??
-            item?.lc             ??
-            item?.last_updated   ??
-            item?.last_changed   ??
-            null;
-        if (typeof tsRaw === 'number')
-        {
-            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
-        }
-        else if (typeof tsRaw === 'string')
-        {
-            const asNum = Number(tsRaw);
-            if (Number.isFinite(asNum) && asNum > 1e9)
-            {
-                ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
-            }
-            else
-            {
-                ts = new Date(tsRaw);
-            }
-        }
-        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
-        {
-            ts = new Date(lastTsMs);
-        }
-        if (!ts || isNaN(ts.getTime()))
-        {
-            continue;
-        }
-
-        lastTsMs = ts.getTime();
-        times.push(ts);
-        values.push(v);
-    }
-
-    return { times, values };
+        const v = parseFloat(s);
+        return (isFinite(v) && v >= 0) ? v : null;
+    });
 }

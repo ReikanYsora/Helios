@@ -1,5 +1,6 @@
 import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
+import { guard } from 'lit/directives/guard.js';
 import type { HeliosCard } from '../helios-card';
 import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode } from '../core/config/helios-config';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
@@ -7,7 +8,7 @@ import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
-import { buildArcSegments, flowDuration, type LabelLayout } from './hud';
+import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
 import { clipSegment, cardClipRect, pointOutside, type ClipRect } from '../core/render-kit/geometry';
 import { formatGridValue } from '../data/sources/grid';
@@ -59,13 +60,46 @@ const NIGHT_STROKE_FACTOR = 0.5;
 //reached through `this.host`. The reactive @state it renders from stays on the card.
 export class SceneHudController
 {
-    public constructor(private readonly host: HeliosCard) {}
+    public constructor(private readonly host: HeliosCard)
+    {}
 
     //Directional leader colours for the ACTIVE flow, resolved every render and read back by the card for the
     //detail-panel accent (the grid + battery chips flip tint with the instantaneous flow, so the panel border
     //must reuse the live leader colour rather than the window-dominant chartAccentColor).
     public _gridLeaderColor    = 'var(--energy-grid-consumption-color, #488fc2)';
     public _batteryLeaderColor = 'var(--energy-battery-out-color, #4db6ac)';
+
+    //Arc-segment + ridge-polygon memo, both keyed on the sunScene object reference: refreshHud's sunSceneEq()
+    //already keeps that reference stable across renders when nothing about the sun/ridge geometry changed, so a
+    //plain identity compare here skips the buildArcSegments() rebuild (an arcColor() computation per segment)
+    //and the ridge points map+join on every hass tick, the same way the flow beads below are guard()ed against
+    //rebuilding on inputs that haven't moved.
+    private _arcSegmentsSunScene: SunScene | null = null;
+    private _arcSegmentsCache: ArcSegment[] = [];
+    private _ridgeLineSunScene: SunScene | null = null;
+    private _ridgeLineCache = '';
+
+    private _buildArcSegmentsCached(sunScene: SunScene, sunColor: string): ArcSegment[]
+    {
+        if (this._arcSegmentsSunScene !== sunScene)
+        {
+            this._arcSegmentsSunScene = sunScene;
+            this._arcSegmentsCache    = buildArcSegments(sunScene.arc, sunColor);
+        }
+        return this._arcSegmentsCache;
+    }
+
+    private _buildRidgeLineCached(sunScene: SunScene): string
+    {
+        if (this._ridgeLineSunScene !== sunScene)
+        {
+            this._ridgeLineSunScene = sunScene;
+            this._ridgeLineCache    = sunScene.ridge.length >= 3
+                ? sunScene.ridge.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+                : '';
+        }
+        return this._ridgeLineCache;
+    }
 
     //Land a chip's leader endpoint on the home pill's stadium outline so every leader docks against the same
     //focal energy node.
@@ -177,6 +211,14 @@ export class SceneHudController
         //override); nothing else in this render can project without them.
         const hasHomeCoords = getHomeCoords(this.host.config, this.host.hass) !== null;
 
+        //Shared scrub state, computed once and reused by every family below (PV, battery/grid, groups) instead
+        //of each recomputing the same live/scrub check and scrub-time-in-the-future check off the same host
+        //fields. Past scrub: a family reflects its actual reading at that instant. Future scrub has no data
+        //yet for most families, so they hide rather than show a stale/fake number.
+        const scrubbing   = !this.host._isLiveMode && this.host._selectedTime !== null;
+        const scrubFuture = scrubbing
+            && this.host._selectedTime!.getTime() > Date.now() + 60_000;
+
         //Chip interactivity: the card wires each chip as a button that re-points the bottom chart and glows when
         //active. A display-only host can set `_interactive = false` to drop the button role, tab focus, click
         //wiring and active-glow; unset reads as interactive.
@@ -226,16 +268,11 @@ export class SceneHudController
         //(not a CSS var) read it directly so colours stay in sync with the CSS rules using the same token.
         //The user's per-chip colour overrides it when set (resolved through the central chip-appearance table).
         const pvColor      = chipSlotColor(this.host, cfg, 'production');
-        //Past scrub: the chip reflects actual production at that instant (like the cloud/irradiance chips).
-        //Future scrub has no PV data yet, so we hide the chip rather than show a stale/fake number.
-        const pvScrubbing  = !this.host._isLiveMode && this.host._selectedTime !== null;
-        const pvScrubFuture = pvScrubbing
-            && this.host._selectedTime!.getTime() > Date.now() + 60_000;
 
         //The chip shows measured instantaneous production at the active instant: the power sensors' summed
         //state live, the meters' recorder change series at a scrubbed instant. No sensor, no chip.
         const pvRate = (pvEntityId !== '' && layout !== null)
-            ? (pvScrubbing
+            ? (scrubbing
                 ? pvRateAtTime(this.host, this.host._selectedTime!)
                 : (this.host._pvCurrent !== null ? currentPvRate(this.host) : null))
             : null;
@@ -244,7 +281,7 @@ export class SceneHudController
         //series the dotted timeline curve draws), so the chip never disagrees with its line. Null (hidden)
         //when the store isn't built or the instant has no forecast.
         let pvPredictedRate: { value: number; unit: string } | null = null;
-        if (pvScrubFuture && pvEntityId !== '' && layout !== null && this.host._unifiedStore)
+        if (scrubFuture && pvEntityId !== '' && layout !== null && this.host._unifiedStore)
         {
             const w = valueAt(this.host._unifiedStore.forecast, this.host._unifiedStore, this.host._selectedTime!.getTime());
             if (w !== null && w > 0)
@@ -253,7 +290,7 @@ export class SceneHudController
             }
         }
 
-        const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
+        const isPvPredicted = scrubFuture && pvPredictedRate !== null;
         const pvActiveRate  = isPvPredicted ? pvPredictedRate : pvRate;
 
         const showPvLabel = hasHomeCoords
@@ -261,10 +298,10 @@ export class SceneHudController
             && layout !== null
             && pvEntityId !== ''
             && pvActiveRate !== null
-            && (!pvScrubFuture || isPvPredicted)
+            && (!scrubFuture || isPvPredicted)
             //Scrub to an era with no production (no panels yet, or a flat 0) hides the chip AND its leader
             //together, so a stale 0 never leaves the leader dangling to the home.
-            && (!pvScrubbing || pvActiveRate.value > 0);
+            && (!scrubbing || pvActiveRate.value > 0);
 
         //User-configured decimal precision, applied to every chip readout (kW/kWh).
         const valueDec = valueDecimals(this.host.config);
@@ -291,13 +328,10 @@ export class SceneHudController
         const batteryEntities    = resolveBatteryEntities(this.host._energyDefaults);
         const hasAnyBankSoc      = batteryEntities.socEntity   !== null;
         const hasAnyBankPower    = batteryEntities.powerEntity !== null;
-        const batteryScrubbing   = !this.host._isLiveMode && this.host._selectedTime !== null;
-        const batteryScrubFuture = batteryScrubbing
-            && this.host._selectedTime!.getTime() > Date.now() + 60_000;
 
         //Grid IN/OUT past-scrub: average watts at the scrub instant from the recorder change series, so the
         //chip shows what flowed then. Skip in future scrub (no data) and live mode (live values already set).
-        const gridScrubTimeMs = batteryScrubbing && !batteryScrubFuture
+        const gridScrubTimeMs = scrubbing && !scrubFuture
             ? this.host._selectedTime!.getTime()
             : null;
         const rawImport = gridScrubTimeMs !== null
@@ -312,13 +346,13 @@ export class SceneHudController
         const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this.host._gridExportUnit;
 
         //Active SoC/power values for this render: historical samples in scrub mode, live state otherwise.
-        const activeBatterySoc: number | null = batteryScrubbing
+        const activeBatterySoc: number | null = scrubbing
             ? batterySampleAtTime(this.host._batterySocHistory, this.host._selectedTime!)
             : this.host._batterySoc;
         //Battery power scrub: net the charge/discharge change series (charge - discharge) for a structural
         //sign. Live mode reads the live signed value.
         let activeBatteryPower: number | null;
-        if (batteryScrubbing)
+        if (scrubbing)
         {
             const tMs = this.host._selectedTime!.getTime();
             const chargeW    = wattsAtFromChangeSeries(this.host._batteryChargeChangeSeries, tMs);
@@ -333,14 +367,14 @@ export class SceneHudController
         }
         //Power unit is watts on both paths (change series resolves to W, live read normalises to W), so the
         //chip formats consistently regardless of mode.
-        const activeBatteryUnit = batteryScrubbing ? 'W' : this.host._batteryPowerUnit;
+        const activeBatteryUnit = scrubbing ? 'W' : this.host._batteryPowerUnit;
 
         const showSocChip = (hasHomeCoords && layout !== null)
-            && !batteryScrubFuture
+            && !scrubFuture
             && hasAnyBankSoc
             && activeBatterySoc !== null;
         const showPowerChip = (hasHomeCoords && layout !== null)
-            && !batteryScrubFuture
+            && !scrubFuture
             && hasAnyBankPower
             && activeBatteryPower !== null;
 
@@ -361,7 +395,7 @@ export class SceneHudController
         //over the card's scrub-aware per-family values, so the chip follows the scrub.
         //Families contribute only when they have a reading; nothing wired -> chip hides. Clamped at zero
         //(a small negative is meter skew).
-        const usagePvW = (!pvScrubFuture && pvActiveRate !== null)
+        const usagePvW = (!scrubFuture && pvActiveRate !== null)
             ? pvNormalizeToWatts(pvActiveRate.value, pvActiveRate.unit)
             : null;
         const usageGridW = (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null)
@@ -375,7 +409,7 @@ export class SceneHudController
         //hides and the editor explains). Scrub mode keeps the bucket-domain balance: all terms share the
         //meters' cadence there, the same bookkeeping the HA Energy dashboard does.
         const d = this.host._energyDefaults;
-        const homeLiveComplete = batteryScrubbing || (
+        const homeLiveComplete = scrubbing || (
             (d.solarStatEnergyFroms.length === 0 || usagePvW !== null)
             && ((d.gridStatEnergyFroms.length === 0 && d.gridStatEnergyTos.length === 0) || usageGridW !== null)
             && ((d.batteryStatEnergyFroms.length === 0 && d.batteryStatEnergyTos.length === 0) || usageBatteryW !== null));
@@ -386,7 +420,7 @@ export class SceneHudController
                 : Math.max(0, (usagePvW ?? 0) + (usageGridW ?? 0) - (usageBatteryW ?? 0)));
         const showHomeUsageChip = hasHomeCoords
             && layout !== null
-            && !batteryScrubFuture
+            && !scrubFuture
             && homeUsageWatts !== null;
         const homeUsageText = showHomeUsageChip
             ? formatGridValue(this.host.hass, homeUsageWatts, 'W', valueDec, powerU)
@@ -470,10 +504,10 @@ export class SceneHudController
         const groupRow1Y   = layout?.groupLabels[0]?.y ?? 0;
         const groupRow2Y   = layout?.groupLabels[1]?.y ?? 0;
         //Scrub-aware group value: at a past instant read each device's change series, else the live stat_rate sum.
-        const groupScrubMs = (!this.host._isLiveMode && this.host._selectedTime !== null) ? this.host._selectedTime.getTime() : null;
+        const groupScrubMs = scrubbing ? this.host._selectedTime!.getTime() : null;
         //Group consumption has no forecast, so scrubbing into the future hides the group chips (and their leaders)
-        //entirely, the same way the PV chip drops out of a future scrub with no prediction (pvScrubFuture above).
-        const activeGroupList = (layout && !pvScrubFuture)
+        //entirely, the same way the PV chip drops out of a future scrub with no prediction (scrubFuture above).
+        const activeGroupList = (layout && !scrubFuture)
             ? activeGroups(this.host.config, this.host._energyDefaults).filter(g => groupChipVisible(cfg, g) && keeps(groupTarget(g)))
             : [];
         const groupCount      = activeGroupList.length;
@@ -572,7 +606,7 @@ export class SceneHudController
         //The on-ground cloud disc is painted engine-side, so no cloud hex is needed here.
         const sunColor      = ENERGY_COLOR.sun(this.host);
         const sunRimColor   = darkenHex(sunColor, 0.20);
-        const arcSegments   = showSun ? buildArcSegments(sunScene!.arc, sunColor) : [];
+        const arcSegments   = showSun ? this._buildArcSegmentsCached(sunScene!, sunColor) : [];
         //Z-order split: below-horizon (dotted) segments render BEHIND the home chip cluster, above-horizon
         //in front so the live sun dominates. Single-pass split into reused scratch buffers (no filter()
         //allocations per cycle).
@@ -696,9 +730,7 @@ export class SceneHudController
         //terrain). Drawn as a polygon so it encircles the house; the sun crosses the crest at its azimuth.
         const ridgePts = sunScene?.ridge ?? [];
         const showRidge = ridgePts.length >= 3;
-        const ridgeLine = showRidge
-            ? ridgePts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-            : '';
+        const ridgeLine = sunScene ? this._buildRidgeLineCached(sunScene) : '';
 
         return html`
                 <!--  Terrain-horizon ridge: distant relief silhouette encircling the home, behind the arc + chips.  -->
@@ -742,16 +774,17 @@ export class SceneHudController
                 ` : nothing}
 
 
-                ${showPvLabel ? (() => {
-                    //Leader endpoint = the home pill's border on the chip-to-home axis (the shared docking
-                    //point for every chip leader).
-                    const pvX1 = layout!.pvLabel.x;
-                    const pvY1 = layout!.pvLabel.y + PV_HALF_HEIGHT_PX;
-                    const pvHomeEnd = this._nudgeToHomePill(
-                        pvX1, pvY1,
+                ${showPvLabel ? (() =>
+    {
+        //Leader endpoint = the home pill's border on the chip-to-home axis (the shared docking
+        //point for every chip leader).
+        const pvX1 = layout!.pvLabel.x;
+        const pvY1 = layout!.pvLabel.y + PV_HALF_HEIGHT_PX;
+        const pvHomeEnd = this._nudgeToHomePill(
+            pvX1, pvY1,
                         layout!.home.x, layout!.home.y,
-                    );
-                    return html`
+        );
+        return html`
                     <svg class="pv-home-leader-svg">
                         <line
                             class="pv-home-leader-line"
@@ -761,9 +794,14 @@ export class SceneHudController
                             x2=${pvHomeEnd.x}
                             y2=${pvHomeEnd.y}
                         ></line>
-                        ${!pvIdle ? svg`
+                        ${!pvIdle ? guard([pvColor, pvFlowDuration, pvX1, pvY1, pvHomeEnd.x, pvHomeEnd.y], () => svg`
                             <!--  Filled disc riding the leader from the PV chip to the home, speed
-                                  proportional to live production. No rotate="auto": a disc has no orientation.  -->
+                                  proportional to live production. No rotate="auto": a disc has no orientation.
+                                  guard()ed on its own inputs, same reason as every flow bead below: this whole
+                                  template runs on every hass tick, most of which touch none of these values, and
+                                  rewriting a live SMIL <animateMotion>'s attributes re-arms its clock even when
+                                  the rewritten value is identical - real, sustained main-thread cost on a card
+                                  with any flow running, independent of scene size.  -->
                             <circle
                                 class="pv-home-leader-bead"
                                 r="3"
@@ -775,9 +813,9 @@ export class SceneHudController
                                     path="M ${pvX1},${pvY1} L ${pvHomeEnd.x},${pvHomeEnd.y}"
                                 ></animateMotion>
                             </circle>
-                        ` : nothing}
+                        `) : nothing}
                     </svg>`;
-                })() : nothing}
+    })() : nothing}
 
                 ${showPvLabel ? html`
                     <div
@@ -804,7 +842,7 @@ export class SceneHudController
                                 style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${batteryHomeLeaderPath}"
                             ></path>
-                            ${(showPowerChip && !batteryIdle) ? svg`
+                            ${(showPowerChip && !batteryIdle) ? guard([batteryLeaderColor, batteryFlowDuration, batteryHomeLeaderPath, batteryCharging], () => svg`
                                 <circle
                                     class="battery-leader-bead"
                                     r="3"
@@ -818,7 +856,7 @@ export class SceneHudController
                                         keyTimes=${batteryCharging ? '0;1' : nothing}
                                     ></animateMotion>
                                 </circle>
-                            ` : nothing}
+                            `) : nothing}
                         ` : nothing}
                     </svg>
                     <div
@@ -837,7 +875,7 @@ export class SceneHudController
                 <!--  Grid chip on the LEFT of the home: one pill showing the ACTIVE flow only. Importing reads
                       consumption blue with a grid -> home bead; exporting flips to return purple with a
                       home -> grid bead. The dominant side wins when both are live.  -->
-                ${hasHomeCoords && showChipGrid && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !batteryScrubFuture ? html`
+                ${hasHomeCoords && showChipGrid && layout !== null && (gridImportDisplayWatts !== null || gridExportDisplayWatts !== null) && !scrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-leader-line" style="stroke:${gridLeaderColor}" d=${gridLeaderPath} />
                         <!--  Single bead on the active flow. Import
@@ -845,7 +883,7 @@ export class SceneHudController
                               export flows home -> grid (keyPoints 1;0
                               reverses it). Dropped when the active side
                               is idle, no misleading motion.           -->
-                        ${gridBeadDur !== null ? (gridImporting ? svg`
+                        ${gridBeadDur !== null ? guard([gridLeaderColor, gridBeadDur, gridLeaderPath, gridImporting], () => gridImporting ? svg`
                             <circle class="grid-leader-bead" r="3" style="fill:${gridLeaderColor}">
                                 <animateMotion dur="${gridBeadDur.toFixed(2)}s" repeatCount="indefinite"
                                                path="${gridLeaderPath}" />
@@ -874,16 +912,21 @@ export class SceneHudController
                 <!--  Monitoring-group chips (dynamic placement by active-group count). Each shows the group's live
                       total with a number badge; clicking one points the chart at that group's per-device curves.
                       The bead runs home -> chip; horizontal leads are reversed (keyPoints) to keep that direction.  -->
-                ${hasHomeCoords && layout !== null ? groupChips.map(gc => html`
+                ${hasHomeCoords && layout !== null ? groupChips.map((gc) =>
+    {
+        //Narrowed to a local so guard()'s callback keeps TS's `!== null` narrowing (a property
+        //access like gc.beadDur loses it across the closure boundary).
+        const beadDur = gc.beadDur;
+        return html`
                     <svg class="group-leader-svg">
                         <path class="group-leader-line" style="stroke:${gc.color}" d=${gc.leadPath} />
-                        ${gc.beadDur !== null ? svg`
+                        ${beadDur !== null ? guard([gc.color, beadDur, gc.leadPath, gc.reverse], () => svg`
                             <circle class="group-leader-bead" r="3" style="fill:${gc.color}">
-                                <animateMotion dur="${gc.beadDur.toFixed(2)}s" repeatCount="indefinite"
+                                <animateMotion dur="${beadDur.toFixed(2)}s" repeatCount="indefinite"
                                                keyPoints=${gc.reverse ? '1;0' : nothing} keyTimes=${gc.reverse ? '0;1' : nothing}
                                                path="${gc.leadPath}" />
                             </circle>
-                        ` : nothing}
+                        `) : nothing}
                     </svg>
                     <div
                         class="group-label ${interactive && this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''} ${curveOn && active === groupTarget(gc.g) ? 'is-curve-on' : ''}"
@@ -894,11 +937,12 @@ export class SceneHudController
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
                         ${gc.icon
-                            ? html`<ha-icon icon=${gc.icon}></ha-icon>`
-                            : html`<span class="group-glyph-num">${gc.g}</span>`}
+        ? html`<ha-icon icon=${gc.icon}></ha-icon>`
+        : html`<span class="group-glyph-num">${gc.g}</span>`}
                         <span>${gc.watts === null ? '' : formatPvValue(this.host.hass, gc.watts, 'W', valueDec, powerU)}</span>
                     </div>
-                `) : nothing}
+                `;
+    }) : nothing}
 
                 <!--  Solar arc, FAR-FRONT pass: above-horizon segments with nearness below the 0.5 midpoint
                       (arched away from the eye but still ahead of the sky dome's back wall). These render
@@ -976,17 +1020,19 @@ export class SceneHudController
                         ></line>
                         <!--  Bead rides an absolute-coordinate path with cx / cy at the default 0 origin.
                               Single-attribute updates keep the SMIL animation continuous during rotation.  -->
-                        <circle
-                            class="solar-ray-bead"
-                            r="3"
-                            fill=${sunColor}
-                        >
-                            <animateMotion
-                                dur="${sunFlowDuration}s"
-                                repeatCount="indefinite"
-                                path="M ${rayX1},${rayY1} L ${rayX2},${rayY2}"
-                            ></animateMotion>
-                        </circle>
+                        ${guard([sunColor, sunFlowDuration, rayX1, rayY1, rayX2, rayY2], () => svg`
+                            <circle
+                                class="solar-ray-bead"
+                                r="3"
+                                fill=${sunColor}
+                            >
+                                <animateMotion
+                                    dur="${sunFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    path="M ${rayX1},${rayY1} L ${rayX2},${rayY2}"
+                                ></animateMotion>
+                            </circle>
+                        `)}
                     </svg>
                 ` : nothing}
 
@@ -995,35 +1041,36 @@ export class SceneHudController
                         class="solar-svg solar-svg-sun ${sunScene!.sun.nearness >= 0.50 ? 'solar-svg-sun-near' : 'solar-svg-sun-far'}"
                         style="--solar-daylight:${sunScene!.daylight}"
                     >
-                        ${(() => {
-                            //Sun disc, four layers back-to-front:
-                            //  0. Halo, radial-gradient glow whose radius (3x disc) and opacity scale with
-                            //     irradiance, feathering into the basemap with no hard edge.
-                            //  1. Background fill (SUN_FILL_OPACITY_BG) so the empty disc reads as tinted glass.
-                            //  2. Inner fill, radius = sunFillRatio x outer; conveys irradiance (sub-px radii
-                            //     vanish, the correct visual for "no sun").
-                            //  3. Outer rim (darkened sun colour) for a clear edge against the basemap.
-                            //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc
-                            //ratio holds across canvas sizes (1.0 at standard Lovelace grid sizes).
-                            const sunArcScale = this.host._engine?.getSunArcScale() ?? 1;
-                            //Cap the disc radius (px): the arc fills a fixed fraction of the frame at any
-                            //zoom, but sunArcScale grows as the ground zoom drops (lower px/m), which would
-                            //otherwise balloon the disc. 22 px keeps it a sun, not a spotlight.
-                            const r = Math.min(
-                                (SUN_R_FAR
+                        ${(() =>
+    {
+        //Sun disc, four layers back-to-front:
+        //  0. Halo, radial-gradient glow whose radius (3x disc) and opacity scale with
+        //     irradiance, feathering into the basemap with no hard edge.
+        //  1. Background fill (SUN_FILL_OPACITY_BG) so the empty disc reads as tinted glass.
+        //  2. Inner fill, radius = sunFillRatio x outer; conveys irradiance (sub-px radii
+        //     vanish, the correct visual for "no sun").
+        //  3. Outer rim (darkened sun colour) for a clear edge against the basemap.
+        //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc
+        //ratio holds across canvas sizes (1.0 at standard Lovelace grid sizes).
+        const sunArcScale = this.host._engine?.getSunArcScale() ?? 1;
+        //Cap the disc radius (px): the arc fills a fixed fraction of the frame at any
+        //zoom, but sunArcScale grows as the ground zoom drops (lower px/m), which would
+        //otherwise balloon the disc. 22 px keeps it a sun, not a spotlight.
+        const r = Math.min(
+            (SUN_R_FAR
                                     + (SUN_R_NEAR - SUN_R_FAR) * sunScene!.sun.nearness)
                                     * sunArcScale,
-                                22);
-                            const rInner = r * sunFillRatio;
-                            //Halo proportional to live irradiance, saturating at 1000 W/m². Same sqrt mapping
-                            //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.
-                            const haloR        = r * 3;
-                            const haloAlphaMax = sunFillRatio * 0.55;
-                            //Radiant-heat aura: a warm glow that breathes (a CSS opacity + scale pulse, a heat
-                            //wave emanating from the disc), fading in with irradiance so a low / hazy sun stays
-                            //calm. `--heat` (0..1) is the gate the CSS pulse multiplies.
-                            const heat = Math.max(0, Math.min(1, (sunFillRatio - 0.15) / 0.55));
-                            return svg`
+            22);
+        const rInner = r * sunFillRatio;
+        //Halo proportional to live irradiance, saturating at 1000 W/m². Same sqrt mapping
+        //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.
+        const haloR        = r * 3;
+        const haloAlphaMax = sunFillRatio * 0.55;
+        //Radiant-heat aura: a warm glow that breathes (a CSS opacity + scale pulse, a heat
+        //wave emanating from the disc), fading in with irradiance so a low / hazy sun stays
+        //calm. `--heat` (0..1) is the gate the CSS pulse multiplies.
+        const heat = Math.max(0, Math.min(1, (sunFillRatio - 0.15) / 0.55));
+        return svg`
                                 <defs>
                                     <radialGradient id="solar-halo-grad-${this.host._instanceId}">
                                         <stop offset="0%"   stop-color="${sunColor}" stop-opacity="${haloAlphaMax}"></stop>
@@ -1072,7 +1119,7 @@ export class SceneHudController
                                     stroke-width="${SUN_RIM_WIDTH}"
                                 ></circle>
                             `;
-                        })()}
+    })()}
                     </svg>
                 ` : nothing}
 
@@ -1108,9 +1155,9 @@ export class SceneHudController
                       consumption) unless the home chip is hidden, in which case it collapses to a small hollow
                       ring: a bare contact point the leads converge on, the scene still visible through it.  -->
                 ${hasHomeCoords && layout !== null && showHomeElement
-                    ? (homeHidden
-                        ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
-                        : html`
+        ? (homeHidden
+            ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
+            : html`
                     <div
                         class="home-pill ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''} ${curveOn && active === 'consumption' ? 'is-curve-on' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
@@ -1124,7 +1171,7 @@ export class SceneHudController
                         <ha-icon icon=${chipSlotIcon(cfg, 'home', 'mdi:home')}></ha-icon>
                         ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}
                     </div>`)
-                    : nothing}
+        : nothing}
         `;
     }
 }

@@ -56,13 +56,25 @@ const TOTAL_SLOTS = 24 * DEFAULT_SLOTS_PER_HOUR;
 function fillGaps(v: number[]): number[]
 {
     const n = v.length;
-    if (!v.some(x => Number.isFinite(x))) { return new Array<number>(n).fill(0); }
+    if (!v.some(x => Number.isFinite(x)))
+    {
+        return new Array<number>(n).fill(0);
+    }
     const out = v.slice();
     for (let i = 0; i < n; i++)
     {
-        if (Number.isFinite(out[i])) { continue; }
-        let db = 1; while (!Number.isFinite(v[((i - db) % n + n) % n])) { db++; }
-        let df = 1; while (!Number.isFinite(v[(i + df) % n])) { df++; }
+        if (Number.isFinite(out[i]))
+        {
+            continue;
+        }
+        let db = 1; while (!Number.isFinite(v[((i - db) % n + n) % n]))
+        {
+            db++;
+        }
+        let df = 1; while (!Number.isFinite(v[(i + df) % n]))
+        {
+            df++;
+        }
         const a = v[((i - db) % n + n) % n];
         const b = v[(i + df) % n];
         out[i] = a + (b - a) * (db / (db + df));
@@ -81,7 +93,10 @@ export function binSlotSum(store: UnifiedDataStore, series: (number | null)[], s
     forEachBucketSlot(store, slots, win, undefined, (i, slot, segMs) =>
     {
         const v = series[i];
-        if (v === null || !isFinite(v)) { return; }
+        if (v === null || !isFinite(v))
+        {
+            return;
+        }
         const energy = (Math.max(0, v) * stepH) / 1000;   //kWh for this bucket
         sum[slot] += energy * (segMs / store.stepMs);
     });
@@ -100,7 +115,10 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
 
     if (target === 'production')
     {
-        if (!store) { return data('energy', []); }
+        if (!store)
+        {
+            return data('energy', []);
+        }
         const nowMs = Date.now();
         const stepH  = store.stepMs / HOUR_MS;
         //Per-source production from the recorder `change` metric (reset-corrected, exact HA Energy energy,
@@ -124,7 +142,10 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
             for (let s = 0; s < ids.length; s++)
             {
                 const w = perSourceWatts[s]?.[i];
-                if (w === null || w === undefined || !(w > 0)) { continue; }
+                if (w === null || w === undefined || !(w > 0))
+                {
+                    continue;
+                }
                 wsum[s][slot] += ((w * stepH) / 1000) * (segMs / store.stepMs);
             }
         });
@@ -146,7 +167,10 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
             for (let i = 0; i < hist.times.length; i++)
             {
                 const v = hist.values[i];
-                if (!isFinite(v)) { continue; }
+                if (!isFinite(v))
+                {
+                    continue;
+                }
                 const h = slotOf(hist.times[i].getTime(), slots);
                 sum[h] += v; cnt[h] += 1;
             }
@@ -158,7 +182,10 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
     //into direction layers, EACH further split per source when 2+ sources carry their own recorder series (for the
     //stacked breakdown); consumption is one layer. Every grid/battery layer carries its `dir` so the arc, panel and
     //timeline group + colour it identically. Single-source falls back to the aggregate store series, exactly as before.
-    if (!store) { return data('energy', []); }
+    if (!store)
+    {
+        return data('energy', []);
+    }
 
     const nowMs = Date.now();
     const sourceWatts = (m: Map<string, ChangeBucket[]>, id: string): (number | null)[] =>
@@ -201,7 +228,10 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
         {
             const p = store.production[i]; const gi = store.gridImport[i];
             const ge = store.gridExport[i]; const b = store.battery[i];
-            if (p === null && gi === null && ge === null && b === null) { continue; }
+            if (p === null && gi === null && ge === null && b === null)
+            {
+                continue;
+            }
             cons[i] = consumptionLoad(p ?? 0, gi ?? 0, ge ?? 0, b ?? 0);
         }
         specs = [{ series: cons }];
@@ -222,7 +252,10 @@ export function hourlyOf(values: number[], sum: boolean): number[]
     for (let h = 0; h < HOURS_PER_DAY; h++)
     {
         let s = 0;
-        for (let j = 0; j < per; j++) { s += Math.max(0, values[h * per + j] ?? 0); }
+        for (let j = 0; j < per; j++)
+        {
+            s += Math.max(0, values[h * per + j] ?? 0);
+        }
         out[h] = sum ? s : s / per;
     }
     return out;
@@ -234,7 +267,10 @@ export function layerPeriodTotal(layer: PeriodLayer, data: PeriodData): number
 {
     const energy = data.unit === 'energy';
     const hv = hourlyOf(layer.values, energy);
-    let t = 0; for (let h = 0; h < HOURS_PER_DAY; h++) { t += Math.max(0, hv[h]); }
+    let t = 0; for (let h = 0; h < HOURS_PER_DAY; h++)
+    {
+        t += Math.max(0, hv[h]);
+    }
     return energy ? t : t / HOURS_PER_DAY;
 }
 

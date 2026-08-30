@@ -7,6 +7,25 @@ import { mixHex, hexByte } from '../render-kit/hex';
 import { clamp } from '../render-kit/math';
 
 
+//Cache Intl.NumberFormat instances by locale + integer + fractionDigits: a chip, axis label or device row calls
+//formatLocalisedNumber every render, but the resolved options only vary across a small, bounded set of keys.
+const _numberFormatMemo = new Map<string, Intl.NumberFormat>();
+
+function getLocalisedNumberFormat(locale: string | undefined, integer: boolean, fractionDigits: number): Intl.NumberFormat
+{
+    const key = `${locale}|${integer}|${fractionDigits}`;
+    let fmt = _numberFormatMemo.get(key);
+    if (!fmt)
+    {
+        const opts: Intl.NumberFormatOptions = integer
+            ? { maximumFractionDigits: 0 }
+            : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
+        fmt = new Intl.NumberFormat(locale, opts); //may throw for a custom locale that isn't a valid BCP-47 tag; caller catches
+        _numberFormatMemo.set(key, fmt);
+    }
+    return fmt;
+}
+
 //Format a number with the user's locale (decimal mark, grouping). Falls back to locale-independent
 //toFixed when Intl rejects the resolved locale, guarding against custom HA locales that aren't valid
 //BCP-47 tags. `integer = true` rounds to the nearest integer and drops fraction digits.
@@ -34,12 +53,9 @@ export function formatLocalisedNumber(
     const locale = (hass?.locale?.language as string | undefined)
         ?? (hass?.language as string | undefined)
         ?? undefined;
-    const opts: Intl.NumberFormatOptions = integer
-        ? { maximumFractionDigits: 0 }
-        : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
     try
     {
-        return new Intl.NumberFormat(locale, opts).format(value);
+        return getLocalisedNumberFormat(locale, integer, fractionDigits).format(value);
     }
     catch (_)
     {
@@ -48,24 +64,56 @@ export function formatLocalisedNumber(
 }
 
 
+//Cache the resolved hour12 answer per (time_format, language): the probe below only needs to run once per
+//distinct pair, not on every timeline tick / sun-time marker / tooltip datetime formatted.
+const _amPmMemo = new Map<string, boolean>();
+
 //HA's am/pm decision: the user's explicit 12/24-hour choice from hass.locale.time_format, falling back to the
 //language/system default by probing the runtime, so a time we format reads exactly as the rest of the dashboard does.
 function haUseAmPm(locale: { time_format?: string; language?: string } | undefined): boolean
 {
     const tf = locale?.time_format;
-    if (tf === '12') { return true; }
-    if (tf === '24') { return false; }
-    //'language' or 'system' (or unset): probe the runtime, honouring the chosen language for 'language'.
-    const testLang = tf === 'language' ? locale?.language : undefined;
-    try
+    if (tf === '12')
     {
-        const probe = new Date().toLocaleString(testLang);
-        return probe.includes('AM') || probe.includes('PM');
+        return true;
     }
-    catch (_)
+    if (tf === '24')
     {
         return false;
     }
+    //'language' or 'system' (or unset): probe the runtime, honouring the chosen language for 'language'.
+    const testLang = tf === 'language' ? locale?.language : undefined;
+    const key = `${tf ?? ''}|${testLang ?? ''}`;
+    let cached = _amPmMemo.get(key);
+    if (cached === undefined)
+    {
+        try
+        {
+            const probe = new Date().toLocaleString(testLang);
+            cached = probe.includes('AM') || probe.includes('PM');
+        }
+        catch (_)
+        {
+            cached = false;
+        }
+        _amPmMemo.set(key, cached);
+    }
+    return cached;
+}
+
+//Cache Intl.DateTimeFormat instances by locale + the caller's options shape, mirroring the number-format memo above.
+const _dateTimeFormatMemo = new Map<string, Intl.DateTimeFormat>();
+
+function getHaDateTimeFormat(locale: string | undefined, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat
+{
+    const key = `${locale}|${JSON.stringify(opts)}`;
+    let fmt = _dateTimeFormatMemo.get(key);
+    if (!fmt)
+    {
+        fmt = new Intl.DateTimeFormat(locale, opts); //may throw for a rejected language tag; caller catches
+        _dateTimeFormatMemo.set(key, fmt);
+    }
+    return fmt;
 }
 
 //Format a Date with the user's HA language + a caller-supplied options set, falling back to the runtime default
@@ -76,11 +124,11 @@ function formatWithHaLocale(hass: HassLike, date: Date, opts: Intl.DateTimeForma
     const withAmPm: Intl.DateTimeFormatOptions = { ...opts, hour12: haUseAmPm(locale) };
     try
     {
-        return new Intl.DateTimeFormat(locale?.language, withAmPm).format(date);
+        return getHaDateTimeFormat(locale?.language, withAmPm).format(date);
     }
     catch (_)
     {
-        return new Intl.DateTimeFormat(undefined, withAmPm).format(date);
+        return getHaDateTimeFormat(undefined, withAmPm).format(date);
     }
 }
 
@@ -172,8 +220,14 @@ function celsiusTo(celsius: number, unit: TemperatureUnit): number
 export function temperatureToCelsius(unitOfMeasurement: string | undefined): ((v: number) => number) | null
 {
     const u = String(unitOfMeasurement ?? '').trim().toUpperCase();
-    if (u === '°F' || u === 'F') { return (v) => (v - 32) * 5 / 9; }
-    if (u === 'K')               { return (v) => v - 273.15; }
+    if (u === '°F' || u === 'F')
+    {
+        return (v) => (v - 32) * 5 / 9;
+    }
+    if (u === 'K')
+    {
+        return (v) => v - 273.15;
+    }
     return null;
 }
 
@@ -224,9 +278,15 @@ export function parseNumericState(raw: unknown): number | null
     {
         return Number.isFinite(raw) ? raw : null;
     }
-    if (typeof raw !== 'string') { return null; }
+    if (typeof raw !== 'string')
+    {
+        return null;
+    }
     const trimmed = raw.trim();
-    if (trimmed === '') { return null; }
+    if (trimmed === '')
+    {
+        return null;
+    }
     const n = parseFloat(trimmed.replace(',', '.'));
     return Number.isFinite(n) ? n : null;
 }
@@ -334,12 +394,24 @@ export function batteryLevelIcon(soc: number | null, charging: boolean): string
     const rounded = clamp(Math.round(soc / 10) * 10, 0, 100);
     if (charging)
     {
-        if (rounded >= 100) { return 'mdi:battery-charging-100'; }
-        if (rounded <= 0)   { return 'mdi:battery-charging-outline'; }
+        if (rounded >= 100)
+        {
+            return 'mdi:battery-charging-100';
+        }
+        if (rounded <= 0)
+        {
+            return 'mdi:battery-charging-outline';
+        }
         return `mdi:battery-charging-${rounded}`;
     }
-    if (rounded >= 100) { return 'mdi:battery'; }
-    if (rounded <= 0)   { return 'mdi:battery-outline'; }
+    if (rounded >= 100)
+    {
+        return 'mdi:battery';
+    }
+    if (rounded <= 0)
+    {
+        return 'mdi:battery-outline';
+    }
     return `mdi:battery-${rounded}`;
 }
 
@@ -395,8 +467,14 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
         return fallback;
     }
     const raw = getComputedStyle(host).getPropertyValue(token).trim();
-    if (/^#[0-9a-f]{6}$/i.test(raw)) { return raw; }
-    if (/^#[0-9a-f]{3}$/i.test(raw)) { return '#' + raw.slice(1).split('').map(c => c + c).join(''); }
+    if (/^#[0-9a-f]{6}$/i.test(raw))
+    {
+        return raw;
+    }
+    if (/^#[0-9a-f]{3}$/i.test(raw))
+    {
+        return '#' + raw.slice(1).split('').map(c => c + c).join('');
+    }
     const m = raw.match(/rgba?\(\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)/i);
     if (m)
     {
@@ -418,12 +496,16 @@ export function isDarkFromCss(host: Element): boolean
         const lum = (0.299 * hexByte(hex, 1) + 0.587 * hexByte(hex, 3) + 0.114 * hexByte(hex, 5)) / 255;
         return lum < 0.5;
     }
-    catch (_) { /* probe failed: fall through to the light-theme default */ }
+    catch (_)
+    { /* probe failed: fall through to the light-theme default */ }
     return false;
 }
 
 //RGB/LAB conversion for the per-energy-source colour ramp below. The D65 white-point + LAB transfer thresholds live in constants.ts.
-const rgbXyz = (c: number): number => { const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4; };
+const rgbXyz = (c: number): number =>
+{
+    const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4;
+};
 const xyzLab = (t: number): number => (t > LAB_T3 ? t ** (1 / 3) : t / LAB_T2 + LAB_T0);
 const xyzRgb = (r: number): number => 255 * (r <= 0.00304 ? 12.92 * r : 1.055 * r ** (1 / 2.4) - 0.055);
 const labXyz = (t: number): number => (t > LAB_T1 ? t * t * t : LAB_T2 * (t - LAB_T0));
@@ -480,10 +562,16 @@ export function energyRampColor(host: Element | null | undefined, dark: boolean,
     if (host)
     {
         const override = getComputedStyle(host).getPropertyValue(`${propertyVar}-${idx}`).trim();
-        if (override) { return cssHex(host, `${propertyVar}-${idx}`, fallback); }
+        if (override)
+        {
+            return cssHex(host, `${propertyVar}-${idx}`, fallback);
+        }
     }
     const base = cssHex(host, propertyVar, fallback);
-    if (!idx) { return base; }
+    if (!idx)
+    {
+        return base;
+    }
     const key = `${propertyVar}|${base}|${dark}|${idx}`;
     let out = _energyRampMemo.get(key);
     if (out === undefined)

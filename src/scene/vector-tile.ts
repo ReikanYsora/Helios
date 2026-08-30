@@ -13,6 +13,10 @@ function zigzag(n: number): number
     return n % 2 === 0 ? n / 2 : -(n + 1) / 2;
 }
 
+//Shared across every Reader.string() call (one tile decode reads many strings): a TextDecoder is reusable and
+//stateless between decode() calls, so constructing a fresh one per string is pure per-call overhead.
+const textDecoder = new TextDecoder();
+
 export interface MvtFeature
 {
     //1 = point, 2 = linestring, 3 = polygon (only polygons are used downstream).
@@ -36,9 +40,13 @@ class Reader
 {
     public pos = 0;
 
-    constructor(private readonly buf: Uint8Array) {}
+    constructor(private readonly buf: Uint8Array)
+    {}
 
-    public get end(): number { return this.buf.length; }
+    public get end(): number
+    {
+        return this.buf.length;
+    }
 
     //Unsigned base-128 varint. JS numbers stay exact to 2^53, well above any tag/coordinate value in a tile.
     public varint(): number
@@ -74,7 +82,7 @@ class Reader
 
     public string(): string
     {
-        return new TextDecoder().decode(this.bytes());
+        return textDecoder.decode(this.bytes());
     }
 
     //IEEE-754 little-endian, for MVT Value float/double columns.
@@ -150,7 +158,10 @@ function decodeGeometry(data: number[]): number[][][]
         const count = Math.floor(cmd / 8);
         if (id === 1) //MoveTo: starts a new ring
         {
-            if (ring.length) { rings.push(ring); }
+            if (ring.length)
+            {
+                rings.push(ring);
+            }
             ring = [];
             for (let c = 0; c < count; c++)
             {
@@ -170,7 +181,10 @@ function decodeGeometry(data: number[]): number[][][]
         }
         //id 7 = ClosePath: no params; the ring closes implicitly, caller treats it as an open ring.
     }
-    if (ring.length) { rings.push(ring); }
+    if (ring.length)
+    {
+        rings.push(ring);
+    }
     return rings;
 }
 
@@ -188,17 +202,32 @@ function readFeature(r: Reader, keys: string[], values: (string | number)[]): Mv
         const tag   = r.varint();
         const field = Math.floor(tag / 8);
         const wire  = tag % 8;
-        if (field === 3) { type = r.varint(); }
-        else if (field === 2) { tagInts = readPacked(r); }
-        else if (field === 4) { geomInts = readPacked(r); }
-        else { r.skip(wire); }
+        if (field === 3)
+        {
+            type = r.varint();
+        }
+        else if (field === 2)
+        {
+            tagInts = readPacked(r);
+        }
+        else if (field === 4)
+        {
+            geomInts = readPacked(r);
+        }
+        else
+        {
+            r.skip(wire);
+        }
     }
     const tags: Record<string, string | number> = {};
     for (let i = 0; i + 1 < tagInts.length; i += 2)
     {
         const k = keys[tagInts[i]];
         const v = values[tagInts[i + 1]];
-        if (k !== undefined && v !== undefined) { tags[k] = v; }
+        if (k !== undefined && v !== undefined)
+        {
+            tags[k] = v;
+        }
     }
     return { type, rings: decodeGeometry(geomInts), tags };
 }
@@ -209,7 +238,10 @@ function readPacked(r: Reader): number[]
 {
     const msgLen = r.varint(); const end = r.pos + msgLen;
     const out: number[] = [];
-    while (r.pos < end) { out.push(r.varint()); }
+    while (r.pos < end)
+    {
+        out.push(r.varint());
+    }
     return out;
 }
 
@@ -263,8 +295,14 @@ export function decodeVectorTile(buf: Uint8Array): MvtLayer[]
         const tag   = r.varint();
         const field = Math.floor(tag / 8);
         const wire  = tag % 8;
-        if (field === 3) { layers.push(readLayer(r)); }
-        else { r.skip(wire); }
+        if (field === 3)
+        {
+            layers.push(readLayer(r));
+        }
+        else
+        {
+            r.skip(wire);
+        }
     }
     return layers;
 }

@@ -72,13 +72,25 @@ function applyGridSlot(host: GridSlots, slot: 'import' | 'export', value: number
     const clamped = value === null ? null : Math.max(0, value);
     if (slot === 'import')
     {
-        if (host._gridImportValue !== clamped) { host._gridImportValue = clamped; }
-        if (host._gridImportUnit  !== unit)    { host._gridImportUnit  = unit; }
+        if (host._gridImportValue !== clamped)
+        {
+            host._gridImportValue = clamped;
+        }
+        if (host._gridImportUnit  !== unit)
+        {
+            host._gridImportUnit  = unit;
+        }
     }
     else
     {
-        if (host._gridExportValue !== clamped) { host._gridExportValue = clamped; }
-        if (host._gridExportUnit  !== unit)    { host._gridExportUnit  = unit; }
+        if (host._gridExportValue !== clamped)
+        {
+            host._gridExportValue = clamped;
+        }
+        if (host._gridExportUnit  !== unit)
+        {
+            host._gridExportUnit  = unit;
+        }
     }
 }
 
@@ -103,10 +115,22 @@ export function refreshGrid(host: GridHost): void
 {
     if (!host.hass)
     {
-        if (host._gridImportValue !== null) { host._gridImportValue = null; }
-        if (host._gridImportUnit  !== '')   { host._gridImportUnit  = ''; }
-        if (host._gridExportValue !== null) { host._gridExportValue = null; }
-        if (host._gridExportUnit  !== '')   { host._gridExportUnit  = ''; }
+        if (host._gridImportValue !== null)
+        {
+            host._gridImportValue = null;
+        }
+        if (host._gridImportUnit  !== '')
+        {
+            host._gridImportUnit  = '';
+        }
+        if (host._gridExportValue !== null)
+        {
+            host._gridExportValue = null;
+        }
+        if (host._gridExportUnit  !== '')
+        {
+            host._gridExportUnit  = '';
+        }
         return;
     }
 
@@ -138,9 +162,15 @@ export function refreshGrid(host: GridHost): void
 function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
 {
     const ed = host._energyDefaults;
-    if (!ed) { return; }
+    if (!ed)
+    {
+        return;
+    }
     const ids = slot === 'import' ? ed.gridStatEnergyFroms : ed.gridStatEnergyTos;
-    if (ids.length === 0) { return; }
+    if (ids.length === 0)
+    {
+        return;
+    }
 
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
@@ -157,12 +187,21 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
         fetchChangeById(host.hass, sortedUnion, startMs, endMs, host._storeFetchPeriod)
             .then((byId) =>
             {
-                if (byId === null) { return; }
+                if (byId === null)
+                {
+                    return;
+                }
                 const series = mergeChangeSeries(byId, ids);
                 if (series !== null)
                 {
-                    if (slot === 'import') { host._gridImportChangeSeries = series; }
-                    else                   { host._gridExportChangeSeries = series; }
+                    if (slot === 'import')
+                    {
+                        host._gridImportChangeSeries = series;
+                    }
+                    else
+                    {
+                        host._gridExportChangeSeries = series;
+                    }
                 }
                 //Per-source split for the stacked breakdown (multi-source only), from the same result, config order.
                 if (ids.length >= 2)
@@ -170,8 +209,14 @@ function fetchGridChangeSeries(host: GridHost, slot: 'import' | 'export'): void
                     const pe = extractPerEntity(byId, ids);
                     if (pe.size > 0)
                     {
-                        if (slot === 'import') { host._gridImportChangeSeriesPerEntity = pe; }
-                        else                   { host._gridExportChangeSeriesPerEntity = pe; }
+                        if (slot === 'import')
+                        {
+                            host._gridImportChangeSeriesPerEntity = pe;
+                        }
+                        else
+                        {
+                            host._gridExportChangeSeriesPerEntity = pe;
+                        }
                     }
                 }
                 host.requestUpdate();
@@ -187,7 +232,10 @@ function readStatRates(host: GridHost, rates: string[]): void
     //`power_config.stat_rate_inverted` flips the sign for one source in a multi-source wiring; sumLiveWatts
     //applies it at read time so the split below sees the canonical "positive = import" convention.
     const { watts, any } = sumLiveWatts(host.hass, rates, host._energyDefaults?.invertedRateEntities);
-    if (!any) { return; }
+    if (!any)
+    {
+        return;
+    }
     applyGridSplit(host, watts);
 }
 
@@ -196,6 +244,9 @@ function readStatRates(host: GridHost, rates: string[]): void
 //Empty string when null so callers can collapse the chip. Thin wrapper over the shared formatter.
 export function formatGridValue(hass: HassLike, value: number | null, unit: string, decimals: number, powerU: PowerUnit = 'kW'): string
 {
-    if (value === null) { return ''; }
+    if (value === null)
+    {
+        return '';
+    }
     return formatEntityValue(hass, value, unit, decimals, powerU);
 }

@@ -151,11 +151,21 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
     }
     try
     {
-        const prefs = await callWS(host.hass, { type: 'energy/get_prefs' }) as {
-            energy_sources?: Record<string, unknown>[];
-            device_consumption?: Record<string, unknown>[];
-        };
-        const next = parseEnergyPrefs(prefs);
+        //`energy/info`'s `cost_sensors` is the authoritative energy-meter -> generated-cost-sensor map (the same
+        //one HA's own frontend reads): HA suggests `<stat_energy_from>_cost` as the entity_id, but that is only a
+        //suggestion, the entity's real identity is a registry id, so a re-registered source meter (integration
+        //re-added, device replaced) can leave HA holding `..._cost_2` forever while the clean id sits on a defunct
+        //entity. Fetched alongside get_prefs, not blocking on it: a core too old for `energy/info`, or a denied
+        //call, degrades to the derive-by-concatenation guess below rather than losing the cost chip's fetch entirely.
+        const [prefs, info] = await Promise.all([
+            callWS<{
+                energy_sources?: Record<string, unknown>[];
+                device_consumption?: Record<string, unknown>[];
+            }>(host.hass, { type: 'energy/get_prefs' }),
+            callWS<{ cost_sensors?: Record<string, string> }>(host.hass, { type: 'energy/info' })
+                .catch(() => null),
+        ]);
+        const next = parseEnergyPrefs(prefs, info?.cost_sensors);
         host._energyDefaults       = next;
         host._energyDefaultsLoaded = true;
         host.requestUpdate();
@@ -170,7 +180,9 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
 
 
 //Subscribe so the snapshot stays in sync when the Energy dashboard is edited elsewhere. Falls back to a single fetch
-//when the subscribe path is missing (older cores).
+//when the subscribe path is missing (older cores) or the subscription is rejected (a non-admin user: the event
+//isn't on core's non-admin allowlist, so `subscribeEvents` rejects Unauthorized for every viewer of a shared
+//dashboard who isn't an admin).
 export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
 {
     if (!host.hass?.connection || host._energyPrefsUnsub)
@@ -178,6 +190,14 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         return;
     }
     fetchEnergyPrefs(host);
+    //A non-admin user can never subscribe to this event (core rejects it outright, always, every time - it is
+    //not a transient failure), so skip the doomed round-trip entirely rather than firing it once per connect.
+    //`is_admin` is read defensively: only an explicit `false` skips, since an absent/unknown value (an older core,
+    //a test harness) must not silently disable a subscription that could otherwise work.
+    if (host.hass.user?.is_admin === false)
+    {
+        return;
+    }
     //`subscribeEvents` resolves its UnsubscribeFunc asynchronously. Install a synchronous canceller now so the
     //re-entry guard above holds and a teardown that lands before the promise resolves still unsubscribes once it
     //does; storing the raw promise as the unsub would silently leak the subscription (a promise is not callable).
@@ -202,11 +222,19 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         })
         .catch(() =>
         {
-            //Event subscription unsupported on this core; the one-shot fetch above already populated the cache.
-            //Clear the canceller (only if not already torn down) so a later attempt can re-subscribe.
+            //Event unsupported on this core, or a non-admin viewer the is_admin check above missed (an unknown
+            //hass.user shape): the one-shot fetch above already populated the cache. The guard is DELIBERATELY
+            //LEFT SET (as a no-op canceller) rather than cleared: every hass state change re-renders the card and
+            //re-checks this guard, so clearing it here retried the doomed subscription on every single render,
+            //hundreds of times a second on a live install - millions of rejected-event log lines a day on a non-
+            //admin viewer's Home Assistant instance. One rejected attempt per real connect is the ceiling;
+            //a genuine reconnect (unsubscribeEnergyPrefs on disconnect) is what re-arms a fresh attempt.
             if (live)
             {
-                host._energyPrefsUnsub = undefined;
+                host._energyPrefsUnsub = () =>
+                {
+                    live = false;
+                };
             }
         });
 }
@@ -301,7 +329,10 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
                     anyHit = true;
                 }
             }
-            if (!anyHit) { return null; }
+            if (!anyHit)
+            {
+                return null;
+            }
             saveDurable(durableKey, total);
             return total;
         }
@@ -343,7 +374,9 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
 export function parseEnergyPrefs(prefs: {
     energy_sources?: Record<string, unknown>[];
     device_consumption?: Record<string, unknown>[];
-}): EnergyDefaults
+//`energy/info`'s meter -> generated-cost/compensation-sensor map (see fetchEnergyPrefs). Optional: absent on a
+//core too old for the command, or when that fetch failed: the `${meter}_cost` guess below is the fallback.
+}, costSensors?: Record<string, string>): EnergyDefaults
 {
     //Fresh literal (not `{ ...EMPTY_ENERGY_DEFAULTS }`) so array fields aren't aliased onto the shared empty default,
     //avoiding cross-call contamination when the subscription path parses while a previous parse is still settling.
@@ -406,34 +439,62 @@ export function parseEnergyPrefs(prefs: {
             //item; the simplified/single shape carries them top-level. Read both so any config maps; all empty when
             //no cost is tracked (the cost chip then stays hidden). Import price/cost live on flow_from + top-level;
             //export compensation on flow_to (top-level entity_energy_price is the IMPORT price, never read as export).
-            //Import flows: price (entity/number) + cost statistic. When no explicit `stat_cost` is set, Home
-            //Assistant auto-generates one named `<stat_energy_from>_cost` as soon as a price is configured.
-            //Deriving it gives an exact, per-tariff cost with zero extra config, so a multi-tariff grid (several
-            //priced flows) just works. The fetch is graceful if the id doesn't exist.
+            //Import flows: price (entity/number) + cost statistic. When no explicit `stat_cost` is set, prefer
+            //`energy/info`'s cost_sensors map (the exact entity HA actually created); only guess the
+            //`<stat_energy_from>_cost` suggestion when that map has nothing for this meter (older core, failed
+            //fetch, or a genuinely never-created sensor - the recorder fetch is graceful either way if it's wrong).
             for (const f of [src, ...asRecordArray(src['flow_from'])])
             {
                 const meter = pickFirstString(f['stat_energy_from']);
                 const p = pickFirstString(f['entity_energy_price']);
                 const n = Number(f['number_energy_price']);
                 const hasPrice = !!p || Number.isFinite(n);
-                if (p) { out.gridImportPrices.push(p); }
-                if (Number.isFinite(n)) { out.gridImportPriceNumbers.push(n); }
+                //Deduped: a dual-tariff grid's flows commonly share the SAME price entity (one live rate covering
+                //every tariff), which is not a multi-tariff price set at all - singlePrice() below only bails to
+                //the cost-statistic path on a genuine multiple, so a repeat here must not count as one.
+                if (p)
+                {
+                    pushStrings(p, out.gridImportPrices);
+                }
+                if (Number.isFinite(n))
+                {
+                    out.gridImportPriceNumbers.push(n);
+                }
                 const explicit = pickFirstString(f['stat_cost']);
-                if (explicit) { out.gridStatCosts.push(explicit); }
-                else if (hasPrice && meter) { out.gridStatCosts.push(`${meter}_cost`); }
+                if (explicit)
+                {
+                    out.gridStatCosts.push(explicit);
+                }
+                else if (hasPrice && meter)
+                {
+                    out.gridStatCosts.push(costSensors?.[meter] ?? `${meter}_cost`);
+                }
             }
-            //Export flows: compensation statistic (explicit, else HA's auto `<stat_energy_to>_compensation`) + the
-            //export price (its own `_export` fields, never the import price).
+            //Export flows: compensation statistic (explicit, else energy/info's cost_sensors map, else HA's auto
+            //`<stat_energy_to>_compensation` guess) + the export price (its own `_export` fields, never the import
+            //price).
             for (const f of [src, ...asRecordArray(src['flow_to'])])
             {
                 const meter = pickFirstString(f['stat_energy_to']);
                 const explicit = pickFirstString(f['stat_compensation']);
-                if (explicit) { out.gridStatCompensations.push(explicit); }
-                else if (meter) { out.gridStatCompensations.push(`${meter}_compensation`); }
+                if (explicit)
+                {
+                    out.gridStatCompensations.push(explicit);
+                }
+                else if (meter)
+                {
+                    out.gridStatCompensations.push(costSensors?.[meter] ?? `${meter}_compensation`);
+                }
                 const p = pickFirstString(f['entity_energy_price_export']);
                 const n = Number(f['number_energy_price_export']);
-                if (p) { out.gridExportPrices.push(p); }
-                if (Number.isFinite(n)) { out.gridExportPriceNumbers.push(n); }
+                if (p)
+                {
+                    pushStrings(p, out.gridExportPrices);
+                }
+                if (Number.isFinite(n))
+                {
+                    out.gridExportPriceNumbers.push(n);
+                }
             }
             const directRate = pickFirstString(src['stat_rate']);
             if (directRate)
@@ -581,11 +642,17 @@ function pushStrings(v: unknown, arr: string[]): void
     if (typeof v === 'string' && v.trim() !== '')
     {
         const s = v.trim();
-        if (!arr.includes(s)) { arr.push(s); }
+        if (!arr.includes(s))
+        {
+            arr.push(s);
+        }
     }
     else if (Array.isArray(v))
     {
-        for (const item of v) { pushStrings(item, arr); }
+        for (const item of v)
+        {
+            pushStrings(item, arr);
+        }
     }
 }
 

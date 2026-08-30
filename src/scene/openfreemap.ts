@@ -7,6 +7,7 @@
 //once from the TileJSON and cached.
 
 import { decodeVectorTile } from './vector-tile';
+import { lonLatToTile as lonLatToTileTuple } from './tiles';
 import { DEG, METRES_PER_DEGREE, OFM_TILEJSON_URL, OFM_TILE_ZOOM, OFM_FETCH_TIMEOUT_MS, BUILDING_CACHE_TTL_MS } from '../core/config/constants';
 
 //One footprint ring from a tile: vertices in [lon, lat], plus the OSM render height (m) or null when untagged.
@@ -27,7 +28,10 @@ export async function fetchWithWatchdog(url: string, signal?: AbortSignal): Prom
 {
     const controller = new AbortController();
     const onAbort = (): void => controller.abort();
-    if (signal?.aborted) { controller.abort(); }
+    if (signal?.aborted)
+    {
+        controller.abort();
+    }
     signal?.addEventListener('abort', onAbort);
     const timer = setTimeout(() => controller.abort(), OFM_FETCH_TIMEOUT_MS);
     try
@@ -48,7 +52,10 @@ export async function resolveTemplate(signal?: AbortSignal): Promise<string | nu
         return _template;
     }
     const res = await fetchWithWatchdog(OFM_TILEJSON_URL, signal);
-    if (!res.ok) { return null; }
+    if (!res.ok)
+    {
+        return null;
+    }
     const tj = (await res.json()) as { tiles?: unknown };
     const t  = Array.isArray(tj.tiles) ? tj.tiles[0] : undefined;
     if (typeof t === 'string' && t.includes('{z}'))
@@ -61,13 +68,11 @@ export async function resolveTemplate(signal?: AbortSignal): Promise<string | nu
 }
 
 
-//Longitude/latitude to fractional tile coordinates at zoom z (slippy-map forward transform).
+//Longitude/latitude to fractional tile coordinates at zoom z (slippy-map forward transform). The projection math
+//lives in tiles.ts; this just wraps its tuple into the {x, y} shape this module's callers use.
 export function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }
 {
-    const n   = 2 ** z;
-    const x   = ((lon + 180) / 360) * n;
-    const rad = lat * DEG;
-    const y   = ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n;
+    const [x, y] = lonLatToTileTuple(lon, lat, z);
     return { x, y };
 }
 
@@ -132,7 +137,10 @@ export async function fetchOfmBuildingRings(
 ): Promise<OfmRing[] | null>
 {
     const template = await resolveTemplate(signal);
-    if (!template) { return null; }
+    if (!template)
+    {
+        return null;
+    }
 
     const z      = OFM_TILE_ZOOM;
     const perLon = METRES_PER_DEGREE * Math.cos(homeLat * DEG);
@@ -159,7 +167,10 @@ export async function fetchOfmBuildingRings(
             try
             {
                 const res = await fetchWithWatchdog(url, signal);
-                if (!res.ok) { throw new Error(String(res.status)); }
+                if (!res.ok)
+                {
+                    throw new Error(String(res.status));
+                }
                 const buf   = new Uint8Array(await res.arrayBuffer());
                 const layer = decodeVectorTile(buf).find((l) => l.name === 'building');
                 anyOk = true;
@@ -170,11 +181,17 @@ export async function fetchOfmBuildingRings(
                         const heightM = ringHeight(feature.tags);
                         for (const ring of feature.rings)
                         {
-                            if (ring.length < 3) { continue; }
+                            if (ring.length < 3)
+                            {
+                                continue;
+                            }
                             //Keep exterior rings only. Per the MVT spec, an exterior ring has a positive tile-space
                             //signed area and an interior ring (a courtyard/atrium hole) a negative one; drawing the
                             //holes as prisms would litter the scene with phantom buildings.
-                            if (ringSignedArea(ring) <= 0) { continue; }
+                            if (ringSignedArea(ring) <= 0)
+                            {
+                                continue;
+                            }
                             //Tile ownership. Every tile repeats its neighbours' geometry inside a ~37 m buffer, so
                             //one building is delivered by up to four tiles: WHOLE by the tile it sits in, and CLIPPED
                             //by the others (a straight cut along the buffer bound). Taking them all stacked a phantom
@@ -184,7 +201,10 @@ export async function fetchOfmBuildingRings(
                             //delivers every building exactly once and whole, by construction. Measured on the real
                             //tiles around the demo home: clipped footprints entering the scene 24 -> 0, overlapping
                             //phantoms 40 -> 4. This is what tile renderers do; a buffer is for joins, not for drawing.
-                            if (!tileOwnsRing(ring, layer.extent)) { continue; }
+                            if (!tileOwnsRing(ring, layer.extent))
+                            {
+                                continue;
+                            }
                             rings.push({
                                 lonLat:  ring.map(([px, py]) =>
                                 {

@@ -32,12 +32,18 @@ interface GpuProbe { maxTex: number; renderer: string; }
 
 function probeGpu(): GpuProbe
 {
-    if (typeof document === 'undefined') { return { maxTex: 0, renderer: '' }; }
+    if (typeof document === 'undefined')
+    {
+        return { maxTex: 0, renderer: '' };
+    }
     try
     {
         const canvas = document.createElement('canvas');
         const gl = (canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
-        if (!gl) { return { maxTex: 0, renderer: '' }; }
+        if (!gl)
+        {
+            return { maxTex: 0, renderer: '' };
+        }
         const max = gl.getParameter(gl.MAX_TEXTURE_SIZE) as unknown;
         //Prefer the standard RENDERER: Firefox exposes the real GPU there and DEPRECATES WEBGL_debug_renderer_info,
         //so touching that extension logs a console warning. Only fall back to the (deprecated) unmasked extension
@@ -47,7 +53,10 @@ function probeGpu(): GpuProbe
         if (!/\b(?:Adreno|Mali|PowerVR|VideoCore|V3D|Apple|NVIDIA|GeForce|AMD|Radeon|Intel|Iris|ANGLE)\b/i.test(renderer))
         {
             const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-            if (dbg) { renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? renderer); }
+            if (dbg)
+            {
+                renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? renderer);
+            }
         }
         //No WEBGL_lose_context/loseContext(): it logs a "WebGL context was lost" console warning, and this throwaway
         //context (created once per renderer, never per frame) is reclaimed by the GC.
@@ -66,16 +75,28 @@ function probeGpu(): GpuProbe
 //severe bugs ("Mali.*", "Adreno.*", "PowerVR .*"); there is no per-model list, and a false positive is cheap (the
 //projected path is near-equivalent), so we match by family and only carve out the current flagships:
 //  - Imagination PowerVR (all): entry Android / MediaTek.
-//  - Broadcom VideoCore / V3D: Raspberry Pi, a common Home Assistant wall display.
+//  - Broadcom VideoCore / V3D: common on the small single-board computers used as Home Assistant wall displays.
 //  - Qualcomm Adreno 2xx-6xx: entry / mid; 7xx flagships stay on the fast path.
-//  - ARM Mali (all but the G7xx flagship line): the reported Mali-G52 reports an 8192 texture cap, so only the
+//  - ARM Mali (all but the G7xx flagship line): entry/mid parts report an ample texture cap, so only the
 //    string separates it.
 function isEntryAndroidGpu(renderer: string): boolean
 {
-    if (/\bPowerVR\b/i.test(renderer))       { return true; }
-    if (/\b(?:VideoCore|V3D)\b/i.test(renderer)) { return true; }
-    if (/\bAdreno\b/i.test(renderer))        { return /\bAdreno[^0-9]*[2-6]\d\d\b/i.test(renderer); }
-    if (/\bMali\b/i.test(renderer))          { return !/\bMali-?G7\d\d\b/i.test(renderer); }
+    if (/\bPowerVR\b/i.test(renderer))
+    {
+        return true;
+    }
+    if (/\b(?:VideoCore|V3D)\b/i.test(renderer))
+    {
+        return true;
+    }
+    if (/\bAdreno\b/i.test(renderer))
+    {
+        return /\bAdreno[^0-9]*[2-6]\d\d\b/i.test(renderer);
+    }
+    if (/\bMali\b/i.test(renderer))
+    {
+        return !/\bMali-?G7\d\d\b/i.test(renderer);
+    }
     return false;
 }
 
@@ -91,8 +112,8 @@ function isEntryAndroidGpu(renderer: string): boolean
 //                (Mali/Adreno) corrupt a GPU-rasterized canvas into colored noise, but the CPU raster has correct
 //                pixels and a plain texture composites fine on them (the 3D-transformed SVG scene already does). So
 //                the rotation stays a cheap GPU transform instead of a per-frame CPU reprojection.
-//  'projected' : CPU canvas repainted already-projected every frame, no 3D layer - for devices where the 3D
-//                transform itself is broken (texture cap too small to back the layer; old iOS half-3D compositor).
+//  'projected' : CPU canvas repainted already-projected when the pose changes, no 3D layer - for devices where the
+//                3D transform itself is broken (texture cap too small to back the layer; old iOS half-3D compositor).
 //A debug flag (localStorage 'helios-ground' = normal|transform|projected) forces any mode for A/B on a real device.
 type GroundMode = 'normal' | 'transform' | 'projected';
 
@@ -101,38 +122,65 @@ function groundMode(degraded = false): GroundMode
     if (typeof localStorage !== 'undefined')
     {
         const forced = localStorage.getItem('helios-ground');
-        if (forced === 'normal' || forced === 'transform' || forced === 'projected') { return forced; }
+        if (forced === 'normal' || forced === 'transform' || forced === 'projected')
+        {
+            return forced;
+        }
     }
     //User opt-in compatibility mode (config `degraded-render`): force the projected path, which drops the CSS 3D
     //transform entirely and is the most compatible render, for a device whose WebView flickers on the 3D layer.
-    if (degraded) { return 'projected'; }
+    if (degraded)
+    {
+        return 'projected';
+    }
     const { maxTex, renderer } = probeGpu();
     //Texture cap smaller than the canvas: the 3D-transformed layer can't be backed at all (old 2048-cap GPUs) -> reproject.
-    if (maxTex > 0 && maxTex < GROUND_CANVAS_EDGE_PX) { return 'projected'; }
-    //Entry / mid Android GPU (e.g. Mali-G52, ample texture cap): corrupts a GPU canvas -> CPU raster, keep the transform.
-    if (isEntryAndroidGpu(renderer)) { return 'transform'; }
+    if (maxTex > 0 && maxTex < GROUND_CANVAS_EDGE_PX)
+    {
+        return 'projected';
+    }
+    //Entry / mid Android GPU (ample texture cap): corrupts a GPU canvas -> CPU raster, keep the transform.
+    if (isEntryAndroidGpu(renderer))
+    {
+        return 'transform';
+    }
     //Renderer masked (Android WebView: the HA app, kiosk apps hide the GPU name): can't tell entry from flagship, so
     //on Android treat it as the corruption class and take the CPU-raster transform path.
     if (renderer === '' && typeof navigator !== 'undefined')
     {
-        if (/\bAndroid\b/i.test(navigator.userAgent || '')) { return 'transform'; }
+        if (/\bAndroid\b/i.test(navigator.userAgent || ''))
+        {
+            return 'transform';
+        }
         //Non-Android masked + low memory (<= 4 GB, coarse Chrome-only signal): unknown weakness, stay on the safe reproject.
         const mem = (navigator as { deviceMemory?: number }).deviceMemory;
-        if (typeof mem === 'number' && mem <= 4) { return 'projected'; }
+        if (typeof mem === 'number' && mem <= 4)
+        {
+            return 'projected';
+        }
     }
 
-    if (typeof navigator === 'undefined') { return 'normal'; }
+    if (typeof navigator === 'undefined')
+    {
+        return 'normal';
+    }
     const ua = navigator.userAgent || '';
     const appleTouch = /iPad|iPhone|iPod/.test(ua)
         || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (!appleTouch) { return 'normal'; }
+    if (!appleTouch)
+    {
+        return 'normal';
+    }
     //Old iOS/iPadOS WebKit (Safari <= 16, or an in-app WKWebView on that hardware) half-composites the 3D layer and
     //clips the scene to its top half, so the transform itself is broken there -> reproject. Read "Version/NN" or the
     //"CPU OS NN" token; a stripped WebView UA with neither errs to the reprojected path.
     const safari = ua.match(/Version\/(\d+)/);
     const os     = ua.match(/(?:CPU|iPhone) OS (\d+)/);
     const major  = (safari ? parseInt(safari[1], 10) : 0) || (os ? parseInt(os[1], 10) : 0);
-    if (major > 0) { return major <= 16 ? 'projected' : 'normal'; }
+    if (major > 0)
+    {
+        return major <= 16 ? 'projected' : 'normal';
+    }
     return 'projected';
 }
 
@@ -222,10 +270,19 @@ export class SceneRenderer
     public constructor(container: HTMLElement, opts: SceneRendererOptions = {})
     {
         this._container = container;
-        if (opts.shadow)        { this._palette.shadow = opts.shadow; }
-        if (opts.shadowOpacity != null) { this._palette.shadowOpacity = opts.shadowOpacity; }
+        if (opts.shadow)
+        {
+            this._palette.shadow = opts.shadow;
+        }
+        if (opts.shadowOpacity != null)
+        {
+            this._palette.shadowOpacity = opts.shadowOpacity;
+        }
         //Compatibility mode re-decides the ground path as 'projected' (the localStorage debug flag still wins).
-        if (opts.degraded === true) { this._groundMode = groundMode(true); }
+        if (opts.degraded === true)
+        {
+            this._groundMode = groundMode(true);
+        }
 
         this._groundHolder = document.createElement('div');
         this._groundHolder.className = 'scene-ground-holder';
@@ -243,18 +300,29 @@ export class SceneRenderer
         //Only redraw on a REAL size change: a draw repaints the HUD, which the host re-projects, and that DOM
         //write can fire the observer again. Without this guard the no-op notification re-draws, re-projects,
         //re-fires: an infinite ResizeObserver loop (visible as the scene flickering every frame).
-        this._resizeObserver = new ResizeObserver((entries) =>
+        //Feature-detected like the same API in the weather layer: a device without ResizeObserver just keeps the
+        //size it was seeded with instead of throwing out of the constructor.
+        if (typeof ResizeObserver !== 'undefined')
         {
-            const cr = entries[entries.length - 1]?.contentRect;
-            if (!cr) { return; }
-            const w = Math.round(cr.width);
-            const h = Math.round(cr.height);
-            if (w === this._obsW && h === this._obsH) { return; }
-            this._obsW = w;
-            this._obsH = h;
-            this.scheduleRedraw();
-        });
-        this._resizeObserver.observe(container);
+            this._resizeObserver = new ResizeObserver((entries) =>
+            {
+                const cr = entries[entries.length - 1]?.contentRect;
+                if (!cr)
+                {
+                    return;
+                }
+                const w = Math.round(cr.width);
+                const h = Math.round(cr.height);
+                if (w === this._obsW && h === this._obsH)
+                {
+                    return;
+                }
+                this._obsW = w;
+                this._obsH = h;
+                this.scheduleRedraw();
+            });
+            this._resizeObserver.observe(container);
+        }
 
         //Seed the camera from the container's current size. The container is already laid out when the
         //renderer is built, so the camera projects against a real viewport from the first frame instead of
@@ -276,17 +344,26 @@ export class SceneRenderer
         //Any compat mode ('transform' or 'projected') backs the ground canvas on the CPU (willReadFrequently) to
         //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas.
         const built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, this._groundMode !== 'normal');
-        if (!this._alive || token !== this._groundToken) { return; }
+        if (!this._alive || token !== this._groundToken)
+        {
+            return;
+        }
         this._groundStyleCur = style;
         this._ground         = built.ground;
         //Layer-promotion hint for the CPU-raster transform path: stabilizes the tilted canvas's compositing layer on
         //the entry GPUs that would otherwise be prone to mis-compositing it.
-        if (this._groundMode === 'transform') { built.ground.el.style.backfaceVisibility = 'hidden'; }
+        if (this._groundMode === 'transform')
+        {
+            built.ground.el.style.backfaceVisibility = 'hidden';
+        }
         this._groundRepaint  = built.repaint;
         this._groundRepaintProjected = built.repaintProjected;
         this._projectedPose = '';
         //buildVectorGround painted the ground ungraded; if a weather grade is already active, repaint it graded.
-        if (this._wxSat !== 1 || this._wxBright !== 1) { this._repaintGroundFromCache(); }
+        if (this._wxSat !== 1 || this._wxBright !== 1)
+        {
+            this._repaintGroundFromCache();
+        }
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
         //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
         //pixels. A browser may drop a canvas's backing store while the page sits idle, and nothing here would put
@@ -297,7 +374,10 @@ export class SceneRenderer
         //cached features, no network.
         built.ground.el.addEventListener('contextrestored', () =>
         {
-            if (this._alive && this._groundStyleCur) { this.setGroundStyle(this._groundStyleCur); }
+            if (this._alive && this._groundStyleCur)
+            {
+                this.setGroundStyle(this._groundStyleCur);
+            }
         });
         this.scheduleRedraw();
     }
@@ -323,7 +403,10 @@ export class SceneRenderer
     //ground from its cache and rebuilds the scene SVG (both pose-guarded on the grade below).
     public setWeatherGrade(sat: number, bright: number): void
     {
-        if (sat === this._wxSat && bright === this._wxBright) { return; }
+        if (sat === this._wxSat && bright === this._wxBright)
+        {
+            return;
+        }
         this._wxSat    = sat;
         this._wxBright = bright;
         this._repaintGroundFromCache();
@@ -335,11 +418,20 @@ export class SceneRenderer
     //with the buildings, which grade the same way.
     private _gradedGroundStyle(): GroundStyle | undefined
     {
-        if (!this._groundStyleCur) { return undefined; }
-        if (this._wxSat === 1 && this._wxBright === 1) { return this._groundStyleCur; }
+        if (!this._groundStyleCur)
+        {
+            return undefined;
+        }
+        if (this._wxSat === 1 && this._wxBright === 1)
+        {
+            return this._groundStyleCur;
+        }
         const src     = this._groundStyleCur.palette;
         const palette = {} as GroundPalette;
-        for (const key of GROUND_LAYER_KEYS) { palette[key] = gradeColor(src[key], this._wxSat, this._wxBright); }
+        for (const key of GROUND_LAYER_KEYS)
+        {
+            palette[key] = gradeColor(src[key], this._wxSat, this._wxBright);
+        }
         return { palette, hidden: this._groundStyleCur.hidden };
     }
 
@@ -347,7 +439,10 @@ export class SceneRenderer
     private _repaintGroundFromCache(): void
     {
         const style = this._gradedGroundStyle();
-        if (this._groundRepaint && style) { this._groundRepaint(style, this._groundAltitude); }
+        if (this._groundRepaint && style)
+        {
+            this._groundRepaint(style, this._groundAltitude);
+        }
     }
 
     public setBuildings(buildings: Building[]): void
@@ -368,7 +463,10 @@ export class SceneRenderer
     //replays it whenever buildings (re)arrive, so it stays in step with the graphs.
     public animateGrowth(): void
     {
-        if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
+        if (this._growthRaf)
+        {
+            cancelAnimationFrame(this._growthRaf); this._growthRaf = 0;
+        }
         if (prefersReducedMotion())
         {
             this._growth = 1;
@@ -382,7 +480,10 @@ export class SceneRenderer
         const start = performance.now();
         const tick = (now: number): void =>
         {
-            if (!this._alive) { this._growthRaf = 0; return; }
+            if (!this._alive)
+            {
+                this._growthRaf = 0; return;
+            }
             const t = Math.min(1, (now - start) / GROWTH_RISE_MS);
             this._growth = 1 - (1 - t) ** 3;
             this.scheduleRedraw();
@@ -411,7 +512,10 @@ export class SceneRenderer
     //grow back up (new colour). Instant under reduced motion or on first paint (no prior colour).
     public animateHomeTo(color: string): void
     {
-        if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
+        if (this._homeRaf)
+        {
+            cancelAnimationFrame(this._homeRaf); this._homeRaf = 0;
+        }
         if (!this._home.color || prefersReducedMotion())
         {
             this._home = { color, growth: 1 };
@@ -423,7 +527,10 @@ export class SceneRenderer
         const start = performance.now();
         const tick = (now: number): void =>
         {
-            if (!this._alive) { this._homeRaf = 0; return; }
+            if (!this._alive)
+            {
+                this._homeRaf = 0; return;
+            }
             const t = now - start;
             if (t < DOWN)
             {
@@ -460,13 +567,22 @@ export class SceneRenderer
         this.scheduleRedraw();
     }
 
-    public getCameraBearing(): number { return this.camera.bearingDeg; }
-    public getCameraPitch():   number { return this.camera.tiltDeg; }
+    public getCameraBearing(): number
+    {
+        return this.camera.bearingDeg;
+    }
+    public getCameraPitch():   number
+    {
+        return this.camera.tiltDeg;
+    }
 
     //rAF-coalesced redraw: many setters per frame collapse to one paint.
     public scheduleRedraw(): void
     {
-        if (this._redrawScheduled || !this._alive) { return; }
+        if (this._redrawScheduled || !this._alive)
+        {
+            return;
+        }
         this._redrawScheduled = true;
         this._rafToken = requestAnimationFrame(() =>
         {
@@ -479,9 +595,15 @@ export class SceneRenderer
     //Skipped unless the pose actually changed, so a static scene costs nothing.
     private _paintProjectedGround(w: number, h: number): void
     {
-        if (!this._ground || !this._groundRepaintProjected || !this._groundStyleCur) { return; }
+        if (!this._ground || !this._groundRepaintProjected || !this._groundStyleCur)
+        {
+            return;
+        }
         const pose = `${w}x${h}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
-        if (pose === this._projectedPose) { return; }
+        if (pose === this._projectedPose)
+        {
+            return;
+        }
         this._projectedPose = pose;
         const style = this._gradedGroundStyle() ?? this._groundStyleCur;
         this._groundRepaintProjected(this.camera, w, h, style, this._groundAltitude);
@@ -496,14 +618,20 @@ export class SceneRenderer
 
     private _draw(): void
     {
-        if (!this._alive) { return; }
+        if (!this._alive)
+        {
+            return;
+        }
         //Read the live size at draw time. The draw is rAF-coalesced, so by the time it runs the layout pass
         //has settled: clientWidth is the final size, not the transient the ResizeObserver may have captured
         //mid-relayout (which would centre the scene on ~(0,0) for a frame). Bail while the container has no
         //size yet (hidden tab, pre-layout); the observer re-fires the draw once it gains one.
         const width  = this._container.clientWidth  || 0;
         const height = this._container.clientHeight || 0;
-        if (width === 0 || height === 0) { return; }
+        if (width === 0 || height === 0)
+        {
+            return;
+        }
 
         this.camera.setViewport(width, height);
 
@@ -511,7 +639,10 @@ export class SceneRenderer
         //repaints already-projected (no transform); 'normal' and 'transform' both ride the cheap CSS 3D transform.
         if (this._ground)
         {
-            if (this._groundMode === 'projected') { this._paintProjectedGround(width, height); }
+            if (this._groundMode === 'projected')
+            {
+                this._paintProjectedGround(width, height);
+            }
             else
             {
                 const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
@@ -573,9 +704,18 @@ export class SceneRenderer
         this._alive = false;
         this._resizeObserver?.disconnect();
         this._resizeObserver = undefined;
-        if (this._rafToken) { cancelAnimationFrame(this._rafToken); this._rafToken = 0; }
-        if (this._growthRaf) { cancelAnimationFrame(this._growthRaf); this._growthRaf = 0; }
-        if (this._homeRaf) { cancelAnimationFrame(this._homeRaf); this._homeRaf = 0; }
+        if (this._rafToken)
+        {
+            cancelAnimationFrame(this._rafToken); this._rafToken = 0;
+        }
+        if (this._growthRaf)
+        {
+            cancelAnimationFrame(this._growthRaf); this._growthRaf = 0;
+        }
+        if (this._homeRaf)
+        {
+            cancelAnimationFrame(this._homeRaf); this._homeRaf = 0;
+        }
         this._groundHolder.remove();
         this._sceneSvg.remove();
     }

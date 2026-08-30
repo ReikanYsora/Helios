@@ -181,11 +181,11 @@ export const CACHE_KEY_PREFIX = 'helios-weather-cache:';
 //=== Colour-space conversion (CIE D65 / LAB) ===
 //D65 white-point tristimulus values and the LAB piecewise-transfer thresholds, used by the RGB<->LAB
 //conversion that drives the per-energy-source colour ramp.
- 
+
 export const Xn = 0.95047;
 export const Yn = 1;
 export const Zn = 1.08883;
- 
+
 export const LAB_T0 = 0.137931034;
 export const LAB_T1 = 0.206896552;
 export const LAB_T2 = 0.12841855;

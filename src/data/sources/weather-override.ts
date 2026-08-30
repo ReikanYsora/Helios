@@ -16,7 +16,7 @@ import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 import { quantizedAnchorMs } from '../source-fetch';
-import { parseStatBoundaryLoose } from './energy-stats';
+import { parseStatBoundaryLoose, parseRawHistorySeries, fetchStatsOrRawHistory } from './energy-stats';
 import { temperatureToCelsius } from '../../core/format/format';
 import { HOUR_MS, DAY_MS } from '../../core/config/constants';
 
@@ -96,11 +96,23 @@ function stateFor(host: WeatherOverrideHost, variable: WeatherOverrideVar): VarS
 // normalised to the canonical unit FIRST, so the range bounds stay expressed in canonical units.
 function clampReading(raw: number, def: OverrideDef, conv: ReadingConverter): number | null
 {
-    if (!isFinite(raw)) { return null; }
+    if (!isFinite(raw))
+    {
+        return null;
+    }
     let v = conv.convert(raw);
-    if (!isFinite(v)) { return null; }
-    if (def.min !== null) { v = Math.max(def.min, v); }
-    if (def.max !== null) { v = Math.min(def.max, v); }
+    if (!isFinite(v))
+    {
+        return null;
+    }
+    if (def.min !== null)
+    {
+        v = Math.max(def.min, v);
+    }
+    if (def.max !== null)
+    {
+        v = Math.min(def.max, v);
+    }
     return v;
 }
 
@@ -115,83 +127,161 @@ const IDENTITY_CONVERTER: ReadingConverter = { convert: (v) => v, tag: '' };
 
 function readingConverter(hass: HassLike, entityId: string, def: OverrideDef): ReadingConverter
 {
-    if (def.variable !== 'temperature') { return IDENTITY_CONVERTER; }
+    if (def.variable !== 'temperature')
+    {
+        return IDENTITY_CONVERTER;
+    }
     const unit = String(hass?.states?.[entityId]?.attributes?.unit_of_measurement ?? '').trim();
     const convert = temperatureToCelsius(unit);
     return convert ? { convert, tag: `@${unit}` } : IDENTITY_CONVERTER;
 }
 
 
-// Live + history refresh for every overridable variable, called each lifecycle cycle.
+// Live + history refresh for every overridable variable, called each lifecycle cycle. The numeric OVERRIDES share
+// refreshVar/pushVar with the condition override below (a HA `weather` entity's state, and recorder history, mapped
+// to WMO codes and pushed as the 'code' override so it drives the rain / snow / thunderstorm layers): both are the
+// same fetch-key/cache-gate and dirty-flag-gated push scaffolding, differing only in how the live value is derived
+// from the entity's state (clampReading+conv vs a CONDITION_TO_CODE lookup) and which config key/history fetcher
+// feeds them.
 export function refreshWeatherOverrides(host: WeatherOverrideHost): void
 {
     for (const def of OVERRIDES)
     {
-        refreshOne(host, def);
+        refreshVar(
+            host, def.variable, def.configKey,
+            (hass, entity) => readingConverter(hass, entity, def),
+            (stateRef, conv) => clampReading(parseFloat(stateRef.state), def, conv),
+            (hass, entityId, start, end, durableKey, conv) => fetchNumericHistory(hass, entityId, start, end, durableKey, def, conv),
+        );
     }
-    refreshConditionOverride(host);
+    refreshVar(
+        host, 'code', 'weather-entity',
+        () => IDENTITY_CONVERTER,
+        (stateRef) => CONDITION_TO_CODE[String(stateRef.state)] ?? null,
+        (hass, entityId, start, end, durableKey) => fetchConditionHistory(hass, entityId, start, end, durableKey),
+    );
 }
 
 
-//Condition override from a HA `weather` entity: its state (and recorder history) mapped to WMO codes, pushed to
-//the engine as the 'code' override so it drives the rain / snow / thunderstorm layers over the live + past window.
-function refreshConditionOverride(host: WeatherOverrideHost): void
+// Live + history refresh for one overridable variable (shared by the numeric OVERRIDES and the 'code' condition
+// override). `convFor` re-derives the entity's reading converter (identity for 'code', which carries no unit);
+// `deriveLive` turns the entity's current state into the variable's live sample; `fetchHistory` pulls its past
+// series (numeric stats+raw for the OVERRIDES vars, condition-code raw history for 'code').
+function refreshVar(
+    host:         WeatherOverrideHost,
+    variable:     WeatherOverrideVar,
+    configKey:    string,
+    convFor:      (hass: HassLike, entity: string) => ReadingConverter,
+    deriveLive:   (stateRef: HassLike['states'][string], conv: ReadingConverter) => number | null,
+    fetchHistory: (hass: HassLike, entityId: string, start: Date, end: Date, durableKey: string, conv: ReadingConverter) => Promise<NumSeries | null>,
+): void
 {
-    const entity = String(host.config?.['weather-entity'] ?? '').trim();
-    const st = stateFor(host, 'code');
+    const entity = String(host.config?.[configKey] ?? '').trim();
+    const st = stateFor(host, variable);
 
     if (!entity || !host.hass)
     {
-        if (st.history !== null) { st.history = null; }
+        if (st.history !== null)
+        {
+            st.history = null;
+        }
         st.fetchKey     = '';
         st.pushedEntity = '';
-        host._engine?.setWeatherOverrideSamples('code', null);
+        host._engine?.setWeatherOverrideSamples(variable, null);
         return;
     }
 
-    pushCondition(host, entity);
+    const conv = convFor(host.hass, entity);
 
-    if (!host._timeRange || st.fetching) { return; }
+    // Keep the engine's "now" sample fresh every cycle (the engine de-dupes on sort, so it is cheap).
+    pushVar(host, variable, entity, conv, deriveLive);
 
+    if (!host._timeRange || st.fetching)
+    {
+        return;
+    }
+
+    // Narrow raw-window cap: a high-frequency sensor over a multi-day timeline would drag the recorder. The head of
+    // the curve needs the live data; older values interpolate from the resampled series. Cap anchored on NOW so
+    // fetchStart stays in the past even when the timeline end sits in the forecast horizon.
     const RAW_WINDOW_H = 6;
     const anchorMs   = quantizedAnchorMs(OVERRIDE_TTL_MS);
     const cap        = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
     const fetchStart = host._timeRange.start < cap ? cap : host._timeRange.start;
     const keyEnd     = Math.floor(host._timeRange.end.getTime() / OVERRIDE_TTL_MS) * OVERRIDE_TTL_MS;
-    const fetchKey   = `code:${entity}@${fetchStart.getTime()}|${keyEnd}`;
-    if (fetchKey === st.fetchKey) { return; }
+    const fetchKey   = `${variable}:${entity}${conv.tag}@${fetchStart.getTime()}|${keyEnd}`;
+    if (fetchKey === st.fetchKey)
+    {
+        return;
+    }
     st.fetchKey = fetchKey;
 
-    const durableKey = `wxo:code:${entity}`;
+    const durableKey = `wxo:${variable}:${entity}${conv.tag}`;
     st.fetching = true;
-    void _cache.get(fetchKey, () => fetchConditionHistory(host.hass, entity, fetchStart, host._timeRange!.end, durableKey))
-        .then(h => { st.history = h ?? { times: [], values: [] }; pushCondition(host, entity); })
-        .finally(() => { st.fetching = false; });
+    void _cache.get(fetchKey, () => fetchHistory(host.hass, entity, fetchStart, host._timeRange!.end, durableKey, conv))
+        .then(h =>
+        {
+            // The entity, or the unit it declares, can change while this request is in flight. The refresh that
+            // noticed already bailed on `st.fetching` without re-keying, so `st.fetchKey` still holds THIS fetch's
+            // key and cannot detect the change: re-derive the live wiring instead. Installing a stale result would
+            // overwrite the freshly converted live sample with history converted under the previous unit. Clearing
+            // the key re-arms the next cycle against the current wiring (mirrors grid-guard's mid-fetch bail).
+            const liveEntity = String(host.config?.[configKey] ?? '').trim();
+            if (liveEntity !== entity || convFor(host.hass, entity).tag !== conv.tag)
+            {
+                st.fetchKey = '';
+                return;
+            }
+            st.history = h ?? { times: [], values: [] };
+            pushVar(host, variable, entity, conv, deriveLive);
+        })
+        .finally(() =>
+        {
+            st.fetching = false;
+        });
 }
 
-function pushCondition(host: WeatherOverrideHost, entity: string): void
+// Merge cached recorder history with the live state and push to the engine. Dirty-flag gated so an unchanged
+// (history, state, entity) triple skips the rebuild. `deriveLive` is the one thing that differs between the
+// numeric OVERRIDES (clampReading+conv) and the 'code' condition override (a CONDITION_TO_CODE lookup).
+function pushVar(
+    host:       WeatherOverrideHost,
+    variable:   WeatherOverrideVar,
+    entity:     string,
+    conv:       ReadingConverter,
+    deriveLive: (stateRef: HassLike['states'][string], conv: ReadingConverter) => number | null,
+): void
 {
-    if (!host._engine) { return; }
-    const st       = stateFor(host, 'code');
+    if (!host._engine)
+    {
+        return;
+    }
+    const st       = stateFor(host, variable);
     const hist     = st.history;
     const stateRef = host.hass.states?.[entity];
-    if (st.pushedHist === hist && st.pushedState === stateRef && st.pushedEntity === entity) { return; }
+    if (st.pushedHist === hist && st.pushedState === stateRef && st.pushedEntity === entity)
+    {
+        return;
+    }
 
     const samples: { time: Date; value: number }[] = [];
     if (hist)
     {
-        for (let i = 0; i < hist.times.length; i++) { samples.push({ time: hist.times[i], value: hist.values[i] }); }
+        for (let i = 0; i < hist.times.length; i++)
+        {
+            samples.push({ time: hist.times[i], value: hist.values[i] });
+        }
     }
     if (stateRef)
     {
-        const code = CONDITION_TO_CODE[String(stateRef.state)];
-        if (code !== undefined)
+        const v = deriveLive(stateRef, conv);
+        if (v !== null)
         {
             const ts = stateRef.last_updated ? new Date(stateRef.last_updated) : new Date();
-            samples.push({ time: ts, value: code });
+            samples.push({ time: ts, value: v });
         }
     }
-    host._engine.setWeatherOverrideSamples('code', samples.length > 0 ? samples : null);
+    host._engine.setWeatherOverrideSamples(variable, samples.length > 0 ? samples : null);
     st.pushedHist   = hist;
     st.pushedState  = stateRef;
     st.pushedEntity = entity;
@@ -201,12 +291,18 @@ function pushCondition(host: WeatherOverrideHost, entity: string): void
 //the last-good durable copy on a failed fetch.
 async function fetchConditionHistory(hass: HassLike, entityId: string, start: Date, end: Date, durableKey: string): Promise<NumSeries | null>
 {
-    if (!hass?.callWS) { return null; }
+    if (!hass?.callWS)
+    {
+        return null;
+    }
     try
     {
         const now = new Date();
         const fetchEnd = end > now ? now : end;
-        if (start >= fetchEnd) { return { times: [], values: [] }; }
+        if (start >= fetchEnd)
+        {
+            return { times: [], values: [] };
+        }
 
         const raw: any = await callWS<any>(hass, {
             type:                     'history/history_during_period',
@@ -228,8 +324,14 @@ async function fetchConditionHistory(hass: HassLike, entityId: string, start: Da
             let ts: Date | null = typeof tsRaw === 'number'
                 ? new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000)
                 : (typeof tsRaw === 'string' ? new Date(tsRaw) : null);
-            if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) { ts = new Date(lastTsMs); }
-            if (code === undefined || !ts || isNaN(ts.getTime())) { continue; }
+            if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+            {
+                ts = new Date(lastTsMs);
+            }
+            if (code === undefined || !ts || isNaN(ts.getTime()))
+            {
+                continue;
+            }
             lastTsMs = ts.getTime();
             times.push(ts);
             values.push(code);
@@ -245,96 +347,9 @@ async function fetchConditionHistory(hass: HassLike, entityId: string, start: Da
     }
 }
 
-function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
-{
-    const entity = String(host.config?.[def.configKey] ?? '').trim();
-    const st = stateFor(host, def.variable);
-
-    if (!entity || !host.hass)
-    {
-        if (st.history !== null) { st.history = null; }
-        st.fetchKey     = '';
-        st.pushedEntity = '';
-        host._engine?.setWeatherOverrideSamples(def.variable, null);
-        return;
-    }
-
-    const conv = readingConverter(host.hass, entity, def);
-
-    // Keep the engine's "now" sample fresh every cycle (the engine de-dupes on sort, so it is cheap).
-    pushOne(host, def, entity, conv);
-
-    if (!host._timeRange || st.fetching) { return; }
-
-    // Narrow raw-window cap (mirrors irradiance): a high-frequency sensor over a multi-day timeline would drag the
-    // recorder. The head of the curve needs the live data; older values interpolate from the resampled series.
-    // Cap anchored on NOW so fetchStart stays in the past even when the timeline end sits in the forecast horizon.
-    const RAW_WINDOW_H = 6;
-    const anchorMs   = quantizedAnchorMs(OVERRIDE_TTL_MS);
-    const cap        = new Date(anchorMs - RAW_WINDOW_H * HOUR_MS);
-    const fetchStart = host._timeRange.start < cap ? cap : host._timeRange.start;
-    const keyEnd     = Math.floor(host._timeRange.end.getTime() / OVERRIDE_TTL_MS) * OVERRIDE_TTL_MS;
-    const fetchKey   = `${def.variable}:${entity}${conv.tag}@${fetchStart.getTime()}|${keyEnd}`;
-    if (fetchKey === st.fetchKey) { return; }
-    st.fetchKey = fetchKey;
-
-    const durableKey = `wxo:${def.variable}:${entity}${conv.tag}`;
-    st.fetching = true;
-    void _cache.get(fetchKey, () => fetchNumericHistory(host.hass, entity, fetchStart, host._timeRange!.end, durableKey, def, conv))
-        .then(h =>
-        {
-            // The entity, or the unit it declares, can change while this request is in flight. The refresh that
-            // noticed already bailed on `st.fetching` without re-keying, so `st.fetchKey` still holds THIS fetch's
-            // key and cannot detect the change: re-derive the live wiring instead. Installing a stale result would
-            // overwrite the freshly converted live sample with history converted under the previous unit. Clearing
-            // the key re-arms the next cycle against the current wiring (mirrors grid-guard's mid-fetch bail).
-            const liveEntity = String(host.config?.[def.configKey] ?? '').trim();
-            if (liveEntity !== entity || readingConverter(host.hass, entity, def).tag !== conv.tag)
-            {
-                st.fetchKey = '';
-                return;
-            }
-            st.history = h ?? { times: [], values: [] };
-            pushOne(host, def, entity, conv);
-        })
-        .finally(() => { st.fetching = false; });
-}
-
-// Merge cached recorder history with the live state and push to the engine. Dirty-flag gated so an unchanged
-// (history, state, entity) triple skips the rebuild.
-function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string, conv: ReadingConverter): void
-{
-    if (!host._engine) { return; }
-    const st       = stateFor(host, def.variable);
-    const hist     = st.history;
-    const stateRef = host.hass.states?.[entity];
-    if (st.pushedHist === hist && st.pushedState === stateRef && st.pushedEntity === entity) { return; }
-
-    const samples: { time: Date; value: number }[] = [];
-    if (hist)
-    {
-        for (let i = 0; i < hist.times.length; i++) { samples.push({ time: hist.times[i], value: hist.values[i] }); }
-    }
-    if (stateRef)
-    {
-        const v = clampReading(parseFloat(stateRef.state), def, conv);
-        if (v !== null)
-        {
-            const ts = stateRef.last_updated ? new Date(stateRef.last_updated) : new Date();
-            samples.push({ time: ts, value: v });
-        }
-    }
-    host._engine.setWeatherOverrideSamples(def.variable, samples.length > 0 ? samples : null);
-    st.pushedHist   = hist;
-    st.pushedState  = stateRef;
-    st.pushedEntity = entity;
-}
-
-
-// Pure numeric-history fetcher: statistics `mean` first (scales to high-frequency measurement sensors that land in
-// LTS), raw history as the fallback. Values come back in the variable's canonical unit (`conv` normalises whatever
-// the entity reports). Returns the fresh series, the last-good durable copy on a failed fetch, or an empty series
-// for an empty window. No host mutation and no engine push (the caller pushes in the `.then`).
+// Numeric-history fetcher for the OVERRIDES vars: the shared single-entity stats-then-raw fetch (energy-stats.ts).
+// Values come back in the variable's canonical unit (`conv` normalises whatever the entity reports). No host
+// mutation and no engine push (the caller pushes in the `.then`).
 export async function fetchNumericHistory(
     hass:       HassLike,
     entityId:   string,
@@ -345,49 +360,12 @@ export async function fetchNumericHistory(
     conv:       ReadingConverter = IDENTITY_CONVERTER,
 ): Promise<NumSeries | null>
 {
-    if (!hass?.callWS) { return null; }
-    try
-    {
-        const now = new Date();
-        const fetchEnd = end > now ? now : end;
-        if (start >= fetchEnd) { return { times: [], values: [] }; }
-
-        let series: NumSeries = { times: [], values: [] };
-        const statsResult: any = await callWS<any>(hass, {
-            type:          'recorder/statistics_during_period',
-            start_time:    start.toISOString(),
-            end_time:      fetchEnd.toISOString(),
-            statistic_ids: [entityId],
-            period:        '5minute',
-            types:         ['mean'],
-        });
-        const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
-        if (statsArr.length > 0)
-        {
-            series = parseStats(statsArr, def, conv);
-        }
-        else
-        {
-            const rawResult: any = await callWS<any>(hass, {
-                type:                     'history/history_during_period',
-                start_time:               start.toISOString(),
-                end_time:                 fetchEnd.toISOString(),
-                entity_ids:               [entityId],
-                minimal_response:         true,
-                no_attributes:            true,
-                significant_changes_only: true,
-            });
-            series = parseRaw((rawResult && rawResult[entityId]) ?? [], def, conv);
-        }
-
-        saveDurableSeries(durableKey, series);
-        return series;
-    }
-    catch (_e)
-    {
-        warnOnce(`wxo-fetch-${durableKey}`, 'weather override fetch failed; showing cached data until it recovers');
-        return loadDurableSeries(durableKey, DAY_MS);
-    }
+    return fetchStatsOrRawHistory(hass, entityId, start, end, durableKey, {
+        parseStats:  (arr) => parseStats(arr, def, conv),
+        parseRaw:    (arr) => parseRaw(arr, def, conv),
+        warnKey:     `wxo-fetch-${durableKey}`,
+        warnMessage: 'weather override fetch failed; showing cached data until it recovers',
+    });
 }
 
 // Statistics parser: the `mean` column at the bucket midpoint. Buckets with a null/out-of-range mean are skipped.
@@ -399,49 +377,30 @@ function parseStats(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSe
     {
         const startMs = parseStatBoundaryLoose(item?.start);
         const endMs   = parseStatBoundaryLoose(item?.end);
-        if (startMs === null) { continue; }
+        if (startMs === null)
+        {
+            continue;
+        }
         const raw = item?.mean;
-        if (raw === null || raw === undefined) { continue; }
+        if (raw === null || raw === undefined)
+        {
+            continue;
+        }
         const v = clampReading(typeof raw === 'number' ? raw : parseFloat(String(raw)), def, conv);
-        if (v === null) { continue; }
+        if (v === null)
+        {
+            continue;
+        }
         times.push(new Date(endMs !== null ? (startMs + endMs) / 2 : startMs));
         values.push(v);
     }
     return { times, values };
 }
 
-// Raw-history parser (fallback), tolerant of the compact `s`/`lu` and verbose `state`/`last_updated` shapes; drops
-// unavailable/unknown/empty and falls back to the previous timestamp when `lu` is omitted on repeats.
+// Raw-history parser (fallback), via the shared per-entity parser (energy-stats.ts): compact/verbose state +
+// timestamp shapes, epoch ms/seconds magnitude check, carry-forward onto the previous sample's timestamp when a
+// repeat omits its own, clamped/converted through the variable's own reading rules.
 function parseRaw(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSeries
 {
-    const times: Date[] = [];
-    const values: number[] = [];
-    let lastTsMs: number | null = null;
-
-    for (const item of arr)
-    {
-        const sRaw = item?.s ?? item?.state;
-        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') { continue; }
-        const v = clampReading(parseFloat(String(sRaw)), def, conv);
-        if (v === null) { continue; }
-
-        let ts: Date | null = null;
-        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
-        if (typeof tsRaw === 'number')
-        {
-            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
-        }
-        else if (typeof tsRaw === 'string')
-        {
-            const asNum = Number(tsRaw);
-            ts = (Number.isFinite(asNum) && asNum > 1e9) ? new Date(asNum > 1e12 ? asNum : asNum * 1000) : new Date(tsRaw);
-        }
-        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) { ts = new Date(lastTsMs); }
-        if (!ts || isNaN(ts.getTime())) { continue; }
-
-        lastTsMs = ts.getTime();
-        times.push(ts);
-        values.push(v);
-    }
-    return { times, values };
+    return parseRawHistorySeries(arr, (s) => clampReading(parseFloat(s), def, conv));
 }

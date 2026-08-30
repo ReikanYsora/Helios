@@ -67,7 +67,10 @@ export interface PvHost
 //tuple matches the last successful fetch.
 export function refreshPv(host: PvHost): void
 {
-    if (!host.hass) { return; }
+    if (!host.hass)
+    {
+        return;
+    }
     const entity = resolvePvLiveEntity(host._energyDefaults);
     const meters = host._energyDefaults.solarStatEnergyFroms;
 
@@ -176,15 +179,24 @@ export function refreshPv(host: PvHost): void
             fetchChangeById(host.hass, sortedUnion, startMs, endMs, host._storeFetchPeriod)
                 .then((byId) =>
                 {
-                    if (byId === null) { return; }
+                    if (byId === null)
+                    {
+                        return;
+                    }
                     const agg = mergeChangeSeries(byId, changeIds);
-                    if (agg !== null) { host._pvChangeSeries = agg; }
+                    if (agg !== null)
+                    {
+                        host._pvChangeSeries = agg;
+                    }
                     //Per-source series (the period aggregation splits production by meter): read each meter's own
                     //buckets from the same per-id result, no extra call. Only meaningful with 2+ sources.
                     if (changeIds.length >= 2)
                     {
                         const next = extractPerEntity(byId, changeIds);
-                        if (next.size > 0) { host._pvChangeSeriesPerEntity = next; }
+                        if (next.size > 0)
+                        {
+                            host._pvChangeSeriesPerEntity = next;
+                        }
                     }
                     host.requestUpdate();
                 }));
@@ -230,9 +242,15 @@ export interface PvLiveHost
 export function currentPvRate(host: PvLiveHost): PvRate | null
 {
     const rates = host._energyDefaults.solarStatRates;
-    if (rates.length === 0) { return null; }
+    if (rates.length === 0)
+    {
+        return null;
+    }
     const { watts, any } = sumLiveWatts(host.hass, rates);
-    if (!any) { return null; }
+    if (!any)
+    {
+        return null;
+    }
     return { value: Math.max(0, watts), unit: 'W' };
 }
 

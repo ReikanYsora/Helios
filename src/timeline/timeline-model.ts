@@ -44,7 +44,10 @@ export function resolveRangeMs(
     range: { start: Date; end: Date } | null | undefined
 ): { startMs: number; endMs: number; rangeMs: number } | null
 {
-    if (!range) { return null; }
+    if (!range)
+    {
+        return null;
+    }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
     const rangeMs = endMs - startMs;
@@ -89,7 +92,10 @@ let _tmVal: TimelineModel | null = null;
 export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TIMELINE_MAX_TICKS): TimelineModel
 {
     const key = `${start.getTime()}|${end.getTime()}|${maxTicks}`;
-    if (key === _tmKey && _tmVal) { return _tmVal; }
+    if (key === _tmKey && _tmVal)
+    {
+        return _tmVal;
+    }
     const model = buildTimelineModelUncached(start, end, maxTicks);
     _tmKey = key;
     _tmVal = model;
@@ -229,9 +235,9 @@ export function formatTimelineLabel(kind: TimelineKind, d: Date, hass?: { langua
     const lang = (hass?.language as string | undefined) || undefined;
     const opts: Intl.DateTimeFormatOptions =
           kind === 'intraday' ? { hour: '2-digit', minute: '2-digit' }
-        : kind === 'days'     ? { weekday: 'short' }
-        : kind === 'weeks'    ? { day: 'numeric', month: 'short' }
-        :                       { month: 'short' };
+              : kind === 'days'     ? { weekday: 'short' }
+                  : kind === 'weeks'    ? { day: 'numeric', month: 'short' }
+                      :                       { month: 'short' };
     try
     {
         return new Intl.DateTimeFormat(lang, opts).format(d);

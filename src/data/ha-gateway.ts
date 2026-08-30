@@ -116,27 +116,31 @@ export function callWS<T = unknown>(
             releaseFetchSlot();
             action();
         };
+        const onAbort = () =>
+        {
+            clearTimeout(timer);
+            finish(() => reject(new WsAbortError(payload.type)));
+        };
         const timer = setTimeout(() =>
         {
+            signal?.removeEventListener('abort', onAbort);
             finish(() => reject(new WsTimeoutError(payload.type, timeoutMs)));
         }, timeoutMs);
         if (signal)
         {
-            signal.addEventListener('abort', () =>
-            {
-                clearTimeout(timer);
-                finish(() => reject(new WsAbortError(payload.type)));
-            }, { once: true });
+            signal.addEventListener('abort', onAbort, { once: true });
         }
         hass.callWS<T>(payload).then(
             (result: T) =>
             {
                 clearTimeout(timer);
+                signal?.removeEventListener('abort', onAbort);
                 finish(() => resolve(result));
             },
             (err: unknown) =>
             {
                 clearTimeout(timer);
+                signal?.removeEventListener('abort', onAbort);
                 finish(() => reject(err));
             },
         );

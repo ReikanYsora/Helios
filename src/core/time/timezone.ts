@@ -30,7 +30,10 @@ const _offsetByUtcHour = new Map<number, number>();
 export function setServerTimeZone(tz: string | undefined): void
 {
     const next = tz || undefined;
-    if (next === _tz) { return; }
+    if (next === _tz)
+    {
+        return;
+    }
     _tz = next;
     _offsetByUtcHour.clear();
     _fmt = next
@@ -47,16 +50,37 @@ function offsetMs(ms: number): number
 {
     const key = Math.floor(ms / HOUR_MS);
     const hit = _offsetByUtcHour.get(key);
-    if (hit !== undefined) { return hit; }
+    if (hit !== undefined)
+    {
+        return hit;
+    }
     let y = 0; let mo = 0; let d = 0; let h = 0; let mi = 0; let s = 0;
     for (const p of _fmt!.formatToParts(new Date(ms)))
     {
-        if (p.type === 'year') { y = Number(p.value); }
-        else if (p.type === 'month') { mo = Number(p.value); }
-        else if (p.type === 'day') { d = Number(p.value); }
-        else if (p.type === 'hour') { h = Number(p.value) % HOURS_PER_DAY; }
-        else if (p.type === 'minute') { mi = Number(p.value); }
-        else if (p.type === 'second') { s = Number(p.value); }
+        if (p.type === 'year')
+        {
+            y = Number(p.value);
+        }
+        else if (p.type === 'month')
+        {
+            mo = Number(p.value);
+        }
+        else if (p.type === 'day')
+        {
+            d = Number(p.value);
+        }
+        else if (p.type === 'hour')
+        {
+            h = Number(p.value) % HOURS_PER_DAY;
+        }
+        else if (p.type === 'minute')
+        {
+            mi = Number(p.value);
+        }
+        else if (p.type === 'second')
+        {
+            s = Number(p.value);
+        }
     }
     //Round to the minute so tiny sub-second drift can't wobble a bucket edge.
     const off = Math.round((Date.UTC(y, mo - 1, d, h, mi, s) - ms) / 60_000) * 60_000;

@@ -58,7 +58,10 @@ export function forEachBucketSlot(
 
     for (let i = first; i < last; i++)
     {
-        if (win && !inWindow(store, i, win)) { continue; }
+        if (win && !inWindow(store, i, win))
+        {
+            continue;
+        }
         const bStart = store.storeStartMs + i * store.stepMs;
         const bEnd   = clampEndMs === undefined ? bStart + store.stepMs : Math.min(bStart + store.stepMs, clampEndMs);
         for (let t = bStart; t < bEnd; )

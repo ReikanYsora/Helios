@@ -88,7 +88,10 @@ export class HeliosCardEditor extends LitElement
     private readonly _onCameraPose = (e: Event): void =>
     {
         const d = (e as CustomEvent).detail;
-        if (!d || typeof d.bearing !== 'number' || typeof d.pitch !== 'number') { return; }
+        if (!d || typeof d.bearing !== 'number' || typeof d.pitch !== 'number')
+        {
+            return;
+        }
         this._livePose = { bearing: d.bearing, pitch: d.pitch };
     };
     //Turning the lock on freezes AND saves the current framed angle into the config, so the exact view propagates
@@ -103,8 +106,7 @@ export class HeliosCardEditor extends LitElement
             next['camera-bearing-deg'] = Math.round(((pose.bearing % 360) + 360) % 360);
             next['camera-pitch-deg']   = Math.round(pose.pitch);
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
     }
 
     public disconnectedCallback(): void
@@ -121,7 +123,10 @@ export class HeliosCardEditor extends LitElement
         // warn about touching @state after disconnect.
         for (const timer of [this._resetFeedbackTimer, this._optionsResetConfirmTimer, this._optionsResetFeedbackTimer])
         {
-            if (timer !== undefined) { window.clearTimeout(timer); }
+            if (timer !== undefined)
+            {
+                window.clearTimeout(timer);
+            }
         }
         this._resetFeedbackTimer = undefined;
         this._optionsResetConfirmTimer = undefined;
@@ -143,14 +148,22 @@ export class HeliosCardEditor extends LitElement
         {
             setTimeout(() =>
             {
-                if (!this.isConnected) { return; }   //editor detached before the tick: nothing to dispatch onto
+                if (!this.isConnected)
+                {
+                    return;
+                }   //editor detached before the tick: nothing to dispatch onto
                 const next = { ...this._cfg } as Record<string, unknown>;
                 let changed = false;
-                for (const k of HeliosCardEditor.LEGACY_KEYS) { if (k in next) { delete next[k]; changed = true; } }
+                for (const k of HeliosCardEditor.LEGACY_KEYS)
+                {
+                    if (k in next)
+                    {
+                        delete next[k]; changed = true;
+                    }
+                }
                 if (changed)
                 {
-                    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-                    this._cfg = next as HeliosConfig;
+                    this._commit(next);
                 }
             }, 0);
         }
@@ -162,7 +175,10 @@ export class HeliosCardEditor extends LitElement
             const id = `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
             setTimeout(() =>
             {
-                if (!this.isConnected) { return; }   //editor detached before the tick: skip the deferred update
+                if (!this.isConnected)
+                {
+                    return;
+                }   //editor detached before the tick: skip the deferred update
                 if (!this._cfg['cache-id'])
                 {
                     this._update('cache-id', id);
@@ -224,7 +240,10 @@ export class HeliosCardEditor extends LitElement
             {
                 await Promise.race([
                     customElements.whenDefined('ha-entity-picker'),
-                    new Promise<void>(resolve => { setTimeout(resolve, HeliosCardEditor.PICKER_LOAD_TIMEOUT_MS); })
+                    new Promise<void>(resolve =>
+                    {
+                        setTimeout(resolve, HeliosCardEditor.PICKER_LOAD_TIMEOUT_MS);
+                    })
                 ]);
             }
         }
@@ -246,19 +265,28 @@ export class HeliosCardEditor extends LitElement
     protected updated(): void
     {
         //Guard evaluation for the grid status line; no-op outside its preconditions / between re-arms.
-        if (this.hass) { refreshGridGuard(this as unknown as GridGuardHost); }
+        if (this.hass)
+        {
+            refreshGridGuard(this as unknown as GridGuardHost);
+        }
         this._pruneStaleDeviceIds();
     }
 
-    //Drop any hidden / order id whose device no longer exists in the Energy dashboard, so removing a
+    //Drop any hidden id whose device no longer exists in the Energy dashboard, so removing a
     //device there also cleans it from this card's YAML. Guarded on a NON-EMPTY loaded snapshot: an empty one can also
     //mean the prefs failed to load (RBAC), and wiping the lists then would silently lose the user's choices. Writes
     //only when something actually changed, so it converges after a single pass and never loops.
     private _pruneStaleDeviceIds(): void
     {
-        if (!this._energyDefaultsLoaded) { return; }
+        if (!this._energyDefaultsLoaded)
+        {
+            return;
+        }
         const devices = this._energyDefaults.devices;
-        if (devices.length === 0) { return; }
+        if (devices.length === 0)
+        {
+            return;
+        }
         const valid = new Set(devices.map(d => d.statConsumption));
         const keys: (keyof HeliosConfig)[] = ['hidden-devices'];
         const next = { ...this._cfg } as Record<string, unknown>;
@@ -266,11 +294,24 @@ export class HeliosCardEditor extends LitElement
         for (const key of keys)
         {
             const cur = this._cfg[key];
-            if (!Array.isArray(cur)) { continue; }
+            if (!Array.isArray(cur))
+            {
+                continue;
+            }
             const kept = cur.filter((v): v is string => typeof v === 'string' && valid.has(v));
-            if (kept.length === cur.length) { continue; }
+            if (kept.length === cur.length)
+            {
+                continue;
+            }
             changed = true;
-            if (kept.length) { next[key] = kept; } else { delete next[key]; }
+            if (kept.length)
+            {
+                next[key] = kept;
+            }
+            else
+            {
+                delete next[key];
+            }
         }
         //Groups are an object map (id -> 1..4), not an array: drop entries whose device is gone.
         const groupsRaw = this._cfg['monitoring-groups'];
@@ -280,17 +321,33 @@ export class HeliosCardEditor extends LitElement
             let dropped = false;
             for (const [k, v] of Object.entries(groupsRaw as Record<string, unknown>))
             {
-                if (valid.has(k) && typeof v === 'number') { kept[k] = v; } else { dropped = true; }
+                if (valid.has(k) && typeof v === 'number')
+                {
+                    kept[k] = v;
+                }
+                else
+                {
+                    dropped = true;
+                }
             }
             if (dropped)
             {
                 changed = true;
-                if (Object.keys(kept).length) { next['monitoring-groups'] = kept; } else { delete next['monitoring-groups']; }
+                if (Object.keys(kept).length)
+                {
+                    next['monitoring-groups'] = kept;
+                }
+                else
+                {
+                    delete next['monitoring-groups'];
+                }
             }
         }
-        if (!changed) { return; }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        if (!changed)
+        {
+            return;
+        }
+        this._commit(next);
     }
 
     //One live-data status line: check or alert glyph + the explanation.
@@ -326,7 +383,10 @@ export class HeliosCardEditor extends LitElement
     //derived from the families above. Silent until the prefs snapshot lands.
     private _renderLiveDataStatus(t: Translations)
     {
-        if (!this._energyDefaultsLoaded) { return nothing; }
+        if (!this._energyDefaultsLoaded)
+        {
+            return nothing;
+        }
         const d = this._energyDefaults;
 
         const solarWired   = d.solarStatEnergyFroms.length > 0;
@@ -350,32 +410,40 @@ export class HeliosCardEditor extends LitElement
                 <div class="hint">${t.editor.liveDataIntro}</div>
 
                 ${solarWired
-                    ? this._liveStatusLine(solarLive, false, solarLive
-                        ? (t.editor.liveSolarOk)
-                        : (t.editor.liveSolarMissing))
-                    : this._liveStatusLine(false, false, t.editor.liveSolarAbsent)}
+        ? this._liveStatusLine(solarLive, false, solarLive
+            ? (t.editor.liveSolarOk)
+            : (t.editor.liveSolarMissing))
+        : this._liveStatusLine(false, false, t.editor.liveSolarAbsent)}
 
                 ${gridWired
-                    ? this._liveStatusLine(gridLive, gridFlagged, gridFlagged
-                        ? (t.editor.liveGridMiswired)
-                        : (gridLive
-                            ? (t.editor.liveGridOk)
-                            : (t.editor.liveGridMissing)))
-                    : this._liveStatusLine(false, false, t.editor.liveGridAbsent)}
+        ? this._liveStatusLine(gridLive, gridFlagged, gridFlagged
+            ? (t.editor.liveGridMiswired)
+            : (gridLive
+                ? (t.editor.liveGridOk)
+                : (t.editor.liveGridMissing)))
+        : this._liveStatusLine(false, false, t.editor.liveGridAbsent)}
 
                 ${batteryWired
-                    ? this._liveStatusLine(batteryLive, false, batteryLive
-                        ? (t.editor.liveBatteryOk)
-                        : (t.editor.liveBatteryMissing))
-                    : this._liveStatusLine(false, false, t.editor.liveBatteryAbsent)}
+        ? this._liveStatusLine(batteryLive, false, batteryLive
+            ? (t.editor.liveBatteryOk)
+            : (t.editor.liveBatteryMissing))
+        : this._liveStatusLine(false, false, t.editor.liveBatteryAbsent)}
 
                 ${this._liveStatusLine(homeReady, false, homeReady
-                    ? (t.editor.liveHomeOk)
-                    : (t.editor.liveHomeNote))}
+        ? (t.editor.liveHomeOk)
+        : (t.editor.liveHomeNote))}
 
                 <div class="live-config-link-row">${this._energyConfigLink()}</div>
             </div>
         `;
+    }
+
+    //Dispatches config-changed with the built next config and mirrors it into local state; the shared tail every
+    //mutator ends with once it has assembled its next config object.
+    private _commit(next: Record<string, unknown>): void
+    {
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
     }
 
     private _update(key: keyof HeliosConfig, value: unknown): void
@@ -383,10 +451,15 @@ export class HeliosCardEditor extends LitElement
         const next = { ...this._cfg } as Record<string, unknown>;
         //undefined clears the key entirely so the YAML drops it (resolvers fall back to their default), rather
         //than persisting an explicit `key: undefined`.
-        if (value === undefined) { delete next[key]; }
-        else { next[key] = value; }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        if (value === undefined)
+        {
+            delete next[key];
+        }
+        else
+        {
+            next[key] = value;
+        }
+        this._commit(next);
     }
 
     // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits
@@ -461,22 +534,34 @@ export class HeliosCardEditor extends LitElement
     private _onSectionToggleEvt = (e: Event): void =>
     {
         const section = (e.currentTarget as HTMLElement).dataset.section;
-        if (section) { this._onSectionToggle(section, e); }
+        if (section)
+        {
+            this._onSectionToggle(section, e);
+        }
     };
     private _onNumFieldChange = (e: Event): void =>
     {
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
-        if (key) { this._numField(key, e); }
+        if (key)
+        {
+            this._numField(key, e);
+        }
     };
     private _onNumSliderInput = (e: Event): void =>
     {
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
-        if (key) { this._numSlider(key, e); }
+        if (key)
+        {
+            this._numSlider(key, e);
+        }
     };
     private _onEntityValueChanged = (e: CustomEvent): void =>
     {
         const key = (e.currentTarget as HTMLElement).dataset.key as keyof HeliosConfig | undefined;
-        if (!key) { return; }
+        if (!key)
+        {
+            return;
+        }
         //Empty/undefined is a real edit: an entity cleared, or a colour reset to the card default via the picker's
         //clear affordance (ui_color emits undefined when the chosen token equals its default). Store it as unset so
         //the resolver falls back to the default. The picker never emits on init, so there is no echo to filter.
@@ -485,19 +570,31 @@ export class HeliosCardEditor extends LitElement
         const next    = cleared ? undefined : raw;
         //Clearing a picker (its X) must snap back to the default. When the key is already unset, storing undefined
         //is a no-op that would leave the ha-selector blank, so bump the nonce to re-create it on its default.
-        if (cleared) { this._colorNonce++; }
-        if ((this._cfg[key] ?? undefined) === (next ?? undefined)) { return; }
+        if (cleared)
+        {
+            this._colorNonce++;
+        }
+        if ((this._cfg[key] ?? undefined) === (next ?? undefined))
+        {
+            return;
+        }
         this._update(key, next);
     };
     private _onBoolToggleClick = (e: Event): void =>
     {
         const el  = e.currentTarget as HTMLElement;
         const key = el.dataset.key as keyof HeliosConfig | undefined;
-        if (!key) { return; }
+        if (!key)
+        {
+            return;
+        }
         const value = el.dataset.value === 'true';
         //Locking the camera also snapshots the current preview angle into the config (see _lockCameraToCurrentView),
         //so a frozen view is identical on every device. Unlocking is a plain toggle.
-        if (key === 'camera-locked' && value) { this._lockCameraToCurrentView(); return; }
+        if (key === 'camera-locked' && value)
+        {
+            this._lockCameraToCurrentView(); return;
+        }
         this._update(key, value);
     };
     //Toggle a device's presence in the hidden-devices list (presence = hidden). Stored back trimmed to undefined
@@ -505,7 +602,10 @@ export class HeliosCardEditor extends LitElement
     private _onDeviceToggleClick = (e: Event): void =>
     {
         const stat = (e.currentTarget as HTMLElement).dataset.stat;
-        if (!stat) { return; }
+        if (!stat)
+        {
+            return;
+        }
         const cur  = this._cfg['hidden-devices'];
         const list = Array.isArray(cur) ? cur.filter((v): v is string => typeof v === 'string') : [];
         const next = list.includes(stat) ? list.filter(v => v !== stat) : [...list, stat];
@@ -523,8 +623,17 @@ export class HeliosCardEditor extends LitElement
     {
         const cur = monitoringGroups(this._cfg);
         const map: Record<string, number> = {};
-        for (const [k, g] of cur) { if (k !== stat) { map[k] = g; } }
-        if (group >= 1) { map[stat] = group; }
+        for (const [k, g] of cur)
+        {
+            if (k !== stat)
+            {
+                map[k] = g;
+            }
+        }
+        if (group >= 1)
+        {
+            map[stat] = group;
+        }
         this._update('monitoring-groups', Object.keys(map).length ? map : undefined);
     }
 
@@ -534,9 +643,15 @@ export class HeliosCardEditor extends LitElement
     private _onZoneItemAdded = (e: CustomEvent<{ data: unknown }>): void =>
     {
         const stat = e.detail?.data;
-        if (typeof stat !== 'string' || stat === '') { return; }
+        if (typeof stat !== 'string' || stat === '')
+        {
+            return;
+        }
         const group = Number((e.currentTarget as HTMLElement).dataset.group);
-        if (!Number.isInteger(group) || group < 0 || group > GROUP_COUNT) { return; }
+        if (!Number.isInteger(group) || group < 0 || group > GROUP_COUNT)
+        {
+            return;
+        }
         this._assignDeviceToGroup(stat, group);
     };
 
@@ -755,7 +870,7 @@ export class HeliosCardEditor extends LitElement
             <div class="live-config-link-row">${this._energyConfigLink()}</div>
             <div class="group-zones">
                 ${Array.from({ length: GROUP_COUNT }, (_v, i) => i + 1)
-                    .map(g => this._renderGroupZone(t, g, inGroup(g), hidden))}
+        .map(g => this._renderGroupZone(t, g, inGroup(g), hidden))}
             </div>
             ${this._renderGroupZone(t, 0, inGroup(0), hidden)}
         `;
@@ -779,8 +894,8 @@ export class HeliosCardEditor extends LitElement
                 <div class="group-zone-head">
                     <span class="group-name-badge ${isNone ? 'group-name-badge-none' : ''}">
                         ${isNone
-                            ? html`<ha-icon icon="mdi:tray-remove"></ha-icon>`
-                            : (icon ? html`<ha-icon icon=${icon}></ha-icon>` : html`${group}`)}
+        ? html`<ha-icon icon="mdi:tray-remove"></ha-icon>`
+        : (icon ? html`<ha-icon icon=${icon}></ha-icon>` : html`${group}`)}
                     </span>
                     <span class="group-zone-name">${name}</span>
                     <span class="group-zone-count">${devs.length}</span>
@@ -795,8 +910,8 @@ export class HeliosCardEditor extends LitElement
                 >
                     <div class="group-zone-body">
                         ${devs.length
-                            ? repeat(devs, d => d.statConsumption, d => this._renderDeviceChip(d, hidden, t))
-                            : html`<div class="group-zone-empty">${t.editor.groupDropHere}</div>`}
+        ? repeat(devs, d => d.statConsumption, d => this._renderDeviceChip(d, hidden, t))
+        : html`<div class="group-zone-empty">${t.editor.groupDropHere}</div>`}
                     </div>
                 </ha-sortable>
             </div>`;
@@ -852,21 +967,32 @@ export class HeliosCardEditor extends LitElement
     private _onMapModeClick = (e: Event): void =>
     {
         const val = (e.currentTarget as HTMLElement).dataset.value as MapThemeMode | undefined;
-        if (!val || val === mapThemeMode(this._cfg)) { return; }
+        if (!val || val === mapThemeMode(this._cfg))
+        {
+            return;
+        }
         const next = { ...this._cfg } as Record<string, unknown>;
-        if (val === 'auto') { delete next['map-theme-mode']; }
-        else                { next['map-theme-mode'] = val; }
+        if (val === 'auto')
+        {
+            delete next['map-theme-mode'];
+        }
+        else
+        {
+            next['map-theme-mode'] = val;
+        }
         if (val === 'custom')
         {
             const base = defaultGroundPalette(isDarkFromCss(this));
             for (const key of GROUND_LAYER_KEYS)
             {
                 const ck = mapColorKey(key);
-                if (!next[ck]) { next[ck] = base[key]; }
+                if (!next[ck])
+                {
+                    next[ck] = base[key];
+                }
             }
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
     };
 
     private _mapLayerLabel(t: Translations, key: GroundLayerKey): string
@@ -942,9 +1068,10 @@ export class HeliosCardEditor extends LitElement
                             <button type="button" class="seg-option ${!on ? 'active' : ''}" aria-pressed=${!on ? 'true' : 'false'} data-key=${visKey} data-value="false" @click=${this._onBoolToggleClick}>${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
-                    ${this._pickerReady ? slots.map(slot => {
-                        const def = CHIP_SLOTS[slot];
-                        return html`
+                    ${this._pickerReady ? slots.map(slot =>
+    {
+        const def = CHIP_SLOTS[slot];
+        return html`
                         <div class="group-line chip-body">
                             <ha-selector
                                 class="chip-picker"
@@ -963,7 +1090,7 @@ export class HeliosCardEditor extends LitElement
                                 @value-changed=${this._onEntityValueChanged}
                             ></ha-selector>`)}
                         </div>`;
-                    }) : nothing}
+    }) : nothing}
                 </div>`;
     }
 
@@ -1021,30 +1148,49 @@ export class HeliosCardEditor extends LitElement
         const map: Record<string, string> = (cur && typeof cur === 'object' && !Array.isArray(cur))
             ? { ...(cur as Record<string, string>) }
             : {};
-        if (value) { map[group] = value; } else { delete map[group]; }
+        if (value)
+        {
+            map[group] = value;
+        }
+        else
+        {
+            delete map[group];
+        }
         this._update(key, Object.keys(map).length ? map : undefined);
     }
 
     private _onGroupNameChanged = (e: Event): void =>
     {
         const el = e.currentTarget as HTMLInputElement;
-        if (el.dataset.group) { this._updateGroupMap('monitoring-group-names', el.dataset.group, el.value.trim()); }
+        if (el.dataset.group)
+        {
+            this._updateGroupMap('monitoring-group-names', el.dataset.group, el.value.trim());
+        }
     };
     private _onGroupColorChanged = (e: CustomEvent<{ value?: unknown }>): void =>
     {
         e.stopPropagation();
         const g = (e.currentTarget as HTMLElement).dataset.group;
-        if (!g) { return; }
+        if (!g)
+        {
+            return;
+        }
         const value = typeof e.detail.value === 'string' ? e.detail.value : '';
         //X clear -> re-create the picker so it snaps back to the group's default colour even when already unset.
-        if (value === '') { this._colorNonce++; }
+        if (value === '')
+        {
+            this._colorNonce++;
+        }
         this._updateGroupMap('monitoring-group-colors', g, value);
     };
     private _onGroupIconChanged = (e: CustomEvent<{ value?: unknown }>): void =>
     {
         e.stopPropagation();
         const g = (e.currentTarget as HTMLElement).dataset.group;
-        if (g) { this._updateGroupMap('monitoring-group-icons', g, typeof e.detail.value === 'string' ? e.detail.value : ''); }
+        if (g)
+        {
+            this._updateGroupMap('monitoring-group-icons', g, typeof e.detail.value === 'string' ? e.detail.value : '');
+        }
     };
     //Toggle a group chip's visibility. Stored as a 'monitoring-group-hidden' object map (group -> true = hidden);
     //visible drops the key, an empty map drops the whole option.
@@ -1052,12 +1198,22 @@ export class HeliosCardEditor extends LitElement
     {
         const el = e.currentTarget as HTMLElement;
         const g  = el.dataset.group;
-        if (!g) { return; }
+        if (!g)
+        {
+            return;
+        }
         const cur = this._cfg['monitoring-group-hidden'];
         const map: Record<string, boolean> = (cur && typeof cur === 'object' && !Array.isArray(cur))
             ? { ...(cur as Record<string, boolean>) }
             : {};
-        if (el.dataset.value === 'true') { delete map[g]; } else { map[g] = true; }
+        if (el.dataset.value === 'true')
+        {
+            delete map[g];
+        }
+        else
+        {
+            map[g] = true;
+        }
         this._update('monitoring-group-hidden', Object.keys(map).length ? map : undefined);
     };
 
@@ -1179,28 +1335,28 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderSlider('max-expected-power', t.editor.maxExpectedPower, MIN_MAX_EXPECTED_POWER_W, MAX_MAX_EXPECTED_POWER_W, 500, DEFAULT_MAX_EXPECTED_POWER_W, ' W')}
                 <div class="field-help">${t.editor.maxExpectedPowerHelp}</div>
                 ${this._renderSelect('power-unit', t.editor.powerUnit,
-                    [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }], 'kW',
-                    t.editor.powerUnitHelp)}
+        [{ value: 'kW', label: 'kW' }, { value: 'W', label: 'W' }], 'kW',
+        t.editor.powerUnitHelp)}
                 ${this._renderSelect('energy-unit', t.editor.energyUnit,
-                    [{ value: 'auto', label: t.editor.energyUnitAuto }, { value: 'kWh', label: 'kWh' }, { value: 'Wh', label: 'Wh' }], 'auto',
-                    t.editor.energyUnitHelp)}
+        [{ value: 'auto', label: t.editor.energyUnitAuto }, { value: 'kWh', label: 'kWh' }, { value: 'Wh', label: 'Wh' }], 'auto',
+        t.editor.energyUnitHelp)}
                 ${this._renderSelect('irradiance-unit', t.editor.irradianceUnit,
-                    [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }, { value: 'W/ft²', label: 'W/ft²' }], 'W/m²',
-                    t.editor.irradianceUnitHelp)}
+        [{ value: 'W/m²', label: 'W/m²' }, { value: 'kW/m²', label: 'kW/m²' }, { value: 'W/ft²', label: 'W/ft²' }], 'W/m²',
+        t.editor.irradianceUnitHelp)}
                 ${this._renderSelect('sun-chip-mode', t.editor.sunChipMode,
-                    [{ value: 'irradiance', label: t.editor.sunChipModeIrradiance },
-                     { value: 'position', label: t.editor.sunChipModePosition }], 'irradiance',
-                    t.editor.sunChipModeHelp)}
+        [{ value: 'irradiance', label: t.editor.sunChipModeIrradiance },
+            { value: 'position', label: t.editor.sunChipModePosition }], 'irradiance',
+        t.editor.sunChipModeHelp)}
                 ${this._renderSelect('battery-chip-mode', t.editor.batteryChipMode,
-                    [{ value: 'power', label: t.editor.batteryChipModePower },
-                     { value: 'soc', label: t.editor.batteryChipModeSoc }], 'power',
-                    t.editor.batteryChipModeHelp)}
+        [{ value: 'power', label: t.editor.batteryChipModePower },
+            { value: 'soc', label: t.editor.batteryChipModeSoc }], 'power',
+        t.editor.batteryChipModeHelp)}
                 ${this._renderSelect('battery-sign', t.editor.batterySign, [
-                        { value: 'default',  label: t.editor.batterySignDefault },
-                        { value: 'inverted', label: t.editor.batterySignInverted },
-                        { value: 'hidden',   label: t.editor.batterySignHidden },
-                    ], 'default',
-                    t.editor.batterySignHelp, 'dropdown')}
+        { value: 'default',  label: t.editor.batterySignDefault },
+        { value: 'inverted', label: t.editor.batterySignInverted },
+        { value: 'hidden',   label: t.editor.batterySignHidden },
+    ], 'default',
+    t.editor.batterySignHelp, 'dropdown')}
                 </details>
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
@@ -1211,8 +1367,8 @@ export class HeliosCardEditor extends LitElement
                 <div class="hint">${t.editor.buildingCountHelp}</div>
                 ${this._renderToggle('building-real-size', t.editor.buildingRealSize, t.editor.buildingRealSizeHint, t.editor.buildingRealSizeOn, t.editor.buildingRealSizeOff, true)}
                 ${c['building-real-size'] === false
-                    ? this._renderSlider('building-height', t.editor.buildingHeight, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
-                    : nothing}
+        ? this._renderSlider('building-height', t.editor.buildingHeight, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M, 0.5, FIXED_BUILDING_HEIGHT_M, ' m')
+        : nothing}
                 ${this._renderSlider('building-cluster-radius', t.editor.buildingClusterRadius, 0, 100, 1, DEFAULT_BUILDING_CLUSTER_RADIUS_M, ' m')}
                 <div class="hint">${t.editor.buildingClusterRadiusHelp}</div>
                 ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
@@ -1236,19 +1392,19 @@ export class HeliosCardEditor extends LitElement
                     <div class="hint">${t.editor.resetSectionHint}</div>
                     <div class="hint reset-warning">${t.editor.resetCacheWarning}</div>
                     ${this._renderActionButton({
-                        icon: 'mdi:database-refresh-outline',
-                        label: this._resetFeedback ?? t.editor.resetCacheButton,
-                        color: 'var(--error-color, #ef4444)',
-                        onClick: this._onResetCacheClick.bind(this),
-                    })}
+        icon: 'mdi:database-refresh-outline',
+        label: this._resetFeedback ?? t.editor.resetCacheButton,
+        color: 'var(--error-color, #ef4444)',
+        onClick: this._onResetCacheClick.bind(this),
+    })}
                     <div class="hint reset-warning">${t.editor.resetOptionsWarning}</div>
                     ${this._renderActionButton({
-                        icon: 'mdi:cog-refresh-outline',
-                        label: this._optionsResetFeedback ?? (this._optionsResetArmed ? (t.editor.resetOptionsConfirm) : (t.editor.resetOptionsButton)),
-                        color: 'var(--error-color, #ef4444)',
-                        onClick: this._onResetOptionsClick.bind(this),
-                        filled: this._optionsResetArmed,
-                    })}
+        icon: 'mdi:cog-refresh-outline',
+        label: this._optionsResetFeedback ?? (this._optionsResetArmed ? (t.editor.resetOptionsConfirm) : (t.editor.resetOptionsButton)),
+        color: 'var(--error-color, #ef4444)',
+        onClick: this._onResetOptionsClick.bind(this),
+        filled: this._optionsResetArmed,
+    })}
                 </details>
 
                 <details class="advanced-section about-section" data-section="about" ?open=${this._openSection === 'about'} @toggle=${this._onSectionToggleEvt}>
@@ -1272,11 +1428,11 @@ export class HeliosCardEditor extends LitElement
                     <div class="about-block about-coffee">
                         <p class="about-paragraph">${t.editor.aboutCoffeeMessage}</p>
                         ${this._renderActionButton({
-                            icon: 'mdi:coffee',
-                            label: t.editor.aboutCoffeeLink,
-                            color: '#ffcc00',
-                            href: 'https://www.buymeacoffee.com/reikanysora',
-                        })}
+        icon: 'mdi:coffee',
+        label: t.editor.aboutCoffeeLink,
+        color: '#ffcc00',
+        href: 'https://www.buymeacoffee.com/reikanysora',
+    })}
                     </div>
                 </details>
 
@@ -1296,7 +1452,8 @@ export class HeliosCardEditor extends LitElement
         {
             window.dispatchEvent(new CustomEvent('helios-data-cache-reset'));
         }
-        catch (_) { /* CustomEvent unsupported: skip the cross-card cache-reset broadcast */ }
+        catch (_)
+        { /* CustomEvent unsupported: skip the cross-card cache-reset broadcast */ }
         const t = this._t();
         this._resetFeedback = t.editor.resetCacheDone;
         if (this._resetFeedbackTimer !== undefined)
@@ -1322,25 +1479,39 @@ export class HeliosCardEditor extends LitElement
         if (!this._optionsResetArmed)
         {
             this._optionsResetArmed = true;
-            if (this._optionsResetConfirmTimer !== undefined) { window.clearTimeout(this._optionsResetConfirmTimer); }
-            this._optionsResetConfirmTimer = window.setTimeout(() => { this._optionsResetArmed = false; }, 4000);
+            if (this._optionsResetConfirmTimer !== undefined)
+            {
+                window.clearTimeout(this._optionsResetConfirmTimer);
+            }
+            this._optionsResetConfirmTimer = window.setTimeout(() =>
+            {
+                this._optionsResetArmed = false;
+            }, 4000);
             return;
         }
         this._optionsResetArmed = false;
-        if (this._optionsResetConfirmTimer !== undefined) { window.clearTimeout(this._optionsResetConfirmTimer); }
+        if (this._optionsResetConfirmTimer !== undefined)
+        {
+            window.clearTimeout(this._optionsResetConfirmTimer);
+        }
         //Clear every Helios option but keep the Lovelace-managed keys (the card `type` is mandatory, plus any
         //layout placement HA stored), so the card stays valid and keeps its dashboard slot.
         const cur  = this._cfg as Record<string, unknown>;
         const next = {} as Record<string, unknown>;
         for (const k of HeliosCardEditor.LOVELACE_KEYS)
         {
-            if (cur[k] !== undefined) { next[k] = cur[k]; }
+            if (cur[k] !== undefined)
+            {
+                next[k] = cur[k];
+            }
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
         const t = this._t();
         this._optionsResetFeedback = t.editor.resetOptionsDone;
-        if (this._optionsResetFeedbackTimer !== undefined) { window.clearTimeout(this._optionsResetFeedbackTimer); }
+        if (this._optionsResetFeedbackTimer !== undefined)
+        {
+            window.clearTimeout(this._optionsResetFeedbackTimer);
+        }
         this._optionsResetFeedbackTimer = window.setTimeout(() =>
         {
             this._optionsResetFeedback = null;

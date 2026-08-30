@@ -7,6 +7,95 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.3
+
+A fast follow-up, mostly fixes reported by the wave of new users right after
+2026.9.2 shipped: the home building now correctly disappears behind a
+neighbour that is genuinely closer to the camera, the cost chip finds Home
+Assistant's actual generated sensor instead of guessing its name, a negative
+cost rate shades toward zero instead of downward, sunrise and sunset stay
+readable under real rain or snow, a non-admin viewer no longer floods the
+Home Assistant log, and the animated flow beads stop burning CPU they never
+needed to.
+
+### Fixed: sustained CPU load from the animated flow beads
+
+The travelling dots on the PV/grid/battery/monitoring-group flow lines are
+native SVG animations (SMIL), not JavaScript, but their speed and path were
+recomputed and rewritten on every single Home Assistant state change, several
+times a second on a live house, whether or not that specific flow had actually
+changed. Rewriting a running animation's attributes forces the browser to
+re-arm its animation clock every time, real, sustained main-thread cost that
+scales with nothing but time, not scene size, which is why it showed up even
+on capable hardware. Each bead now only recomputes when its own speed, path or
+direction genuinely changes. Thanks to @mifritscher2 (#417).
+
+### Fixed: sunrise and sunset times stay readable under real weather
+
+The sunrise/sunset marker sat on the same layer as the far side of the sun arc,
+which put it underneath the weather overlay and, worse, underneath the rain and
+snow canvases. On a genuinely rainy or foggy day the time was barely legible
+through the precipitation. It now sits at the chip tier, above weather, same as
+every other readout on the card. Thanks to @igotyou (#416).
+
+### Fixed: a non-admin viewer no longer floods the Home Assistant log
+
+The card's Energy-dashboard subscription isn't on core's non-admin allowlist, so a
+non-admin user (anyone in a shared household dashboard who isn't an administrator)
+had it rejected, and rejection cleared the retry guard instead of leaving it set,
+so the next re-render (every Home Assistant state change) tried again. On a live
+install that meant hundreds of rejected attempts a second, tens of millions of log
+lines a day and real CPU load, for as long as the card stayed on screen. The card
+now skips the subscription outright for a user it knows isn't an admin, and any
+other rejection sticks instead of retrying on every render; one attempt per real
+connect is now the ceiling. Thanks to @bjoernhardegen and @ufozone (#415).
+
+### Fixed: a negative cost rate no longer shades as if it stayed positive
+
+The cost curve's filled area always closed at the bottom of the chart, so a
+rate that dipped below zero (selling surplus back to the grid) kept shading
+downward instead of shrinking toward zero, reading as if the cost stayed
+positive the whole time. The fill now closes at zero itself, so the shaded
+area actually shrinks as the rate crosses into negative and grows again on
+the other side. Thanks to @TCWORLD (#411).
+
+### Fixed: the cost chip stays hidden when HA renamed its generated cost sensor
+
+Home Assistant auto-generates a cost statistic named `<meter>_cost` when a price is
+configured and no explicit one is set, and the card derived that same name to
+read it. But that name is only a suggestion: the sensor's real identity is a
+registry id, so re-registering the source meter (the integration re-added, a
+device replaced) can leave the clean `..._cost` id on a defunct entity while HA
+quietly moves on to `..._cost_2` and keeps it there for good. The card now
+prefers the exact mapping `energy/info` exposes (the same one HA's own frontend
+reads), falling back to the derived name only when that map has nothing for a
+given meter. Also: a dual-tariff grid whose flows share one live price entity
+no longer reads as two prices and bails to "no price found", it dedupes to one
+like it always should have. Thanks to the detailed write-up on #410.
+
+### Fixed: the home building now occludes correctly against its neighbours
+
+The home prism always painted on top of every neighbouring building, whichever
+was actually closer to the camera. Neighbours used to be pre-composited as one
+faded group, entirely behind the home, so a neighbour genuinely standing between
+the camera and the home still appeared behind it instead of correctly hiding
+part of it. Every building now paints in one true depth order, home included, so
+a nearer neighbour occludes the home exactly as it would occlude another
+neighbour, and a farther one still sits behind it. Thanks to @vbtheory (#413).
+
+### Fixed: a battery without long-term statistics could misread its own history
+
+A battery power sensor with no long-term statistics or state class falls back
+to raw recorder history instead, and that fallback path had drifted from the
+weather and irradiance history readers it was modelled on: it always treated a
+numeric timestamp as seconds, misreading a millisecond one, and never carried
+a timestamp forward when Home Assistant's own compaction omitted it on a
+repeated identical sample, silently dropping that point. Unified onto the same
+parser the other two readers already use, so all three read a battery's
+history the same correct way.
+
+---
+
 ## 2026.9.2
 
 A performance and reliability release, mostly about running clean on real devices:

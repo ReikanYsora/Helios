@@ -126,7 +126,8 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
         {
             track.releasePointerCapture(e.pointerId);
         }
-        catch (_) { /* pointer capture may already be released */ }
+        catch (_)
+        { /* pointer capture may already be released */ }
         track.removeEventListener('pointermove',   host.boundPointerMove);
         track.removeEventListener('pointerup',     host.boundPointerUp);
         track.removeEventListener('pointercancel', host.boundPointerUp);

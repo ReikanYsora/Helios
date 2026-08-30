@@ -11,7 +11,7 @@ import type { HassLike } from '../../core/ha-types';
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, HOUR_MS, DAY_MS } from '../../core/config/constants';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
-import { loadDurable, saveDurable } from '../durable-cache';
+import { loadDurable, saveDurable, loadDurableSeries, saveDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 
 
@@ -66,9 +66,18 @@ export async function fetchChangeById(
     period:       StatPeriod = '5minute',
 ): Promise<Record<string, ChangeBucket[]> | null>
 {
-    if (statisticIds.length === 0) { return null; }
-    if (!hass?.callWS)             { return null; }
-    if (endMs <= startMs)          { return null; }
+    if (statisticIds.length === 0)
+    {
+        return null;
+    }
+    if (!hass?.callWS)
+    {
+        return null;
+    }
+    if (endMs <= startMs)
+    {
+        return null;
+    }
 
     const sorted     = [...statisticIds].sort();
     const cacheKey   = `${period}|${startMs}|${endMs}|${sorted.join('|')}`;
@@ -96,21 +105,36 @@ export async function fetchChangeById(
             for (const id of statisticIds)
             {
                 const buckets = result?.[id];
-                if (!Array.isArray(buckets)) { continue; }
+                if (!Array.isArray(buckets))
+                {
+                    continue;
+                }
                 const parsed: ChangeBucket[] = [];
                 for (const b of buckets)
                 {
                     const startBoundary = parseStatBoundary(b?.start);
-                    if (startBoundary === null) { continue; }
+                    if (startBoundary === null)
+                    {
+                        continue;
+                    }
                     const kwh = typeof b?.change === 'number' ? b.change : null;
-                    if (kwh === null || !Number.isFinite(kwh)) { continue; }
+                    if (kwh === null || !Number.isFinite(kwh))
+                    {
+                        continue;
+                    }
                     const endBoundary = parseStatBoundary(b?.end) ?? (startBoundary + periodMs(period));
                     parsed.push({ startMs: startBoundary, endMs: endBoundary, kwh });
                     anyHit = true;
                 }
-                if (parsed.length > 0) { byId[id] = parsed; }
+                if (parsed.length > 0)
+                {
+                    byId[id] = parsed;
+                }
             }
-            if (!anyHit) { return null; }
+            if (!anyHit)
+            {
+                return null;
+            }
             saveDurable(durableKey, byId);
             return byId;
         }
@@ -135,16 +159,28 @@ export function mergeChangeSeries(byId: Record<string, ChangeBucket[]>, ids: str
     for (const id of ids)
     {
         const buckets = byId[id];
-        if (!buckets) { continue; }
+        if (!buckets)
+        {
+            continue;
+        }
         for (const b of buckets)
         {
             const existing = merged.get(b.startMs);
-            if (existing) { existing.kwh += b.kwh; }
-            else          { merged.set(b.startMs, { startMs: b.startMs, endMs: b.endMs, kwh: b.kwh }); }
+            if (existing)
+            {
+                existing.kwh += b.kwh;
+            }
+            else
+            {
+                merged.set(b.startMs, { startMs: b.startMs, endMs: b.endMs, kwh: b.kwh });
+            }
             anyHit = true;
         }
     }
-    if (!anyHit) { return null; }
+    if (!anyHit)
+    {
+        return null;
+    }
     return [...merged.values()].sort((a, b) => a.startMs - b.startMs);
 }
 
@@ -157,7 +193,10 @@ export function extractPerEntity(byId: Record<string, ChangeBucket[]>, ids: stri
     for (const id of ids)
     {
         const buckets = byId[id];
-        if (buckets) { out.set(id, buckets); }
+        if (buckets)
+        {
+            out.set(id, buckets);
+        }
     }
     return out;
 }
@@ -181,9 +220,15 @@ const OUTLIER_CAP_QUANTILE = 0.9;
 //dumped into one bucket). Infinity when there's nothing to compare against.
 export function outlierCapKwh(buckets: ChangeBucket[] | null): number
 {
-    if (!buckets) { return Infinity; }
+    if (!buckets)
+    {
+        return Infinity;
+    }
     const mags = buckets.map(b => Math.abs(b.kwh)).filter(k => isFinite(k) && k > 0).sort((a, b) => a - b);
-    if (!mags.length) { return Infinity; }
+    if (!mags.length)
+    {
+        return Infinity;
+    }
     const idx = Math.min(mags.length - 1, Math.floor(mags.length * OUTLIER_CAP_QUANTILE));
     return mags[idx] * OUTLIER_CAP_FACTOR;
 }
@@ -201,10 +246,16 @@ function smoothCoarseReports(sums: number[], hit: boolean[]): void
     const reports: number[] = [];
     for (let i = 0; i < sums.length; i++)
     {
-        if (hit[i] && sums[i] !== 0) { reports.push(i); }
+        if (hit[i] && sums[i] !== 0)
+        {
+            reports.push(i);
+        }
     }
     //Need two reports to know an interval; a lone spike (fully intermittent flow) is left untouched.
-    if (reports.length < 2) { return; }
+    if (reports.length < 2)
+    {
+        return;
+    }
     //The first report keeps its own bucket (its accumulation start is unknown, so it is never spread backward);
     //every later report spreads over the capped gap to its predecessor. span <= gap means a report's range never
     //reaches the previous report, so the in-place writes never collide and genuine-gap buckets keep their zero.
@@ -239,16 +290,28 @@ export function changeSeriesToWatts(
 ): (number | null)[]
 {
     const out = new Array<number | null>(bucketsTotal).fill(null);
-    if (!buckets || buckets.length === 0) { return out; }
+    if (!buckets || buckets.length === 0)
+    {
+        return out;
+    }
     const cap  = outlierCapKwh(buckets);
     const sums = new Array<number>(bucketsTotal).fill(0);
     const hit  = new Array<boolean>(bucketsTotal).fill(false);
     for (const b of buckets)
     {
-        if (b.startMs < storeStartMs || b.startMs >= nowMs) { continue; }
-        if (Math.abs(b.kwh) > cap) { continue; }   //drop a reset/rollover spike
+        if (b.startMs < storeStartMs || b.startMs >= nowMs)
+        {
+            continue;
+        }
+        if (Math.abs(b.kwh) > cap)
+        {
+            continue;
+        }   //drop a reset/rollover spike
         const idx = Math.floor((b.startMs - storeStartMs) / stepMs);
-        if (idx < 0 || idx >= bucketsTotal) { continue; }
+        if (idx < 0 || idx >= bucketsTotal)
+        {
+            continue;
+        }
         sums[idx] += b.kwh;
         hit[idx]   = true;
     }
@@ -256,7 +319,10 @@ export function changeSeriesToWatts(
     const stepH = stepMs / HOUR_MS;
     for (let i = 0; i < bucketsTotal; i++)
     {
-        if (!hit[i]) { continue; }
+        if (!hit[i])
+        {
+            continue;
+        }
         //Negative net (battery discharge, or a small negative recorder change) is preserved; the caller floors if
         //needed (production/grid at zero, battery keeps the sign).
         out[i] = (sums[i] * 1000) / stepH;
@@ -282,15 +348,27 @@ function probeChangeWindow(buckets: ChangeBucket[], loMs: number, hiMs: number):
     let total   = 0;
     for (const b of buckets)
     {
-        if (b.endMs <= loMs || b.startMs >= hiMs) { continue; }
+        if (b.endMs <= loMs || b.startMs >= hiMs)
+        {
+            continue;
+        }
         const span = b.endMs - b.startMs;
-        if (span <= 0) { continue; }
+        if (span <= 0)
+        {
+            continue;
+        }
         const ov = Math.min(b.endMs, hiMs) - Math.max(b.startMs, loMs);
-        if (ov <= 0) { continue; }
+        if (ov <= 0)
+        {
+            continue;
+        }
         kwh += b.kwh * (ov / span);
         ms  += ov;
         total++;
-        if (b.kwh > 0) { nonZero++; }
+        if (b.kwh > 0)
+        {
+            nonZero++;
+        }
     }
     return { kwh, ms, nonZero, total };
 }
@@ -309,17 +387,26 @@ export function wattsAtFromChangeSeries(
     tMs:     number,
 ): number | null
 {
-    if (!buckets || buckets.length === 0) { return null; }
+    if (!buckets || buckets.length === 0)
+    {
+        return null;
+    }
     const half  = COARSE_PROBE_MS / 2;
     const probe = probeChangeWindow(buckets, tMs - half, tMs + half);
-    if (probe.total === 0) { return null; }
+    if (probe.total === 0)
+    {
+        return null;
+    }
     const dense = probe.nonZero >= Math.ceil(probe.total * DENSE_FRACTION);
     if (dense)
     {
         //Fine meter: read the bucket that actually contains tMs.
         for (const b of buckets)
         {
-            if (tMs >= b.startMs && tMs < b.endMs) { return wattsFromBucket(b); }
+            if (tMs >= b.startMs && tMs < b.endMs)
+            {
+                return wattsFromBucket(b);
+            }
         }
     }
     //Coarse meter (or tMs between buckets): average the probe window.
@@ -337,12 +424,18 @@ export function sumChangeForDay(
     dayEndMs:   number,
 ): number | null
 {
-    if (!buckets || buckets.length === 0) { return null; }
+    if (!buckets || buckets.length === 0)
+    {
+        return null;
+    }
     let sum    = 0;
     let anyHit = false;
     for (const b of buckets)
     {
-        if (b.startMs < dayStartMs || b.startMs >= dayEndMs) { continue; }
+        if (b.startMs < dayStartMs || b.startMs >= dayEndMs)
+        {
+            continue;
+        }
         sum   += b.kwh;
         anyHit = true;
     }
@@ -352,8 +445,14 @@ export function sumChangeForDay(
 
 function periodMs(period: StatPeriod): number
 {
-    if (period === '5minute') { return 5 * 60_000; }
-    if (period === 'hour')    { return HOUR_MS; }
+    if (period === '5minute')
+    {
+        return 5 * 60_000;
+    }
+    if (period === 'hour')
+    {
+        return HOUR_MS;
+    }
     return DAY_MS;
 }
 
@@ -361,7 +460,10 @@ function periodMs(period: StatPeriod): number
 //Parse a statistics bucket boundary: modern cores serve epoch ms (number), older ones ISO strings; accept both.
 export function parseStatBoundary(raw: unknown): number | null
 {
-    if (typeof raw === 'number' && Number.isFinite(raw)) { return raw; }
+    if (typeof raw === 'number' && Number.isFinite(raw))
+    {
+        return raw;
+    }
     if (typeof raw === 'string')
     {
         const ms = Date.parse(raw);
@@ -376,7 +478,10 @@ export function parseStatBoundary(raw: unknown): number | null
 //never second-guesses a real millisecond value.
 export function parseStatBoundaryLoose(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) { return null; }
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
     if (typeof raw === 'number')
     {
         return raw > 1e12 ? raw : raw * 1000;
@@ -392,4 +497,137 @@ export function parseStatBoundaryLoose(raw: unknown): number | null
         return isFinite(t) ? t : null;
     }
     return null;
+}
+
+
+//Parallel times[]/values[] series, the shape every per-entity raw-history / stats parser below returns.
+export interface RawSeries
+{
+    times:  Date[];
+    values: number[];
+}
+
+
+//Shared raw-history parser for `history/history_during_period` (battery/weather-override/irradiance): tolerates the
+//compact `s`/`lu`/`lc` and verbose `state`/`last_updated`/`last_changed` shapes, drops unavailable/unknown/empty
+//samples, and falls back to the previous sample's timestamp when a payload omits one entirely (HA compaction can
+//drop it on consecutive identical states). `toValue` derives the caller's numeric reading from the raw state
+//string (its own clamping/unit conversion); null skips the sample.
+export function parseRawHistorySeries(
+    arr:     any[],
+    toValue: (rawState: string) => number | null,
+): RawSeries
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    let lastTsMs: number | null = null;
+
+    for (const item of arr ?? [])
+    {
+        const sRaw = item?.s ?? item?.state;
+        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+        {
+            continue;
+        }
+        const v = toValue(String(sRaw));
+        if (v === null)
+        {
+            continue;
+        }
+
+        let ts: Date | null = null;
+        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+        if (typeof tsRaw === 'number')
+        {
+            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
+        }
+        else if (typeof tsRaw === 'string')
+        {
+            const asNum = Number(tsRaw);
+            ts = (Number.isFinite(asNum) && asNum > 1e9) ? new Date(asNum > 1e12 ? asNum : asNum * 1000) : new Date(tsRaw);
+        }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+        {
+            ts = new Date(lastTsMs);
+        }
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
+
+        lastTsMs = ts.getTime();
+        times.push(ts);
+        values.push(v);
+    }
+    return { times, values };
+}
+
+
+//Shared single-entity history fetch (irradiance + weather-override): clamp `end` to now, try
+//`recorder/statistics_during_period` (`mean`, 5-min buckets), fall back to `history/history_during_period` when the
+//stats array comes back empty (no LTS tracking), persist the result via saveDurableSeries, and on any throw warn
+//once and restore the durable copy. `parseStats`/`parseRaw` do the caller's own value derivation and clamping.
+export async function fetchStatsOrRawHistory(
+    hass:       HassLike,
+    entityId:   string,
+    start:      Date,
+    end:        Date,
+    durableKey: string,
+    opts: {
+        parseStats:  (arr: any[]) => RawSeries;
+        parseRaw:    (arr: any[]) => RawSeries;
+        warnKey:     string;
+        warnMessage: string;
+    },
+): Promise<RawSeries | null>
+{
+    if (!hass?.callWS)
+    {
+        return null;
+    }
+    try
+    {
+        const now = new Date();
+        const fetchEnd = end > now ? now : end;
+        if (start >= fetchEnd)
+        {
+            return { times: [], values: [] };
+        }
+
+        let series: RawSeries;
+        const statsResult: any = await callWS<any>(hass, {
+            type:          'recorder/statistics_during_period',
+            start_time:    start.toISOString(),
+            end_time:      fetchEnd.toISOString(),
+            statistic_ids: [entityId],
+            period:        '5minute',
+            types:         ['mean'],
+        });
+        const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
+        if (statsArr.length > 0)
+        {
+            series = opts.parseStats(statsArr);
+        }
+        else
+        {
+            const rawResult: any = await callWS<any>(hass, {
+                type:                     'history/history_during_period',
+                start_time:               start.toISOString(),
+                end_time:                 fetchEnd.toISOString(),
+                entity_ids:               [entityId],
+                minimal_response:         true,
+                no_attributes:            true,
+                significant_changes_only: true,
+            });
+            series = opts.parseRaw((rawResult && rawResult[entityId]) ?? []);
+        }
+
+        saveDurableSeries(durableKey, series);
+        return series;
+    }
+    catch (_e)
+    {
+        warnOnce(opts.warnKey, opts.warnMessage);
+        return loadDurableSeries(durableKey, DAY_MS);
+    }
 }

@@ -73,7 +73,13 @@ export function modeBucketsPerHour(mode: TimelineMode, config: HeliosConfig | un
 export function modeFetchPeriod(mode: TimelineMode, config: HeliosConfig | undefined): StatPeriod
 {
     const bph = modeBucketsPerHour(mode, config);
-    if (bph >= 2) { return '5minute'; }
-    if (bph >= 1) { return 'hour'; }
+    if (bph >= 2)
+    {
+        return '5minute';
+    }
+    if (bph >= 1)
+    {
+        return 'hour';
+    }
     return 'day';
 }
