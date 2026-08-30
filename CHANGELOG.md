@@ -9,6 +9,18 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.3
 
+### Fixed: a non-admin viewer no longer floods the Home Assistant log
+
+The card's Energy-dashboard subscription isn't on core's non-admin allowlist, so a
+non-admin user (anyone in a shared household dashboard who isn't an administrator)
+had it rejected, and rejection cleared the retry guard instead of leaving it set,
+so the next re-render (every Home Assistant state change) tried again. On a live
+install that meant hundreds of rejected attempts a second, tens of millions of log
+lines a day and real CPU load, for as long as the card stayed on screen. The card
+now skips the subscription outright for a user it knows isn't an admin, and any
+other rejection sticks instead of retrying on every render; one attempt per real
+connect is now the ceiling. Thanks to @bjoernhardegen and @ufozone (#415).
+
 ### Fixed: a negative cost rate no longer shades as if it stayed positive
 
 The cost curve's filled area always closed at the bottom of the chart, so a

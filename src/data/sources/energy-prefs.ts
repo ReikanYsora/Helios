@@ -180,7 +180,9 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
 
 
 //Subscribe so the snapshot stays in sync when the Energy dashboard is edited elsewhere. Falls back to a single fetch
-//when the subscribe path is missing (older cores).
+//when the subscribe path is missing (older cores) or the subscription is rejected (a non-admin user: the event
+//isn't on core's non-admin allowlist, so `subscribeEvents` rejects Unauthorized for every viewer of a shared
+//dashboard who isn't an admin).
 export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
 {
     if (!host.hass?.connection || host._energyPrefsUnsub)
@@ -188,6 +190,14 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         return;
     }
     fetchEnergyPrefs(host);
+    //A non-admin user can never subscribe to this event (core rejects it outright, always, every time - it is
+    //not a transient failure), so skip the doomed round-trip entirely rather than firing it once per connect.
+    //`is_admin` is read defensively: only an explicit `false` skips, since an absent/unknown value (an older core,
+    //a test harness) must not silently disable a subscription that could otherwise work.
+    if (host.hass.user?.is_admin === false)
+    {
+        return;
+    }
     //`subscribeEvents` resolves its UnsubscribeFunc asynchronously. Install a synchronous canceller now so the
     //re-entry guard above holds and a teardown that lands before the promise resolves still unsubscribes once it
     //does; storing the raw promise as the unsub would silently leak the subscription (a promise is not callable).
@@ -212,11 +222,16 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         })
         .catch(() =>
         {
-            //Event subscription unsupported on this core; the one-shot fetch above already populated the cache.
-            //Clear the canceller (only if not already torn down) so a later attempt can re-subscribe.
+            //Event unsupported on this core, or a non-admin viewer the is_admin check above missed (an unknown
+            //hass.user shape): the one-shot fetch above already populated the cache. The guard is DELIBERATELY
+            //LEFT SET (as a no-op canceller) rather than cleared: every hass state change re-renders the card and
+            //re-checks this guard, so clearing it here retried the doomed subscription on every single render,
+            //hundreds of times a second on a live install - millions of rejected-event log lines a day on a non-
+            //admin viewer's Home Assistant instance (#415). One rejected attempt per real connect is the ceiling;
+            //a genuine reconnect (unsubscribeEnergyPrefs on disconnect) is what re-arms a fresh attempt.
             if (live)
             {
-                host._energyPrefsUnsub = undefined;
+                host._energyPrefsUnsub = () => { live = false; };
             }
         });
 }

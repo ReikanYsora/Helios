@@ -58,4 +58,6 @@ export interface HassLike
     language:   string;
     locale?:    HassLocale;
     themes?:    HassThemes;
+    //Present on every real HA frontend `hass`; optional here so a minimal test/mock hass still type-checks.
+    user?:      { is_admin?: boolean };
 }
