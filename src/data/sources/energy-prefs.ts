@@ -227,7 +227,7 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
             //LEFT SET (as a no-op canceller) rather than cleared: every hass state change re-renders the card and
             //re-checks this guard, so clearing it here retried the doomed subscription on every single render,
             //hundreds of times a second on a live install - millions of rejected-event log lines a day on a non-
-            //admin viewer's Home Assistant instance (#415). One rejected attempt per real connect is the ceiling;
+            //admin viewer's Home Assistant instance. One rejected attempt per real connect is the ceiling;
             //a genuine reconnect (unsubscribeEnergyPrefs on disconnect) is what re-arms a fresh attempt.
             if (live)
             {
