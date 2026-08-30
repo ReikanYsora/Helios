@@ -16,7 +16,7 @@ import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 import { quantizedAnchorMs } from '../source-fetch';
-import { parseStatBoundaryLoose, parseRawHistorySeries } from './energy-stats';
+import { parseStatBoundaryLoose, parseRawHistorySeries, fetchStatsOrRawHistory } from './energy-stats';
 import { temperatureToCelsius } from '../../core/format/format';
 import { HOUR_MS, DAY_MS } from '../../core/config/constants';
 
@@ -403,10 +403,9 @@ function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string, co
 }
 
 
-// Pure numeric-history fetcher: statistics `mean` first (scales to high-frequency measurement sensors that land in
-// LTS), raw history as the fallback. Values come back in the variable's canonical unit (`conv` normalises whatever
-// the entity reports). Returns the fresh series, the last-good durable copy on a failed fetch, or an empty series
-// for an empty window. No host mutation and no engine push (the caller pushes in the `.then`).
+// Numeric-history fetcher for the OVERRIDES vars: the shared single-entity stats-then-raw fetch (energy-stats.ts).
+// Values come back in the variable's canonical unit (`conv` normalises whatever the entity reports). No host
+// mutation and no engine push (the caller pushes in the `.then`).
 export async function fetchNumericHistory(
     hass:       HassLike,
     entityId:   string,
@@ -417,55 +416,12 @@ export async function fetchNumericHistory(
     conv:       ReadingConverter = IDENTITY_CONVERTER,
 ): Promise<NumSeries | null>
 {
-    if (!hass?.callWS)
-    {
-        return null;
-    }
-    try
-    {
-        const now = new Date();
-        const fetchEnd = end > now ? now : end;
-        if (start >= fetchEnd)
-        {
-            return { times: [], values: [] };
-        }
-
-        let series: NumSeries = { times: [], values: [] };
-        const statsResult: any = await callWS<any>(hass, {
-            type:          'recorder/statistics_during_period',
-            start_time:    start.toISOString(),
-            end_time:      fetchEnd.toISOString(),
-            statistic_ids: [entityId],
-            period:        '5minute',
-            types:         ['mean'],
-        });
-        const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
-        if (statsArr.length > 0)
-        {
-            series = parseStats(statsArr, def, conv);
-        }
-        else
-        {
-            const rawResult: any = await callWS<any>(hass, {
-                type:                     'history/history_during_period',
-                start_time:               start.toISOString(),
-                end_time:                 fetchEnd.toISOString(),
-                entity_ids:               [entityId],
-                minimal_response:         true,
-                no_attributes:            true,
-                significant_changes_only: true,
-            });
-            series = parseRaw((rawResult && rawResult[entityId]) ?? [], def, conv);
-        }
-
-        saveDurableSeries(durableKey, series);
-        return series;
-    }
-    catch (_e)
-    {
-        warnOnce(`wxo-fetch-${durableKey}`, 'weather override fetch failed; showing cached data until it recovers');
-        return loadDurableSeries(durableKey, DAY_MS);
-    }
+    return fetchStatsOrRawHistory(hass, entityId, start, end, durableKey, {
+        parseStats:  (arr) => parseStats(arr, def, conv),
+        parseRaw:    (arr) => parseRaw(arr, def, conv),
+        warnKey:     `wxo-fetch-${durableKey}`,
+        warnMessage: 'weather override fetch failed; showing cached data until it recovers',
+    });
 }
 
 // Statistics parser: the `mean` column at the bucket midpoint. Buckets with a null/out-of-range mean are skipped.
