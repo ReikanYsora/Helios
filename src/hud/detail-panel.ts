@@ -300,8 +300,8 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
             { icon: chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-up'),   value: energy(discharged) },
         ];
 
-        // Third line: the AVERAGE state of charge over the window. Marked with the same Ø mean glyph the SoC
-        // detail panel uses, so it never reads as the live level (@stalakerob's idea).
+        //Third line: the AVERAGE state of charge over the window. Marked with the same Ø mean glyph the SoC
+        //detail panel uses, so it never reads as the live level.
         const soc = socStats(buildPeriodData(host, 'battery-soc'));
         if (soc)
         {
