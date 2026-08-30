@@ -381,7 +381,7 @@ export async function buildVectorGround(
     altitude: number,
     signal?:  AbortSignal,
     //Force the basemap canvas onto the CPU raster backend (willReadFrequently). Set on the projected compat path,
-    //which is the degraded mode entry-level GPUs (Mali/Adreno) fall into: their GPU-accelerated 2D canvas renders
+    //which is the degraded mode certain Android GPUs fall into: their GPU-accelerated 2D canvas renders
     //corrupted memory (bands of RGB noise), and a CPU-backed canvas sidesteps that driver bug while keeping the
     //full map. No cost worth caring about here: the ground repaints only on a camera move or a theme change.
     cpuRaster = false,
