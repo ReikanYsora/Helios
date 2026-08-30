@@ -1,4 +1,4 @@
-import { warnOnce } from './log';
+import { warnOnce, clearPrefixedLocalStorage } from './log';
 
 //Durable cache for the data layer: a versioned, age-capped localStorage stash so a browser reload or a
 //Home Assistant restart shows the last successfully-fetched data instantly instead of a blank card, then
@@ -175,34 +175,7 @@ export function saveDurable<T>(key: string, data: T): void
 //Drop every durable payload (called from the card's reset hook). Returns the count removed.
 export function clearDurable(): number
 {
-    let cleared = 0;
-    try
-    {
-        const ls = window.localStorage;
-        if (!ls)
-        {
-            return 0;
-        }
-        const stale: string[] = [];
-        for (let i = 0; i < ls.length; i++)
-        {
-            const k = ls.key(i);
-            if (k && k.startsWith(PREFIX))
-            {
-                stale.push(k);
-            }
-        }
-        for (const k of stale)
-        {
-            ls.removeItem(k);
-            cleared++;
-        }
-    }
-    catch
-    {
-        //localStorage unavailable: nothing to clear.
-    }
-    return cleared;
+    return clearPrefixedLocalStorage(PREFIX);
 }
 
 

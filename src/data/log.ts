@@ -14,3 +14,36 @@ export function warnOnce(key: string, message: string): void
     // eslint-disable-next-line no-console -- one-time data-layer diagnostic; the layer is otherwise fully silent
     console.warn(`[Helios] ${message}`);
 }
+
+
+//Remove every localStorage key starting with `prefix`. Best-effort: storage unavailable or a quota error
+//just leaves the cache as-is. Returns the count removed.
+export function clearPrefixedLocalStorage(prefix: string): number
+{
+    let cleared = 0;
+    try
+    {
+        const ls = window.localStorage;
+        if (!ls)
+        {
+            return 0;
+        }
+        const stale: string[] = [];
+        for (let i = 0; i < ls.length; i++)
+        {
+            const k = ls.key(i);
+            if (k && k.startsWith(prefix))
+            {
+                stale.push(k);
+            }
+        }
+        for (const k of stale)
+        {
+            ls.removeItem(k);
+            cleared++;
+        }
+    }
+    catch
+    { /* localStorage unavailable or quota error: leave the cache as-is */ }
+    return cleared;
+}

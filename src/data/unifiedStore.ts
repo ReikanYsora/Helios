@@ -2,7 +2,7 @@
 //Built ONCE after the underlying fetches land, cached on the host, then sliced/re-sampled by consumers at look-up time.
 //Live numeric chips stay on the direct hass.states path; every other surface that draws or hovers a curve uses this.
 //
-//Cadence: one knob (`display-update-frequency-per-hour`, 1-60, default 4) controls both the storage and render cadence
+//Cadence: one knob (`display-update-frequency-per-hour`, 1-6, default 4) controls both the storage and render cadence
 //of every graph. Higher = more precise curves at the cost of CPU + memory. The forecast curve is the exception: from
 //HA's Energy solar forecast at its native hourly cadence, read into buckets as a stepped hourly curve (each bucket reads
 //the wh of the forecast hour it falls inside).
@@ -267,7 +267,7 @@ function buildHumidity(host: UnifiedStoreHost, storeStartMs: number, storeEndMs:
 //kWh -> average watts (kWh * 1000 / bucket-hours). No client-side differentiation or unit classification, so a
 //coarse-reporting or daily-reset meter is handled natively by the recorder.
 //
-//Store buckets are always >= the 5-min source period (data-interval caps at 12/hour = 5 min), so each store bucket
+//Store buckets are always >= the 5-min source period (display-update-frequency-per-hour caps at 6/hour = 10 min), so each store bucket
 //aggregates whole source buckets and the conversion is exact. Past gaps interpolated; future buckets stay null so the
 //forecast series owns the future half.
 function buildProduction(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]

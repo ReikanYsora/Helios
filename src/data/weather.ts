@@ -10,6 +10,7 @@ import {
     WEATHER_CACHE_KEY_DECIMALS as CACHE_KEY_DECIMALS,
     CACHE_KEY_PREFIX,
 } from '../core/config/constants';
+import { clearPrefixedLocalStorage } from './log';
 
 
 //Hourly forecast at the home location. Numeric arrays are aligned on `times`. `shortwave` uses -1 as a
@@ -172,31 +173,7 @@ function cacheKey(lat: number, lon: number, precision: 'standard' | 'high'): str
 //Safe to call repeatedly.
 export function clearWeatherCache(): number
 {
-    let cleared = 0;
-    try
-    {
-        const ls = window.localStorage;
-        if (!ls)
-        {
-            return 0;
-        }
-        const stale: string[] = [];
-        for (let i = 0; i < ls.length; i++)
-        {
-            const k = ls.key(i);
-            if (k && k.startsWith(CACHE_KEY_PREFIX))
-            {
-                stale.push(k);
-            }
-        }
-        for (const k of stale)
-        {
-            ls.removeItem(k); cleared++;
-        }
-    }
-    catch (_)
-    { /* localStorage unavailable or quota error: leave the cache as-is */ }
-    return cleared;
+    return clearPrefixedLocalStorage(CACHE_KEY_PREFIX);
 }
 
 function readCache(lat: number, lon: number, precision: 'standard' | 'high'): SampleHourly | null
