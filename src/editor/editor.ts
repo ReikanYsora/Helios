@@ -106,8 +106,7 @@ export class HeliosCardEditor extends LitElement
             next['camera-bearing-deg'] = Math.round(((pose.bearing % 360) + 360) % 360);
             next['camera-pitch-deg']   = Math.round(pose.pitch);
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
     }
 
     public disconnectedCallback(): void
@@ -164,8 +163,7 @@ export class HeliosCardEditor extends LitElement
                 }
                 if (changed)
                 {
-                    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-                    this._cfg = next as HeliosConfig;
+                    this._commit(next);
                 }
             }, 0);
         }
@@ -274,7 +272,7 @@ export class HeliosCardEditor extends LitElement
         this._pruneStaleDeviceIds();
     }
 
-    //Drop any hidden / order id whose device no longer exists in the Energy dashboard, so removing a
+    //Drop any hidden id whose device no longer exists in the Energy dashboard, so removing a
     //device there also cleans it from this card's YAML. Guarded on a NON-EMPTY loaded snapshot: an empty one can also
     //mean the prefs failed to load (RBAC), and wiping the lists then would silently lose the user's choices. Writes
     //only when something actually changed, so it converges after a single pass and never loops.
@@ -349,8 +347,7 @@ export class HeliosCardEditor extends LitElement
         {
             return;
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
     }
 
     //One live-data status line: check or alert glyph + the explanation.
@@ -441,6 +438,14 @@ export class HeliosCardEditor extends LitElement
         `;
     }
 
+    //Dispatches config-changed with the built next config and mirrors it into local state; the shared tail every
+    //mutator ends with once it has assembled its next config object.
+    private _commit(next: Record<string, unknown>): void
+    {
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+    }
+
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
         const next = { ...this._cfg } as Record<string, unknown>;
@@ -454,8 +459,7 @@ export class HeliosCardEditor extends LitElement
         {
             next[key] = value;
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
     }
 
     // Free-form numeric field. Empty input clears the option (card falls back to default); a finite number commits
@@ -988,8 +992,7 @@ export class HeliosCardEditor extends LitElement
                 }
             }
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
     };
 
     private _mapLayerLabel(t: Translations, key: GroundLayerKey): string
@@ -1502,8 +1505,7 @@ export class HeliosCardEditor extends LitElement
                 next[k] = cur[k];
             }
         }
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
-        this._cfg = next as HeliosConfig;
+        this._commit(next);
         const t = this._t();
         this._optionsResetFeedback = t.editor.resetOptionsDone;
         if (this._optionsResetFeedbackTimer !== undefined)
