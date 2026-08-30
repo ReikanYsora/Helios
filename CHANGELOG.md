@@ -9,6 +9,15 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.3
 
+A fast follow-up, mostly fixes reported by the wave of new users right after
+2026.9.2 shipped: the home building now correctly disappears behind a
+neighbour that is genuinely closer to the camera, the cost chip finds Home
+Assistant's actual generated sensor instead of guessing its name, a negative
+cost rate shades toward zero instead of downward, sunrise and sunset stay
+readable under real rain or snow, a non-admin viewer no longer floods the
+Home Assistant log, and the animated flow beads stop burning CPU they never
+needed to.
+
 ### Fixed: sustained CPU load from the animated flow beads
 
 The travelling dots on the PV/grid/battery/monitoring-group flow lines are

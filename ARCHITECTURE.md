@@ -147,8 +147,14 @@ Three passes turn raw tile rings into a scene that paints correctly:
 - **Paint order.** With no z-buffer, order is everything. For each pair of nearby
   buildings a **separating plane** is sought between their real outlines; that plane
   says which of the two is in front from the current eye point. The pairwise
-  relations are topologically sorted (Kahn) into the paint order. This is exact for
-  vertical prisms on a common ground plane, which is what the scene is.
+  relations are topologically sorted (Kahn) into the paint order, HOME INCLUDED: one
+  face list for every building, painted far-to-near as a single stable sort (a
+  nearer neighbour occludes the home exactly as it would occlude another neighbour,
+  and vice versa), not two separate always-home-on-top groups. This is exact for
+  vertical prisms on a common ground plane, which is what the scene is. Neighbour
+  opacity is baked into each face's own fill/stroke as rgba rather than a wrapping
+  `<g opacity>`, since the home is now free to interleave between neighbour faces in
+  the paint order.
 
 Walls are shaded by Lambert from the footprint's own winding: a face square on to
 the sun takes the lit tint, one turned away falls to the ambient (sky) tint.
@@ -208,7 +214,14 @@ for the screen-space anchors of the home, the chip cluster and the sun scene eve
 frame (`onMapTransform`), resolves each chip's scrub-aware value, and returns the
 absolutely-positioned chips + SVG leaders at those coordinates. Each chip has a
 leader to the home with an animated **bead** whose direction and speed encode the
-live flow. Clicking a chip points the timeline at that metric.
+live flow: a native SVG SMIL `<animateMotion>`, not a JS/CSS animation. Its
+`dur`/`path`/`keyPoints` are wrapped in Lit's `guard()`, keyed on the handful of
+values that actually define the bead - rewriting a running SMIL element's
+attributes re-arms its animation clock even when the written value is identical,
+real main-thread cost that has nothing to do with scene size, and `render()` here
+runs on every `hass` change (`refreshHud`'s own projections use the same
+equal-content-keeps-identity guard for the same reason, see `hud.ts`). Clicking a
+chip points the timeline at that metric.
 
 **Tapping a chip** opens a compact **detail panel** top-right
 (`hud/detail-panel.ts`), tinted in the active chip's live colour: it aggregates
