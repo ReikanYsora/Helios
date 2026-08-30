@@ -319,33 +319,40 @@ export class HeliosEngine
     //Locked + a configured angle: the config pose WINS over the per-device localStorage pose, so a locked view is
     //identical on every device/browser. Unlocked (or no config angle): the drag-set localStorage pose leads, then
     //config, then the hemisphere default, keeping the per-device behaviour for free-rotating cards.
-    private _initialBearing(): number
+    //Shared 4-way precedence behind _initialBearing/_initialPitch: stored localStorage value, then config, then
+    //(when locked) config over storage, then a fallback default. `normalize` wraps (bearing, 0-360) or clamps
+    //(pitch, min/max) the resolved raw value into its valid range.
+    private _initialCameraAngle(
+        storedField: 'bearing' | 'pitch',
+        cfgKey:      string,
+        normalize:   (raw: number) => number,
+        fallback:    number
+    ): number
     {
-        const stored = this._readStoredPose();
-        const rawStored = stored && typeof stored.bearing === 'number' ? stored.bearing : NaN;
-        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
+        const stored    = this._readStoredPose();
+        const storedVal = stored ? stored[storedField] : undefined;
+        const rawStored = typeof storedVal === 'number' ? storedVal : NaN;
+        const rawCfg    = Number((this.cfg as Record<string, unknown>)[cfgKey]);
         const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
             ? rawCfg
             : (Number.isFinite(rawStored) ? rawStored : rawCfg);
-        if (Number.isFinite(raw))
-        {
-            return ((raw % 360) + 360) % 360;
-        }
-        return this.homeLat >= 0 ? 180 : 0;
+        return Number.isFinite(raw) ? normalize(raw) : fallback;
+    }
+    private _initialBearing(): number
+    {
+        return this._initialCameraAngle(
+            'bearing', 'camera-bearing-deg',
+            (raw) => ((raw % 360) + 360) % 360,
+            this.homeLat >= 0 ? 180 : 0
+        );
     }
     private _initialPitch(): number
     {
-        const stored = this._readStoredPose();
-        const rawStored = stored && typeof stored.pitch === 'number' ? stored.pitch : NaN;
-        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
-        const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
-            ? rawCfg
-            : (Number.isFinite(rawStored) ? rawStored : rawCfg);
-        if (Number.isFinite(raw))
-        {
-            return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw));
-        }
-        return CAMERA_PITCH_REST_DEG;
+        return this._initialCameraAngle(
+            'pitch', 'camera-pitch-deg',
+            (raw) => Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw)),
+            CAMERA_PITCH_REST_DEG
+        );
     }
     //True when drag-rotate/pitch and idle auto-orbit are all suppressed (locked pose). The editor/YAML
     //`camera-locked` toggle is the sole authority: a stale localStorage flag must never override it.
