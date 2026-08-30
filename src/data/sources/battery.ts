@@ -11,7 +11,7 @@ import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
-import { fetchChangeById, mergeChangeSeries, extractPerEntity, changeRefreshAnchorMs, parseStatBoundaryLoose, type ChangeBucket, type StatPeriod } from './energy-stats';
+import { fetchChangeById, mergeChangeSeries, extractPerEntity, changeRefreshAnchorMs, parseStatBoundaryLoose, parseRawHistorySeries, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, quantizedAnchorMs, type KeyedFetch } from '../source-fetch';
 import { refreshBatteryGuard, batteryLiveInverted, type BatteryGuardState } from './battery-guard';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
@@ -329,51 +329,16 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
 }
 
 
-//Parse a raw-history payload (`history/history_during_period`, minimal shape) into a `BatteryHistory`. Accepts `lu` (epoch seconds)
-//and `last_updated`/`last_changed` (ISO) so it survives HA payload variations across releases.
+//Parse a raw-history payload (`history/history_during_period`) into a `BatteryHistory` via the shared per-entity
+//parser (energy-stats.ts): compact/verbose state + timestamp shapes, epoch ms/seconds magnitude check, and
+//carry-forward onto the previous sample's timestamp when a repeat omits its own.
 function parseRawBatteryHistory(arr: any[]): BatteryHistory
 {
-    const times:  Date[]   = [];
-    const values: number[] = [];
-    for (const item of arr ?? [])
+    return parseRawHistorySeries(arr, (s) =>
     {
-        const stateStr =
-            typeof item?.s     === 'string' ? item.s :
-                typeof item?.state === 'string' ? item.state :
-                    null;
-        if (stateStr === null
-            || stateStr === 'unavailable'
-            || stateStr === 'unknown'
-            || stateStr === '')
-        {
-            continue;
-        }
-        const v = parseFloat(stateStr);
-        if (!isFinite(v))
-        {
-            continue;
-        }
-        let ts: Date | null = null;
-        if (typeof item?.lu === 'number')
-        {
-            ts = new Date(item.lu * 1000);
-        }
-        else if (typeof item?.last_updated === 'string')
-        {
-            ts = new Date(item.last_updated);
-        }
-        else if (typeof item?.last_changed === 'string')
-        {
-            ts = new Date(item.last_changed);
-        }
-        if (!ts || isNaN(ts.getTime()))
-        {
-            continue;
-        }
-        times.push(ts);
-        values.push(v);
-    }
-    return { times, values };
+        const v = parseFloat(s);
+        return isFinite(v) ? v : null;
+    });
 }
 
 

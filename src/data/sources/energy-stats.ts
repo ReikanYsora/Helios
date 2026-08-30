@@ -11,7 +11,7 @@ import type { HassLike } from '../../core/ha-types';
 import { CHANGE_REFRESH_MS, COARSE_PROBE_MS, DENSE_FRACTION, COARSE_MAX_SPREAD_BUCKETS, HOUR_MS, DAY_MS } from '../../core/config/constants';
 import { callWS } from '../ha-gateway';
 import { RequestCache } from '../request-cache';
-import { loadDurable, saveDurable } from '../durable-cache';
+import { loadDurable, saveDurable, loadDurableSeries, saveDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 
 
@@ -497,4 +497,137 @@ export function parseStatBoundaryLoose(raw: unknown): number | null
         return isFinite(t) ? t : null;
     }
     return null;
+}
+
+
+//Parallel times[]/values[] series, the shape every per-entity raw-history / stats parser below returns.
+export interface RawSeries
+{
+    times:  Date[];
+    values: number[];
+}
+
+
+//Shared raw-history parser for `history/history_during_period` (battery/weather-override/irradiance): tolerates the
+//compact `s`/`lu`/`lc` and verbose `state`/`last_updated`/`last_changed` shapes, drops unavailable/unknown/empty
+//samples, and falls back to the previous sample's timestamp when a payload omits one entirely (HA compaction can
+//drop it on consecutive identical states). `toValue` derives the caller's numeric reading from the raw state
+//string (its own clamping/unit conversion); null skips the sample.
+export function parseRawHistorySeries(
+    arr:     any[],
+    toValue: (rawState: string) => number | null,
+): RawSeries
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    let lastTsMs: number | null = null;
+
+    for (const item of arr ?? [])
+    {
+        const sRaw = item?.s ?? item?.state;
+        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+        {
+            continue;
+        }
+        const v = toValue(String(sRaw));
+        if (v === null)
+        {
+            continue;
+        }
+
+        let ts: Date | null = null;
+        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+        if (typeof tsRaw === 'number')
+        {
+            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
+        }
+        else if (typeof tsRaw === 'string')
+        {
+            const asNum = Number(tsRaw);
+            ts = (Number.isFinite(asNum) && asNum > 1e9) ? new Date(asNum > 1e12 ? asNum : asNum * 1000) : new Date(tsRaw);
+        }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+        {
+            ts = new Date(lastTsMs);
+        }
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
+
+        lastTsMs = ts.getTime();
+        times.push(ts);
+        values.push(v);
+    }
+    return { times, values };
+}
+
+
+//Shared single-entity history fetch (irradiance + weather-override): clamp `end` to now, try
+//`recorder/statistics_during_period` (`mean`, 5-min buckets), fall back to `history/history_during_period` when the
+//stats array comes back empty (no LTS tracking), persist the result via saveDurableSeries, and on any throw warn
+//once and restore the durable copy. `parseStats`/`parseRaw` do the caller's own value derivation and clamping.
+export async function fetchStatsOrRawHistory(
+    hass:       HassLike,
+    entityId:   string,
+    start:      Date,
+    end:        Date,
+    durableKey: string,
+    opts: {
+        parseStats:  (arr: any[]) => RawSeries;
+        parseRaw:    (arr: any[]) => RawSeries;
+        warnKey:     string;
+        warnMessage: string;
+    },
+): Promise<RawSeries | null>
+{
+    if (!hass?.callWS)
+    {
+        return null;
+    }
+    try
+    {
+        const now = new Date();
+        const fetchEnd = end > now ? now : end;
+        if (start >= fetchEnd)
+        {
+            return { times: [], values: [] };
+        }
+
+        let series: RawSeries;
+        const statsResult: any = await callWS<any>(hass, {
+            type:          'recorder/statistics_during_period',
+            start_time:    start.toISOString(),
+            end_time:      fetchEnd.toISOString(),
+            statistic_ids: [entityId],
+            period:        '5minute',
+            types:         ['mean'],
+        });
+        const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
+        if (statsArr.length > 0)
+        {
+            series = opts.parseStats(statsArr);
+        }
+        else
+        {
+            const rawResult: any = await callWS<any>(hass, {
+                type:                     'history/history_during_period',
+                start_time:               start.toISOString(),
+                end_time:                 fetchEnd.toISOString(),
+                entity_ids:               [entityId],
+                minimal_response:         true,
+                no_attributes:            true,
+                significant_changes_only: true,
+            });
+            series = opts.parseRaw((rawResult && rawResult[entityId]) ?? []);
+        }
+
+        saveDurableSeries(durableKey, series);
+        return series;
+    }
+    catch (_e)
+    {
+        warnOnce(opts.warnKey, opts.warnMessage);
+        return loadDurableSeries(durableKey, DAY_MS);
+    }
 }
