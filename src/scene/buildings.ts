@@ -978,10 +978,10 @@ export function renderBuildings(
     for (const { index } of order)
     {
         const b  = buildings[index];
-        const fp = simplifyFootprint(b.footprint);
         //Every ring of the block: the outline plus any courtyard. A hole's walls face into the yard, and the cull
         //below reads the PROJECTED quad, so their opposite winding sorts itself out.
-        const rings = [fp, ...(b.holes ?? []).map(simplifyFootprint)];
+        const rings = simplifiedRings(b);
+        const fp    = rings[0];
         //Home prism height carries the extra squash/grow multiplier.
         const h  = b.height * growth * (b.isHome ? (home.growth ?? 1) : 1);
 
@@ -1118,5 +1118,22 @@ function simplifyFootprint(points: Point[]): Point[]
         }
     }
     return out.length >= 3 ? out : points;
+}
+
+//A building's footprint/holes are invariant between data re-interprets, but renderBuildings runs every camera
+//frame during pan/orbit; mirrors separatingPlanes' own WeakMap cache (above) for the same reason: simplify each
+//building's rings once, not every frame.
+const _simplifyCache = new WeakMap<Building, Point[][]>();
+
+function simplifiedRings(b: Building): Point[][]
+{
+    const cached = _simplifyCache.get(b);
+    if (cached)
+    {
+        return cached;
+    }
+    const rings = [simplifyFootprint(b.footprint), ...(b.holes ?? []).map(simplifyFootprint)];
+    _simplifyCache.set(b, rings);
+    return rings;
 }
 
