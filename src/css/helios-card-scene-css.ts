@@ -134,11 +134,12 @@ export const heliosCardStyles = css`
 
 
     /*  ============================================================
-        HUD chips: ONE shared box recipe for every floating pill so they
-        match in height, width, padding and font. Only the distinct bits
-        (border-colour, z-index, pointer behaviour, active-glow, per-chip
-        states) live in the per-chip rules below; don't re-declare the box
-        geometry per chip.
+        HUD chips: ONE shared pill recipe for every floating chip, scene
+        pills and corner chips alike, so they match in height, width,
+        padding and font. Only the distinct bits (position, border-colour,
+        z-index, pointer behaviour, active-glow, per-chip states) live in
+        the per-chip rules below; don't re-declare the box geometry per
+        chip.
         ============================================================ */
     .pv-pct-label,
     .battery-pct-label,
@@ -147,8 +148,20 @@ export const heliosCardStyles = css`
     .solar-pct-label,
     .home-pill
     {
+        /*  The scene pills are anchored to a projected point and centred on it; the corner chips instead
+            flow in their own row (.helios-corner-chip keeps position: relative), so this stays split out
+            from the shared box recipe below. */
         position: absolute;
         transform: translate(-50%, -50%);
+    }
+    .pv-pct-label,
+    .battery-pct-label,
+    .grid-label,
+    .group-label,
+    .solar-pct-label,
+    .home-pill,
+    .helios-corner-chip
+    {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -193,13 +206,15 @@ export const heliosCardStyles = css`
         border-color: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
     }
 
-    /*  Shared icon recipe for the value chips (PV / battery / grid / cloud / sun). The home pill's icon is
-        coloured differently, so it keeps its own rule below. */
+    /*  Shared icon recipe for the value chips (PV / battery / grid / cloud / sun) and the corner chips
+        (cost / temperature / humidity). The home pill's icon is coloured differently, so it keeps its
+        own rule below. */
     .pv-pct-label ha-icon,
     .battery-pct-label ha-icon,
     .grid-label ha-icon,
     .group-label ha-icon,
-    .solar-pct-label ha-icon
+    .solar-pct-label ha-icon,
+    .helios-corner-chip ha-icon
     {
         --mdc-icon-size: 16px;
         color: inherit;
@@ -213,7 +228,8 @@ export const heliosCardStyles = css`
     .battery-pct-label[role="button"],
     .grid-label[role="button"],
     .group-label[role="button"],
-    .solar-pct-label[role="button"]
+    .solar-pct-label[role="button"],
+    .helios-corner-chip[role="button"]
     {
         pointer-events: auto;
         cursor: pointer;
@@ -227,13 +243,15 @@ export const heliosCardStyles = css`
     .group-label       { --chip-glow: var(--group-color, var(--primary-color, #03a9f4)); }
     .solar-pct-label   { --chip-glow: var(--solar-color, var(--amber-color, #ffc107)); }
     .home-pill         { --chip-glow: var(--helios-consumption-color, #4caf50); }
+    .helios-corner-chip { --chip-glow: var(--chip-color, #e53935); }
 
     .pv-pct-label::after,
     .battery-pct-label::after,
     .grid-label::after,
     .group-label::after,
     .solar-pct-label::after,
-    .home-pill::after
+    .home-pill::after,
+    .helios-corner-chip::after
     {
         content: "";
         position: absolute;
@@ -251,7 +269,8 @@ export const heliosCardStyles = css`
     .grid-label.is-chart-active::after,
     .group-label.is-chart-active::after,
     .solar-pct-label.is-chart-active::after,
-    .home-pill.is-chart-active::after
+    .home-pill.is-chart-active::after,
+    .helios-corner-chip.is-chart-active::after
     {
         opacity: 1;
     }
@@ -286,7 +305,8 @@ export const heliosCardStyles = css`
     .grid-label.is-curve-on,
     .group-label.is-curve-on,
     .solar-pct-label.is-curve-on,
-    .home-pill.is-curve-on
+    .home-pill.is-curve-on,
+    .helios-corner-chip.is-curve-on
     {
         background: var(--chip-glow, var(--primary-color, #ff9800));
         color: var(--ha-card-background, var(--card-background-color, #fff));
@@ -298,7 +318,8 @@ export const heliosCardStyles = css`
     .grid-label.is-curve-on ha-icon,
     .group-label.is-curve-on ha-icon,
     .solar-pct-label.is-curve-on ha-icon,
-    .home-pill.is-curve-on ha-icon
+    .home-pill.is-curve-on ha-icon,
+    .helios-corner-chip.is-curve-on ha-icon
     {
         color: var(--ha-card-background, var(--card-background-color, #fff));
     }
@@ -922,68 +943,18 @@ export const heliosCardStyles = css`
     {
         bottom: calc(33px + clamp(54px, 18%, 90px) + 10px);
     }
-    /*  Same shared pill recipe as the HUD chips: fixed width, 2px border in the chip's colour, card-background fill,
-        icon + text in --primary-text-color. Only the border colour differs per chip (via --chip-color).  */
+    /*  Same shared pill recipe as the HUD chips (box, icon, pointer, active-glow and curve-on rules all live
+        with those chips above); flows in its own row rather than being anchored to a projected point, so it
+        keeps its own position and border colour. */
     .helios-corner-chip
     {
         position: relative;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        box-sizing: border-box;
-        width: 106px;
-        padding: 3px 10px;
-        border: 2px solid var(--chip-color, #e53935);
-        border-radius: 999px;
-        background: var(--card-background-color, #ffffff);
-        background-clip: padding-box;
+        border-color: var(--chip-color, #e53935);
         color: var(--primary-text-color, #212121);
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: 600;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-        box-shadow: var(--helios-shadow-chip);
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
-        /*  Glow accent for the active-target halo below (same language as the scene chips).  */
-        --chip-glow: var(--chip-color, #e53935);
     }
-    .helios-corner-chip ha-icon
-    {
-        --mdc-icon-size: 16px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-    /*  Clickable + active states, mirroring the scene chips: [role=button] re-enables events (the row is
-        pointer-events:none), .is-chart-active raises the halo, .is-curve-on fills the pill with the metric colour.  */
-    .helios-corner-chip[role="button"] { pointer-events: auto; cursor: pointer; }
     /*  Day-curve open: each non-active corner chip becomes an inert, invisible placeholder. It still reserves its
         slot width so the centered row does not shift the surviving chip when its siblings drop out.  */
     .helios-corner-chip.is-slot-hidden { visibility: hidden; pointer-events: none; }
-    .helios-corner-chip::after
-    {
-        content: "";
-        position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        pointer-events: none;
-        box-shadow: 0 0 12px 1px color-mix(in srgb, var(--chip-glow, transparent) 90%, transparent);
-        opacity: 0;
-        /*  Same grow-synced fade as the scene chips (HOME_GROW_MS), so a corner chip's glow settles like the rest
-            instead of snapping on. */
-        transition: opacity ${unsafeCSS(HOME_GROW_MS)}ms ease;
-    }
-    .helios-corner-chip.is-chart-active::after { opacity: 1; }
-    .helios-corner-chip.is-curve-on
-    {
-        background: var(--chip-glow, var(--primary-color, #ff9800));
-        color: var(--ha-card-background, var(--card-background-color, #fff));
-        transition: background ${unsafeCSS(HOME_GROW_MS)}ms ease, color ${unsafeCSS(HOME_GROW_MS)}ms ease;
-    }
-    .helios-corner-chip.is-curve-on ha-icon { color: var(--ha-card-background, var(--card-background-color, #fff)); }
 
     /*  THUNDERSTORM lightning: a top-weighted blue-white flash pushed by the storm controller via --wx-flash.
         Plain opacity compositing (no mix-blend-mode): screen-blend forces a stacking-context blend group that some
