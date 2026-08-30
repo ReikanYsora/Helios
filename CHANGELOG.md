@@ -9,6 +9,14 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.3
 
+### Fixed: sunrise and sunset times stay readable under real weather
+
+The sunrise/sunset marker sat on the same layer as the far side of the sun arc,
+which put it underneath the weather overlay and, worse, underneath the rain and
+snow canvases. On a genuinely rainy or foggy day the time was barely legible
+through the precipitation. It now sits at the chip tier, above weather, same as
+every other readout on the card. Thanks to @igotyou (#416).
+
 ### Fixed: a non-admin viewer no longer floods the Home Assistant log
 
 The card's Energy-dashboard subscription isn't on core's non-admin allowlist, so a

@@ -755,8 +755,10 @@ export const heliosCardStyles = css`
         gap: 4px;
         color: var(--sun-cross-color, #ffc107);
         pointer-events: none;
-        /*  Same layer as the far arc (z 5) it sits on, so the value chips (z 8) stay on top. */
-        z-index: 5;
+        /*  z 5 (the far arc's own layer) used to leave this UNDER the weather overlay (z 6) and the rain/snow
+            canvases (z 7), so the time read as barely legible under real precipitation - weather is meant to
+            tint the map, never the data, exactly like the chips it now shares a tier with (#416). */
+        z-index: 8;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     }
     .sun-cross-marker ha-icon
