@@ -7,6 +7,25 @@ import { mixHex, hexByte } from '../render-kit/hex';
 import { clamp } from '../render-kit/math';
 
 
+//Cache Intl.NumberFormat instances by locale + integer + fractionDigits: a chip, axis label or device row calls
+//formatLocalisedNumber every render, but the resolved options only vary across a small, bounded set of keys.
+const _numberFormatMemo = new Map<string, Intl.NumberFormat>();
+
+function getLocalisedNumberFormat(locale: string | undefined, integer: boolean, fractionDigits: number): Intl.NumberFormat
+{
+    const key = `${locale}|${integer}|${fractionDigits}`;
+    let fmt = _numberFormatMemo.get(key);
+    if (!fmt)
+    {
+        const opts: Intl.NumberFormatOptions = integer
+            ? { maximumFractionDigits: 0 }
+            : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
+        fmt = new Intl.NumberFormat(locale, opts); //may throw for a custom locale that isn't a valid BCP-47 tag; caller catches
+        _numberFormatMemo.set(key, fmt);
+    }
+    return fmt;
+}
+
 //Format a number with the user's locale (decimal mark, grouping). Falls back to locale-independent
 //toFixed when Intl rejects the resolved locale, guarding against custom HA locales that aren't valid
 //BCP-47 tags. `integer = true` rounds to the nearest integer and drops fraction digits.
@@ -34,12 +53,9 @@ export function formatLocalisedNumber(
     const locale = (hass?.locale?.language as string | undefined)
         ?? (hass?.language as string | undefined)
         ?? undefined;
-    const opts: Intl.NumberFormatOptions = integer
-        ? { maximumFractionDigits: 0 }
-        : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
     try
     {
-        return new Intl.NumberFormat(locale, opts).format(value);
+        return getLocalisedNumberFormat(locale, integer, fractionDigits).format(value);
     }
     catch (_)
     {
@@ -47,6 +63,10 @@ export function formatLocalisedNumber(
     }
 }
 
+
+//Cache the resolved hour12 answer per (time_format, language): the probe below only needs to run once per
+//distinct pair, not on every timeline tick / sun-time marker / tooltip datetime formatted.
+const _amPmMemo = new Map<string, boolean>();
 
 //HA's am/pm decision: the user's explicit 12/24-hour choice from hass.locale.time_format, falling back to the
 //language/system default by probing the runtime, so a time we format reads exactly as the rest of the dashboard does.
@@ -63,15 +83,37 @@ function haUseAmPm(locale: { time_format?: string; language?: string } | undefin
     }
     //'language' or 'system' (or unset): probe the runtime, honouring the chosen language for 'language'.
     const testLang = tf === 'language' ? locale?.language : undefined;
-    try
+    const key = `${tf ?? ''}|${testLang ?? ''}`;
+    let cached = _amPmMemo.get(key);
+    if (cached === undefined)
     {
-        const probe = new Date().toLocaleString(testLang);
-        return probe.includes('AM') || probe.includes('PM');
+        try
+        {
+            const probe = new Date().toLocaleString(testLang);
+            cached = probe.includes('AM') || probe.includes('PM');
+        }
+        catch (_)
+        {
+            cached = false;
+        }
+        _amPmMemo.set(key, cached);
     }
-    catch (_)
+    return cached;
+}
+
+//Cache Intl.DateTimeFormat instances by locale + the caller's options shape, mirroring the number-format memo above.
+const _dateTimeFormatMemo = new Map<string, Intl.DateTimeFormat>();
+
+function getHaDateTimeFormat(locale: string | undefined, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat
+{
+    const key = `${locale}|${JSON.stringify(opts)}`;
+    let fmt = _dateTimeFormatMemo.get(key);
+    if (!fmt)
     {
-        return false;
+        fmt = new Intl.DateTimeFormat(locale, opts); //may throw for a rejected language tag; caller catches
+        _dateTimeFormatMemo.set(key, fmt);
     }
+    return fmt;
 }
 
 //Format a Date with the user's HA language + a caller-supplied options set, falling back to the runtime default
@@ -82,11 +124,11 @@ function formatWithHaLocale(hass: HassLike, date: Date, opts: Intl.DateTimeForma
     const withAmPm: Intl.DateTimeFormatOptions = { ...opts, hour12: haUseAmPm(locale) };
     try
     {
-        return new Intl.DateTimeFormat(locale?.language, withAmPm).format(date);
+        return getHaDateTimeFormat(locale?.language, withAmPm).format(date);
     }
     catch (_)
     {
-        return new Intl.DateTimeFormat(undefined, withAmPm).format(date);
+        return getHaDateTimeFormat(undefined, withAmPm).format(date);
     }
 }
 
