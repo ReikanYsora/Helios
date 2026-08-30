@@ -10,7 +10,7 @@ import { consumptionLoad } from '../core/energy';
 import { staticPrice, costRateAt } from '../data/sources/cost';
 import { buildTimelineModel, formatTimelineLabel } from '../timeline/timeline-model';
 import { sumChangeForDay, changeSeriesToWatts, type ChangeBucket } from '../data/sources/energy-stats';
-import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark, irradianceForecastColor, cloudBandColors } from './charts';
+import { type ChartHost, type ChartTarget, type StrandColour, isGroupTarget, groupOfTarget, chartIsDark, irradianceForecastColor, cloudBandColors, hasMultiSourceBreakdown } from './charts';
 import { interpAt } from '../data/series-sample';
 import { sliceForRange } from '../data/unifiedStore';
 import { renderPvChart } from './charts-pv';
@@ -176,7 +176,7 @@ function stackedLines(
     colour: (idx: number) => string
 ): ChartLine[] | null
 {
-    if (ids.length < 2 || !ids.every((id) => map.has(id)))
+    if (!hasMultiSourceBreakdown(ids, map))
     {
         return null;
     }

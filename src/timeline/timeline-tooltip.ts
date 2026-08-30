@@ -28,6 +28,7 @@ import {
     groupOfTarget,
     irradianceForecastColor,
     cloudBandColors,
+    hasMultiSourceBreakdown,
 } from '../charts/charts';
 import { interpAt, pvValueAtTime } from '../data/series-sample';
 import { computeDailyKwhTotals } from '../charts/charts-generic';
@@ -167,9 +168,9 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const forecastColor  = irradianceForecastColor(host);
 
     //Multi-source breakdown rows for grid / battery, mirroring the solar perEntity rows: one row per configured meter,
-    //but only once 2+ sources each carry their own recorder series (the same guard stackedLines uses), so a
-    //single-source install stays exactly as before. Index and colour follow the source order the bands are painted in,
-    //so each row lines up with its own stacked band.
+    //but only once 2+ sources each carry their own recorder series (the shared hasMultiSourceBreakdown guard
+    //stackedLines also uses), so a single-source install stays exactly as before. Index and colour follow the
+    //source order the bands are painted in, so each row lines up with its own stacked band.
     const dark = chartIsDark(host);
     const ed   = host._energyDefaults;
     const breakdown = (
@@ -179,7 +180,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         colorFor: (i: number) => string
     ): { label: string; valueText: string; color: string }[] =>
     {
-        if (ids.length < 2 || !ids.every((id) => map.has(id)))
+        if (!hasMultiSourceBreakdown(ids, map))
         {
             return [];
         }

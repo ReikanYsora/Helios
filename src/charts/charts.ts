@@ -220,6 +220,14 @@ export function cloudBandColors(el: Element | null | undefined): { low: string; 
     };
 }
 
+//Multi-source breakdown eligibility: 2+ configured sources, each with its own recorder change series fetched.
+//Below that the aggregate (or lone-entry) view is exact and a per-source breakdown would be redundant or
+//partly blank, so callers fall back to the aggregate curve/row instead.
+export function hasMultiSourceBreakdown(ids: readonly string[], map: ReadonlyMap<string, ChangeBucket[]>): boolean
+{
+    return ids.length >= 2 && ids.every((id) => map.has(id));
+}
+
 
 //Re-exports keeping the render concerns importable from this module, with the implementations in sibling files.
 export {
