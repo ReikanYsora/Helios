@@ -319,33 +319,40 @@ export class HeliosEngine
     //Locked + a configured angle: the config pose WINS over the per-device localStorage pose, so a locked view is
     //identical on every device/browser. Unlocked (or no config angle): the drag-set localStorage pose leads, then
     //config, then the hemisphere default, keeping the per-device behaviour for free-rotating cards.
-    private _initialBearing(): number
+    //Shared 4-way precedence behind _initialBearing/_initialPitch: stored localStorage value, then config, then
+    //(when locked) config over storage, then a fallback default. `normalize` wraps (bearing, 0-360) or clamps
+    //(pitch, min/max) the resolved raw value into its valid range.
+    private _initialCameraAngle(
+        storedField: 'bearing' | 'pitch',
+        cfgKey:      string,
+        normalize:   (raw: number) => number,
+        fallback:    number
+    ): number
     {
-        const stored = this._readStoredPose();
-        const rawStored = stored && typeof stored.bearing === 'number' ? stored.bearing : NaN;
-        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
+        const stored    = this._readStoredPose();
+        const storedVal = stored ? stored[storedField] : undefined;
+        const rawStored = typeof storedVal === 'number' ? storedVal : NaN;
+        const rawCfg    = Number((this.cfg as Record<string, unknown>)[cfgKey]);
         const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
             ? rawCfg
             : (Number.isFinite(rawStored) ? rawStored : rawCfg);
-        if (Number.isFinite(raw))
-        {
-            return ((raw % 360) + 360) % 360;
-        }
-        return this.homeLat >= 0 ? 180 : 0;
+        return Number.isFinite(raw) ? normalize(raw) : fallback;
+    }
+    private _initialBearing(): number
+    {
+        return this._initialCameraAngle(
+            'bearing', 'camera-bearing-deg',
+            (raw) => ((raw % 360) + 360) % 360,
+            this.homeLat >= 0 ? 180 : 0
+        );
     }
     private _initialPitch(): number
     {
-        const stored = this._readStoredPose();
-        const rawStored = stored && typeof stored.pitch === 'number' ? stored.pitch : NaN;
-        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
-        const raw = (this.isCameraLocked() && Number.isFinite(rawCfg))
-            ? rawCfg
-            : (Number.isFinite(rawStored) ? rawStored : rawCfg);
-        if (Number.isFinite(raw))
-        {
-            return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw));
-        }
-        return CAMERA_PITCH_REST_DEG;
+        return this._initialCameraAngle(
+            'pitch', 'camera-pitch-deg',
+            (raw) => Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw)),
+            CAMERA_PITCH_REST_DEG
+        );
     }
     //True when drag-rotate/pitch and idle auto-orbit are all suppressed (locked pose). The editor/YAML
     //`camera-locked` toggle is the sole authority: a stale localStorage flag must never override it.
@@ -353,9 +360,6 @@ export class HeliosEngine
     {
         return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
     }
-    //Persist the camera's CURRENT bearing/pitch to localStorage, so reopening the dashboard restores the exact
-    //view. Called on drag-end and by the card on teardown (captures an auto-rotated bearing too). No-op before
-    //the renderer exists.
     //Current camera pose (bearing/pitch in degrees), or null before the renderer exists. Used by the editor's
     //"use current view" helper to capture the framed angle into the config.
     public getCameraPose(): { bearing: number; pitch: number } | null
@@ -367,6 +371,9 @@ export class HeliosEngine
         return { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
     }
 
+    //Persist the camera's CURRENT bearing/pitch to localStorage, so reopening the dashboard restores the exact
+    //view. Called on drag-end and by the card on teardown (captures an auto-rotated bearing too). No-op before
+    //the renderer exists.
     public persistCameraPose(): void
     {
         if (!this._renderer)
@@ -555,6 +562,25 @@ export class HeliosEngine
     //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
     //change, not per arc sample per frame. Bearing/pitch invariant, so auto-rotation never refreshes it.
     private _arcScaleMemo?: { w: number; h: number; zoom: number; scale: number };
+    //Memo for getTimelineSeries, keyed on the object references it actually reads: the hourly forecast, the
+    //irradiance-sensor samples and the temperature/humidity override samples. Every scrub tick calls this via
+    //onWeatherUpdate/setSelectedTime, but those references only change on a real fetch/override update (the
+    //setters early-return on an unchanged value), so a reference match means the built series is still valid.
+    private _timelineSeriesCache?: {
+        home:      SampleHourly;
+        sensorRef: TimeSample[] | null;
+        tempRef:   TimeSample[] | null;
+        humRef:    TimeSample[] | null;
+        series: {
+            times:       Date[];
+            irradiance:  number[];
+            cloudLow:    number[];
+            cloudMid:    number[];
+            cloudHigh:   number[];
+            temperature: number[];
+            humidity:    number[];
+        };
+    };
 
     constructor(
         container:    HTMLElement,
@@ -640,20 +666,15 @@ export class HeliosEngine
         //Custom drag-rotate. Bound to the container (the renderer's host). touch-action stays pan-y so a ONE-finger
         //swipe still scrolls the dashboard page over the card, untouched and instant.
         //
-        //Rotation is left-click on a pointer device, and ONE finger on touch, locked to its direction.
+        //Rotation is left-click on a pointer device, and ONE finger on touch, locked to its direction. A finger
+        //going down alone means nothing (rotate and scroll start identically); a hold-timer can't disambiguate
+        //either (too short and the page scrolls away, too long and the scroll is swallowed), and two fingers are
+        //unambiguous but ask for a gesture nobody makes over a dashboard.
         //
-        //A finger going down means nothing on its own: rotate and scroll start identically. Two earlier answers
-        //both failed on that. A press-hold timer could not tell them apart either - hold too briefly and the card
-        //scrolled away under you, hold long enough and the scroll you wanted was swallowed. Two fingers were
-        //unambiguous but asked for a gesture nobody makes over a dashboard.
-        //
-        //The finger already says which, by its DIRECTION: sideways is a turn, up and down is the page. So the
-        //first few pixels decide, and after that the gesture is committed and cannot flip. pan-y makes the
-        //browser the referee rather than us: it keeps vertical panning for itself and hands us the horizontal, so
-        //a scroll is instant and untouched, and a turn never has to be stolen back with preventDefault.
-        //
-        //The lock says who OWNS the gesture, not which axis may move. Once a turn has won it, dy tilts as it does
-        //on the mouse: the vertical was only ever ambiguous at the first pixel.
+        //So the DIRECTION decides: sideways is a turn, up/down is the page. The first few pixels judge it, then
+        //the gesture is locked and cannot flip; pan-y leaves vertical panning to the browser and hands us the
+        //horizontal, so a turn never needs preventDefault stolen back. Once locked to a turn, dy tilts as on the
+        //mouse - the vertical was only ever ambiguous at the first pixel.
         container.style.touchAction = 'pan-y';
         //Firefox starts a native text/image drag on a left-mouse press over the canvas, which swallows the follow-up
         //pointermove stream so the scene never rotates (Chrome is lenient). Suppressing selection + the drag default
@@ -683,8 +704,6 @@ export class HeliosEngine
         let touchStartY = 0;
         let verdict: 'rotate' | 'page' | null = null;
 
-        //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
-        //two can never drift apart in direction or sensitivity.
         //One drag step, from wherever the gesture last was to where it is now. Shared by mouse and touch, so the
         //two can never drift apart in direction or sensitivity. `pitch` is off only while a touch gesture is still
         //being judged.
@@ -798,7 +817,7 @@ export class HeliosEngine
                 }
                 //Both axes, now that the verdict is in. The vertical is only ambiguous at the START of a gesture,
                 //where a turn and a scroll look alike; past the lock the browser has passed on this one and it is
-                //ours, so there is nothing left for dy to fight over. It it changes its mind, pointercancel lands
+                //ours, so there is nothing left for dy to fight over. If it changes its mind, pointercancel lands
                 //on onEnd and we stand down.
                 applyDrag(e.clientX, e.clientY, true);
                 return;
@@ -1503,9 +1522,9 @@ export class HeliosEngine
             {
                 //Back-off slot for the current streak, capped at the last entry. setTimeout (not setInterval)
                 //so exactly one retry fires: success resets the streak, another failure bumps it.
-                const idx = Math.min(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS.length - 1);
-                retryDelay = RATE_LIMIT_BACKOFF_MS[idx];
-                this._rateLimitStreak++;
+                const backoff = this._nextBackoffDelay(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS);
+                retryDelay = backoff.delay;
+                this._rateLimitStreak = backoff.streak;
 
                 this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
@@ -1516,15 +1535,24 @@ export class HeliosEngine
             {
                 //Non-rate-limit error (network, 500, parse): graduated back-off (1/5/15/60 min cap) via
                 //setTimeout, so one retry is scheduled; success resets the streak, failure picks the next slot.
-                const idx = Math.min(this._otherErrorStreak, OTHER_ERROR_BACKOFF_MS.length - 1);
-                retryDelay = OTHER_ERROR_BACKOFF_MS[idx];
-                this._otherErrorStreak++;
+                const backoff = this._nextBackoffDelay(this._otherErrorStreak, OTHER_ERROR_BACKOFF_MS);
+                retryDelay = backoff.delay;
+                this._otherErrorStreak = backoff.streak;
+
                 this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
                     retryDelay
                 );
             }
         }
+    }
+
+    //Backoff-table lookup shared by _refreshWeather's 429 / non-429 retry branches: the delay for the current
+    //streak, clamped to the table's last slot, plus the streak advanced by one.
+    private _nextBackoffDelay(streak: number, table: readonly number[]): { delay: number; streak: number }
+    {
+        const idx = Math.min(streak, table.length - 1);
+        return { delay: table[idx], streak: streak + 1 };
     }
 
     //Wipe cached Open-Meteo payloads, drop the in-memory snapshot, and re-fetch (editor's "reset data
@@ -2223,6 +2251,16 @@ export class HeliosEngine
             return null;
         }
 
+        const sensorRef = this._sensorIrradianceSamples;
+        const tempRef    = this._weatherOverrideSamples.get('temperature') ?? null;
+        const humRef     = this._weatherOverrideSamples.get('humidity')    ?? null;
+
+        const cache = this._timelineSeriesCache;
+        if (cache && cache.home === home && cache.sensorRef === sensorRef && cache.tempRef === tempRef && cache.humRef === humRef)
+        {
+            return cache.series;
+        }
+
         const irradiance = home.times.map((_, i) =>
         {
             //Per-hour priority sensor -> shortwave -> Haurwitz. Forecast hours carry no sensor sample, so
@@ -2251,7 +2289,7 @@ export class HeliosEngine
         const temperature = home.times.map((_, i) => this._weatherOverrideAt('temperature', home.times[i]) ?? (home.temperature[i] ?? NaN));
         const humidity    = home.times.map((_, i) => this._weatherOverrideAt('humidity',    home.times[i]) ?? (home.humidity[i]    ?? NaN));
 
-        return {
+        const series = {
             times:       home.times.slice(),
             irradiance,
             cloudLow,
@@ -2260,6 +2298,8 @@ export class HeliosEngine
             temperature,
             humidity,
         };
+        this._timelineSeriesCache = { home, sensorRef, tempRef, humRef, series };
+        return series;
     }
 
     public updateConfig(cfg: HeliosConfig): void
