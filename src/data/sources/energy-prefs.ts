@@ -231,7 +231,10 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
             //a genuine reconnect (unsubscribeEnergyPrefs on disconnect) is what re-arms a fresh attempt.
             if (live)
             {
-                host._energyPrefsUnsub = () => { live = false; };
+                host._energyPrefsUnsub = () =>
+                {
+                    live = false;
+                };
             }
         });
 }
@@ -326,7 +329,10 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
                     anyHit = true;
                 }
             }
-            if (!anyHit) { return null; }
+            if (!anyHit)
+            {
+                return null;
+            }
             saveDurable(durableKey, total);
             return total;
         }
@@ -446,11 +452,23 @@ export function parseEnergyPrefs(prefs: {
                 //Deduped: a dual-tariff grid's flows commonly share the SAME price entity (one live rate covering
                 //every tariff), which is not a multi-tariff price set at all - singlePrice() below only bails to
                 //the cost-statistic path on a genuine multiple, so a repeat here must not count as one.
-                if (p) { pushStrings(p, out.gridImportPrices); }
-                if (Number.isFinite(n)) { out.gridImportPriceNumbers.push(n); }
+                if (p)
+                {
+                    pushStrings(p, out.gridImportPrices);
+                }
+                if (Number.isFinite(n))
+                {
+                    out.gridImportPriceNumbers.push(n);
+                }
                 const explicit = pickFirstString(f['stat_cost']);
-                if (explicit) { out.gridStatCosts.push(explicit); }
-                else if (hasPrice && meter) { out.gridStatCosts.push(costSensors?.[meter] ?? `${meter}_cost`); }
+                if (explicit)
+                {
+                    out.gridStatCosts.push(explicit);
+                }
+                else if (hasPrice && meter)
+                {
+                    out.gridStatCosts.push(costSensors?.[meter] ?? `${meter}_cost`);
+                }
             }
             //Export flows: compensation statistic (explicit, else energy/info's cost_sensors map, else HA's auto
             //`<stat_energy_to>_compensation` guess) + the export price (its own `_export` fields, never the import
@@ -459,12 +477,24 @@ export function parseEnergyPrefs(prefs: {
             {
                 const meter = pickFirstString(f['stat_energy_to']);
                 const explicit = pickFirstString(f['stat_compensation']);
-                if (explicit) { out.gridStatCompensations.push(explicit); }
-                else if (meter) { out.gridStatCompensations.push(costSensors?.[meter] ?? `${meter}_compensation`); }
+                if (explicit)
+                {
+                    out.gridStatCompensations.push(explicit);
+                }
+                else if (meter)
+                {
+                    out.gridStatCompensations.push(costSensors?.[meter] ?? `${meter}_compensation`);
+                }
                 const p = pickFirstString(f['entity_energy_price_export']);
                 const n = Number(f['number_energy_price_export']);
-                if (p) { pushStrings(p, out.gridExportPrices); }
-                if (Number.isFinite(n)) { out.gridExportPriceNumbers.push(n); }
+                if (p)
+                {
+                    pushStrings(p, out.gridExportPrices);
+                }
+                if (Number.isFinite(n))
+                {
+                    out.gridExportPriceNumbers.push(n);
+                }
             }
             const directRate = pickFirstString(src['stat_rate']);
             if (directRate)
@@ -612,11 +642,17 @@ function pushStrings(v: unknown, arr: string[]): void
     if (typeof v === 'string' && v.trim() !== '')
     {
         const s = v.trim();
-        if (!arr.includes(s)) { arr.push(s); }
+        if (!arr.includes(s))
+        {
+            arr.push(s);
+        }
     }
     else if (Array.isArray(v))
     {
-        for (const item of v) { pushStrings(item, arr); }
+        for (const item of v)
+        {
+            pushStrings(item, arr);
+        }
     }
 }
 

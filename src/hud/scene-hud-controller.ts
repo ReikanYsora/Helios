@@ -60,7 +60,8 @@ const NIGHT_STROKE_FACTOR = 0.5;
 //reached through `this.host`. The reactive @state it renders from stays on the card.
 export class SceneHudController
 {
-    public constructor(private readonly host: HeliosCard) {}
+    public constructor(private readonly host: HeliosCard)
+    {}
 
     //Directional leader colours for the ACTIVE flow, resolved every render and read back by the card for the
     //detail-panel accent (the grid + battery chips flip tint with the instantaneous flow, so the panel border
@@ -743,16 +744,17 @@ export class SceneHudController
                 ` : nothing}
 
 
-                ${showPvLabel ? (() => {
-                    //Leader endpoint = the home pill's border on the chip-to-home axis (the shared docking
-                    //point for every chip leader).
-                    const pvX1 = layout!.pvLabel.x;
-                    const pvY1 = layout!.pvLabel.y + PV_HALF_HEIGHT_PX;
-                    const pvHomeEnd = this._nudgeToHomePill(
-                        pvX1, pvY1,
+                ${showPvLabel ? (() =>
+    {
+        //Leader endpoint = the home pill's border on the chip-to-home axis (the shared docking
+        //point for every chip leader).
+        const pvX1 = layout!.pvLabel.x;
+        const pvY1 = layout!.pvLabel.y + PV_HALF_HEIGHT_PX;
+        const pvHomeEnd = this._nudgeToHomePill(
+            pvX1, pvY1,
                         layout!.home.x, layout!.home.y,
-                    );
-                    return html`
+        );
+        return html`
                     <svg class="pv-home-leader-svg">
                         <line
                             class="pv-home-leader-line"
@@ -783,7 +785,7 @@ export class SceneHudController
                             </circle>
                         `) : nothing}
                     </svg>`;
-                })() : nothing}
+    })() : nothing}
 
                 ${showPvLabel ? html`
                     <div
@@ -880,11 +882,12 @@ export class SceneHudController
                 <!--  Monitoring-group chips (dynamic placement by active-group count). Each shows the group's live
                       total with a number badge; clicking one points the chart at that group's per-device curves.
                       The bead runs home -> chip; horizontal leads are reversed (keyPoints) to keep that direction.  -->
-                ${hasHomeCoords && layout !== null ? groupChips.map((gc) => {
-                    //Narrowed to a local so guard()'s callback keeps TS's `!== null` narrowing (a property
-                    //access like gc.beadDur loses it across the closure boundary).
-                    const beadDur = gc.beadDur;
-                    return html`
+                ${hasHomeCoords && layout !== null ? groupChips.map((gc) =>
+    {
+        //Narrowed to a local so guard()'s callback keeps TS's `!== null` narrowing (a property
+        //access like gc.beadDur loses it across the closure boundary).
+        const beadDur = gc.beadDur;
+        return html`
                     <svg class="group-leader-svg">
                         <path class="group-leader-line" style="stroke:${gc.color}" d=${gc.leadPath} />
                         ${beadDur !== null ? guard([gc.color, beadDur, gc.leadPath, gc.reverse], () => svg`
@@ -904,12 +907,12 @@ export class SceneHudController
                         @click=${interactive ? this.host.onChartTargetClick : undefined}
                     >
                         ${gc.icon
-                            ? html`<ha-icon icon=${gc.icon}></ha-icon>`
-                            : html`<span class="group-glyph-num">${gc.g}</span>`}
+        ? html`<ha-icon icon=${gc.icon}></ha-icon>`
+        : html`<span class="group-glyph-num">${gc.g}</span>`}
                         <span>${gc.watts === null ? '' : formatPvValue(this.host.hass, gc.watts, 'W', valueDec, powerU)}</span>
                     </div>
                 `;
-                }) : nothing}
+    }) : nothing}
 
                 <!--  Solar arc, FAR-FRONT pass: above-horizon segments with nearness below the 0.5 midpoint
                       (arched away from the eye but still ahead of the sky dome's back wall). These render
@@ -1008,35 +1011,36 @@ export class SceneHudController
                         class="solar-svg solar-svg-sun ${sunScene!.sun.nearness >= 0.50 ? 'solar-svg-sun-near' : 'solar-svg-sun-far'}"
                         style="--solar-daylight:${sunScene!.daylight}"
                     >
-                        ${(() => {
-                            //Sun disc, four layers back-to-front:
-                            //  0. Halo, radial-gradient glow whose radius (3x disc) and opacity scale with
-                            //     irradiance, feathering into the basemap with no hard edge.
-                            //  1. Background fill (SUN_FILL_OPACITY_BG) so the empty disc reads as tinted glass.
-                            //  2. Inner fill, radius = sunFillRatio x outer; conveys irradiance (sub-px radii
-                            //     vanish, the correct visual for "no sun").
-                            //  3. Outer rim (darkened sun colour) for a clear edge against the basemap.
-                            //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc
-                            //ratio holds across canvas sizes (1.0 at standard Lovelace grid sizes).
-                            const sunArcScale = this.host._engine?.getSunArcScale() ?? 1;
-                            //Cap the disc radius (px): the arc fills a fixed fraction of the frame at any
-                            //zoom, but sunArcScale grows as the ground zoom drops (lower px/m), which would
-                            //otherwise balloon the disc. 22 px keeps it a sun, not a spotlight.
-                            const r = Math.min(
-                                (SUN_R_FAR
+                        ${(() =>
+    {
+        //Sun disc, four layers back-to-front:
+        //  0. Halo, radial-gradient glow whose radius (3x disc) and opacity scale with
+        //     irradiance, feathering into the basemap with no hard edge.
+        //  1. Background fill (SUN_FILL_OPACITY_BG) so the empty disc reads as tinted glass.
+        //  2. Inner fill, radius = sunFillRatio x outer; conveys irradiance (sub-px radii
+        //     vanish, the correct visual for "no sun").
+        //  3. Outer rim (darkened sun colour) for a clear edge against the basemap.
+        //Scale disc + halo by the same ramp the arc uses engine-side, so the disc-to-arc
+        //ratio holds across canvas sizes (1.0 at standard Lovelace grid sizes).
+        const sunArcScale = this.host._engine?.getSunArcScale() ?? 1;
+        //Cap the disc radius (px): the arc fills a fixed fraction of the frame at any
+        //zoom, but sunArcScale grows as the ground zoom drops (lower px/m), which would
+        //otherwise balloon the disc. 22 px keeps it a sun, not a spotlight.
+        const r = Math.min(
+            (SUN_R_FAR
                                     + (SUN_R_NEAR - SUN_R_FAR) * sunScene!.sun.nearness)
                                     * sunArcScale,
-                                22);
-                            const rInner = r * sunFillRatio;
-                            //Halo proportional to live irradiance, saturating at 1000 W/m². Same sqrt mapping
-                            //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.
-                            const haloR        = r * 3;
-                            const haloAlphaMax = sunFillRatio * 0.55;
-                            //Radiant-heat aura: a warm glow that breathes (a CSS opacity + scale pulse, a heat
-                            //wave emanating from the disc), fading in with irradiance so a low / hazy sun stays
-                            //calm. `--heat` (0..1) is the gate the CSS pulse multiplies.
-                            const heat = Math.max(0, Math.min(1, (sunFillRatio - 0.15) / 0.55));
-                            return svg`
+            22);
+        const rInner = r * sunFillRatio;
+        //Halo proportional to live irradiance, saturating at 1000 W/m². Same sqrt mapping
+        //as sunFillRatio so a 50% reading halves the glow's AREA, not its radius.
+        const haloR        = r * 3;
+        const haloAlphaMax = sunFillRatio * 0.55;
+        //Radiant-heat aura: a warm glow that breathes (a CSS opacity + scale pulse, a heat
+        //wave emanating from the disc), fading in with irradiance so a low / hazy sun stays
+        //calm. `--heat` (0..1) is the gate the CSS pulse multiplies.
+        const heat = Math.max(0, Math.min(1, (sunFillRatio - 0.15) / 0.55));
+        return svg`
                                 <defs>
                                     <radialGradient id="solar-halo-grad-${this.host._instanceId}">
                                         <stop offset="0%"   stop-color="${sunColor}" stop-opacity="${haloAlphaMax}"></stop>
@@ -1085,7 +1089,7 @@ export class SceneHudController
                                     stroke-width="${SUN_RIM_WIDTH}"
                                 ></circle>
                             `;
-                        })()}
+    })()}
                     </svg>
                 ` : nothing}
 
@@ -1121,9 +1125,9 @@ export class SceneHudController
                       consumption) unless the home chip is hidden, in which case it collapses to a small hollow
                       ring: a bare contact point the leads converge on, the scene still visible through it.  -->
                 ${hasHomeCoords && layout !== null && showHomeElement
-                    ? (homeHidden
-                        ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
-                        : html`
+        ? (homeHidden
+            ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
+            : html`
                     <div
                         class="home-pill ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''} ${curveOn && active === 'consumption' ? 'is-curve-on' : ''}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
@@ -1137,7 +1141,7 @@ export class SceneHudController
                         <ha-icon icon=${chipSlotIcon(cfg, 'home', 'mdi:home')}></ha-icon>
                         ${showHomeUsageChip ? html`<span class="home-pill-usage">${homeUsageText}</span>` : nothing}
                     </div>`)
-                    : nothing}
+        : nothing}
         `;
     }
 }

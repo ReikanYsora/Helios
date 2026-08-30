@@ -179,14 +179,20 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
         colorFor: (i: number) => string
     ): { label: string; valueText: string; color: string }[] =>
     {
-        if (ids.length < 2 || !ids.every((id) => map.has(id))) { return []; }
+        if (ids.length < 2 || !ids.every((id) => map.has(id)))
+        {
+            return [];
+        }
         const rows: { label: string; valueText: string; color: string }[] = [];
         for (let s = 0; s < ids.length; s++)
         {
             const w = wattsAtFromChangeSeries(map.get(ids[s]) ?? null, atMs);
             //Skip a source idle at this instant (same 1 W floor as the aggregate rows); this also drops the whole set
             //for the flow that is not active right now, so import and export never both list their sources at once.
-            if (w === null || !isFinite(w) || Math.abs(w) < 1) { continue; }
+            if (w === null || !isFinite(w) || Math.abs(w) < 1)
+            {
+                continue;
+            }
             rows.push({ label: nameFor(s), valueText: formatPower(host.hass, Math.abs(w), dec, powerU), color: colorFor(s) });
         }
         return rows;
@@ -216,8 +222,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const spanDays  = rangeMs / DAY_MS;
     const timeOpts: Intl.DateTimeFormatOptions =
           spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }
-        : spanDays <= 14.05 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }
-        :                     { weekday: 'short', day: 'numeric', month: 'short' };
+              : spanDays <= 14.05 ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }
+                  :                     { weekday: 'short', day: 'numeric', month: 'short' };
     const timeLabel  = new Intl.DateTimeFormat(haLanguage, timeOpts).format(atDate);
 
     //Day total split observed/forecast by cursor-vs-"now" (not the day boundary), so later-today hours show the

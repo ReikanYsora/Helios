@@ -92,9 +92,15 @@ export interface UnifiedStoreHost
 //Bucket arithmetic. Bucketing is HALF-OPEN: sample at t lands in floor((t - storeStartMs) / stepMs). -1 = out of window.
 function bucketForMs(storeStartMs: number, ms: number, stepMs: number, bucketsTotal: number): number
 {
-    if (ms < storeStartMs) { return -1; }
+    if (ms < storeStartMs)
+    {
+        return -1;
+    }
     const idx = Math.floor((ms - storeStartMs) / stepMs);
-    if (idx >= bucketsTotal) { return -1; }
+    if (idx >= bucketsTotal)
+    {
+        return -1;
+    }
     return idx;
 }
 
@@ -106,19 +112,34 @@ function interpolateNullGaps(arr: (number | null)[]): void
     let i = 0;
     while (i < N)
     {
-        if (arr[i] !== null) { i++; continue; }
+        if (arr[i] !== null)
+        {
+            i++; continue;
+        }
         let j = i;
-        while (j < N && arr[j] === null) { j++; }
+        while (j < N && arr[j] === null)
+        {
+            j++;
+        }
         const prev = i > 0 ? arr[i - 1] : null;
         const next = j < N ? arr[j]     : null;
-        if (prev === null && next === null) { return; }
+        if (prev === null && next === null)
+        {
+            return;
+        }
         if (prev === null)
         {
-            for (let k = i; k < j; k++) { arr[k] = next; }
+            for (let k = i; k < j; k++)
+            {
+                arr[k] = next;
+            }
         }
         else if (next === null)
         {
-            for (let k = i; k < N; k++) { arr[k] = prev; }
+            for (let k = i; k < N; k++)
+            {
+                arr[k] = prev;
+            }
             return;
         }
         else
@@ -144,7 +165,10 @@ function interpolatePastOnly(out: (number | null)[], storeStartMs: number, nowMs
     {
         const pastSlice = out.slice(0, pastEnd);
         interpolateNullGaps(pastSlice);
-        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
+        for (let h = 0; h < pastEnd; h++)
+        {
+            out[h] = pastSlice[h];
+        }
     }
 }
 
@@ -175,25 +199,43 @@ export function bucketizeWeatherAvg(
 ): (number | null)[]
 {
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    if (!times || times.length === 0 || !values) { return out; }
+    if (!times || times.length === 0 || !values)
+    {
+        return out;
+    }
     const sums   = new Array<number>(p.bucketsTotal).fill(0);
     const counts = new Array<number>(p.bucketsTotal).fill(0);
     for (let i = 0; i < times.length; i++)
     {
         const t = times[i].getTime();
-        if (t < storeStartMs || t >= storeEndMs) { continue; }
+        if (t < storeStartMs || t >= storeEndMs)
+        {
+            continue;
+        }
         const raw = values[i];
-        if (typeof raw !== 'number' || !Number.isFinite(raw)) { continue; }
+        if (typeof raw !== 'number' || !Number.isFinite(raw))
+        {
+            continue;
+        }
         const v = accept(raw);
-        if (v === null) { continue; }
+        if (v === null)
+        {
+            continue;
+        }
         const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
-        if (h < 0) { continue; }
+        if (h < 0)
+        {
+            continue;
+        }
         sums[h]   += v;
         counts[h] += 1;
     }
     for (let h = 0; h < p.bucketsTotal; h++)
     {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
+        if (counts[h] > 0)
+        {
+            out[h] = sums[h] / counts[h];
+        }
     }
     interpolateNullGaps(out);
     return out;
@@ -235,7 +277,10 @@ function buildProduction(host: UnifiedStoreHost, storeStartMs: number, nowMs: nu
     for (let i = 0; i < out.length; i++)
     {
         const v = out[i];
-        if (v !== null && v < 0) { out[i] = 0; }
+        if (v !== null && v < 0)
+        {
+            out[i] = 0;
+        }
     }
     interpolatePastOnly(out, storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     return out;
@@ -251,17 +296,26 @@ function buildForecast(host: UnifiedStoreHost, storeStartMs: number, storeEndMs:
 {
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
     const forecast = host._haSolarForecast;
-    if (!forecast || forecast.length === 0) { return out; }
+    if (!forecast || forecast.length === 0)
+    {
+        return out;
+    }
     const coarse = p.stepMs > HOUR_MS;
     for (let h = 0; h < p.bucketsTotal; h++)
     {
         const start = storeStartMs + h * p.stepMs;
         const mid = start + p.stepMs / 2;
-        if (mid < storeStartMs || mid >= storeEndMs) { continue; }
+        if (mid < storeStartMs || mid >= storeEndMs)
+        {
+            continue;
+        }
         const w = coarse
             ? forecastAverageWatts(forecast, start, start + p.stepMs)
             : forecastWattsAt(forecast, mid);
-        if (w !== null && Number.isFinite(w)) { out[h] = Math.max(0, w); }
+        if (w !== null && Number.isFinite(w))
+        {
+            out[h] = Math.max(0, w);
+        }
     }
     return out;
 }
@@ -278,7 +332,10 @@ function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: numbe
     {
         const c = charge[i];
         const d = discharge[i];
-        if (c === null && d === null) { continue; }
+        if (c === null && d === null)
+        {
+            continue;
+        }
         out[i] = Math.max(0, c ?? 0) - Math.max(0, d ?? 0);
     }
     interpolatePastOnly(out, storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
@@ -300,7 +357,10 @@ function buildGridChange(
     for (let i = 0; i < out.length; i++)
     {
         const v = out[i];
-        if (v !== null && v < 0) { out[i] = 0; }
+        if (v !== null && v < 0)
+        {
+            out[i] = 0;
+        }
     }
     interpolatePastOnly(out, storeStartMs, nowMs, stepMs, bucketsTotal);
     return out;
@@ -313,7 +373,10 @@ function buildGridChange(
 function changeSig(s: ChangeBucket[] | null): string
 {
     const n = s?.length ?? 0;
-    if (n === 0) { return '0'; }
+    if (n === 0)
+    {
+        return '0';
+    }
     const last = s![n - 1];
     return `${n}.${last.endMs}.${last.kwh.toFixed(3)}`;
 }
@@ -391,7 +454,10 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
 //True when the host's current store matches the host's current data version; lets the caller skip the rebuild.
 export function isStoreFresh(host: UnifiedStoreHost, store: UnifiedDataStore | null): boolean
 {
-    if (!store) { return false; }
+    if (!store)
+    {
+        return false;
+    }
     return store.dataVersion === computeDataVersion(host);
 }
 
@@ -405,15 +471,27 @@ export function isStoreFresh(host: UnifiedStoreHost, store: UnifiedDataStore | n
 //Linearly interpolate a series value at an exact timestamp. Null when outside the window OR both surrounding buckets null.
 export function valueAt(series: readonly (number | null)[], store: UnifiedDataStore, ms: number): number | null
 {
-    if (ms < store.storeStartMs || ms >= store.storeEndMs) { return null; }
+    if (ms < store.storeStartMs || ms >= store.storeEndMs)
+    {
+        return null;
+    }
     const stepFloat = (ms - store.storeStartMs) / store.stepMs - 0.5;
     const i0 = Math.max(0, Math.min(store.bucketsTotal - 1, Math.floor(stepFloat)));
     const i1 = Math.max(0, Math.min(store.bucketsTotal - 1, i0 + 1));
     const v0 = series[i0];
     const v1 = series[i1];
-    if (v0 === null && v1 === null) { return null; }
-    if (v0 === null) { return v1; }
-    if (v1 === null) { return v0; }
+    if (v0 === null && v1 === null)
+    {
+        return null;
+    }
+    if (v0 === null)
+    {
+        return v1;
+    }
+    if (v1 === null)
+    {
+        return v0;
+    }
     const f = Math.max(0, Math.min(1, stepFloat - i0));
     return v0 + (v1 - v0) * f;
 }
@@ -446,7 +524,10 @@ export function sliceForRange(store: UnifiedDataStore, startMs: number, endMs: n
     const forecast:   (number | null)[] = [];
     for (let mid = firstMid; mid < hi; mid += stepMs)
     {
-        if (mid < lo) { continue; }
+        if (mid < lo)
+        {
+            continue;
+        }
         times.push(new Date(mid));
         production.push(valueAt(store.production, store, mid));
         forecast.push(  valueAt(store.forecast,   store, mid));

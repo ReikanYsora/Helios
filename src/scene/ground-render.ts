@@ -74,17 +74,35 @@ const ROAD_SCALE = 0.4;
 
 function landcoverKey(cls: string): GroundLayerKey
 {
-    if (/wood|forest|tree/.test(cls)) { return 'wood'; }
-    if (/sand|beach|dune/.test(cls)) { return 'sand'; }
-    if (/wetland|marsh|mangrove|bog|swamp/.test(cls)) { return 'wetland'; }
-    if (/ice|glacier|snow/.test(cls)) { return 'ice'; }
+    if (/wood|forest|tree/.test(cls))
+    {
+        return 'wood';
+    }
+    if (/sand|beach|dune/.test(cls))
+    {
+        return 'sand';
+    }
+    if (/wetland|marsh|mangrove|bog|swamp/.test(cls))
+    {
+        return 'wetland';
+    }
+    if (/ice|glacier|snow/.test(cls))
+    {
+        return 'ice';
+    }
     return 'grass';
 }
 
 function landuseKey(cls: string): GroundLayerKey
 {
-    if (/wood|forest/.test(cls)) { return 'wood'; }
-    if (/park|pitch|playground|recreation|golf|garden|grass|meadow|cemetery|farm|orchard|vineyard/.test(cls)) { return 'grass'; }
+    if (/wood|forest/.test(cls))
+    {
+        return 'wood';
+    }
+    if (/park|pitch|playground|recreation|golf|garden|grass|meadow|cemetery|farm|orchard|vineyard/.test(cls))
+    {
+        return 'grass';
+    }
     return 'landuse';
 }
 
@@ -100,7 +118,10 @@ function addPath(path: Path2D, f: GroundFeature, toPx: (lon: number, lat: number
             const [x, y] = toPx(ring[i][0], ring[i][1]);
             path.lineTo(x, y);
         }
-        if (!f.line) { path.closePath(); }
+        if (!f.line)
+        {
+            path.closePath();
+        }
     }
 }
 
@@ -112,10 +133,22 @@ function groundTint(base: string, altitude: number): string
     const dusk  = mixHex(base, '#2a2445', 0.45);
     const warm  = mixHex(base, '#7a3f1e', 0.28);
     const sunny = mixHex(base, '#fff2d8', 0.16);
-    if (altitude < -8) { return night; }
-    if (altitude < 0)  { return mixHex(night, dusk, (altitude + 8) / 8); }
-    if (altitude < 6)  { return mixHex(dusk,  warm, altitude / 6); }
-    if (altitude < 25) { return mixHex(warm,  sunny, (altitude - 6) / 19); }
+    if (altitude < -8)
+    {
+        return night;
+    }
+    if (altitude < 0)
+    {
+        return mixHex(night, dusk, (altitude + 8) / 8);
+    }
+    if (altitude < 6)
+    {
+        return mixHex(dusk,  warm, altitude / 6);
+    }
+    if (altitude < 25)
+    {
+        return mixHex(warm,  sunny, (altitude - 6) / 19);
+    }
     return sunny;
 }
 
@@ -123,7 +156,10 @@ function groundTint(base: string, altitude: number): string
 function tintPalette(palette: GroundPalette, altitude: number): GroundPalette
 {
     const out = {} as GroundPalette;
-    for (const key of GROUND_LAYER_KEYS) { out[key] = groundTint(palette[key], altitude); }
+    for (const key of GROUND_LAYER_KEYS)
+    {
+        out[key] = groundTint(palette[key], altitude);
+    }
     return out;
 }
 
@@ -148,8 +184,14 @@ function paint(
     if (!hide('land'))
     {
         ctx.fillStyle = p.land;
-        if (landPath) { ctx.fill(landPath); }
-        else { ctx.fillRect(0, 0, cw, ch); }
+        if (landPath)
+        {
+            ctx.fill(landPath);
+        }
+        else
+        {
+            ctx.fillRect(0, 0, cw, ch);
+        }
     }
     ctx.lineJoin = 'round';
     ctx.lineCap  = 'round';
@@ -173,30 +215,63 @@ function paint(
     //Areas, bottom to top: greenery, land use, water on top of land.
     for (const f of features)
     {
-        if (f.line || f.layer !== 'landcover') { continue; }
+        if (f.line || f.layer !== 'landcover')
+        {
+            continue;
+        }
         const key = landcoverKey(f.cls);
-        if (!hide(key)) { fillFeature(f, p[key]); }
+        if (!hide(key))
+        {
+            fillFeature(f, p[key]);
+        }
     }
     for (const f of features)
     {
-        if (f.line || f.layer !== 'landuse') { continue; }
+        if (f.line || f.layer !== 'landuse')
+        {
+            continue;
+        }
         const key = landuseKey(f.cls);
-        if (!hide(key)) { fillFeature(f, p[key]); }
+        if (!hide(key))
+        {
+            fillFeature(f, p[key]);
+        }
     }
     if (!hide('grass'))
     {
-        for (const f of features) { if (!f.line && f.layer === 'park') { fillFeature(f, p.grass); } }
+        for (const f of features)
+        {
+            if (!f.line && f.layer === 'park')
+            {
+                fillFeature(f, p.grass);
+            }
+        }
     }
     if (!hide('roadCasing'))
     {
-        for (const f of features) { if (!f.line && f.layer === 'aeroway') { fillFeature(f, p.roadCasing); } }
+        for (const f of features)
+        {
+            if (!f.line && f.layer === 'aeroway')
+            {
+                fillFeature(f, p.roadCasing);
+            }
+        }
     }
     if (!hide('water'))
     {
-        for (const f of features) { if (!f.line && f.layer === 'water') { fillFeature(f, p.water); } }
         for (const f of features)
         {
-            if (!f.line || f.layer !== 'waterway') { continue; }
+            if (!f.line && f.layer === 'water')
+            {
+                fillFeature(f, p.water);
+            }
+        }
+        for (const f of features)
+        {
+            if (!f.line || f.layer !== 'waterway')
+            {
+                continue;
+            }
             const w = (f.cls === 'stream' || f.cls === 'ditch' || f.cls === 'drain' ? 1.4 : 3) * pxPerMetre * ROAD_SCALE;
             strokeFeature(f, p.water, Math.max(1, w));
         }
@@ -210,12 +285,18 @@ function paint(
 
     if (!hide('roadCasing'))
     {
-        for (const f of roads) { strokeFeature(f, p.roadCasing, roadWidth(f.cls) + ROAD_CASING_M * pxPerMetre * ROAD_SCALE); }
+        for (const f of roads)
+        {
+            strokeFeature(f, p.roadCasing, roadWidth(f.cls) + ROAD_CASING_M * pxPerMetre * ROAD_SCALE);
+        }
     }
     for (const f of roads)
     {
         const key: GroundLayerKey = rank(f.cls) >= 8 ? 'roadMajor' : 'roadMinor';
-        if (!hide(key)) { strokeFeature(f, p[key], roadWidth(f.cls)); }
+        if (!hide(key))
+        {
+            strokeFeature(f, p[key], roadWidth(f.cls));
+        }
     }
 
     //Paths + tracks (thin, dashed) and rails (dashed).
@@ -224,7 +305,10 @@ function paint(
     {
         for (const f of features)
         {
-            if (!f.line || f.layer !== 'transportation' || !/^path|footway|cycleway|steps|track/.test(f.cls)) { continue; }
+            if (!f.line || f.layer !== 'transportation' || !/^path|footway|cycleway|steps|track/.test(f.cls))
+            {
+                continue;
+            }
             strokeFeature(f, p.path, Math.max(1, 2 * pxPerMetre * ROAD_SCALE));
         }
     }
@@ -232,7 +316,10 @@ function paint(
     {
         for (const f of features)
         {
-            if (!f.line || f.layer !== 'transportation' || f.cls !== 'rail') { continue; }
+            if (!f.line || f.layer !== 'transportation' || f.cls !== 'rail')
+            {
+                continue;
+            }
             strokeFeature(f, p.rail, Math.max(1, 3 * pxPerMetre * ROAD_SCALE));
         }
     }
@@ -241,7 +328,13 @@ function paint(
     //Building footprints under the 3D prisms.
     if (!hide('building'))
     {
-        for (const f of features) { if (!f.line && f.layer === 'building') { fillFeature(f, p.building); } }
+        for (const f of features)
+        {
+            if (!f.line && f.layer === 'building')
+            {
+                fillFeature(f, p.building);
+            }
+        }
     }
 
     //Admin boundaries (dashed, thin).
@@ -250,7 +343,10 @@ function paint(
         ctx.setLineDash([Math.max(3, 2 * pxPerMetre), Math.max(3, 2 * pxPerMetre)]);
         for (const f of features)
         {
-            if (!f.line || f.layer !== 'boundary') { continue; }
+            if (!f.line || f.layer !== 'boundary')
+            {
+                continue;
+            }
             strokeFeature(f, p.boundary, Math.max(1, 1.2 * pxPerMetre * ROAD_SCALE));
         }
         ctx.setLineDash([]);
@@ -318,7 +414,10 @@ export async function buildVectorGround(
     };
     const repaint = (st: GroundStyle, alt: number): void =>
     {
-        if (ctx) { paint(ctx, size, size, features, toPx, pxPerMetre, st, alt); }
+        if (ctx)
+        {
+            paint(ctx, size, size, features, toPx, pxPerMetre, st, alt);
+        }
     };
     repaint(style, altitude);
 
@@ -335,8 +434,14 @@ export async function buildVectorGround(
         alt: number,
     ): void =>
     {
-        if (!ctx) { return; }
-        if (el.width !== w || el.height !== h) { el.width = w; el.height = h; }
+        if (!ctx)
+        {
+            return;
+        }
+        if (el.width !== w || el.height !== h)
+        {
+            el.width = w; el.height = h;
+        }
 
         const toScreen = (lon: number, la: number): [number, number] =>
         {
@@ -361,8 +466,14 @@ export async function buildVectorGround(
                 const t = s / STEPS;
                 const [e, n] = toMetres(ax + (bx - ax) * t, ay + (by - ay) * t);
                 const q = camera.project(e, n, 0);
-                if (c === 0 && s === 0) { landPath.moveTo(q[0], q[1]); }
-                else { landPath.lineTo(q[0], q[1]); }
+                if (c === 0 && s === 0)
+                {
+                    landPath.moveTo(q[0], q[1]);
+                }
+                else
+                {
+                    landPath.lineTo(q[0], q[1]);
+                }
             }
         }
         landPath.closePath();

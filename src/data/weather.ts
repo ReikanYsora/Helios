@@ -189,9 +189,13 @@ export function clearWeatherCache(): number
                 stale.push(k);
             }
         }
-        for (const k of stale) { ls.removeItem(k); cleared++; }
+        for (const k of stale)
+        {
+            ls.removeItem(k); cleared++;
+        }
     }
-    catch (_) { /* localStorage unavailable or quota error: leave the cache as-is */ }
+    catch (_)
+    { /* localStorage unavailable or quota error: leave the cache as-is */ }
     return cleared;
 }
 

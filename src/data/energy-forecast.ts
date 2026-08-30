@@ -145,7 +145,10 @@ async function fetchHeliosSeries(host: EnergyForecastHost): Promise<SolarForecas
     let anyAnswered = false;
     for (const raw of results)
     {
-        if (!Array.isArray(raw)) { continue; }
+        if (!Array.isArray(raw))
+        {
+            continue;
+        }
         anyAnswered = true;
         for (const p of raw)
         {

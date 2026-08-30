@@ -77,7 +77,10 @@ function ringDistances(): number[]
 function readCache(lat: number, lon: number): HorizonProfile | null
 {
     const p = loadDurable<HorizonProfile>(cacheKey(lat, lon), CACHE_TTL_MS);
-    if (!p || !Array.isArray(p.alt) || typeof p.step !== 'number') { return null; }
+    if (!p || !Array.isArray(p.alt) || typeof p.step !== 'number')
+    {
+        return null;
+    }
     return { step: p.step, alt: p.alt.map(Number) };
 }
 
@@ -90,7 +93,10 @@ function writeCache(lat: number, lon: number, profile: HorizonProfile): void
 async function fetchElevations(coords: [number, number][], signal: AbortSignal): Promise<number[] | null>
 {
     const chunks: [number, number][][] = [];
-    for (let i = 0; i < coords.length; i += BATCH) { chunks.push(coords.slice(i, i + BATCH)); }
+    for (let i = 0; i < coords.length; i += BATCH)
+    {
+        chunks.push(coords.slice(i, i + BATCH));
+    }
 
     //Sequential, not Promise.all: firing every chunk at once bursts 4-5 heavy elevation calls (100 points each)
     //at Open-Meteo in a single instant, the surest way to trip its rate limit on a cold start. One at a time
@@ -104,12 +110,21 @@ async function fetchElevations(coords: [number, number][], signal: AbortSignal):
         const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
         // eslint-disable-next-line no-await-in-loop -- deliberate serialization to avoid a request burst
         const res = await fetch(url, { signal });
-        if (!res.ok) { return null; }
+        if (!res.ok)
+        {
+            return null;
+        }
         // eslint-disable-next-line no-await-in-loop -- same
         const json = await res.json();
         const el = json?.elevation;
-        if (!Array.isArray(el) || el.length !== chunk.length) { return null; }
-        for (const v of el) { out.push(Number(v)); }
+        if (!Array.isArray(el) || el.length !== chunk.length)
+        {
+            return null;
+        }
+        for (const v of el)
+        {
+            out.push(Number(v));
+        }
     }
     return out;
 }
@@ -122,11 +137,17 @@ export function fetchHorizonProfile(lat: number, lon: number, signal: AbortSigna
     const fLon = Number(lon.toFixed(KEY_DECIMALS));
 
     const cached = readCache(fLat, fLon);
-    if (cached) { return Promise.resolve(cached); }
+    if (cached)
+    {
+        return Promise.resolve(cached);
+    }
 
     const key = cacheKey(fLat, fLon);
     const pending = _inflight.get(key);
-    if (pending) { return pending; }
+    if (pending)
+    {
+        return pending;
+    }
 
     const promise = (async (): Promise<HorizonProfile | null> =>
     {
@@ -137,11 +158,17 @@ export function fetchHorizonProfile(lat: number, lon: number, signal: AbortSigna
             for (let a = 0; a < AZ_COUNT; a++)
             {
                 const az = a * AZ_STEP;
-                for (const dist of rings) { coords.push(destination(fLat, fLon, az, dist)); }
+                for (const dist of rings)
+                {
+                    coords.push(destination(fLat, fLon, az, dist));
+                }
             }
 
             const elev = await fetchElevations(coords, signal);
-            if (!elev) { return null; }
+            if (!elev)
+            {
+                return null;
+            }
 
             const home = elev[0];
             const alt = new Array<number>(AZ_COUNT).fill(0);
@@ -154,7 +181,10 @@ export function fetchHorizonProfile(lat: number, lon: number, signal: AbortSigna
                     const drop = (dist * dist) / (2 * R_EFFECTIVE);
                     const angle = Math.atan2(elev[idx] - home - drop, dist) / DEG;
                     idx++;
-                    if (angle > best) { best = angle; }
+                    if (angle > best)
+                    {
+                        best = angle;
+                    }
                 }
                 alt[a] = best;
             }
@@ -181,10 +211,16 @@ export function fetchHorizonProfile(lat: number, lon: number, signal: AbortSigna
 //at 360). 0 for an empty profile.
 export function horizonAltAt(profile: HorizonProfile | null, azimuthDeg: number): number
 {
-    if (!profile || profile.alt.length === 0) { return 0; }
+    if (!profile || profile.alt.length === 0)
+    {
+        return 0;
+    }
     const n = profile.alt.length;
     let az = azimuthDeg % 360;
-    if (az < 0) { az += 360; }
+    if (az < 0)
+    {
+        az += 360;
+    }
     const f = az / profile.step;
     const i0 = Math.floor(f) % n;
     const i1 = (i0 + 1) % n;
@@ -195,8 +231,17 @@ export function horizonAltAt(profile: HorizonProfile | null, azimuthDeg: number)
 //The tallest ridge anywhere: lets a consumer skip the whole feature on effectively flat terrain.
 export function horizonPeak(profile: HorizonProfile | null): number
 {
-    if (!profile || profile.alt.length === 0) { return 0; }
+    if (!profile || profile.alt.length === 0)
+    {
+        return 0;
+    }
     let m = 0;
-    for (const v of profile.alt) { if (v > m) { m = v; } }
+    for (const v of profile.alt)
+    {
+        if (v > m)
+        {
+            m = v;
+        }
+    }
     return m;
 }

@@ -56,8 +56,14 @@ function spherePoint(
 //band between blends so dawn/dusk doesn't pop.
 export function daylightRamp(altitudeDeg: number, nightOpacity: number): number
 {
-    if (altitudeDeg >= 6) { return 1; }
-    if (altitudeDeg <= -6) { return nightOpacity; }
+    if (altitudeDeg >= 6)
+    {
+        return 1;
+    }
+    if (altitudeDeg <= -6)
+    {
+        return nightOpacity;
+    }
     const t01 = (altitudeDeg + 6) / 12;
     return nightOpacity + (1 - nightOpacity) * t01;
 }

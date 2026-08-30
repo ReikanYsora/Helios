@@ -54,7 +54,10 @@ export function activeGroups(config: HeliosConfig | undefined, defaults: EnergyD
     const out: number[] = [];
     for (let g = 1; g <= GROUP_COUNT; g++)
     {
-        if (groupDevices(config, defaults, g).length > 0) { out.push(g); }
+        if (groupDevices(config, defaults, g).length > 0)
+        {
+            out.push(g);
+        }
     }
     return out;
 }
@@ -84,12 +87,18 @@ export function deviceIcon(hass: HassLike, dev: DeviceConsumption): string
 //totals. 0 when the series is missing / empty.
 export function deviceWindowKwh(series: ChangeBucket[] | undefined, startMs: number, endMs: number): number
 {
-    if (!series) { return 0; }
+    if (!series)
+    {
+        return 0;
+    }
     let kwh = 0;
     for (const b of series)
     {
         const mid = (b.startMs + b.endMs) / 2;
-        if (mid >= startMs && mid <= endMs && isFinite(b.kwh)) { kwh += Math.abs(b.kwh); }
+        if (mid >= startMs && mid <= endMs && isFinite(b.kwh))
+        {
+            kwh += Math.abs(b.kwh);
+        }
     }
     return kwh;
 }
@@ -101,7 +110,10 @@ export function groupLivePowerW(host: DeviceConsumptionHost, group: number): num
     const rates = groupDevices(host.config, host._energyDefaults, group)
         .map(d => d.statRate)
         .filter(r => r !== '');
-    if (rates.length === 0) { return null; }
+    if (rates.length === 0)
+    {
+        return null;
+    }
     const { watts, any } = sumLiveWatts(host.hass, rates);
     return any ? watts : null;
 }
@@ -115,7 +127,10 @@ export function groupPowerWAt(host: DeviceConsumptionHost, group: number, atMs: 
     for (const dev of groupDevices(host.config, host._energyDefaults, group))
     {
         const w = wattsAtFromChangeSeries(host._deviceChangeSeries.get(dev.statConsumption) ?? null, atMs);
-        if (w !== null) { sum += w; any = true; }
+        if (w !== null)
+        {
+            sum += w; any = true;
+        }
     }
     return any ? sum : null;
 }
@@ -124,11 +139,17 @@ export function groupPowerWAt(host: DeviceConsumptionHost, group: number, atMs: 
 //call (per-id), keyed on (id-set, window) and re-armed each CHANGE_REFRESH_MS. Clears the map when nothing is grouped.
 export function refreshDeviceConsumption(host: DeviceConsumptionHost): void
 {
-    if (!host.hass) { return; }
+    if (!host.hass)
+    {
+        return;
+    }
     const ids = groupedDevices(host.config, host._energyDefaults).map(d => d.statConsumption);
     if (ids.length === 0)
     {
-        if (host._deviceChangeSeries.size > 0) { host._deviceChangeSeries = new Map(); host.requestUpdate(); }
+        if (host._deviceChangeSeries.size > 0)
+        {
+            host._deviceChangeSeries = new Map(); host.requestUpdate();
+        }
         return;
     }
     const startMs = localMidnightMinusDays(host._periodPastDays);
@@ -139,7 +160,10 @@ export function refreshDeviceConsumption(host: DeviceConsumptionHost): void
         fetchChangeById(host.hass, sorted, startMs, endMs, host._storeFetchPeriod)
             .then((byId) =>
             {
-                if (byId === null) { return; }
+                if (byId === null)
+                {
+                    return;
+                }
                 //Per-device split of the shared fetch: each id's own buckets (already sorted), in one pass.
                 host._deviceChangeSeries = extractPerEntity(byId, sorted);
                 host.requestUpdate();

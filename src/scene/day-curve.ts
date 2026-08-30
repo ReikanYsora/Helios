@@ -142,7 +142,10 @@ function splineSpan(pts: [number, number][], i: number, closed: boolean, ok?: (k
     const at = (k: number): [number, number] =>
     {
         const j = wrap(k);
-        if (!ok || ok(j)) { return pts[j]; }
+        if (!ok || ok(j))
+        {
+            return pts[j];
+        }
         //Fall back on the end of this span that the missing neighbour sits beyond.
         return pts[wrap(k < i ? i : i + 1)];
     };
@@ -202,11 +205,17 @@ function projectStrandTops(camera: SceneCamera, strand: DayStrand, base: SunTrac
 //crossing without ever straddling the end of the array, so there is no head-and-tail special case to get wrong.
 export function splitLoopBySide(n: number, side: (i: number) => boolean): { idx: number[]; near: boolean }[]
 {
-    if (n < 2) { return []; }
+    if (n < 2)
+    {
+        return [];
+    }
     let start = -1;
     for (let k = 0; k < n; k++)
     {
-        if (side(k) !== side((k - 1 + n) % n)) { start = k; break; }
+        if (side(k) !== side((k - 1 + n) % n))
+        {
+            start = k; break;
+        }
     }
     //Never crosses: the loop is wholly on one side, so it is one piece, closed back onto itself.
     if (start < 0)
@@ -218,7 +227,10 @@ export function splitLoopBySide(n: number, side: (i: number) => boolean): { idx:
 
     //Walk the whole loop from the crossing and one point past it, so the wrap segment is covered like any other.
     const seq: number[] = [];
-    for (let j = 0; j <= n; j++) { seq.push((start + j) % n); }
+    for (let j = 0; j <= n; j++)
+    {
+        seq.push((start + j) % n);
+    }
 
     const out: { idx: number[]; near: boolean }[] = [];
     let cur: number[] = [seq[0]];
@@ -251,8 +263,14 @@ function nearnessOf(depths: number[]): number[]
     let dMax = -Infinity;
     for (const d of depths)
     {
-        if (d < dMin) { dMin = d; }
-        if (d > dMax) { dMax = d; }
+        if (d < dMin)
+        {
+            dMin = d;
+        }
+        if (d > dMax)
+        {
+            dMax = d;
+        }
     }
     const range = (dMax - dMin) || 1;
     //project3 returns depth = cameraZ, where LARGER is nearer, so nearness peaks at dMax with no inversion.
@@ -337,7 +355,10 @@ function addSunBeads(scene: DayCurveScene, camera: SceneCamera, curve: DayCurveD
     strands: DayStrand[], stTops: TopPoint[][], rect: ClipRect): void
 {
     //Sun under the horizon, or nothing to point at: no leader, no beads.
-    if (curve.sunSlot === null || sun.altitude <= 0) { return; }
+    if (curve.sunSlot === null || sun.altitude <= 0)
+    {
+        return;
+    }
     const slots = curve.base.length;
     const f  = ((curve.sunSlot % slots) + slots) % slots;
     const i0 = Math.floor(f);
@@ -361,14 +382,23 @@ function addSunBeads(scene: DayCurveScene, camera: SceneCamera, curve: DayCurveD
     {
         const tops = stTops[s];
         //The strand does not exist across this pair, so there is nothing on it to mark.
-        if (!tops[i0].has || !tops[i1].has) { continue; }
+        if (!tops[i0].has || !tops[i1].has)
+        {
+            continue;
+        }
         //Land on the drawn line, at the same fraction, off the same spline. Closed: the track is a loop.
         const hit    = splineAt(tops.map((t) => [t.x, t.y] as [number, number]), f, true);
         const colour = strands[s].segColours?.[i0] ?? strands[s].colour;
         beads.push({ x: hit[0], y: hit[1], colour });
-        if (hit[1] < topY) { topY = hit[1]; topX = hit[0]; topColour = colour; }
+        if (hit[1] < topY)
+        {
+            topY = hit[1]; topX = hit[0]; topColour = colour;
+        }
     }
-    if (beads.length === 0) { return; }
+    if (beads.length === 0)
+    {
+        return;
+    }
     pass.beads  = beads;
     //Trim the sun-to-curve leader to the card box; a sun far off-card would otherwise stretch this layer.
     const lc = clipSegment([sunP.x, sunP.y], [topX, topY], rect);
@@ -386,7 +416,10 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
     }
     //A strand with no peak has nothing to normalise against; one off the shared grid cannot be projected on it.
     const strands = curve.strands.filter((st) => st.peak > 0 && st.values.length === curve.base.length);
-    if (strands.length === 0) { return { far: emptyPass(), near: emptyPass() }; }
+    if (strands.length === 0)
+    {
+        return { far: emptyPass(), near: emptyPass() };
+    }
 
     //The curve is a ring around the home; at low zoom its far side runs well past the card. On old iOS that
     //off-card ink oversizes the day-curve SVG layer past the compositor cap and drops its lower half.
@@ -414,7 +447,10 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
     {
         const pass  = piece.near ? scene.near : scene.far;
         const drawn = piece.idx.filter((i) => i <= reached);
-        if (drawn.length < 2) { continue; }
+        if (drawn.length < 2)
+        {
+            continue;
+        }
 
         //The scaffolding, in the text colour and dashed: the sun's ground track, and a riser under each hour rising
         //to the TALLEST strand there. Neutral and behind, so the eye reads them as the frame the strands are
@@ -424,23 +460,38 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
         const risers: string[] = [];
         for (let k = 1; k < drawn.length; k++)
         {
-            if (clipSegment(bots[drawn[k - 1]], bots[drawn[k]], rect) === null) { continue; }
+            if (clipSegment(bots[drawn[k - 1]], bots[drawn[k]], rect) === null)
+            {
+                continue;
+            }
             foot.push(splineSpan(bots, drawn[k - 1], true));
         }
         for (const i of drawn)
         {
-            if (i % perHour !== 0) { continue; }
+            if (i % perHour !== 0)
+            {
+                continue;
+            }
             let best   = -1;
             let bestUp = -Infinity;
             for (let s = 0; s < strands.length; s++)
             {
                 const t = stTops[s][i];
-                if (t.has && t.up > bestUp) { bestUp = t.up; best = s; }
+                if (t.has && t.up > bestUp)
+                {
+                    bestUp = t.up; best = s;
+                }
             }
-            if (best < 0) { continue; }
+            if (best < 0)
+            {
+                continue;
+            }
             const t = stTops[best][i];
             const rc = clipSegment([ground[i].x, ground[i].y], [t.x, t.y], rect);
-            if (rc === null) { continue; }
+            if (rc === null)
+            {
+                continue;
+            }
             risers.push(`M ${rc[0][0].toFixed(2)} ${rc[0][1].toFixed(2)} L ${rc[1][0].toFixed(2)} ${rc[1][1].toFixed(2)}`);
         }
         pass.foot   = pass.foot   ? `${pass.foot} ${foot.join(' ')}`     : foot.join(' ');
@@ -461,10 +512,16 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
                 const j = drawn[k];
                 //No reading either side means no line to draw between them. This is what stops today at now instead
                 //of trailing a flat line along the ground to midnight.
-                if (!tops[i].has || !tops[j].has) { continue; }
+                if (!tops[i].has || !tops[j].has)
+                {
+                    continue;
+                }
                 //Drop the span whole when its chord misses the card box: the cubic hugs its chord, so
                 //an off-card chord means an off-card span, and the on-card spans keep their exact shape.
-                if (clipSegment(topPts[i], topPts[j], rect) === null) { continue; }
+                if (clipSegment(topPts[i], topPts[j], rect) === null)
+                {
+                    continue;
+                }
                 const n = 0.5 * (near01[i] + near01[j]);
                 out.spans.push({
                     d: splineSpan(topPts, i, true, hasAt),

@@ -200,7 +200,10 @@ export class HeliosEngine
         //fires onWeatherUpdate -> updated() -> push again, an infinite loop that freezes the dashboard the moment
         //an irradiance entity is selected.
         const next = buildTimeSamples(samples, (s) => s.time.getTime(), (s) => s.wm2, (v) => v >= 0);
-        if (timeSamplesEqual(this._sensorIrradianceSamples, next)) { return; }
+        if (timeSamplesEqual(this._sensorIrradianceSamples, next))
+        {
+            return;
+        }
         this._sensorIrradianceSamples = next;
         //Invalidate the arc cache so the next projectSunScene rebuilds with the new sensor ground truth.
         this._arcInputsCache = undefined;
@@ -228,9 +231,18 @@ export class HeliosEngine
         //Overrides keep every finite value (a temperature override is legitimately negative).
         const next = buildTimeSamples(samples, (s) => s.time.getTime(), (s) => s.value, () => true);
         //Same re-render guard as the irradiance setter (the card pushes every Lit cycle).
-        if (timeSamplesEqual(prev, next)) { return; }
-        if (next === null) { this._weatherOverrideSamples.delete(variable); }
-        else               { this._weatherOverrideSamples.set(variable, next); }
+        if (timeSamplesEqual(prev, next))
+        {
+            return;
+        }
+        if (next === null)
+        {
+            this._weatherOverrideSamples.delete(variable);
+        }
+        else
+        {
+            this._weatherOverrideSamples.set(variable, next);
+        }
         this._arcInputsCache = undefined;
         this._renderForCurrentSelection();
     }
@@ -348,7 +360,10 @@ export class HeliosEngine
     //"use current view" helper to capture the framed angle into the config.
     public getCameraPose(): { bearing: number; pitch: number } | null
     {
-        if (!this._renderer) { return null; }
+        if (!this._renderer)
+        {
+            return null;
+        }
         return { bearing: this._renderer.getCameraBearing(), pitch: this._renderer.getCameraPitch() };
     }
 
@@ -379,7 +394,10 @@ export class HeliosEngine
     //cut straight through.
     public projectDayCurve(t: Date): DayCurveScene | null
     {
-        if (!this._curveInput || !this._renderer) { return null; }
+        if (!this._curveInput || !this._renderer)
+        {
+            return null;
+        }
         const sun = getSunPosition(t, this.homeLat, this.homeLon);
         //The radius is the arc's own, restamped every call, so a resize can never leave the track off the arc.
         const curve = { ...this._curveInput, radiusM: SUN_ARC_RADIUS_M * this._sunArcScale() };
@@ -406,7 +424,10 @@ export class HeliosEngine
 
     //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
     //sun-arc-scale memo key keeps a stable value.
-    public getCameraZoom():    number { return 18; }
+    public getCameraZoom():    number
+    {
+        return 18;
+    }
 
 
     _autoRotateRaf?:           number;
@@ -592,10 +613,16 @@ export class HeliosEngine
         this._resizeObserver = new ResizeObserver(entries =>
         {
             const cr = entries[entries.length - 1]?.contentRect;
-            if (!cr) { return; }
+            if (!cr)
+            {
+                return;
+            }
             const w = Math.round(cr.width);
             const h = Math.round(cr.height);
-            if (w === this._obsW && h === this._obsH) { return; }
+            if (w === this._obsW && h === this._obsH)
+            {
+                return;
+            }
             this._obsW = w;
             this._obsH = h;
             this._cachedCanvasCssW = cr.width  || this._cachedCanvasCssW;
@@ -663,7 +690,10 @@ export class HeliosEngine
         //being judged.
         const applyDrag = (x: number, y: number, pitch: boolean): void =>
         {
-            if (!this._renderer) { return; }
+            if (!this._renderer)
+            {
+                return;
+            }
             const dx = x - lastX;
             const dy = y - lastY;
             lastX = x;
@@ -671,7 +701,10 @@ export class HeliosEngine
             this._autoRotateLastUserAction = Date.now();
             //Drag right turns the scene with the gesture (negate dx: +dx read inverted on the canvas plane).
             this._renderer.setCameraBearing(this._renderer.getCameraBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
-            if (!pitch) { return; }
+            if (!pitch)
+            {
+                return;
+            }
             //Subtract dy so drag up flattens pitch, drag down goes bird's-eye; clamped to session bounds.
             const nextPitch = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG,
                 this._renderer.getCameraPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
@@ -688,7 +721,10 @@ export class HeliosEngine
             if (e.pointerType === 'touch')
             {
                 //A second finger is not ours: leave the first one's verdict alone rather than fight over it.
-                if (touchId !== null) { return; }
+                if (touchId !== null)
+                {
+                    return;
+                }
                 touchId     = e.pointerId;
                 touchStartX = e.clientX;
                 touchStartY = e.clientY;
@@ -716,20 +752,30 @@ export class HeliosEngine
             //keeps coming.
             e.preventDefault();
             dragRotating = true;
-            try { container.setPointerCapture(e.pointerId); }
-            catch (_) { /* pointer capture unsupported on this element */ }
+            try
+            {
+                container.setPointerCapture(e.pointerId);
+            }
+            catch (_)
+            { /* pointer capture unsupported on this element */ }
         };
 
         const onMove = (e: PointerEvent) =>
         {
             if (e.pointerType === 'touch')
             {
-                if (e.pointerId !== touchId) { return; }
+                if (e.pointerId !== touchId)
+                {
+                    return;
+                }
                 if (verdict === null)
                 {
                     const dx = e.clientX - touchStartX;
                     const dy = e.clientY - touchStartY;
-                    if (Math.hypot(dx, dy) < TOUCH_DIRECTION_LOCK_PX) { return; }
+                    if (Math.hypot(dx, dy) < TOUCH_DIRECTION_LOCK_PX)
+                    {
+                        return;
+                    }
                     verdict = Math.abs(dx) > Math.abs(dy) ? 'rotate' : 'page';
                     if (verdict === 'page')
                     {
@@ -746,7 +792,10 @@ export class HeliosEngine
                     this._autoRotateLastUserAction = Date.now();
                     return;
                 }
-                if (!dragRotating) { return; }
+                if (!dragRotating)
+                {
+                    return;
+                }
                 //Both axes, now that the verdict is in. The vertical is only ambiguous at the START of a gesture,
                 //where a turn and a scroll look alike; past the lock the browser has passed on this one and it is
                 //ours, so there is nothing left for dy to fight over. It it changes its mind, pointercancel lands
@@ -754,7 +803,10 @@ export class HeliosEngine
                 applyDrag(e.clientX, e.clientY, true);
                 return;
             }
-            if (e.pointerId !== activeId || !dragRotating) { return; }
+            if (e.pointerId !== activeId || !dragRotating)
+            {
+                return;
+            }
             e.preventDefault();
             applyDrag(e.clientX, e.clientY, true);
         };
@@ -763,7 +815,10 @@ export class HeliosEngine
         {
             if (e.pointerType === 'touch')
             {
-                if (e.pointerId !== touchId) { return; }
+                if (e.pointerId !== touchId)
+                {
+                    return;
+                }
                 touchId = null;
                 verdict = null;
                 //Also covers pointercancel, which is how the browser tells us it has taken the gesture for its own
@@ -775,12 +830,19 @@ export class HeliosEngine
                 }
                 return;
             }
-            if (e.pointerId !== activeId) { return; }
+            if (e.pointerId !== activeId)
+            {
+                return;
+            }
             const wasRotating = dragRotating;
             dragRotating = false;
             activeId     = null;
-            try { container.releasePointerCapture(e.pointerId); }
-            catch (_) { /* pointer capture may already be released */ }
+            try
+            {
+                container.releasePointerCapture(e.pointerId);
+            }
+            catch (_)
+            { /* pointer capture may already be released */ }
             //Persist the pose only if a rotation actually happened, so a plain click leaves storage untouched.
             if (wasRotating)
             {
@@ -792,7 +854,10 @@ export class HeliosEngine
         //the pointermove stream, so the scene freezes mid-drag. preventDefault in onDown is not always enough there;
         //cancelling `dragstart` outright (it bubbles up from whatever child the press landed on) is what reliably
         //keeps the gesture ours. Harmless in Chromium, which never starts the drag here anyway.
-        const onDragStart = (e: Event): void => { e.preventDefault(); };
+        const onDragStart = (e: Event): void =>
+        {
+            e.preventDefault();
+        };
         container.addEventListener('pointerdown',   onDown);
         container.addEventListener('pointermove',   onMove);
         container.addEventListener('pointerup',     onEnd);
@@ -879,7 +944,13 @@ export class HeliosEngine
         {
             window.clearTimeout(this._horizonTimer);
             this._horizonTimer = window.setTimeout(
-                () => { if (this._renderer) { this._refreshHorizon(this.homeLat, this.homeLon); } },
+                () =>
+                {
+                    if (this._renderer)
+                    {
+                        this._refreshHorizon(this.homeLat, this.homeLon);
+                    }
+                },
                 HORIZON_INITIAL_DELAY_MS);
         }
     }
@@ -909,8 +980,14 @@ export class HeliosEngine
             for (const key of GROUND_LAYER_KEYS)
             {
                 const raw = mapLayerColor(this.cfg, key);
-                if (raw) { palette[key] = this._resolveMapColor(raw, base[key]); }
-                if (!mapLayerVisible(this.cfg, key)) { hidden.add(key); }
+                if (raw)
+                {
+                    palette[key] = this._resolveMapColor(raw, base[key]);
+                }
+                if (!mapLayerVisible(this.cfg, key))
+                {
+                    hidden.add(key);
+                }
             }
             return { palette, hidden };
         }
@@ -972,12 +1049,30 @@ export class HeliosEngine
         //fallback, so a local cloud sensor sharpens that too.
         if (this._weatherOverrideSamples.size > 0)
         {
-            const cloud = this._weatherOverrideAt('cloudCover',  t); if (cloud !== null) { w.cloudCover  = Math.max(0, Math.min(100, cloud)); }
-            const prec  = this._weatherOverrideAt('precip',      t); if (prec  !== null) { w.precip      = Math.max(0, prec); }
-            const snow  = this._weatherOverrideAt('snowfall',    t); if (snow  !== null) { w.snowfall    = Math.max(0, snow); }
-            const temp  = this._weatherOverrideAt('temperature', t); if (temp  !== null) { w.temperature = temp; }
-            const hum   = this._weatherOverrideAt('humidity',    t); if (hum   !== null) { w.humidity    = Math.max(0, Math.min(100, hum)); }
-            const code  = this._weatherOverrideAt('code',        t); if (code  !== null) { w.weatherCode = Math.round(code); }
+            const cloud = this._weatherOverrideAt('cloudCover',  t); if (cloud !== null)
+            {
+                w.cloudCover  = Math.max(0, Math.min(100, cloud));
+            }
+            const prec  = this._weatherOverrideAt('precip',      t); if (prec  !== null)
+            {
+                w.precip      = Math.max(0, prec);
+            }
+            const snow  = this._weatherOverrideAt('snowfall',    t); if (snow  !== null)
+            {
+                w.snowfall    = Math.max(0, snow);
+            }
+            const temp  = this._weatherOverrideAt('temperature', t); if (temp  !== null)
+            {
+                w.temperature = temp;
+            }
+            const hum   = this._weatherOverrideAt('humidity',    t); if (hum   !== null)
+            {
+                w.humidity    = Math.max(0, Math.min(100, hum));
+            }
+            const code  = this._weatherOverrideAt('code',        t); if (code  !== null)
+            {
+                w.weatherCode = Math.round(code);
+            }
         }
         return w;
     }
@@ -1066,23 +1161,23 @@ export class HeliosEngine
         }
 
         this.onWeatherUpdate?.(
-        {
-            cloudCover:       w.cloudCover,
-            cloudLow:         w.cloudLow,
-            cloudMid:         w.cloudMid,
-            cloudHigh:        w.cloudHigh,
-            precip:           w.precip,
-            snowfall:         w.snowfall,
-            weatherCode:      w.weatherCode,
-            temperature:      w.temperature,
-            humidity:         w.humidity,
-            timeRange:        this._getTimeRange(),
-            isLiveTime:       this._selectedTime === null,
-            pvPower,
-            pvPowerHaurwitz,
-            pvPowerShortwave,
-            irradianceSource,
-        });
+            {
+                cloudCover:       w.cloudCover,
+                cloudLow:         w.cloudLow,
+                cloudMid:         w.cloudMid,
+                cloudHigh:        w.cloudHigh,
+                precip:           w.precip,
+                snowfall:         w.snowfall,
+                weatherCode:      w.weatherCode,
+                temperature:      w.temperature,
+                humidity:         w.humidity,
+                timeRange:        this._getTimeRange(),
+                isLiveTime:       this._selectedTime === null,
+                pvPower,
+                pvPowerHaurwitz,
+                pvPowerShortwave,
+                irradianceSource,
+            });
     }
 
     //Global display radius from the display-radius slider (50-500 m, default 200); the buildings fetch +
@@ -1171,36 +1266,36 @@ export class HeliosEngine
         this._buildingsAbort = ac;
 
         fetchRawBuildings(this.homeLat, this.homeLon, ac.signal)
-        .then(result =>
-        {
-            if (ac.signal.aborted || !this._renderer)
+            .then(result =>
             {
-                return;
-            }
-            //Null = the tile fetch failed entirely. The location stays UNCLAIMED (no raw, no shared cache) so a
-            //later pass re-fetches. Mark the fetch settled and interpret, so the fallback house now shows (a
-            //genuine outage) until a re-attempt heals it, instead of an empty scene.
-            if (result === null)
-            {
+                if (ac.signal.aborted || !this._renderer)
+                {
+                    return;
+                }
+                //Null = the tile fetch failed entirely. The location stays UNCLAIMED (no raw, no shared cache) so a
+                //later pass re-fetches. Mark the fetch settled and interpret, so the fallback house now shows (a
+                //genuine outage) until a re-attempt heals it, instead of an empty scene.
+                if (result === null)
+                {
+                    this._buildingsFetchDone = true;
+                    this._scheduleBuildingsRetry();
+                    this._applyBuildings();
+                    return;
+                }
+                this._buildingsRaw       = result;
                 this._buildingsFetchDone = true;
-                this._scheduleBuildingsRetry();
+                this._buildingsLocKey    = locKey;
+                _sharedBuildingsCache.set(locKey, { data: result, ts: Date.now() });
                 this._applyBuildings();
-                return;
-            }
-            this._buildingsRaw       = result;
-            this._buildingsFetchDone = true;
-            this._buildingsLocKey    = locKey;
-            _sharedBuildingsCache.set(locKey, { data: result, ts: Date.now() });
-            this._applyBuildings();
-            //Buildings just arrived; bypass the "sun hardly moved" guard so the next call repaints a full
-            //pass (the renderer re-extrudes + re-casts shadows from the new footprints).
-            this._lastAtmosphereAlt = -999;
-            this._refreshShadowsAndAtmosphere();
-        })
-        .catch(() =>
-        {
+                //Buildings just arrived; bypass the "sun hardly moved" guard so the next call repaints a full
+                //pass (the renderer re-extrudes + re-casts shadows from the new footprints).
+                this._lastAtmosphereAlt = -999;
+                this._refreshShadowsAndAtmosphere();
+            })
+            .catch(() =>
+            {
             //Buildings fetch failed or was aborted on teardown: the scene renders without 3D buildings.
-        });
+            });
     }
 
 
@@ -1378,27 +1473,30 @@ export class HeliosEngine
             //forecast traces. We emit a single update with neutral defaults; the retry below will replace
             //these fields with real values once the fetch succeeds.
             this.onWeatherUpdate?.(
-            {
-                cloudCover:       0,
-                cloudLow:         0,
-                cloudMid:         0,
-                cloudHigh:        0,
-                precip:           0,
-                snowfall:         0,
-                weatherCode:      0,
-                temperature:      NaN,
-                humidity:         NaN,
-                timeRange:        this._getTimeRange(),
-                isLiveTime:       this._selectedTime === null,
-                pvPower:          0,
-                pvPowerHaurwitz:  0,
-                pvPowerShortwave: -1,
-                irradianceSource: 'haurwitz',
-            });
+                {
+                    cloudCover:       0,
+                    cloudLow:         0,
+                    cloudMid:         0,
+                    cloudHigh:        0,
+                    precip:           0,
+                    snowfall:         0,
+                    weatherCode:      0,
+                    temperature:      NaN,
+                    humidity:         NaN,
+                    timeRange:        this._getTimeRange(),
+                    isLiveTime:       this._selectedTime === null,
+                    pvPower:          0,
+                    pvPowerHaurwitz:  0,
+                    pvPowerShortwave: -1,
+                    irradianceSource: 'haurwitz',
+                });
 
             //Paused mid-flight: emit the one fallback frame but schedule no retry timer (the finally still
             //runs). Un-pausing calls _refreshWeather again, which restarts the cycle from a clean slate.
-            if (this._paused) { return; }
+            if (this._paused)
+            {
+                return;
+            }
 
             let retryDelay: number;
             if (e.status === 429)
@@ -1534,7 +1632,10 @@ export class HeliosEngine
     //this just repaints with or without the crest.
     public setHorizonLineVisible(visible: boolean): void
     {
-        if (visible === this._horizonLineVisible) { return; }
+        if (visible === this._horizonLineVisible)
+        {
+            return;
+        }
         this._horizonLineVisible = visible;
         this._renderForCurrentSelection();
     }
@@ -1556,7 +1657,13 @@ export class HeliosEngine
                     this._horizonRetryCount++;
                     window.clearTimeout(this._horizonTimer);
                     this._horizonTimer = window.setTimeout(
-                        () => { if (this._renderer) { this._refreshHorizon(this.homeLat, this.homeLon); } },
+                        () =>
+                        {
+                            if (this._renderer)
+                            {
+                                this._refreshHorizon(this.homeLat, this.homeLon);
+                            }
+                        },
                         HORIZON_RETRY_DELAY_MS);
                 }
                 return;
@@ -1710,9 +1817,15 @@ export class HeliosEngine
                         this.homeLat + north / mPerDegLat,
                         0
                     );
-                    if (!p) { continue; }
+                    if (!p)
+                    {
+                        continue;
+                    }
                     const dist = Math.hypot(p.x - home.x, p.y - home.y);
-                    if (dist > maxDistPx) { maxDistPx = dist; }
+                    if (dist > maxDistPx)
+                    {
+                        maxDistPx = dist;
+                    }
                 }
                 const pxPerM = maxDistPx / PROBE_M;
                 if (pxPerM > 0)
@@ -1731,7 +1844,10 @@ export class HeliosEngine
     }
     //Public accessor so the card scales the sun disc + halo with the arc radius (else the disc stays its
     //grid-tuned pixel size and reads as a tiny dot on a giant curve on a fullscreen canvas).
-    public getSunArcScale(): number { return this._sunArcScale(); }
+    public getSunArcScale(): number
+    {
+        return this._sunArcScale();
+    }
 
     //Keystone projection: lon/lat/altitude -> screen px via the SceneCamera. Every card-facing projection
     //method (projectSunScene, projectHomeLabelLayout, getSunArcScale) routes through here. Coordinates are converted to local metres relative to
@@ -1794,7 +1910,8 @@ export class HeliosEngine
         //Live cloud cover colours the whole arc; with no reading yet treat as clear (0%) so the arc still
         //shows clear-sky intensity before the first weather fetch.
         const liveCloud = this._homeHourlyData
-            ? (() => {
+            ? (() =>
+            {
                 const w = this._getWeatherAtTime(now);
                 return w?.cloudCover ?? 0;
             })()
@@ -1910,11 +2027,23 @@ export class HeliosEngine
         let dMax = -Infinity;
         for (const p of raw)
         {
-            if (p.depth < dMin) { dMin = p.depth; }
-            if (p.depth > dMax) { dMax = p.depth; }
+            if (p.depth < dMin)
+            {
+                dMin = p.depth;
+            }
+            if (p.depth > dMax)
+            {
+                dMax = p.depth;
+            }
         }
-        if (sunScreen.depth < dMin) { dMin = sunScreen.depth; }
-        if (sunScreen.depth > dMax) { dMax = sunScreen.depth; }
+        if (sunScreen.depth < dMin)
+        {
+            dMin = sunScreen.depth;
+        }
+        if (sunScreen.depth > dMax)
+        {
+            dMax = sunScreen.depth;
+        }
         const dRange = (dMax - dMin) || 1;
         //SceneCamera.project3 returns depth = cameraZ, where LARGER = nearer the camera (it magnifies in the
         //perspective divide). So nearness peaks at dMax (closest); no `1 -` inversion.
@@ -1941,7 +2070,10 @@ export class HeliosEngine
             {
                 const hp = horizonSpherePoint(this.homeLat, this.homeLon, ridgeScale, az, this._horizonAt(az));
                 const px = this._projectScenePoint(hp.lon, hp.lat, hp.altitudeM);
-                if (px) { ridge.push({ x: px.x, y: px.y }); }
+                if (px)
+                {
+                    ridge.push({ x: px.x, y: px.y });
+                }
             }
         }
 
@@ -2236,8 +2368,12 @@ export class HeliosEngine
         this._dragRotateHandlers    = undefined;
 
         //Renderer teardown: cancels its rAF, removes its ground holder + scene SVG from the container.
-        try { this._renderer?.cleanup(); }
-        catch (_) { /* renderer may already be torn down */ }
+        try
+        {
+            this._renderer?.cleanup();
+        }
+        catch (_)
+        { /* renderer may already be torn down */ }
         this._renderer      = undefined;
         this._mapReady      = false;
     }

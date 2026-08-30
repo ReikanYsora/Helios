@@ -85,8 +85,14 @@ export function evaluateBatteryHours(hours: BatteryHour[], flipped: boolean): Ba
     let okHours = 0;
     for (const h of hours)
     {
-        if (h.netKwh === null) { continue; }
-        if (Math.abs(h.netKwh) < BATTERY_GUARD_MIN_KWH) { continue; }
+        if (h.netKwh === null)
+        {
+            continue;
+        }
+        if (Math.abs(h.netKwh) < BATTERY_GUARD_MIN_KWH)
+        {
+            continue;
+        }
         //Effective rate sign this hour = the raw sensor, negated when the card flips it. Prefer the mean (an
         //integral, directly comparable to the net energy, so a brief opposite spike in a mixed hour can't outvote
         //the real flow); fall back to the dominant min/max excursion only when no mean is recorded. A flat /
@@ -94,23 +100,38 @@ export function evaluateBatteryHours(hours: BatteryHour[], flipped: boolean): Ba
         let effectivePositive: boolean;
         if (h.meanW !== null)
         {
-            if (h.meanW === 0) { continue; }
+            if (h.meanW === 0)
+            {
+                continue;
+            }
             effectivePositive = (flipped ? -h.meanW : h.meanW) > 0;
         }
         else
         {
-            if (h.minW === null || h.maxW === null) { continue; }
+            if (h.minW === null || h.maxW === null)
+            {
+                continue;
+            }
             const posExc = Math.max(0, h.maxW);
             const negExc = Math.max(0, -h.minW);
-            if (posExc === 0 && negExc === 0) { continue; }
+            if (posExc === 0 && negExc === 0)
+            {
+                continue;
+            }
             const rawPositive = posExc >= negExc;
             effectivePositive = flipped ? !rawPositive : rawPositive;
         }
         //The card's convention is charge-positive: the effective sign should be positive while charging.
         const charging = h.netKwh > 0;
         const contradicts = charging ? !effectivePositive : effectivePositive;
-        if (contradicts) { invertedHours++; }
-        else { okHours++; }
+        if (contradicts)
+        {
+            invertedHours++;
+        }
+        else
+        {
+            okHours++;
+        }
     }
     return { invertedHours, okHours };
 }
@@ -170,11 +191,20 @@ export function refreshBatteryGuard(host: BatteryGuardHost): void
         host._batteryGuard = { ...createBatteryGuard(), entityKey };
         return;
     }
-    if (rates.length !== 1 || chargeIds.length === 0 || dischargeIds.length === 0 || !host.hass?.callWS) { return; }
-    if (state.fetching) { return; }
+    if (rates.length !== 1 || chargeIds.length === 0 || dischargeIds.length === 0 || !host.hass?.callWS)
+    {
+        return;
+    }
+    if (state.fetching)
+    {
+        return;
+    }
     const anchor = Math.floor(Date.now() / GUARD_REFRESH_MS) * GUARD_REFRESH_MS;
     const key    = `${entityKey}|${anchor}`;
-    if (key === state.fetchKey) { return; }
+    if (key === state.fetchKey)
+    {
+        return;
+    }
     state.fetchKey = key;
     state.fetching = true;
 
@@ -205,7 +235,10 @@ export function refreshBatteryGuard(host: BatteryGuardHost): void
         {
             //A prefs edit mid-fetch resets host._batteryGuard for the NEW wiring; drop this late result rather than
             //apply stale evidence over it (mirrors the grid-guard bail).
-            if (host._batteryGuard.entityKey !== entityKey) { return; }
+            if (host._batteryGuard.entityKey !== entityKey)
+            {
+                return;
+            }
             const hours = buildBatteryHours(
                 energyRes as Record<string, { start?: unknown; change?: number | null }[]>,
                 rateRes   as Record<string, { start?: unknown; mean?: number | null; min?: number | null; max?: number | null }[]>,
@@ -221,7 +254,10 @@ export function refreshBatteryGuard(host: BatteryGuardHost): void
                 next.fetchKey = key;
                 next.entityKey = entityKey;
                 host._batteryGuard = next;
-                if (changed) { host.requestUpdate(); }
+                if (changed)
+                {
+                    host.requestUpdate();
+                }
             }
         })
         .catch(() =>
@@ -231,7 +267,10 @@ export function refreshBatteryGuard(host: BatteryGuardHost): void
         .finally(() =>
         {
             //Only release the flag if this fetch still owns the live guard (a mid-fetch reset installed a fresh one).
-            if (host._batteryGuard.entityKey === entityKey) { host._batteryGuard.fetching = false; }
+            if (host._batteryGuard.entityKey === entityKey)
+            {
+                host._batteryGuard.fetching = false;
+            }
         });
 }
 
@@ -265,7 +304,10 @@ export function buildBatteryHours(
             {
                 const startMs = parseStatBoundary(b?.start);
                 const change  = typeof b?.change === 'number' && Number.isFinite(b.change) ? b.change : null;
-                if (startMs === null || change === null) { continue; }
+                if (startMs === null || change === null)
+                {
+                    continue;
+                }
                 const h = slot(startMs);
                 h.netKwh = (h.netKwh ?? 0) + sign * change;
             }
@@ -276,11 +318,23 @@ export function buildBatteryHours(
     for (const b of rateRes?.[rateId] ?? [])
     {
         const startMs = parseStatBoundary(b?.start);
-        if (startMs === null) { continue; }
+        if (startMs === null)
+        {
+            continue;
+        }
         const h = slot(startMs);
-        if (typeof b?.mean === 'number' && Number.isFinite(b.mean)) { h.meanW = b.mean; }
-        if (typeof b?.min  === 'number' && Number.isFinite(b.min))  { h.minW  = b.min; }
-        if (typeof b?.max  === 'number' && Number.isFinite(b.max))  { h.maxW  = b.max; }
+        if (typeof b?.mean === 'number' && Number.isFinite(b.mean))
+        {
+            h.meanW = b.mean;
+        }
+        if (typeof b?.min  === 'number' && Number.isFinite(b.min))
+        {
+            h.minW  = b.min;
+        }
+        if (typeof b?.max  === 'number' && Number.isFinite(b.max))
+        {
+            h.maxW  = b.max;
+        }
     }
     return [...byStart.entries()].sort((a, b) => a[0] - b[0]).map(([, h]) => h);
 }

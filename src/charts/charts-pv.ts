@@ -63,7 +63,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
         for (let i = 0; i < rangeSlice.times.length; i++)
         {
             const v = rangeSlice.production[i];
-            if (v === null || !isFinite(v)) { continue; }
+            if (v === null || !isFinite(v))
+            {
+                continue;
+            }
             samples.push({ t: rangeSlice.times[i], v });
         }
     }
@@ -76,7 +79,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
         for (let i = 0; i < rangeSlice.times.length; i++)
         {
             const v = rangeSlice.forecast[i];
-            if (v === null || !isFinite(v) || v <= 0) { continue; }
+            if (v === null || !isFinite(v) || v <= 0)
+            {
+                continue;
+            }
             predictedSamples.push({ t: rangeSlice.times[i], v });
         }
     }
@@ -84,8 +90,20 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //Auto-scale Y to the running max (min 1 avoids divide-by-zero on an all-zero window, keeping the curve pinned to
     //the baseline). Predicted samples feed yMax too so the forecast line never clips above observed peaks.
     let yMax = 1;
-    for (const s of samples)          { if (s.v > yMax) yMax = s.v; }
-    for (const s of predictedSamples) { if (s.v > yMax) yMax = s.v; }
+    for (const s of samples)
+    {
+        if (s.v > yMax)
+        {
+            yMax = s.v;
+        }
+    }
+    for (const s of predictedSamples)
+    {
+        if (s.v > yMax)
+        {
+            yMax = s.v;
+        }
+    }
     const yOf = makeYOf(0, yMax);
 
     const points = samples.map(s =>
@@ -133,7 +151,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
         const colTotal = new Array<number>(N).fill(0);
         for (let j = 0; j < N; j++)
         {
-            for (let k = 0; k < S; k++) { colTotal[j] += raw[k][j]; }
+            for (let k = 0; k < S; k++)
+            {
+                colTotal[j] += raw[k][j];
+            }
         }
         //Stack each source as its share of the aggregate, so the stack top tracks the aggregate curve exactly.
         const lower = new Array<number>(N).fill(0);
@@ -186,12 +207,18 @@ export function renderPvChart(host: ChartHost): TemplateResult
         {
             const a = interpAt(samples.map(s => s.t), samples.map(s => s.v), hoverMs);
             //Floor at zero: a net meter can dip below zero at dawn/dusk; the dot still rides the curve.
-            if (isFinite(a)) { hoverY = yOf(Math.max(0, a)); }
+            if (isFinite(a))
+            {
+                hoverY = yOf(Math.max(0, a));
+            }
         }
         if (predictedSamples.length >= 1)
         {
             const p = interpAt(predictedSamples.map(s => s.t), predictedSamples.map(s => s.v), hoverMs);
-            if (isFinite(p)) { hoverYPred = yOf(Math.max(0, p)); }
+            if (isFinite(p))
+            {
+                hoverYPred = yOf(Math.max(0, p));
+            }
         }
         showHover = isFinite(hoverY) || isFinite(hoverYPred);
     }
@@ -241,14 +268,14 @@ export function renderPvChart(host: ChartHost): TemplateResult
             `)}
             <g class="hc-chart-grow">
                 ${stackedAreas.length > 0
-                    ? stackedAreas.map(a => svg`
+        ? stackedAreas.map(a => svg`
                         <path
                             d="${a.path}"
                             fill="${a.color}"
                             fill-opacity="0.55"
                         ></path>
                     `)
-                    : (area ? svg`
+        : (area ? svg`
                         <path
                             d="${area}"
                             fill="${pvColor}"

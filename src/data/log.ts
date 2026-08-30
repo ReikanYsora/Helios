@@ -6,7 +6,10 @@ const _warned = new Set<string>();
 
 export function warnOnce(key: string, message: string): void
 {
-    if (_warned.has(key)) { return; }
+    if (_warned.has(key))
+    {
+        return;
+    }
     _warned.add(key);
     // eslint-disable-next-line no-console -- one-time data-layer diagnostic; the layer is otherwise fully silent
     console.warn(`[Helios] ${message}`);

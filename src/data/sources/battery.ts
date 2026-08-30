@@ -128,16 +128,25 @@ function computeBatteryLive(hass: HassLike, defaults: EnergyDefaults): { soc: nu
         {
             const so = hass.states?.[id];
             const v  = so ? parseNumericState(so.state) : null;
-            if (v !== null) { sum += v; count += 1; }
+            if (v !== null)
+            {
+                sum += v; count += 1;
+            }
         }
-        if (count > 0) { soc = Math.max(0, Math.min(100, sum / count)); }
+        if (count > 0)
+        {
+            soc = Math.max(0, Math.min(100, sum / count));
+        }
     }
     let power: number | null = null;
     let unit = '';
     if (!batteryLiveIsBucketSourced(defaults))
     {
         const { watts, any } = sumLiveWatts(hass, defaults.batteryStatRates, defaults.invertedRateEntities);
-        if (any) { power = watts; unit = 'W'; }
+        if (any)
+        {
+            power = watts; unit = 'W';
+        }
     }
     return { soc, power, unit };
 }
@@ -247,11 +256,15 @@ export function refreshBattery(host: BatteryHost): void
     const durableKey = `bsoc:${host._storeFetchPeriod}|${sortedSoc.join(',')}`;
     host._batteryFetching = true;
     void _batteryCache.get(fetchKey, () => fetchBatterySoc(host.hass, sortedSoc, ltsStart, rawStart, host._timeRange!.end, host._storeFetchPeriod, durableKey))
-        .then(res => {
+        .then(res =>
+        {
             host._batterySocHistory        = res?.merged  ?? { times: [], values: [] };
             host._batterySocPerBankHistory = res?.perBank ?? [];
         })
-        .finally(() => { host._batteryFetching = false; });
+        .finally(() =>
+        {
+            host._batteryFetching = false;
+        });
 }
 
 
@@ -262,7 +275,10 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
 {
     const chargeIds    = host._energyDefaults.batteryStatEnergyTos;
     const dischargeIds = host._energyDefaults.batteryStatEnergyFroms;
-    if (chargeIds.length === 0 && dischargeIds.length === 0) { return; }
+    if (chargeIds.length === 0 && dischargeIds.length === 0)
+    {
+        return;
+    }
 
     //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
     //wide window (e.g. 7 d) come back empty.
@@ -277,21 +293,36 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
         fetchChangeById(host.hass, sortedUnion, startMs, endMs, host._storeFetchPeriod)
             .then((byId) =>
             {
-                if (byId === null) { return; }
+                if (byId === null)
+                {
+                    return;
+                }
                 const charge    = chargeIds.length    > 0 ? mergeChangeSeries(byId, chargeIds)    : null;
                 const discharge = dischargeIds.length > 0 ? mergeChangeSeries(byId, dischargeIds) : null;
-                if (charge    !== null) { host._batteryChargeChangeSeries    = charge; }
-                if (discharge !== null) { host._batteryDischargeChangeSeries = discharge; }
+                if (charge    !== null)
+                {
+                    host._batteryChargeChangeSeries    = charge;
+                }
+                if (discharge !== null)
+                {
+                    host._batteryDischargeChangeSeries = discharge;
+                }
                 //Per-source split for the stacked breakdown (multi-source only), from the same result, config order.
                 if (chargeIds.length >= 2)
                 {
                     const pe = extractPerEntity(byId, chargeIds);
-                    if (pe.size > 0) { host._batteryChargeChangeSeriesPerEntity = pe; }
+                    if (pe.size > 0)
+                    {
+                        host._batteryChargeChangeSeriesPerEntity = pe;
+                    }
                 }
                 if (dischargeIds.length >= 2)
                 {
                     const pe = extractPerEntity(byId, dischargeIds);
-                    if (pe.size > 0) { host._batteryDischargeChangeSeriesPerEntity = pe; }
+                    if (pe.size > 0)
+                    {
+                        host._batteryDischargeChangeSeriesPerEntity = pe;
+                    }
                 }
                 host.requestUpdate();
             }));
@@ -308,8 +339,8 @@ function parseRawBatteryHistory(arr: any[]): BatteryHistory
     {
         const stateStr =
             typeof item?.s     === 'string' ? item.s :
-            typeof item?.state === 'string' ? item.state :
-            null;
+                typeof item?.state === 'string' ? item.state :
+                    null;
         if (stateStr === null
             || stateStr === 'unavailable'
             || stateStr === 'unknown'
@@ -569,7 +600,10 @@ export function batterySampleAtTime(
             break;
         }
     }
-    if (idx < 0) { idx = 0; }
+    if (idx < 0)
+    {
+        idx = 0;
+    }
     return hist.values[idx];
 }
 
@@ -580,7 +614,10 @@ export function batterySampleAtTime(
 export function formatBatteryPower(hass: HassLike, value: number, unit: string, decimals: number, powerU: PowerUnit = 'kW', sign: 'default' | 'inverted' | 'hidden' = 'default'): string
 {
     const watts = pvNormalizeToWatts(value, unit);
-    if (sign === 'hidden') { return formatPowerKw(hass, Math.abs(watts), decimals, false, powerU); }
+    if (sign === 'hidden')
+    {
+        return formatPowerKw(hass, Math.abs(watts), decimals, false, powerU);
+    }
     return formatPowerKw(hass, sign === 'inverted' ? -watts : watts, decimals, true, powerU);
 }
 

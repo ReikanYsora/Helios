@@ -79,8 +79,14 @@ export function evaluateGuardHours(hours: GuardHour[]): GuardEvaluation
     for (let i = 0; i < hours.length; i++)
     {
         const { exportKwh, minW } = hours[i];
-        if (exportKwh === null || minW === null) { continue; }
-        if (exportKwh <= GUARD_MIN_EXPORT_KWH || exportKwh >= GUARD_MAX_EXPORT_KWH) { continue; }
+        if (exportKwh === null || minW === null)
+        {
+            continue;
+        }
+        if (exportKwh <= GUARD_MIN_EXPORT_KWH || exportKwh >= GUARD_MAX_EXPORT_KWH)
+        {
+            continue;
+        }
         realExportHours++;
         //Implied average export power for the hour; the sensor must have dipped at least RELATIVE of it (or
         //the fixed band for small exports) to count as genuinely signed.
@@ -98,10 +104,16 @@ export function evaluateGuardHours(hours: GuardHour[]): GuardEvaluation
     const rawCandidates = [...candidates];
     for (let i = 0; i < hours.length; i++)
     {
-        if (!rawCandidates[i]) { continue; }
+        if (!rawCandidates[i])
+        {
+            continue;
+        }
         const exculpates = (j: number): boolean =>
         {
-            if (j < 0 || j >= hours.length || rawCandidates[j]) { return false; }
+            if (j < 0 || j >= hours.length || rawCandidates[j])
+            {
+                return false;
+            }
             const m = hours[j].minW;
             return m !== null && m < GUARD_NEGATIVE_BAND_W;
         };
@@ -178,11 +190,20 @@ export function refreshGridGuard(host: GridGuardHost): void
         host._gridGuard = { ...createGridGuard(), entityKey };
         return;
     }
-    if (rates.length !== 1 || exportIds.length === 0 || !host.hass?.callWS) { return; }
-    if (state.fetching) { return; }
+    if (rates.length !== 1 || exportIds.length === 0 || !host.hass?.callWS)
+    {
+        return;
+    }
+    if (state.fetching)
+    {
+        return;
+    }
     const anchor = Math.floor(Date.now() / GUARD_REFRESH_MS) * GUARD_REFRESH_MS;
     const key    = `${entityKey}|${anchor}`;
-    if (key === state.fetchKey) { return; }
+    if (key === state.fetchKey)
+    {
+        return;
+    }
     state.fetchKey = key;
     state.fetching = true;
 
@@ -216,7 +237,10 @@ export function refreshGridGuard(host: GridGuardHost): void
             //A prefs edit mid-fetch resets host._gridGuard to a fresh state for the NEW wiring; this late result is
             //evidence for the OLD one. Bail rather than stamp the stale key back over the reset (which would blank
             //the live chips for a cycle and force a re-reset next tick).
-            if (host._gridGuard.entityKey !== entityKey) { return; }
+            if (host._gridGuard.entityKey !== entityKey)
+            {
+                return;
+            }
             const hours = buildGuardHours(
                 exportRes as Record<string, { start?: unknown; change?: number | null }[]>,
                 rateRes   as Record<string, { start?: unknown; min?: number | null; max?: number | null }[]>,
@@ -229,7 +253,10 @@ export function refreshGridGuard(host: GridGuardHost): void
                 next.fetchKey = key;
                 next.entityKey = entityKey;
                 host._gridGuard = next;
-                if (changed) { host.requestUpdate(); }
+                if (changed)
+                {
+                    host.requestUpdate();
+                }
             }
         })
         .catch(() =>
@@ -240,7 +267,10 @@ export function refreshGridGuard(host: GridGuardHost): void
         {
             //Only release the flag if this fetch still owns the live guard: a mid-fetch reset already installed a
             //fresh state (fetching=false), and blindly clearing it could unlatch a newer fetch's guard.
-            if (host._gridGuard.entityKey === entityKey) { host._gridGuard.fetching = false; }
+            if (host._gridGuard.entityKey === entityKey)
+            {
+                host._gridGuard.fetching = false;
+            }
         });
 }
 
@@ -271,7 +301,10 @@ export function buildGuardHours(
         {
             const startMs = parseStatBoundary(b?.start);
             const change  = typeof b?.change === 'number' && Number.isFinite(b.change) ? b.change : null;
-            if (startMs === null || change === null) { continue; }
+            if (startMs === null || change === null)
+            {
+                continue;
+            }
             const h = slot(startMs);
             h.exportKwh = (h.exportKwh ?? 0) + change;
         }
@@ -279,11 +312,17 @@ export function buildGuardHours(
     for (const b of rateRes?.[rateId] ?? [])
     {
         const startMs = parseStatBoundary(b?.start);
-        if (startMs === null) { continue; }
+        if (startMs === null)
+        {
+            continue;
+        }
         const raw = inverted
             ? (typeof b?.max === 'number' && Number.isFinite(b.max) ? -b.max : null)
             : (typeof b?.min === 'number' && Number.isFinite(b.min) ? b.min : null);
-        if (raw === null) { continue; }
+        if (raw === null)
+        {
+            continue;
+        }
         slot(startMs).minW = raw;
     }
     return [...byStart.entries()].sort((a, b) => a[0] - b[0]).map(([, h]) => h);

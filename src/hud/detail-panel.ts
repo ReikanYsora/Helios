@@ -52,10 +52,19 @@ function aggWatts(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly
     for (let i = 0; i < arr.length; i++)
     {
         const raw = arr[i];
-        if (raw === null || !isFinite(raw)) { continue; }
+        if (raw === null || !isFinite(raw))
+        {
+            continue;
+        }
         const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-        if (tMs < startMs || tMs > endMs) { continue; }
-        if (raw > peak) { peak = raw; }
+        if (tMs < startMs || tMs > endMs)
+        {
+            continue;
+        }
+        if (raw > peak)
+        {
+            peak = raw;
+        }
         sum += raw;
         count++;
     }
@@ -74,11 +83,23 @@ function aggRange(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly
     for (let i = 0; i < arr.length; i++)
     {
         const raw = arr[i];
-        if (raw === null || !isFinite(raw)) { continue; }
+        if (raw === null || !isFinite(raw))
+        {
+            continue;
+        }
         const tMs = store.storeStartMs + (i + 0.5) * store.stepMs;
-        if (tMs < startMs || tMs > endMs) { continue; }
-        if (raw < min) { min = raw; }
-        if (raw > max) { max = raw; }
+        if (tMs < startMs || tMs > endMs)
+        {
+            continue;
+        }
+        if (raw < min)
+        {
+            min = raw;
+        }
+        if (raw > max)
+        {
+            max = raw;
+        }
         sum += raw;
         count++;
     }
@@ -90,7 +111,10 @@ function aggRange(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly
 function socStats(data: PeriodData): { min: number; avg: number; max: number } | null
 {
     const layer = data.layers[0];
-    if (!layer) { return null; }
+    if (!layer)
+    {
+        return null;
+    }
     const hv = hourlyOf(layer.values, false);
     let min = Infinity;
     let max = 0;
@@ -98,13 +122,25 @@ function socStats(data: PeriodData): { min: number; avg: number; max: number } |
     let count = 0;
     for (const v of hv)
     {
-        if (!isFinite(v)) { continue; }
-        if (v < min) { min = v; }
-        if (v > max) { max = v; }
+        if (!isFinite(v))
+        {
+            continue;
+        }
+        if (v < min)
+        {
+            min = v;
+        }
+        if (v > max)
+        {
+            max = v;
+        }
         sum += v;
         count++;
     }
-    if (!count) { return null; }
+    if (!count)
+    {
+        return null;
+    }
     return { min, avg: sum / count, max };
 }
 
@@ -113,10 +149,16 @@ function socStats(data: PeriodData): { min: number; avg: number; max: number } |
 function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 {
     const range = host._timeRange;
-    if (!range) { return []; }
+    if (!range)
+    {
+        return [];
+    }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
-    if (endMs <= startMs) { return []; }
+    if (endMs <= startMs)
+    {
+        return [];
+    }
 
     const hass = host.hass;
     const dec  = valueDecimals(host.config);
@@ -172,7 +214,10 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
     //Spent / earned / net / per-day, in the user's currency. Absent when no cost statistic is loaded.
     if (target === 'cost')
     {
-        if (!host._costImportSeries && !host._costExportSeries) { return []; }
+        if (!host._costImportSeries && !host._costExportSeries)
+        {
+            return [];
+        }
         const cur = String(hass?.config?.currency ?? '€');
         const money = (v: number): string =>
             `${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`;
@@ -182,7 +227,10 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
         const earned = sumWin(host._costExportSeries);
         const net    = spent - earned;
         const rows: DetailMetric[] = [{ icon: 'mdi:cash-minus', value: money(spent) }];
-        if (earned > 0) { rows.push({ icon: 'mdi:cash-plus', value: money(earned) }); }
+        if (earned > 0)
+        {
+            rows.push({ icon: 'mdi:cash-plus', value: money(earned) });
+        }
         rows.push(
             { icon: 'mdi:scale-balance', value: money(net) },
             { icon: 'mdi:calendar-today', value: money(days > 0 ? net / days : net) },
@@ -206,7 +254,10 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
     if (target === 'battery-soc')
     {
         const s = socStats(data);
-        if (!s) { return []; }
+        if (!s)
+        {
+            return [];
+        }
         const pct = (v: number): string => `${Math.round(v)} %`;
         return [
             { icon: 'mdi:arrow-down', value: pct(s.min) },
@@ -217,7 +268,10 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
 
     //Every remaining target is an energy metric. No layers yet (pre-fetch, or month/year before the hourly
     //profile lands) -> nothing to show.
-    if (!data.layers.length) { return []; }
+    if (!data.layers.length)
+    {
+        return [];
+    }
 
     //Sum all layers of a flow direction: one layer on a single-source install, several once split per source.
     const dirTotal = (dir: string): number =>
@@ -245,7 +299,7 @@ function buildMetrics(host: DetailHost, target: ChartTarget): DetailMetric[]
             { icon: chipSlotIcon(host.config, 'batteryCharge', 'mdi:battery-arrow-down'), value: energy(charged) },
             { icon: chipSlotIcon(host.config, 'batteryDischarge', 'mdi:battery-arrow-up'),   value: energy(discharged) },
         ];
-    
+
         // Third line: the AVERAGE state of charge over the window. Marked with the same Ø mean glyph the SoC
         // detail panel uses, so it never reads as the live level (@stalakerob's idea).
         const soc = socStats(buildPeriodData(host, 'battery-soc'));
@@ -283,10 +337,10 @@ export function renderDetailPanel(host: DetailHost): TemplateResult | typeof not
             ${metrics.map(m => html`
                 <div class="dp-row ${m.label ? 'dp-row-device' : ''}">
                     ${m.label
-                        ? html`<span class="dp-label">${m.label}</span>`
-                        : m.glyph
-                            ? html`<span class="dp-glyph">${m.glyph}</span>`
-                            : html`<ha-icon icon=${m.icon}></ha-icon>`}
+        ? html`<span class="dp-label">${m.label}</span>`
+        : m.glyph
+            ? html`<span class="dp-glyph">${m.glyph}</span>`
+            : html`<ha-icon icon=${m.icon}></ha-icon>`}
                     <span class="dp-value">${m.value}</span>
                 </div>
             `)}

@@ -48,7 +48,10 @@ export function firstAvailableChartTarget(config: HeliosConfig | undefined, defa
     }
     for (const g of activeGroups(config, defaults))
     {
-        if (groupChipVisible(config, g)) { return groupTarget(g); }
+        if (groupChipVisible(config, g))
+        {
+            return groupTarget(g);
+        }
     }
     return null;
 }

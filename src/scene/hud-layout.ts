@@ -27,10 +27,22 @@ export function clusterScaleRamp(minDim: number, max: number): number
 //first paint has a sane radius. The dynamic projection-probe scale takes over once projection works.
 export function steppedArcScale(minDim: number): number
 {
-    if (!Number.isFinite(minDim) || minDim <= 0) { return 1.0; }
+    if (!Number.isFinite(minDim) || minDim <= 0)
+    {
+        return 1.0;
+    }
     const SMALL = 360; const FLOOR = 600; const TOP = 1200; const MIN = 0.72; const MAX = 2.2;
-    if (minDim <= SMALL) { return MIN; }
-    if (minDim <  FLOOR) { return MIN + (1.0 - MIN) * (minDim - SMALL) / (FLOOR - SMALL); }
-    if (minDim >= TOP)   { return MAX; }
+    if (minDim <= SMALL)
+    {
+        return MIN;
+    }
+    if (minDim <  FLOOR)
+    {
+        return MIN + (1.0 - MIN) * (minDim - SMALL) / (FLOOR - SMALL);
+    }
+    if (minDim >= TOP)
+    {
+        return MAX;
+    }
     return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
 }

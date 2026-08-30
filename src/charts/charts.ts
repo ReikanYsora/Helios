@@ -46,9 +46,18 @@ export type StrandColour =
     | { kind: 'flow';    dir: (StrandFlowDir | null)[] };
 
 //Group target helpers: build a target from a group number, test one, and read its group number (0 when not a group).
-export function groupTarget(n: number): GroupTarget { return `group-${n}` as GroupTarget; }
-export function isGroupTarget(t: ChartTarget | undefined): t is GroupTarget { return typeof t === 'string' && t.startsWith('group-'); }
-export function groupOfTarget(t: ChartTarget | undefined): number { return isGroupTarget(t) ? Number(t.slice(6)) : 0; }
+export function groupTarget(n: number): GroupTarget
+{
+    return `group-${n}` as GroupTarget;
+}
+export function isGroupTarget(t: ChartTarget | undefined): t is GroupTarget
+{
+    return typeof t === 'string' && t.startsWith('group-');
+}
+export function groupOfTarget(t: ChartTarget | undefined): number
+{
+    return isGroupTarget(t) ? Number(t.slice(6)) : 0;
+}
 
 //Friendly name of the first configured entity in a stat list (the HA Energy dashboard's own name), for a tooltip
 //row. Empty when none is configured.
@@ -70,10 +79,22 @@ export function solarSourceName(host: ChartHost, index: number): string
 //Directional energy names, so the detail panel + timeline tooltips never diverge: the user-given source name
 //from the dashboard settings when one exists, else the meter's friendly name (the direction stays
 //readable through each row's icon and colour).
-export function gridImportName(host: ChartHost):      string { return host._energyDefaults.gridName    || statFriendly(host, host._energyDefaults.gridStatEnergyFroms); }
-export function gridExportName(host: ChartHost):      string { return host._energyDefaults.gridName    || statFriendly(host, host._energyDefaults.gridStatEnergyTos); }
-export function batteryChargeName(host: ChartHost):   string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyTos); }
-export function batteryDischargeName(host: ChartHost): string { return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyFroms); }
+export function gridImportName(host: ChartHost):      string
+{
+    return host._energyDefaults.gridName    || statFriendly(host, host._energyDefaults.gridStatEnergyFroms);
+}
+export function gridExportName(host: ChartHost):      string
+{
+    return host._energyDefaults.gridName    || statFriendly(host, host._energyDefaults.gridStatEnergyTos);
+}
+export function batteryChargeName(host: ChartHost):   string
+{
+    return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyTos);
+}
+export function batteryDischargeName(host: ChartHost): string
+{
+    return host._energyDefaults.batteryName || statFriendly(host, host._energyDefaults.batteryStatEnergyFroms);
+}
 
 //Per-source grid / battery name, resolved by index the same way solarSourceName is: the meter's HA friendly name for
 //that source and direction, falling back to the statistic id, then a generic label. Only the multi-source breakdown
@@ -89,7 +110,10 @@ export function batterySourceName(host: ChartHost, index: number, dir: 'charge' 
     const ed = host._energyDefaults;
     //Prefer the Energy dashboard's configured per-source name; else the meter friendly name, then a generic.
     const configured = ed.batteryNames[index];
-    if (configured) { return configured; }
+    if (configured)
+    {
+        return configured;
+    }
     const id = (dir === 'charge' ? ed.batteryStatEnergyTos : ed.batteryStatEnergyFroms)[index];
     return id ? String(host.hass?.states?.[id]?.attributes?.friendly_name ?? id) : `Battery ${index + 1}`;
 }

@@ -48,9 +48,15 @@ export interface CostHost
 export function refreshCostSeries(host: CostHost): void
 {
     const d = host._energyDefaults;
-    if (!d) { return; }
+    if (!d)
+    {
+        return;
+    }
     const ids = [...d.gridStatCosts, ...d.gridStatCompensations];
-    if (ids.length === 0) { return; }
+    if (ids.length === 0)
+    {
+        return;
+    }
     const startMs = localMidnightMinusDays(host._periodPastDays);
     const endMs   = changeRefreshAnchorMs();
     const sorted  = [...ids].sort();
@@ -58,7 +64,10 @@ export function refreshCostSeries(host: CostHost): void
     host._costFetch.run(key, () =>
         fetchChangeById(host.hass, sorted, startMs, endMs, host._storeFetchPeriod).then((byId) =>
         {
-            if (byId === null) { return; }
+            if (byId === null)
+            {
+                return;
+            }
             host._costImportSeries = mergeChangeSeries(byId, d.gridStatCosts);
             host._costExportSeries = mergeChangeSeries(byId, d.gridStatCompensations);
             host.requestUpdate();
@@ -73,10 +82,16 @@ export function costRateAt(
     atMs: number,
 ): number | null
 {
-    if (!host._costImportSeries && !host._costExportSeries) { return null; }
+    if (!host._costImportSeries && !host._costExportSeries)
+    {
+        return null;
+    }
     const impW = wattsAtFromChangeSeries(host._costImportSeries, atMs);
     const expW = wattsAtFromChangeSeries(host._costExportSeries, atMs);
-    if (impW === null && expW === null) { return null; }
+    if (impW === null && expW === null)
+    {
+        return null;
+    }
     return ((impW ?? 0) - (expW ?? 0)) / 1000;
 }
 
@@ -87,7 +102,10 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
 {
     const imp = host._costImportSeries;
     const exp = host._costExportSeries;
-    if ((!imp || imp.length === 0) && (!exp || exp.length === 0)) { return null; }
+    if ((!imp || imp.length === 0) && (!exp || exp.length === 0))
+    {
+        return null;
+    }
 
     //Freshness gate. HA's own price-driven cost sensors track the meter in real time and always pass; a utility
     //integration that backfills yesterday does not, and its last bucket would otherwise be rendered as the live
@@ -99,17 +117,26 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
     // has no compensation buckets at all, and absence is not staleness.
     const stale = (s: ChangeBucket[] | null): boolean =>
         !!s && s.length > 0 && (nowMs - s[s.length - 1].endMs) > COST_STAT_MAX_AGE_MS;
-    if (stale(imp) || stale(exp)) { return null; }
+    if (stale(imp) || stale(exp))
+    {
+        return null;
+    }
 
     const bucketRate = (b: ChangeBucket | undefined): number =>
     {
-        if (!b) { return 0; }
+        if (!b)
+        {
+            return 0;
+        }
         const h = (b.endMs - b.startMs) / 3_600_000;
         return h > 0 ? b.kwh / h : 0;
     };
     const impR = imp && imp.length > 0 ? bucketRate(imp[imp.length - 1]) : 0;
     const expR = exp && exp.length > 0 ? bucketRate(exp[exp.length - 1]) : 0;
-    if (impR !== 0 || expR !== 0) { return impR - expR; }
+    if (impR !== 0 || expR !== 0)
+    {
+        return impR - expR;
+    }
 
     //Both newest buckets are flat. Whether that means "zero" depends on the meter. HA's *_cost sensors only step
     //when the energy sensor they derive from updates, so a meter that reports every 15 min, recorded at 5-minute
@@ -139,13 +166,19 @@ export function latestCostRate(host: CostHost, nowMs: number = Date.now()): numb
         exp && exp.length > 0 ? exp[exp.length - 1].endMs : 0);
     const impEst = betweenReportsRate(imp, newestEnd);
     const expEst = betweenReportsRate(exp, newestEnd);
-    if (impEst === null && expEst === null) { return 0; }
+    if (impEst === null && expEst === null)
+    {
+        return 0;
+    }
     return (impEst ?? impR) - (expEst ?? expR);
 }
 
 //A report is any bucket whose Δ is nonzero in EITHER direction: a coarse import series under a negative dynamic
 //tariff (paid to import) steps downward on every report and must still be recognised as reporting.
-function isReport(b: ChangeBucket): boolean { return b.kwh !== 0; }
+function isReport(b: ChangeBucket): boolean
+{
+    return b.kwh !== 0;
+}
 
 //When a series' newest buckets are flat but its meter is merely BETWEEN two of its coarse reports, the live rate
 //it should be showing: the last report spread over its own interval (currency/h, signed). Null when the series is
@@ -158,21 +191,39 @@ function isReport(b: ChangeBucket): boolean { return b.kwh !== 0; }
 //series is not "between reports", and a series that has never been coarse (cadence = one bucket) never is either.
 function betweenReportsRate(buckets: ChangeBucket[] | null, endMs: number): number | null
 {
-    if (!buckets || buckets.length < 2) { return null; }
+    if (!buckets || buckets.length < 2)
+    {
+        return null;
+    }
     //Index of the last report, and the length of the flat run after it, in buckets.
     let last = -1;
     for (let i = buckets.length - 1; i >= 0; i--)
     {
-        if (buckets[i].endMs > endMs) { continue; }
-        if (isReport(buckets[i])) { last = i; break; }
+        if (buckets[i].endMs > endMs)
+        {
+            continue;
+        }
+        if (isReport(buckets[i]))
+        {
+            last = i; break;
+        }
     }
-    if (last < 0) { return null; }
+    if (last < 0)
+    {
+        return null;
+    }
     let flatRun = 0;
     for (let i = last + 1; i < buckets.length; i++)
     {
-        if (buckets[i].endMs <= endMs) { flatRun++; }
+        if (buckets[i].endMs <= endMs)
+        {
+            flatRun++;
+        }
     }
-    if (flatRun === 0) { return null; }
+    if (flatRun === 0)
+    {
+        return null;
+    }
     //Gaps between the last few reports, newest first.
     const gaps: number[] = [];
     let prev = last;
@@ -184,11 +235,17 @@ function betweenReportsRate(buckets: ChangeBucket[] | null, endMs: number): numb
             prev = i;
         }
     }
-    if (gaps.length === 0) { return null; }
+    if (gaps.length === 0)
+    {
+        return null;
+    }
     gaps.sort((a, b) => a - b);
     const cadence = gaps[Math.floor(gaps.length / 2)];
     //Between reports only while the flat run has not yet reached the cadence; at or past it, a report was due.
-    if (cadence <= 1 || flatRun >= cadence) { return null; }
+    if (cadence <= 1 || flatRun >= cadence)
+    {
+        return null;
+    }
     //The last report's Δ, spread over the interval it accumulated across (its own bucket plus the gap before it,
     //capped like smoothCoarseReports), as a per-hour rate. Uses the buckets' real durations, not an assumed period.
     const first  = Math.max(0, last - cadence + 1);
@@ -243,7 +300,10 @@ export function refreshCostLive(host: CostHost): void
         const fromStats = scrubMs !== null ? costRateAt(host, scrubMs) : latestCostRate(host);
         if (fromStats !== null)
         {
-            if (host._costRate !== fromStats) { host._costRate = fromStats; }
+            if (host._costRate !== fromStats)
+            {
+                host._costRate = fromStats;
+            }
             return;
         }
     }
@@ -255,7 +315,10 @@ export function refreshCostLive(host: CostHost): void
         || d.gridExportPrices.length > 0 || d.gridExportPriceNumbers.length > 0);
     if (!d || !hasAnyPrice)
     {
-        if (host._costRate !== null) { host._costRate = null; }
+        if (host._costRate !== null)
+        {
+            host._costRate = null;
+        }
         return;
     }
 
@@ -266,12 +329,18 @@ export function refreshCostLive(host: CostHost): void
     //the rate null. Export-only pricing with no import price is not a real setup, so gate on import.
     if (importPrice === null)
     {
-        if (host._costRate !== null) { host._costRate = null; }
+        if (host._costRate !== null)
+        {
+            host._costRate = null;
+        }
         return;
     }
 
     const cost = importPrice * slotKw(host._gridImportValue, host._gridImportUnit);
     const revenue = exportPrice === null ? 0 : exportPrice * slotKw(host._gridExportValue, host._gridExportUnit);
     const rate = cost - revenue;
-    if (host._costRate !== rate) { host._costRate = rate; }
+    if (host._costRate !== rate)
+    {
+        host._costRate = rate;
+    }
 }

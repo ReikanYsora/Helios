@@ -140,7 +140,10 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
         || !nearlyEq(a.sun.altitude, b.sun.altitude)
         || !nearlyEq(a.sun.azimuth, b.sun.azimuth)
         || !nearlyEq(a.sun.irradiance, b.sun.irradiance)
-        || !nearlyEq(a.sun.nearness, b.sun.nearness)) return false;
+        || !nearlyEq(a.sun.nearness, b.sun.nearness))
+    {
+        return false;
+    }
     if (a.arc.length !== b.arc.length)
     {
         return false;
@@ -163,13 +166,19 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
         return false;
     }
     if (a.sunrise && b.sunrise
-        && (!nearlyEq(a.sunrise.x, b.sunrise.x) || !nearlyEq(a.sunrise.y, b.sunrise.y))) return false;
+        && (!nearlyEq(a.sunrise.x, b.sunrise.x) || !nearlyEq(a.sunrise.y, b.sunrise.y)))
+    {
+        return false;
+    }
     if ((a.sunset === null) !== (b.sunset === null))
     {
         return false;
     }
     if (a.sunset && b.sunset
-        && (!nearlyEq(a.sunset.x, b.sunset.x) || !nearlyEq(a.sunset.y, b.sunset.y))) return false;
+        && (!nearlyEq(a.sunset.x, b.sunset.x) || !nearlyEq(a.sunset.y, b.sunset.y)))
+    {
+        return false;
+    }
     return true;
 }
 
@@ -186,7 +195,10 @@ function dayCurvePassEq(a: DayCurvePass, b: DayCurvePass): boolean
     if (a.leader && b.leader
         && (a.leader.stroke !== b.leader.stroke
             || !nearlyEq(a.leader.x1, b.leader.x1) || !nearlyEq(a.leader.y1, b.leader.y1)
-            || !nearlyEq(a.leader.x2, b.leader.x2) || !nearlyEq(a.leader.y2, b.leader.y2))) return false;
+            || !nearlyEq(a.leader.x2, b.leader.x2) || !nearlyEq(a.leader.y2, b.leader.y2)))
+    {
+        return false;
+    }
     if (a.beads.length !== b.beads.length)
     {
         return false;
@@ -194,7 +206,10 @@ function dayCurvePassEq(a: DayCurvePass, b: DayCurvePass): boolean
     for (let i = 0; i < a.beads.length; i++)
     {
         const ba = a.beads[i]; const bb = b.beads[i];
-        if (ba.colour !== bb.colour || !nearlyEq(ba.x, bb.x) || !nearlyEq(ba.y, bb.y)) return false;
+        if (ba.colour !== bb.colour || !nearlyEq(ba.x, bb.x) || !nearlyEq(ba.y, bb.y))
+        {
+            return false;
+        }
     }
     if (a.strands.length !== b.strands.length)
     {
@@ -203,11 +218,17 @@ function dayCurvePassEq(a: DayCurvePass, b: DayCurvePass): boolean
     for (let i = 0; i < a.strands.length; i++)
     {
         const sa = a.strands[i]; const sb = b.strands[i];
-        if (sa.dashed !== sb.dashed || sa.spans.length !== sb.spans.length) return false;
+        if (sa.dashed !== sb.dashed || sa.spans.length !== sb.spans.length)
+        {
+            return false;
+        }
         for (let j = 0; j < sa.spans.length; j++)
         {
             const pa = sa.spans[j]; const pb = sb.spans[j];
-            if (pa.d !== pb.d || pa.w !== pb.w || pa.predicted !== pb.predicted || pa.colour !== pb.colour) return false;
+            if (pa.d !== pb.d || pa.w !== pb.w || pa.predicted !== pb.predicted || pa.colour !== pb.colour)
+            {
+                return false;
+            }
         }
     }
     return true;
@@ -299,7 +320,8 @@ export function setAnimationsPaused(host: HudHost, paused: boolean): void
                 s.unpauseAnimations?.();
             }
         }
-        catch (_) { /* SMIL control unsupported on this element */ }
+        catch (_)
+        { /* SMIL control unsupported on this element */ }
     }
 }
 

@@ -144,8 +144,14 @@ export function refreshIrradiance(host: IrradianceHost): void
     const durableKey = `irr:${entity}`;
     host._irradianceFetching = true;
     void _irradianceCache.get(fetchKey, () => fetchIrradiance(host.hass, entity, fetchStart, host._timeRange!.end, durableKey))
-        .then(h => { host._irradianceHistory = h ?? { times: [], values: [] }; pushIrradianceToEngine(host); })
-        .finally(() => { host._irradianceFetching = false; });
+        .then(h =>
+        {
+            host._irradianceHistory = h ?? { times: [], values: [] }; pushIrradianceToEngine(host);
+        })
+        .finally(() =>
+        {
+            host._irradianceFetching = false;
+        });
 }
 
 

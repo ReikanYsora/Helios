@@ -195,7 +195,10 @@ function resolveClampedInt(config: HeliosConfig | undefined, key: string, def: n
 {
     const raw = config?.[key];
     const parsed = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(parsed)) { return def; }
+    if (!Number.isFinite(parsed))
+    {
+        return def;
+    }
     return clamp(Math.round(parsed), min, max);
 }
 
@@ -235,8 +238,14 @@ export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 export function energyUnit(config: HeliosConfig | undefined): 'Wh' | 'kWh'
 {
     const raw = config?.['energy-unit'];
-    if (raw === 'Wh')  { return 'Wh'; }
-    if (raw === 'kWh') { return 'kWh'; }
+    if (raw === 'Wh')
+    {
+        return 'Wh';
+    }
+    if (raw === 'kWh')
+    {
+        return 'kWh';
+    }
     return powerUnit(config) === 'W' ? 'Wh' : 'kWh';
 }
 
@@ -245,8 +254,14 @@ export function energyUnit(config: HeliosConfig | undefined): 'Wh' | 'kWh'
 export function irradianceUnit(config: HeliosConfig | undefined): 'W/m²' | 'kW/m²' | 'W/ft²'
 {
     const raw = config?.['irradiance-unit'];
-    if (raw === 'kW/m²') { return 'kW/m²'; }
-    if (raw === 'W/ft²') { return 'W/ft²'; }
+    if (raw === 'kW/m²')
+    {
+        return 'kW/m²';
+    }
+    if (raw === 'W/ft²')
+    {
+        return 'W/ft²';
+    }
     return 'W/m²';
 }
 
@@ -361,7 +376,13 @@ export function hiddenDevices(config: HeliosConfig | undefined): Set<string>
     const out = new Set<string>();
     if (Array.isArray(raw))
     {
-        for (const v of raw) { if (typeof v === 'string' && v.trim() !== '') { out.add(v.trim()); } }
+        for (const v of raw)
+        {
+            if (typeof v === 'string' && v.trim() !== '')
+            {
+                out.add(v.trim());
+            }
+        }
     }
     return out;
 }
@@ -385,7 +406,10 @@ export function monitoringGroups(config: HeliosConfig | undefined): Map<string, 
         {
             const id = k.trim();
             const g  = typeof v === 'number' ? v : typeof v === 'string' ? parseInt(v, 10) : NaN;
-            if (id !== '' && Number.isInteger(g) && g >= 1 && g <= GROUP_COUNT) { out.set(id, g); }
+            if (id !== '' && Number.isInteger(g) && g >= 1 && g <= GROUP_COUNT)
+            {
+                out.set(id, g);
+            }
         }
     }
     return out;
@@ -398,7 +422,10 @@ function groupMapString(config: HeliosConfig | undefined, key: keyof HeliosConfi
     if (raw && typeof raw === 'object' && !Array.isArray(raw))
     {
         const v = (raw as Record<string, unknown>)[String(group)];
-        if (typeof v === 'string') { return v.trim(); }
+        if (typeof v === 'string')
+        {
+            return v.trim();
+        }
     }
     return '';
 }
@@ -428,8 +455,14 @@ export function monitoringGroupColor(config: HeliosConfig | undefined, group: nu
 {
     const fallback = `var(--graph-color-${group}, ${GROUP_FALLBACK_COLORS[(group - 1) % GROUP_FALLBACK_COLORS.length]})`;
     const token = monitoringGroupColorToken(config, group);
-    if (!token) { return fallback; }
-    if (/^(#|rgb|var)/i.test(token)) { return token; }
+    if (!token)
+    {
+        return fallback;
+    }
+    if (/^(#|rgb|var)/i.test(token))
+    {
+        return token;
+    }
     return `var(--${token}-color, ${fallback})`;
 }
 
@@ -466,8 +499,14 @@ export function mapThemeMode(config: HeliosConfig | undefined): MapThemeMode
 }
 
 //Per-layer config keys for the custom colour + visibility.
-export function mapColorKey(layer: string): string { return `map-color-${layer}`; }
-export function mapShowKey(layer: string):  string { return `map-show-${layer}`; }
+export function mapColorKey(layer: string): string
+{
+    return `map-color-${layer}`;
+}
+export function mapShowKey(layer: string):  string
+{
+    return `map-show-${layer}`;
+}
 
 //The stored custom colour for a layer ('' when unset): a ui_color token or a raw #hex / rgb(), resolved to a
 //paintable colour by the engine.

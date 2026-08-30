@@ -47,7 +47,10 @@ type IntensityCurve = readonly (readonly [number, number])[];
 
 function intensityDensity(x: number, curve: IntensityCurve): number
 {
-    if (x <= curve[0][0]) { return curve[0][1]; }
+    if (x <= curve[0][0])
+    {
+        return curve[0][1];
+    }
     for (let i = 1; i < curve.length; i++)
     {
         const [x1, y1] = curve[i];
@@ -93,13 +96,13 @@ export function weatherLayers(w: WxInput): WxLayers
         storm,
         label:
             storm > 0            ? 'Thunderstorm' :
-            snow  > 0.5          ? 'Snow' :
-            snow  > 0            ? 'Light snow' :
-            rain  > 0.5          ? 'Rain' :
-            rain  > 0            ? 'Light rain' :
-            cloud01 > 0.75       ? 'Overcast' :
-            cloud01 > 0.40       ? 'Cloudy' :
-            cloud01 > 0.15       ? 'Partly cloudy' : 'Clear',
+                snow  > 0.5          ? 'Snow' :
+                    snow  > 0            ? 'Light snow' :
+                        rain  > 0.5          ? 'Rain' :
+                            rain  > 0            ? 'Light rain' :
+                                cloud01 > 0.75       ? 'Overcast' :
+                                    cloud01 > 0.40       ? 'Cloudy' :
+                                        cloud01 > 0.15       ? 'Partly cloudy' : 'Clear',
     };
 }
 
@@ -145,36 +148,61 @@ export class WeatherRain
     private readonly _ringCap = 20;
     private _ro?: ResizeObserver;
 
-    constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined) {}
+    constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined)
+    {}
 
     setIntensity(amt: number): void
     {
         this._intensity = clamp01(amt);
         const target = Math.round(this._intensity * this._max);
-        if (target <= 0) { this.stop(); return; }
+        if (target <= 0)
+        {
+            this.stop(); return;
+        }
         //Resize only when (re)starting the loop, never on every call: a caller that drives setIntensity every
         //animation frame would otherwise clear the canvas (c.width reset) each frame and wipe the rain. The loop
         //itself re-resizes when the canvas size actually changes.
-        if (!this._raf) { this._resize(); this._observeResize(); }
-        while (this._drops.length < target) { this._drops.push(this._newDrop(true)); }
-        if (this._drops.length > target) { this._drops.length = target; }
-        if (!this._raf) { this._last = 0; this._raf = requestAnimationFrame(this._loop); }
+        if (!this._raf)
+        {
+            this._resize(); this._observeResize();
+        }
+        while (this._drops.length < target)
+        {
+            this._drops.push(this._newDrop(true));
+        }
+        if (this._drops.length > target)
+        {
+            this._drops.length = target;
+        }
+        if (!this._raf)
+        {
+            this._last = 0; this._raf = requestAnimationFrame(this._loop);
+        }
     }
 
     stop(): void
     {
-        if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+        if (this._raf)
+        {
+            cancelAnimationFrame(this._raf); this._raf = 0;
+        }
         this._ro?.disconnect(); this._ro = undefined;
         this._rings = [];
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
-        if (c && ctx) { ctx.clearRect(0, 0, c.width, c.height); }
+        if (c && ctx)
+        {
+            ctx.clearRect(0, 0, c.width, c.height);
+        }
     }
 
     private _resize(): void
     {
         const c = this._getCanvas();
-        if (!c) { return; }
+        if (!c)
+        {
+            return;
+        }
         const r = c.getBoundingClientRect();
         this._dpr = Math.min(window.devicePixelRatio || 1, 1.5);
         this._w = r.width;
@@ -182,7 +210,10 @@ export class WeatherRain
         c.width = Math.round(this._w * this._dpr);
         c.height = Math.round(this._h * this._dpr);
         const ctx = c.getContext('2d');
-        if (ctx) { ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0); }
+        if (ctx)
+        {
+            ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+        }
     }
 
     private _newDrop(anywhere: boolean): Drop
@@ -199,10 +230,22 @@ export class WeatherRain
     //Re-measure only when the canvas actually resizes, instead of forcing a layout read every frame in the loop.
     private _observeResize(): void
     {
-        if (this._ro || typeof ResizeObserver === 'undefined') { return; }
+        if (this._ro || typeof ResizeObserver === 'undefined')
+        {
+            return;
+        }
         const c = this._getCanvas();
-        if (!c) { return; }
-        this._ro = new ResizeObserver((): void => { if (this._raf) { this._resize(); } });
+        if (!c)
+        {
+            return;
+        }
+        this._ro = new ResizeObserver((): void =>
+        {
+            if (this._raf)
+            {
+                this._resize();
+            }
+        });
         this._ro.observe(c);
     }
 
@@ -210,11 +253,20 @@ export class WeatherRain
     {
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
-        if (!c || !ctx) { this._raf = 0; return; }
-        if (!this._last) { this._last = ts; }
+        if (!c || !ctx)
+        {
+            this._raf = 0; return;
+        }
+        if (!this._last)
+        {
+            this._last = ts;
+        }
         let dt = (ts - this._last) / 1000;
         this._last = ts;
-        if (dt > 0.1) { dt = 0.1; }
+        if (dt > 0.1)
+        {
+            dt = 0.1;
+        }
 
         ctx.clearRect(0, 0, this._w, this._h);
 
@@ -228,7 +280,10 @@ export class WeatherRain
             const d = this._drops[i];
             d.y += d.spd * dt;
             d.x += d.wind * dt;
-            if (d.y > this._h + 20 || d.x > this._w + 40) { this._drops[i] = this._newDrop(false); continue; }
+            if (d.y > this._h + 20 || d.x > this._w + 40)
+            {
+                this._drops[i] = this._newDrop(false); continue;
+            }
             ctx.moveTo(d.x, d.y);
             ctx.lineTo(d.x - d.wind * 0.02, d.y - d.len);
         }
@@ -248,7 +303,10 @@ export class WeatherRain
             const g = this._rings[j];
             g.r += 26 * dt;
             g.a -= 0.9 * dt;
-            if (g.a <= 0) { this._rings.splice(j, 1); continue; }
+            if (g.a <= 0)
+            {
+                this._rings.splice(j, 1); continue;
+            }
             ctx.globalAlpha = Math.max(0, g.a);
             ctx.beginPath();
             ctx.ellipse(g.x, g.y, g.r, g.r * 0.4, 0, 0, Math.PI * 2);
@@ -276,32 +334,57 @@ export class WeatherSnow
     private readonly _max = 340;
     private _ro?: ResizeObserver;
 
-    constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined) {}
+    constructor(private readonly _getCanvas: () => HTMLCanvasElement | undefined)
+    {}
 
     setIntensity(amt: number): void
     {
         this._intensity = clamp01(amt);
         const target = Math.round(this._intensity * this._max);
-        if (target <= 0) { this.stop(); return; }
-        if (!this._raf) { this._resize(); this._observeResize(); }
-        while (this._flakes.length < target) { this._flakes.push(this._newFlake(true)); }
-        if (this._flakes.length > target) { this._flakes.length = target; }
-        if (!this._raf) { this._last = 0; this._raf = requestAnimationFrame(this._loop); }
+        if (target <= 0)
+        {
+            this.stop(); return;
+        }
+        if (!this._raf)
+        {
+            this._resize(); this._observeResize();
+        }
+        while (this._flakes.length < target)
+        {
+            this._flakes.push(this._newFlake(true));
+        }
+        if (this._flakes.length > target)
+        {
+            this._flakes.length = target;
+        }
+        if (!this._raf)
+        {
+            this._last = 0; this._raf = requestAnimationFrame(this._loop);
+        }
     }
 
     stop(): void
     {
-        if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+        if (this._raf)
+        {
+            cancelAnimationFrame(this._raf); this._raf = 0;
+        }
         this._ro?.disconnect(); this._ro = undefined;
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
-        if (c && ctx) { ctx.clearRect(0, 0, c.width, c.height); }
+        if (c && ctx)
+        {
+            ctx.clearRect(0, 0, c.width, c.height);
+        }
     }
 
     private _resize(): void
     {
         const c = this._getCanvas();
-        if (!c) { return; }
+        if (!c)
+        {
+            return;
+        }
         const r = c.getBoundingClientRect();
         this._dpr = Math.min(window.devicePixelRatio || 1, 1.5);
         this._w = r.width;
@@ -309,7 +392,10 @@ export class WeatherSnow
         c.width = Math.round(this._w * this._dpr);
         c.height = Math.round(this._h * this._dpr);
         const ctx = c.getContext('2d');
-        if (ctx) { ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0); }
+        if (ctx)
+        {
+            ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+        }
     }
 
     private _newFlake(anywhere: boolean): Flake
@@ -328,10 +414,22 @@ export class WeatherSnow
     //Re-measure only when the canvas actually resizes, instead of forcing a layout read every frame in the loop.
     private _observeResize(): void
     {
-        if (this._ro || typeof ResizeObserver === 'undefined') { return; }
+        if (this._ro || typeof ResizeObserver === 'undefined')
+        {
+            return;
+        }
         const c = this._getCanvas();
-        if (!c) { return; }
-        this._ro = new ResizeObserver((): void => { if (this._raf) { this._resize(); } });
+        if (!c)
+        {
+            return;
+        }
+        this._ro = new ResizeObserver((): void =>
+        {
+            if (this._raf)
+            {
+                this._resize();
+            }
+        });
         this._ro.observe(c);
     }
 
@@ -339,11 +437,20 @@ export class WeatherSnow
     {
         const c = this._getCanvas();
         const ctx = c?.getContext('2d');
-        if (!c || !ctx) { this._raf = 0; return; }
-        if (!this._last) { this._last = ts; }
+        if (!c || !ctx)
+        {
+            this._raf = 0; return;
+        }
+        if (!this._last)
+        {
+            this._last = ts;
+        }
         let dt = (ts - this._last) / 1000;
         this._last = ts;
-        if (dt > 0.1) { dt = 0.1; }
+        if (dt > 0.1)
+        {
+            dt = 0.1;
+        }
 
         ctx.clearRect(0, 0, this._w, this._h);
         ctx.fillStyle = `rgba(248,250,255,${0.6 + this._intensity * 0.3})`;
@@ -354,7 +461,10 @@ export class WeatherSnow
             f.y += f.spd * dt;
             f.phase += f.sway * dt;
             const x = f.x + Math.sin(f.phase) * f.amp;
-            if (f.y > this._h + 10) { this._flakes[i] = this._newFlake(false); continue; }
+            if (f.y > this._h + 10)
+            {
+                this._flakes[i] = this._newFlake(false); continue;
+            }
             ctx.moveTo(x + f.r, f.y);
             ctx.arc(x, f.y, f.r, 0, Math.PI * 2);
         }
@@ -376,25 +486,38 @@ export class WeatherStorm
     private _strikeT0 = -1; //start time of the strike in progress, -1 when idle between strikes
     private _lastFlash = -1;
 
-    constructor(private readonly _set: (flash: number) => void) {}
+    constructor(private readonly _set: (flash: number) => void)
+    {}
 
     //Only touch the CSS var when the value actually changes: the multi-second gaps between strikes would otherwise
     //rewrite the same 0 every frame, triggering a style recalc for nothing.
     private _emit(flash: number): void
     {
-        if (flash !== this._lastFlash) { this._lastFlash = flash; this._set(flash); }
+        if (flash !== this._lastFlash)
+        {
+            this._lastFlash = flash; this._set(flash);
+        }
     }
 
     setStrength(s: number): void
     {
         this._strength = clamp01(s);
-        if (this._strength <= 0) { this.stop(); return; }
-        if (!this._raf) { this._last = 0; this._nextAt = 0; this._strikeT0 = -1; this._raf = requestAnimationFrame(this._loop); }
+        if (this._strength <= 0)
+        {
+            this.stop(); return;
+        }
+        if (!this._raf)
+        {
+            this._last = 0; this._nextAt = 0; this._strikeT0 = -1; this._raf = requestAnimationFrame(this._loop);
+        }
     }
 
     stop(): void
     {
-        if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+        if (this._raf)
+        {
+            cancelAnimationFrame(this._raf); this._raf = 0;
+        }
         this._emit(0);
     }
 
@@ -408,28 +531,49 @@ export class WeatherStorm
     //Flash envelope for a strike, τ in ms since it began: sharp flash, brief dip, second flash, then decay.
     private static _envelope(tau: number): number
     {
-        if (tau < 45)  { return 1; }
-        if (tau < 95)  { return 0.28; }
-        if (tau < 150) { return 0.85; }
-        if (tau < 360) { return 0.85 * (1 - (tau - 150) / 210); }
+        if (tau < 45)
+        {
+            return 1;
+        }
+        if (tau < 95)
+        {
+            return 0.28;
+        }
+        if (tau < 150)
+        {
+            return 0.85;
+        }
+        if (tau < 360)
+        {
+            return 0.85 * (1 - (tau - 150) / 210);
+        }
         return 0;
     }
 
     private readonly _loop = (ts: number): void =>
     {
-        if (!this._last) { this._last = ts; this._nextAt = ts + this._gap(); }
+        if (!this._last)
+        {
+            this._last = ts; this._nextAt = ts + this._gap();
+        }
 
         if (this._strikeT0 < 0)
         {
             //Between strikes: dark, waiting for the scheduled time.
             this._emit(0);
-            if (ts >= this._nextAt) { this._strikeT0 = ts; }
+            if (ts >= this._nextAt)
+            {
+                this._strikeT0 = ts;
+            }
         }
         else
         {
             const tau = ts - this._strikeT0;
             this._emit(WeatherStorm._envelope(tau) * (0.7 + this._strength * 0.3));
-            if (tau >= 360) { this._strikeT0 = -1; this._nextAt = ts + this._gap(); }
+            if (tau >= 360)
+            {
+                this._strikeT0 = -1; this._nextAt = ts + this._gap();
+            }
         }
 
         this._last = ts;

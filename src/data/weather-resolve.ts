@@ -38,9 +38,18 @@ function lerpRad(a: number, b: number, f: number): number
 {
     const aBad = !isFinite(a) || a < 0;
     const bBad = !isFinite(b) || b < 0;
-    if (aBad && bBad) { return -1; }
-    if (aBad) { return b; }
-    if (bBad) { return a; }
+    if (aBad && bBad)
+    {
+        return -1;
+    }
+    if (aBad)
+    {
+        return b;
+    }
+    if (bBad)
+    {
+        return a;
+    }
     return a + (b - a) * f;
 }
 
@@ -49,9 +58,18 @@ function lerpFinite(a: number, b: number, f: number): number
 {
     const aBad = !isFinite(a);
     const bBad = !isFinite(b);
-    if (aBad && bBad) { return NaN; }
-    if (aBad) { return b; }
-    if (bBad) { return a; }
+    if (aBad && bBad)
+    {
+        return NaN;
+    }
+    if (aBad)
+    {
+        return b;
+    }
+    if (bBad)
+    {
+        return a;
+    }
     return a + (b - a) * f;
 }
 

@@ -53,8 +53,14 @@ export function formatLocalisedNumber(
 function haUseAmPm(locale: { time_format?: string; language?: string } | undefined): boolean
 {
     const tf = locale?.time_format;
-    if (tf === '12') { return true; }
-    if (tf === '24') { return false; }
+    if (tf === '12')
+    {
+        return true;
+    }
+    if (tf === '24')
+    {
+        return false;
+    }
     //'language' or 'system' (or unset): probe the runtime, honouring the chosen language for 'language'.
     const testLang = tf === 'language' ? locale?.language : undefined;
     try
@@ -172,8 +178,14 @@ function celsiusTo(celsius: number, unit: TemperatureUnit): number
 export function temperatureToCelsius(unitOfMeasurement: string | undefined): ((v: number) => number) | null
 {
     const u = String(unitOfMeasurement ?? '').trim().toUpperCase();
-    if (u === '°F' || u === 'F') { return (v) => (v - 32) * 5 / 9; }
-    if (u === 'K')               { return (v) => v - 273.15; }
+    if (u === '°F' || u === 'F')
+    {
+        return (v) => (v - 32) * 5 / 9;
+    }
+    if (u === 'K')
+    {
+        return (v) => v - 273.15;
+    }
     return null;
 }
 
@@ -224,9 +236,15 @@ export function parseNumericState(raw: unknown): number | null
     {
         return Number.isFinite(raw) ? raw : null;
     }
-    if (typeof raw !== 'string') { return null; }
+    if (typeof raw !== 'string')
+    {
+        return null;
+    }
     const trimmed = raw.trim();
-    if (trimmed === '') { return null; }
+    if (trimmed === '')
+    {
+        return null;
+    }
     const n = parseFloat(trimmed.replace(',', '.'));
     return Number.isFinite(n) ? n : null;
 }
@@ -334,12 +352,24 @@ export function batteryLevelIcon(soc: number | null, charging: boolean): string
     const rounded = clamp(Math.round(soc / 10) * 10, 0, 100);
     if (charging)
     {
-        if (rounded >= 100) { return 'mdi:battery-charging-100'; }
-        if (rounded <= 0)   { return 'mdi:battery-charging-outline'; }
+        if (rounded >= 100)
+        {
+            return 'mdi:battery-charging-100';
+        }
+        if (rounded <= 0)
+        {
+            return 'mdi:battery-charging-outline';
+        }
         return `mdi:battery-charging-${rounded}`;
     }
-    if (rounded >= 100) { return 'mdi:battery'; }
-    if (rounded <= 0)   { return 'mdi:battery-outline'; }
+    if (rounded >= 100)
+    {
+        return 'mdi:battery';
+    }
+    if (rounded <= 0)
+    {
+        return 'mdi:battery-outline';
+    }
     return `mdi:battery-${rounded}`;
 }
 
@@ -395,8 +425,14 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
         return fallback;
     }
     const raw = getComputedStyle(host).getPropertyValue(token).trim();
-    if (/^#[0-9a-f]{6}$/i.test(raw)) { return raw; }
-    if (/^#[0-9a-f]{3}$/i.test(raw)) { return '#' + raw.slice(1).split('').map(c => c + c).join(''); }
+    if (/^#[0-9a-f]{6}$/i.test(raw))
+    {
+        return raw;
+    }
+    if (/^#[0-9a-f]{3}$/i.test(raw))
+    {
+        return '#' + raw.slice(1).split('').map(c => c + c).join('');
+    }
     const m = raw.match(/rgba?\(\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)/i);
     if (m)
     {
@@ -418,12 +454,16 @@ export function isDarkFromCss(host: Element): boolean
         const lum = (0.299 * hexByte(hex, 1) + 0.587 * hexByte(hex, 3) + 0.114 * hexByte(hex, 5)) / 255;
         return lum < 0.5;
     }
-    catch (_) { /* probe failed: fall through to the light-theme default */ }
+    catch (_)
+    { /* probe failed: fall through to the light-theme default */ }
     return false;
 }
 
 //RGB/LAB conversion for the per-energy-source colour ramp below. The D65 white-point + LAB transfer thresholds live in constants.ts.
-const rgbXyz = (c: number): number => { const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4; };
+const rgbXyz = (c: number): number =>
+{
+    const r = c / 255; return r <= 0.04045 ? r / 12.92 : ((r + 0.055) / 1.055) ** 2.4;
+};
 const xyzLab = (t: number): number => (t > LAB_T3 ? t ** (1 / 3) : t / LAB_T2 + LAB_T0);
 const xyzRgb = (r: number): number => 255 * (r <= 0.00304 ? 12.92 * r : 1.055 * r ** (1 / 2.4) - 0.055);
 const labXyz = (t: number): number => (t > LAB_T1 ? t * t * t : LAB_T2 * (t - LAB_T0));
@@ -480,10 +520,16 @@ export function energyRampColor(host: Element | null | undefined, dark: boolean,
     if (host)
     {
         const override = getComputedStyle(host).getPropertyValue(`${propertyVar}-${idx}`).trim();
-        if (override) { return cssHex(host, `${propertyVar}-${idx}`, fallback); }
+        if (override)
+        {
+            return cssHex(host, `${propertyVar}-${idx}`, fallback);
+        }
     }
     const base = cssHex(host, propertyVar, fallback);
-    if (!idx) { return base; }
+    if (!idx)
+    {
+        return base;
+    }
     const key = `${propertyVar}|${base}|${dark}|${idx}`;
     let out = _energyRampMemo.get(key);
     if (out === undefined)

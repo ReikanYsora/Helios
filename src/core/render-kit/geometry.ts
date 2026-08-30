@@ -51,10 +51,22 @@ export function clipPolygon(ring: Point[], r: ClipRect): Point[]
     let mnx = Infinity; let mny = Infinity; let mxx = -Infinity; let mxy = -Infinity;
     for (const p of ring)
     {
-        if (p[0] < mnx) { mnx = p[0]; }
-        if (p[0] > mxx) { mxx = p[0]; }
-        if (p[1] < mny) { mny = p[1]; }
-        if (p[1] > mxy) { mxy = p[1]; }
+        if (p[0] < mnx)
+        {
+            mnx = p[0];
+        }
+        if (p[0] > mxx)
+        {
+            mxx = p[0];
+        }
+        if (p[1] < mny)
+        {
+            mny = p[1];
+        }
+        if (p[1] > mxy)
+        {
+            mxy = p[1];
+        }
     }
     if (mxx < r.minX || mnx > r.maxX || mxy < r.minY || mny > r.maxY)
     {
@@ -66,11 +78,20 @@ export function clipPolygon(ring: Point[], r: ClipRect): Point[]
     }
     let out = ring;
     out = clipPolygonEdge(out, 0, r.minX);
-    if (out.length < 3) { return []; }
+    if (out.length < 3)
+    {
+        return [];
+    }
     out = clipPolygonEdge(out, 1, r.maxX);
-    if (out.length < 3) { return []; }
+    if (out.length < 3)
+    {
+        return [];
+    }
     out = clipPolygonEdge(out, 2, r.minY);
-    if (out.length < 3) { return []; }
+    if (out.length < 3)
+    {
+        return [];
+    }
     out = clipPolygonEdge(out, 3, r.maxY);
     return out.length < 3 ? [] : out;
 }
@@ -89,7 +110,10 @@ function clipPolygonEdge(poly: Point[], side: number, v: number): Point[]
         if (ain)
         {
             res.push(a);
-            if (!bin) { res.push(edgeCross(a, b, side, v)); }
+            if (!bin)
+            {
+                res.push(edgeCross(a, b, side, v));
+            }
         }
         else if (bin)
         {
@@ -101,9 +125,18 @@ function clipPolygonEdge(poly: Point[], side: number, v: number): Point[]
 
 function edgeInside(p: Point, side: number, v: number): boolean
 {
-    if (side === 0) { return p[0] >= v; }
-    if (side === 1) { return p[0] <= v; }
-    if (side === 2) { return p[1] >= v; }
+    if (side === 0)
+    {
+        return p[0] >= v;
+    }
+    if (side === 1)
+    {
+        return p[0] <= v;
+    }
+    if (side === 2)
+    {
+        return p[1] >= v;
+    }
     return p[1] <= v;
 }
 
@@ -132,19 +165,34 @@ export function clipSegment(a: Point, b: Point, r: ClipRect): [Point, Point] | n
     {
         if (p[i] === 0)
         {
-            if (q[i] < 0) { return null; }
+            if (q[i] < 0)
+            {
+                return null;
+            }
             continue;
         }
         const t = q[i] / p[i];
         if (p[i] < 0)
         {
-            if (t > t1) { return null; }
-            if (t > t0) { t0 = t; }
+            if (t > t1)
+            {
+                return null;
+            }
+            if (t > t0)
+            {
+                t0 = t;
+            }
         }
         else
         {
-            if (t < t0) { return null; }
-            if (t < t1) { t1 = t; }
+            if (t < t0)
+            {
+                return null;
+            }
+            if (t < t1)
+            {
+                t1 = t;
+            }
         }
     }
     return [

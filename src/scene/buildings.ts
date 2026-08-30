@@ -377,7 +377,14 @@ function mergeSameHeight(list: Building[]): Building[]
     {
         const key = `${b.height.toFixed(3)}|${b.isHome ? 'h' : 'n'}`;
         const g = groups.get(key);
-        if (g) { g.push(b); } else { groups.set(key, [b]); }
+        if (g)
+        {
+            g.push(b);
+        }
+        else
+        {
+            groups.set(key, [b]);
+        }
     }
 
     const out: Building[] = [];
@@ -397,7 +404,10 @@ function mergeSameHeight(list: Building[]): Building[]
         catch (_)
         {
             //Degenerate outline: keep the originals rather than lose the buildings.
-            for (const b of group) { out.push({ ...b, detail: [b.footprint] }); }
+            for (const b of group)
+            {
+                out.push({ ...b, detail: [b.footprint] });
+            }
             continue;
         }
 
@@ -407,11 +417,17 @@ function mergeSameHeight(list: Building[]): Building[]
                 //polygon-clipping closes its rings; the rest of the pipeline works on open ones.
                 .map((r) => r.slice(0, -1).map(([x, y]) => [x, y] as Point))
                 .filter((r) => r.length >= 3);
-            if (rings.length === 0) { continue; }
+            if (rings.length === 0)
+            {
+                continue;
+            }
             const outer = rings[0];
             let cx = 0;
             let cy = 0;
-            for (const p of outer) { cx += p[0]; cy += p[1]; }
+            for (const p of outer)
+            {
+                cx += p[0]; cy += p[1];
+            }
             const centerX = cx / outer.length;
             const centerY = cy / outer.length;
             out.push({
@@ -573,8 +589,14 @@ export function renderShadows(
         //cast-centroid; the gradient is full at the base's FAR edge (where the shadow leaves the building, so its
         //visible part starts fully opaque) and fades to 0 at the cast's far edge (the tip). The part under the
         //building (before the far edge) reads the clamped full-opacity stop, but the prism covers it anyway.
-        let bcx = 0; let bcy = 0; for (const p of base) { bcx += p[0]; bcy += p[1]; }
-        let ccx = 0; let ccy = 0; for (const p of cast) { ccx += p[0]; ccy += p[1]; }
+        let bcx = 0; let bcy = 0; for (const p of base)
+        {
+            bcx += p[0]; bcy += p[1];
+        }
+        let ccx = 0; let ccy = 0; for (const p of cast)
+        {
+            ccx += p[0]; ccy += p[1];
+        }
         const n = base.length || 1;
         let ax = ccx / n - bcx / n;
         let ay = ccy / n - bcy / n;
@@ -589,9 +611,21 @@ export function renderShadows(
         const ox = bcx / n;
         const oy = bcy / n;
         let sMax = -Infinity;
-        for (const p of base) { const d = (p[0] - ox) * ax + (p[1] - oy) * ay; if (d > sMax) { sMax = d; } }
+        for (const p of base)
+        {
+            const d = (p[0] - ox) * ax + (p[1] - oy) * ay; if (d > sMax)
+            {
+                sMax = d;
+            }
+        }
         let eMax = -Infinity;
-        for (const p of cast) { const d = (p[0] - ox) * ax + (p[1] - oy) * ay; if (d > eMax) { eMax = d; } }
+        for (const p of cast)
+        {
+            const d = (p[0] - ox) * ax + (p[1] - oy) * ay; if (d > eMax)
+            {
+                eMax = d;
+            }
+        }
         const start: [number, number] = [ox + ax * sMax, oy + ay * sMax];
         const end:   [number, number] = [ox + ax * eMax, oy + ay * eMax];
 
@@ -607,7 +641,10 @@ export function renderShadows(
         //non-zero union still reads the same within the card (a clip cannot change an interior point's winding).
         let d = '';
         const cc = clipPolygon(cast, rect);
-        if (cc.length >= 3) { d += pathOf(cc); }
+        if (cc.length >= 3)
+        {
+            d += pathOf(cc);
+        }
         for (const ring of [b.footprint, ...(b.holes ?? [])])
         {
             const rb = ring.map((p) => cam.project(p[0], p[1], 0));
@@ -616,7 +653,10 @@ export function renderShadows(
             {
                 const j = (i + 1) % rb.length;
                 const q = clipPolygon([rb[i], rb[j], rc[j], rc[i]], rect);
-                if (q.length >= 3) { d += pathOf(q); }
+                if (q.length >= 3)
+                {
+                    d += pathOf(q);
+                }
             }
         }
         //Whole shadow off-card: emit neither the sweep nor its gradient def, and do not burn an id.
@@ -696,15 +736,42 @@ function findSeparatingAxis(a: Point[], b: Point[]): { nx: number; ny: number; c
             let nx = -(p1[1] - p0[1]);
             let ny = p1[0] - p0[0];
             const len = Math.hypot(nx, ny);
-            if (len < 1e-9) { continue; }
+            if (len < 1e-9)
+            {
+                continue;
+            }
             nx /= len;
             ny /= len;
             let minA = Infinity; let maxA = -Infinity;
             let minB = Infinity; let maxB = -Infinity;
-            for (const q of a) { const d = q[0] * nx + q[1] * ny; if (d < minA) { minA = d; } if (d > maxA) { maxA = d; } }
-            for (const q of b) { const d = q[0] * nx + q[1] * ny; if (d < minB) { minB = d; } if (d > maxB) { maxB = d; } }
-            if (maxA <= minB + SEP_TOL_M) { return { nx, ny, c: (maxA + minB) / 2 }; }
-            if (maxB <= minA + SEP_TOL_M) { return { nx: -nx, ny: -ny, c: -(minA + maxB) / 2 }; }
+            for (const q of a)
+            {
+                const d = q[0] * nx + q[1] * ny; if (d < minA)
+                {
+                    minA = d;
+                } if (d > maxA)
+                {
+                    maxA = d;
+                }
+            }
+            for (const q of b)
+            {
+                const d = q[0] * nx + q[1] * ny; if (d < minB)
+                {
+                    minB = d;
+                } if (d > maxB)
+                {
+                    maxB = d;
+                }
+            }
+            if (maxA <= minB + SEP_TOL_M)
+            {
+                return { nx, ny, c: (maxA + minB) / 2 };
+            }
+            if (maxB <= minA + SEP_TOL_M)
+            {
+                return { nx: -nx, ny: -ny, c: -(minA + maxB) / 2 };
+            }
         }
     }
     return null;
@@ -724,16 +791,25 @@ const _sepCache = new WeakMap<Building[], SepPlane[]>();
 function separatingPlanes(buildings: Building[]): SepPlane[]
 {
     const cached = _sepCache.get(buildings);
-    if (cached) { return cached; }
+    if (cached)
+    {
+        return cached;
+    }
     const out: SepPlane[] = [];
     for (let i = 0; i < buildings.length; i++)
     {
         for (let j = i + 1; j < buildings.length; j++)
         {
             if (Math.hypot(buildings[i].centerX - buildings[j].centerX,
-                           buildings[i].centerY - buildings[j].centerY) > SEP_RANGE_M) { continue; }
+                buildings[i].centerY - buildings[j].centerY) > SEP_RANGE_M)
+            {
+                continue;
+            }
             const axis = findSeparatingAxis(buildings[i].footprint, buildings[j].footprint);
-            if (axis) { out.push({ i, j, nx: axis.nx, ny: axis.ny, c: axis.c }); }
+            if (axis)
+            {
+                out.push({ i, j, nx: axis.nx, ny: axis.ny, c: axis.c });
+            }
         }
     }
     _sepCache.set(buildings, out);
@@ -758,7 +834,10 @@ function eyeGroundPoint(cam: SceneCamera): { e: number; n: number }
 //ring of three prisms can still do). Order only: no geometry is touched, so the worst case is the old behaviour.
 export function paintOrder(cam: SceneCamera, buildings: Building[], visible: { index: number; depth: number }[]): { index: number }[]
 {
-    if (visible.length < 2) { return visible; }
+    if (visible.length < 2)
+    {
+        return visible;
+    }
     const slot = new Map<number, number>();
     visible.forEach((v, k) => slot.set(v.index, k));
 
@@ -770,7 +849,10 @@ export function paintOrder(cam: SceneCamera, buildings: Building[], visible: { i
     {
         const a = slot.get(plane.i);
         const b = slot.get(plane.j);
-        if (a === undefined || b === undefined) { continue; }
+        if (a === undefined || b === undefined)
+        {
+            continue;
+        }
         //Whichever side the eye is on is in front, so it paints LAST.
         const side = eye.e * plane.nx + eye.n * plane.ny;
         const far  = side < plane.c ? b : a;
@@ -788,8 +870,14 @@ export function paintOrder(cam: SceneCamera, buildings: Building[], visible: { i
         let pick = -1;
         for (let k = 0; k < visible.length; k++)
         {
-            if (done[k] || indeg[k] > 0) { continue; }
-            if (pick < 0 || visible[k].depth < visible[pick].depth) { pick = k; }
+            if (done[k] || indeg[k] > 0)
+            {
+                continue;
+            }
+            if (pick < 0 || visible[k].depth < visible[pick].depth)
+            {
+                pick = k;
+            }
         }
         if (pick < 0)
         {
@@ -797,14 +885,26 @@ export function paintOrder(cam: SceneCamera, buildings: Building[], visible: { i
             //still standing and carry on rather than dropping the rest.
             for (let k = 0; k < visible.length; k++)
             {
-                if (done[k]) { continue; }
-                if (pick < 0 || visible[k].depth < visible[pick].depth) { pick = k; }
+                if (done[k])
+                {
+                    continue;
+                }
+                if (pick < 0 || visible[k].depth < visible[pick].depth)
+                {
+                    pick = k;
+                }
             }
         }
-        if (pick < 0) { break; }
+        if (pick < 0)
+        {
+            break;
+        }
         done[pick] = true;
         out.push({ index: visible[pick].index });
-        for (const nx of after[pick]) { indeg[nx] -= 1; }
+        for (const nx of after[pick])
+        {
+            indeg[nx] -= 1;
+        }
     }
     return out;
 }
@@ -840,7 +940,13 @@ export function renderBuildings(
             //Order by the building's NEAREST footprint vertex (max cameraZ), not its centre: a big building
             //behind a small one in front has a nearer centre yet must draw FIRST, which a centroid sort breaks.
             let near = -Infinity;
-            for (const p of b.footprint) { const d = cam.project3(p[0], p[1], 0).depth; if (d > near) { near = d; } }
+            for (const p of b.footprint)
+            {
+                const d = cam.project3(p[0], p[1], 0).depth; if (d > near)
+                {
+                    near = d;
+                }
+            }
             return { index, depth: near, cameraZ: c.depth };
         })
         //Near-plane cull: skip buildings at/behind the camera, else their walls smear over the scene.
@@ -899,61 +1005,67 @@ export function renderBuildings(
         //Emit each visible wall into the shared face list (sorted globally below), for every ring of the block.
         for (const ring of rings)
         {
-        const rBase = ring.map((p) => cam.project(p[0], p[1], 0));
-        const rRoof = ring.map((p) => cam.project(p[0], p[1], h));
-        for (let i = 0; i < rBase.length; i++)
-        {
-            const next = (i + 1) % rBase.length;
-            const p0 = rBase[i];
-            const p1 = rBase[next];
-            const p2 = rRoof[next];
-            const p3 = rRoof[i];
-            //Screen-space back-face cull: a wall facing the camera winds negative (shoelace) once projected.
-            //Using the PROJECTED quad (not a global bearing) stays correct for buildings off to the sides,
-            //where perspective makes the view angle differ from bearing.
-            const facing =
+            const rBase = ring.map((p) => cam.project(p[0], p[1], 0));
+            const rRoof = ring.map((p) => cam.project(p[0], p[1], h));
+            for (let i = 0; i < rBase.length; i++)
+            {
+                const next = (i + 1) % rBase.length;
+                const p0 = rBase[i];
+                const p1 = rBase[next];
+                const p2 = rRoof[next];
+                const p3 = rRoof[i];
+                //Screen-space back-face cull: a wall facing the camera winds negative (shoelace) once projected.
+                //Using the PROJECTED quad (not a global bearing) stays correct for buildings off to the sides,
+                //where perspective makes the view angle differ from bearing.
+                const facing =
                 p0[0] * p1[1] - p1[0] * p0[1] +
                 (p1[0] * p2[1] - p2[0] * p1[1]) +
                 (p2[0] * p3[1] - p3[0] * p2[1]) +
                 (p3[0] * p0[1] - p0[0] * p3[1]);
-            if (facing >= 0)
-            {
-                continue;
+                if (facing >= 0)
+                {
+                    continue;
+                }
+                //How square-on to the sun does this wall stand? The outward normal falls out of the winding: rings run
+                //counter-clockwise with the solid on their left (a courtyard runs the other way, and so its normal
+                //turns into the yard, which is exactly right). Lambert, clamped: a wall turned away gets no sun, never
+                //negative light.
+                const ex = ring[next][0] - ring[i][0];
+                const ey = ring[next][1] - ring[i][1];
+                const el = Math.hypot(ex, ey) || 1;
+                const lit = Math.max(0, (ey / el) * sunE + (-ex / el) * sunN) * sunFade;
+                const shade = mixHex(wallAmbient, wallLit, lit);
+                const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : rgbaHex(shade, neighborOp);
+                //One full-height wall quad per edge, clipped to the card box so an off-card wall never enlarges the
+                //scene layer past the old-iOS compositor cap. The back-face cull above reads the true quad.
+                const wq = clipPolygon([p0, p1, p2, p3], rect);
+                if (wq.length < 3)
+                {
+                    continue;
+                }
+                const wall = `<polygon points="${pointsAttr(wq)}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+                //Sort key = the wall's NEAREST corner (max cameraZ, larger = nearer). On a concave footprint an
+                //edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
+                const wallDepth = Math.max(
+                    cam.project3(ring[i][0], ring[i][1], 0).depth,
+                    cam.project3(ring[next][0], ring[next][1], 0).depth,
+                    cam.project3(ring[i][0], ring[i][1], h).depth,
+                    cam.project3(ring[next][0], ring[next][1], h).depth,
+                );
+                faces.push({ depth: wallDepth, svg: wall });
             }
-            //How square-on to the sun does this wall stand? The outward normal falls out of the winding: rings run
-            //counter-clockwise with the solid on their left (a courtyard runs the other way, and so its normal
-            //turns into the yard, which is exactly right). Lambert, clamped: a wall turned away gets no sun, never
-            //negative light.
-            const ex = ring[next][0] - ring[i][0];
-            const ey = ring[next][1] - ring[i][1];
-            const el = Math.hypot(ex, ey) || 1;
-            const lit = Math.max(0, (ey / el) * sunE + (-ex / el) * sunN) * sunFade;
-            const shade = mixHex(wallAmbient, wallLit, lit);
-            const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : rgbaHex(shade, neighborOp);
-            //One full-height wall quad per edge, clipped to the card box so an off-card wall never enlarges the
-            //scene layer past the old-iOS compositor cap. The back-face cull above reads the true quad.
-            const wq = clipPolygon([p0, p1, p2, p3], rect);
-            if (wq.length < 3)
-            {
-                continue;
-            }
-            const wall = `<polygon points="${pointsAttr(wq)}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
-            //Sort key = the wall's NEAREST corner (max cameraZ, larger = nearer). On a concave footprint an
-            //edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
-            const wallDepth = Math.max(
-                cam.project3(ring[i][0], ring[i][1], 0).depth,
-                cam.project3(ring[next][0], ring[next][1], 0).depth,
-                cam.project3(ring[i][0], ring[i][1], h).depth,
-                cam.project3(ring[next][0], ring[next][1], h).depth,
-            );
-            faces.push({ depth: wallDepth, svg: wall });
-        }
         }
         //Flat roof at its own nearest-corner depth. It sits at the top so in any above-horizon view it never
         //overlaps a wall in screen space, so its order against walls is cosmetic; depth-placing it just keeps a
         //nearer building's roof correctly over a farther one.
         let roofDepth = -Infinity;
-        for (const p of fp) { const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth) { roofDepth = d; } }
+        for (const p of fp)
+        {
+            const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth)
+            {
+                roofDepth = d;
+            }
+        }
         //Roof as ONE path over every ring, even-odd, so a courtyard stays a hole instead of being filled in.
         //Rings are clipped to the card box; even-odd keeps the same parity for any point within it.
         const roofPath = ringsPath(rings.map((ring) => ring.map((p) => cam.project(p[0], p[1], h))), rect);

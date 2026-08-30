@@ -96,11 +96,23 @@ function stateFor(host: WeatherOverrideHost, variable: WeatherOverrideVar): VarS
 // normalised to the canonical unit FIRST, so the range bounds stay expressed in canonical units.
 function clampReading(raw: number, def: OverrideDef, conv: ReadingConverter): number | null
 {
-    if (!isFinite(raw)) { return null; }
+    if (!isFinite(raw))
+    {
+        return null;
+    }
     let v = conv.convert(raw);
-    if (!isFinite(v)) { return null; }
-    if (def.min !== null) { v = Math.max(def.min, v); }
-    if (def.max !== null) { v = Math.min(def.max, v); }
+    if (!isFinite(v))
+    {
+        return null;
+    }
+    if (def.min !== null)
+    {
+        v = Math.max(def.min, v);
+    }
+    if (def.max !== null)
+    {
+        v = Math.min(def.max, v);
+    }
     return v;
 }
 
@@ -115,7 +127,10 @@ const IDENTITY_CONVERTER: ReadingConverter = { convert: (v) => v, tag: '' };
 
 function readingConverter(hass: HassLike, entityId: string, def: OverrideDef): ReadingConverter
 {
-    if (def.variable !== 'temperature') { return IDENTITY_CONVERTER; }
+    if (def.variable !== 'temperature')
+    {
+        return IDENTITY_CONVERTER;
+    }
     const unit = String(hass?.states?.[entityId]?.attributes?.unit_of_measurement ?? '').trim();
     const convert = temperatureToCelsius(unit);
     return convert ? { convert, tag: `@${unit}` } : IDENTITY_CONVERTER;
@@ -142,7 +157,10 @@ function refreshConditionOverride(host: WeatherOverrideHost): void
 
     if (!entity || !host.hass)
     {
-        if (st.history !== null) { st.history = null; }
+        if (st.history !== null)
+        {
+            st.history = null;
+        }
         st.fetchKey     = '';
         st.pushedEntity = '';
         host._engine?.setWeatherOverrideSamples('code', null);
@@ -151,7 +169,10 @@ function refreshConditionOverride(host: WeatherOverrideHost): void
 
     pushCondition(host, entity);
 
-    if (!host._timeRange || st.fetching) { return; }
+    if (!host._timeRange || st.fetching)
+    {
+        return;
+    }
 
     const RAW_WINDOW_H = 6;
     const anchorMs   = quantizedAnchorMs(OVERRIDE_TTL_MS);
@@ -159,28 +180,46 @@ function refreshConditionOverride(host: WeatherOverrideHost): void
     const fetchStart = host._timeRange.start < cap ? cap : host._timeRange.start;
     const keyEnd     = Math.floor(host._timeRange.end.getTime() / OVERRIDE_TTL_MS) * OVERRIDE_TTL_MS;
     const fetchKey   = `code:${entity}@${fetchStart.getTime()}|${keyEnd}`;
-    if (fetchKey === st.fetchKey) { return; }
+    if (fetchKey === st.fetchKey)
+    {
+        return;
+    }
     st.fetchKey = fetchKey;
 
     const durableKey = `wxo:code:${entity}`;
     st.fetching = true;
     void _cache.get(fetchKey, () => fetchConditionHistory(host.hass, entity, fetchStart, host._timeRange!.end, durableKey))
-        .then(h => { st.history = h ?? { times: [], values: [] }; pushCondition(host, entity); })
-        .finally(() => { st.fetching = false; });
+        .then(h =>
+        {
+            st.history = h ?? { times: [], values: [] }; pushCondition(host, entity);
+        })
+        .finally(() =>
+        {
+            st.fetching = false;
+        });
 }
 
 function pushCondition(host: WeatherOverrideHost, entity: string): void
 {
-    if (!host._engine) { return; }
+    if (!host._engine)
+    {
+        return;
+    }
     const st       = stateFor(host, 'code');
     const hist     = st.history;
     const stateRef = host.hass.states?.[entity];
-    if (st.pushedHist === hist && st.pushedState === stateRef && st.pushedEntity === entity) { return; }
+    if (st.pushedHist === hist && st.pushedState === stateRef && st.pushedEntity === entity)
+    {
+        return;
+    }
 
     const samples: { time: Date; value: number }[] = [];
     if (hist)
     {
-        for (let i = 0; i < hist.times.length; i++) { samples.push({ time: hist.times[i], value: hist.values[i] }); }
+        for (let i = 0; i < hist.times.length; i++)
+        {
+            samples.push({ time: hist.times[i], value: hist.values[i] });
+        }
     }
     if (stateRef)
     {
@@ -201,12 +240,18 @@ function pushCondition(host: WeatherOverrideHost, entity: string): void
 //the last-good durable copy on a failed fetch.
 async function fetchConditionHistory(hass: HassLike, entityId: string, start: Date, end: Date, durableKey: string): Promise<NumSeries | null>
 {
-    if (!hass?.callWS) { return null; }
+    if (!hass?.callWS)
+    {
+        return null;
+    }
     try
     {
         const now = new Date();
         const fetchEnd = end > now ? now : end;
-        if (start >= fetchEnd) { return { times: [], values: [] }; }
+        if (start >= fetchEnd)
+        {
+            return { times: [], values: [] };
+        }
 
         const raw: any = await callWS<any>(hass, {
             type:                     'history/history_during_period',
@@ -228,8 +273,14 @@ async function fetchConditionHistory(hass: HassLike, entityId: string, start: Da
             let ts: Date | null = typeof tsRaw === 'number'
                 ? new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000)
                 : (typeof tsRaw === 'string' ? new Date(tsRaw) : null);
-            if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) { ts = new Date(lastTsMs); }
-            if (code === undefined || !ts || isNaN(ts.getTime())) { continue; }
+            if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+            {
+                ts = new Date(lastTsMs);
+            }
+            if (code === undefined || !ts || isNaN(ts.getTime()))
+            {
+                continue;
+            }
             lastTsMs = ts.getTime();
             times.push(ts);
             values.push(code);
@@ -252,7 +303,10 @@ function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
 
     if (!entity || !host.hass)
     {
-        if (st.history !== null) { st.history = null; }
+        if (st.history !== null)
+        {
+            st.history = null;
+        }
         st.fetchKey     = '';
         st.pushedEntity = '';
         host._engine?.setWeatherOverrideSamples(def.variable, null);
@@ -264,7 +318,10 @@ function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
     // Keep the engine's "now" sample fresh every cycle (the engine de-dupes on sort, so it is cheap).
     pushOne(host, def, entity, conv);
 
-    if (!host._timeRange || st.fetching) { return; }
+    if (!host._timeRange || st.fetching)
+    {
+        return;
+    }
 
     // Narrow raw-window cap (mirrors irradiance): a high-frequency sensor over a multi-day timeline would drag the
     // recorder. The head of the curve needs the live data; older values interpolate from the resampled series.
@@ -275,7 +332,10 @@ function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
     const fetchStart = host._timeRange.start < cap ? cap : host._timeRange.start;
     const keyEnd     = Math.floor(host._timeRange.end.getTime() / OVERRIDE_TTL_MS) * OVERRIDE_TTL_MS;
     const fetchKey   = `${def.variable}:${entity}${conv.tag}@${fetchStart.getTime()}|${keyEnd}`;
-    if (fetchKey === st.fetchKey) { return; }
+    if (fetchKey === st.fetchKey)
+    {
+        return;
+    }
     st.fetchKey = fetchKey;
 
     const durableKey = `wxo:${def.variable}:${entity}${conv.tag}`;
@@ -297,23 +357,35 @@ function refreshOne(host: WeatherOverrideHost, def: OverrideDef): void
             st.history = h ?? { times: [], values: [] };
             pushOne(host, def, entity, conv);
         })
-        .finally(() => { st.fetching = false; });
+        .finally(() =>
+        {
+            st.fetching = false;
+        });
 }
 
 // Merge cached recorder history with the live state and push to the engine. Dirty-flag gated so an unchanged
 // (history, state, entity) triple skips the rebuild.
 function pushOne(host: WeatherOverrideHost, def: OverrideDef, entity: string, conv: ReadingConverter): void
 {
-    if (!host._engine) { return; }
+    if (!host._engine)
+    {
+        return;
+    }
     const st       = stateFor(host, def.variable);
     const hist     = st.history;
     const stateRef = host.hass.states?.[entity];
-    if (st.pushedHist === hist && st.pushedState === stateRef && st.pushedEntity === entity) { return; }
+    if (st.pushedHist === hist && st.pushedState === stateRef && st.pushedEntity === entity)
+    {
+        return;
+    }
 
     const samples: { time: Date; value: number }[] = [];
     if (hist)
     {
-        for (let i = 0; i < hist.times.length; i++) { samples.push({ time: hist.times[i], value: hist.values[i] }); }
+        for (let i = 0; i < hist.times.length; i++)
+        {
+            samples.push({ time: hist.times[i], value: hist.values[i] });
+        }
     }
     if (stateRef)
     {
@@ -345,12 +417,18 @@ export async function fetchNumericHistory(
     conv:       ReadingConverter = IDENTITY_CONVERTER,
 ): Promise<NumSeries | null>
 {
-    if (!hass?.callWS) { return null; }
+    if (!hass?.callWS)
+    {
+        return null;
+    }
     try
     {
         const now = new Date();
         const fetchEnd = end > now ? now : end;
-        if (start >= fetchEnd) { return { times: [], values: [] }; }
+        if (start >= fetchEnd)
+        {
+            return { times: [], values: [] };
+        }
 
         let series: NumSeries = { times: [], values: [] };
         const statsResult: any = await callWS<any>(hass, {
@@ -399,11 +477,20 @@ function parseStats(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSe
     {
         const startMs = parseStatBoundaryLoose(item?.start);
         const endMs   = parseStatBoundaryLoose(item?.end);
-        if (startMs === null) { continue; }
+        if (startMs === null)
+        {
+            continue;
+        }
         const raw = item?.mean;
-        if (raw === null || raw === undefined) { continue; }
+        if (raw === null || raw === undefined)
+        {
+            continue;
+        }
         const v = clampReading(typeof raw === 'number' ? raw : parseFloat(String(raw)), def, conv);
-        if (v === null) { continue; }
+        if (v === null)
+        {
+            continue;
+        }
         times.push(new Date(endMs !== null ? (startMs + endMs) / 2 : startMs));
         values.push(v);
     }
@@ -421,9 +508,15 @@ function parseRaw(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSeri
     for (const item of arr)
     {
         const sRaw = item?.s ?? item?.state;
-        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') { continue; }
+        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+        {
+            continue;
+        }
         const v = clampReading(parseFloat(String(sRaw)), def, conv);
-        if (v === null) { continue; }
+        if (v === null)
+        {
+            continue;
+        }
 
         let ts: Date | null = null;
         const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
@@ -436,8 +529,14 @@ function parseRaw(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSeri
             const asNum = Number(tsRaw);
             ts = (Number.isFinite(asNum) && asNum > 1e9) ? new Date(asNum > 1e12 ? asNum : asNum * 1000) : new Date(tsRaw);
         }
-        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) { ts = new Date(lastTsMs); }
-        if (!ts || isNaN(ts.getTime())) { continue; }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+        {
+            ts = new Date(lastTsMs);
+        }
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
 
         lastTsMs = ts.getTime();
         times.push(ts);

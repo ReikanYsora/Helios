@@ -38,7 +38,10 @@ export async function fetchGroundVector(
 ): Promise<GroundFeature[] | null>
 {
     const template = await resolveTemplate(signal);
-    if (!template) { return null; }
+    if (!template)
+    {
+        return null;
+    }
 
     const z      = OFM_TILE_ZOOM;
     const perLon = METRES_PER_DEGREE * Math.cos(homeLat * DEG);
@@ -64,7 +67,10 @@ export async function fetchGroundVector(
             try
             {
                 const res = await fetchWithWatchdog(url, signal);
-                if (!res.ok) { throw new Error(String(res.status)); }
+                if (!res.ok)
+                {
+                    throw new Error(String(res.status));
+                }
                 const buf = new Uint8Array(await res.arrayBuffer());
                 //Only count the tile as decoded once decodeVectorTile returns: a garbage 200 (captive portal, proxy
                 //error page) throws here, and must leave anyOk false so the caller gets null, not an empty [].
@@ -72,10 +78,16 @@ export async function fetchGroundVector(
                 anyOk = true;
                 for (const layer of layers)
                 {
-                    if (!GROUND_LAYERS.has(layer.name)) { continue; }
+                    if (!GROUND_LAYERS.has(layer.name))
+                    {
+                        continue;
+                    }
                     for (const feature of layer.features)
                     {
-                        if (feature.type === 1) { continue; } //points have no ground presence
+                        if (feature.type === 1)
+                        {
+                            continue;
+                        } //points have no ground presence
                         const line   = feature.type === 2;
                         const minPts = line ? 2 : 3;
                         const lonLat = feature.rings

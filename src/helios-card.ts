@@ -440,7 +440,10 @@ export class HeliosCard extends LitElement
     //it (drops + rebuilds the store at the mode's cadence) and persists.
     private _setTimelineMode(mode: TimelineMode): void
     {
-        if (this._timelineMode === mode) { return; }
+        if (this._timelineMode === mode)
+        {
+            return;
+        }
         this._timelineMode = mode;
         const spec = TIMELINE_MODES[mode];
         this._periodPastDays   = modePastDays(mode);
@@ -452,29 +455,44 @@ export class HeliosCard extends LitElement
         if (!spec.weather && (this._chartTarget === 'irradiance' || this._chartTarget === 'temperature' || this._chartTarget === 'humidity'))
         {
             const fallback = firstAvailableChartTarget(this.config, this._energyDefaults);
-            if (fallback) { this._chartTarget = fallback; }
+            if (fallback)
+            {
+                this._chartTarget = fallback;
+            }
         }
         this._applyPeriod();
         this.persistUiState();
     }
 
     //Shared: swallow a pointerdown so the period selector doesn't start a timeline scrub.
-    private _stopPropagation = (e: Event): void => { e.stopPropagation(); };
+    private _stopPropagation = (e: Event): void =>
+    {
+        e.stopPropagation();
+    };
 
     //Period-selector button delegate: the clicked element carries its mode in data-mode.
     private _onTimelineModeClick = (e: Event): void =>
     {
         const mode = (e.currentTarget as HTMLElement).dataset.mode as TimelineMode | undefined;
-        if (mode) { this._setTimelineMode(mode); }
+        if (mode)
+        {
+            this._setTimelineMode(mode);
+        }
     };
 
     //Recorder period for the energy change-series, per the active mode (5-min for forecast, hourly for a week,
     //daily for month/year), so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
-    get _storeFetchPeriod(): StatPeriod { return modeFetchPeriod(this._timelineMode, this.config); }
+    get _storeFetchPeriod(): StatPeriod
+    {
+        return modeFetchPeriod(this._timelineMode, this.config);
+    }
 
     //Whether weather (irradiance + cloud) is offered in the active mode. Off for month/year (Open-Meteo only
     //reaches ~16 days), where the focus is energy. Hides those chips + their chart targets.
-    get _weatherAvailable(): boolean { return TIMELINE_MODES[this._timelineMode].weather; }
+    get _weatherAvailable(): boolean
+    {
+        return TIMELINE_MODES[this._timelineMode].weather;
+    }
 
     //Chip -> bottom-chart re-targeting. Points the chart at the clicked metric; no-op when already there.
     setChartTarget = (target: ChartTarget): void =>
@@ -502,7 +520,10 @@ export class HeliosCard extends LitElement
     onChartTargetClick = (e: Event): void =>
     {
         const target = (e.currentTarget as HTMLElement).dataset.target as ChartTarget | undefined;
-        if (!target) { return; }
+        if (!target)
+        {
+            return;
+        }
         if (target === this._chartTarget)
         {
             this._setDayCurveOpen(!this._dayCurveOpen);
@@ -530,7 +551,7 @@ export class HeliosCard extends LitElement
     {
         return this._chartTarget === 'grid' ? this._hud._gridLeaderColor
             : (this._chartTarget === 'battery' || this._chartTarget === 'battery-soc') ? this._hud._batteryLeaderColor
-            : chartAccentColor(this);
+                : chartAccentColor(this);
     }
 
     updateHomeAppearance(animate: boolean): void
@@ -551,9 +572,15 @@ export class HeliosCard extends LitElement
     //a fresh element restarts with it: under auto-rotation it would stutter forever instead of playing once.
     private _setDayCurveOpen(open: boolean): void
     {
-        if (open === this._dayCurveOpen) { return; }
+        if (open === this._dayCurveOpen)
+        {
+            return;
+        }
         this._dayCurveOpen = open;
-        if (this._dayCurveRaf) { cancelAnimationFrame(this._dayCurveRaf); this._dayCurveRaf = 0; }
+        if (this._dayCurveRaf)
+        {
+            cancelAnimationFrame(this._dayCurveRaf); this._dayCurveRaf = 0;
+        }
         const to = open ? 1 : 0;
         if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
         {
@@ -582,10 +609,16 @@ export class HeliosCard extends LitElement
     //still a valid answer ("the sun did not shine", "no import today"), distinct from null ("nothing is raised").
     private _buildDayCurve(): DayCurveInput | null
     {
-        if (!this._dayCurveOpen && this._dayCurveT <= 0) { return null; }
+        if (!this._dayCurveOpen && this._dayCurveT <= 0)
+        {
+            return null;
+        }
         const target = this._chartTarget;
         const coords = getHomeCoords(this.config, this.hass);
-        if (!coords) { return null; }
+        if (!coords)
+        {
+            return null;
+        }
         //Clamped INTO the window, because the curve reads the store and can only speak for a day the store holds.
         //Every period but Yesterday ends on today, so "now" is inside one and is the right default. Yesterday ends
         //at this morning's midnight, which puts now OUTSIDE its own window: the curve was then built for today
@@ -886,7 +919,7 @@ export class HeliosCard extends LitElement
         max_rows:    number;
         min_columns: number;
         max_columns: number;
-    }
+        }
     {
         return {
             rows:        8,
@@ -903,13 +936,22 @@ export class HeliosCard extends LitElement
     //when the mode is off. A delay of 0 means "never show the UI": input keeps it hidden rather than flashing it.
     private _onUiActivity = (): void =>
     {
-        if (!autoHideUi(this.config)) { return; }
-        if (noUiDelayMs(this.config) <= 0)
+        if (!autoHideUi(this.config))
         {
-            if (!this._uiHidden) { this._uiHidden = true; }
             return;
         }
-        if (this._uiHidden) { this._uiHidden = false; }
+        if (noUiDelayMs(this.config) <= 0)
+        {
+            if (!this._uiHidden)
+            {
+                this._uiHidden = true;
+            }
+            return;
+        }
+        if (this._uiHidden)
+        {
+            this._uiHidden = false;
+        }
         this._scheduleUiHide();
     };
 
@@ -922,17 +964,26 @@ export class HeliosCard extends LitElement
         }
         if (!autoHideUi(this.config))
         {
-            if (this._uiHidden) { this._uiHidden = false; }
+            if (this._uiHidden)
+            {
+                this._uiHidden = false;
+            }
             return;
         }
         //Delay 0: hide immediately and stay hidden (no timer), so the UI never reappears on input.
         const delay = noUiDelayMs(this.config);
         if (delay <= 0)
         {
-            if (!this._uiHidden) { this._uiHidden = true; }
+            if (!this._uiHidden)
+            {
+                this._uiHidden = true;
+            }
             return;
         }
-        this._uiHideTimer = window.setTimeout(() => { this._uiHidden = true; }, delay);
+        this._uiHideTimer = window.setTimeout(() =>
+        {
+            this._uiHidden = true;
+        }, delay);
     }
 
     public connectedCallback(): void
@@ -985,12 +1036,18 @@ export class HeliosCard extends LitElement
         this._wxStormCtl.stop();
         liveCards.delete(this);
         window.clearInterval(this._timer);
-        if (this._dayCurveRaf) { cancelAnimationFrame(this._dayCurveRaf); this._dayCurveRaf = 0; }
+        if (this._dayCurveRaf)
+        {
+            cancelAnimationFrame(this._dayCurveRaf); this._dayCurveRaf = 0;
+        }
         this.removeEventListener('pointerdown', this._onUiActivity);
         this.removeEventListener('pointermove', this._onUiActivity);
         this.removeEventListener('wheel', this._onUiActivity);
         this.removeEventListener('touchstart', this._onUiActivity);
-        if (this._uiHideTimer !== undefined) { window.clearTimeout(this._uiHideTimer); this._uiHideTimer = undefined; }
+        if (this._uiHideTimer !== undefined)
+        {
+            window.clearTimeout(this._uiHideTimer); this._uiHideTimer = undefined;
+        }
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
         if (this._onVisibilityChange)
@@ -1006,7 +1063,10 @@ export class HeliosCard extends LitElement
         //Snapshot the view for the next visit (while still registered, so the storage slot is the right one):
         //the engine writes the live camera pose (captures an auto-rotated bearing too), the card writes the
         //view mode + selected chip.
-        if (this._engine) { this._engine.cacheKey = this.effectiveCacheId(); }
+        if (this._engine)
+        {
+            this._engine.cacheKey = this.effectiveCacheId();
+        }
         this._engine?.persistCameraPose();
         this.persistUiState();
         this._unregisterCacheId();
@@ -1055,7 +1115,10 @@ export class HeliosCard extends LitElement
     //time (Open-Meteo or the matching local sensor override). Each is hidden when turned off or without a reading.
     private _renderTempChip(): TemplateResult | typeof nothing
     {
-        if (!showTemperature(this.config) || !isFinite(this._temperature)) { return nothing; }
+        if (!showTemperature(this.config) || !isFinite(this._temperature))
+        {
+            return nothing;
+        }
         //When a day curve is up, only the active chip is visible; the other stays in the DOM as an invisible
         //placeholder so the visible chip keeps its slot (the centered row must not shift when its sibling drops).
         const hidden = this._dayCurveOpen && this._chartTarget !== 'temperature';
@@ -1063,7 +1126,10 @@ export class HeliosCard extends LitElement
     }
     private _renderHumidityChip(): TemplateResult | typeof nothing
     {
-        if (!showHumidity(this.config) || !isFinite(this._humidity)) { return nothing; }
+        if (!showHumidity(this.config) || !isFinite(this._humidity))
+        {
+            return nothing;
+        }
         const hidden = this._dayCurveOpen && this._chartTarget !== 'humidity';
         return this._cornerChip('humidity', `${Math.round(this._humidity)} %`, hidden);
     }
@@ -1097,7 +1163,10 @@ export class HeliosCard extends LitElement
     //cost is configured (no resolvable rate).
     private _renderCostChip(): TemplateResult | typeof nothing
     {
-        if (!showCost(this.config) || this._costRate === null) { return nothing; }
+        if (!showCost(this.config) || this._costRate === null)
+        {
+            return nothing;
+        }
         const hidden = this._dayCurveOpen && this._chartTarget !== 'cost';
         const val = this._costRate
             .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1173,7 +1242,10 @@ export class HeliosCard extends LitElement
         //as "right now", and snap any active scrub back to live (a frozen past instant would otherwise stick).
         if (!showTimeline(this.config))
         {
-            if (this._timelineMode !== 'today') { this._setTimelineMode('today'); }
+            if (this._timelineMode !== 'today')
+            {
+                this._setTimelineMode('today');
+            }
             this._exitScrubMode();
         }
 
@@ -1197,7 +1269,10 @@ export class HeliosCard extends LitElement
         if (!this._chartTargetExplicit && _changedProperties.has('_energyDefaults'))
         {
             const resolved = firstAvailableChartTarget(this.config, this._energyDefaults);
-            if (resolved && resolved !== this._chartTarget) { this._chartTarget = resolved; }
+            if (resolved && resolved !== this._chartTarget)
+            {
+                this._chartTarget = resolved;
+            }
         }
 
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
@@ -1406,8 +1481,14 @@ export class HeliosCard extends LitElement
 
     //Explicit "back to live" button: jump straight from a scrubbed instant to the live cursor, no fiddling
     //with the slider. Its pointerdown is swallowed so pressing it never scrubs the track underneath.
-    private _onReturnToLive = (e: Event): void => { e.stopPropagation(); returnTimelineToLive(this); };
-    private _stopPointer    = (e: Event): void => { e.stopPropagation(); };
+    private _onReturnToLive = (e: Event): void =>
+    {
+        e.stopPropagation(); returnTimelineToLive(this);
+    };
+    private _stopPointer    = (e: Event): void =>
+    {
+        e.stopPropagation();
+    };
     private get _backToLiveLabel(): string
     {
         return pickTranslations(this.hass?.language).editor.backToLive;
@@ -1541,7 +1622,7 @@ export class HeliosCard extends LitElement
                             >
                                 ${keyed(`${this._chartTarget}|${this._timelineMode}`, renderBottomChart(this))}
                                 ${(this._timelineMode === 'forecast' || this._timelineMode === 'today' || this._timelineMode === 'yesterday' || this._timelineMode === 'week')
-                                    ? renderTimelineNightZones(this) : nothing}
+        ? renderTimelineNightZones(this) : nothing}
                                 ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
@@ -1603,14 +1684,20 @@ export class HeliosCard extends LitElement
     private _localPointerXY(e: PointerEvent): { x: number; y: number } | null
     {
         const card = this._haCard;
-        if (!card) { return null; }
+        if (!card)
+        {
+            return null;
+        }
         const rect = card.getBoundingClientRect();
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     }
     private _onSceneTapStart = (e: PointerEvent): void =>
     {
         const p = this._localPointerXY(e);
-        if (!p) { return; }
+        if (!p)
+        {
+            return;
+        }
         this._sceneTapStartX = p.x;
         this._sceneTapStartY = p.y;
     };
@@ -1620,9 +1707,18 @@ export class HeliosCard extends LitElement
     private _onSceneTapEnd = (e: PointerEvent): void =>
     {
         const p = this._localPointerXY(e);
-        if (!p) { return; }
-        if (Math.hypot(p.x - this._sceneTapStartX, p.y - this._sceneTapStartY) > 10) { return; }
-        if (this._infoPanelOpen) { this._infoPanelOpen = false; }
+        if (!p)
+        {
+            return;
+        }
+        if (Math.hypot(p.x - this._sceneTapStartX, p.y - this._sceneTapStartY) > 10)
+        {
+            return;
+        }
+        if (this._infoPanelOpen)
+        {
+            this._infoPanelOpen = false;
+        }
         //One gesture, one rule: a tap on the scene puts away everything a chip tap put up.
         this._setDayCurveOpen(false);
     };
