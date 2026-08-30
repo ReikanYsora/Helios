@@ -498,3 +498,66 @@ export function parseStatBoundaryLoose(raw: unknown): number | null
     }
     return null;
 }
+
+
+//Parallel times[]/values[] series, the shape every per-entity raw-history / stats parser below returns.
+export interface RawSeries
+{
+    times:  Date[];
+    values: number[];
+}
+
+
+//Shared raw-history parser for `history/history_during_period` (battery/weather-override/irradiance): tolerates the
+//compact `s`/`lu`/`lc` and verbose `state`/`last_updated`/`last_changed` shapes, drops unavailable/unknown/empty
+//samples, and falls back to the previous sample's timestamp when a payload omits one entirely (HA compaction can
+//drop it on consecutive identical states). `toValue` derives the caller's numeric reading from the raw state
+//string (its own clamping/unit conversion); null skips the sample.
+export function parseRawHistorySeries(
+    arr:     any[],
+    toValue: (rawState: string) => number | null,
+): RawSeries
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    let lastTsMs: number | null = null;
+
+    for (const item of arr ?? [])
+    {
+        const sRaw = item?.s ?? item?.state;
+        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+        {
+            continue;
+        }
+        const v = toValue(String(sRaw));
+        if (v === null)
+        {
+            continue;
+        }
+
+        let ts: Date | null = null;
+        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+        if (typeof tsRaw === 'number')
+        {
+            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
+        }
+        else if (typeof tsRaw === 'string')
+        {
+            const asNum = Number(tsRaw);
+            ts = (Number.isFinite(asNum) && asNum > 1e9) ? new Date(asNum > 1e12 ? asNum : asNum * 1000) : new Date(tsRaw);
+        }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+        {
+            ts = new Date(lastTsMs);
+        }
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
+
+        lastTsMs = ts.getTime();
+        times.push(ts);
+        values.push(v);
+    }
+    return { times, values };
+}

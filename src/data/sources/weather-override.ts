@@ -16,7 +16,7 @@ import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 import { quantizedAnchorMs } from '../source-fetch';
-import { parseStatBoundaryLoose } from './energy-stats';
+import { parseStatBoundaryLoose, parseRawHistorySeries } from './energy-stats';
 import { temperatureToCelsius } from '../../core/format/format';
 import { HOUR_MS, DAY_MS } from '../../core/config/constants';
 
@@ -497,50 +497,10 @@ function parseStats(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSe
     return { times, values };
 }
 
-// Raw-history parser (fallback), tolerant of the compact `s`/`lu` and verbose `state`/`last_updated` shapes; drops
-// unavailable/unknown/empty and falls back to the previous timestamp when `lu` is omitted on repeats.
+// Raw-history parser (fallback), via the shared per-entity parser (energy-stats.ts): compact/verbose state +
+// timestamp shapes, epoch ms/seconds magnitude check, carry-forward onto the previous sample's timestamp when a
+// repeat omits its own, clamped/converted through the variable's own reading rules.
 function parseRaw(arr: any[], def: OverrideDef, conv: ReadingConverter): NumSeries
 {
-    const times: Date[] = [];
-    const values: number[] = [];
-    let lastTsMs: number | null = null;
-
-    for (const item of arr)
-    {
-        const sRaw = item?.s ?? item?.state;
-        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
-        {
-            continue;
-        }
-        const v = clampReading(parseFloat(String(sRaw)), def, conv);
-        if (v === null)
-        {
-            continue;
-        }
-
-        let ts: Date | null = null;
-        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
-        if (typeof tsRaw === 'number')
-        {
-            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
-        }
-        else if (typeof tsRaw === 'string')
-        {
-            const asNum = Number(tsRaw);
-            ts = (Number.isFinite(asNum) && asNum > 1e9) ? new Date(asNum > 1e12 ? asNum : asNum * 1000) : new Date(tsRaw);
-        }
-        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
-        {
-            ts = new Date(lastTsMs);
-        }
-        if (!ts || isNaN(ts.getTime()))
-        {
-            continue;
-        }
-
-        lastTsMs = ts.getTime();
-        times.push(ts);
-        values.push(v);
-    }
-    return { times, values };
+    return parseRawHistorySeries(arr, (s) => clampReading(parseFloat(s), def, conv));
 }

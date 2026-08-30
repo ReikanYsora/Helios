@@ -15,7 +15,7 @@ import { RequestCache } from '../request-cache';
 import { saveDurableSeries, loadDurableSeries } from '../durable-cache';
 import { warnOnce } from '../log';
 import { quantizedAnchorMs } from '../source-fetch';
-import { parseStatBoundaryLoose } from './energy-stats';
+import { parseStatBoundaryLoose, parseRawHistorySeries } from './energy-stats';
 import { IRRADIANCE_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
 
 
@@ -287,68 +287,14 @@ export async function fetchIrradiance(
 }
 
 
-// Raw-history parser, the fallback when statistics is empty. Tolerates the compact `s`/`lu` and verbose `state`/`last_updated`
-// shapes, drops `unavailable`/`unknown`/empty samples, and falls back to the previous timestamp on a missing `lu` (HA compaction
-// can omit it on consecutive identical samples).
+// Raw-history parser, the fallback when statistics is empty, via the shared per-entity parser (energy-stats.ts).
+// Refuses a negative reading (irradiance is never negative) on top of the shared compact/verbose state + timestamp
+// handling.
 function parseRawIrradianceHistory(arr: any[]): IrradianceHistory
 {
-    const times:  Date[]   = [];
-    const values: number[] = [];
-    let lastTsMs: number | null = null;
-
-    for (const item of arr)
+    return parseRawHistorySeries(arr, (s) =>
     {
-        const sRaw = item?.s ?? item?.state;
-        if (sRaw === null
-            || sRaw === undefined
-            || sRaw === 'unavailable'
-            || sRaw === 'unknown'
-            || sRaw === '')
-        {
-            continue;
-        }
-        const v = parseFloat(String(sRaw));
-        if (!isFinite(v) || v < 0)
-        {
-            continue;
-        }
-
-        let ts: Date | null = null;
-        const tsRaw =
-            item?.lu             ??
-            item?.lc             ??
-            item?.last_updated   ??
-            item?.last_changed   ??
-            null;
-        if (typeof tsRaw === 'number')
-        {
-            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
-        }
-        else if (typeof tsRaw === 'string')
-        {
-            const asNum = Number(tsRaw);
-            if (Number.isFinite(asNum) && asNum > 1e9)
-            {
-                ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
-            }
-            else
-            {
-                ts = new Date(tsRaw);
-            }
-        }
-        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
-        {
-            ts = new Date(lastTsMs);
-        }
-        if (!ts || isNaN(ts.getTime()))
-        {
-            continue;
-        }
-
-        lastTsMs = ts.getTime();
-        times.push(ts);
-        values.push(v);
-    }
-
-    return { times, values };
+        const v = parseFloat(s);
+        return (isFinite(v) && v >= 0) ? v : null;
+    });
 }
