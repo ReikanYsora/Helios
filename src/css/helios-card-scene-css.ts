@@ -514,16 +514,15 @@ export const heliosCardStyles = css`
             the leaders are data, not scenery - yet still below the chip cluster so the dashes pass behind it. */
         z-index: 7;
     }
-    /*  Group leader: a thin static line from the home pill down to the group chip, in the group's colour. */
-    .group-leader-line
-    {
-        stroke-width: 2;
-        stroke-linecap: round;
-        fill: none;
-    }
-    /*  Grid leader; stroke + bead fill from the inline colour, so one path serves both import
-        (blue) and export (purple). */
-    .grid-leader-line
+    /*  Shared leader stroke recipe: the group, grid, PV-to-home and battery leaders are all thin round-capped
+        unfilled paths; only stroke colour, opacity and linejoin differ per leader below. The group leader is a
+        thin static line from the home pill to the group chip; the grid leader's stroke and bead fill both come
+        from the inline colour, so one path serves both import (blue) and export (purple) - neither needs a
+        colour rule of its own. */
+    .group-leader-line,
+    .grid-leader-line,
+    .pv-home-leader-line,
+    .battery-leader-line
     {
         stroke-width: 2;
         stroke-linecap: round;
@@ -535,10 +534,7 @@ export const heliosCardStyles = css`
     .pv-home-leader-line
     {
         stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
-        stroke-width: 2;
         stroke-opacity: 1;
-        stroke-linecap: round;
-        fill: none;
     }
 
     /*  Moving bead riding a leader at a speed proportional to live flow, like HA's energy-distribution
@@ -564,11 +560,8 @@ export const heliosCardStyles = css`
     .battery-leader-line
     {
         stroke: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
-        stroke-width: 2;
         stroke-opacity: 1;
-        stroke-linecap: round;
         stroke-linejoin: round;
-        fill: none;
     }
 
     /*  Solar overlay split in two passes so chips never occlude the live sun while the night part still
