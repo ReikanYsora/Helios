@@ -1127,7 +1127,15 @@ export class HeliosCard extends LitElement
         if (changedProperties.size === 1 && changedProperties.has('hass'))
         {
             const next = this._relevantHassFingerprint();
-            if (next === this._lastHassFingerprint)
+            //The fingerprint below only reads hass.themes.darkMode, so a theme swap that keeps the same
+            //light/dark mode (the ordinary "pick a different theme" case) never shows up in it on its own.
+            //Bypass on any hass.themes reference change too, the same signal willUpdate uses below to
+            //invalidate the colour cache - otherwise such a swap could be silently blocked forever (until an
+            //unrelated field happens to change in the same pass), leaving chip/chart colours stuck on the old
+            //theme. _lastColorCacheThemesRef is updated in willUpdate, which only runs once this returns true,
+            //so this naturally stays in sync pass to pass.
+            const themesChanged = this.hass?.themes !== this._lastColorCacheThemesRef;
+            if (!themesChanged && next === this._lastHassFingerprint)
             {
                 return false;
             }
