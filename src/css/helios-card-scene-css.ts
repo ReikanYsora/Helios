@@ -150,9 +150,12 @@ export const heliosCardStyles = css`
     {
         /*  The scene pills are anchored to a projected point and centred on it; the corner chips instead
             flow in their own row (.helios-corner-chip keeps position: relative), so this stays split out
-            from the shared box recipe below. */
+            from the shared box recipe below. left/top pin the anchor at the container's origin; the actual
+            projected position + centering both come from the single inline transform (see scene-hud-controller),
+            so a chip moving every frame during rotation only ever writes a compositor-only property. */
         position: absolute;
-        transform: translate(-50%, -50%);
+        left: 0;
+        top:  0;
     }
     .pv-pct-label,
     .battery-pct-label,
@@ -645,7 +648,8 @@ export const heliosCardStyles = css`
     .home-ring
     {
         position: absolute;
-        transform: translate(-50%, -50%);
+        left: 0;
+        top:  0;
         box-sizing: border-box;
         width: 50px;
         height: 28px;
@@ -759,7 +763,8 @@ export const heliosCardStyles = css`
     .sun-cross-marker
     {
         position: absolute;
-        transform: translate(-50%, -50%);
+        left: 0;
+        top:  0;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -787,10 +792,9 @@ export const heliosCardStyles = css`
     }
 
     /*  Solar irradiance label pinned above the live sun. Anchors above the sun via a -100% vertical
-        translate (not the shared -50%) and sits higher in the stack. */
+        translate (not the shared -50%, supplied inline - see scene-hud-controller) and sits higher in the stack. */
     .solar-pct-label
     {
-        transform: translate(-50%, -100%);
         pointer-events: none;
         /*  Above the arc-front lines (z 11) so a segment never crosses the W/m² readout; the sun disc
             (z 12) still paints on top. */

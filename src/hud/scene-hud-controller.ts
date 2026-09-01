@@ -195,7 +195,7 @@ export class SceneHudController
         return html`
             <div
                 class="sun-cross-marker"
-                style="left:${lx.toFixed(1)}px; top:${ly.toFixed(1)}px; --sun-cross-color:${color}"
+                style="transform:translate(${lx.toFixed(1)}px,${ly.toFixed(1)}px) translate(-50%,-50%); --sun-cross-color:${color}"
             >
                 <ha-icon icon=${icon}></ha-icon>
                 <span>${t}</span>
@@ -820,7 +820,7 @@ export class SceneHudController
                 ${showPvLabel ? html`
                     <div
                         class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${interactive && this.host._chartTarget === 'production' ? 'is-chart-active' : ''} ${this.host._dayCurveOpen ? 'is-curve-on' : ''}"
-                        style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}; --chip-color:${pvColor}"
+                        style="transform:translate(${layout!.pvLabel.x}px,${layout!.pvLabel.y}px) translate(-50%,-50%); --pv-leader-color:${pvColor}; --chip-color:${pvColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="production"
@@ -861,7 +861,7 @@ export class SceneHudController
                     </svg>
                     <div
                         class="battery-pct-label ${interactive && this.host._chartTarget === 'battery' ? 'is-chart-active' : ''} ${curveOn && active === 'battery' ? 'is-curve-on' : ''}"
-                        style="left:${batteryChipX}px; top:${batteryChipY}px; --battery-leader-color:${batteryLeaderColor}"
+                        style="transform:translate(${batteryChipX}px,${batteryChipY}px) translate(-50%,-50%); --battery-leader-color:${batteryLeaderColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="battery"
@@ -898,7 +898,7 @@ export class SceneHudController
                     </svg>
                     <div
                         class="grid-label ${interactive && this.host._chartTarget === 'grid' ? 'is-chart-active' : ''} ${curveOn && active === 'grid' ? 'is-curve-on' : ''}"
-                        style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
+                        style="transform:translate(${layout!.gridLabel.x}px,${layout!.gridLabel.y}px) translate(-50%,-50%); --grid-leader-color:${gridLeaderColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="grid"
@@ -930,7 +930,7 @@ export class SceneHudController
                     </svg>
                     <div
                         class="group-label ${interactive && this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''} ${curveOn && active === groupTarget(gc.g) ? 'is-curve-on' : ''}"
-                        style="left:${gc.anchor.x}px; top:${gc.anchor.y}px; --group-color:${gc.color}"
+                        style="transform:translate(${gc.anchor.x}px,${gc.anchor.y}px) translate(-50%,-50%); --group-color:${gc.color}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target=${groupTarget(gc.g)}
@@ -1135,7 +1135,7 @@ export class SceneHudController
                 ${showSunLabel ? html`
                     <div
                         class="solar-pct-label ${interactive && this.host._chartTarget === 'irradiance' ? 'is-chart-active' : ''} ${curveOn && active === 'irradiance' ? 'is-curve-on' : ''}"
-                        style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px; --solar-color:${irradChipColor}"
+                        style="transform:translate(${sunScene!.sun.x}px,${sunScene!.sun.y - 22}px) translate(-50%,-100%); --solar-color:${irradChipColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="irradiance"
@@ -1161,11 +1161,11 @@ export class SceneHudController
                       ring: a bare contact point the leads converge on, the scene still visible through it.  -->
                 ${hasHomeCoords && layout !== null && showHomeElement
         ? (homeHidden
-            ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
+            ? html`<div class="home-ring" style="transform:translate(${layout!.home.x}px,${layout!.home.y}px) translate(-50%,-50%); --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
             : html`
                     <div
                         class="home-pill ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''} ${curveOn && active === 'consumption' ? 'is-curve-on' : ''}"
-                        style="left:${layout!.home.x}px; top:${layout!.home.y}px"
+                        style="transform:translate(${layout!.home.x}px,${layout!.home.y}px) translate(-50%,-50%)"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="consumption"

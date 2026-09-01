@@ -29,7 +29,7 @@ import { heliosCardStyles } from './css/helios-card-scene-css';
 import { weatherOverlay, WeatherRain, WeatherSnow, WeatherStorm, weatherLayers, type WxInput } from './scene/weather-fx';
 import { heliosTimelineStyles } from './css/helios-timeline-css';
 import { setServerTimeZone, serverMsOfDay } from './core/time/timezone';
-import { isDarkFromCss, resolveUiColor, formatTemperature } from './core/format/format';
+import { isDarkFromCss, resolveUiColor, formatTemperature, clearUiColorCache } from './core/format/format';
 import { refreshPv } from './data/sources/pv';
 import
 {
@@ -379,6 +379,10 @@ export class HeliosCard extends LitElement
     private static readonly _UNCACHED_THEMES = Symbol('theme-cache-empty');
     private _cachedIsDarkThemesRef: unknown = HeliosCard._UNCACHED_THEMES;
     private _cachedIsDark = false;
+    //Tracks hass.themes' own reference across updates, purely to invalidate the cssHex colour cache on a real
+    //theme swap (see willUpdate). Separate from _cachedIsDarkThemesRef above: that one only runs down the
+    //darkMode-missing fallback path, not on every hass update.
+    private _lastColorCacheThemesRef: unknown = undefined;
     //Last resolved home-colour token, so the :host consumption var is only re-derived when it changes.
     //Read + written by publishConsumptionColor (card/init.ts), so not TS-private.
     _homeColorToken = '';
@@ -1163,6 +1167,15 @@ export class HeliosCard extends LitElement
         if (_changedProperties.has('hass'))
         {
             setServerTimeZone(this.hass?.config?.time_zone);
+            //Drop the cached colour resolutions (see cssHex) the moment HA actually swaps hass.themes - a real
+            //theme change, not just a re-render. hass.themes' own reference identity is HA's own change signal
+            //for this (a same-theme hass update reuses the same object), so this never over- or under-fires.
+            const themesRef = this.hass?.themes;
+            if (themesRef !== this._lastColorCacheThemesRef)
+            {
+                this._lastColorCacheThemesRef = themesRef;
+                clearUiColorCache(this);
+            }
         }
     }
 

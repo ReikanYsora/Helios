@@ -187,6 +187,20 @@ function groupByLayer(features: GroundFeature[]): GroundFeaturesByLayer
     return byLayer;
 }
 
+//Per-ground-build Path2D cache, passed by the normal/transform `repaint` closure only - NEVER by
+//`repaintProjected`, whose geometry changes every frame under a moving camera and must always be rebuilt
+//fresh. `toPx` and the decoded feature set are both invariant for the lifetime of one buildVectorGround()
+//call, so on that path every feature's (or stroke bucket's) Path2D is the exact same shape on every repaint();
+//only fillStyle/strokeStyle/lineWidth (driven by style + altitude) change per call. Scoped to the closure that
+//creates it (see buildVectorGround), so a location change / re-fetch discards it with nothing to invalidate
+//by hand.
+interface PaintCache
+{
+    fills:         Map<GroundFeature, Path2D>;
+    strokes:       Map<string, Path2D>;
+    strokeBuckets: Map<string, Map<number, Path2D>>;
+}
+
 function paint(
     ctx:        CanvasRenderingContext2D,
     cw:         number,
@@ -199,6 +213,7 @@ function paint(
     //Screen-space outline of the ground when painting already-projected (the compat path). Without it the
     //land colour would flood the whole canvas, including the sky above the horizon.
     landPath?:  Path2D,
+    cache?:     PaintCache,
 ): void
 {
     const p    = tintPalette(style.palette, altitude);
@@ -221,10 +236,18 @@ function paint(
     ctx.lineJoin = 'round';
     ctx.lineCap  = 'round';
 
+    //A feature's own Path2D never changes shape across repeated repaint() calls (see PaintCache above), so
+    //when a cache is given, build it once and replay it - only fillStyle (the one thing style/altitude can
+    //change) is reapplied per call.
     const fillFeature = (f: GroundFeature, colour: string): void =>
     {
-        const path = new Path2D();
-        addPath(path, f, toPx);
+        let path = cache?.fills.get(f);
+        if (!path)
+        {
+            path = new Path2D();
+            addPath(path, f, toPx);
+            cache?.fills.set(f, path);
+        }
         ctx.fillStyle = colour;
         ctx.fill(path, 'evenodd');
     };
@@ -232,17 +255,26 @@ function paint(
     //merge into a single Path2D and a single stroke() call with no visual difference - the actual per-repaint
     //cost on the projected ground mode, which repaints every rotation frame with no camera-driven change to
     //skip. `features` order is preserved into the merged path, so stacking (e.g. minor road under major) only
-    //depends on the CALLER already grouping by width the same way the un-batched code drew them.
-    const strokeBatch = (features: GroundFeature[], colour: string, widthPx: number): void =>
+    //depends on the CALLER already grouping by width the same way the un-batched code drew them. `cacheKey`
+    //(only meaningful together with a cache) lets repeated calls for the same named group reuse one merged path.
+    const strokeBatch = (features: GroundFeature[], colour: string, widthPx: number, cacheKey?: string): void =>
     {
         if (!features.length)
         {
             return;
         }
-        const path = new Path2D();
-        for (const f of features)
+        let path = cacheKey ? cache?.strokes.get(cacheKey) : undefined;
+        if (!path)
         {
-            addPath(path, f, toPx);
+            path = new Path2D();
+            for (const f of features)
+            {
+                addPath(path, f, toPx);
+            }
+            if (cacheKey)
+            {
+                cache?.strokes.set(cacheKey, path);
+            }
         }
         ctx.strokeStyle = colour;
         ctx.lineWidth   = widthPx;
@@ -252,19 +284,27 @@ function paint(
     //by the exact width so the draw-call count still drops from O(features) to O(distinct widths present),
     //while every feature keeps its own correct width. Bucket insertion follows `features`'s own order, so
     //passing an already rank-sorted array (as the roads below are) preserves the original stacking order.
-    const strokeBatchByWidth = (features: GroundFeature[], colour: string, widthOf: (f: GroundFeature) => number): void =>
+    const strokeBatchByWidth = (features: GroundFeature[], colour: string, widthOf: (f: GroundFeature) => number, cacheKey?: string): void =>
     {
-        const buckets = new Map<number, Path2D>();
-        for (const f of features)
+        let buckets = cacheKey ? cache?.strokeBuckets.get(cacheKey) : undefined;
+        if (!buckets)
         {
-            const w = widthOf(f);
-            let path = buckets.get(w);
-            if (!path)
+            buckets = new Map<number, Path2D>();
+            for (const f of features)
             {
-                path = new Path2D();
-                buckets.set(w, path);
+                const w = widthOf(f);
+                let path = buckets.get(w);
+                if (!path)
+                {
+                    path = new Path2D();
+                    buckets.set(w, path);
+                }
+                addPath(path, f, toPx);
             }
-            addPath(path, f, toPx);
+            if (cacheKey)
+            {
+                cache?.strokeBuckets.set(cacheKey, buckets);
+            }
         }
         ctx.strokeStyle = colour;
         for (const [w, path] of buckets)
@@ -330,7 +370,7 @@ function paint(
         }
         const waterways = layerFeatures('waterway').filter((f) => f.line);
         strokeBatchByWidth(waterways, p.water, (f) =>
-            Math.max(1, (f.cls === 'stream' || f.cls === 'ditch' || f.cls === 'drain' ? 1.4 : 3) * pxPerMetre * ROAD_SCALE));
+            Math.max(1, (f.cls === 'stream' || f.cls === 'ditch' || f.cls === 'drain' ? 1.4 : 3) * pxPerMetre * ROAD_SCALE), 'waterway');
     }
 
     //Roads: rank so minor draws under major; a casing pass under a fill pass gives the classic outlined road.
@@ -341,18 +381,18 @@ function paint(
 
     if (!hide('roadCasing'))
     {
-        strokeBatchByWidth(roads, p.roadCasing, (f) => roadWidth(f.cls) + ROAD_CASING_M * pxPerMetre * ROAD_SCALE);
+        strokeBatchByWidth(roads, p.roadCasing, (f) => roadWidth(f.cls) + ROAD_CASING_M * pxPerMetre * ROAD_SCALE, 'roadCasing');
     }
     //roads is already rank-sorted ascending; minor's widest class (6) is still below major's narrowest (8), so
     //splitting into these two filtered passes (instead of one interleaved loop) draws the exact same
     //minor-under-major stacking, just batched to one stroke() call per distinct width instead of one per road.
     if (!hide('roadMinor'))
     {
-        strokeBatchByWidth(roads.filter((f) => rank(f.cls) < 8), p.roadMinor, (f) => roadWidth(f.cls));
+        strokeBatchByWidth(roads.filter((f) => rank(f.cls) < 8), p.roadMinor, (f) => roadWidth(f.cls), 'roadMinor');
     }
     if (!hide('roadMajor'))
     {
-        strokeBatchByWidth(roads.filter((f) => rank(f.cls) >= 8), p.roadMajor, (f) => roadWidth(f.cls));
+        strokeBatchByWidth(roads.filter((f) => rank(f.cls) >= 8), p.roadMajor, (f) => roadWidth(f.cls), 'roadMajor');
     }
 
     //Paths + tracks (thin, dashed) and rails (dashed) - both a single fixed width, so a plain batch suffices.
@@ -360,12 +400,12 @@ function paint(
     if (!hide('path'))
     {
         const paths = layerFeatures('transportation').filter((f) => f.line && /^path|footway|cycleway|steps|track/.test(f.cls));
-        strokeBatch(paths, p.path, Math.max(1, 2 * pxPerMetre * ROAD_SCALE));
+        strokeBatch(paths, p.path, Math.max(1, 2 * pxPerMetre * ROAD_SCALE), 'path');
     }
     if (!hide('rail'))
     {
         const rails = layerFeatures('transportation').filter((f) => f.line && f.cls === 'rail');
-        strokeBatch(rails, p.rail, Math.max(1, 3 * pxPerMetre * ROAD_SCALE));
+        strokeBatch(rails, p.rail, Math.max(1, 3 * pxPerMetre * ROAD_SCALE), 'rail');
     }
     ctx.setLineDash([]);
 
@@ -386,7 +426,7 @@ function paint(
     {
         ctx.setLineDash([Math.max(3, 2 * pxPerMetre), Math.max(3, 2 * pxPerMetre)]);
         const boundaries = layerFeatures('boundary').filter((f) => f.line);
-        strokeBatch(boundaries, p.boundary, Math.max(1, 1.2 * pxPerMetre * ROAD_SCALE));
+        strokeBatch(boundaries, p.boundary, Math.max(1, 1.2 * pxPerMetre * ROAD_SCALE), 'boundary');
         ctx.setLineDash([]);
     }
 }
@@ -453,11 +493,15 @@ export async function buildVectorGround(
         const [wx, wy] = lonLatToTile(lon, la, zoom);
         return [(wx - firstX) * TILE_PX, (wy - firstY) * TILE_PX];
     };
+    //toPx above is fixed for this ground build's whole lifetime, so every feature's Path2D geometry through it
+    //is too - only the paint cache created below actually reuses that fact. NEVER passed to repaintProjected,
+    //whose own toScreen (via the camera) changes every frame.
+    const paintCache: PaintCache = { fills: new Map(), strokes: new Map(), strokeBuckets: new Map() };
     const repaint = (st: GroundStyle, alt: number): void =>
     {
         if (ctx)
         {
-            paint(ctx, size, size, featuresByLayer, toPx, pxPerMetre, st, alt);
+            paint(ctx, size, size, featuresByLayer, toPx, pxPerMetre, st, alt, undefined, paintCache);
         }
     };
     repaint(style, altitude);

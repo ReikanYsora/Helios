@@ -458,14 +458,25 @@ export function resolveUiColor(
 //attributes) rather than a CSS var(), we resolve the live HA theme token off a host element's computed style, so a
 //user's custom theme flows through and we don't hardcode hex. A literal fallback covers an unset token.
 
-//Resolve a CSS custom property to #rrggbb off the host's computed style. Accepts #rgb / #rrggbb /
-//rgb()/rgba(); falls back when the token is empty or unparseable.
-export function cssHex(host: Element | null | undefined, token: string, fallback: string): string
+//Per-host cache of resolved colours: every chip/chart/panel re-render re-resolves the same handful of tokens
+//(chip accents, horizon line, home consumption...), and each resolution forces a synchronous style recalc.
+//WeakMap so a removed card/editor instance's entry is GC'd with it. Keyed on (token, fallback) together, not
+//just token, since the fallback IS part of a call's identity - and deliberately caches the FALLBACK result
+//too, not only a successfully-parsed hex: a config with no matching theme var hits that branch on every call,
+//and a cache that only memoised on success would measure zero benefit there.
+const uiColorCache = new WeakMap<Element, Map<string, string>>();
+
+//Drop a host's cached colour resolutions. Call when its underlying CSS custom properties may actually have
+//changed (a live HA theme swap) - see helios-card.ts's willUpdate, which tracks hass.themes' object identity
+//and calls this on a real change. Safe to call speculatively; a cleared cache just costs one fresh read per
+//token on the next call.
+export function clearUiColorCache(host: Element): void
 {
-    if (!host)
-    {
-        return fallback;
-    }
+    uiColorCache.delete(host);
+}
+
+function resolveCssHex(host: Element, token: string, fallback: string): string
+{
     const raw = getComputedStyle(host).getPropertyValue(token).trim();
     if (/^#[0-9a-f]{6}$/i.test(raw))
     {
@@ -482,6 +493,32 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
         return '#' + h(m[1]) + h(m[2]) + h(m[3]);
     }
     return fallback;
+}
+
+//Resolve a CSS custom property to #rrggbb off the host's computed style, cached per host until a real theme
+//change drops it (clearUiColorCache). Accepts #rgb / #rrggbb / rgb()/rgba(); falls back when the token is
+//empty or unparseable.
+export function cssHex(host: Element | null | undefined, token: string, fallback: string): string
+{
+    if (!host)
+    {
+        return fallback;
+    }
+    let hostCache = uiColorCache.get(host);
+    const key = `${token}|${fallback}`;
+    const cached = hostCache?.get(key);
+    if (cached !== undefined)
+    {
+        return cached;
+    }
+    if (!hostCache)
+    {
+        hostCache = new Map();
+        uiColorCache.set(host, hostCache);
+    }
+    const resolved = resolveCssHex(host, token, fallback);
+    hostCache.set(key, resolved);
+    return resolved;
 }
 
 //Fallback luminance probe: reads --primary-background-color and decides dark vs light by relative luminance. Costly

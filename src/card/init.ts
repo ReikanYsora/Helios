@@ -400,6 +400,11 @@ function wireEngineCallbacks(host: InitHost): void
     //+ dome re-projection ran several times per frame (heavy: sun arc, home silhouettes, dome cells + ribbon). The gate caps it at
     //one full pass per frame.
     let overlayRaf: number | null = null;
+    //On top of the single-flight gate above: during a sustained burst (auto-rotate, a long drag) refreshHud's own
+    //cost is still heavy enough that every other frame reads just as smooth, so skip every second one. Starts
+    //true so the flip below lands on "run" first: a real (non-burst) transform is a single isolated call, and
+    //this way it's never the one that gets skipped.
+    let overlaySkip = true;
     host._engine.onMapTransform = () =>
     {
         //If paused (off-screen or hidden tab) the browser still fires move events for tile-load completions, but nothing's
@@ -415,7 +420,11 @@ function wireEngineCallbacks(host: InitHost): void
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;
-            refreshHud(host);
+            overlaySkip = !overlaySkip;
+            if (!overlaySkip)
+            {
+                refreshHud(host);
+            }
             //In the editor preview, publish the live camera pose so the editor's "use current view" helper can
             //capture the framed angle into the config. Composed + bubbling so it reaches the editor element.
             if (host.preview)
