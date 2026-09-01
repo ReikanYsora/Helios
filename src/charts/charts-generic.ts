@@ -208,7 +208,7 @@ function stackedLines(
 //equality alone is exact, no content hashing needed. Theme polarity is included too (colours are baked into the
 //cached lines) plus a coarse freshness term as a safety net for a live theme-token edit that doesn't flip
 //dark/light. One slot per host (WeakMap, like the memo below), not a single global slot: a single slot thrashes
-//to a 0% hit rate the moment two cards' renders interleave, each evicting the other's entry every time.
+//toward a near-0% hit rate the moment two cards' renders interleave, each evicting the other's entry every time.
 const _targetSeriesCache = new WeakMap<ChartHost, {
     inputs: readonly unknown[];
     result: { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null };

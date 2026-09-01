@@ -252,11 +252,14 @@ function paint(
         ctx.fill(path, 'evenodd');
     };
     //Strokes carry no winding/hole semantics, so unlike a fill, disjoint line features sharing one width can
-    //merge into a single Path2D and a single stroke() call with no visual difference - the actual per-repaint
-    //cost on the projected ground mode, which repaints every rotation frame with no camera-driven change to
-    //skip. `features` order is preserved into the merged path, so stacking (e.g. minor road under major) only
-    //depends on the CALLER already grouping by width the same way the un-batched code drew them. `cacheKey`
-    //(only meaningful together with a cache) lets repeated calls for the same named group reuse one merged path.
+    //merge into a single Path2D and a single stroke() call with no visual difference. Cuts Path2D allocation
+    //and canvas draw-call count on the projected ground mode, which repaints every rotation frame with no
+    //camera-driven change to skip - measured to meaningfully reduce GC pressure there, though NOT to move
+    //observed repaint throughput or main-thread busy time, since canvas stroke() rasterization cost (pixels
+    //painted, not call count) dominates that mode's per-frame cost. `features` order is preserved into the
+    //merged path, so stacking (e.g. minor road under major) only depends on the CALLER already grouping by
+    //width the same way the un-batched code drew them. `cacheKey` (only meaningful together with a cache) lets
+    //repeated calls for the same named group reuse one merged path.
     const strokeBatch = (features: GroundFeature[], colour: string, widthPx: number, cacheKey?: string): void =>
     {
         if (!features.length)
