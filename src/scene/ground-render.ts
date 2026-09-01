@@ -228,13 +228,50 @@ function paint(
         ctx.fillStyle = colour;
         ctx.fill(path, 'evenodd');
     };
-    const strokeFeature = (f: GroundFeature, colour: string, widthPx: number): void =>
+    //Strokes carry no winding/hole semantics, so unlike a fill, disjoint line features sharing one width can
+    //merge into a single Path2D and a single stroke() call with no visual difference - the actual per-repaint
+    //cost on the projected ground mode, which repaints every rotation frame with no camera-driven change to
+    //skip. `features` order is preserved into the merged path, so stacking (e.g. minor road under major) only
+    //depends on the CALLER already grouping by width the same way the un-batched code drew them.
+    const strokeBatch = (features: GroundFeature[], colour: string, widthPx: number): void =>
     {
+        if (!features.length)
+        {
+            return;
+        }
         const path = new Path2D();
-        addPath(path, f, toPx);
+        for (const f of features)
+        {
+            addPath(path, f, toPx);
+        }
         ctx.strokeStyle = colour;
         ctx.lineWidth   = widthPx;
         ctx.stroke(path);
+    };
+    //Same as strokeBatch, but for a feature set whose per-feature width varies (roads, their casing): buckets
+    //by the exact width so the draw-call count still drops from O(features) to O(distinct widths present),
+    //while every feature keeps its own correct width. Bucket insertion follows `features`'s own order, so
+    //passing an already rank-sorted array (as the roads below are) preserves the original stacking order.
+    const strokeBatchByWidth = (features: GroundFeature[], colour: string, widthOf: (f: GroundFeature) => number): void =>
+    {
+        const buckets = new Map<number, Path2D>();
+        for (const f of features)
+        {
+            const w = widthOf(f);
+            let path = buckets.get(w);
+            if (!path)
+            {
+                path = new Path2D();
+                buckets.set(w, path);
+            }
+            addPath(path, f, toPx);
+        }
+        ctx.strokeStyle = colour;
+        for (const [w, path] of buckets)
+        {
+            ctx.lineWidth = w;
+            ctx.stroke(path);
+        }
     };
 
     //Areas, bottom to top: greenery, land use, water on top of land.
@@ -291,15 +328,9 @@ function paint(
                 fillFeature(f, p.water);
             }
         }
-        for (const f of layerFeatures('waterway'))
-        {
-            if (!f.line)
-            {
-                continue;
-            }
-            const w = (f.cls === 'stream' || f.cls === 'ditch' || f.cls === 'drain' ? 1.4 : 3) * pxPerMetre * ROAD_SCALE;
-            strokeFeature(f, p.water, Math.max(1, w));
-        }
+        const waterways = layerFeatures('waterway').filter((f) => f.line);
+        strokeBatchByWidth(waterways, p.water, (f) =>
+            Math.max(1, (f.cls === 'stream' || f.cls === 'ditch' || f.cls === 'drain' ? 1.4 : 3) * pxPerMetre * ROAD_SCALE));
     }
 
     //Roads: rank so minor draws under major; a casing pass under a fill pass gives the classic outlined road.
@@ -310,43 +341,31 @@ function paint(
 
     if (!hide('roadCasing'))
     {
-        for (const f of roads)
-        {
-            strokeFeature(f, p.roadCasing, roadWidth(f.cls) + ROAD_CASING_M * pxPerMetre * ROAD_SCALE);
-        }
+        strokeBatchByWidth(roads, p.roadCasing, (f) => roadWidth(f.cls) + ROAD_CASING_M * pxPerMetre * ROAD_SCALE);
     }
-    for (const f of roads)
+    //roads is already rank-sorted ascending; minor's widest class (6) is still below major's narrowest (8), so
+    //splitting into these two filtered passes (instead of one interleaved loop) draws the exact same
+    //minor-under-major stacking, just batched to one stroke() call per distinct width instead of one per road.
+    if (!hide('roadMinor'))
     {
-        const key: GroundLayerKey = rank(f.cls) >= 8 ? 'roadMajor' : 'roadMinor';
-        if (!hide(key))
-        {
-            strokeFeature(f, p[key], roadWidth(f.cls));
-        }
+        strokeBatchByWidth(roads.filter((f) => rank(f.cls) < 8), p.roadMinor, (f) => roadWidth(f.cls));
+    }
+    if (!hide('roadMajor'))
+    {
+        strokeBatchByWidth(roads.filter((f) => rank(f.cls) >= 8), p.roadMajor, (f) => roadWidth(f.cls));
     }
 
-    //Paths + tracks (thin, dashed) and rails (dashed).
+    //Paths + tracks (thin, dashed) and rails (dashed) - both a single fixed width, so a plain batch suffices.
     ctx.setLineDash([Math.max(2, pxPerMetre), Math.max(2, pxPerMetre)]);
     if (!hide('path'))
     {
-        for (const f of layerFeatures('transportation'))
-        {
-            if (!f.line || !/^path|footway|cycleway|steps|track/.test(f.cls))
-            {
-                continue;
-            }
-            strokeFeature(f, p.path, Math.max(1, 2 * pxPerMetre * ROAD_SCALE));
-        }
+        const paths = layerFeatures('transportation').filter((f) => f.line && /^path|footway|cycleway|steps|track/.test(f.cls));
+        strokeBatch(paths, p.path, Math.max(1, 2 * pxPerMetre * ROAD_SCALE));
     }
     if (!hide('rail'))
     {
-        for (const f of layerFeatures('transportation'))
-        {
-            if (!f.line || f.cls !== 'rail')
-            {
-                continue;
-            }
-            strokeFeature(f, p.rail, Math.max(1, 3 * pxPerMetre * ROAD_SCALE));
-        }
+        const rails = layerFeatures('transportation').filter((f) => f.line && f.cls === 'rail');
+        strokeBatch(rails, p.rail, Math.max(1, 3 * pxPerMetre * ROAD_SCALE));
     }
     ctx.setLineDash([]);
 
@@ -366,14 +385,8 @@ function paint(
     if (!hide('boundary'))
     {
         ctx.setLineDash([Math.max(3, 2 * pxPerMetre), Math.max(3, 2 * pxPerMetre)]);
-        for (const f of layerFeatures('boundary'))
-        {
-            if (!f.line)
-            {
-                continue;
-            }
-            strokeFeature(f, p.boundary, Math.max(1, 1.2 * pxPerMetre * ROAD_SCALE));
-        }
+        const boundaries = layerFeatures('boundary').filter((f) => f.line);
+        strokeBatch(boundaries, p.boundary, Math.max(1, 1.2 * pxPerMetre * ROAD_SCALE));
         ctx.setLineDash([]);
     }
 }

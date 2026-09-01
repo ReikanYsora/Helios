@@ -34,6 +34,10 @@ const OVERRIDES: readonly OverrideDef[] = [
     { variable: 'humidity',    configKey: 'humidity-entity',      min: 0,    max: 100  },
 ];
 
+//The config keys above, for callers that need to know which entities feed this subsystem without depending on
+//OverrideDef itself (e.g. the card's hass-churn reactivity gate).
+export const WEATHER_OVERRIDE_CONFIG_KEYS: readonly string[] = OVERRIDES.map((o) => o.configKey);
+
 //HA `weather` entity condition -> WMO weather code, so a weather entity can drive the condition (rain / snow /
 //thunderstorm) the same way Open-Meteo's weather_code does. Unlisted conditions push no sample (model kept).
 const CONDITION_TO_CODE: Record<string, number> = {

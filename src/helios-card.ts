@@ -37,7 +37,7 @@ import
     clearBatteryModuleCaches
 } from './data/sources/battery';
 import { refreshIrradiance, clearIrradianceModuleCaches } from './data/sources/irradiance';
-import { refreshWeatherOverrides, clearWeatherOverrideCaches } from './data/sources/weather-override';
+import { refreshWeatherOverrides, clearWeatherOverrideCaches, WEATHER_OVERRIDE_CONFIG_KEYS } from './data/sources/weather-override';
 import
 {
     renderBottomChart,
@@ -355,6 +355,9 @@ export class HeliosCard extends LitElement
     //soon as the HA Energy defaults snapshot appears rather than waiting up to 30 s for the next tick.
     _energyDefaultsLoaded   = false;
     private _dailyTotalsKicked = false;
+    //Fingerprint from the last hass-only update pass shouldUpdate() let through (see below); undefined until
+    //the first one, which is never skipped.
+    private _lastHassFingerprint: string | undefined = undefined;
     //Unified 5-day data store. Built after the initial weather + PV + battery + grid fetches, rebuilt when
     //any refresh, sliced/interpolated by the graph view and main timeline. Live numeric chips
     //stay on the direct hass.states path: the store carries bucketed curves, the chips need sample-accurate
@@ -1096,6 +1099,57 @@ export class HeliosCard extends LitElement
     //disconnectedCallback so a removed card doesn't leak a global handler or double-subscribe on remount.
     _onVisibilityChange?: () => void;
 
+
+    //HA replaces the whole `hass` object on ANY entity's state_changed anywhere in the house, not just the ones
+    //this card reads - a full render pass for a light bulb toggling in another room. Narrow gate: only when
+    //this pass changed NOTHING but `hass` (config/@state changes always render normally, see below), skip it
+    //unless something Helios actually reads moved. Cheap (a string join over a few dozen entities) next to the
+    //render it may skip.
+    protected shouldUpdate(changedProperties: PropertyValues): boolean
+    {
+        if (changedProperties.size === 1 && changedProperties.has('hass'))
+        {
+            const next = this._relevantHassFingerprint();
+            if (next === this._lastHassFingerprint)
+            {
+                return false;
+            }
+            this._lastHassFingerprint = next;
+        }
+        return super.shouldUpdate(changedProperties);
+    }
+
+    //Every hass-derived value a render pass can depend on: the Energy-dashboard-resolved entities
+    //(_energyDefaults - the single source of truth, see the house rule against card-level sensor overrides)
+    //plus the small set of config-driven sensor overrides (weather variables, irradiance) that read hass.states
+    //directly, plus theme/language/home location. `id=state@last_changed` per entity, so an attribute-only
+    //push some integrations use (same state string, new last_changed) is still caught.
+    private _relevantHassFingerprint(): string
+    {
+        const hass = this.hass;
+        const d    = this._energyDefaults;
+        const ids  = [
+            ...d.solarStatRates, ...d.solarStatEnergyFroms,
+            ...d.gridStatRates, ...d.gridStatEnergyFroms, ...d.gridStatEnergyTos,
+            ...d.gridImportPrices, ...d.gridExportPrices,
+            ...d.batteryStatRates, ...d.batteryStatEnergyFroms, ...d.batteryStatEnergyTos, ...d.batteryStatSocs,
+            ...d.devices.flatMap((dev) => [dev.statConsumption, dev.statRate]),
+            String(this.config?.['solar-irradiance-entity'] ?? ''),
+            ...WEATHER_OVERRIDE_CONFIG_KEYS.map((key) => String(this.config?.[key] ?? '')),
+        ];
+        let out = `${hass?.themes?.darkMode}|${hass?.language}`
+            + `|${hass?.config?.latitude}|${hass?.config?.longitude}|${hass?.config?.time_zone}|${hass?.config?.elevation}`;
+        for (const id of ids)
+        {
+            if (!id)
+            {
+                continue;
+            }
+            const s = hass?.states?.[id];
+            out += `|${id}=${s?.state}@${s?.last_changed}`;
+        }
+        return out;
+    }
 
     //Engine init policy: re-init only when an identity input changes (home coordinates). Container reflow
     //just resizes the existing engine; we never tear down the engine for a sibling re-render (it would

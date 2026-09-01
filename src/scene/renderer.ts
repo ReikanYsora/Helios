@@ -25,6 +25,10 @@ import {
 //3D-transformed, so the compositor backs it as one layer of this size.
 const GROUND_CANVAS_EDGE_PX = (2 * GROUND_RADIUS + 1) * TILE_PX;
 
+//Weather-grade change threshold below which setWeatherGrade() is a no-op. sat spans ~[0.50, 1.10], bright
+//~[0.72, 1.05]; this is a few percent of either range, well under what a repaint would make visible.
+const WX_GRADE_EPS = 0.02;
+
 //The GPU's max texture edge (px) and its renderer string, from a throwaway WebGL context. Both 0 / '' when they
 //can't be read. The renderer is the GPU's own identity: the standard RENDERER when the browser fills it (Firefox),
 //else the unmasked WEBGL_debug_renderer_info extension (Chrome masks RENDERER); '' when both are masked for privacy.
@@ -399,11 +403,14 @@ export class SceneRenderer
     }
 
     //Set the "your real sky" weather grade (saturate/brightness). Baked into the ground + building colours, not a
-    //CSS filter, so a static scene rotates as a pure GPU transform. A no-op when unchanged; a change repaints the
-    //ground from its cache and rebuilds the scene SVG (both pose-guarded on the grade below).
+    //CSS filter, so a static scene rotates as a pure GPU transform. A no-op within WX_GRADE_EPS of the current
+    //grade (cloud cover is resolved continuously while scrubbing the timeline, so an exact-equality gate repaints
+    //the whole ground canvas on almost every tick; this tolerance is imperceptible but skips that churn, the same
+    //spirit as setGroundAltitude's caller-side degree step). A real change repaints the ground from its cache and
+    //rebuilds the scene SVG (both pose-guarded on the grade below).
     public setWeatherGrade(sat: number, bright: number): void
     {
-        if (sat === this._wxSat && bright === this._wxBright)
+        if (Math.abs(sat - this._wxSat) < WX_GRADE_EPS && Math.abs(bright - this._wxBright) < WX_GRADE_EPS)
         {
             return;
         }

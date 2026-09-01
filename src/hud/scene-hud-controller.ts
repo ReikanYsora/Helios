@@ -1070,6 +1070,11 @@ export class SceneHudController
         //wave emanating from the disc), fading in with irradiance so a low / hazy sun stays
         //calm. `--heat` (0..1) is the gate the CSS pulse multiplies.
         const heat = Math.max(0, Math.min(1, (sunFillRatio - 0.15) / 0.55));
+        //mix-blend-mode disqualifies this element from compositor-only animation, so Blink keeps running the
+        //pulse on the main thread every frame even fully invisible (heat 0, opacity 0 - a weak/hazy/night
+        //sun). Pausing it on the same per-frame write that already gates opacity costs nothing extra and the
+        //pulse resumes exactly where CSS would have left it once heat rises again.
+        const heatPlayState = heat > 0.02 ? 'running' : 'paused';
         return svg`
                                 <defs>
                                     <radialGradient id="solar-halo-grad-${this.host._instanceId}">
@@ -1093,7 +1098,7 @@ export class SceneHudController
                                     cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
                                     r="${r * 2.6}"
                                     fill="url(#solar-heat-grad-${this.host._instanceId})"
-                                    style="--heat:${heat}"
+                                    style="--heat:${heat};animation-play-state:${heatPlayState}"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"
