@@ -7,6 +7,77 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4-a0
+
+A release entirely dedicated to performance: a full audit of the rendering
+pipeline, with every fix independently re-measured under simulated
+weak-hardware CPU throttling before it shipped, then re-audited a second time
+after landing to verify what actually held up. Timeline scrubbing tracks your
+drag far more closely, chip and marker movement is lighter on every device,
+and the card does less work in the background while it just sits on a
+dashboard.
+
+### Changed: timeline scrubbing tracks your drag much more closely
+
+Dragging the timeline could feel stepped rather than smooth, especially on
+slower hardware. The scene's ground map was repainting on almost every tiny
+step of the drag, even when the sky barely changed, because the repaint check
+only skipped an *exactly* unchanged reading, and a live drag practically never
+lands on the same value twice. That check now tolerates an imperceptibly small
+change instead of demanding an exact match, so the map only actually repaints
+when the sky genuinely does. Thanks to @mifritscher2 for the detailed report
+that pointed at this (#417).
+
+### Changed: lighter chip movement, and a leaner ground map on the normal renderer
+
+Chips and markers on the scene (production, battery, grid, group and
+irradiance labels, the home marker) now move using a technique the browser can
+animate without re-checking the page layout each frame, and the overlay that
+keeps them aligned during rotation skips every second frame during a fast
+spin, both imperceptible changes that free up real headroom on every device.
+On the normal renderer, the ground map's shapes are also now reused between
+redraws instead of rebuilt from scratch every time nothing but the colour
+actually changed. On the compatibility renderer (older Android GPUs, some
+browsers, the Home Assistant app on certain devices), the ground map now draws
+roads, paths, railways and borders in batched strokes instead of one at a
+time, which measurably lightens the background cleanup work the browser has
+to do, even though it did not turn out to speed up that renderer's own redraw.
+
+### Changed: the card does less work while sitting idle in a busy house
+
+Home Assistant hands the card a fresh state snapshot on *any* entity change
+anywhere in the house, not just the ones this card actually shows. The card
+used to re-render on every single one of those, even a light bulb three rooms
+over. It now recognizes when nothing it actually reads has changed and skips
+that render entirely, which matters most for a card that is visible on a
+dashboard but not being actively watched, in a home with a lot of other
+activity.
+
+### Changed: cheaper colour lookups and less avoidable repainting
+
+A handful of smaller savings from the same audit: chip and chart colours
+(pulled from your Home Assistant theme) are now resolved once and reused
+instead of being recalculated on every redraw, correctly refreshing the
+moment you actually switch theme; the sun's radiant-heat glow around the sun
+disc no longer keeps animating in the background when it is fully invisible
+(a weak or hazy sun); the weather overlay's variables are only rewritten when
+they actually change; the timeline's date/time labels reuse their formatter
+instead of building a new one for every label; and a few leftover style
+writes that never did anything (their values never actually change) were
+removed from the per-frame render path.
+
+### Fixed: charts and the timeline no longer share cached data between
+multiple Helios cards on the same dashboard
+
+A few internal caches (chart series, daily totals, night-time shading, the
+timeline's own tick model) were shared across every Helios card on a page
+instead of kept separately per card. With only one card this was invisible,
+but with two or more, each card's render could silently evict and rebuild
+the other's cached data instead of reusing its own. Each card now keeps its
+own cache.
+
+---
+
 ## 2026.9.3
 
 A fast follow-up, mostly fixes reported by the wave of new users right after

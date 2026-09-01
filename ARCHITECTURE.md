@@ -90,7 +90,15 @@ loop would ever put those pixels back.
 Features are grouped by layer once, right after the fetch, not re-filtered from
 the flat array on every paint: a repaint (theme change, or every camera move on
 the projected fallback) walks each layer's own slice instead of scanning the
-whole tile set once per layer.
+whole tile set once per layer. Same-style line features (roads, rail, paths,
+casings, boundaries) draw as one batched `Path2D` + stroke per style bucket
+instead of one call per feature, cutting draw-call count and allocation on
+every repaint regardless of path. On the non-projected path, where the tile-space
+mapping never changes for a ground build's whole lifetime, every feature's (and
+stroke bucket's) `Path2D` is additionally cached and replayed across repeated
+repaints, so only the fill/stroke colour is reapplied on a theme or altitude
+change; the projected path always rebuilds fresh, since its geometry genuinely
+moves every frame under the camera.
 
 That CSS 3D transform is the fast path, but some hardware can't composite it: entry
 Android GPUs corrupt a GPU-drawn canvas into colored noise, and a few old WebViews
@@ -217,7 +225,13 @@ The HUD is **projected, not laid out**: `hud/scene-hud-controller.ts`
 (`SceneHudController`, with `hud/hud.ts` / `hud/hud-geometry.ts`) asks the engine
 for the screen-space anchors of the home, the chip cluster and the sun scene every
 frame (`onMapTransform`), resolves each chip's scrub-aware value, and returns the
-absolutely-positioned chips + SVG leaders at those coordinates. Each chip has a
+absolutely-positioned chips + SVG leaders at those coordinates. Each chip/marker
+positions itself via one inline `transform: translate()` (the projected coordinates
+composed with its own centring offset), not `left`/`top`, so moving it every frame
+is compositor-only work, never a forced layout pass. `onMapTransform`'s own
+single-flight `requestAnimationFrame` gate additionally skips every second call
+during a sustained burst (auto-rotate, a long drag) - a real one-off transform is
+never the call that gets skipped. Each chip has a
 leader to the home with an animated **bead** whose direction and speed encode the
 live flow: a native SVG SMIL `<animateMotion>`, not a JS/CSS animation. Its
 `dur`/`path`/`keyPoints` are wrapped in Lit's `guard()`, keyed on the handful of
@@ -347,6 +361,10 @@ cloud cover) is **baked into the ground and building paint** by the renderer
 (`SceneRenderer.setWeatherGrade`), not applied as a CSS `filter` on the map layer:
 a filter there wraps the CSS 3D-transformed basemap and forces the whole scene to
 re-flatten every frame while rotating, which flickers hard on Android WebViews.
+`setWeatherGrade` is a no-op within a small tolerance of the current grade, not
+exact equality: cloud cover resolves continuously while scrubbing the timeline, so
+an exact-equality gate repainted the ground canvas on almost every tick even though
+the sky barely changed.
 
 ### Weather overrides, `data/sources/irradiance.ts`, `data/sources/weather-override.ts`
 
@@ -398,7 +416,10 @@ group (the generic path, and the grid/battery per-source stacking, live in
 `charts/charts-generic.ts`). It draws day separators, night-zone hatching
 (`timeline/timeline-overlays.ts`), a future mask, the live + the scrub cursors, and a
 hover tooltip (`timeline/timeline-tooltip.ts`) whose icons take each series'
-colour.
+colour. The series build, the daily totals, the night intervals and the shared
+tick model are each memoised per card (`WeakMap` keyed on the host), not in one
+global slot, so a multi-card dashboard's cards don't evict each other's cache on
+every interleaved render.
 
 ### The recorder plumbing, `data/*`
 
@@ -534,7 +555,12 @@ fallback.
 4. The card subscribes to the Energy dashboard and, through the data layer,
    fetches the per-source live + history in one shared recorder call, builds the
    unified store, and renders the HUD / charts from it via the controller.
-   A short tick advances the live cursor and refreshes daily totals.
+   A short tick advances the live cursor and refreshes daily totals. A
+   `shouldUpdate()` override skips the render pass outright when `hass` was
+   the only property that changed and a fingerprint over every entity Helios
+   actually reads (plus theme, language, home location) is unchanged - HA
+   replaces the whole `hass` object on any entity's state change anywhere in
+   the house, not just the ones this card shows.
 5. On disconnect the engine teardown is deferred briefly (HA edit-mode churn fires
    disconnect + reconnect in one tick); a real removal tears down the renderer,
    timers, controllers and observers, after persisting the view + pose.
