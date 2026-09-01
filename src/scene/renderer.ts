@@ -652,12 +652,12 @@ export class SceneRenderer
             }
             else
             {
+                //fade's width/height are set once by buildVectorGround() and 'display' is never touched off this
+                //path (only the projected compat path hides it) - both fixed for the ground's whole lifetime, so
+                //only the two properties that genuinely move every frame are written here.
                 const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
                 this._ground.el.style.transformOrigin = transformOrigin;
                 this._ground.el.style.transform = transform;
-                this._ground.fade.style.display = '';
-                this._ground.fade.style.width  = `${this._ground.size}px`;
-                this._ground.fade.style.height = `${this._ground.size}px`;
                 this._ground.fade.style.transformOrigin = transformOrigin;
                 this._ground.fade.style.transform = transform;
             }

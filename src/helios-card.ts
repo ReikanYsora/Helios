@@ -314,6 +314,19 @@ export class HeliosCard extends LitElement
     private readonly _wxRainCtl  = new WeatherRain((): HTMLCanvasElement | undefined => this._wxRainCanvas);
     private readonly _wxSnowCtl  = new WeatherSnow((): HTMLCanvasElement | undefined => this._wxSnowCanvas);
     private readonly _wxStormCtl = new WeatherStorm((v: number): void => this.style.setProperty('--wx-flash', v.toFixed(3)));
+    //Last value written per --wx-* var (see _applyWeather), so a repeat write of an unchanged value skips the
+    //setProperty call - the same guard WeatherStorm._emit already applies to --wx-flash, extended to every var
+    //_applyWeather owns. Per-var rather than one combined check: --wx-sun-x/-y move every rotation frame while
+    //the rest only change with the weather data itself, so a combined guard would rarely skip anything.
+    private _lastWxVars: Record<string, string> = {};
+    private _setWxVar(name: string, value: string): void
+    {
+        if (this._lastWxVars[name] !== value)
+        {
+            this._lastWxVars[name] = value;
+            this.style.setProperty(name, value);
+        }
+    }
     //Weather driving the layers right now: the resolved live/scrub weather (cloud/precip/snow/code + sun altitude).
     private get _wxInput(): WxInput
     {
@@ -1259,16 +1272,16 @@ export class HeliosCard extends LitElement
 
         const sun = this._sunScene?.sun;
         const p = weatherLayers(this._wxInput);
-        this.style.setProperty('--wx-sun', p.sun.toFixed(3));
+        this._setWxVar('--wx-sun', p.sun.toFixed(3));
         if (sun)
         {
-            this.style.setProperty('--wx-sun-x', `${sun.x.toFixed(1)}px`);
-            this.style.setProperty('--wx-sun-y', `${sun.y.toFixed(1)}px`);
+            this._setWxVar('--wx-sun-x', `${sun.x.toFixed(1)}px`);
+            this._setWxVar('--wx-sun-y', `${sun.y.toFixed(1)}px`);
         }
-        this.style.setProperty('--wx-grey',  p.grey.toFixed(3));
-        this.style.setProperty('--wx-cloud', p.cloud.toFixed(3));
-        this.style.setProperty('--wx-rain',  p.rain.toFixed(3));
-        this.style.setProperty('--wx-snow',  p.snow.toFixed(3));
+        this._setWxVar('--wx-grey',  p.grey.toFixed(3));
+        this._setWxVar('--wx-cloud', p.cloud.toFixed(3));
+        this._setWxVar('--wx-rain',  p.rain.toFixed(3));
+        this._setWxVar('--wx-snow',  p.snow.toFixed(3));
         this._engine?.setWeatherGrade(p.sat, p.bright);
         this._wxRainCtl.setIntensity(p.rain);
         this._wxSnowCtl.setIntensity(p.snow);

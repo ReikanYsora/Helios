@@ -207,9 +207,12 @@ function stackedLines(
 //it consults per target - all of which Lit reassigns rather than mutates in place on a real change, so reference
 //equality alone is exact, no content hashing needed. Theme polarity is included too (colours are baked into the
 //cached lines) plus a coarse freshness term as a safety net for a live theme-token edit that doesn't flip
-//dark/light. Single slot, like the memo below: cheap, and a miss just costs one extra rebuild.
-let _targetSeriesInputs: readonly unknown[] | null = null;
-let _targetSeriesResult: { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null } | null = null;
+//dark/light. One slot per host (WeakMap, like the memo below), not a single global slot: a single slot thrashes
+//to a 0% hit rate the moment two cards' renders interleave, each evicting the other's entry every time.
+const _targetSeriesCache = new WeakMap<ChartHost, {
+    inputs: readonly unknown[];
+    result: { series: ChartLine[]; fixedMax: number; fixedMin: number; socHover: SocHover | null };
+}>();
 
 function buildTargetSeries(
     host: ChartHost, target: Exclude<ChartTarget, 'production'>, ctx: TargetSeriesCtx
@@ -224,17 +227,15 @@ function buildTargetSeries(
         host._batteryChargeChangeSeriesPerEntity, host._batteryDischargeChangeSeriesPerEntity,
         host._deviceChangeSeries,
     ];
-    const prevInputs = _targetSeriesInputs;
-    const prevResult = _targetSeriesResult;
-    if (prevInputs && prevResult
-        && prevInputs.length === inputs.length
-        && inputs.every((v, i) => v === prevInputs[i]))
+    const cached = _targetSeriesCache.get(host);
+    if (cached
+        && cached.inputs.length === inputs.length
+        && inputs.every((v, i) => v === cached.inputs[i]))
     {
-        return prevResult;
+        return cached.result;
     }
     const out = buildTargetSeriesUncached(host, target, ctx);
-    _targetSeriesInputs = inputs;
-    _targetSeriesResult = out;
+    _targetSeriesCache.set(host, { inputs, result: out });
     return out;
 }
 
@@ -711,7 +712,7 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     const forecastColor = irradianceForecastColor(host);
 
     //Day separators from the shared timeline model (bounded, empty on wide spans).
-    const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
+    const dayXs = buildTimelineModel(host, range.start, range.end).dayBoundaries.map(frac => frac * W);
 
     //Hover guide + one dot per series, interpolated at the hover instant.
     const hoverPct = host._chartHoverPct;
@@ -869,7 +870,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeo
     }
 
     const { start, end } = host._timeRange;
-    const model  = buildTimelineModel(start, end);
+    const model  = buildTimelineModel(host, start, end);
     //Drop entries hugging the window edges so they never collide with the card corners.
     const labels = model.labels.filter(s => s.frac > 0.02 && s.frac < 0.98);
     const seps   = model.separators.filter(s => s.frac > 0.02 && s.frac < 0.98);
@@ -901,9 +902,10 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult | typeo
 //Memo for computeDailyKwhTotals. The tooltip calls it on every pointermove, but the result depends only on the
 //range + data, never the cursor. Key: the range, the store's data-version hash (which already folds in the pv
 //change series), a light pv signature for the store-null case, and a per-minute term so Pass 2's now-split stays
-//fresh. Stable across a hover session, so the whole per-day sum stops recomputing on every frame.
-let _dailyTotalsKey: string | null = null;
-let _dailyTotalsVal: Map<number, number> | null = null;
+//fresh. Stable across a hover session, so the whole per-day sum stops recomputing on every frame. One slot per
+//host (WeakMap): a single global slot both thrashes across multiple mounted cards AND, unlike the memo above,
+//has no host identity in its key at all, so two cards could in principle collide on the same key.
+const _dailyTotalsCache = new WeakMap<ChartHost, { key: string; val: Map<number, number> }>();
 
 function dailyTotalsKey(host: ChartHost): string
 {
@@ -926,14 +928,14 @@ function dailyTotalsKey(host: ChartHost): string
 //the map (never mutate it), so a shared cached instance is safe.
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 {
-    const key = dailyTotalsKey(host);
-    if (key === _dailyTotalsKey && _dailyTotalsVal)
+    const key    = dailyTotalsKey(host);
+    const cached = _dailyTotalsCache.get(host);
+    if (cached && cached.key === key)
     {
-        return _dailyTotalsVal;
+        return cached.val;
     }
     const out = computeDailyKwhTotalsUncached(host);
-    _dailyTotalsKey = key;
-    _dailyTotalsVal = out;
+    _dailyTotalsCache.set(host, { key, val: out });
     return out;
 }
 

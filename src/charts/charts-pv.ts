@@ -46,7 +46,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //Day-boundary X positions from the shared timeline model (same source as the weather chart so separators line
     //up); empty on wide spans.
     const endMsAbs = range.end.getTime();
-    const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
+    const dayXs = buildTimelineModel(host, range.start, range.end).dayBoundaries.map(frac => frac * W);
 
     //unifiedStore carries the production series over the full J-1..J+2 window in watts (linearly interpolated, never
     //mixed with forecast). sliceForRange returns one sample per display bucket in view; empty before the first build
