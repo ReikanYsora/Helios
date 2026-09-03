@@ -180,6 +180,16 @@ clear-sky irradiance (Haurwitz 1945 + Kasten-Czeplak 1980 cloud attenuation);
 drive the sun arc, the disc, and the shadow direction. They fade as the sun nears
 the horizon.
 
+`core/time/moon.ts` is the moon's counterpart: a low-precision lunar position
+(ecliptic -> equatorial -> horizontal) and the illuminated fraction from the
+sun-earth-moon angle, no ephemeris library. `scene/sun-arc.ts` projects it onto the
+same dome as the sun (`moonSpherePoint`), the engine samples its own 96-point arc
+(`projectMoonScene`, cached per day + arc scale, nothing weather-related), and
+`scene/moon-crescent.ts` turns the fraction into a point-sampled SVG crescent lit
+toward the sun's projected position. One HUD layer, always over the sun's (the moon
+is the nearer body); the `moon-display` option picks always / night-only / hidden.
+Cosmetic only: no chip, no value, no calculation reads it.
+
 A cast shadow is the **exact swept envelope** of the footprint: the outline
 translated along the sun vector, plus one quad per edge (outer rings and courtyard
 rings alike), emitted as a single path per caster. Sweeping the real outline rather

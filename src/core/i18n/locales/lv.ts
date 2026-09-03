@@ -142,6 +142,11 @@ export const lv: Translations = {
     showHorizonLineHint: "Zīmē reljefa horizonta līniju ap māju, aprēķinātu no vietējā reljefa. Horizonts vienmēr reālistiski pieklusina sauli aiz pakalniem; tas tikai parāda vai paslēpj zīmēto līniju.",
     horizonLineColor: "Reljefa horizonta krāsa",
     horizonLineColorHint: "Reljefa horizonta līnijas krāsa.",
+    moonDisplay: "Mēness",
+    moonDisplayHint: "Zīmē mēnesi uz sava loka ar fāzei atbilstošu sirpi, vienmēr saules priekšā. Tikai dekoratīvi: bez etiķetes, bez vērtības.",
+    moonDisplayAlways: "Vienmēr redzams",
+    moonDisplayNight: "Tikai naktī",
+    moonDisplayHidden: "Paslēpts",
     lockRotation: "Fiksēt rotāciju",
     lockRotationHint:
       "Velciet priekšskatījumu, lai pagrieztu un sasvērtu ainu vēlamajā skatā, pēc tam ieslēdziet šo. Bloķēšana iesaldē šo skatu (pagriešana ar vilkšanu un automātiskā griešanās miera stāvoklī tiek atspējota) un saglabā leņķi kartē, tāpēc tieši tas pats skats parādās katrā ierīcē un pārlūkā. Izslēdziet to, lai atkal brīvi grieztu.",

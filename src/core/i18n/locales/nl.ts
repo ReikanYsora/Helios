@@ -142,6 +142,11 @@ export const nl: Translations = {
     showHorizonLineHint: "Tekent de horizonlijn van het reliëf rond het huis, berekend op basis van het lokale terrein. De horizon dempt de zon altijd realistisch achter heuvels; dit toont of verbergt alleen de getekende lijn.",
     horizonLineColor: "Kleur van de terreinhorizon",
     horizonLineColorHint: "Kleur van de terreinhorizonlijn.",
+    moonDisplay: "Maan",
+    moonDisplayHint: "Tekent de maan op haar eigen boog met een fase-getrouwe sikkel, altijd vóór de zon. Puur cosmetisch: geen chip, geen waarde.",
+    moonDisplayAlways: "Altijd zichtbaar",
+    moonDisplayNight: "Alleen 's nachts",
+    moonDisplayHidden: "Verborgen",
     lockRotation: "Rotatie vergrendelen",
     lockRotationHint:
       "Sleep in het voorbeeld om de scène te draaien en te kantelen naar de gewenste weergave en zet dit vervolgens aan. De vergrendeling zet die weergave vast (draaien via slepen en de automatische rotatie in rust worden uitgeschakeld) en slaat de hoek op in de kaart, zodat exact dezelfde weergave op elk apparaat en in elke browser verschijnt. Zet het uit om weer vrij te draaien.",

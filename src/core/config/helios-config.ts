@@ -121,6 +121,8 @@ export interface HeliosConfig
     'show-sun-times'?:          unknown;
     'show-horizon-line'?:       unknown;
     'horizon-line-color'?:      unknown;
+    //Moon arc + crescent disc: 'always' | 'night' (only while the sun is down) | 'hidden'. Cosmetic, no chip.
+    'moon-display'?:            unknown;
     'sun-chip-mode'?:           unknown;
     'battery-chip-mode'?:       unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
@@ -315,6 +317,14 @@ export function showSunTimes(config: HeliosConfig | undefined): boolean
 export function showHorizonLine(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-horizon-line'] !== false;
+}
+export type MoonDisplay = 'always' | 'night' | 'hidden';
+//Moon arc + phase disc visibility. Default 'always'; 'night' shows it only while the sun is below the horizon;
+//'hidden' drops it entirely. Purely cosmetic: it drives no chip, no value, no calculation.
+export function moonDisplay(config: HeliosConfig | undefined): MoonDisplay
+{
+    const v = config?.['moon-display'];
+    return v === 'night' || v === 'hidden' ? v : 'always';
 }
 //Configured colour for the horizon ridge line, as a ui_color token or hex. Undefined falls back to the card CSS.
 export function horizonLineColor(config: HeliosConfig | undefined): string | undefined

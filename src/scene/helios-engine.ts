@@ -2,12 +2,13 @@ import { SceneRenderer } from './renderer';
 import { renderDayCurve, type DayCurveInput as CurveInput, type DayCurveScene } from './day-curve';
 import type { Building, RawBuilding } from './buildings';
 import { getSunPosition, computePvPercent, computeIrradianceWm2 } from '../core/time/sun';
+import { getMoonPosition, getMoonPhase } from '../core/time/moon';
 import { fetchHomePointData, clearWeatherCache, type SampleHourly } from '../data/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './buildings';
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
 import { resolveWeatherAtTime } from '../data/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './hud-layout';
-import { sunSpherePoint, daylightRamp, horizonSpherePoint } from './sun-arc';
+import { sunSpherePoint, moonSpherePoint, daylightRamp, horizonSpherePoint } from './sun-arc';
 import { buildTimeSamples, timeSamplesEqual, nearestSampleAt, type TimeSample } from '../core/nearest-series';
 import { fetchHorizonProfile, horizonAltAt, horizonPeak, HORIZON_MIN_PEAK_DEG, type HorizonProfile } from '../data/sources/horizon';
 import {
@@ -557,6 +558,19 @@ export class HeliosEngine
             azimuthDeg: number;
             wm2: number;
             belowHorizon: boolean;
+        } | null)[];
+    };
+    //Same idea as _arcInputsCache, for the moon's own 96 per-day samples. No cloud/sensor/weather dependence
+    //(nothing about the moon's position or phase reads them), so the key is only day + arc scale.
+    private _moonArcInputsCache?: {
+        dayStartMs: number;
+        scaleKey: number;
+        samples: ({
+            lon: number;
+            lat: number;
+            altitudeM: number;
+            altitudeDeg: number;
+            azimuthDeg: number;
         } | null)[];
     };
     //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
@@ -1643,8 +1657,9 @@ export class HeliosEngine
         this._fetchLon = lon;
         //Both arc caches bake the projection around the home: the scale probe and the per-sample sun points.
         //Drop them so the arc rebuilds at the new position instead of reusing the old location's geometry.
-        this._arcScaleMemo   = undefined;
-        this._arcInputsCache = undefined;
+        this._arcScaleMemo       = undefined;
+        this._arcInputsCache     = undefined;
+        this._moonArcInputsCache = undefined;
         void this._renderer?.setLocation(lat, lon, this._groundStyle());
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
@@ -2195,6 +2210,118 @@ export class HeliosEngine
         return sunSpherePoint(date, this.homeLat, this.homeLon, this._sunArcScale());
     }
 
+    //Screen-space layout of the moon's own arc and its current position + phase. Same shape/sampling as
+    //projectSunScene, deliberately leaner: no irradiance, weather, sensor reading or terrain-horizon ridge, none
+    //of which the moon reads. Cosmetic only, so there is no home-anchored incidence ray either (see hud
+    //scene-hud-controller: the moon carries no chip).
+    public projectMoonScene(now: Date): {
+        arc:  { x: number; y: number; altitude: number; nearness: number; belowHorizon: boolean }[];
+        moon: {
+            x: number; y: number; altitude: number; azimuth: number; nearness: number;
+            fraction: number; waxing: boolean;
+        };
+    } | null
+    {
+        if (!this._renderer)
+        {
+            return null;
+        }
+
+        const dayStart = new Date(now);
+        dayStart.setHours(0, 0, 0, 0);
+        const stepMs = DAY_MS / SUN_ARC_SAMPLES;
+
+        const dayStartMs  = dayStart.getTime();
+        const arcScaleKey = Math.round(this._sunArcScale() * 100);
+        let cache = this._moonArcInputsCache;
+        if (!cache || cache.dayStartMs !== dayStartMs || cache.scaleKey !== arcScaleKey)
+        {
+            const samples: ({
+                lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number;
+            } | null)[] = [];
+            for (let i = 0; i < SUN_ARC_SAMPLES; i++)
+            {
+                const t = new Date(dayStartMs + i * stepMs);
+                samples.push(this._moonSpherePoint(t));
+            }
+            cache = { dayStartMs, scaleKey: arcScaleKey, samples };
+            this._moonArcInputsCache = cache;
+        }
+
+        interface RawArcPoint { x: number; y: number; depth: number; altitude: number; belowHorizon: boolean; }
+        const raw: RawArcPoint[] = [];
+        for (let i = 0; i < SUN_ARC_SAMPLES; i++)
+        {
+            const s = cache.samples[i];
+            if (!s)
+            {
+                continue;
+            }
+            const px = this._projectScenePoint(s.lon, s.lat, s.altitudeM);
+            if (!px)
+            {
+                continue;
+            }
+            //No terrain-horizon test for the moon (that profile is built and gated for the sun's own visual
+            //gate): plain geometric altitude, same as the sun arc's own render-mode split before its terrain
+            //refinement.
+            raw.push({ x: px.x, y: px.y, depth: px.depth, altitude: s.altitudeDeg, belowHorizon: s.altitudeDeg <= 0 });
+        }
+
+        const moonNow3D = this._moonSpherePoint(now);
+        const moonNowPos = getMoonPosition(now, this.homeLat, this.homeLon);
+        const moonNowPhase = getMoonPhase(now);
+
+        let moonScreen: { x: number; y: number; depth: number } | null = null;
+        if (moonNow3D)
+        {
+            moonScreen = this._projectScenePoint(moonNow3D.lon, moonNow3D.lat, moonNow3D.altitudeM);
+        }
+        if (!moonScreen)
+        {
+            const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+            if (!homeScreen)
+            {
+                return null;
+            }
+            moonScreen = { ...homeScreen };
+        }
+
+        let dMin = Infinity;
+        let dMax = -Infinity;
+        for (const p of raw)
+        {
+            if (p.depth < dMin) { dMin = p.depth; }
+            if (p.depth > dMax) { dMax = p.depth; }
+        }
+        if (moonScreen.depth < dMin) { dMin = moonScreen.depth; }
+        if (moonScreen.depth > dMax) { dMax = moonScreen.depth; }
+        const dRange = (dMax - dMin) || 1;
+        const nearnessOf = (d: number) => (d - dMin) / dRange;
+
+        const arc = raw.map(p => ({
+            x: p.x, y: p.y, altitude: p.altitude, nearness: nearnessOf(p.depth), belowHorizon: p.belowHorizon
+        }));
+
+        return {
+            arc,
+            moon: {
+                x: moonScreen.x, y: moonScreen.y,
+                altitude: moonNowPos.altitude, azimuth: moonNowPos.azimuth,
+                nearness: nearnessOf(moonScreen.depth),
+                fraction: moonNowPhase.fraction, waxing: moonNowPhase.waxing
+            }
+        };
+    }
+
+    //date -> 3D point on the celestial hemisphere (centred on home) for the moon, same dome/scale as the sun.
+    private _moonSpherePoint(date: Date): {
+        lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number
+    } | null
+    {
+        return moonSpherePoint(date, this.homeLat, this.homeLon, this._sunArcScale());
+    }
+
     //Set the scrub time (null = live). Swaps the weather refresh cadence and re-renders.
     public setSelectedTime(time: Date | null): void
     {
@@ -2381,6 +2508,7 @@ export class HeliosEngine
         window.clearTimeout(this._horizonTimer);
         this._clearBuildingsRetry();
         this._arcInputsCache         = undefined;
+        this._moonArcInputsCache     = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {

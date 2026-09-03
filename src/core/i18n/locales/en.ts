@@ -131,6 +131,11 @@ export const en: Translations = {
     showHorizonLineHint: "Draw the terrain skyline around the home, computed from the local relief. The horizon always dims the sun realistically behind hills; this only toggles the drawn line.",
     horizonLineColor: "Terrain horizon colour",
     horizonLineColorHint: "Colour of the terrain horizon line.",
+    moonDisplay: "Moon",
+    moonDisplayHint: "Draw the moon on its own arc with a phase-correct crescent, always in front of the sun. Cosmetic only: no chip, no value.",
+    moonDisplayAlways: "Always visible",
+    moonDisplayNight: "Night only",
+    moonDisplayHidden: "Hidden",
     lockRotation: "Lock rotation",
     lockRotationHint:
       "Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.",

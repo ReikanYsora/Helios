@@ -2,13 +2,14 @@ import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import { guard } from 'lit/directives/guard.js';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode, moonDisplay } from '../core/config/helios-config';
+import { moonCrescentPath } from '../scene/moon-crescent';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
-import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene } from './hud';
+import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene, type MoonScene } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
 import { clipSegment, cardClipRect, pointOutside, type ClipRect } from '../core/render-kit/geometry';
 import { formatGridValue } from '../data/sources/grid';
@@ -40,6 +41,16 @@ const SEGMENT_NEAR = 4.0;
 const SUN_R_FAR    = 10.0;
 const SUN_R_NEAR   = 20.0;
 const SUN_RIM_WIDTH = 1.5;
+//Moon: a pale, fixed colour (no time-of-day ramp, no irradiance fill), and a disc a touch smaller than the sun's so
+//the two never read as the same body. Overridable via --helios-moon-color in the card CSS.
+const MOON_COLOR    = '#dfe6ee';
+//The unlit side: a solid dark slate rather than a faint tint, so the disc reads as one body (its own arc passes
+//behind it instead of showing through the dark half as a stray straight edge).
+const MOON_DARK     = '#3a4250';
+const MOON_R_FAR    = 8.0;
+const MOON_R_NEAR   = 16.0;
+//Fraction of the disc radius the crescent is inset by, so the lit shape sits inside the rim rather than on it.
+const MOON_CRESCENT_INSET = 0.86;
 //Home pill is a horizontal stadium (like the other chips), not a circle. Half-extents of its outline;
 //leaders dock against this stadium so they all meet the same focal energy node.
 const HOME_PILL_HALF_WIDTH_PX  = 38;
@@ -87,6 +98,34 @@ export class SceneHudController
             this._arcSegmentsCache    = buildArcSegments(sunScene.arc, sunColor);
         }
         return this._arcSegmentsCache;
+    }
+
+    private _moonSegmentsScene: MoonScene | null = null;
+    private _moonSegmentsCache: ArcSegment[] = [];
+
+    //Moon arc segments, identity-cached on the scene like the sun's. Built inline rather than through
+    //buildArcSegments: that one paints the sun's time-of-day colour ramp (grey under the horizon, amber high),
+    //while the moon keeps one fixed pale colour whatever its altitude.
+    private _buildMoonArcSegmentsCached(moonScene: MoonScene, color: string): ArcSegment[]
+    {
+        if (this._moonSegmentsScene !== moonScene)
+        {
+            this._moonSegmentsScene = moonScene;
+            const out: ArcSegment[] = [];
+            const arc = moonScene.arc;
+            for (let i = 0; i < arc.length - 1; i++)
+            {
+                const p = arc[i]; const n = arc[i + 1];
+                out.push({
+                    x1: p.x, y1: p.y, x2: n.x, y2: n.y,
+                    color,
+                    nearness:     0.5 * (p.nearness + n.nearness),
+                    belowHorizon: p.belowHorizon || n.belowHorizon,
+                });
+            }
+            this._moonSegmentsCache = out;
+        }
+        return this._moonSegmentsCache;
     }
 
     private _buildRidgeLineCached(sunScene: SunScene): string
@@ -1127,6 +1166,71 @@ export class SceneHudController
     })()}
                     </svg>
                 ` : nothing}
+
+                <!--  Moon: its own arc (dotted under the horizon, solid above) and a phase-correct crescent disc,
+                      in ONE layer that always paints over the sun's (z 13 > sun near-disc z 12): the moon is
+                      nearer to us than the sun, so it never passes behind it. Cosmetic only, no chip. Lit side
+                      faces the sun's projected position in this same scene, so the crescent reads right against
+                      the sun wherever the camera turns; that direction only degenerates at new moon, when there is
+                      no crescent to orient anyway.  -->
+                ${(() =>
+    {
+        const mode      = moonDisplay(cfg);
+        const moonScene = this.host._moonScene;
+        if (mode === 'hidden' || !hasHomeCoords || !moonScene || moonScene.arc.length < 2)
+        {
+            return nothing;
+        }
+        //'night': only while the sun is below the geometric horizon (its own scene, same instant).
+        if (mode === 'night' && sunScene && sunScene.sun.altitude > 0)
+        {
+            return nothing;
+        }
+        const moonColor = MOON_COLOR;
+        const moonRim   = darkenHex(moonColor, 0.30);
+        const segs      = this._buildMoonArcSegmentsCached(moonScene, moonColor);
+        const m         = moonScene.moon;
+
+        //Disc + crescent, culled off-card like the sun's (60 px clears the largest rim).
+        const discVisible = m.altitude > 0 && (clipRect === null
+            || !pointOutside([m.x, m.y],
+                { minX: clipRect.minX - 60, minY: clipRect.minY - 60, maxX: clipRect.maxX + 60, maxY: clipRect.maxY + 60 }));
+        const arcScale = this.host._engine?.getSunArcScale() ?? 1;
+        const r  = Math.min((MOON_R_FAR + (MOON_R_NEAR - MOON_R_FAR) * m.nearness) * arcScale, 18);
+        const litDx = (sunScene?.sun.x ?? m.x + 1) - m.x;
+        const litDy = (sunScene?.sun.y ?? m.y) - m.y;
+        const crescent = moonCrescentPath(m.x, m.y, r * MOON_CRESCENT_INSET, m.fraction, litDx, litDy);
+
+        return html`
+                    <svg class="moon-svg">
+                        ${segs.map(s =>
+        {
+            if (clipRect)
+            {
+                const c = clipSegment([s.x1, s.y1], [s.x2, s.y2], clipRect);
+                if (!c)
+                {
+                    return nothing;
+                }
+                s.x1 = c[0][0]; s.y1 = c[0][1]; s.x2 = c[1][0]; s.y2 = c[1][1];
+            }
+            const w = (SEGMENT_FAR + (SEGMENT_NEAR - SEGMENT_FAR) * s.nearness) * 0.75;
+            return svg`
+                            <line
+                                class="moon-arc-segment ${s.belowHorizon ? 'moon-arc-night' : ''}"
+                                x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}"
+                                stroke="${s.color}"
+                                stroke-width="${s.belowHorizon ? w * NIGHT_STROKE_FACTOR : w}"
+                            ></line>`;
+        })}
+                        ${discVisible ? svg`
+                            <circle class="moon-disc-bg" cx="${m.x}" cy="${m.y}" r="${r}" fill="${MOON_DARK}" fill-opacity="0.9"></circle>
+                            <path class="moon-crescent" d="${crescent}" fill="${moonColor}"></path>
+                            <circle class="moon-disc-rim" cx="${m.x}" cy="${m.y}" r="${r}" fill="none" stroke="${moonRim}" stroke-width="1"></circle>
+                        ` : nothing}
+                    </svg>
+                `;
+    })()}
 
                 <!--  Weather chip, pinned above the sun disc: the cloud-cover glyph (clear / partly / overcast)
                       next to the live irradiance value. One chip carries both stories, the icon for the sky

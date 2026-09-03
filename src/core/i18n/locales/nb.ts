@@ -142,6 +142,11 @@ export const nb: Translations = {
     showHorizonLineHint: "Tegner terrengets horisontlinje rundt hjemmet, beregnet fra det lokale terrenget. Horisonten demper alltid solen realistisk bak åser; dette viser eller skjuler bare den tegnede linjen.",
     horizonLineColor: "Farge på terrenghorisonten",
     horizonLineColorHint: "Farge på terrenghorisontlinjen.",
+    moonDisplay: "Måne",
+    moonDisplayHint: "Tegner månen på sin egen bue med en fasekorrekt sigd, alltid foran solen. Kun kosmetisk: ingen brikke, ingen verdi.",
+    moonDisplayAlways: "Alltid synlig",
+    moonDisplayNight: "Bare om natten",
+    moonDisplayHidden: "Skjult",
     lockRotation: "Lås rotasjon",
     lockRotationHint:
       "Dra i forhåndsvisningen for å rotere og vippe scenen til ønsket visning, og slå så på dette. Låsen fryser den visningen (dra-for-å-rotere og den automatiske rotasjonen i hvile slås av) og lagrer vinkelen i kortet, slik at nøyaktig samme visning vises på alle enheter og nettlesere. Slå det av for å rotere fritt igjen.",

@@ -141,6 +141,11 @@ export const fr: Translations = {
     showHorizonLineHint: "Dessine la ligne d'horizon du relief autour de la maison, calculée à partir du terrain local. L'horizon atténue toujours le soleil de façon réaliste derrière les collines ; ceci ne fait qu'afficher ou masquer la ligne.",
     horizonLineColor: "Couleur de l'horizon du terrain",
     horizonLineColorHint: "Couleur de la ligne d'horizon du terrain.",
+    moonDisplay: "Lune",
+    moonDisplayHint: "Dessine la lune sur son propre arc avec un croissant fidèle à sa phase, toujours devant le soleil. Purement cosmétique : ni badge, ni valeur.",
+    moonDisplayAlways: "Toujours visible",
+    moonDisplayNight: "Nuit uniquement",
+    moonDisplayHidden: "Masquée",
     lockRotation: "Verrouiller la rotation",
     lockRotationHint:
       "Faites glisser l'aperçu pour pivoter et incliner la scène jusqu'à la vue souhaitée, puis activez ceci. Le verrou fige cette vue (le glisser-pour-pivoter et l'auto-rotation au repos sont désactivés) et enregistre l'angle dans la carte, pour un rendu identique sur chaque appareil et navigateur. Désactivez-le pour pivoter à nouveau librement.",

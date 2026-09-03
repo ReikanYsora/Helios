@@ -142,6 +142,11 @@ export const sr: Translations = {
     showHorizonLineHint: "Црта линију хоризонта рељефа око дома, израчунату из локалног терена. Хоризонт увек реалистично пригушује сунце иза брда; ово само приказује или сакрива нацртану линију.",
     horizonLineColor: "Боја хоризонта терена",
     horizonLineColorHint: "Боја линије хоризонта терена.",
+    moonDisplay: "Mesec",
+    moonDisplayHint: "Crta mesec na sopstvenom luku sa srpom vernim fazi, uvek ispred sunca. Samo dekorativno: bez oznake, bez vrednosti.",
+    moonDisplayAlways: "Uvek vidljiv",
+    moonDisplayNight: "Samo noću",
+    moonDisplayHidden: "Skriven",
     lockRotation: "Закључај ротацију",
     lockRotationHint:
       "Превуците преглед да бисте ротирали и нагнули сцену до жељеног приказа, а затим укључите ово. Закључавање замрзава тај приказ (ротација превлачењем и аутоматска ротација у мировању се искључују) и чува угао у картици, тако да се потпуно исти приказ појављује на сваком уређају и прегледачу. Искључите га да бисте поново слободно ротирали.",

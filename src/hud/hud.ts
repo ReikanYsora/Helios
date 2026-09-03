@@ -31,6 +31,17 @@ export interface SunScene
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
 }
 
+//Moon-scene projection (engine.projectMoonScene): its own arc on the same dome as the sun's, plus the disc's
+//position and phase. Cosmetic only, so no irradiance, ray anchor, ridge or rise/set markers.
+export interface MoonScene
+{
+    arc:  SunArcSample[];
+    moon: {
+        x: number; y: number; altitude: number; azimuth: number; nearness: number;
+        fraction: number; waxing: boolean;
+    };
+}
+
 //Screen-space anchors for the always-visible chips plus ring edge / home point used by leader lines.
 export interface LabelLayout
 {
@@ -66,6 +77,8 @@ export interface HudHost
 
     _labelLayout:     LabelLayout | null;
     _sunScene:        SunScene | null;
+    //The moon's own arc + disc, projected alongside the sun's. null until the engine is ready.
+    _moonScene:       MoonScene | null;
     //The day curve, already projected, as the two depth passes the card layers around its chips. null when off.
     _dayCurveScene:   DayCurveScene | null;
 
@@ -182,6 +195,42 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     return true;
 }
 
+//Same identity-preserving guard as sunSceneEq: the moon is re-projected on every transform tick, and a content-equal
+//result must keep its identity or Lit rebuilds the moon SVG for nothing. Phase (fraction/waxing) is gated too: a
+//fixed scrub time at a stationary moon still changes the crescent as the day is scrubbed.
+function moonSceneEq(a: MoonScene | null, b: MoonScene | null): boolean
+{
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b)
+    {
+        return false;
+    }
+    if (!nearlyEq(a.moon.x, b.moon.x) || !nearlyEq(a.moon.y, b.moon.y)
+        || !nearlyEq(a.moon.altitude, b.moon.altitude)
+        || !nearlyEq(a.moon.nearness, b.moon.nearness)
+        || Math.abs(a.moon.fraction - b.moon.fraction) > 0.002
+        || a.moon.waxing !== b.moon.waxing)
+    {
+        return false;
+    }
+    if (a.arc.length !== b.arc.length)
+    {
+        return false;
+    }
+    for (let i = 0; i < a.arc.length; i++)
+    {
+        const sa = a.arc[i]; const sb = b.arc[i];
+        if (sa.belowHorizon !== sb.belowHorizon || !nearlyEq(sa.x, sb.x) || !nearlyEq(sa.y, sb.y))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 function dayCurvePassEq(a: DayCurvePass, b: DayCurvePass): boolean
 {
     if (a.foot !== b.foot || a.risers !== b.risers)
@@ -278,6 +327,13 @@ export function refreshHud(host: HudHost): void
     if (!sunSceneEq(host._sunScene, nextSun))
     {
         host._sunScene = nextSun;
+    }
+
+    //The moon rides the same refresh as the sun: same dome, same camera, same reasons to re-project.
+    const nextMoon  = host._engine ? host._engine.projectMoonScene(t) : null;
+    if (!moonSceneEq(host._moonScene, nextMoon))
+    {
+        host._moonScene = nextMoon;
     }
 
     //The day curve rides the same refresh as the rest of the HUD, for the same reason: it is projected through the

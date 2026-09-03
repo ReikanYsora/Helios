@@ -688,6 +688,24 @@ export const heliosCardStyles = css`
     .solar-svg-front-near { z-index: 11; }
     .solar-svg-sun-far    { z-index: 5;  }
     .solar-svg-sun-near   { z-index: 12; }
+    /*  Moon layer: arc + crescent disc together, always over every sun layer (z 13 > sun near-disc z 12) since the
+        moon is the nearer body. That also puts it over the chips (z 8) and home pill (z 9), the same trade the sun's
+        own near disc already makes; the disc is small and carries no data, so nothing it can cover is a reading.
+        No --solar-daylight fade: the moon is most wanted exactly when the sun's layers dim to night. */
+    .moon-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 13;
+        overflow: visible;
+        color: var(--helios-moon-color, #dfe6ee);
+    }
+    .moon-svg .moon-arc-segment { stroke-linecap: round; stroke-opacity: 0.7; }
+    .moon-svg .moon-arc-night   { stroke-dasharray: 0 7; stroke-opacity: 0.45; }
+    .moon-svg .moon-crescent    { opacity: 0.95; }
     /*  Radiant-heat aura around the sun disc: a warm halo that slowly breathes so a strong sun visibly
         shimmers with heat. Only the scale animates; the inline opacity gates it on irradiance (0 when the sun
         is weak). transform-box + centre origin so it pulses around its own centre wherever the sun sits;

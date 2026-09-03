@@ -1276,6 +1276,11 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderToggle('show-sun-times', t.editor.showSunTimes, t.editor.showSunTimesHint, undefined, undefined, true)}
                 ${this._renderToggle('show-horizon-line', t.editor.showHorizonLine, t.editor.showHorizonLineHint, undefined, undefined, true)}
                 ${this._renderColorPicker('horizon-line-color', t.editor.horizonLineColor, t.editor.horizonLineColorHint, 'blue-grey', c['show-horizon-line'] === false)}
+                ${this._renderSelect('moon-display', t.editor.moonDisplay,
+        [{ value: 'always', label: t.editor.moonDisplayAlways },
+            { value: 'night',  label: t.editor.moonDisplayNight },
+            { value: 'hidden', label: t.editor.moonDisplayHidden }], 'always',
+        t.editor.moonDisplayHint)}
                 ${this._renderToggle('weather-enabled', t.editor.weatherEnabled, t.editor.weatherEnabledHint, undefined, undefined, true)}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode, t.editor.noUiModeHint)}
                 ${this._renderSlider('no-ui-delay', t.editor.noUiDelay, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}

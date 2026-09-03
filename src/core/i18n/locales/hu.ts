@@ -142,6 +142,11 @@ export const hu: Translations = {
     showHorizonLineHint: "Kirajzolja a domborzat horizontvonalát az otthon körül, a helyi terep alapján számítva. A horizont mindig valósághűen tompítja a napot a dombok mögött; ez csak megjeleníti vagy elrejti a kirajzolt vonalat.",
     horizonLineColor: "Domborzati horizont színe",
     horizonLineColorHint: "A domborzati horizontvonal színe.",
+    moonDisplay: "Hold",
+    moonDisplayHint: "A holdat saját ívén rajzolja, a fázisnak megfelelő sarlóval, mindig a nap előtt. Csak díszítés: nincs címke, nincs érték.",
+    moonDisplayAlways: "Mindig látható",
+    moonDisplayNight: "Csak éjjel",
+    moonDisplayHidden: "Rejtett",
     lockRotation: "Forgatás zárolása",
     lockRotationHint:
       "Húzza az előnézetet a jelenet elforgatásához és megdöntéséhez a kívánt nézetig, majd kapcsolja be ezt. A zár rögzíti ezt a nézetet (a húzással forgatás és a nyugalmi automatikus forgatás kikapcsol), és elmenti a szöget a kártyába, így pontosan ugyanaz a nézet jelenik meg minden eszközön és böngészőben. Kapcsolja ki, hogy újra szabadon forgathasson.",

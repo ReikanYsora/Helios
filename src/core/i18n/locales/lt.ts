@@ -142,6 +142,11 @@ export const lt: Translations = {
     showHorizonLineHint: "Nubrėžia reljefo horizonto liniją aplink namus, apskaičiuotą pagal vietovės reljefą. Horizontas visada realistiškai pritemdo saulę už kalvų; tai tik parodo arba paslepia nubrėžtą liniją.",
     horizonLineColor: "Reljefo horizonto spalva",
     horizonLineColorHint: "Reljefo horizonto linijos spalva.",
+    moonDisplay: "Mėnulis",
+    moonDisplayHint: "Piešia mėnulį ant jo paties lanko su fazę atitinkančiu pjautuvu, visada priešais saulę. Tik dekoratyvu: be žymos, be vertės.",
+    moonDisplayAlways: "Visada matomas",
+    moonDisplayNight: "Tik naktį",
+    moonDisplayHidden: "Paslėptas",
     lockRotation: "Užrakinti kampą",
     lockRotationHint:
       "Vilkite peržiūrą, kad pasuktumėte ir pakreiptumėte sceną iki norimo vaizdo, tada įjunkite tai. Užraktas užfiksuoja tą vaizdą (sukimas velkant ir automatinis sukimasis ramybės būsenoje išjungiami) ir įrašo kampą į kortelę, todėl tiksliai tas pats vaizdas rodomas kiekviename įrenginyje ir naršyklėje. Išjunkite jį, kad vėl galėtumėte laisvai sukti.",

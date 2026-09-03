@@ -142,6 +142,11 @@ export const it: Translations = {
     showHorizonLineHint: "Disegna la linea dell'orizzonte del rilievo attorno alla casa, calcolata dal terreno locale. L'orizzonte attenua sempre il sole in modo realistico dietro le colline; questo mostra o nasconde solo la linea.",
     horizonLineColor: "Colore dell'orizzonte del terreno",
     horizonLineColorHint: "Colore della linea dell'orizzonte del terreno.",
+    moonDisplay: "Luna",
+    moonDisplayHint: "Disegna la luna sul proprio arco con una falce fedele alla fase, sempre davanti al sole. Solo estetico: nessun chip, nessun valore.",
+    moonDisplayAlways: "Sempre visibile",
+    moonDisplayNight: "Solo di notte",
+    moonDisplayHidden: "Nascosta",
     lockRotation: "Blocca rotazione",
     lockRotationHint:
       "Trascina l'anteprima per ruotare e inclinare la scena fino alla vista desiderata, poi attiva questa opzione. Il blocco congela quella vista (la rotazione con trascinamento e l'auto-rotazione a riposo vengono disattivate) e salva l'angolo nella scheda, così la stessa identica vista appare su ogni dispositivo e browser. Disattivalo per ruotare di nuovo liberamente.",

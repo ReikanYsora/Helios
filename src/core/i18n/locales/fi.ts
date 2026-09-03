@@ -142,6 +142,11 @@ export const fi: Translations = {
     showHorizonLineHint: "Piirtää maaston horisonttiviivan kodin ympärille paikallisesta maastosta laskettuna. Horisontti himmentää auringon aina realistisesti kukkuloiden taakse; tämä vain näyttää tai piilottaa piirretyn viivan.",
     horizonLineColor: "Maaston horisontin väri",
     horizonLineColorHint: "Maaston horisonttiviivan väri.",
+    moonDisplay: "Kuu",
+    moonDisplayHint: "Piirtää kuun omalle kaarelleen vaiheen mukaisena sirppinä, aina auringon edessä. Vain koristeellinen: ei merkkiä, ei arvoa.",
+    moonDisplayAlways: "Aina näkyvissä",
+    moonDisplayNight: "Vain yöllä",
+    moonDisplayHidden: "Piilotettu",
     lockRotation: "Lukitse kierto",
     lockRotationHint:
       "Vedä esikatselua kääntääksesi ja kallistaaksesi näkymää haluamaasi kulmaan ja ota tämä sitten käyttöön. Lukitus jäädyttää näkymän (vetämällä kääntäminen ja lepotilan automaattinen kierto poistetaan käytöstä) ja tallentaa kulman korttiin, joten täsmälleen sama näkymä näkyy jokaisella laitteella ja selaimella. Poista se käytöstä kääntääksesi taas vapaasti.",

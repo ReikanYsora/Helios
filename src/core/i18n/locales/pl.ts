@@ -142,6 +142,11 @@ export const pl: Translations = {
     showHorizonLineHint: "Rysuje linię horyzontu terenu wokół domu, obliczoną na podstawie lokalnego ukształtowania. Horyzont zawsze realistycznie przygasza słońce za wzniesieniami; to tylko włącza lub wyłącza rysowaną linię.",
     horizonLineColor: "Kolor horyzontu terenu",
     horizonLineColorHint: "Kolor linii horyzontu terenu.",
+    moonDisplay: "Księżyc",
+    moonDisplayHint: "Rysuje księżyc na własnym łuku z sierpem zgodnym z fazą, zawsze przed słońcem. Wyłącznie ozdobne: bez plakietki, bez wartości.",
+    moonDisplayAlways: "Zawsze widoczny",
+    moonDisplayNight: "Tylko w nocy",
+    moonDisplayHidden: "Ukryty",
     lockRotation: "Zablokuj obrót",
     lockRotationHint:
       "Przeciągnij podgląd, aby obrócić i pochylić scenę do żądanego widoku, a następnie włącz tę opcję. Blokada zamraża ten widok (obracanie przeciąganiem i automatyczne obracanie w spoczynku zostają wyłączone) i zapisuje kąt w karcie, dzięki czemu dokładnie ten sam widok pojawia się na każdym urządzeniu i w każdej przeglądarce. Wyłącz ją, aby ponownie swobodnie obracać.",

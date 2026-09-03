@@ -142,6 +142,11 @@ export const de: Translations = {
     showHorizonLineHint: "Zeichnet die Horizontlinie des Geländes rund um das Zuhause, aus dem lokalen Relief berechnet. Der Horizont dämpft die Sonne immer realistisch hinter Hügeln; dies blendet nur die gezeichnete Linie ein oder aus.",
     horizonLineColor: "Farbe des Geländehorizonts",
     horizonLineColorHint: "Farbe der Geländehorizontlinie.",
+    moonDisplay: "Mond",
+    moonDisplayHint: "Zeichnet den Mond auf seinem eigenen Bogen mit phasengetreuer Sichel, immer vor der Sonne. Rein kosmetisch: keine Plakette, kein Wert.",
+    moonDisplayAlways: "Immer sichtbar",
+    moonDisplayNight: "Nur nachts",
+    moonDisplayHidden: "Ausgeblendet",
     lockRotation: "Drehung sperren",
     lockRotationHint:
       "Ziehen Sie in der Vorschau, um die Szene zu drehen und zu neigen, bis Sie die gewünschte Ansicht haben, und schalten Sie dies dann ein. Die Sperre friert diese Ansicht ein (Drehen per Ziehen und die automatische Rotation im Leerlauf werden deaktiviert) und speichert den Winkel in der Karte, sodass genau dieselbe Ansicht auf jedem Gerät und in jedem Browser erscheint. Schalten Sie sie aus, um wieder frei zu drehen.",

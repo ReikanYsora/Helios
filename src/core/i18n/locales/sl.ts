@@ -142,6 +142,11 @@ export const sl: Translations = {
     showHorizonLineHint: "Nariše črto obzorja reliefa okoli doma, izračunano iz lokalnega terena. Obzorje vedno realistično zatemni sonce za griči; to samo prikaže ali skrije narisano črto.",
     horizonLineColor: "Barva obzorja terena",
     horizonLineColorHint: "Barva črte obzorja terena.",
+    moonDisplay: "Luna",
+    moonDisplayHint: "Nariše luno na lastnem loku s srpom, zvestim fazi, vedno pred soncem. Zgolj okrasno: brez oznake, brez vrednosti.",
+    moonDisplayAlways: "Vedno vidna",
+    moonDisplayNight: "Samo ponoči",
+    moonDisplayHidden: "Skrita",
     lockRotation: "Zakleni vrtenje",
     lockRotationHint:
       "Povlecite predogled, da zavrtite in nagnete prizor na želeni pogled, nato pa to vklopite. Zaklep zamrzne ta pogled (vrtenje z vlečenjem in samodejno vrtenje v mirovanju se izklopita) in shrani kot v kartico, tako da se popolnoma enak pogled prikaže na vsaki napravi in brskalniku. Izklopite ga za ponovno prosto vrtenje.",

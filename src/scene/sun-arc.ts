@@ -3,6 +3,7 @@
 //and owns the per-frame caches.
 
 import { getSunPosition } from '../core/time/sun';
+import { getMoonPosition } from '../core/time/moon';
 import { SUN_ARC_RADIUS_M, METRES_PER_DEGREE, DEG } from '../core/config/constants';
 
 //date -> 3D point on the celestial hemisphere (radius SUN_ARC_RADIUS_M x scale, centred on home) as
@@ -17,6 +18,21 @@ export function sunSpherePoint(
         ...spherePoint(homeLat, homeLon, scale, sun.azimuth, sun.altitude),
         altitudeDeg: sun.altitude,
         azimuthDeg:  sun.azimuth
+    };
+}
+
+//date -> 3D point on the same celestial hemisphere as the sun arc, for the moon's own azimuth/altitude at that
+//instant. Same shape as sunSpherePoint (and the same radius/scale), so the moon's arc sits on the identical dome
+//and the two never need reconciling projections.
+export function moonSpherePoint(
+    date: Date, homeLat: number, homeLon: number, scale: number
+): { lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number }
+{
+    const moon = getMoonPosition(date, homeLat, homeLon);
+    return {
+        ...spherePoint(homeLat, homeLon, scale, moon.azimuth, moon.altitude),
+        altitudeDeg: moon.altitude,
+        azimuthDeg:  moon.azimuth
     };
 }
 

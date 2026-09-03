@@ -56,7 +56,7 @@ import
 import { firstAvailableChartTarget } from './charts/chart-target-availability';
 import { renderDetailPanel } from './hud/detail-panel';
 import { refreshHud } from './hud/hud';
-import type { ArcSegment, SunScene, LabelLayout } from './hud/hud';
+import type { ArcSegment, SunScene, MoonScene, LabelLayout } from './hud/hud';
 import
 {
     tick,
@@ -239,6 +239,9 @@ export class HeliosCard extends LitElement
     //Screen-space layout of the solar arc, sun and incidence ray. Recomputed via engine.projectSunScene()
     //on every map transform and periodic tick (sun moves with time).
     @state() _sunScene: SunScene | null = null;
+    //The moon's own arc + crescent disc, projected on the same dome as the sun and refreshed with it. Cosmetic
+    //only (no chip, no value), so nothing downstream reads it but the HUD template.
+    @state() _moonScene: MoonScene | null = null;
     //Day curve, projected by the engine and refreshed with the rest of the HUD. Two depth passes so the card can
     //put the far half behind its chips and the near half over them, the way the sun arc does.
     @state() _dayCurveScene: DayCurveScene | null = null;

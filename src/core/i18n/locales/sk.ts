@@ -142,6 +142,11 @@ export const sk: Translations = {
     showHorizonLineHint: "Vykreslí líniu horizontu terénu okolo domu, vypočítanú z miestneho reliéfu. Horizont vždy realisticky stlmí slnko za kopcami; toto iba zobrazí alebo skryje vykreslenú líniu.",
     horizonLineColor: "Farba horizontu terénu",
     horizonLineColorHint: "Farba línie horizontu terénu.",
+    moonDisplay: "Mesiac",
+    moonDisplayHint: "Vykreslí mesiac na vlastnom oblúku s kosákom zodpovedajúcim fáze, vždy pred slnkom. Len dekoratívne: bez štítku, bez hodnoty.",
+    moonDisplayAlways: "Vždy viditeľný",
+    moonDisplayNight: "Len v noci",
+    moonDisplayHidden: "Skrytý",
     lockRotation: "Uzamknúť natočenie",
     lockRotationHint:
       "Potiahnutím v náhľade otočte a nakloňte scénu do požadovaného pohľadu a potom toto zapnite. Zámok tento pohľad zmrazí (otáčanie ťahaním a automatické otáčanie v pokoji sa vypnú) a uloží uhol do karty, takže úplne rovnaký pohľad sa zobrazí na každom zariadení a prehliadači. Vypnite ho pre opätovné voľné otáčanie.",

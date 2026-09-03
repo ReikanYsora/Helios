@@ -142,6 +142,11 @@ export const pt: Translations = {
     showHorizonLineHint: "Desenha a linha do horizonte do relevo à volta da casa, calculada a partir do terreno local. O horizonte atenua sempre o sol de forma realista atrás das colinas; isto apenas mostra ou oculta a linha.",
     horizonLineColor: "Cor do horizonte do terreno",
     horizonLineColorHint: "Cor da linha do horizonte do terreno.",
+    moonDisplay: "Lua",
+    moonDisplayHint: "Desenha a lua no seu próprio arco com um crescente fiel à fase, sempre à frente do sol. Apenas estético: sem chip nem valor.",
+    moonDisplayAlways: "Sempre visível",
+    moonDisplayNight: "Só à noite",
+    moonDisplayHidden: "Oculta",
     lockRotation: "Bloquear rotação",
     lockRotationHint:
       "Arraste a pré-visualização para girar e inclinar a cena até à vista que quer e depois ative isto. O bloqueio congela essa vista (a rotação por arrasto e a rotação automática em repouso são desativadas) e guarda o ângulo no cartão, para que exatamente a mesma vista apareça em todos os dispositivos e navegadores. Desative-o para voltar a girar livremente.",

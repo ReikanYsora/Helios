@@ -142,6 +142,11 @@ export const et: Translations = {
     showHorizonLineHint: "Joonistab maastiku horisondijoone kodu ümber, arvutatuna kohalikust reljeefist. Horisont summutab päikest alati realistlikult küngaste taga; see üksnes näitab või peidab joonistatud joone.",
     horizonLineColor: "Maastiku horisondi värv",
     horizonLineColorHint: "Maastiku horisondijoone värv.",
+    moonDisplay: "Kuu",
+    moonDisplayHint: "Joonistab kuu omaenda kaarele faasile vastava sirbiga, alati päikese ees. Ainult kaunistus: ilma sildita, ilma väärtuseta.",
+    moonDisplayAlways: "Alati nähtav",
+    moonDisplayNight: "Ainult öösel",
+    moonDisplayHidden: "Peidetud",
     lockRotation: "Lukusta pööramine",
     lockRotationHint:
       "Lohistage eelvaadet, et pöörata ja kallutada stseeni soovitud vaateni, seejärel lülitage see sisse. Lukk külmutab selle vaate (lohistamisega pööramine ja jõudeoleku automaatne pööramine lülitatakse välja) ja salvestab nurga kaardile, nii et täpselt sama vaade kuvatakse igas seadmes ja brauseris. Lülitage see välja, et taas vabalt pöörata.",

@@ -142,6 +142,11 @@ export const isLocale: Translations = {
     showHorizonLineHint: "Teiknar sjóndeildarlínu landslagsins í kringum heimilið, reiknaða út frá staðbundnu landslagi. Sjóndeildarhringurinn deyfir alltaf sólina raunsætt á bak við hæðir; þetta sýnir eða felur aðeins teiknuðu línuna.",
     horizonLineColor: "Litur sjóndeildarhrings lands",
     horizonLineColorHint: "Litur sjóndeildarlínu landslagsins.",
+    moonDisplay: "Tungl",
+    moonDisplayHint: "Teiknar tunglið á eigin boga með sigð sem fylgir tunglstöðunni, alltaf fyrir framan sólina. Aðeins til skrauts: engin flís, ekkert gildi.",
+    moonDisplayAlways: "Alltaf sýnilegt",
+    moonDisplayNight: "Aðeins á nóttunni",
+    moonDisplayHidden: "Falið",
     lockRotation: "Læsa snúningi",
     lockRotationHint:
       "Dragðu forskoðunina til að snúa og halla senunni að þeirri sýn sem þú vilt og kveiktu svo á þessu. Læsingin frystir þá sýn (snúningur með drætti og sjálfvirkur snúningur í hvíld eru gerð óvirk) og vistar hornið á spjaldið, þannig að nákvæmlega sama sýn birtist á öllum tækjum og vöfrum. Slökktu á henni til að snúa frjálst aftur.",

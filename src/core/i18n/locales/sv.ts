@@ -142,6 +142,11 @@ export const sv: Translations = {
     showHorizonLineHint: "Ritar terrängens horisontlinje runt hemmet, beräknad från den lokala terrängen. Horisonten dämpar alltid solen realistiskt bakom kullar; detta visar eller döljer bara den ritade linjen.",
     horizonLineColor: "Färg på terränghorisonten",
     horizonLineColorHint: "Färg på terränghorisontlinjen.",
+    moonDisplay: "Måne",
+    moonDisplayHint: "Ritar månen på sin egen båge med en fasriktig skära, alltid framför solen. Enbart kosmetiskt: ingen chip, inget värde.",
+    moonDisplayAlways: "Alltid synlig",
+    moonDisplayNight: "Endast på natten",
+    moonDisplayHidden: "Dold",
     lockRotation: "Lås rotation",
     lockRotationHint:
       "Dra i förhandsvisningen för att rotera och luta scenen till önskad vy och slå sedan på detta. Låset fryser den vyn (dra-för-att-rotera och den automatiska rotationen i viloläge stängs av) och sparar vinkeln i kortet, så att exakt samma vy visas på varje enhet och webbläsare. Stäng av det för att rotera fritt igen.",

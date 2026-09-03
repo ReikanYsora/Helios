@@ -134,6 +134,12 @@ export interface Translations
         showHorizonLineHint:         string;
         horizonLineColor:            string;
         horizonLineColorHint:        string;
+        //Moon arc + crescent: three-way visibility (always / night only / hidden). Cosmetic, no chip.
+        moonDisplay:                 string;
+        moonDisplayHint:             string;
+        moonDisplayAlways:           string;
+        moonDisplayNight:            string;
+        moonDisplayHidden:           string;
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
         lockRotation:                string;
         lockRotationHint:            string;
