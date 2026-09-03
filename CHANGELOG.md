@@ -7,6 +7,26 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4-a1
+
+### Fixed: the forecast curve could stay frozen on a stale snapshot
+
+The unified data store's rebuild check tracked the fetched HA Energy solar
+forecast by its point COUNT only. A forecast provider that revises its
+past-hour values in place, without the count changing, is a case that check
+was structurally blind to: the store kept whatever forecast content it had
+from the last rebuild-triggering event (boot, or a period switch), silently
+discarding every later background refetch. On a dashboard left open, this
+showed up as the past-hour curve looking correct on first paint, then stuck,
+then briefly correct again right after switching the timeline period and
+back, then stuck again after switching to another Home Assistant dashboard
+view and back and none of it actually tracking when the underlying forecast
+data changed. The store now also tracks the last fetch's timestamp, so an
+in-place revision invalidates it like every other source already does.
+Thanks to @ruteclrp for the detailed reports on Helios-Forecast#52, which is
+where this was traced to, before turning out to be a card-side bug, not one
+in the integration itself.
+
 ## 2026.9.4-a0
 
 A release entirely dedicated to performance: a full audit of the rendering
