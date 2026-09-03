@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bucketizeWeatherAvg } from '../src/data/unifiedStore';
+import { bucketizeWeatherAvg, buildUnifiedStore, type UnifiedStoreHost } from '../src/data/unifiedStore';
 import { HOUR_MS } from '../src/core/config/constants';
 
 //Characterises the shared weather bucketizer that backs irradiance / temperature / humidity: per-bucket mean of the
@@ -55,5 +55,64 @@ describe('bucketizeWeatherAvg', () =>
     {
         expect(bucketizeWeatherAvg(undefined, undefined, 0, HOUR_MS, P(2), temperature)).toEqual([null, null]);
         expect(bucketizeWeatherAvg([], [], 0, HOUR_MS, P(2), temperature)).toEqual([null, null]);
+    });
+});
+
+//Minimal, otherwise-empty host: enough for computeDataVersion's window/cadence/content terms to resolve without
+//throwing, so each test only has to vary the one field it's characterising.
+function baseHost(overrides: Partial<UnifiedStoreHost>): UnifiedStoreHost
+{
+    return {
+        config:                          undefined,
+        _periodPastDays:                 0,
+        _periodFutureDays:               0,
+        _timelineMode:                   'today',
+        _chartSeries:                    null,
+        _pvChangeSeries:                 null,
+        _batteryChargeChangeSeries:      null,
+        _batteryDischargeChangeSeries:   null,
+        _gridImportChangeSeries:         null,
+        _gridExportChangeSeries:         null,
+        _haSolarForecast:                [],
+        _haSolarForecastFetchedAt:       0,
+        ...overrides,
+    };
+}
+
+//Regression coverage for the forecast half of computeDataVersion (via buildUnifiedStore's dataVersion output): a
+//provider that refreshes its past-hour estimates in place, without the point COUNT changing, must still invalidate
+//the store. Length alone is blind to that; the fetch timestamp is what catches it (Helios-Forecast #52).
+describe('buildUnifiedStore data version (forecast in-place revision)', () =>
+{
+    it('changes when the forecast array is refetched, even at the same length', () =>
+    {
+        const forecastA = [{ tMs: 0, w: 100 }, { tMs: HOUR_MS, w: 200 }];
+        const forecastB = [{ tMs: 0, w: 150 }, { tMs: HOUR_MS, w: 250 }]; //same length, revised values
+
+        const v1 = buildUnifiedStore(baseHost({ _haSolarForecast: forecastA, _haSolarForecastFetchedAt: 1000 })).dataVersion;
+        const v2 = buildUnifiedStore(baseHost({ _haSolarForecast: forecastB, _haSolarForecastFetchedAt: 2000 })).dataVersion;
+
+        expect(v2).not.toBe(v1);
+    });
+
+    it('stays identical when nothing about the forecast changed (no spurious rebuild)', () =>
+    {
+        const forecast = [{ tMs: 0, w: 100 }, { tMs: HOUR_MS, w: 200 }];
+
+        const v1 = buildUnifiedStore(baseHost({ _haSolarForecast: forecast, _haSolarForecastFetchedAt: 1000 })).dataVersion;
+        const v2 = buildUnifiedStore(baseHost({ _haSolarForecast: forecast, _haSolarForecastFetchedAt: 1000 })).dataVersion;
+
+        expect(v2).toBe(v1);
+    });
+
+    it('still changes on a genuine length change (unaffected by the fetch-timestamp addition)', () =>
+    {
+        const shorter = [{ tMs: 0, w: 100 }];
+        const longer  = [{ tMs: 0, w: 100 }, { tMs: HOUR_MS, w: 200 }];
+
+        const v1 = buildUnifiedStore(baseHost({ _haSolarForecast: shorter, _haSolarForecastFetchedAt: 1000 })).dataVersion;
+        const v2 = buildUnifiedStore(baseHost({ _haSolarForecast: longer, _haSolarForecastFetchedAt: 1000 })).dataVersion;
+
+        expect(v2).not.toBe(v1);
     });
 });

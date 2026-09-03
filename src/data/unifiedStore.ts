@@ -86,6 +86,10 @@ export interface UnifiedStoreHost
     //HA Energy solar forecast (energy-forecast.ts), merged across config entries and time-sorted. Empty when no
     //forecast source is configured (forecast series left all-null, no curve renders).
     readonly _haSolarForecast:        readonly SolarForecastPoint[];
+    //Date.now() of the last real (non-throttled) forecast fetch attempt. The forecast can be refreshed in place -
+    //a provider revising its past-hour estimates without the point COUNT changing - so the data-version hash
+    //below needs this alongside the length (see computeDataVersion).
+    readonly _haSolarForecastFetchedAt: number;
 }
 
 
@@ -400,7 +404,10 @@ function computeDataVersion(host: UnifiedStoreHost): string
         + `|pv${changeSig(host._pvChangeSeries)}`
         + `|bc${changeSig(host._batteryChargeChangeSeries)}|bd${changeSig(host._batteryDischargeChangeSeries)}`
         + `|gi${changeSig(host._gridImportChangeSeries)}|ge${changeSig(host._gridExportChangeSeries)}`
-        + `|f${host._haSolarForecast?.length ?? 0}`;
+        //Length alone misses an in-place revision (same point count, updated past-hour values as the provider's
+        //model refreshes), which would otherwise leave the forecast frozen at whatever landed on the last rebuild
+        //(see the fetch timestamp's doc comment on UnifiedStoreHost).
+        + `|f${host._haSolarForecast?.length ?? 0}.${host._haSolarForecastFetchedAt}`;
 }
 
 
