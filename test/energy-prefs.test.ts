@@ -132,6 +132,30 @@ describe('subscribeEnergyPrefs non-admin retry storm (#415)', () =>
         expect(host.hass.callWS).toHaveBeenCalled();
     });
 
+    it('leaves the guard set for a non-admin user, so the one-shot fetch is not re-fired on every render', async () =>
+    {
+        //The #415 fix skipped the doomed subscription for a non-admin viewer but returned WITHOUT setting the
+        //guard. helios-card.ts's updated() re-calls subscribeEnergyPrefs whenever the guard is empty, and the
+        //one-shot fetch rewrites _energyDefaults (a fresh object) + requestUpdate() each time it lands: a fetch
+        //per render, forever, for every non-admin viewer. The guard must hold after the first call.
+        const subscribeEvents = vi.fn();
+        const host = fakeHost(false, subscribeEvents);
+        subscribeEnergyPrefs(host);
+        await flush();
+        expect(host._energyPrefsUnsub).toBeDefined();
+        const fetches = (host.hass.callWS as ReturnType<typeof vi.fn>).mock.calls.length;
+        expect(fetches).toBeGreaterThan(0);
+
+        //What updated() does on every subsequent pass: with the guard set, this must be a no-op.
+        for (let i = 0; i < 25; i++)
+        {
+            subscribeEnergyPrefs(host);
+        }
+        await flush();
+        expect((host.hass.callWS as ReturnType<typeof vi.fn>).mock.calls.length).toBe(fetches);
+        expect(subscribeEvents).not.toHaveBeenCalled();
+    });
+
     it('still attempts the subscription for an admin user', async () =>
     {
         const subscribeEvents = vi.fn().mockResolvedValue(() => {});

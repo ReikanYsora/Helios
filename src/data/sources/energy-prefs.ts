@@ -194,8 +194,14 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
     //not a transient failure), so skip the doomed round-trip entirely rather than firing it once per connect.
     //`is_admin` is read defensively: only an explicit `false` skips, since an absent/unknown value (an older core,
     //a test harness) must not silently disable a subscription that could otherwise work.
+    //The guard is set BEFORE bailing, as a no-op canceller: the card's updated() re-calls this whenever the guard
+    //is empty, and the one-shot fetch above rewrites _energyDefaults each time it lands, which re-renders, which
+    //re-calls this... a fetch-per-render storm for every non-admin viewer (a WS flood on a real core, a hard
+    //main-thread lock against a synchronous mock). One fetch per connect is the ceiling, exactly like the
+    //rejected-subscription path below.
     if (host.hass.user?.is_admin === false)
     {
+        host._energyPrefsUnsub = () => { /* nothing to cancel: no subscription was ever attempted */ };
         return;
     }
     //`subscribeEvents` resolves its UnsubscribeFunc asynchronously. Install a synchronous canceller now so the
