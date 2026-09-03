@@ -7,6 +7,35 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4-a2
+
+### Added: the moon, on its own arc, with its real phase
+
+The scene now draws the moon: its own arc across the same sky dome as the sun's
+(dotted while it is below the horizon, solid above), and a disc showing the actual
+crescent for the current phase, lit toward the sun's position in the scene so it
+reads right whichever way the camera turns. Its position and illuminated fraction
+come from a compact lunar-position model in the same spirit as the sun's, no
+ephemeris library; the phase checks out against documented full and new moons to
+well under a percent. The moon always paints in front of the sun, since it is the
+nearer body, and it carries no chip and no value: it is purely cosmetic. A new
+`moon-display` option (visual editor, "UI and map" section) picks always visible
+(the default), night only (while the sun is below the horizon), or hidden. Asked
+for by @Sniper435 (#408).
+
+### Fixed: a fetch-per-render loop for every non-admin viewer (since 2026.9.3)
+
+The 2026.9.3 fix that stopped retrying the rejected Energy-preferences event
+subscription for non-admin users (#415) skipped the subscription but forgot to
+leave its guard set. The card re-checks that guard on every render, and the
+one-shot preferences fetch that still runs for non-admin users rewrites the
+Energy snapshot each time it lands, which re-renders, which re-checks the
+guard, which fetches again: one `energy/get_prefs` + `energy/info` round-trip
+per render, indefinitely, on every dashboard viewed by a non-admin user (a
+steady websocket drip on a real core; a hard main-thread lock against a
+synchronous mock, which is how it was caught). The guard now holds after the
+first fetch, exactly like the rejected-subscription path already did.
+
 ## 2026.9.4-a1
 
 ### Fixed: the forecast curve could stay frozen on a stale snapshot
