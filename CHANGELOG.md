@@ -9,9 +9,17 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.4-b1
 
+### Changed: the "Forecast" period is now "J - J+2"
+
+The first tab of the period selector read "Forecast", which said what the data
+was rather than what the window is: today plus the two days ahead. It is now
+named for the window itself, "J - J+2" (with the local letter for "day" in each
+language). Nothing else changes: the YAML value and the remembered selection are
+untouched.
+
 ### Added: a scene zoom
 
-A `scene-zoom` option (visual editor, "Buildings" section) at 1x, 1.5x or 2x
+A `scene-zoom` option (visual editor, "UI and map" section) at 1x, 1.5x or 2x
 magnifies the map, the buildings and the shadows around your home, for a wide
 card where the neighbourhood read too small. The sun, its arcs, the moon and the
 chips keep their size, so the card stays as legible as before, just with a bigger
@@ -40,7 +48,7 @@ come from a compact lunar-position model in the same spirit as the sun's, no
 ephemeris library; the phase checks out against documented full and new moons to
 well under a percent. The moon always paints in front of the sun, since it is the
 nearer body, and it carries no chip and no value: it is purely cosmetic. A new
-`moon-display` option (visual editor, "UI and map" section) picks night only (the
+`moon-display` option (visual editor, "Moon configuration" section) picks night only (the
 default: while the sun is below the horizon), always visible, or hidden. Asked for
 by @Sniper435 (#408).
 
