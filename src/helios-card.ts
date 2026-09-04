@@ -56,7 +56,7 @@ import
 import { firstAvailableChartTarget } from './charts/chart-target-availability';
 import { renderDetailPanel } from './hud/detail-panel';
 import { refreshHud } from './hud/hud';
-import type { ArcSegment, SunScene, MoonScene, LabelLayout } from './hud/hud';
+import type { ArcSegment, SunScene, MoonScene, ArrayScene, LabelLayout } from './hud/hud';
 import
 {
     tick,
@@ -81,6 +81,8 @@ import { clearEnergyStatsCache, type StatPeriod, type ChangeBucket } from './dat
 import { clearDurable } from './data/durable-cache';
 import { KeyedFetch } from './data/source-fetch';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './data/energy-forecast';
+import { fetchForecastLayout } from './data/forecast-layout';
+import type { ArrayLine } from './scene/array-markers';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost, type UnifiedDataStore } from './data/unifiedStore';
 import
 {
@@ -168,6 +170,12 @@ export class HeliosCard extends LitElement
     //to ask for" apart from "too soon to ask again": switching to a mode wanting more past days (e.g. Yesterday)
     //bypasses the throttle even seconds after a narrower fetch, instead of silently keeping that narrower result.
     _haSolarForecastCoveredPastDays = 0;
+    //Helios-Forecast array layout (src/data/forecast-layout.ts): the lines the engine marks in the scene. null until
+    //the first read settles, [] when no entry is the Helios provider.
+    _forecastLayout: ArrayLine[] | null = null;
+    _forecastLayoutFetching  = false;
+    _forecastLayoutKey       = '';
+    _forecastLayoutFetchedAt = 0;
     //Home-battery state, set when the HA Energy dashboard exposes a battery source (stat_rate,
     //stat_energy_from/to or stat_soc). Live readings; historical series in the *History fields below.
     //Units kept alongside values so the chip formats kW vs W without re-reading the state.
@@ -245,6 +253,8 @@ export class HeliosCard extends LitElement
     //Day curve, projected by the engine and refreshed with the rest of the HUD. Two depth passes so the card can
     //put the far half behind its chips and the near half over them, the way the sun arc does.
     @state() _dayCurveScene: DayCurveScene | null = null;
+    //Array markers (Helios-Forecast lines), projected and refreshed with the rest of the HUD.
+    @state() _arrayScene: ArrayScene | null = null;
 
     //Energy dashboard preferences snapshot. Subscribed at connectedCallback, updated on every HA
     //energy_preferences_updated event. Chip refresh helpers read their fallback entity from here.
@@ -887,6 +897,9 @@ export class HeliosCard extends LitElement
         this._haSolarForecastFetching     = false;
         this._haSolarForecastFetchedAt    = 0;
         this._haSolarForecastCoveredPastDays = 0;
+        this._forecastLayout              = null;
+        this._forecastLayoutKey           = '';
+        this._forecastLayoutFetchedAt     = 0;
         this._gridImportChangeSeries      = null;
         this._gridExportChangeSeries      = null;
         this._gridImportChangeSeriesPerEntity = new Map();
@@ -1541,6 +1554,8 @@ export class HeliosCard extends LitElement
         //no forecast source configured the call returns empty and the curve doesn't render. On the refresh
         //chain (which energy-prefs changes re-trip), so a freshly configured source lands next pass.
         fetchHaSolarForecast(this);
+        //Where those arrays stand and which way they look, for the scene's markers (Helios-Forecast entries only).
+        fetchForecastLayout(this);
     }
 
 

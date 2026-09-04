@@ -5,6 +5,10 @@ import { getSunPosition, computePvPercent, computeIrradianceWm2 } from '../core/
 import { getMoonPosition, getMoonPhase } from '../core/time/moon';
 import { fetchHomePointData, clearWeatherCache, type SampleHourly } from '../data/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './buildings';
+import { arrayTileCorners, arrayIncidence, type ArrayLine } from './array-markers';
+import { PERSPECTIVE, NEAR_PLANE } from './projection';
+import type { Point } from '../core/render-kit/geometry';
+import type { ArrayScene } from '../hud/hud';
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
 import { resolveWeatherAtTime } from '../data/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './hud-layout';
@@ -14,6 +18,7 @@ import { fetchHorizonProfile, horizonAltAt, horizonPeak, HORIZON_MIN_PEAK_DEG, t
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
+    ARRAY_TILE_W_PX, ARRAY_TILE_L_PX, ARRAY_TILE_LIFT_M, DEG,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
     BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS,
     RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS} from '../core/config/constants';
@@ -265,6 +270,8 @@ export class HeliosEngine
 
     //Map transform changed: card recomputes screen-space projections (arc, chips, leaders) from this hook.
     public onMapTransform?:  () => void;
+    //The Helios-Forecast lines to mark in the scene, read on every projection pass (the host owns the fetch).
+    public arrayLines: () => readonly ArrayLine[] = () => [];
 
     //Camera pose persists via localStorage: Lovelace doesn't persist config-changed from a live card (only
     //the editor preview), so a YAML round-trip isn't an option. cacheKey is the per-card storage
@@ -2208,6 +2215,97 @@ export class HeliosEngine
             sunrise,
             sunset
         };
+    }
+
+    //Screen-space array markers: one tile per Helios-Forecast line at its own position (or on the home's roof
+    //when it has none), turned to its azimuth and raised to its tilt, plus the sun the rays point at. The tile
+    //keeps a fixed size on screen at zoom 1 and grows with the scene zoom, like a building would.
+    public projectArrayScene(now: Date): ArrayScene | null
+    {
+        const lines = this.arrayLines();
+        if (!this._renderer || lines.length === 0)
+        {
+            return null;
+        }
+        const cam = this._renderer.camera;
+        const halfW = ARRAY_TILE_W_PX * cam.zoom / (2 * cam.pxPerMetre);
+        const halfL = ARRAY_TILE_L_PX * cam.zoom / (2 * cam.pxPerMetre);
+        const perLat = METRES_PER_DEGREE;
+        const perLon = METRES_PER_DEGREE * Math.cos(this.homeLat * Math.PI / 180);
+        //A line on the home stands on the roof of the tallest home prism, riding its rise animation, and out on the
+        //slope it faces: a south array sits on the south side of the roof, which also keeps the tile from hiding
+        //under the home chips pinned over the centre. The roof's reach in that direction comes from the footprint.
+        let roofM = 0;
+        let homeFp: Point[] = [];
+        for (const b of this._buildingsData ?? [])
+        {
+            if (b.isHome && b.height > roofM)
+            {
+                roofM  = b.height;
+                homeFp = b.footprint;
+            }
+        }
+        roofM = roofM * this._renderer.homeHeightScale + ARRAY_TILE_LIFT_M;
+        const roofReach = (fe: number, fn: number): number =>
+        {
+            let reach = 0;
+            for (const [x, y] of homeFp)
+            {
+                const d = x * fe + y * fn;
+                if (d > reach)
+                {
+                    reach = d;
+                }
+            }
+            return reach > 0 ? reach * 0.55 : 3;
+        };
+        const sunPos = getSunPosition(now, this.homeLat, this.homeLon);
+        const tiles: ArrayScene['tiles'] = [];
+        for (const line of lines)
+        {
+            const onHome = line.lat === null || line.lon === null;
+            const fe = Math.sin(line.azimuth * DEG);
+            const fn = Math.cos(line.azimuth * DEG);
+            const east   = onHome ? fe * roofReach(fe, fn) : (line.lon! - this.homeLon) * perLon;
+            const north  = onHome ? fn * roofReach(fe, fn) : (line.lat! - this.homeLat) * perLat;
+            const base   = onHome ? roofM : ARRAY_TILE_LIFT_M;
+            const tracker = line.tracker !== null;
+            const corners = arrayTileCorners(line.azimuth, line.tilt, halfW, halfL, tracker);
+            const points: [number, number][] = [];
+            let behind = false;
+            for (const [e, n, u] of corners)
+            {
+                const p = cam.project3(east + e, north + n, base + u);
+                if (p.depth >= PERSPECTIVE * (1 - NEAR_PLANE))
+                {
+                    behind = true;
+                    break;
+                }
+                points.push([p.x, p.y]);
+            }
+            if (behind)
+            {
+                continue;
+            }
+            const c = cam.project3(east, north, base);
+            tiles.push({
+                points,
+                cx:   c.x,
+                cy:   c.y,
+                glow: arrayIncidence(line.azimuth, line.tilt, sunPos.azimuth, sunPos.altitude, tracker),
+            });
+        }
+        let sun: ArrayScene['sun'] = null;
+        if (sunPos.altitude > 0)
+        {
+            const sun3D = this._sunSpherePoint(now);
+            const px = sun3D ? this._projectScenePoint(sun3D.lon, sun3D.lat, sun3D.altitudeM) : null;
+            if (px)
+            {
+                sun = { x: px.x, y: px.y };
+            }
+        }
+        return { tiles, sun };
     }
 
     //date -> 3D point on the celestial hemisphere (centred on home) for _projectScenePoint; the pure

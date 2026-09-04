@@ -7,11 +7,12 @@ import { moonCrescentPath } from '../scene/moon-crescent';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
+import { mixHex } from '../core/render-kit/hex';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
 import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene, type MoonScene } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
-import { clipSegment, cardClipRect, pointOutside, type ClipRect } from '../core/render-kit/geometry';
+import { clipSegment, clipPolygon, cardClipRect, pointOutside, pointsAttr, type ClipRect } from '../core/render-kit/geometry';
 import { formatGridValue } from '../data/sources/grid';
 import { activeGroups, groupLivePowerW, groupPowerWAt } from '../data/sources/device-consumption';
 import { groupTarget } from '../charts/charts';
@@ -688,7 +689,11 @@ export class SceneHudController
 
         //The incidence ray only renders when the sun is above the horizon (a ray from below ground would be
         //visually nonsensical).
-        const showRay = showSun && sunScene!.sun.altitude > 0;
+        //With Helios-Forecast lines in the scene, each array carries its own ray to the sun (below) and the single
+        //sun-to-production ray steps aside.
+        const arrayScene = this.host._arrayScene;
+        const hasArrays  = arrayScene !== null && arrayScene.tiles.length > 0;
+        const showRay = showSun && sunScene!.sun.altitude > 0 && !hasArrays;
 
         //Live irradiance for the W/m² label above the sun disc, also driving the inner-disc fill ratio: at
         //STC (1000 W/m²) the fill reaches the rim, at zero it vanishes. The sqrt mapping linearises AREA
@@ -1072,6 +1077,35 @@ export class SceneHudController
                                 ></animateMotion>
                             </circle>
                         `)}
+                    </svg>
+                ` : nothing}
+
+                <!--  Array markers: one tile per Helios-Forecast line, turned and tilted as the line is, glowing
+                      by how squarely it faces the sun, with a hairline of dots from the tile to the sun while it
+                      is up. Same tier as the incidence ray they replace.  -->
+                ${showSun && hasArrays ? html`
+                    <svg class="solar-svg solar-array-svg"
+                         style="--solar-daylight:${sunScene!.daylight}">
+                        ${arrayScene!.tiles.map((tile) =>
+    {
+        const quad = clipRect ? clipPolygon(tile.points, clipRect) : tile.points;
+        const sunAt = arrayScene!.sun;
+        //No ray from a tile the card does not show: an off-card array would otherwise shoot one in from the edge.
+        const ray = sunAt && !(clipRect && pointOutside([tile.cx, tile.cy], clipRect))
+            ? (clipRect ? clipSegment([tile.cx, tile.cy], [sunAt.x, sunAt.y], clipRect) : [[tile.cx, tile.cy], [sunAt.x, sunAt.y]])
+            : null;
+        //Dark glass at rest, warming toward the sun colour as the line turns square to the light.
+        const fill = mixHex('#1c2a3f', sunColor, 0.12 + 0.6 * tile.glow);
+        return svg`
+                            ${ray ? svg`
+                            <line class="solar-array-ray"
+                                x1="${ray[0][0]}" y1="${ray[0][1]}" x2="${ray[1][0]}" y2="${ray[1][1]}"
+                                stroke="${sunColor}"></line>` : nothing}
+                            ${quad.length >= 3 ? svg`
+                            <polygon class="solar-array-tile"
+                                points="${pointsAttr(quad)}"
+                                fill="${fill}" stroke="${sunColor}"></polygon>` : nothing}`;
+    })}
                     </svg>
                 ` : nothing}
 

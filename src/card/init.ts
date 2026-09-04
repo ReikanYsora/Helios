@@ -3,6 +3,7 @@
 //
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
+import type { ArrayLine } from '../scene/array-markers';
 import type { HassLike } from '../core/ha-types';
 import { homeColor, mapColorKey, mapShowKey, type HeliosConfig } from '../core/config/helios-config';
 import { resolveUiColor } from '../core/format/format';
@@ -210,6 +211,10 @@ export interface InitHost extends HudHost
     readonly preview?: boolean;
 
     _engine?:            HeliosEngine;
+
+    //The Helios-Forecast lines (forecast-layout.ts) the engine marks in the scene.
+
+    readonly _forecastLayout: ArrayLine[] | null;
     _cloudCover:         number;
     //"Your real sky" weather layers, resolved at the current live/scrub time (precip mm, snowfall cm, WMO code).
     _precip:             number;
@@ -354,6 +359,8 @@ function scheduleEngineInit(host: InitHost): void
         const elevation = host.hass.config.elevation;
 
         host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host.effectiveCacheId?.() ?? '');
+        //The Helios-Forecast lines the engine marks in the scene; the card owns their fetch (forecast-layout.ts).
+        host._engine.arrayLines = () => host._forecastLayout ?? [];
         wireEngineCallbacks(host);
         //Seed the engine with the active (possibly restored) window before getTimelineRange(), so a card that
         //loads straight into a week/month frame the right span from the first paint.

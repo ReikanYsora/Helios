@@ -66,6 +66,16 @@ export const SUN_ARC_NIGHT_OPACITY = 0.25;  //below-horizon segment opacity
 //The arc + detail-panel mark rise/set at this altitude, not the geometric-centre 0° crossing.
 export const SUNRISE_SUNSET_ALTITUDE_DEG = -0.833;
 
+//=== Array markers (Helios-Forecast lines) ===
+//Tile footprint on screen at scene zoom 1 (px; it scales with the zoom like the buildings), across and up the slope.
+export const ARRAY_TILE_W_PX          = 26;
+export const ARRAY_TILE_L_PX          = 16;
+//A ground-standing line floats this much above the basemap so its tile clears the ground; a line on the home sits
+//this much above the roof.
+export const ARRAY_TILE_LIFT_M        = 0.4;
+//The forecast layout changes with the integration's options only: re-read it this often at most.
+export const ARRAY_LAYOUT_THROTTLE_MS = 60 * 60 * 1000;
+
 
 
 //=== Animation / timing ===

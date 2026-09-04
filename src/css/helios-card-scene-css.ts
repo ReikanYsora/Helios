@@ -738,6 +738,23 @@ export const heliosCardStyles = css`
     /*  Sun to PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the ray
         endpoint at the chip border. */
     .solar-ray-svg        { z-index: 7;  }
+    /*  Array markers (Helios-Forecast lines): tiles + their dotted rays to the sun, same tier as the ray. */
+    .solar-array-svg      { z-index: 7;  }
+    .solar-array-tile
+    {
+        stroke-width: 1;
+        stroke-linejoin: round;
+        fill-opacity: 0.85;
+    }
+    /*  A ray of dots only (zero-length dashes + round caps), hairline, one per line toward the sun. Opacity
+        follows daylight through the parent like the arc. */
+    .solar-array-ray
+    {
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-dasharray: 0 5;
+        stroke-opacity: 0.7;
+    }
 
     /*  Arc: first pass a dark outline for legibility on light basemaps, second pass the sun colour on top.
         Stroke widths set inline per segment. */

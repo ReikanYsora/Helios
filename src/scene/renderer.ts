@@ -477,6 +477,13 @@ export class SceneRenderer
         }
     }
 
+    //Current multiplier on the home prism's height (rise animation x squash), so a marker standing on the roof
+    //rides it up and down with the prism.
+    public get homeHeightScale(): number
+    {
+        return this._growth * (this._home.growth ?? 1);
+    }
+
     public setBuildings(buildings: Building[]): void
     {
         this._buildings = buildings;

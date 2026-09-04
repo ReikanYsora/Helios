@@ -42,6 +42,22 @@ export interface MoonScene
     };
 }
 
+//Array markers (engine.projectArrayScene): one tile per Helios-Forecast line, as its projected quad, its centre
+//(the ray's foot) and how squarely it faces the sun (0..1, the tile's glow); `sun` is the ray target, null while
+//the sun is below the horizon (no rays). null when the install has no Helios-Forecast lines.
+export interface ArrayTile
+{
+    points: [number, number][];
+    cx:     number;
+    cy:     number;
+    glow:   number;
+}
+export interface ArrayScene
+{
+    tiles: ArrayTile[];
+    sun:   { x: number; y: number } | null;
+}
+
 //Screen-space anchors for the always-visible chips plus ring edge / home point used by leader lines.
 export interface LabelLayout
 {
@@ -81,6 +97,8 @@ export interface HudHost
     _moonScene:       MoonScene | null;
     //The day curve, already projected, as the two depth passes the card layers around its chips. null when off.
     _dayCurveScene:   DayCurveScene | null;
+    //The Helios-Forecast array tiles + rays, projected with the rest. null without the integration.
+    _arrayScene:      ArrayScene | null;
 
     readonly shadowRoot: ShadowRoot | null;
     readonly classList:  DOMTokenList;
@@ -231,6 +249,37 @@ function moonSceneEq(a: MoonScene | null, b: MoonScene | null): boolean
     return true;
 }
 
+//Same gate for the array tiles: a few quads, compared corner by corner, plus the glow (sun-driven, so a fixed
+//scrub time at a still camera can change it alone).
+function arraySceneEq(a: ArrayScene | null, b: ArrayScene | null): boolean
+{
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b || a.tiles.length !== b.tiles.length || !pointEq(a.sun, b.sun))
+    {
+        return false;
+    }
+    for (let i = 0; i < a.tiles.length; i++)
+    {
+        const ta = a.tiles[i]; const tb = b.tiles[i];
+        if (Math.abs(ta.glow - tb.glow) > 0.01 || !nearlyEq(ta.cx, tb.cx) || !nearlyEq(ta.cy, tb.cy)
+            || ta.points.length !== tb.points.length)
+        {
+            return false;
+        }
+        for (let k = 0; k < ta.points.length; k++)
+        {
+            if (!nearlyEq(ta.points[k][0], tb.points[k][0]) || !nearlyEq(ta.points[k][1], tb.points[k][1]))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 function dayCurvePassEq(a: DayCurvePass, b: DayCurvePass): boolean
 {
     if (a.foot !== b.foot || a.risers !== b.risers)
@@ -342,6 +391,13 @@ export function refreshHud(host: HudHost): void
     if (!dayCurveSceneEq(host._dayCurveScene, nextCurve))
     {
         host._dayCurveScene = nextCurve;
+    }
+
+    //The array tiles stand in the scene like the buildings and their rays reach for the sun: same refresh.
+    const nextArrays = host._engine?.projectArrayScene(t) ?? null;
+    if (!arraySceneEq(host._arrayScene, nextArrays))
+    {
+        host._arrayScene = nextArrays;
     }
 }
 
