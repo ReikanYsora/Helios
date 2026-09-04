@@ -9,7 +9,8 @@
 
 import { SceneCamera } from './projection';
 import { pxPerMetreFor, type Ground } from './tiles';
-import { buildVectorGround, GROUND_LAYER_KEYS, type GroundStyle, type GroundPalette } from './ground-render';
+import { buildVectorGround, GROUND_LAYER_KEYS, type GroundStyle, type GroundPalette, type VectorGround } from './ground-render';
+import { groundPoolKey, offerGround, takeGround } from './ground-pool';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
 import { SceneSvgLayers, type SceneDocument, type SceneNode } from './scene-dom';
 import { gradeColor } from '../core/render-kit/colors';
@@ -211,6 +212,26 @@ export interface ScenePaletteFull extends ScenePalette
     neighborOpacity: number;
 }
 
+//A canvas the browser emptied under memory pressure while it waited in the pool reads transparent where the
+//ground paints an opaque backdrop. One pixel at the home, read once on adoption.
+function groundPurged(built: VectorGround): boolean
+{
+    try
+    {
+        const { el, homeX, homeY } = built.ground;
+        const ctx = el.getContext('2d');
+        if (!ctx || el.width === 0)
+        {
+            return true;
+        }
+        return ctx.getImageData(Math.min(el.width - 1, Math.max(0, Math.round(homeX))), Math.min(el.height - 1, Math.max(0, Math.round(homeY))), 1, 1).data[3] === 0;
+    }
+    catch (_)
+    {
+        return true;
+    }
+}
+
 export class SceneRenderer
 {
     public readonly camera = new SceneCamera();
@@ -222,6 +243,11 @@ export class SceneRenderer
     private readonly _sceneLayers:  SceneSvgLayers;
 
     private _ground?:     Ground;
+    //The ground as built (canvas + repaint closures over its cached features), what the pool parks and hands back.
+    private _groundBuilt?: VectorGround;
+    private _groundKey = '';
+    //The canvas's contextrestored handler, removed before the ground leaves this renderer.
+    private _groundRestore?: () => void;
     //Repaints the current ground canvas from its cached vector features with a new style + sun altitude (theme
     //flip / colour config / day-night grade), so it never re-fetches tiles.
     private _groundRepaint?: (style: GroundStyle, altitude: number) => void;
@@ -372,13 +398,37 @@ export class SceneRenderer
         const token = ++this._groundToken;
         //Any compat mode ('transform' or 'projected') backs the ground canvas on the CPU (willReadFrequently) to
         //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas.
-        const built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, this._groundMode !== 'normal');
-        if (!this._alive || token !== this._groundToken)
+        const cpuRaster = this._groundMode !== 'normal';
+        const key       = groundPoolKey(lat, lon, cpuRaster);
+        //A ground released moments ago by the renderer this one replaces (see parkGround) is adopted as is: no
+        //fetch, no decode, no paint, the map is there for the first frame. Repainted from its cached features
+        //only when it was painted for another style or grade, or when the browser purged its pixels meanwhile.
+        this._releaseGround();
+        const styleKey = this._groundStyleKey(style);
+        let built: VectorGround;
+        const parked = takeGround(key);
+        if (parked)
         {
-            return;
+            built = parked.built;
+            if (parked.styleKey !== styleKey || groundPurged(built))
+            {
+                built.repaint(style, this._groundAltitude);
+            }
+        }
+        else
+        {
+            built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, cpuRaster);
+            if (!this._alive || token !== this._groundToken)
+            {
+                //Superseded while the tiles loaded: park the fresh ground rather than drop it.
+                offerGround(key, styleKey, built);
+                return;
+            }
         }
         this._groundStyleCur = style;
         this._ground         = built.ground;
+        this._groundBuilt    = built;
+        this._groundKey      = key;
         //Layer-promotion hint for the CPU-raster transform path: stabilizes the tilted canvas's compositing layer on
         //the entry GPUs that would otherwise be prone to mis-compositing it.
         if (this._groundMode === 'transform')
@@ -401,14 +451,53 @@ export class SceneRenderer
         //is the wall-tablet one: the card stays "visible" while the screen sleeps. `contextrestored` is the
         //browser saying exactly "I dropped your pixels, here is a fresh surface" -- repaint on the spot, from the
         //cached features, no network.
-        built.ground.el.addEventListener('contextrestored', () =>
+        this._groundRestore = () =>
         {
             if (this._alive && this._groundStyleCur)
             {
                 this.setGroundStyle(this._groundStyleCur);
             }
-        });
+        };
+        built.ground.el.addEventListener('contextrestored', this._groundRestore);
         this.scheduleRedraw();
+    }
+
+    //Paint identity of the current ground: style, sun altitude step and weather grade, so an adopted ground is
+    //repainted only when it would look different.
+    private _groundStyleKey(style: GroundStyle): string
+    {
+        return `${JSON.stringify(style)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
+    }
+
+    //Let go of the current ground: its canvas goes to the pool for the next renderer at this home (the pool
+    //disposes it if none comes). Nothing here repaints or refetches.
+    private _releaseGround(): void
+    {
+        const built = this._groundBuilt;
+        if (!built)
+        {
+            return;
+        }
+        if (this._groundRestore)
+        {
+            built.ground.el.removeEventListener('contextrestored', this._groundRestore);
+            this._groundRestore = undefined;
+        }
+        const styleKey = this._groundStyleCur ? this._groundStyleKey(this._groundStyleCur) : '';
+        offerGround(this._groundKey, styleKey, built);
+        this._ground                 = undefined;
+        this._groundBuilt            = undefined;
+        this._groundRepaint          = undefined;
+        this._groundRepaintProjected = undefined;
+        this._projectedPose          = '';
+    }
+
+    //Park the ground without tearing the renderer down (the card lost its place in the document, maybe for a
+    //tick, maybe for good): a quick return reclaims it through setLocation, a real removal lets the pool hand it
+    //to the next card or dispose it.
+    public parkGround(): void
+    {
+        this._releaseGround();
     }
 
     //Repaint the ground with a new style (theme flip / colour config) from the cached vector features, no fetch.
@@ -750,6 +839,8 @@ export class SceneRenderer
         {
             cancelAnimationFrame(this._homeRaf); this._homeRaf = 0;
         }
+        this._releaseGround();
+        this._buildings = [];
         this._groundHolder.remove();
         this._sceneSvg.remove();
     }

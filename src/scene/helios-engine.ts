@@ -2617,6 +2617,19 @@ export class HeliosEngine
     }
 
 
+    //The card left the document: park the painted ground for whoever comes next (a returning self included),
+    //keep everything else running until the teardown decision falls.
+    public parkGround(): void
+    {
+        this._renderer?.parkGround();
+    }
+
+    //The card is back before its teardown fired: reclaim the parked ground (or rebuild from the tile cache).
+    public reloadGround(): void
+    {
+        void this._renderer?.setLocation(this.homeLat, this.homeLon, this._groundStyle());
+    }
+
     public cleanup(): void
     {
         this._clearWeatherTimer();

@@ -23,6 +23,27 @@ panel would. A tracker, which has no fixed orientation, lies flat. Nothing is sh
 without the integration, and no name or value is ever written next to a tile: the
 scene keeps its graphic language. Asked for by @caswal.
 
+### Fixed: editing the card no longer boots it from nothing at every change
+
+In the visual editor, Home Assistant destroys the card and creates a fresh one
+on every setting you change. Each fresh card used to start from nothing: a
+frame or more with no map, no buildings, empty chips and an empty timeline
+while it re-fetched and repainted everything, and every rebuild left the
+previous basemap canvas (2816 px square, about 32 MB) waiting for the garbage
+collector. On a phone or a tablet, a run of quick changes could stack enough of
+them for the browser to give up: the WebView reloaded, or the card stayed stuck
+in that half-drawn state until a page refresh. A leaving card now parks its
+painted map for the one that replaces it, and hands over its fetched data (live
+readings, series, forecast, preferences), so the next card shows a complete
+scene from its first frames and refreshes behind it; the parked map is reclaimed
+on the spot, and any map nobody claims within a minute has its canvas emptied at
+once. Under a six-times CPU throttle, a rebuilt card now shows its map one frame
+in instead of three, and is complete in about 140 ms instead of 260 ms; on a real
+Home Assistant, where the recorder fetches take far longer than in the harness,
+the difference is the whole loading phase. This is the mechanism behind #414's
+"change settings, rotate, repeat until it crashes" and the odd frame you could see
+between two settings in the editor.
+
 ### Changed: the scene keeps its buildings and shadows between frames
 
 Rotating the scene rebuilt the whole buildings-and-shadows layer from scratch

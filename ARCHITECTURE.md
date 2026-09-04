@@ -612,6 +612,16 @@ fallback.
    actually reads (plus theme, language, home location) is unchanged - HA
    replaces the whole `hass` object on any entity's state change anywhere in
    the house, not just the ones this card shows.
-5. On disconnect the engine teardown is deferred briefly (HA edit-mode churn fires
-   disconnect + reconnect in one tick); a real removal tears down the renderer,
-   timers, controllers and observers, after persisting the view + pose.
+5. On disconnect the card parks its painted ground in `scene/ground-pool.ts` at
+   once and leaves its fetched data in `card/warm-start.ts` under its cache id
+   (or home); the engine teardown itself is deferred briefly (HA edit-mode churn
+   fires disconnect + reconnect in one tick, and a returning card reclaims its
+   ground). A real removal tears down the renderer, timers, controllers and
+   observers, after persisting the view + pose. The Home Assistant editor
+   creates a NEW card element on every setting it changes (preview mode), so
+   the card that comes next boots from that parked ground and warm data: its
+   first frames already carry the map, the buildings, the chips and the chart,
+   while its own fetches run behind. The pool keeps one spare ground for a
+   minute and empties the canvas of anything it lets go (2816 px square, some
+   32 MB each), so a burst of rebuilds never stacks basemaps waiting for the
+   garbage collector.

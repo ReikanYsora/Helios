@@ -82,6 +82,7 @@ import { clearDurable } from './data/durable-cache';
 import { KeyedFetch } from './data/source-fetch';
 import { fetchHaSolarForecast, type SolarForecastPoint } from './data/energy-forecast';
 import { fetchForecastLayout } from './data/forecast-layout';
+import { saveWarmStart, restoreWarmStart, warmStartKey } from './card/warm-start';
 import type { ArrayLine } from './scene/array-markers';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost, type UnifiedDataStore } from './data/unifiedStore';
 import
@@ -397,6 +398,8 @@ export class HeliosCard extends LitElement
     _lastHomeKey       = '';
     _lastConfigSig     = '';
     _initInflight      = false;
+    //Seeded once, from the data the card this one replaces left behind (card/warm-start.ts).
+    _warmRestored      = false;
 
     //Cached theme polarity. The fallback path (getComputedStyle + regex) forces a style flush, too costly
     //per render. Result only changes on theme polarity flip / style reload, so cache by themesObj identity.
@@ -1028,11 +1031,13 @@ export class HeliosCard extends LitElement
         super.connectedCallback();
         liveCards.add(this);
         this._registerCacheId();
-        //Quick reconnect (HA edit-mode thrash): cancel the deferred engine teardown so the live engine is kept.
+        //Quick reconnect (HA edit-mode thrash): cancel the deferred engine teardown so the live engine is kept,
+        //and take the ground back from the pool it was parked in on the way out.
         if (this._engineTeardownTimer !== undefined)
         {
             window.clearTimeout(this._engineTeardownTimer);
             this._engineTeardownTimer = undefined;
+            this._engine?.reloadGround();
         }
         //Reset the daily-totals kickoff flag so a remount re-fires refreshHaDailyTotals when the HA Energy
         //defaults snapshot lands again.
@@ -1106,9 +1111,14 @@ export class HeliosCard extends LitElement
         }
         this._engine?.persistCameraPose();
         this.persistUiState();
+        //Leave the fetched data for the card that may replace this one (the editor rebuilds on every change).
+        saveWarmStart(this, warmStartKey(this.effectiveCacheId(), this._lastHomeKey));
         this._unregisterCacheId();
         //HA's edit-mode wrapping fires disconnect + reconnect in the same tick. Defer the engine teardown so a
         //quick reconnect (cancelled in connectedCallback) keeps the live engine; only a real removal lets it fire.
+        //The painted ground is parked right away, not at teardown: when the editor replaces this card, the new
+        //one boots BEFORE this timer fires, and it must find the ground waiting.
+        this._engine?.parkGround();
         if (this._engine !== undefined && this._engineTeardownTimer === undefined)
         {
             this._engineTeardownTimer = window.setTimeout(() =>
@@ -1497,6 +1507,13 @@ export class HeliosCard extends LitElement
             }
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
+            //First boot of this element: take over the fetched data of the card it replaces, if any, so the first
+            //render already carries chips, curves and preferences while the refresh chain re-fetches behind it.
+            if (!this._warmRestored)
+            {
+                this._warmRestored = true;
+                restoreWarmStart(this, warmStartKey(this.effectiveCacheId(), homeKey));
+            }
             initEngine(this);
             return null;
         }
