@@ -1105,10 +1105,11 @@ return new Date((c+g)/2)}var Nt=/* @__PURE__ */new WeakMap;function renderTimeli
         gap: 4px;
         color: var(--sun-cross-color, #ffc107);
         pointer-events: none;
-        /*  z 5 (the far arc's own layer) used to leave this UNDER the weather overlay (z 6) and the rain/snow
-            canvases (z 7), so the time read as barely legible under real precipitation - weather is meant to
-            tint the map, never the data, exactly like the chips it now shares a tier with. */
-        z-index: 8;
+        /*  z 7: above the weather overlay (z 6, whose rain/snow/flash canvases stack inside its own context),
+            so the time stays legible under real precipitation - weather tints the map, never the data - yet
+            below the chips (z 8): a marker landing under a chip must pass behind it, not over its value. Same
+            tier as the leaders and the sun ray, drawn after them in the DOM. */
+        z-index: 7;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     }
     .sun-cross-marker ha-icon

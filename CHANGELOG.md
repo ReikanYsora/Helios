@@ -127,6 +127,13 @@ Thanks to @ruteclrp for the detailed reports on Helios-Forecast#52, which is
 where this was traced to, before turning out to be a card-side bug, not one
 in the integration itself.
 
+### Fixed: the sunrise and sunset markers no longer paint over the chips
+
+The two horizon-crossing markers (glyph + local time) shared the chips' own
+layer and came later in the paint order, so one landing under a chip covered
+its value. They now sit just below the chips and still above the weather, so a
+downpour never dims the times either.
+
 ### Fixed: charts and the timeline no longer share cached data between
 multiple Helios cards on the same dashboard
 
