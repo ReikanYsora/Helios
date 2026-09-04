@@ -7,6 +7,16 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4-b1
+
+### Added: a scene zoom
+
+A `scene-zoom` option (visual editor, "Buildings" section) at 1x, 1.5x or 2x
+magnifies the map, the buildings and the shadows around your home, for a wide
+card where the neighbourhood read too small. The sun, its arcs, the moon and the
+chips keep their size, so the card stays as legible as before, just with a bigger
+home in the middle. 1x is exactly today's rendering. Asked for by @10tribu.
+
 ## 2026.9.4-b0
 
 First beta, feature-complete. The release is mostly dedicated to performance: a
