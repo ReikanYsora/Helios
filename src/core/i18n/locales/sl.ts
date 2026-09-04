@@ -147,6 +147,8 @@ export const sl: Translations = {
     moonDisplayAlways: "Vedno vidna",
     moonDisplayNight: "Samo ponoči",
     moonDisplayHidden: "Skrita",
+    sceneZoom: "Povečava prizora",
+    sceneZoomHint: "Poveča zemljevid, stavbe in sence okoli vašega doma: 1x je današnji prikaz, 1,5x in 2x jih prikažeta večje. Sonce, loki in ploščice ohranijo svojo velikost.",
     lockRotation: "Zakleni vrtenje",
     lockRotationHint:
       "Povlecite predogled, da zavrtite in nagnete prizor na želeni pogled, nato pa to vklopite. Zaklep zamrzne ta pogled (vrtenje z vlečenjem in samodejno vrtenje v mirovanju se izklopita) in shrani kot v kartico, tako da se popolnoma enak pogled prikaže na vsaki napravi in brskalniku. Izklopite ga za ponovno prosto vrtenje.",

@@ -76,6 +76,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `scene-zoom` | `1` / `1.5` / `2` | `1` | Magnifies the basemap, buildings and shadows around the home (a scene-space zoom, not a map zoom): `1` is today's rendering, `1.5` and `2` draw them larger on screen. The sun, its arcs, the moon and the chips keep their card-fitted size. The basemap is CSS-scaled, so at `2` it reads a little softer. |
 | `display-radius` | 0-250 m | `200` | Distance around the home within which buildings and shadows render. The main perf lever on older phones. 250 m is as far as the ground under them reaches; 0 draws none. |
 | `building-count` | 10-100 | `50` | How many of the nearest buildings to keep around the home. |
 | `building-real-size` | boolean | `true` | Extrude buildings to their real OSM heights (capped). When `false`, every building uses the fixed `building-height` prism. |

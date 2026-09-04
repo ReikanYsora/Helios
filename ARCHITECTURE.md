@@ -394,6 +394,18 @@ condition from a HA `weather` entity mapped to a WMO code) runs through the
 generalised, table-driven `weather-override.ts`. Each pushes samples to the
 engine, which does the nearest-neighbour lookup at resolve time.
 
+### Scene zoom
+
+`scene-zoom` (1 / 1.5 / 2) multiplies the camera's px-per-metre (`SceneCamera.pxPerMetre`,
+`renderer.setZoom`). Everything projected through the camera grows with it: the
+buildings, the shadows, the horizon ridge, and the basemap canvas, which is painted
+once at the base scale and gets a matching `scale()` in its CSS transform (the
+compat `projected` path re-projects through the same camera). The HUD does not:
+`_sunArcScale()` probes the projected px per metre and sizes the sun/moon arcs in
+metres to fit the card, so the arcs, discs and chip cluster keep their on-screen
+size while the neighbourhood zooms in under them. Default 1 leaves the transform
+string and every projection byte-identical to before the option existed.
+
 ### Unified store, `data/unifiedStore.ts`
 
 The single source of truth for every graph. It bucketises the active period at

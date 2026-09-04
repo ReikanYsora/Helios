@@ -32,6 +32,10 @@ export class SceneCamera
     public tiltDeg    = DEFAULT_TILT;
     //Scale: screen px per real metre at the ground plane (set from the tile zoom + latitude by the host).
     public pxPerMetre = 1;
+    //Scene magnification folded into pxPerMetre by the host (`scene-zoom`). Kept here as well because the basemap
+    //canvas is painted at the base scale and only CSS-transformed: groundTransform scales it by this so the raster
+    //keeps matching the buildings/shadows projected through pxPerMetre.
+    public zoom = 1;
     //Screen-space anchor of the home (local origin), recomputed by setViewport each frame.
     public centreX = 0;
     public centreY = 0;
@@ -118,7 +122,10 @@ export class SceneCamera
             transform:
                 `translate(${(this.centreX - homeX).toFixed(2)}px, ${(this.centreY - homeY).toFixed(2)}px) ` +
                 `perspective(${PERSPECTIVE}px) ` +
-                `rotateX(${this.tiltDeg}deg) rotateZ(${this.bearingDeg}deg)`,
+                `rotateX(${this.tiltDeg}deg) rotateZ(${this.bearingDeg}deg)` +
+                //Innermost (applied first, about the home origin): canvas px -> zoomed px, exactly what pxPerMetre
+                //does for the projected layers. Omitted at 1 so the default transform string is unchanged.
+                (this.zoom !== 1 ? ` scale(${this.zoom})` : ''),
         };
     }
 }

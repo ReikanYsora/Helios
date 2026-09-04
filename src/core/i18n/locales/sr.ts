@@ -147,6 +147,8 @@ export const sr: Translations = {
     moonDisplayAlways: "Uvek vidljiv",
     moonDisplayNight: "Samo noću",
     moonDisplayHidden: "Skriven",
+    sceneZoom: "Zum scene",
+    sceneZoomHint: "Uvećava mapu, zgrade i senke oko vašeg doma: 1x je današnji prikaz, 1,5x i 2x ih prikazuju veće. Sunce, lukovi i pločice zadržavaju svoju veličinu.",
     lockRotation: "Закључај ротацију",
     lockRotationHint:
       "Превуците преглед да бисте ротирали и нагнули сцену до жељеног приказа, а затим укључите ово. Закључавање замрзава тај приказ (ротација превлачењем и аутоматска ротација у мировању се искључују) и чува угао у картици, тако да се потпуно исти приказ појављује на сваком уређају и прегледачу. Искључите га да бисте поново слободно ротирали.",

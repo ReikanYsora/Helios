@@ -147,6 +147,8 @@ export const da: Translations = {
     moonDisplayAlways: "Altid synlig",
     moonDisplayNight: "Kun om natten",
     moonDisplayHidden: "Skjult",
+    sceneZoom: "Scenezoom",
+    sceneZoomHint: "Forstørrer kortet, bygningerne og skyggerne omkring dit hjem: 1x er den nuværende visning, 1,5x og 2x viser dem større. Solen, buerne og brikkerne beholder deres størrelse.",
     lockRotation: "Lås rotation",
     lockRotationHint:
       "Træk i forhåndsvisningen for at rotere og vippe scenen til den ønskede visning, og slå så dette til. Låsen fastfryser den visning (træk-for-at-rotere og den automatiske rotation i hvile deaktiveres) og gemmer vinklen i kortet, så nøjagtig samme visning vises på alle enheder og browsere. Slå det fra for at rotere frit igen.",

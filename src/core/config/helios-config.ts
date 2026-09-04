@@ -10,12 +10,14 @@ import {
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
     DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
+    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM,
 } from './constants';
 import { clamp } from '../render-kit/math';
 
 export {
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
+    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM,
     MAX_DISPLAY_RADIUS_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
@@ -123,6 +125,8 @@ export interface HeliosConfig
     'horizon-line-color'?:      unknown;
     //Moon arc + crescent disc: 'always' | 'night' (only while the sun is down) | 'hidden'. Cosmetic, no chip.
     'moon-display'?:            unknown;
+    //Scene magnification, one of SCENE_ZOOM_LEVELS (1 = as-is). See sceneZoom().
+    'scene-zoom'?:              unknown;
     'sun-chip-mode'?:           unknown;
     'battery-chip-mode'?:       unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
@@ -327,6 +331,18 @@ export function moonDisplay(config: HeliosConfig | undefined): MoonDisplay
     const v = config?.['moon-display'];
     return v === 'always' || v === 'hidden' ? v : 'night';
 }
+//Scene magnification: 1 (default, today's rendering), 1.5 or 2. Multiplies the camera's px-per-metre, so the
+//basemap, buildings and shadows grow around the home; the sun/moon arcs, discs and chips stay card-sized (the arc
+//scale probe measures projected px per metre and compensates). Accepts a number or a numeric string (the editor's
+//select emits strings); anything else falls back to 1.
+export type SceneZoom = (typeof SCENE_ZOOM_LEVELS)[number];
+export function sceneZoom(config: HeliosConfig | undefined): SceneZoom
+{
+    const raw = config?.['scene-zoom'];
+    const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+    return (SCENE_ZOOM_LEVELS as readonly number[]).includes(n) ? (n as SceneZoom) : DEFAULT_SCENE_ZOOM;
+}
+
 //Configured colour for the horizon ridge line, as a ui_color token or hex. Undefined falls back to the card CSS.
 export function horizonLineColor(config: HeliosConfig | undefined): string | undefined
 {

@@ -147,6 +147,8 @@ export const pt: Translations = {
     moonDisplayAlways: "Sempre visível",
     moonDisplayNight: "Só à noite",
     moonDisplayHidden: "Oculta",
+    sceneZoom: "Zoom da cena",
+    sceneZoomHint: "Amplia o mapa, os edifícios e as sombras à volta da sua casa: 1x é a renderização atual, 1,5x e 2x mostram-nos maiores. O sol, os arcos e os mostradores mantêm o tamanho.",
     lockRotation: "Bloquear rotação",
     lockRotationHint:
       "Arraste a pré-visualização para girar e inclinar a cena até à vista que quer e depois ative isto. O bloqueio congela essa vista (a rotação por arrasto e a rotação automática em repouso são desativadas) e guarda o ângulo no cartão, para que exatamente a mesma vista apareça em todos os dispositivos e navegadores. Desative-o para voltar a girar livremente.",

@@ -42,6 +42,8 @@ const STATIC_VISUAL_CONFIG_KEYS = [
     //Building option keys: a change triggers updateConfig -> _ensureBuildings -> _applyBuildings, which re-interprets the
     //cached raw footprints in memory (no re-fetch, the location key is unchanged).
     'display-radius',
+    //Scene zoom: updateConfig rescales the renderer's camera and drops the arc caches (helios-engine).
+    'scene-zoom',
     'building-cluster-radius',
     'building-count',
     'building-real-size',

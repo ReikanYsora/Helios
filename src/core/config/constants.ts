@@ -19,6 +19,10 @@ export const DEG = Math.PI / 180;
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
 export const MIN_DISPLAY_RADIUS_M     = 0;
 export const MAX_DISPLAY_RADIUS_M     = 250;
+//Scene magnification (`scene-zoom`): the camera's px-per-metre is multiplied by it, so the ground, the buildings
+//and the shadows grow around the home while the HUD (arc, discs, chips) keeps its card-fitted size. 1 = as-is.
+export const SCENE_ZOOM_LEVELS = [1, 1.5, 2] as const;
+export const DEFAULT_SCENE_ZOOM = 1;
 export const DEFAULT_BUILDING_OPACITY          = 0.5;   //ghost surround; home stays 1.0
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = single-polygon home detection
 

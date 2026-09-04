@@ -147,6 +147,8 @@ export const ro: Translations = {
     moonDisplayAlways: "Mereu vizibilă",
     moonDisplayNight: "Doar noaptea",
     moonDisplayHidden: "Ascunsă",
+    sceneZoom: "Zoom scenă",
+    sceneZoomHint: "Mărește harta, clădirile și umbrele din jurul casei: 1x este redarea actuală, 1,5x și 2x le afișează mai mari. Soarele, arcele și etichetele își păstrează dimensiunea.",
     lockRotation: "Blocheaza rotirea",
     lockRotationHint:
       "Trageți de previzualizare pentru a roti și înclina scena la vederea dorită, apoi activați această opțiune. Blocarea îngheață acea vedere (rotirea prin tragere și rotația automată în repaus sunt dezactivate) și salvează unghiul în card, astfel încât exact aceeași vedere apare pe fiecare dispozitiv și browser. Dezactivați-o pentru a roti din nou liber.",

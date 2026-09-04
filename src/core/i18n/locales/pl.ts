@@ -147,6 +147,8 @@ export const pl: Translations = {
     moonDisplayAlways: "Zawsze widoczny",
     moonDisplayNight: "Tylko w nocy",
     moonDisplayHidden: "Ukryty",
+    sceneZoom: "Zoom sceny",
+    sceneZoomHint: "Powiększa mapę, budynki i cienie wokół domu: 1x to obecny widok, 1,5x i 2x pokazują je większe. Słońce, łuki i plakietki zachowują swój rozmiar.",
     lockRotation: "Zablokuj obrót",
     lockRotationHint:
       "Przeciągnij podgląd, aby obrócić i pochylić scenę do żądanego widoku, a następnie włącz tę opcję. Blokada zamraża ten widok (obracanie przeciąganiem i automatyczne obracanie w spoczynku zostają wyłączone) i zapisuje kąt w karcie, dzięki czemu dokładnie ten sam widok pojawia się na każdym urządzeniu i w każdej przeglądarce. Wyłącz ją, aby ponownie swobodnie obracać.",

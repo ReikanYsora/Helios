@@ -1366,6 +1366,11 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
+                ${this._renderSelect('scene-zoom', t.editor.sceneZoom,
+        [{ value: '1',   label: '1x' },
+            { value: '1.5', label: '1.5x' },
+            { value: '2',   label: '2x' }], '1',
+        t.editor.sceneZoomHint)}
                 ${this._renderSlider('display-radius', t.editor.displayRadius, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
                 <div class="hint">${t.editor.displayRadiusHelp}</div>
                 ${this._renderSlider('building-count', t.editor.buildingCount, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}

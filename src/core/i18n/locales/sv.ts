@@ -147,6 +147,8 @@ export const sv: Translations = {
     moonDisplayAlways: "Alltid synlig",
     moonDisplayNight: "Endast på natten",
     moonDisplayHidden: "Dold",
+    sceneZoom: "Scenzoom",
+    sceneZoomHint: "Förstorar kartan, byggnaderna och skuggorna runt ditt hem: 1x är dagens rendering, 1,5x och 2x visar dem större. Solen, bågarna och brickorna behåller sin storlek.",
     lockRotation: "Lås rotation",
     lockRotationHint:
       "Dra i förhandsvisningen för att rotera och luta scenen till önskad vy och slå sedan på detta. Låset fryser den vyn (dra-för-att-rotera och den automatiska rotationen i viloläge stängs av) och sparar vinkeln i kortet, så att exakt samma vy visas på varje enhet och webbläsare. Stäng av det för att rotera fritt igen.",

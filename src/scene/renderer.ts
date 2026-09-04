@@ -230,6 +230,8 @@ export class SceneRenderer
     private _projectedPose = '';
     //Pose signature of the last buildings+shadows SVG rebuild, so an unchanged scene skips the reparse (see _draw).
     private _lastScenePose = '';
+    //Home latitude of the current ground, so setZoom can rebuild pxPerMetre without a setLocation.
+    private _lat = 0;
     //Bumped by setBuildings/setPalette so the pose guard rebuilds when the scene DATA (not just the pose) changes.
     private _sceneRev = 0;
     //Ground render path, decided once per device (see groundMode): 'normal' / 'transform' both use the CSS 3D
@@ -341,9 +343,26 @@ export class SceneRenderer
 
     //Build the ground basemap for a home position. One style serves both themes; dark mode is a CSS
     //filter on the canvas, so a theme flip never re-tiles.
+    //Scene magnification (`scene-zoom`): scales the camera and re-keys the pose guards so the next frame repaints
+    //the buildings/shadows and, on the compat path, the projected ground. The basemap canvas itself is untouched:
+    //the normal path scales it in groundTransform, the projected path re-projects through the camera.
+    public setZoom(zoom: number): void
+    {
+        if (zoom === this.camera.zoom)
+        {
+            return;
+        }
+        this.camera.zoom       = zoom;
+        this.camera.pxPerMetre = pxPerMetreFor(this._lat) * zoom;
+        this._projectedPose    = '';
+        this._lastScenePose    = '';
+        this.scheduleRedraw();
+    }
+
     public async setLocation(lat: number, lon: number, style: GroundStyle): Promise<void>
     {
-        this.camera.pxPerMetre = pxPerMetreFor(lat);
+        this._lat = lat;
+        this.camera.pxPerMetre = pxPerMetreFor(lat) * this.camera.zoom;
         const token = ++this._groundToken;
         //Any compat mode ('transform' or 'projected') backs the ground canvas on the CPU (willReadFrequently) to
         //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas.
@@ -606,7 +625,7 @@ export class SceneRenderer
         {
             return;
         }
-        const pose = `${w}x${h}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
+        const pose = `${w}x${h}|${this.camera.zoom}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
         if (pose === this._projectedPose)
         {
             return;
@@ -668,7 +687,7 @@ export class SceneRenderer
         //when nothing it reads changed since the last draw (camera pose, sun, growth, home, and a revision bumped by
         //setBuildings/setPalette), mirroring the ground compat path's own pose guard above. Anything below the SVG
         //that must run every frame (onAfterDraw) stays outside this gate.
-        const scenePose = `${width}x${height}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}`
+        const scenePose = `${width}x${height}|${this.camera.zoom}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}`
             + `|${this._sun.azimuth.toFixed(2)}|${this._sun.altitude.toFixed(2)}|${this._growth.toFixed(3)}`
             + `|${this._home.color ?? ''}|${(this._home.growth ?? 1).toFixed(3)}|${this._sceneRev}`
             + `|${this._wxSat}|${this._wxBright}`;

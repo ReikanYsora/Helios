@@ -21,6 +21,7 @@ import
 {
     type HeliosConfig,
     displayRadiusM,
+    sceneZoom,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
@@ -432,10 +433,6 @@ export class HeliosEngine
 
     //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
     //sun-arc-scale memo key keeps a stable value.
-    public getCameraZoom():    number
-    {
-        return 18;
-    }
 
 
     _autoRotateRaf?:           number;
@@ -637,6 +634,7 @@ export class HeliosEngine
         });
         this._renderer.setCameraBearing(this._initialBearing());
         this._renderer.setCameraPitch(this._initialPitch());
+        this._renderer.setZoom(sceneZoom(this.cfg));
         this._resolvePalette();
 
         //Re-project the card's HUD (arc, chips, leaders) on every renderer paint so the overlays stay glued
@@ -926,6 +924,9 @@ export class HeliosEngine
         {
             return;
         }
+        //The renderer can draw (ResizeObserver) before setLocation resolved, while the camera still carried its
+        //seed scale; the arc-scale probe would have memoised that. Drop it so the first real projection re-probes.
+        this._arcScaleMemo = undefined;
         this._onRendererReady();
     }
 
@@ -1768,7 +1769,8 @@ export class HeliosEngine
 
         //The cluster centres on the home pill (the chips' orbit hub), lifted modestly off the ground point
         //so it sits over the building body; liftScale lets a kiosk canvas breathe.
-        const CLUSTER_LIFT_PX = 28 * liftScale;
+        //Lifted with the scene zoom too: the home prism grows with the zoom, so the pill keeps clearing its roof.
+        const CLUSTER_LIFT_PX = 28 * liftScale * (this._renderer?.camera.zoom ?? 1);
         const clusterY = home.y - CLUSTER_LIFT_PX;
         const pvX = home.x;
         //PV sits at exactly twice the home->battery vertical gap (battery is at CHIP_STACK_GAP_PX / 2 above the
@@ -1830,8 +1832,8 @@ export class HeliosEngine
         const w = this._cachedCanvasCssW;
         const h = this._cachedCanvasCssH;
         const minDim = Math.min(w || Infinity, h || Infinity);
-        //No zoom under the 2.5D renderer; the constant getCameraZoom() keeps the memo key stable.
-        const zoom = this._renderer ? this.getCameraZoom() : -1;
+        //The scene zoom changes the projected px per metre the probe below measures, so it keys the memo.
+        const zoom = this._renderer ? this._renderer.camera.zoom : -1;
 
         const memo = this._arcScaleMemo;
         if (memo && memo.w === w && memo.h === h && memo.zoom === zoom)
@@ -1877,7 +1879,11 @@ export class HeliosEngine
                     //sane and leaves headroom above the apex for the chips on the sun.
                     const TARGET_FRAC = 0.41;
                     const desiredR    = (TARGET_FRAC * minDim) / pxPerM;
-                    scale = Math.max(0.72, Math.min(desiredR / SUN_ARC_RADIUS_M, 6));
+                    //Floor and cap are on-screen bounds expressed in metre scale: under a scene zoom the same
+                    //screen reach takes 1/zoom the metres, so both move with it (else a small card on the floor
+                    //would see its arc leave the card at 2x).
+                    const z = zoom > 0 ? zoom : 1;
+                    scale = Math.max(0.72 / z, Math.min(desiredR / SUN_ARC_RADIUS_M, 6 / z));
                 }
             }
         }
@@ -1885,11 +1891,14 @@ export class HeliosEngine
         this._arcScaleMemo = { w, h, zoom, scale };
         return scale;
     }
-    //Public accessor so the card scales the sun disc + halo with the arc radius (else the disc stays its
-    //grid-tuned pixel size and reads as a tiny dot on a giant curve on a fullscreen canvas).
+    //Public accessor so the card scales the sun disc + halo (and the moon's) with the arc radius (else the disc
+    //stays its grid-tuned pixel size and reads as a tiny dot on a giant curve on a fullscreen canvas). This is
+    //the ON-SCREEN scale: the internal _sunArcScale() is a metre scale that the probe shrinks by the scene zoom
+    //to keep the arc card-fitted, so it is multiplied back by the zoom here, otherwise the discs would shrink
+    //with every step of zoom while the arc they ride stays put.
     public getSunArcScale(): number
     {
-        return this._sunArcScale();
+        return this._sunArcScale() * (this._renderer?.camera.zoom ?? 1);
     }
 
     //Keystone projection: lon/lat/altitude -> screen px via the SceneCamera. Every card-facing projection
@@ -2436,6 +2445,7 @@ export class HeliosEngine
         const prevShadowsOn   = this._shadowsEnabled();
         const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
         const prevCameraLocked = this.isCameraLocked();
+        const prevZoom         = sceneZoom(this.cfg);
         this.cfg = { ...cfg };
 
         //Re-arm the auto-rotate rAF loop when the flags transition back to rotation-permitting (the loop
@@ -2464,6 +2474,17 @@ export class HeliosEngine
         if (!this._renderer)
         {
             return;
+        }
+
+        //Scene zoom: the renderer rescales its camera; the arc caches baked the old px-per-metre into their
+        //samples and the scale memo, so they are dropped for the next projection pass.
+        const nextZoom = sceneZoom(this.cfg);
+        if (nextZoom !== prevZoom)
+        {
+            this._renderer.setZoom(nextZoom);
+            this._arcScaleMemo       = undefined;
+            this._arcInputsCache     = undefined;
+            this._moonArcInputsCache = undefined;
         }
 
         //Building option updates (radius/count/real-size/height/cluster): re-interpret the cached raw

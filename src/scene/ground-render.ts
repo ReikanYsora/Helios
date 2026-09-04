@@ -566,7 +566,8 @@ export async function buildVectorGround(
         }
         landPath.closePath();
 
-        paint(ctx, w, h, featuresByLayer, toScreen, pxPerMetre, st, alt, landPath);
+        //Stroke widths follow the camera's (zoomed) scale, like every projected point above does.
+        paint(ctx, w, h, featuresByLayer, toScreen, camera.pxPerMetre, st, alt, landPath);
 
         //Edge fade, baked into the projected canvas instead of the face-on .ground-fade disc. The
         //ground-space fade circle (radius = the basemap's closest-side, transparent until GROUND_FADE_START%,

@@ -140,6 +140,8 @@ export interface Translations
         moonDisplayAlways:           string;
         moonDisplayNight:            string;
         moonDisplayHidden:           string;
+        sceneZoom:                   string;
+        sceneZoomHint:               string;
         //Camera pose controls (scene view): the lock toggle + a hint to set the angle by dragging the preview.
         lockRotation:                string;
         lockRotationHint:            string;
