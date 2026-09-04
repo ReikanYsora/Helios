@@ -7,37 +7,18 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
-## 2026.9.4-a4
+## 2026.9.4-b0
 
-### Fixed: the battery sign guard now covers installs with several batteries
+First beta, feature-complete. The release is mostly dedicated to performance: a
+full audit of the rendering pipeline, with every fix independently re-measured
+under simulated weak-hardware CPU throttling before it shipped, then re-audited
+a second time after landing to verify what actually held up. Timeline scrubbing
+tracks your drag far more closely, chip and marker movement is lighter on every
+device, and the card does less work in the background while it just sits on a
+dashboard.
 
-Helios cross-checks a battery's live power sensor against its charge and
-discharge meters and corrects a sensor whose sign convention contradicts the
-slot it was wired into (a charge-positive sensor set to "Standard", say). That
-check only ever ran for a single battery: with two or more, it switched itself
-off, so a backwards sensor stayed backwards on the live chip and in the flow
-while the history, built from the meters, stayed right. It now judges each
-battery against its own meters and flips exactly the sensor(s) that need it,
-inside the sum, so a correct second battery is never turned around with a wrong
-first one. Single-battery installs behave exactly as before. Thanks to
-@bernhard2901 for the screenshots that pinned this down (#422).
-
-## 2026.9.4-a3
-
-### Changed: the moon shows at night by default
-
-`moon-display` now defaults to night only (the moon and its arc appear while the
-sun is below the horizon, when the sun's own layers have dimmed and a moon is
-expected there). Always visible and hidden remain available in the visual editor.
-
-### Fixed: beads along the moon's arc
-
-Every joint between two segments of the moon's arc showed a small bright dot:
-the arc's translucency was applied per segment, so the two round caps meeting at
-each joint added their alpha together. The translucency now applies to the arc
-as a whole, composited once.
-
-## 2026.9.4-a2
+On top of that, one new thing in the sky (the moon) and four fixes, two of them
+for bugs that reached 2026.9.3.
 
 ### Added: the moon, on its own arc, with its real phase
 
@@ -52,49 +33,6 @@ nearer body, and it carries no chip and no value: it is purely cosmetic. A new
 `moon-display` option (visual editor, "UI and map" section) picks night only (the
 default: while the sun is below the horizon), always visible, or hidden. Asked for
 by @Sniper435 (#408).
-
-### Fixed: a fetch-per-render loop for every non-admin viewer (since 2026.9.3)
-
-The 2026.9.3 fix that stopped retrying the rejected Energy-preferences event
-subscription for non-admin users (#415) skipped the subscription but forgot to
-leave its guard set. The card re-checks that guard on every render, and the
-one-shot preferences fetch that still runs for non-admin users rewrites the
-Energy snapshot each time it lands, which re-renders, which re-checks the
-guard, which fetches again: one `energy/get_prefs` + `energy/info` round-trip
-per render, indefinitely, on every dashboard viewed by a non-admin user (a
-steady websocket drip on a real core; a hard main-thread lock against a
-synchronous mock, which is how it was caught). The guard now holds after the
-first fetch, exactly like the rejected-subscription path already did.
-
-## 2026.9.4-a1
-
-### Fixed: the forecast curve could stay frozen on a stale snapshot
-
-The unified data store's rebuild check tracked the fetched HA Energy solar
-forecast by its point COUNT only. A forecast provider that revises its
-past-hour values in place, without the count changing, is a case that check
-was structurally blind to: the store kept whatever forecast content it had
-from the last rebuild-triggering event (boot, or a period switch), silently
-discarding every later background refetch. On a dashboard left open, this
-showed up as the past-hour curve looking correct on first paint, then stuck,
-then briefly correct again right after switching the timeline period and
-back, then stuck again after switching to another Home Assistant dashboard
-view and back and none of it actually tracking when the underlying forecast
-data changed. The store now also tracks the last fetch's timestamp, so an
-in-place revision invalidates it like every other source already does.
-Thanks to @ruteclrp for the detailed reports on Helios-Forecast#52, which is
-where this was traced to, before turning out to be a card-side bug, not one
-in the integration itself.
-
-## 2026.9.4-a0
-
-A release entirely dedicated to performance: a full audit of the rendering
-pipeline, with every fix independently re-measured under simulated
-weak-hardware CPU throttling before it shipped, then re-audited a second time
-after landing to verify what actually held up. Timeline scrubbing tracks your
-drag far more closely, chip and marker movement is lighter on every device,
-and the card does less work in the background while it just sits on a
-dashboard.
 
 ### Changed: timeline scrubbing tracks your drag much more closely
 
@@ -145,6 +83,50 @@ instead of building a new one for every label; and a few leftover style
 writes that never did anything (their values never actually change) were
 removed from the per-frame render path.
 
+### Fixed: the battery sign guard now covers installs with several batteries
+
+Helios cross-checks a battery's live power sensor against its charge and
+discharge meters and corrects a sensor whose sign convention contradicts the
+slot it was wired into (a charge-positive sensor set to "Standard", say). That
+check only ever ran for a single battery: with two or more, it switched itself
+off, so a backwards sensor stayed backwards on the live chip and in the flow
+while the history, built from the meters, stayed right. It now judges each
+battery against its own meters and flips exactly the sensor(s) that need it,
+inside the sum, so a correct second battery is never turned around with a wrong
+first one. Single-battery installs behave exactly as before. Thanks to
+@bernhard2901 for the screenshots that pinned this down (#422).
+
+### Fixed: a fetch-per-render loop for every non-admin viewer (since 2026.9.3)
+
+The 2026.9.3 fix that stopped retrying the rejected Energy-preferences event
+subscription for non-admin users (#415) skipped the subscription but forgot to
+leave its guard set. The card re-checks that guard on every render, and the
+one-shot preferences fetch that still runs for non-admin users rewrites the
+Energy snapshot each time it lands, which re-renders, which re-checks the
+guard, which fetches again: one `energy/get_prefs` + `energy/info` round-trip
+per render, indefinitely, on every dashboard viewed by a non-admin user (a
+steady websocket drip on a real core; a hard main-thread lock against a
+synchronous mock, which is how it was caught). The guard now holds after the
+first fetch, exactly like the rejected-subscription path already did.
+
+### Fixed: the forecast curve could stay frozen on a stale snapshot
+
+The unified data store's rebuild check tracked the fetched HA Energy solar
+forecast by its point COUNT only. A forecast provider that revises its
+past-hour values in place, without the count changing, is a case that check
+was structurally blind to: the store kept whatever forecast content it had
+from the last rebuild-triggering event (boot, or a period switch), silently
+discarding every later background refetch. On a dashboard left open, this
+showed up as the past-hour curve looking correct on first paint, then stuck,
+then briefly correct again right after switching the timeline period and
+back, then stuck again after switching to another Home Assistant dashboard
+view and back and none of it actually tracking when the underlying forecast
+data changed. The store now also tracks the last fetch's timestamp, so an
+in-place revision invalidates it like every other source already does.
+Thanks to @ruteclrp for the detailed reports on Helios-Forecast#52, which is
+where this was traced to, before turning out to be a card-side bug, not one
+in the integration itself.
+
 ### Fixed: charts and the timeline no longer share cached data between
 multiple Helios cards on the same dashboard
 
@@ -154,6 +136,8 @@ instead of kept separately per card. With only one card this was invisible,
 but with two or more, each card's render could silently evict and rebuild
 the other's cached data instead of reusing its own. Each card now keeps its
 own cache.
+
+---
 
 ---
 

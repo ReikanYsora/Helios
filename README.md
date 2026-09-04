@@ -69,6 +69,9 @@ home and your consumption; the production layers simply do not appear.
 * **Your real horizon**, worked out from the terrain around your home, so the sun
   dims the moment it drops behind a hill and not only at the flat horizon, with
   the skyline drawn as a discreet ridge around the scene.
+* **The moon**, on its own arc across the same sky, with the actual crescent for
+  tonight's phase lit toward the sun. At night by default, always or never if
+  you prefer; purely for the eye, it carries no reading.
 * **Live flows**, production, grid and battery, each with a bead that travels to
   the home at the speed of the power it carries.
 * **A timeline you can scrub**, two days back and two days forward. The whole
