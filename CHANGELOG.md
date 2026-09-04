@@ -7,6 +7,21 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4-a3
+
+### Changed: the moon shows at night by default
+
+`moon-display` now defaults to night only (the moon and its arc appear while the
+sun is below the horizon, when the sun's own layers have dimmed and a moon is
+expected there). Always visible and hidden remain available in the visual editor.
+
+### Fixed: beads along the moon's arc
+
+Every joint between two segments of the moon's arc showed a small bright dot:
+the arc's translucency was applied per segment, so the two round caps meeting at
+each joint added their alpha together. The translucency now applies to the arc
+as a whole, composited once.
+
 ## 2026.9.4-a2
 
 ### Added: the moon, on its own arc, with its real phase
@@ -19,9 +34,9 @@ come from a compact lunar-position model in the same spirit as the sun's, no
 ephemeris library; the phase checks out against documented full and new moons to
 well under a percent. The moon always paints in front of the sun, since it is the
 nearer body, and it carries no chip and no value: it is purely cosmetic. A new
-`moon-display` option (visual editor, "UI and map" section) picks always visible
-(the default), night only (while the sun is below the horizon), or hidden. Asked
-for by @Sniper435 (#408).
+`moon-display` option (visual editor, "UI and map" section) picks night only (the
+default: while the sun is below the horizon), always visible, or hidden. Asked for
+by @Sniper435 (#408).
 
 ### Fixed: a fetch-per-render loop for every non-admin viewer (since 2026.9.3)
 
