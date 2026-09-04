@@ -127,7 +127,16 @@ plus a screen-space `<svg>` it repaints each frame with the occluding geometry
 (the cast shadows and the extruded buildings). It
 coalesces redraws into one `requestAnimationFrame` pass, owns its own
 `ResizeObserver`, and fires `onAfterDraw` so the card can re-project its HUD in
-lock-step. The `<svg>` is bound to the card box (`contain: paint`): its building
+lock-step. The painters in `scene/buildings.ts` describe a frame as shapes
+(tag + attribute text per face, per cast shade), and `scene/scene-dom.ts` keeps
+the `<svg>`'s nodes alive between frames: one node per shape slot, only the
+attributes whose text changed are written, nodes are appended or dropped at the
+tail as the count moves, and a slot swaps its node in place when its tag changes.
+A camera move therefore rewrites geometry on existing, already-styled nodes
+instead of the whole subtree being thrown away and reparsed from one markup
+string. `shapesSvg` / `shadowLayerSvg` serialise the exact markup that string
+form used to be, which the characterisation snapshots pin, and a fake-DOM test
+checks the committed tree against it frame after frame. The `<svg>` is bound to the card box (`contain: paint`): its building
 paths reach a whole neighbourhood past the card, and without that bound an old iOS
 compositor sized the layer's backing store to that content, capped it and painted
 only the top half; binding it also trims the off-card raster on every frame.

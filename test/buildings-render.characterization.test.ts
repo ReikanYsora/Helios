@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
     renderBuildings,
     renderShadows,
+    shapesSvg,
+    shadowLayerSvg,
     type Building,
     type ScenePalette,
     type HomeAppearance,
@@ -9,7 +11,7 @@ import {
 import { SceneCamera } from '../src/scene/projection';
 
 //Characterization snapshot: pins the exact SVG output of the buildings + shadows painters for a fixed scene, so the
-//upcoming performance refactor (how the painted shapes reach the DOM) can prove it did not change a single path.
+//painters' output reaching the DOM as persistent nodes (scene-dom.ts) provably changed not a single path.
 //Deterministic: the painters are pure projection, no randomness.
 function scene(): {
     cam: SceneCamera;
@@ -38,13 +40,13 @@ describe('buildings / shadows render (characterization)', () =>
     it('renderBuildings output is stable for a fixed scene', () =>
     {
         const { cam, buildings, palette, home, sun } = scene();
-        expect(renderBuildings(cam, buildings, sun.altitude, palette, 1, 0.25, home, sun.azimuth)).toMatchSnapshot();
+        expect(shapesSvg(renderBuildings(cam, buildings, sun.altitude, palette, 1, 0.25, home, sun.azimuth))).toMatchSnapshot();
     });
 
     it('renderShadows output is stable for a fixed scene', () =>
     {
         const { cam, buildings, sun } = scene();
-        expect(renderShadows(cam, buildings, sun, '#101014', 0.35)).toMatchSnapshot();
+        expect(shadowLayerSvg(renderShadows(cam, buildings, sun, '#101014', 0.35))).toMatchSnapshot();
     });
 
     it('a neighbour nearer the camera than the home paints on top of it (#413)', () =>
@@ -64,7 +66,7 @@ describe('buildings / shadows render (characterization)', () =>
         ];
         const palette: ScenePalette = { home: '#e0a020', neighbor: '#8a8f98' };
         const home: HomeAppearance = { color: '#e0a020', growth: 1 };
-        const svg = renderBuildings(cam, buildings, 40, palette, 1, 0.25, home, 135);
+        const svg = shapesSvg(renderBuildings(cam, buildings, 40, palette, 1, 0.25, home, 135));
 
         //Home's fill is the palette gold (#e0a020 -> rgb 224,160,32); the neighbour's is the palette grey
         //(#8a8f98 -> rgb 138,143,152, this scene's wall shade before the ambient/lit mix darkens it further,

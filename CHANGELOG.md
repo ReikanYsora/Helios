@@ -7,6 +7,29 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4-b2
+
+### Changed: the scene keeps its buildings and shadows between frames
+
+Rotating the scene rebuilt the whole buildings-and-shadows layer from scratch
+every frame: one long piece of markup regenerated, handed to the browser, which
+threw the previous layer away, parsed the new one, recreated every shape and
+restyled it. That rebuild was the single heaviest thing the card did while the
+camera moved. The layer now keeps its shapes alive and, each frame, rewrites
+only what actually moved (the geometry of each wall, roof and shade), adding or
+dropping shapes at the tail as buildings enter or leave the view. The picture
+is the same one to the pixel: the painters emit the exact same shapes in the
+exact same order, a snapshot test pins that, and a screenshot comparison of
+the scene against 2026.9.4-b1 across five camera poses and three times of day
+(noon, low sun, night) found zero differing pixels. On a CPU throttled six
+times, a continuous rotation drops from about 76% to 65% of the main thread
+busy, and its worst frame from 50 ms to 27 ms; interaction (drag, scrub,
+hover, period switch) and idle are unchanged or slightly lighter. Along the
+way, the shade projector no longer projects each footprint three times over
+(the sweep, the edge quads and the stencil now share one projection) and the
+wall painter reads each vertex's depth from the projection it already made
+instead of projecting it again; neither changes a coordinate.
+
 ## 2026.9.4-b1
 
 ### Changed: the "Forecast" period is now "J - J+2"

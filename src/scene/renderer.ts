@@ -11,6 +11,7 @@ import { SceneCamera } from './projection';
 import { pxPerMetreFor, type Ground } from './tiles';
 import { buildVectorGround, GROUND_LAYER_KEYS, type GroundStyle, type GroundPalette } from './ground-render';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
+import { SceneSvgLayers, type SceneDocument, type SceneNode } from './scene-dom';
 import { gradeColor } from '../core/render-kit/colors';
 import {
     SVG_NS,
@@ -217,6 +218,8 @@ export class SceneRenderer
     private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
     private readonly _sceneSvg:     SVGSVGElement;
+    //The scene SVG's persistent nodes (shadows + buildings), updated in place each frame.
+    private readonly _sceneLayers:  SceneSvgLayers;
 
     private _ground?:     Ground;
     //Repaints the current ground canvas from its cached vector features with a new style + sun altitude (theme
@@ -228,7 +231,7 @@ export class SceneRenderer
         camera: SceneCamera, w: number, h: number, style: GroundStyle, altitude: number,
     ) => void;
     private _projectedPose = '';
-    //Pose signature of the last buildings+shadows SVG rebuild, so an unchanged scene skips the reparse (see _draw).
+    //Pose signature of the last buildings+shadows repaint, so an unchanged scene skips it (see _draw).
     private _lastScenePose = '';
     //Home latitude of the current ground, so setZoom can rebuild pxPerMetre without a setLocation.
     private _lat = 0;
@@ -294,6 +297,9 @@ export class SceneRenderer
         this._groundHolder.className = 'scene-ground-holder';
         this._sceneSvg = document.createElementNS(SVG_NS, 'svg');
         this._sceneSvg.setAttribute('class', 'scene-svg');
+        //The layers see a structural subset of the DOM (so a test can drive them with a fake); the DOM's generic
+        //appendChild signatures do not unify with it, hence the cast.
+        this._sceneLayers = new SceneSvgLayers(document as unknown as SceneDocument, this._sceneSvg as unknown as SceneNode);
         container.appendChild(this._groundHolder);
         container.appendChild(this._sceneSvg);
 
@@ -683,10 +689,10 @@ export class SceneRenderer
         }
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-        //The buildings + shadows layer is a full innerHTML rebuild + reparse, the heaviest per-frame cost. Skip it
-        //when nothing it reads changed since the last draw (camera pose, sun, growth, home, and a revision bumped by
-        //setBuildings/setPalette), mirroring the ground compat path's own pose guard above. Anything below the SVG
-        //that must run every frame (onAfterDraw) stays outside this gate.
+        //The buildings + shadows repaint (project, order, then write the scene SVG's nodes in place) is the heaviest
+        //per-frame cost. Skip it when nothing it reads changed since the last draw (camera pose, sun, growth, home,
+        //and a revision bumped by setBuildings/setPalette), mirroring the ground compat path's own pose guard above.
+        //Anything below the SVG that must run every frame (onAfterDraw) stays outside this gate.
         const scenePose = `${width}x${height}|${this.camera.zoom}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}`
             + `|${this._sun.azimuth.toFixed(2)}|${this._sun.altitude.toFixed(2)}|${this._growth.toFixed(3)}`
             + `|${this._home.color ?? ''}|${(this._home.growth ?? 1).toFixed(3)}|${this._sceneRev}`
@@ -711,15 +717,10 @@ export class SceneRenderer
                 : this._home;
             //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
             //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
-            //Each pass in its own group. A <g> changes nothing about the picture, and it makes the two passes
-            //addressable from a stylesheet - which is the only way to hold one of them off, since this innerHTML is
-            //rebuilt whole and anything done to the nodes themselves is gone by the next rebuild.
-            this._sceneSvg.innerHTML =
-                `<g class="scene-shadows">`
-                + renderShadows(this.camera, drawn, this._sun, gradedShadow, this._palette.shadowOpacity)
-                + `</g><g class="scene-buildings">`
-                + renderBuildings(this.camera, drawn, alt, gradedPalette, this._growth, this._palette.neighborOpacity, gradedHome, this._sun.azimuth)
-                + `</g>`;
+            this._sceneLayers.commit(
+                renderShadows(this.camera, drawn, this._sun, gradedShadow, this._palette.shadowOpacity),
+                renderBuildings(this.camera, drawn, alt, gradedPalette, this._growth, this._palette.neighborOpacity, gradedHome, this._sun.azimuth),
+            );
         }
 
         this.onAfterDraw?.();
