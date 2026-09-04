@@ -1201,19 +1201,25 @@ export class SceneHudController
         const litDy = (sunScene?.sun.y ?? m.y) - m.y;
         const crescent = moonCrescentPath(m.x, m.y, r * MOON_CRESCENT_INSET, m.fraction, litDx, litDy);
 
-        return html`
-                    <svg class="moon-svg">
-                        ${segs.map(s =>
+        //Clip to the card box, then split solid (above horizon) from dotted (below): each half gets its own
+        //translucent <g>, see the CSS note on why the opacity cannot sit on the segments themselves.
+        const solid: ArcSegment[] = [];
+        const dotted: ArcSegment[] = [];
+        for (const s of segs)
         {
             if (clipRect)
             {
                 const c = clipSegment([s.x1, s.y1], [s.x2, s.y2], clipRect);
                 if (!c)
                 {
-                    return nothing;
+                    continue;
                 }
                 s.x1 = c[0][0]; s.y1 = c[0][1]; s.x2 = c[1][0]; s.y2 = c[1][1];
             }
+            (s.belowHorizon ? dotted : solid).push(s);
+        }
+        const moonLine = (s: ArcSegment) =>
+        {
             const w = (SEGMENT_FAR + (SEGMENT_NEAR - SEGMENT_FAR) * s.nearness) * 0.75;
             return svg`
                             <line
@@ -1222,7 +1228,12 @@ export class SceneHudController
                                 stroke="${s.color}"
                                 stroke-width="${s.belowHorizon ? w * NIGHT_STROKE_FACTOR : w}"
                             ></line>`;
-        })}
+        };
+
+        return html`
+                    <svg class="moon-svg">
+                        <g class="moon-arc-nightg">${dotted.map(moonLine)}</g>
+                        <g class="moon-arc-solid">${solid.map(moonLine)}</g>
                         ${discVisible ? svg`
                             <circle class="moon-disc-bg" cx="${m.x}" cy="${m.y}" r="${r}" fill="${MOON_DARK}" fill-opacity="0.9"></circle>
                             <path class="moon-crescent" d="${crescent}" fill="${moonColor}"></path>

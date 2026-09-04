@@ -112,7 +112,7 @@ The card paints the real weather over the scene (see the README). Everything her
 | `show-cost` | boolean | `true` | Show the cost chip (only ever visible when the Energy dashboard tracks a price). |
 | `show-horizon-line` | boolean | `true` | Draw the terrain horizon ridge around the house. The realistic sun dimming behind terrain is always on regardless. |
 | `horizon-line-color` | color | theme | Optional colour for the drawn horizon ridge. |
-| `moon-display` | `always` / `night` / `hidden` | `always` | Draw the moon on its own arc with a phase-correct crescent, always in front of the sun. `night` shows it only while the sun is below the horizon. Cosmetic only: no chip, no value. |
+| `moon-display` | `night` / `always` / `hidden` | `night` | Draw the moon on its own arc with a phase-correct crescent, always in front of the sun. `night` shows it only while the sun is below the horizon; `always` keeps it up in daylight too. Cosmetic only: no chip, no value. |
 
 ### Local weather sensors (override the model)
 

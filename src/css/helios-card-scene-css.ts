@@ -703,8 +703,13 @@ export const heliosCardStyles = css`
         overflow: visible;
         color: var(--helios-moon-color, #dfe6ee);
     }
-    .moon-svg .moon-arc-segment { stroke-linecap: round; stroke-opacity: 0.7; }
-    .moon-svg .moon-arc-night   { stroke-dasharray: 0 7; stroke-opacity: 0.45; }
+    /*  Translucency lives on the two <g> wrappers (group opacity composites the whole arc once), never on the
+        segments: per-segment stroke-opacity double-counts where two round caps overlap at every joint, which
+        reads as a bead at each vertex along the arc. */
+    .moon-svg .moon-arc-solid   { opacity: 0.7; }
+    .moon-svg .moon-arc-nightg  { opacity: 0.45; }
+    .moon-svg .moon-arc-segment { stroke-linecap: round; }
+    .moon-svg .moon-arc-night   { stroke-dasharray: 0 7; }
     .moon-svg .moon-crescent    { opacity: 0.95; }
     /*  Radiant-heat aura around the sun disc: a warm halo that slowly breathes so a strong sun visibly
         shimmers with heat. Only the scale animates; the inline opacity gates it on irradiance (0 when the sun

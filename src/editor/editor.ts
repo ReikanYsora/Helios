@@ -1279,7 +1279,7 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderSelect('moon-display', t.editor.moonDisplay,
         [{ value: 'always', label: t.editor.moonDisplayAlways },
             { value: 'night',  label: t.editor.moonDisplayNight },
-            { value: 'hidden', label: t.editor.moonDisplayHidden }], 'always',
+            { value: 'hidden', label: t.editor.moonDisplayHidden }], 'night',
         t.editor.moonDisplayHint)}
                 ${this._renderToggle('weather-enabled', t.editor.weatherEnabled, t.editor.weatherEnabledHint, undefined, undefined, true)}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode, t.editor.noUiModeHint)}
