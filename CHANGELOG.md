@@ -48,9 +48,9 @@ come from a compact lunar-position model in the same spirit as the sun's, no
 ephemeris library; the phase checks out against documented full and new moons to
 well under a percent. The moon always paints in front of the sun, since it is the
 nearer body, and it carries no chip and no value: it is purely cosmetic. A new
-`moon-display` option (visual editor, "Moon configuration" section) picks night only (the
-default: while the sun is below the horizon), always visible, or hidden. Asked for
-by @Sniper435 (#408).
+`moon-display` option (visual editor, "Moon configuration" section) picks Night (the
+default: while the sun is below the horizon), Always, or Disabled. Asked for by
+@Sniper435 (#408).
 
 ### Changed: timeline scrubbing tracks your drag much more closely
 
