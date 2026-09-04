@@ -7,6 +7,21 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4-a4
+
+### Fixed: the battery sign guard now covers installs with several batteries
+
+Helios cross-checks a battery's live power sensor against its charge and
+discharge meters and corrects a sensor whose sign convention contradicts the
+slot it was wired into (a charge-positive sensor set to "Standard", say). That
+check only ever ran for a single battery: with two or more, it switched itself
+off, so a backwards sensor stayed backwards on the live chip and in the flow
+while the history, built from the meters, stayed right. It now judges each
+battery against its own meters and flips exactly the sensor(s) that need it,
+inside the sum, so a correct second battery is never turned around with a wrong
+first one. Single-battery installs behave exactly as before. Thanks to
+@bernhard2901 for the screenshots that pinned this down (#422).
+
 ## 2026.9.4-a3
 
 ### Changed: the moon shows at night by default
