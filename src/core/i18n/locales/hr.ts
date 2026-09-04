@@ -8,7 +8,7 @@ export const hr: Translations = {
 
   period: {
     rangeLabel: "Vremenski raspon",
-    forecast: "Prognoza",
+    forecast: "D - D+2",
     yesterday: "Jučer",
     today: "Danas",
     week: "Tjedan",
@@ -142,7 +142,7 @@ export const hr: Translations = {
     showHorizonLineHint: "Crta liniju horizonta reljefa oko doma, izračunatu iz lokalnog terena. Horizont uvijek realistično prigušuje sunce iza brežuljaka; ovo samo prikazuje ili skriva nacrtanu liniju.",
     horizonLineColor: "Boja horizonta terena",
     horizonLineColorHint: "Boja linije horizonta terena.",
-    moonDisplay: "Mjesec",
+    moonDisplay: "Način prikaza mjeseca",
     moonDisplayHint: "Crta mjesec na vlastitom luku sa srpom vjernim fazi, uvijek ispred sunca. Samo dekorativno: bez oznake, bez vrijednosti.",
     moonDisplayAlways: "Uvijek vidljiv",
     moonDisplayNight: "Samo noću",
@@ -221,6 +221,7 @@ export const hr: Translations = {
     buildingColor: "Boja zgrada",
     buildingColorHelp: "Osnovni ton primijenjen na okolne zgrade u sceni.",
     shadowsSection: "Sjene",
+    moonSection: "Postavke mjeseca",
     shadowsEnabled: "Prikaži sjene",
     shadowsEnabledOn: "Prikazano",
     shadowsEnabledOff: "Skriveno",

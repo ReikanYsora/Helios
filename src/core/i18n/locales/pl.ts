@@ -8,7 +8,7 @@ export const pl: Translations = {
 
   period: {
     rangeLabel: "Zakres czasu",
-    forecast: "Prognoza",
+    forecast: "D - D+2",
     yesterday: "Wczoraj",
     today: "Dzisiaj",
     week: "Tydzień",
@@ -142,7 +142,7 @@ export const pl: Translations = {
     showHorizonLineHint: "Rysuje linię horyzontu terenu wokół domu, obliczoną na podstawie lokalnego ukształtowania. Horyzont zawsze realistycznie przygasza słońce za wzniesieniami; to tylko włącza lub wyłącza rysowaną linię.",
     horizonLineColor: "Kolor horyzontu terenu",
     horizonLineColorHint: "Kolor linii horyzontu terenu.",
-    moonDisplay: "Księżyc",
+    moonDisplay: "Tryb wyświetlania księżyca",
     moonDisplayHint: "Rysuje księżyc na własnym łuku z sierpem zgodnym z fazą, zawsze przed słońcem. Wyłącznie ozdobne: bez plakietki, bez wartości.",
     moonDisplayAlways: "Zawsze widoczny",
     moonDisplayNight: "Tylko w nocy",
@@ -222,6 +222,7 @@ export const pl: Translations = {
     buildingColorHelp:
       "Bazowy odcień stosowany do okolicznych budynków w scenie.",
     shadowsSection: "Cienie",
+    moonSection: "Konfiguracja księżyca",
     shadowsEnabled: "Pokaż cienie",
     shadowsEnabledOn: "Pokazane",
     shadowsEnabledOff: "Ukryte",

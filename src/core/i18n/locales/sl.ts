@@ -8,7 +8,7 @@ export const sl: Translations = {
 
   period: {
     rangeLabel: "Časovni razpon",
-    forecast: "Napoved",
+    forecast: "D - D+2",
     yesterday: "Včeraj",
     today: "Danes",
     week: "Teden",
@@ -142,7 +142,7 @@ export const sl: Translations = {
     showHorizonLineHint: "Nariše črto obzorja reliefa okoli doma, izračunano iz lokalnega terena. Obzorje vedno realistično zatemni sonce za griči; to samo prikaže ali skrije narisano črto.",
     horizonLineColor: "Barva obzorja terena",
     horizonLineColorHint: "Barva črte obzorja terena.",
-    moonDisplay: "Luna",
+    moonDisplay: "Način prikaza lune",
     moonDisplayHint: "Nariše luno na lastnem loku s srpom, zvestim fazi, vedno pred soncem. Zgolj okrasno: brez oznake, brez vrednosti.",
     moonDisplayAlways: "Vedno vidna",
     moonDisplayNight: "Samo ponoči",
@@ -221,6 +221,7 @@ export const sl: Translations = {
     buildingColorHelp:
       "Osnovni odtenek, uporabljen za okoliške stavbe v prizoru.",
     shadowsSection: "Sence",
+    moonSection: "Nastavitve lune",
     shadowsEnabled: "Pokaži sence",
     shadowsEnabledOn: "Prikazano",
     shadowsEnabledOff: "Skrito",

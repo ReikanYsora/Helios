@@ -226,6 +226,7 @@ export interface Translations
         buildingColorHelp:        string;
         //Shadow options.
         shadowsSection:           string;
+        moonSection:              string;
         //Master shadow toggle (building footprints).
         shadowsEnabled:           string;
         shadowsEnabledOn:         string;

@@ -8,7 +8,7 @@ export const sv: Translations = {
 
   period: {
     rangeLabel: "Tidsintervall",
-    forecast: "Prognos",
+    forecast: "D - D+2",
     yesterday: "Igår",
     today: "Idag",
     week: "Vecka",
@@ -142,7 +142,7 @@ export const sv: Translations = {
     showHorizonLineHint: "Ritar terrängens horisontlinje runt hemmet, beräknad från den lokala terrängen. Horisonten dämpar alltid solen realistiskt bakom kullar; detta visar eller döljer bara den ritade linjen.",
     horizonLineColor: "Färg på terränghorisonten",
     horizonLineColorHint: "Färg på terränghorisontlinjen.",
-    moonDisplay: "Måne",
+    moonDisplay: "Visningsläge för månen",
     moonDisplayHint: "Ritar månen på sin egen båge med en fasriktig skära, alltid framför solen. Enbart kosmetiskt: ingen chip, inget värde.",
     moonDisplayAlways: "Alltid synlig",
     moonDisplayNight: "Endast på natten",
@@ -221,6 +221,7 @@ export const sv: Translations = {
     buildingColorHelp:
       "Grundton som tillämpas på de omgivande byggnaderna i scenen.",
     shadowsSection: "Skuggor",
+    moonSection: "Månkonfiguration",
     shadowsEnabled: "Visa skuggor",
     shadowsEnabledOn: "Visas",
     shadowsEnabledOff: "Dold",

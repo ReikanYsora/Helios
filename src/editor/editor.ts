@@ -1276,11 +1276,11 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderToggle('show-sun-times', t.editor.showSunTimes, t.editor.showSunTimesHint, undefined, undefined, true)}
                 ${this._renderToggle('show-horizon-line', t.editor.showHorizonLine, t.editor.showHorizonLineHint, undefined, undefined, true)}
                 ${this._renderColorPicker('horizon-line-color', t.editor.horizonLineColor, t.editor.horizonLineColorHint, 'blue-grey', c['show-horizon-line'] === false)}
-                ${this._renderSelect('moon-display', t.editor.moonDisplay,
-        [{ value: 'always', label: t.editor.moonDisplayAlways },
-            { value: 'night',  label: t.editor.moonDisplayNight },
-            { value: 'hidden', label: t.editor.moonDisplayHidden }], 'night',
-        t.editor.moonDisplayHint)}
+                ${this._renderSelect('scene-zoom', t.editor.sceneZoom,
+        [{ value: '1',   label: '1x' },
+            { value: '1.5', label: '1.5x' },
+            { value: '2',   label: '2x' }], '1',
+        t.editor.sceneZoomHint)}
                 ${this._renderToggle('weather-enabled', t.editor.weatherEnabled, t.editor.weatherEnabledHint, undefined, undefined, true)}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode, t.editor.noUiModeHint)}
                 ${this._renderSlider('no-ui-delay', t.editor.noUiDelay, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}
@@ -1366,11 +1366,6 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" data-section="buildings" ?open=${this._openSection === 'buildings'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
-                ${this._renderSelect('scene-zoom', t.editor.sceneZoom,
-        [{ value: '1',   label: '1x' },
-            { value: '1.5', label: '1.5x' },
-            { value: '2',   label: '2x' }], '1',
-        t.editor.sceneZoomHint)}
                 ${this._renderSlider('display-radius', t.editor.displayRadius, MIN_DISPLAY_RADIUS_M, MAX_DISPLAY_RADIUS_M, 10, DEFAULT_DISPLAY_RADIUS_M, ' m')}
                 <div class="hint">${t.editor.displayRadiusHelp}</div>
                 ${this._renderSlider('building-count', t.editor.buildingCount, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT, 5, DEFAULT_BUILDING_COUNT)}
@@ -1384,6 +1379,16 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
                 <div class="hint">${t.editor.buildingsHint}</div>
                 ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
+
+                </details>
+
+                <details class="advanced-section" data-section="moon" ?open=${this._openSection === 'moon'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:moon-waning-crescent"></ha-icon>${t.editor.moonSection}</summary>
+                ${this._renderSelect('moon-display', t.editor.moonDisplay,
+        [{ value: 'always', label: t.editor.moonDisplayAlways },
+            { value: 'night',  label: t.editor.moonDisplayNight },
+            { value: 'hidden', label: t.editor.moonDisplayHidden }], 'night',
+        t.editor.moonDisplayHint)}
 
                 </details>
 

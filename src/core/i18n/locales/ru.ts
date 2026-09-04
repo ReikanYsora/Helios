@@ -8,7 +8,7 @@ export const ru: Translations = {
 
   period: {
     rangeLabel: "Период",
-    forecast: "Прогноз",
+    forecast: "Д - Д+2",
     yesterday: "Вчера",
     today: "Сегодня",
     week: "Неделя",
@@ -142,7 +142,7 @@ export const ru: Translations = {
     showHorizonLineHint: "Рисует линию горизонта рельефа вокруг дома, рассчитанную по местному ландшафту. Горизонт всегда реалистично приглушает солнце за холмами; это лишь показывает или скрывает нарисованную линию.",
     horizonLineColor: "Цвет горизонта рельефа",
     horizonLineColorHint: "Цвет линии горизонта рельефа.",
-    moonDisplay: "Луна",
+    moonDisplay: "Режим отображения луны",
     moonDisplayHint: "Рисует луну на собственной дуге с серпом, соответствующим фазе, всегда перед солнцем. Только декоративно: без метки, без значения.",
     moonDisplayAlways: "Всегда видна",
     moonDisplayNight: "Только ночью",
@@ -221,6 +221,7 @@ export const ru: Translations = {
     buildingColorHelp:
       "Базовый оттенок, применяемый к окружающим зданиям в сцене.",
     shadowsSection: "Тени",
+    moonSection: "Настройки луны",
     shadowsEnabled: "Показывать тени",
     shadowsEnabledOn: "Показаны",
     shadowsEnabledOff: "Скрыты",

@@ -8,7 +8,7 @@ export const de: Translations = {
 
   period: {
     rangeLabel: "Zeitraum",
-    forecast: "Prognose",
+    forecast: "T - T+2",
     yesterday: "Gestern",
     today: "Heute",
     week: "Woche",
@@ -142,7 +142,7 @@ export const de: Translations = {
     showHorizonLineHint: "Zeichnet die Horizontlinie des Geländes rund um das Zuhause, aus dem lokalen Relief berechnet. Der Horizont dämpft die Sonne immer realistisch hinter Hügeln; dies blendet nur die gezeichnete Linie ein oder aus.",
     horizonLineColor: "Farbe des Geländehorizonts",
     horizonLineColorHint: "Farbe der Geländehorizontlinie.",
-    moonDisplay: "Mond",
+    moonDisplay: "Anzeigemodus des Mondes",
     moonDisplayHint: "Zeichnet den Mond auf seinem eigenen Bogen mit phasengetreuer Sichel, immer vor der Sonne. Rein kosmetisch: keine Plakette, kein Wert.",
     moonDisplayAlways: "Immer sichtbar",
     moonDisplayNight: "Nur nachts",
@@ -222,6 +222,7 @@ export const de: Translations = {
     buildingColorHelp:
       "Grundton, der auf die umliegenden Gebäude in der Szene angewendet wird.",
     shadowsSection: "Schatten",
+    moonSection: "Mond-Konfiguration",
     shadowsEnabled: "Schatten anzeigen",
     shadowsEnabledOn: "Angezeigt",
     shadowsEnabledOff: "Ausgeblendet",

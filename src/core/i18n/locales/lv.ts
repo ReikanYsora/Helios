@@ -8,7 +8,7 @@ export const lv: Translations = {
 
   period: {
     rangeLabel: "Laika diapazons",
-    forecast: "Prognoze",
+    forecast: "D - D+2",
     yesterday: "Vakar",
     today: "Šodien",
     week: "Nedēļa",
@@ -142,7 +142,7 @@ export const lv: Translations = {
     showHorizonLineHint: "Zīmē reljefa horizonta līniju ap māju, aprēķinātu no vietējā reljefa. Horizonts vienmēr reālistiski pieklusina sauli aiz pakalniem; tas tikai parāda vai paslēpj zīmēto līniju.",
     horizonLineColor: "Reljefa horizonta krāsa",
     horizonLineColorHint: "Reljefa horizonta līnijas krāsa.",
-    moonDisplay: "Mēness",
+    moonDisplay: "Mēness attēlošanas režīms",
     moonDisplayHint: "Zīmē mēnesi uz sava loka ar fāzei atbilstošu sirpi, vienmēr saules priekšā. Tikai dekoratīvi: bez etiķetes, bez vērtības.",
     moonDisplayAlways: "Vienmēr redzams",
     moonDisplayNight: "Tikai naktī",
@@ -222,6 +222,7 @@ export const lv: Translations = {
     buildingColor: "Ēkas krāsa",
     buildingColorHelp: "Pamattonis, kas tiek piemērots apkārtējām ēkām ainā.",
     shadowsSection: "Ēnas",
+    moonSection: "Mēness konfigurācija",
     shadowsEnabled: "Rādīt ēnas",
     shadowsEnabledOn: "Rādītas",
     shadowsEnabledOff: "Paslēptas",

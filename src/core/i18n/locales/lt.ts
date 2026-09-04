@@ -8,7 +8,7 @@ export const lt: Translations = {
 
   period: {
     rangeLabel: "Laiko intervalas",
-    forecast: "Prognozė",
+    forecast: "D - D+2",
     yesterday: "Vakar",
     today: "Šiandien",
     week: "Savaitė",
@@ -142,7 +142,7 @@ export const lt: Translations = {
     showHorizonLineHint: "Nubrėžia reljefo horizonto liniją aplink namus, apskaičiuotą pagal vietovės reljefą. Horizontas visada realistiškai pritemdo saulę už kalvų; tai tik parodo arba paslepia nubrėžtą liniją.",
     horizonLineColor: "Reljefo horizonto spalva",
     horizonLineColorHint: "Reljefo horizonto linijos spalva.",
-    moonDisplay: "Mėnulis",
+    moonDisplay: "Mėnulio rodymo režimas",
     moonDisplayHint: "Piešia mėnulį ant jo paties lanko su fazę atitinkančiu pjautuvu, visada priešais saulę. Tik dekoratyvu: be žymos, be vertės.",
     moonDisplayAlways: "Visada matomas",
     moonDisplayNight: "Tik naktį",
@@ -223,6 +223,7 @@ export const lt: Translations = {
     buildingColorHelp:
       "Bazinis atspalvis, taikomas aplinkiniams pastatams scenoje.",
     shadowsSection: "Šešėliai",
+    moonSection: "Mėnulio konfigūracija",
     shadowsEnabled: "Rodyti šešėlius",
     shadowsEnabledOn: "Rodomi",
     shadowsEnabledOff: "Paslėpti",

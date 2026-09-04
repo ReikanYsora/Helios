@@ -1,7 +1,7 @@
 //The timeline's rolling-window modes. One spec per mode drives the whole pipeline (the store window and whether
 //weather is available), so adding/tuning a mode is a one-line change here. The store cadence and recorder fetch
 //period derive from the user's data-detail setting (display-update-frequency-per-hour, 1..12) capped per mode, not
-//hard-coded, so the editor knob drives every mode, not just the forecast window. The scrub is free (no
+//hard-coded, so the editor knob drives every mode, not just the J - J+2 window. The scrub is free (no
 //quantisation) in every mode.
 
 import type { StatPeriod } from '../data/sources/energy-stats';
@@ -14,7 +14,7 @@ export interface TimelineModeSpec
     //Days of history in the window. A function for month: the window length tracks the PREVIOUS calendar month (so
     //a 31-day month shows 31 days), always ending today.
     pastDays:    number | (() => number);
-    futureDays:  number;       //days of forecast (forecast mode only; the "past" modes end today, no forecast)
+    futureDays:  number;       //days of forecast (J - J+2 mode only; the "past" modes end today, no forecast)
     weather:     boolean;      //irradiance + cloud available (Open-Meteo forecast only reaches ~16 days)
     //Cap on store buckets/hour for this window: short windows honour the user's setting fully; month is capped at
     //hourly so a 31-day window can't pull a month of 5-min rows.
@@ -33,7 +33,7 @@ function daysInPrevMonth(): number
 }
 
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
-    //Forecast: J .. J+2 (today + the two days ahead, so 3 days) - the at-a-glance default. It carried J-1 as well,
+    //J - J+2 (id 'forecast', its former name): today + the two days ahead, so 3 days - the at-a-glance default. It carried J-1 as well,
     //which spent a quarter of the width on a day that is already its own mode next door. today/week/month/year all
     //END today.
     forecast:  { pastDays: 0,                           futureDays: 2, weather: true,  maxBucketsPerHour: 12   },

@@ -71,12 +71,12 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `show-timeline` | boolean | `true` | Show the bottom timeline band and its period selector. |
 | `show-detail-panel` | boolean | `true` | Allow a chip's detail panel to open on tap. |
 | `show-sun-times` | boolean | `true` | Show the sunrise / sunset markers on the sun arc. |
+| `scene-zoom` | `1` / `1.5` / `2` | `1` | Magnifies the basemap, buildings and shadows around the home (a scene-space zoom, not a map zoom): `1` is today's rendering, `1.5` and `2` draw them larger on screen. The sun, its arcs, the moon and the chips keep their card-fitted size. The basemap is CSS-scaled, so at `2` it reads a little softer. |
 
 ## Buildings + shadows
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `scene-zoom` | `1` / `1.5` / `2` | `1` | Magnifies the basemap, buildings and shadows around the home (a scene-space zoom, not a map zoom): `1` is today's rendering, `1.5` and `2` draw them larger on screen. The sun, its arcs, the moon and the chips keep their card-fitted size. The basemap is CSS-scaled, so at `2` it reads a little softer. |
 | `display-radius` | 0-250 m | `200` | Distance around the home within which buildings and shadows render. The main perf lever on older phones. 250 m is as far as the ground under them reaches; 0 draws none. |
 | `building-count` | 10-100 | `50` | How many of the nearest buildings to keep around the home. |
 | `building-real-size` | boolean | `true` | Extrude buildings to their real OSM heights (capped). When `false`, every building uses the fixed `building-height` prism. |
@@ -99,7 +99,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
 | `max-expected-power` | 500-30000 W | `5000` | Reference power at which a flow animates at full speed, so every flow shares one honest pace. Raise it for a large installation, lower it for a small one. |
 
-The rolling window itself is chosen live from the timeline's period selector (**Forecast**, **Yesterday**, **Today**, **Week**, **Month**) and remembered per card; it needs no YAML key.
+The rolling window itself is chosen live from the timeline's period selector (**J - J+2**, **Yesterday**, **Today**, **Week**, **Month**) and remembered per card; it needs no YAML key.
 
 ## Weather
 

@@ -8,7 +8,7 @@ export const isLocale: Translations = {
 
   period: {
     rangeLabel: "Tímabil",
-    forecast: "Spá",
+    forecast: "D - D+2",
     yesterday: "Í gær",
     today: "Í dag",
     week: "Vika",
@@ -142,7 +142,7 @@ export const isLocale: Translations = {
     showHorizonLineHint: "Teiknar sjóndeildarlínu landslagsins í kringum heimilið, reiknaða út frá staðbundnu landslagi. Sjóndeildarhringurinn deyfir alltaf sólina raunsætt á bak við hæðir; þetta sýnir eða felur aðeins teiknuðu línuna.",
     horizonLineColor: "Litur sjóndeildarhrings lands",
     horizonLineColorHint: "Litur sjóndeildarlínu landslagsins.",
-    moonDisplay: "Tungl",
+    moonDisplay: "Birtingarhamur tunglsins",
     moonDisplayHint: "Teiknar tunglið á eigin boga með sigð sem fylgir tunglstöðunni, alltaf fyrir framan sólina. Aðeins til skrauts: engin flís, ekkert gildi.",
     moonDisplayAlways: "Alltaf sýnilegt",
     moonDisplayNight: "Aðeins á nóttunni",
@@ -222,6 +222,7 @@ export const isLocale: Translations = {
     buildingColorHelp:
       "Grunntónn sem beitt er á byggingarnar í kring í senunni.",
     shadowsSection: "Skuggar",
+    moonSection: "Stillingar tunglsins",
     shadowsEnabled: "Sýna skugga",
     shadowsEnabledOn: "Sýndir",
     shadowsEnabledOff: "Faldir",

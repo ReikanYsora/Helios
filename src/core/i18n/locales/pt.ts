@@ -8,7 +8,7 @@ export const pt: Translations = {
 
   period: {
     rangeLabel: "Período",
-    forecast: "Previsão",
+    forecast: "D - D+2",
     yesterday: "Ontem",
     today: "Hoje",
     week: "Semana",
@@ -142,7 +142,7 @@ export const pt: Translations = {
     showHorizonLineHint: "Desenha a linha do horizonte do relevo à volta da casa, calculada a partir do terreno local. O horizonte atenua sempre o sol de forma realista atrás das colinas; isto apenas mostra ou oculta a linha.",
     horizonLineColor: "Cor do horizonte do terreno",
     horizonLineColorHint: "Cor da linha do horizonte do terreno.",
-    moonDisplay: "Lua",
+    moonDisplay: "Modo de exibição da lua",
     moonDisplayHint: "Desenha a lua no seu próprio arco com um crescente fiel à fase, sempre à frente do sol. Apenas estético: sem chip nem valor.",
     moonDisplayAlways: "Sempre visível",
     moonDisplayNight: "Só à noite",
@@ -223,6 +223,7 @@ export const pt: Translations = {
     buildingColorHelp:
       "Tom de base aplicado aos edifícios envolventes na cena.",
     shadowsSection: "Sombras",
+    moonSection: "Configuração da lua",
     shadowsEnabled: "Mostrar sombras",
     shadowsEnabledOn: "Mostradas",
     shadowsEnabledOff: "Ocultas",

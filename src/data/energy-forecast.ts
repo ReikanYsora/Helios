@@ -9,7 +9,7 @@ import { localMidnightMinusDays } from '../core/time/timezone';
 import { callWS } from './ha-gateway';
 
 
-//The Forecast period shows +2 days. The fetch always reaches at least this far ahead, whatever the active period,
+//The J - J+2 period shows +2 days. The fetch always reaches at least this far ahead, whatever the active period,
 //so a re-fetch while on a no-future period (Today/Week/Month/Year all have futureDays 0) can't overwrite the
 //cached future days the Forecast view needs. The forecast is period-independent, so caching extra is harmless.
 const FORECAST_HORIZON_DAYS = 2;

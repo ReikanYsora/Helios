@@ -8,7 +8,7 @@ export const el: Translations = {
 
   period: {
     rangeLabel: "Περίοδος",
-    forecast: "Πρόγνωση",
+    forecast: "Η - Η+2",
     yesterday: "Χθες",
     today: "Σήμερα",
     week: "Εβδομάδα",
@@ -142,7 +142,7 @@ export const el: Translations = {
     showHorizonLineHint: "Σχεδιάζει τη γραμμή ορίζοντα του αναγλύφου γύρω από το σπίτι, υπολογισμένη από το τοπικό έδαφος. Ο ορίζοντας πάντα χαμηλώνει ρεαλιστικά τον ήλιο πίσω από λόφους· αυτό απλώς εμφανίζει ή αποκρύπτει τη σχεδιασμένη γραμμή.",
     horizonLineColor: "Χρώμα ορίζοντα εδάφους",
     horizonLineColorHint: "Χρώμα της γραμμής ορίζοντα εδάφους.",
-    moonDisplay: "Σελήνη",
+    moonDisplay: "Λειτουργία εμφάνισης της σελήνης",
     moonDisplayHint: "Σχεδιάζει τη σελήνη στο δικό της τόξο με μηνίσκο πιστό στη φάση της, πάντα μπροστά από τον ήλιο. Καθαρά διακοσμητικό: χωρίς ετικέτα, χωρίς τιμή.",
     moonDisplayAlways: "Πάντα ορατή",
     moonDisplayNight: "Μόνο τη νύχτα",
@@ -223,6 +223,7 @@ export const el: Translations = {
     buildingColorHelp:
       "Βασική απόχρωση που εφαρμόζεται στα γύρω κτήρια στη σκηνή.",
     shadowsSection: "Σκιές",
+    moonSection: "Ρυθμίσεις σελήνης",
     shadowsEnabled: "Εμφάνιση σκιών",
     shadowsEnabledOn: "Εμφανείς",
     shadowsEnabledOff: "Κρυμμένες",

@@ -8,7 +8,7 @@ export const et: Translations = {
 
   period: {
     rangeLabel: "Ajavahemik",
-    forecast: "Prognoos",
+    forecast: "P - P+2",
     yesterday: "Eile",
     today: "Täna",
     week: "Nädal",
@@ -142,7 +142,7 @@ export const et: Translations = {
     showHorizonLineHint: "Joonistab maastiku horisondijoone kodu ümber, arvutatuna kohalikust reljeefist. Horisont summutab päikest alati realistlikult küngaste taga; see üksnes näitab või peidab joonistatud joone.",
     horizonLineColor: "Maastiku horisondi värv",
     horizonLineColorHint: "Maastiku horisondijoone värv.",
-    moonDisplay: "Kuu",
+    moonDisplay: "Kuu kuvarežiim",
     moonDisplayHint: "Joonistab kuu omaenda kaarele faasile vastava sirbiga, alati päikese ees. Ainult kaunistus: ilma sildita, ilma väärtuseta.",
     moonDisplayAlways: "Alati nähtav",
     moonDisplayNight: "Ainult öösel",
@@ -221,6 +221,7 @@ export const et: Translations = {
     buildingColor: "Hoone värv",
     buildingColorHelp: "Stseenis ümbritsevatele hoonetele rakendatav põhitoon.",
     shadowsSection: "Varjud",
+    moonSection: "Kuu seadistus",
     shadowsEnabled: "Näita varje",
     shadowsEnabledOn: "Näidatud",
     shadowsEnabledOff: "Peidetud",

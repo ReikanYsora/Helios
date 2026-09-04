@@ -421,7 +421,7 @@ charts and the timeline a consistent view regardless of cadence.
 ### Periods, `timeline/timeline-modes.ts`
 
 One spec per period drives the whole pipeline (store window, whether weather is
-available, the bucket cadence cap). The five periods are **Forecast** (today to two
+available, the bucket cadence cap). The five periods are **J - J+2** (id `forecast`, its former label: today to two
 days ahead), **Yesterday**, **Today**, **Week** and **Month**. Yesterday is exactly
 the previous day; Today / Week / Month end on today; Month resolves its length from
 the previous calendar month. The store cadence and the recorder fetch period derive

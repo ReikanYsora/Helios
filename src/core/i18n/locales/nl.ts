@@ -8,7 +8,7 @@ export const nl: Translations = {
 
   period: {
     rangeLabel: "Periode",
-    forecast: "Voorspelling",
+    forecast: "D - D+2",
     yesterday: "Gisteren",
     today: "Vandaag",
     week: "Week",
@@ -142,7 +142,7 @@ export const nl: Translations = {
     showHorizonLineHint: "Tekent de horizonlijn van het reliëf rond het huis, berekend op basis van het lokale terrein. De horizon dempt de zon altijd realistisch achter heuvels; dit toont of verbergt alleen de getekende lijn.",
     horizonLineColor: "Kleur van de terreinhorizon",
     horizonLineColorHint: "Kleur van de terreinhorizonlijn.",
-    moonDisplay: "Maan",
+    moonDisplay: "Weergavemodus van de maan",
     moonDisplayHint: "Tekent de maan op haar eigen boog met een fase-getrouwe sikkel, altijd vóór de zon. Puur cosmetisch: geen chip, geen waarde.",
     moonDisplayAlways: "Altijd zichtbaar",
     moonDisplayNight: "Alleen 's nachts",
@@ -222,6 +222,7 @@ export const nl: Translations = {
     buildingColorHelp:
       "Basistint die op de omliggende gebouwen in de scène wordt toegepast.",
     shadowsSection: "Schaduwen",
+    moonSection: "Maanconfiguratie",
     shadowsEnabled: "Schaduwen tonen",
     shadowsEnabledOn: "Getoond",
     shadowsEnabledOff: "Verborgen",

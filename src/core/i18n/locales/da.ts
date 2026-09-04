@@ -8,7 +8,7 @@ export const da: Translations = {
 
   period: {
     rangeLabel: "Tidsrum",
-    forecast: "Prognose",
+    forecast: "D - D+2",
     yesterday: "I går",
     today: "I dag",
     week: "Uge",
@@ -142,7 +142,7 @@ export const da: Translations = {
     showHorizonLineHint: "Tegner terrænets horisontlinje omkring hjemmet, beregnet ud fra det lokale terræn. Horisonten dæmper altid solen realistisk bag bakker; dette viser eller skjuler kun den tegnede linje.",
     horizonLineColor: "Farve på terrænhorisonten",
     horizonLineColorHint: "Farve på terrænhorisontlinjen.",
-    moonDisplay: "Måne",
+    moonDisplay: "Visningstilstand for månen",
     moonDisplayHint: "Tegner månen på sin egen bue med en fasekorrekt segl, altid foran solen. Kun kosmetisk: ingen chip, ingen værdi.",
     moonDisplayAlways: "Altid synlig",
     moonDisplayNight: "Kun om natten",
@@ -220,6 +220,7 @@ export const da: Translations = {
     buildingColor: "Bygningsfarve",
     buildingColorHelp: "Grundtone anvendt på de omgivende bygninger i scenen.",
     shadowsSection: "Skygger",
+    moonSection: "Månekonfiguration",
     shadowsEnabled: "Vis skygger",
     shadowsEnabledOn: "Vist",
     shadowsEnabledOff: "Skjult",

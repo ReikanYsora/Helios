@@ -8,7 +8,7 @@ export const bg: Translations = {
 
   period: {
     rangeLabel: "Период",
-    forecast: "Прогноза",
+    forecast: "Д - Д+2",
     yesterday: "Вчера",
     today: "Днес",
     week: "Седмица",
@@ -142,7 +142,7 @@ export const bg: Translations = {
     showHorizonLineHint: "Начертава линията на хоризонта на релефа около дома, изчислена от местния терен. Хоризонтът винаги реалистично приглушава слънцето зад хълмовете; това само показва или скрива начертаната линия.",
     horizonLineColor: "Цвят на релефния хоризонт",
     horizonLineColorHint: "Цвят на линията на релефния хоризонт.",
-    moonDisplay: "Луна",
+    moonDisplay: "Режим на показване на луната",
     moonDisplayHint: "Изчертава луната по собствена дъга със сърп според фазата, винаги пред слънцето. Само декоративно: без етикет, без стойност.",
     moonDisplayAlways: "Винаги видима",
     moonDisplayNight: "Само нощем",
@@ -222,6 +222,7 @@ export const bg: Translations = {
     buildingColor: "Цвят на сградите",
     buildingColorHelp: "Основен нюанс, прилаган към околните сгради в сцената.",
     shadowsSection: "Сенки",
+    moonSection: "Настройки на луната",
     shadowsEnabled: "Показвай сенки",
     shadowsEnabledOn: "Показани",
     shadowsEnabledOff: "Скрити",

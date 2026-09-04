@@ -18,7 +18,7 @@ export const en: Translations = {
 
   period: {
     rangeLabel: "Time range",
-    forecast: "Forecast",
+    forecast: "D - D+2",
     yesterday: "Yesterday",
     today: "Today",
     week: "Week",
@@ -131,7 +131,7 @@ export const en: Translations = {
     showHorizonLineHint: "Draw the terrain skyline around the home, computed from the local relief. The horizon always dims the sun realistically behind hills; this only toggles the drawn line.",
     horizonLineColor: "Terrain horizon colour",
     horizonLineColorHint: "Colour of the terrain horizon line.",
-    moonDisplay: "Moon",
+    moonDisplay: "Moon display mode",
     moonDisplayHint: "Draw the moon on its own arc with a phase-correct crescent, always in front of the sun. Cosmetic only: no chip, no value.",
     moonDisplayAlways: "Always visible",
     moonDisplayNight: "Night only",
@@ -232,6 +232,7 @@ export const en: Translations = {
     buildingColorHelp:
       "Base tint applied to the surrounding buildings in the scene.",
     shadowsSection: "Shadows",
+    moonSection: "Moon configuration",
     shadowsEnabled: "Show shadows",
     shadowsEnabledOn: "Shown",
     shadowsEnabledOff: "Hidden",

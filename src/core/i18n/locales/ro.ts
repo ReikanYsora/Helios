@@ -8,7 +8,7 @@ export const ro: Translations = {
 
   period: {
     rangeLabel: "Interval de timp",
-    forecast: "Prognoza",
+    forecast: "Z - Z+2",
     yesterday: "Ieri",
     today: "Astazi",
     week: "Saptamana",
@@ -142,7 +142,7 @@ export const ro: Translations = {
     showHorizonLineHint: "Desenează linia orizontului reliefului în jurul casei, calculată din terenul local. Orizontul estompează întotdeauna soarele în mod realist în spatele dealurilor; aceasta doar afișează sau ascunde linia desenată.",
     horizonLineColor: "Culoarea orizontului terenului",
     horizonLineColorHint: "Culoarea liniei orizontului terenului.",
-    moonDisplay: "Luna",
+    moonDisplay: "Modul de afișare a lunii",
     moonDisplayHint: "Desenează luna pe propriul arc cu o seceră fidelă fazei, mereu în fața soarelui. Pur estetic: fără etichetă, fără valoare.",
     moonDisplayAlways: "Mereu vizibilă",
     moonDisplayNight: "Doar noaptea",
@@ -220,6 +220,7 @@ export const ro: Translations = {
     buildingColor: "Culoarea cladirilor",
     buildingColorHelp: "Nuanta de baza aplicata cladirilor din jur in scena.",
     shadowsSection: "Umbre",
+    moonSection: "Configurarea lunii",
     shadowsEnabled: "Arata umbrele",
     shadowsEnabledOn: "Afisate",
     shadowsEnabledOff: "Ascunse",

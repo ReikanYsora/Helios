@@ -8,7 +8,7 @@ export const sk: Translations = {
 
   period: {
     rangeLabel: "Časový rozsah",
-    forecast: "Predpoveď",
+    forecast: "D - D+2",
     yesterday: "Včera",
     today: "Dnes",
     week: "Týždeň",
@@ -142,7 +142,7 @@ export const sk: Translations = {
     showHorizonLineHint: "Vykreslí líniu horizontu terénu okolo domu, vypočítanú z miestneho reliéfu. Horizont vždy realisticky stlmí slnko za kopcami; toto iba zobrazí alebo skryje vykreslenú líniu.",
     horizonLineColor: "Farba horizontu terénu",
     horizonLineColorHint: "Farba línie horizontu terénu.",
-    moonDisplay: "Mesiac",
+    moonDisplay: "Režim zobrazenia mesiaca",
     moonDisplayHint: "Vykreslí mesiac na vlastnom oblúku s kosákom zodpovedajúcim fáze, vždy pred slnkom. Len dekoratívne: bez štítku, bez hodnoty.",
     moonDisplayAlways: "Vždy viditeľný",
     moonDisplayNight: "Len v noci",
@@ -222,6 +222,7 @@ export const sk: Translations = {
     buildingColor: "Farba budov",
     buildingColorHelp: "Základný odtieň použitý na okolité budovy v scéne.",
     shadowsSection: "Tiene",
+    moonSection: "Nastavenie mesiaca",
     shadowsEnabled: "Zobraziť tiene",
     shadowsEnabledOn: "Zobrazené",
     shadowsEnabledOff: "Skryté",

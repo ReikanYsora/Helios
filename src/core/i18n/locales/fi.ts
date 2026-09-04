@@ -8,7 +8,7 @@ export const fi: Translations = {
 
   period: {
     rangeLabel: "Aikaväli",
-    forecast: "Ennuste",
+    forecast: "P - P+2",
     yesterday: "Eilen",
     today: "Tänään",
     week: "Viikko",
@@ -142,7 +142,7 @@ export const fi: Translations = {
     showHorizonLineHint: "Piirtää maaston horisonttiviivan kodin ympärille paikallisesta maastosta laskettuna. Horisontti himmentää auringon aina realistisesti kukkuloiden taakse; tämä vain näyttää tai piilottaa piirretyn viivan.",
     horizonLineColor: "Maaston horisontin väri",
     horizonLineColorHint: "Maaston horisonttiviivan väri.",
-    moonDisplay: "Kuu",
+    moonDisplay: "Kuun näyttötila",
     moonDisplayHint: "Piirtää kuun omalle kaarelleen vaiheen mukaisena sirppinä, aina auringon edessä. Vain koristeellinen: ei merkkiä, ei arvoa.",
     moonDisplayAlways: "Aina näkyvissä",
     moonDisplayNight: "Vain yöllä",
@@ -222,6 +222,7 @@ export const fi: Translations = {
     buildingColorHelp:
       "Ympäröiviin rakennuksiin näkymässä sovellettu perussävy.",
     shadowsSection: "Varjot",
+    moonSection: "Kuun asetukset",
     shadowsEnabled: "Näytä varjot",
     shadowsEnabledOn: "Näytetään",
     shadowsEnabledOff: "Piilotettu",

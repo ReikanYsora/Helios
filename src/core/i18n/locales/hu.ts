@@ -8,7 +8,7 @@ export const hu: Translations = {
 
   period: {
     rangeLabel: "Időtartomány",
-    forecast: "Előrejelzés",
+    forecast: "N - N+2",
     yesterday: "Tegnap",
     today: "Ma",
     week: "Hét",
@@ -142,7 +142,7 @@ export const hu: Translations = {
     showHorizonLineHint: "Kirajzolja a domborzat horizontvonalát az otthon körül, a helyi terep alapján számítva. A horizont mindig valósághűen tompítja a napot a dombok mögött; ez csak megjeleníti vagy elrejti a kirajzolt vonalat.",
     horizonLineColor: "Domborzati horizont színe",
     horizonLineColorHint: "A domborzati horizontvonal színe.",
-    moonDisplay: "Hold",
+    moonDisplay: "A hold megjelenítési módja",
     moonDisplayHint: "A holdat saját ívén rajzolja, a fázisnak megfelelő sarlóval, mindig a nap előtt. Csak díszítés: nincs címke, nincs érték.",
     moonDisplayAlways: "Mindig látható",
     moonDisplayNight: "Csak éjjel",
@@ -223,6 +223,7 @@ export const hu: Translations = {
     buildingColorHelp:
       "A jelenetben a környező épületekre alkalmazott alapszínezet.",
     shadowsSection: "Árnyékok",
+    moonSection: "A hold beállításai",
     shadowsEnabled: "Árnyékok megjelenítése",
     shadowsEnabledOn: "Megjelenítve",
     shadowsEnabledOff: "Elrejtve",

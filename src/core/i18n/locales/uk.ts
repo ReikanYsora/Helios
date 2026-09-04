@@ -8,7 +8,7 @@ export const uk: Translations = {
 
   period: {
     rangeLabel: "Період",
-    forecast: "Прогноз",
+    forecast: "Д - Д+2",
     yesterday: "Вчора",
     today: "Сьогодні",
     week: "Тиждень",
@@ -142,7 +142,7 @@ export const uk: Translations = {
     showHorizonLineHint: "Малює лінію горизонту рельєфу навколо дому, обчислену за місцевим ландшафтом. Горизонт завжди реалістично приглушує сонце за пагорбами; це лише показує або приховує намальовану лінію.",
     horizonLineColor: "Колір горизонту рельєфу",
     horizonLineColorHint: "Колір лінії горизонту рельєфу.",
-    moonDisplay: "Місяць",
+    moonDisplay: "Режим відображення місяця",
     moonDisplayHint: "Малює місяць на власній дузі із серпом, що відповідає фазі, завжди перед сонцем. Лише декоративно: без мітки, без значення.",
     moonDisplayAlways: "Завжди видимий",
     moonDisplayNight: "Лише вночі",
@@ -222,6 +222,7 @@ export const uk: Translations = {
     buildingColorHelp:
       "Базовий відтінок, що застосовується до навколишніх будівель у сцені.",
     shadowsSection: "Тіні",
+    moonSection: "Налаштування місяця",
     shadowsEnabled: "Показувати тіні",
     shadowsEnabledOn: "Показані",
     shadowsEnabledOff: "Приховані",
