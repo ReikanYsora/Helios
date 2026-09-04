@@ -148,7 +148,7 @@ export const sk: Translations = {
     moonDisplayNight: "Len v noci",
     moonDisplayHidden: "Skrytý",
     sceneZoom: "Priblíženie scény",
-    sceneZoomHint: "Zväčší mapu, budovy a tiene okolo vášho domova: 1x je súčasné vykreslenie, 1,5x a 2x ich zobrazia väčšie. Slnko, oblúky a štítky si zachovajú veľkosť.",
+    sceneZoomHint: "Zväčší mapu, budovy a tiene okolo vášho domova: 1x je predvolené vykreslenie, 1,5x a 2x ich zobrazia väčšie. Slnko, oblúky a štítky si zachovajú veľkosť.",
     lockRotation: "Uzamknúť natočenie",
     lockRotationHint:
       "Potiahnutím v náhľade otočte a nakloňte scénu do požadovaného pohľadu a potom toto zapnite. Zámok tento pohľad zmrazí (otáčanie ťahaním a automatické otáčanie v pokoji sa vypnú) a uloží uhol do karty, takže úplne rovnaký pohľad sa zobrazí na každom zariadení a prehliadači. Vypnite ho pre opätovné voľné otáčanie.",

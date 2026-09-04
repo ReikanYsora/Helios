@@ -147,7 +147,7 @@ export const fr: Translations = {
     moonDisplayNight: "Nuit uniquement",
     moonDisplayHidden: "Masquée",
     sceneZoom: "Zoom de la scène",
-    sceneZoomHint: "Agrandit la carte, les bâtiments et les ombres autour de votre domicile : 1x est le rendu actuel, 1,5x et 2x les affichent plus gros à l'écran. Le soleil, les arcs et les badges gardent leur taille.",
+    sceneZoomHint: "Agrandit la carte, les bâtiments et les ombres autour de votre domicile : 1x est le rendu par défaut, 1,5x et 2x les affichent plus gros à l'écran. Le soleil, les arcs et les badges gardent leur taille.",
     lockRotation: "Verrouiller la rotation",
     lockRotationHint:
       "Faites glisser l'aperçu pour pivoter et incliner la scène jusqu'à la vue souhaitée, puis activez ceci. Le verrou fige cette vue (le glisser-pour-pivoter et l'auto-rotation au repos sont désactivés) et enregistre l'angle dans la carte, pour un rendu identique sur chaque appareil et navigateur. Désactivez-le pour pivoter à nouveau librement.",

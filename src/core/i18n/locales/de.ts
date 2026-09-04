@@ -148,7 +148,7 @@ export const de: Translations = {
     moonDisplayNight: "Nur nachts",
     moonDisplayHidden: "Ausgeblendet",
     sceneZoom: "Szenen-Zoom",
-    sceneZoomHint: "Vergrößert Karte, Gebäude und Schatten rund um Ihr Zuhause: 1x ist die heutige Darstellung, 1,5x und 2x zeigen sie größer. Sonne, Bögen und Plaketten behalten ihre Größe.",
+    sceneZoomHint: "Vergrößert Karte, Gebäude und Schatten rund um Ihr Zuhause: 1x ist die Standarddarstellung, 1,5x und 2x zeigen sie größer. Sonne, Bögen und Plaketten behalten ihre Größe.",
     lockRotation: "Drehung sperren",
     lockRotationHint:
       "Ziehen Sie in der Vorschau, um die Szene zu drehen und zu neigen, bis Sie die gewünschte Ansicht haben, und schalten Sie dies dann ein. Die Sperre friert diese Ansicht ein (Drehen per Ziehen und die automatische Rotation im Leerlauf werden deaktiviert) und speichert den Winkel in der Karte, sodass genau dieselbe Ansicht auf jedem Gerät und in jedem Browser erscheint. Schalten Sie sie aus, um wieder frei zu drehen.",

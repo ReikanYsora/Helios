@@ -148,7 +148,7 @@ export const lt: Translations = {
     moonDisplayNight: "Tik naktį",
     moonDisplayHidden: "Paslėptas",
     sceneZoom: "Scenos mastelis",
-    sceneZoomHint: "Padidina žemėlapį, pastatus ir šešėlius aplink jūsų namus: 1x yra dabartinis vaizdas, 1,5x ir 2x rodo juos didesnius. Saulė, lankai ir žymos išlaiko savo dydį.",
+    sceneZoomHint: "Padidina žemėlapį, pastatus ir šešėlius aplink jūsų namus: 1x yra numatytasis vaizdas, 1,5x ir 2x rodo juos didesnius. Saulė, lankai ir žymos išlaiko savo dydį.",
     lockRotation: "Užrakinti kampą",
     lockRotationHint:
       "Vilkite peržiūrą, kad pasuktumėte ir pakreiptumėte sceną iki norimo vaizdo, tada įjunkite tai. Užraktas užfiksuoja tą vaizdą (sukimas velkant ir automatinis sukimasis ramybės būsenoje išjungiami) ir įrašo kampą į kortelę, todėl tiksliai tas pats vaizdas rodomas kiekviename įrenginyje ir naršyklėje. Išjunkite jį, kad vėl galėtumėte laisvai sukti.",

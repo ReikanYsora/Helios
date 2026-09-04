@@ -148,7 +148,7 @@ export const lv: Translations = {
     moonDisplayNight: "Tikai naktī",
     moonDisplayHidden: "Paslēpts",
     sceneZoom: "Ainas tālummaiņa",
-    sceneZoomHint: "Palielina karti, ēkas un ēnas ap jūsu māju: 1x ir pašreizējais attēlojums, 1,5x un 2x tos rāda lielākus. Saule, loki un zīmes saglabā savu izmēru.",
+    sceneZoomHint: "Palielina karti, ēkas un ēnas ap jūsu māju: 1x ir noklusējuma attēlojums, 1,5x un 2x tos rāda lielākus. Saule, loki un zīmes saglabā savu izmēru.",
     lockRotation: "Fiksēt rotāciju",
     lockRotationHint:
       "Velciet priekšskatījumu, lai pagrieztu un sasvērtu ainu vēlamajā skatā, pēc tam ieslēdziet šo. Bloķēšana iesaldē šo skatu (pagriešana ar vilkšanu un automātiskā griešanās miera stāvoklī tiek atspējota) un saglabā leņķi kartē, tāpēc tieši tas pats skats parādās katrā ierīcē un pārlūkā. Izslēdziet to, lai atkal brīvi grieztu.",

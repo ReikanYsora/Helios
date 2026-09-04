@@ -71,7 +71,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `show-timeline` | boolean | `true` | Show the bottom timeline band and its period selector. |
 | `show-detail-panel` | boolean | `true` | Allow a chip's detail panel to open on tap. |
 | `show-sun-times` | boolean | `true` | Show the sunrise / sunset markers on the sun arc. |
-| `scene-zoom` | `1` / `1.5` / `2` | `1` | Magnifies the basemap, buildings and shadows around the home (a scene-space zoom, not a map zoom): `1` is today's rendering, `1.5` and `2` draw them larger on screen. The sun, its arcs, the moon and the chips keep their card-fitted size. The basemap is CSS-scaled, so at `2` it reads a little softer. |
+| `scene-zoom` | `1` / `1.5` / `2` | `1` | Magnifies the basemap, buildings and shadows around the home (a scene-space zoom, not a map zoom): `1` is the default rendering, `1.5` and `2` draw them larger on screen. The sun, its arcs, the moon and the chips keep their card-fitted size. The basemap is CSS-scaled, so at `2` it reads a little softer. |
 
 ## Buildings + shadows
 

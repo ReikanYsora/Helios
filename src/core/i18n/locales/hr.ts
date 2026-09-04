@@ -148,7 +148,7 @@ export const hr: Translations = {
     moonDisplayNight: "Samo noću",
     moonDisplayHidden: "Skriven",
     sceneZoom: "Zum scene",
-    sceneZoomHint: "Povećava kartu, zgrade i sjene oko vašeg doma: 1x je današnji prikaz, 1,5x i 2x prikazuju ih veće. Sunce, lukovi i pločice zadržavaju svoju veličinu.",
+    sceneZoomHint: "Povećava kartu, zgrade i sjene oko vašeg doma: 1x je zadani prikaz, 1,5x i 2x prikazuju ih veće. Sunce, lukovi i pločice zadržavaju svoju veličinu.",
     lockRotation: "Zaključaj rotaciju",
     lockRotationHint:
       "Povucite pregled da biste zakrenuli i nagnuli scenu na željeni prikaz, a zatim uključite ovo. Zaključavanje zamrzava taj prikaz (zakretanje povlačenjem i automatsko okretanje u mirovanju se isključuju) i sprema kut u karticu, tako da se potpuno isti prikaz pojavljuje na svakom uređaju i pregledniku. Isključite ga za ponovno slobodno zakretanje.",

@@ -148,7 +148,7 @@ export const fi: Translations = {
     moonDisplayNight: "Vain yöllä",
     moonDisplayHidden: "Piilotettu",
     sceneZoom: "Näkymän zoomaus",
-    sceneZoomHint: "Suurentaa karttaa, rakennuksia ja varjoja kotisi ympärillä: 1x on nykyinen näkymä, 1,5x ja 2x näyttävät ne suurempina. Aurinko, kaaret ja merkit säilyttävät kokonsa.",
+    sceneZoomHint: "Suurentaa karttaa, rakennuksia ja varjoja kotisi ympärillä: 1x on oletusnäkymä, 1,5x ja 2x näyttävät ne suurempina. Aurinko, kaaret ja merkit säilyttävät kokonsa.",
     lockRotation: "Lukitse kierto",
     lockRotationHint:
       "Vedä esikatselua kääntääksesi ja kallistaaksesi näkymää haluamaasi kulmaan ja ota tämä sitten käyttöön. Lukitus jäädyttää näkymän (vetämällä kääntäminen ja lepotilan automaattinen kierto poistetaan käytöstä) ja tallentaa kulman korttiin, joten täsmälleen sama näkymä näkyy jokaisella laitteella ja selaimella. Poista se käytöstä kääntääksesi taas vapaasti.",

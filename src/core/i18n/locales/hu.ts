@@ -148,7 +148,7 @@ export const hu: Translations = {
     moonDisplayNight: "Csak éjjel",
     moonDisplayHidden: "Rejtett",
     sceneZoom: "Jelenet nagyítása",
-    sceneZoomHint: "Felnagyítja a térképet, az épületeket és az árnyékokat az otthona körül: az 1x a mai megjelenítés, az 1,5x és a 2x nagyobbnak mutatja őket. A nap, az ívek és a címkék megtartják a méretüket.",
+    sceneZoomHint: "Felnagyítja a térképet, az épületeket és az árnyékokat az otthona körül: az 1x az alapértelmezett megjelenítés, az 1,5x és a 2x nagyobbnak mutatja őket. A nap, az ívek és a címkék megtartják a méretüket.",
     lockRotation: "Forgatás zárolása",
     lockRotationHint:
       "Húzza az előnézetet a jelenet elforgatásához és megdöntéséhez a kívánt nézetig, majd kapcsolja be ezt. A zár rögzíti ezt a nézetet (a húzással forgatás és a nyugalmi automatikus forgatás kikapcsol), és elmenti a szöget a kártyába, így pontosan ugyanaz a nézet jelenik meg minden eszközön és böngészőben. Kapcsolja ki, hogy újra szabadon forgathasson.",

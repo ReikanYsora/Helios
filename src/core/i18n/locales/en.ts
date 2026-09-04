@@ -137,7 +137,7 @@ export const en: Translations = {
     moonDisplayNight: "Night only",
     moonDisplayHidden: "Hidden",
     sceneZoom: "Scene zoom",
-    sceneZoomHint: "Magnifies the map, buildings and shadows around your home: 1x is today's rendering, 1.5x and 2x make them larger on screen. The sun, the arcs and the chips keep their size.",
+    sceneZoomHint: "Magnifies the map, buildings and shadows around your home: 1x is the default rendering, 1.5x and 2x make them larger on screen. The sun, the arcs and the chips keep their size.",
     lockRotation: "Lock rotation",
     lockRotationHint:
       "Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.",
