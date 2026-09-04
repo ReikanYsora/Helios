@@ -199,6 +199,18 @@ toward the sun's projected position. One HUD layer, always over the sun's (the m
 is the nearer body); the `moon-display` option picks always / night-only / hidden.
 Cosmetic only: no chip, no value, no calculation reads it.
 
+`scene/array-markers.ts` marks the Helios-Forecast lines in the scene. The card
+reads each forecast entry's layout once over `helios_forecast/layout`
+(`data/forecast-layout.ts`, memory-cached, hourly throttle, entries that are not the
+Helios provider answer nothing) and hands the lines to the engine through a
+callback. `projectArrayScene` projects, per frame, one tile per line: a quad in
+local metres about the line's own position (or the home's roof, on the slope it
+faces, when the line has none), across its azimuth and up its tilt, sized in pixels
+at zoom 1 and growing with the scene zoom, plus the sun's screen point while it is
+up. The HUD paints the tiles and a dot-only hairline from each to the sun, in the
+incidence ray's tier, and drops the single sun-to-production ray while tiles show.
+A tracker lies flat. Cosmetic only: no name, no value, no calculation reads it.
+
 A cast shadow is the **exact swept envelope** of the footprint: the outline
 translated along the sun vector, plus one quad per edge (outer rings and courtyard
 rings alike), emitted as a single path per caster. Sweeping the real outline rather

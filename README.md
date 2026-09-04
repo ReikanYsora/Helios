@@ -148,7 +148,9 @@ solar production forecast that learns from your own panels and runs entirely on
 your Home Assistant. It feeds the official Energy dashboard, corrects itself
 against what your installation really produces, and exposes a clean set of
 sensors. Helios draws its prediction as the dashed curve your production tracks
-against.
+against, and marks each array you configured there in the scene: a small tile at
+its position, turned and tilted the way the panels look, with its own ray to the
+sun.
 
 ---
 

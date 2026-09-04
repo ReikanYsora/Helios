@@ -73,6 +73,9 @@ export const ARRAY_TILE_L_PX          = 16;
 //A ground-standing line floats this much above the basemap so its tile clears the ground; a line on the home sits
 //this much above the roof.
 export const ARRAY_TILE_LIFT_M        = 0.4;
+//Marker colour: a spring green no other element of the card wears (sun amber, production orange, grid blue and
+//violet, battery pink and teal, consumption green are all taken), so the arrays and their rays read at a glance.
+export const ARRAY_MARKER_COLOR      = '#69f0ae';
 //The forecast layout changes with the integration's options only: re-read it this often at most.
 export const ARRAY_LAYOUT_THROTTLE_MS = 60 * 60 * 1000;
 

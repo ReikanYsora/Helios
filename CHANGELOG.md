@@ -9,6 +9,20 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ## 2026.9.4-b2
 
+### Added: your arrays in the scene, when Helios-Forecast is installed
+
+With Helios-Forecast (2026.9.1 or later) providing the solar forecast, the card now
+reads the lines you configured there and marks each one in the scene: a small
+spring-green tile at the line's own position (or on the roof of your home, on the
+side it faces, when the line has no coordinates of its own), turned to its azimuth
+and raised to its tilt, so it shows which way the array looks; it brightens as the
+sun comes square to it. While the sun is up, a hairline of dots runs from each tile
+to the sun, and the single sun-to-production ray steps aside. The tile is drawn in
+true perspective, so seen from behind at a low angle it thins to an edge, as a real
+panel would. A tracker, which has no fixed orientation, lies flat. Nothing is shown
+without the integration, and no name or value is ever written next to a tile: the
+scene keeps its graphic language. Asked for by @caswal.
+
 ### Changed: the scene keeps its buildings and shadows between frames
 
 Rotating the scene rebuilt the whole buildings-and-shadows layer from scratch

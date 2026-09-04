@@ -8,6 +8,7 @@ import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
 import { mixHex } from '../core/render-kit/hex';
+import { ARRAY_MARKER_COLOR } from '../core/config/constants';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
 import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene, type MoonScene } from './hud';
@@ -1094,17 +1095,17 @@ export class SceneHudController
         const ray = sunAt && !(clipRect && pointOutside([tile.cx, tile.cy], clipRect))
             ? (clipRect ? clipSegment([tile.cx, tile.cy], [sunAt.x, sunAt.y], clipRect) : [[tile.cx, tile.cy], [sunAt.x, sunAt.y]])
             : null;
-        //Dark glass at rest, warming toward the sun colour as the line turns square to the light.
-        const fill = mixHex('#1c2a3f', sunColor, 0.12 + 0.6 * tile.glow);
+        //Dark glass at rest, brightening toward the marker colour as the line turns square to the light.
+        const fill = mixHex('#1c2a3f', ARRAY_MARKER_COLOR, 0.12 + 0.6 * tile.glow);
         return svg`
                             ${ray ? svg`
                             <line class="solar-array-ray"
                                 x1="${ray[0][0]}" y1="${ray[0][1]}" x2="${ray[1][0]}" y2="${ray[1][1]}"
-                                stroke="${sunColor}"></line>` : nothing}
+                                stroke="${ARRAY_MARKER_COLOR}"></line>` : nothing}
                             ${quad.length >= 3 ? svg`
                             <polygon class="solar-array-tile"
                                 points="${pointsAttr(quad)}"
-                                fill="${fill}" stroke="${sunColor}"></polygon>` : nothing}`;
+                                fill="${fill}" stroke="${ARRAY_MARKER_COLOR}"></polygon>` : nothing}`;
     })}
                     </svg>
                 ` : nothing}
