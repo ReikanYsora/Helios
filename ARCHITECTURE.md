@@ -344,6 +344,14 @@ an hour of metered export while the "signed net" sensor never went meaningfully
 negative is physically impossible) and, once proven mis-scoped, reroutes the live
 split to the meters, self-clearing if the sensor is later fixed.
 
+The battery live readout has the same kind of guard, `data/sources/battery-guard.ts`:
+each battery's live power sensor is judged against that battery's own charge and
+discharge meters (`batteryBanks` in `energy-prefs.ts` keeps the pairing the flat
+lists lose) over a rolling 24 h of hourly stats, and a sensor proven backwards for
+its slot is flipped per rate inside the live sum, never by negating the total, so a
+correct second battery is never turned around with a wrong first one. Display-only
+`battery-sign` sits on top of this and is untouched by it.
+
 ### Weather, `data/weather.ts`, `data/weather-resolve.ts`
 
 One fetch per home point against Open-Meteo, fusing a global model with the best

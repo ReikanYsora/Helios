@@ -37,6 +37,10 @@ export interface EnergyDefaults
     batteryStatEnergyTos:   string[]; //Battery charge kWh meters (`stat_energy_to`). Drives `charged today`.
     //Battery state-of-charge sensors (`stat_soc`), uniform-averaged across sources (HA Energy has no per-source capacity).
     batteryStatSocs:        string[];
+    //The same battery wiring, kept PER SOURCE: each bank's own live power sensor(s) with its own charge / discharge
+    //meters. The flat lists above lose that pairing, and the sign guard needs it: a bank's rate is only ever judged
+    //against that bank's meters, never against another battery's flow (battery-guard.ts).
+    batteryBanks:           { rates: string[]; tos: string[]; froms: string[] }[];
     //Count of battery SOURCES that expose no live-power sensor (`power_config`). >0 means a mixed/energy-only wiring:
     //the live readout must then net the directional energy meters (which cover every bank) instead of summing the
     //partial set of power sensors, otherwise a battery without a power sensor drops out of the live power.
@@ -116,6 +120,7 @@ export function freshEnergyDefaults(): EnergyDefaults
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
         batteryStatSocs:        [],
+        batteryBanks:           [],
         batterySourcesWithoutRate: 0,
         invertedRateEntities:   [],
         solarForecastEntryIds:  [],
@@ -530,6 +535,9 @@ export function parseEnergyPrefs(prefs: {
             }
             pushStrings(src['stat_energy_from'], out.batteryStatEnergyFroms);
             pushStrings(src['stat_energy_to'], out.batteryStatEnergyTos);
+            const bank: { rates: string[]; tos: string[]; froms: string[] } = { rates: [], tos: [], froms: [] };
+            pushStrings(src['stat_energy_to'], bank.tos);
+            pushStrings(src['stat_energy_from'], bank.froms);
             const soc = pickFirstString(src['stat_soc']);
             if (soc)
             {
@@ -544,6 +552,7 @@ export function parseEnergyPrefs(prefs: {
                 for (const slot of batteryRates)
                 {
                     out.batteryStatRates.push(slot.entity);
+                    bank.rates.push(slot.entity);
                     if (slot.inverted)
                     {
                         out.invertedRateEntities.push(slot.entity);
@@ -557,6 +566,7 @@ export function parseEnergyPrefs(prefs: {
                 {
                     //HA's battery stat_rate is discharge-positive; flip it to the card's charge-positive convention.
                     out.batteryStatRates.push(topRate);
+                    bank.rates.push(topRate);
                     out.invertedRateEntities.push(topRate);
                 }
                 else
@@ -564,6 +574,7 @@ export function parseEnergyPrefs(prefs: {
                     out.batterySourcesWithoutRate += 1;
                 }
             }
+            out.batteryBanks.push(bank);
         }
     }
 

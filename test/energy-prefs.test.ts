@@ -119,6 +119,44 @@ describe('parseEnergyPrefs price dedup (#410)', () =>
     });
 });
 
+describe('parseEnergyPrefs battery banks (#422)', () =>
+{
+    it('keeps each battery source\'s rate paired with its own meters, alongside the flat lists', () =>
+    {
+        const prefs = {
+            energy_sources: [
+                {
+                    type: 'battery',
+                    stat_energy_from: 'sensor.marstek_discharged',
+                    stat_energy_to:   'sensor.marstek_charged',
+                    power_config:     { stat_rate: 'sensor.marstek_power' },
+                },
+                {
+                    type: 'battery',
+                    stat_energy_from: 'sensor.bank1_discharged',
+                    stat_energy_to:   'sensor.bank1_charged',
+                    stat_rate:        'sensor.bank1_power',
+                },
+                {
+                    type: 'battery',
+                    stat_energy_from: 'sensor.bank2_discharged',
+                    stat_energy_to:   'sensor.bank2_charged',
+                },
+            ],
+        };
+        const d = parseEnergyPrefs(prefs);
+        expect(d.batteryBanks).toEqual([
+            { rates: ['sensor.marstek_power'], tos: ['sensor.marstek_charged'], froms: ['sensor.marstek_discharged'] },
+            { rates: ['sensor.bank1_power'],   tos: ['sensor.bank1_charged'],   froms: ['sensor.bank1_discharged'] },
+            { rates: [],                       tos: ['sensor.bank2_charged'],   froms: ['sensor.bank2_discharged'] },
+        ]);
+        //The flat lists are unchanged by the per-bank view.
+        expect(d.batteryStatRates).toEqual(['sensor.marstek_power', 'sensor.bank1_power']);
+        expect(d.batteryStatEnergyTos).toEqual(['sensor.marstek_charged', 'sensor.bank1_charged', 'sensor.bank2_charged']);
+        expect(d.batterySourcesWithoutRate).toBe(1);
+    });
+});
+
 describe('subscribeEnergyPrefs non-admin retry storm (#415)', () =>
 {
     it('never calls subscribeEvents for a known non-admin user', async () =>

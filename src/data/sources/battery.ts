@@ -13,7 +13,7 @@ import { warnOnce } from '../log';
 import { unionChangeMeters, type EnergyDefaults } from './energy-prefs';
 import { fetchChangeById, mergeChangeSeries, extractPerEntity, changeRefreshAnchorMs, parseStatBoundaryLoose, parseRawHistorySeries, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, quantizedAnchorMs, type KeyedFetch } from '../source-fetch';
-import { refreshBatteryGuard, batteryLiveInverted, type BatteryGuardState } from './battery-guard';
+import { refreshBatteryGuard, batteryInvertedRates, effectiveInvertedRates, type BatteryGuardState } from './battery-guard';
 import { BATTERY_CACHE_TTL_MS, HOUR_MS, DAY_MS} from '../../core/config/constants';
 import { localMidnightMinusDays } from '../../core/time/timezone';
 
@@ -116,7 +116,11 @@ export interface BatteryHost
 //source), sum their states like the HA Energy live tile (per-bank sign honoured via `invertedRateEntities`). A mixed or
 //energy-only wiring shows NO live power (the sum would silently miss a bank, and a live value is never derived from the
 //meters); scrub and curves keep netting the directional change series regardless.
-function computeBatteryLive(hass: HassLike, defaults: EnergyDefaults): { soc: number | null; power: number | null; unit: string }
+//`guardInverted`: rate ids the sign guard has proven backwards vs their slot; each one's slot flip is undone (a
+//symmetric difference with `invertedRateEntities`), so a two-bank install corrects exactly the bank that needs it.
+function computeBatteryLive(
+    hass: HassLike, defaults: EnergyDefaults, guardInverted: readonly string[] = [],
+): { soc: number | null; power: number | null; unit: string }
 {
     let soc: number | null = null;
     const socEntities = defaults.batteryStatSocs;
@@ -142,7 +146,8 @@ function computeBatteryLive(hass: HassLike, defaults: EnergyDefaults): { soc: nu
     let unit = '';
     if (!batteryLiveIsBucketSourced(defaults))
     {
-        const { watts, any } = sumLiveWatts(hass, defaults.batteryStatRates, defaults.invertedRateEntities);
+        const inverted = effectiveInvertedRates(defaults.invertedRateEntities, guardInverted);
+        const { watts, any } = sumLiveWatts(hass, defaults.batteryStatRates, inverted);
         if (any)
         {
             power = watts; unit = 'W';
@@ -193,12 +198,12 @@ export function refreshBattery(host: BatteryHost): void
     const socEntities = host._energyDefaults.batteryStatSocs;
     //Battery-sign guard: cross-check the live rate's convention against the directional meters (see battery-guard).
     refreshBatteryGuard(host);
-    const live      = computeBatteryLive(host.hass, host._energyDefaults);
+    //Rates the guard has proven backwards are un-flipped INSIDE the sum (per rate), never by negating the total: with
+    //two banks and one bad sensor, negating the sum would turn the good bank around too.
+    const live      = computeBatteryLive(host.hass, host._energyDefaults, batteryInvertedRates(host._batteryGuard));
     const nextSoc   = live.soc;
     const nextUnit  = live.unit;
-    //When the guard has proven the sensor inverted, the sumLiveWatts flip produced the wrong sign; negate the live
-    //read so the chip value AND the flow direction match the structural meters and the Energy dashboard.
-    const nextPower = (live.power !== null && batteryLiveInverted(host._batteryGuard)) ? -live.power : live.power;
+    const nextPower = live.power;
     if (nextSoc   !== host._batterySoc)
     {
         host._batterySoc       = nextSoc;
