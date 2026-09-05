@@ -1088,8 +1088,9 @@ export class SceneHudController
     {
         const quad = clipRect ? clipPolygon(tile.points, clipRect) : tile.points;
         const sunAt = arrayScene!.sun;
-        //No ray from a tile the card does not show: an off-card array would otherwise shoot one in from the edge.
-        const ray = sunAt && !(clipRect && pointOutside([tile.cx, tile.cy], clipRect))
+        //The ray is clipped to the card box like the sun ray, so an off-card array still shows its line coming in
+        //from the edge: the line is what says where the sun is for that line, tile in view or not.
+        const ray = sunAt
             ? (clipRect ? clipSegment([tile.cx, tile.cy], [sunAt.x, sunAt.y], clipRect) : [[tile.cx, tile.cy], [sunAt.x, sunAt.y]])
             : null;
         //Dark glass at rest, brightening toward the marker colour as the line turns square to the light.
