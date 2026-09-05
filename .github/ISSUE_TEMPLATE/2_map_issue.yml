@@ -38,12 +38,12 @@ body:
       description: HACS > Helios shows the installed version.
       options:
         # versions:start
-        - 2026.9.3 (latest)
+        - 2026.9.4 (latest)
+        - 2026.9.3
         - 2026.9.2
         - 2026.9.1
         - 2026.9.0
         - 2026.8.3
-        - 2026.8.2
         - An older version
         - A beta / prerelease
         - I don't know
