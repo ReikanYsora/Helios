@@ -57,10 +57,10 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `auto-rotate-enabled` | boolean | `false` | Idle camera orbit. Off by default; enable for kiosk / always-on dashboards. Any drag pauses it, then it resumes after a short idle. |
 | `camera-pitch-deg` | 0-65 | `50` | Optional fixed pitch at boot. Drag still works unless locked. |
 | `camera-bearing-deg` | 0-359 | hemisphere | Optional fixed bearing at boot. |
-| `camera-locked` | boolean | `false` | Disable drag-rotate and the idle orbit; the camera stays at the configured pose. Also toggled live from the lock button on the card. |
+| `camera-locked` | boolean | `false` | Disable drag-rotate and the idle orbit; the camera stays at the configured pose. The editor's lock toggle also captures the preview's current angle into `camera-pitch-deg` / `camera-bearing-deg`. |
 | `degraded-render` | boolean | `false` | Compatibility rendering: force the simpler "projected" ground path (no CSS 3D transform, a per-frame redraw instead). Turn on only if the map flickers or tears while rotating on your device and the automatic detection didn't catch it. Slightly heavier, less smooth rotation. |
 
-> The card also remembers the live camera pose, the selected period, the selected chip and the lock per home (or per `cache-id`), so reopening the dashboard restores exactly what you left.
+> The card also remembers the live camera pose, the selected period and the selected chip per home (or per `cache-id`), so reopening the dashboard restores exactly what you left.
 
 ## Interface
 
@@ -77,13 +77,13 @@ The visual editor exposes every option below. Direct YAML editing also works.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `display-radius` | 0-250 m | `200` | Distance around the home within which buildings and shadows render. The main perf lever on older phones. 250 m is as far as the ground under them reaches; 0 draws none. |
+| `display-radius` | 0-250 m | `200` | Distance around the home within which buildings and shadows render. The main perf lever on older phones. 250 m is as far as the ground under them reaches; 0 keeps only the home. |
 | `building-count` | 10-100 | `50` | How many of the nearest buildings to keep around the home. |
 | `building-real-size` | boolean | `true` | Extrude buildings to their real OSM heights (capped). When `false`, every building uses the fixed `building-height` prism. |
 | `building-height` | 3-10 m | `6` | Fixed prism height used when `building-real-size` is `false`. |
 | `building-cluster-radius` | 0-100 m | `0` | Buildings within this distance of the home (or touching it) join the home group at full opacity. Use it to attach garages / verandas to the house. |
 | `building-opacity` | 0-1 | `0.5` | Opacity of the surrounding buildings. The home (and its cluster) always stays at full opacity. |
-| `building-color` | color | theme | Optional base tone for the surrounding buildings. |
+| `building-color` | color | `grey` | Optional base tone for the surrounding buildings (an HA colour token or a hex). |
 | `shadows-enabled` | boolean | `true` | Master toggle for the cast ground shadows (projected from the building footprints). |
 | `shadow-opacity` | 0-1 | `0.32` | Opacity of the cast shadows. |
 
@@ -91,7 +91,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `display-update-frequency-per-hour` | 1-6 | `4` | Storage + render cadence (buckets per hour) for the data store, every graph and the day curve's own resolution. `4` = 15-minute granularity (the HA Energy bucket size); raise for smoother curves, lower to save memory. Live numeric chips bypass this and stay on the direct `hass.states` path. |
+| `display-update-frequency-per-hour` | 1-6 | `4` | Storage + render cadence (buckets per hour) for the data store, every graph and the day curve's own resolution. `4` = 15-minute granularity (built from HA's 5-minute statistics); raise for smoother curves, lower to save memory. Live numeric chips bypass this and stay on the direct `hass.states` path. |
 | `value-decimals` | 0-3 | `1` | Decimal places on every kW / kWh / % readout. |
 | `power-unit` | `W` \| `kW` | `kW` | Unit for every power readout (chips, tooltips). Energy totals follow it by default (`kW` pairs with `kWh`, `W` with `Wh`), unless `energy-unit` below sets one of its own. |
 | `energy-unit` | `auto` \| `Wh` \| `kWh` | `auto` | Unit for every energy total (the day curve, the detail panel, the timeline's day totals). `auto` follows `power-unit`; set `Wh` or `kWh` to pick one independently of the power unit above, e.g. precise `W` chips alongside `kWh` totals. |
@@ -99,7 +99,7 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `battery-sign` | `default` \| `inverted` \| `hidden` | `default` | Sign shown on the battery chip: `default` (minus charging, plus discharging), `inverted`, or `hidden` (magnitude only). Display-only; flows and history are unchanged. |
 | `max-expected-power` | 500-30000 W | `5000` | Reference power at which a flow animates at full speed, so every flow shares one honest pace. Raise it for a large installation, lower it for a small one. |
 
-The rolling window itself is chosen live from the timeline's period selector (**J - J+2**, **Yesterday**, **Today**, **Week**, **Month**) and remembered per card; it needs no YAML key.
+The rolling window itself is chosen live from the timeline's period selector (**D - D+2** (the letter for "day" is localised), **Yesterday**, **Today**, **Week**, **Month**) and remembered per card; it needs no YAML key.
 
 ## Weather
 
@@ -167,10 +167,10 @@ The `<layer>` names (water, roads, parks, ...) and their colours are all exposed
 | `monitoring-groups` | map | none | Device-to-group assignment (which monitoring group each tracked device belongs to). Set by dragging devices into groups in the editor. |
 | `monitoring-group-hidden` | map | none | Per-group hidden flag, so a group can be turned off without losing its device assignments. |
 | `hidden-devices` | list | none | Device meters hidden from every view. Managed from the editor's device list (the eye toggle). |
-| `chip-home-color` | color | theme | Optional colour for the home pill and its consumption readout. |
+| `chip-home-color` | color | `primary` | Optional colour for the home pill and its consumption readout. |
 
 ## Per-card cache
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `cache-id` | string | auto | A hidden, auto-generated id that keeps each card's saved view (selected period, selected chip, camera, lock) independent, so two cards on the same home do not share state. You normally never touch this. |
+| `cache-id` | string | auto | A hidden, auto-generated id that keeps each card's saved view (selected period, selected chip, camera pose) independent, so two cards on the same home do not share state. You normally never touch this. |

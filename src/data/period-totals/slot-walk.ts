@@ -49,8 +49,8 @@ export function forEachBucketSlot(
 ): void
 {
     const slotMs = DAY_MS / slots;
-    //Only the buckets the slice can reach. A month's store holds ~744 of them and one day needs 24, so walking all
-    //of them to throw away 97% was the cost of asking a simple question. `inWindow` still decides the two edges.
+    //Only the buckets the slice can reach (a month's store holds ~744, one day needs 24); `inWindow` still decides
+    //the two edges.
     const first = win ? Math.max(0, Math.floor((win.fromMs - store.storeStartMs) / store.stepMs) - 1) : 0;
     const last  = win
         ? Math.min(store.bucketsTotal, Math.ceil((win.toMs - store.storeStartMs) / store.stepMs) + 1)

@@ -219,7 +219,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
     //Header granularity follows the window: intraday shows the time, a multi-day span adds the weekday, and a
-    //month/year span shows the calendar day (the scrub steps day by day), so you always know when you are.
+    //month span shows the calendar day, so you always know when you are.
     const spanDays  = rangeMs / DAY_MS;
     const timeOpts: Intl.DateTimeFormatOptions =
           spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }

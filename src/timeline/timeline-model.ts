@@ -201,7 +201,7 @@ function buildTimelineModelUncached(start: Date, end: Date, maxTicks: number): T
     }
 
     //Months: align the gridlines with the named months (one separator at the start of each shown label) instead of
-    //thinning boundaries independently (which dropped lines onto the unlabelled months).
+    //thinning boundaries independently (independent thinning leaves gridlines on unlabelled months).
     if (kind === 'months')
     {
         separators = labels
@@ -209,8 +209,8 @@ function buildTimelineModelUncached(start: Date, end: Date, maxTicks: number): T
             .filter(s => s.frac > 0 && s.frac < 1);
     }
 
-    //Midnight gridlines, only up to a week span (Forecast and Week); Month and Year drop them so the graph stays
-    //clean when the days are too dense to read individually.
+    //Midnight gridlines, only up to a week span; Month drops them so the graph stays clean when the days are too
+    //dense to read individually.
     const dayBoundaries: number[] = [];
     if (spanDays > 1.05 && spanDays <= 8)
     {
@@ -230,10 +230,9 @@ function buildTimelineModelUncached(start: Date, end: Date, maxTicks: number): T
 }
 
 
-//Constructing an Intl.DateTimeFormat is a genuinely expensive V8 operation, and formatTimelineLabel below runs
-//it fresh for every rendered label. The key space is tiny and stable within a session (4 kinds x whatever
-//language HA reports), so caching every formatter ever built - including the try/catch's fallback, so a
-//language that throws isn't re-attempted on every call either - is safe with no eviction needed.
+//Constructing an Intl.DateTimeFormat is expensive and formatTimelineLabel runs per rendered label; the key space is
+//tiny and stable (4 kinds x the HA language), so every formatter is cached with no eviction, the try/catch fallback
+//included so a throwing language isn't re-attempted.
 const timelineFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
 function timelineFormatterFor(kind: TimelineKind, lang: string | undefined, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat

@@ -1,8 +1,7 @@
 //Open-Meteo weather data layer: multi-model fetch, in-browser cache, and pure helpers around the weather signal.
 //No DOM, map, or engine state; all forecast-API code lives here so the engine stays focused on rendering.
 
-//Forecast window, back-off tables, cache TTL/precision live in constants.ts. Aliased on import so in-file usages
-//stay unchanged; the back-off tables are re-exported because helios-engine.ts imports them from here.
+//Forecast window, back-off tables, cache TTL/precision live in constants.ts.
 import {
     WEATHER_PAST_DAYS          as PAST_DAYS,
     WEATHER_FORECAST_DAYS      as FORECAST_DAYS,
@@ -258,8 +257,8 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 
 //Variables requested from Open-Meteo. shortwave_radiation_instant gives GHI W/m² *at* the indicated hour (vs averaged
 //over the preceding one), matching the visual time cursor; it powers the live irradiance chip and sun-arc colouring.
-//The low/mid/high cloud layers are combined client-side into cloudEffective for rendering (and let us detect the
-//low-layer "fog spike" failure mode); the API's raw total cloud_cover is not used. precipitation (mm), snowfall
+//The low/mid/high cloud layers are combined client-side into cloudEffective for rendering; the API's raw total
+//cloud_cover is not used. precipitation (mm), snowfall
 //(cm) and weather_code (WMO) drive the weather layers (rain / snow / thunderstorm). The PV
 //forecast is read natively from Home Assistant.
 const HOURLY_VARS = [
@@ -337,7 +336,7 @@ const fillCode      = (arr: (number | null)[]): number[] => arr.map(v => v == nu
 const fillNaN       = (arr: (number | null)[]): number[] => arr.map(v => (v == null || !isFinite(v)) ? NaN : v);
 
 
-//Layer-weighted effective cloud cover (spec decision B): each layer clamped to [0, 100] before weighting so an
+//Layer-weighted effective cloud cover: each layer clamped to [0, 100] before weighting so an
 //upstream > 100 quirk doesn't bleed in with the wrong relative contribution. Low cloud attenuates far more than high
 //cirrus. THE single source: the per-hour precompute here and weather-resolve's at-instant recompute both call it, so
 //the effective cover is always a function of the layers at that instant (never a separately-interpolated value that

@@ -15,7 +15,7 @@
 //Evaluated PER BATTERY: each bank's single net rate is judged against that bank's own charge/discharge meters
 //(energy-prefs.ts, batteryBanks), so a two-battery install where only one sensor is backwards gets exactly that
 //one corrected. A bank wired with two directional power sensors, or missing a meter, has no structural truth of
-//its own and keeps the current behaviour.
+//its own and is not evaluated (its slot's flip applies as-is).
 
 import type { HassLike } from '../../core/ha-types';
 import type { EnergyDefaults } from './energy-prefs';

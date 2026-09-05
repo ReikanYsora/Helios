@@ -71,8 +71,8 @@ export interface HeliosConfig
     //to hass.config. The window.__heliosLocationOverride debug hook still wins over this.
     'home-latitude'?:          unknown;
     'home-longitude'?:         unknown;
-    //Live irradiance sensor (W/m²) at the home, preferred over the model for the live "now" reading. Past +
-    //forecast still come from the model.
+    //Live irradiance sensor (W/m²) at the home, preferred over the model for the live + past window (the forecast
+    //keeps the model).
     'solar-irradiance-entity'?: unknown;
     //HA ui_color token for the base tint of surrounding buildings. Default 'grey'.
     'building-color'?:          unknown;
@@ -230,8 +230,7 @@ export function maxExpectedPowerW(config: HeliosConfig | undefined): number
 }
 
 
-//Resolved power readout unit ('W' or 'kW') for every power value on the card. Default 'kW' so existing cards
-//are unchanged.
+//Resolved power readout unit ('W' or 'kW') for every power value on the card. Default 'kW'.
 export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 {
     return config?.['power-unit'] === 'W' ? 'W' : 'kW';
@@ -239,8 +238,7 @@ export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 
 
 //Resolved energy total unit ('Wh' or 'kWh'). Explicit 'energy-unit' wins; absent or 'auto' mirrors powerUnit
-//(kW -> kWh, W -> Wh), exactly today's behaviour, so an existing card is unchanged until the user picks one on
-//its own.
+//(kW -> kWh, W -> Wh).
 export function energyUnit(config: HeliosConfig | undefined): 'Wh' | 'kWh'
 {
     const raw = config?.['energy-unit'];

@@ -13,7 +13,6 @@ export const isLocale: Translations = {
     today: "Í dag",
     week: "Vika",
     month: "Mánuður",
-    year: "Ár",
   },
 
   compass: "N,NA,A,SA,S,SV,V,NV",
@@ -82,7 +81,7 @@ export const isLocale: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Sjálfvirkur snúningur myndavélar",
     autoRotateHint:
-      "Þegar ekkert hefur gerst í nokkrar sekúndur, snýst myndavélin hægt um heimilið (um það bil 1.5°/s, andstætt sýnilegri hreyfingu sólarinnar). Að draga með einum fingri stöðvar hann samstundis og hann heldur áfram þegar þú sleppir. Forðastu hann á mjög gömlum tækjum: sjálfvirkur snúningur þvingar fram myndgerð á hverri sekúndu.",
+      "Þegar ekkert hefur gerst í nokkrar sekúndur, snýst myndavélin hægt um heimilið (um það bil 4°/s, andstætt sýnilegri hreyfingu sólarinnar). Að draga með einum fingri stöðvar hann samstundis og hann heldur áfram þegar þú sleppir. Forðastu hann á mjög gömlum tækjum: sjálfvirkur snúningur þvingar fram myndgerð á hverri sekúndu.",
     autoRotateOn: "Kveikt",
     autoRotateOff: "Slökkt",
     degradedRender: "Samhæfnisútlit",

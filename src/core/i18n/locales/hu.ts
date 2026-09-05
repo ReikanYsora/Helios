@@ -13,7 +13,6 @@ export const hu: Translations = {
     today: "Ma",
     week: "Hét",
     month: "Hónap",
-    year: "Év",
   },
 
   compass: "É,ÉK,K,DK,D,DNy,Ny,ÉNy",
@@ -82,7 +81,7 @@ export const hu: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Kamera automatikus forgatása",
     autoRotateHint:
-      "Néhány másodperc tétlenség után a kamera lassan az otthon körül kering (körülbelül 1,5°/s, a nap látszólagos mozgásával ellentétesen). Egyujjas húzás azonnal megállítja, és folytatódik, amint elengeded. Kerüld nagyon régi eszközökön: az automatikus forgatás másodpercenként újrarajzolásra kényszerít.",
+      "Néhány másodperc tétlenség után a kamera lassan az otthon körül kering (körülbelül 4°/s, a nap látszólagos mozgásával ellentétesen). Egyujjas húzás azonnal megállítja, és folytatódik, amint elengeded. Kerüld nagyon régi eszközökön: az automatikus forgatás másodpercenként újrarajzolásra kényszerít.",
     autoRotateOn: "Be",
     autoRotateOff: "Ki",
     degradedRender: "Kompatibilitási megjelenítés",

@@ -68,7 +68,7 @@ const NIGHT_STROKE_FACTOR = 0.5;
 
 //Scene HUD subsystem: the home-anchored energy chip cluster (PV / battery SoC + power / grid / custom /
 //home consumption), their animated leader paths, the solar arc depth-split passes, the sun disc/halo/ray
-//geometry and the sunrise/sunset markers. Extracted from HeliosCard.render(); every card member it reads
+//geometry and the sunrise/sunset markers. Every card member it reads
 //(hass, config, the scrub/live state, the label layout, the sun scene, the arc scratch buffers, ...) is
 //reached through `this.host`. The reactive @state it renders from stays on the card.
 export class SceneHudController
@@ -186,7 +186,8 @@ export class SceneHudController
     }
 
     //Rounded L between two arbitrary points. verticalFirst=true draws the vertical leg first, then the
-    //horizontal into the end (used PV -> Power, dropping down then right). Same fillet as _buildLPathToHome.
+    //horizontal into the end (the four-group fan-out: down from the home pill's bottom edge, then across to the
+    //chip). Same fillet as _buildLPathToHome.
     private _buildLPath(
         sx: number, sy: number, ex: number, ey: number, verticalFirst: boolean
     ): string
@@ -360,12 +361,10 @@ export class SceneHudController
         const pvPeakRefW  = flowRefW;
         const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
         const pvIdle         = !(pvWattsNow > 0);
-        //Battery overlay: two chips flanking the PV chip (SoC % left, signed Power right), each wired to it
-        //by a static dotted hairline; the power sign is the only charging-vs-discharging encoding. Scrub
-        //mirrors PV: live reads hass.states, past-scrub reads the WS history series, future-scrub hides both.
-        //Chip eligibility from the HA Energy defaults: a stat_soc source lights the SoC chip; a power
-        //source (stat_rate, or stat_energy_from/to without a power_config block) lights the Power chip.
-        //They render independently, so a SoC-only install still paints the vessel.
+        //Battery: SoC + power resolved separately (each eligible from its own HA Energy source: stat_soc for the
+        //SoC, stat_rate or stat_energy_from/to without a power_config block for the power), then fused into one
+        //chip below. Scrub mirrors PV: live reads hass.states, past-scrub reads the history series, future-scrub
+        //hides it.
         const batteryEntities    = resolveBatteryEntities(this.host._energyDefaults);
         const hasAnyBankSoc      = batteryEntities.socEntity   !== null;
         const hasAnyBankPower    = batteryEntities.powerEntity !== null;
@@ -467,10 +466,9 @@ export class SceneHudController
             ? formatGridValue(this.host.hass, homeUsageWatts, 'W', valueDec, powerU)
             : '';
 
-        //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader
-        //arrow: charging flows PV -> Power (into the battery) at a speed proportional to |P| saturating at
-        //~5 kW. The dual-tone leader colour tracks the physical direction, independent of the chip's HA-sign
-        //flip above.
+        //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the battery <-> home bead
+        //direction and the lead colour, at a speed proportional to |P| saturating at the shared flow reference,
+        //independent of the chip's HA-sign flip above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
         const batteryChargeColor    = chipSlotColor(this.host, cfg, 'batteryCharge');
         const batteryDischargeColor = chipSlotColor(this.host, cfg, 'batteryDischarge');
@@ -520,7 +518,7 @@ export class SceneHudController
         //  1 group  -> centred below the home on the lower row, vertical lead;
         //  2 groups -> left + right, grid/battery-style horizontal lead off each chip's mid-height;
         //  3 groups -> two on top (left/right) + one centred on the lower row, vertical lead;
-        //  4 groups -> the original four-corner fan-out.
+        //  4 groups -> four-corner fan-out.
         //Live value = the sum of the group's device stat_rate; colour = the group's graph colour; a number badge
         //carries the group id. Every lead's bead runs home -> chip (power leaving to the group's devices).
         const HOME_PILL_WIDTH_PX  = 96;
@@ -568,7 +566,7 @@ export class SceneHudController
                 }
                 else if (groupCount === 4)
                 {
-                    //Original four-corner arrangement: slots [top-left, bottom-left, top-right, bottom-right].
+                    //Four-corner arrangement: slots [top-left, bottom-left, top-right, bottom-right].
                     const isLeft  = i < 2;
                     anchor        = { x: isLeft ? groupLeftX : groupRightX, y: i % 2 === 0 ? groupRow1Y : groupRow2Y };
                     const innerX  = isLeft ? anchor.x + GROUP_CHIP_HALF_W : anchor.x - GROUP_CHIP_HALF_W;
@@ -644,7 +642,6 @@ export class SceneHudController
         const clipRect: ClipRect | null = cam?.hasViewport ? cardClipRect(cam.width, cam.height) : null;
 
         //Fixed colour design system. The sun colour paints the arc, the disc rim and the irradiance fill.
-        //The on-ground cloud disc is painted engine-side, so no cloud hex is needed here.
         const sunColor      = ENERGY_COLOR.sun(this.host);
         const sunRimColor   = darkenHex(sunColor, 0.20);
         const arcSegments   = showSun ? this._buildArcSegmentsCached(sunScene!, sunColor) : [];

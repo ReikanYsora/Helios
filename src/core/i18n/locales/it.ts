@@ -13,7 +13,6 @@ export const it: Translations = {
     today: "Oggi",
     week: "Settimana",
     month: "Mese",
-    year: "Anno",
   },
 
   compass: "N,NE,E,SE,S,SO,O,NO",
@@ -82,7 +81,7 @@ export const it: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Rotazione automatica della camera",
     autoRotateHint:
-      "Dopo qualche secondo di inattività, la camera ruota lentamente intorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un trascinamento con un dito la mette in pausa all'istante e riprende appena lasci. Da evitare su dispositivi molto vecchi: la rotazione automatica forza un rendering ogni secondo.",
+      "Dopo qualche secondo di inattività, la camera ruota lentamente intorno alla casa (circa 4°/s, in senso opposto al moto apparente del sole). Un trascinamento con un dito la mette in pausa all'istante e riprende appena lasci. Da evitare su dispositivi molto vecchi: la rotazione automatica forza un rendering ogni secondo.",
     autoRotateOn: "Attiva",
     autoRotateOff: "Disattiva",
     degradedRender: "Rendering di compatibilità",

@@ -41,7 +41,7 @@ function windowDays(startMs: number, endMs: number): number
     return Math.max(1, Math.round((endMs - startMs) / DAY_MS));
 }
 
-//Min / mean / max over a store watt-array inside the window, for the weather metric (irradiance is not a period
+//Peak / mean over a store watt-array inside the window, for the weather metric (irradiance is not a period
 //aggregation metric, so it keeps its own aggregation over the store's own window).
 function aggWatts(store: NonNullable<PeriodHost['_unifiedStore']>, arr: readonly (number | null)[], startMs: number, endMs: number):
     { peak: number; avg: number; count: number }

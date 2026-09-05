@@ -74,8 +74,8 @@ home and your consumption; the production layers simply do not appear.
   you prefer; purely for the eye, it carries no reading.
 * **Live flows**, production, grid and battery, each with a bead that travels to
   the home at the speed of the power it carries.
-* **A timeline you can scrub**, two days back and two days forward. The whole
-  scene follows: sun, shadows, weather, every value.
+* **A timeline you can scrub**, from yesterday to two days ahead, or back across
+  the week and the month. The whole scene follows: sun, shadows, weather, every value.
 * **Your real sky**, the local weather painted over the scene: clear-sky
   sunshine that dims as the clouds build, then rain, snow or a thunderstorm,
   each following the timeline as you scrub.

@@ -13,7 +13,6 @@ export const lv: Translations = {
     today: "Šodien",
     week: "Nedēļa",
     month: "Mēnesis",
-    year: "Gads",
   },
 
   compass: "Z,ZA,A,DA,D,DR,R,ZR",
@@ -82,7 +81,7 @@ export const lv: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Kameras automātiskā rotācija",
     autoRotateHint:
-      "Kad dažas sekundes esi neaktīvs, kamera lēni riņķo ap māju (apmēram 1.5°/s, pretēji saules šķietamajai kustībai). Vilkšana ar vienu pirkstu to nekavējoties aptur, un tā atsākas, tiklīdz atlaid. Izvairies no tā ļoti vecās ierīcēs: automātiskā rotācija piespiež renderēšanu katru sekundi.",
+      "Kad dažas sekundes esi neaktīvs, kamera lēni riņķo ap māju (apmēram 4°/s, pretēji saules šķietamajai kustībai). Vilkšana ar vienu pirkstu to nekavējoties aptur, un tā atsākas, tiklīdz atlaid. Izvairies no tā ļoti vecās ierīcēs: automātiskā rotācija piespiež renderēšanu katru sekundi.",
     autoRotateOn: "Ieslēgts",
     autoRotateOff: "Izslēgts",
     degradedRender: "Saderības renderēšana",

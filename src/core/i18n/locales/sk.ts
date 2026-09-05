@@ -13,7 +13,6 @@ export const sk: Translations = {
     today: "Dnes",
     week: "Týždeň",
     month: "Mesiac",
-    year: "Rok",
   },
 
   compass: "S,SV,V,JV,J,JZ,Z,SZ",
@@ -82,7 +81,7 @@ export const sk: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatické otáčanie kamery",
     autoRotateHint:
-      "Po niekoľkých sekundách nečinnosti kamera pomaly obieha okolo domova (približne 1.5°/s, opačne k zdanlivému pohybu slnka). Ťahanie jedným prstom ju okamžite pozastaví a obnoví sa, len čo prst zdvihneš. Na veľmi starých zariadeniach sa tomu vyhni: automatické otáčanie vynúti vykreslenie každú sekundu.",
+      "Po niekoľkých sekundách nečinnosti kamera pomaly obieha okolo domova (približne 4°/s, opačne k zdanlivému pohybu slnka). Ťahanie jedným prstom ju okamžite pozastaví a obnoví sa, len čo prst zdvihneš. Na veľmi starých zariadeniach sa tomu vyhni: automatické otáčanie vynúti vykreslenie každú sekundu.",
     autoRotateOn: "Zapnuté",
     autoRotateOff: "Vypnuté",
     degradedRender: "Vykresľovanie v režime kompatibility",

@@ -68,7 +68,7 @@ export class HeliosCardEditor extends LitElement
     //Bumped whenever a colour picker is cleared with its X, to force that picker to be re-created (via keyed) so
     //it re-reads its fallback default value even when the config key was already unset (a no-op edit).
     @state()                        private _colorNonce = 0;
-    // Accordion: at most one top-level section open at a time (a stack of expanded blocks got too tall to scan). Id
+    // Accordion: at most one top-level section open at a time (a stack of expanded blocks is too tall to scan). Id
     // of the open section, or null when all collapsed. Defaults to null so a fresh card opens fully collapsed, keeping
     // the top-pinned "Configuration status" panel in view.
     @state()                        private _openSection: string | null = null;
@@ -1456,8 +1456,8 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    // Fires the window-level reset bus so every live card drops its cached Open-Meteo payload + in-memory PV history
-    // and re-fetches. Flashes a brief confirmation on the button so the user sees the click landed without a toast.
+    // Fires the window-level reset bus so every live card drops everything it has cached (energy series, weather,
+    // building footprints) and re-fetches. Flashes a brief confirmation on the button so the user sees the click landed without a toast.
     private _resetFeedbackTimer?: number;
     @state() private _resetFeedback: string | null = null;
 

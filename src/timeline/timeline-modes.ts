@@ -1,6 +1,6 @@
 //The timeline's rolling-window modes. One spec per mode drives the whole pipeline (the store window and whether
 //weather is available), so adding/tuning a mode is a one-line change here. The store cadence and recorder fetch
-//period derive from the user's data-detail setting (display-update-frequency-per-hour, 1..12) capped per mode, not
+//period derive from the user's data-detail setting (display-update-frequency-per-hour, 1..6) capped per mode, not
 //hard-coded, so the editor knob drives every mode, not just the J - J+2 window. The scrub is free (no
 //quantisation) in every mode.
 
@@ -33,23 +33,21 @@ function daysInPrevMonth(): number
 }
 
 export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
-    //J - J+2 (id 'forecast', its former name): today + the two days ahead, so 3 days - the at-a-glance default. It carried J-1 as well,
-    //which spent a quarter of the width on a day that is already its own mode next door. today/week/month/year all
-    //END today.
+    //J - J+2 (id 'forecast'): today + the two days ahead, the at-a-glance default; J-1 is its own mode next door.
+    //Every other mode ENDS today.
     forecast:  { pastDays: 0,                           futureDays: 2, weather: true,  maxBucketsPerHour: 12   },
     //Yesterday: EXACTLY the previous day. futureDays -1 ends the window at today's midnight (start + storeDays =
     //past 1 + 1 - 1 = 1 day), so the timeline shows only J-1, not J-1..today.
     yesterday: { pastDays: 1,                           futureDays: -1, weather: true, maxBucketsPerHour: 12   },
     today:     { pastDays: 0,                           futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     week:     { pastDays: 6,                            futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
-    //Month is the long view, and the last one the SCENE can still speak for: its store stays hourly, so any day of
-    //it can be scrubbed to and read under that day's own sun. A year mode on a DAILY store would carry no shape of
-    //a day at all, nothing the arc, the shadows or the curve could illustrate, and 365 bars two pixels wide for the
-    //eye, a whole second data path to say less than the Energy dashboard already says better.
+    //Month is the long view and the last one the SCENE can speak for: its store stays hourly, so any day can be
+    //scrubbed under its own sun. A year mode on a daily store carries no shape of a day for the arc, shadows or
+    //curve, and the Energy dashboard already says it better.
     month:    { pastDays: () => daysInPrevMonth() - 1,  futureDays: 0, weather: false, maxBucketsPerHour: 1    },
 };
 
-//Resolved window lengths (resolves the month/year functions to a concrete day count for today).
+//Resolved window lengths (resolves month's function to a concrete day count for today).
 export function modePastDays(mode: TimelineMode): number
 {
     const p = TIMELINE_MODES[mode].pastDays;

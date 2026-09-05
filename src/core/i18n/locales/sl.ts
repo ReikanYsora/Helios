@@ -13,7 +13,6 @@ export const sl: Translations = {
     today: "Danes",
     week: "Teden",
     month: "Mesec",
-    year: "Leto",
   },
 
   compass: "S,SV,V,JV,J,JZ,Z,SZ",
@@ -82,7 +81,7 @@ export const sl: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Samodejno vrtenje kamere",
     autoRotateHint:
-      "Po nekaj sekundah nedejavnosti kamera počasi kroži okoli doma (približno 1,5°/s, nasprotno navideznemu gibanju sonca). Poteg z enim prstom jo takoj zaustavi in se nadaljuje, ko spustiš. Izogibaj se mu na zelo starih napravah: samodejno vrtenje vsako sekundo prisili izris.",
+      "Po nekaj sekundah nedejavnosti kamera počasi kroži okoli doma (približno 4°/s, nasprotno navideznemu gibanju sonca). Poteg z enim prstom jo takoj zaustavi in se nadaljuje, ko spustiš. Izogibaj se mu na zelo starih napravah: samodejno vrtenje vsako sekundo prisili izris.",
     autoRotateOn: "Vklopljeno",
     autoRotateOff: "Izklopljeno",
     degradedRender: "Izris v načinu združljivosti",

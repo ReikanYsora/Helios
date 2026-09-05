@@ -60,7 +60,7 @@ export function timeSamplesEqual(a: TimeSample[] | null, b: TimeSample[] | null)
 
 //Value of the sample nearest `tMs` within +/- windowMs, else null. Samples must be ascending: binary-search for
 //the insertion point, then compare the two bracketing neighbours (whichever of them is closer wins; a tie keeps
-//the earlier one, matching the old left-to-right scan).
+//the earlier one).
 export function nearestSampleAt(samples: TimeSample[] | null, tMs: number, windowMs: number): number | null
 {
     if (!samples || samples.length === 0)

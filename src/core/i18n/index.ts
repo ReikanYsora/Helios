@@ -48,7 +48,6 @@ export interface Translations
         today:      string; //'Today'
         week:       string; //'1 week'
         month:      string; //'1 month'
-        year:       string; //'1 year'
     };
 
 
@@ -72,13 +71,13 @@ export interface Translations
         homeLatitude:             string;
         homeLongitude:            string;
         locationHint:             string;
-        //Display radius + camera auto-rotate, titled "UI & map".
+        //Display radius + camera auto-rotate, titled "UI".
         uiAndMapSection:          string;
         autoRotate:               string;
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
-        //Data display: density of the unified data source (buckets per hour, 1-60).
+        //Data display: density of the unified data source (buckets per hour, 1-6).
         dataDisplaySection:           string;
         displayUpdateFrequency:       string;
         displayUpdateFrequencyHelp:   string;
@@ -107,7 +106,7 @@ export interface Translations
         energyUnitAuto:              string;
         irradianceUnit:              string;
         irradianceUnitHelp:          string;
-        //Battery-sign selector + home-consumption override entity.
+        //Battery-sign selector.
         batterySign:                 string;
         batterySignHelp:             string;
         batterySignDefault:          string;
@@ -148,7 +147,7 @@ export interface Translations
         //Compatibility ("degraded") renderer toggle: a last resort for devices whose WebView flickers.
         degradedRender:              string;
         degradedRenderHint:          string;
-        //"Chips & colours" section: per-chip show/hide toggles + colour pickers.
+        //"Entity display" section: per-chip show/hide toggles + colour pickers.
         chipsSection:                string;
         chipsIntro:                  string;
         chipIrradiance:              string;
@@ -162,7 +161,7 @@ export interface Translations
         //Sections split out of "Entity display": group definitions and optional sensors.
         groupsConfigTitle:           string;
         optionalSensors:             string;
-        //Global display radius slider (50-500 m).
+        //Global display radius slider (0-250 m).
         displayRadius:               string;
         displayRadiusHelp:           string;
         buildingCount:               string;
@@ -235,8 +234,8 @@ export interface Translations
         //Cast-shadow opacity, 0..1 slider.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
-        //Reset: two buttons. One refetches every cached payload (weather, all energy series, forecast
-        //calibration, OpenFreeMap footprints); the other resets every card option to its default (a confirming
+        //Reset: two buttons. One refetches every cached payload (weather, every energy series, the solar forecast,
+        //OpenFreeMap footprints); the other resets every card option to its default (a confirming
         //second click). The *Done keys are transient confirmations shown on each button.
         resetSection:             string;
         resetSectionHint:         string;

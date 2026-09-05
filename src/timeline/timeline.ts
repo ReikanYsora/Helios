@@ -25,7 +25,7 @@ export interface TimelineHost extends HudHost
     _isLiveMode:        boolean;
     _now:               Date;
     _chartSeries:       ChartSeries | null;
-    //Active timeline mode: drives the scrub snapping (free for Now, hourly for a week, day-at-noon for month/year).
+    //Active timeline mode (window span + weather availability).
     readonly _timelineMode: TimelineMode;
 
     //Hover cursor position on the timeline charts. The scrub handler writes it in lock-step with _selectedTime so the
@@ -177,10 +177,6 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
 }
 
 
-//Translate the pointer's clientX into a timestamp inside the active range and pin the card into scrubbed mode. No
-//hour-snap on the selected time: snapping to the nearest hour made the sun arc and cloud dome jerk forward in 1 h
-//jumps while dragging. Sub-hour timestamps still resolve to the right hourly weather bucket via nearest-hour lookup
-//in the engine, so accuracy is kept where it matters and the sun animates smoothly where it doesn't.
 //Snap the timeline back to live: drop the scrub selection, re-enter live mode, and let the scene engine follow "now"
 //again. Shared by the magnet snap and the explicit Live button.
 export function returnTimelineToLive(host: TimelineHost): void

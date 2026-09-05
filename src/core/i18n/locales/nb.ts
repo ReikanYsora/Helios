@@ -13,7 +13,6 @@ export const nb: Translations = {
     today: "I dag",
     week: "Uke",
     month: "Måned",
-    year: "År",
   },
 
   compass: "N,NØ,Ø,SØ,S,SV,V,NV",
@@ -82,7 +81,7 @@ export const nb: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatisk kamerarotasjon",
     autoRotateHint:
-      "Når det er inaktivt i noen sekunder, sirkler kameraet sakte rundt hjemmet (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). Et dra med én finger setter den umiddelbart på pause, og den fortsetter når du slipper. Unngå det på svært gamle enheter: automatisk rotasjon tvinger frem en gjengivelse hvert sekund.",
+      "Når det er inaktivt i noen sekunder, sirkler kameraet sakte rundt hjemmet (omtrent 4°/s, motsatt av solens tilsynelatende bevegelse). Et dra med én finger setter den umiddelbart på pause, og den fortsetter når du slipper. Unngå det på svært gamle enheter: automatisk rotasjon tvinger frem en gjengivelse hvert sekund.",
     autoRotateOn: "På",
     autoRotateOff: "Av",
     degradedRender: "Kompatibilitetsgjengivelse",

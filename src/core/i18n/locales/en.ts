@@ -23,7 +23,6 @@ export const en: Translations = {
     today: "Today",
     week: "Week",
     month: "Month",
-    year: "Year",
   },
 
   compass: "N,NE,E,SE,S,SW,W,NW",
@@ -68,7 +67,7 @@ export const en: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Camera auto-rotation",
     autoRotateHint:
-      "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go. Avoid it on very old devices: auto-rotation forces a render every second.",
+      "When idle for a few seconds, the camera slowly orbits the home (about 4°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go. Avoid it on very old devices: auto-rotation forces a render every second.",
     autoRotateOn: "On",
     autoRotateOff: "Off",
     degradedRender: "Compatibility rendering",

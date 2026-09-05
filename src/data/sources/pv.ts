@@ -1,4 +1,4 @@
-//Photovoltaic data subsystem: live polling, history/LTS fetch, instantaneous-rate derivation, calibration, chip/chart formatting.
+//Photovoltaic data subsystem: live power read, recorder change-series fetch, scrub rate lookup, chip formatting.
 //
 //Functions operate on a "host" (the card) that owns the @state PV fields. Writing back through the card's setters preserves
 //Lit reactivity, so calling refreshPv(this) from a lifecycle hook re-renders.
@@ -10,14 +10,14 @@ import { formatEntityValue, parseNumericState, type PowerUnit } from '../../core
 import { fetchChangeById, mergeChangeSeries, extractPerEntity, wattsAtFromChangeSeries, changeRefreshAnchorMs, type ChangeBucket, type StatPeriod } from './energy-stats';
 import { sumLiveWatts, type KeyedFetch } from '../source-fetch';
 import { localMidnightMinusDays } from '../../core/time/timezone';
-//Re-export so battery/grid/charts/helios-card can import pvNormalizeToWatts from './pv'.
+//Re-export for battery.ts.
 export { pvNormalizeToWatts } from '../../core/format/format';
 
 
 //Resolve the live PV entity: the first declared power sensor (`stat_rate`), or empty when the install
 //has none. Measured-only: a cumulative meter is never treated as a live entity; installs without a
 //power sensor simply have no live PV state (their curves and totals read the recorder meters). The
-//history/calibration fetches key on the meters separately.
+//change-series fetch keys on the meters separately.
 export function resolvePvLiveEntity(defaults: EnergyDefaults): string
 {
     return defaults.solarStatRates[0] ?? '';
@@ -50,13 +50,13 @@ export interface PvHost
 
     _pvCurrent:             number | null;
     _pvUnit:                string;
-    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. Canonical past-production source for the unified
+    //Recorder `change` series for the solar energy meter(s), recorder-period buckets. Canonical past-production source for the unified
     //store (timeline graphs) and chip scrub: the recorder returns reset-corrected, unit-normalised kWh per bucket, the same
     //metric the HA Energy dashboard consumes, so plotted production matches it without client-side differentiation. Null pre-fetch.
     _pvChangeSeries:         ChangeBucket[] | null;
     _pvChangeFetch:          KeyedFetch;
     //Per-source recorder `change` series, keyed by the source's energy meter (`stat_energy_from`). Same reset-corrected,
-    //unit-normalised 5-minute buckets as `_pvChangeSeries`, but split per HA Energy solar source so the period
+    //unit-normalised recorder-period buckets as `_pvChangeSeries`, but split per HA Energy solar source so the period
     //aggregation shows each string with the exact dashboard energy (and recorded night production from non-solar
     //sources fed in as PV), instead of re-differentiating the lagging hourly LTS. Empty until the per-source fetch lands.
     _pvChangeSeriesPerEntity:    Map<string, ChangeBucket[]>;
@@ -161,7 +161,7 @@ export function refreshPv(host: PvHost): void
         return;
     }
     //Past-production curve for the unified store + chip scrub. From the recorder `change` metric on the solar ENERGY meter(s)
-    //(`stat_energy_from`), like the HA Energy dashboard: reset-corrected, unit-normalised kWh per 5-min bucket, divided by bucket
+    //(`stat_energy_from`), like the HA Energy dashboard: reset-corrected, unit-normalised kWh per recorder bucket, divided by bucket
     //duration for average watts. No client-side differentiation, so coarse-reporting or daily-reset meters work natively.
     const changeIds = meters;
     if (changeIds.length > 0)
@@ -211,7 +211,7 @@ export function refreshPv(host: PvHost): void
 
 
 //Production rate at an arbitrary historical time (timeline scrubbed into the past). Reads average power from the recorder
-//`change` series (5-min buckets): resets + unit conversion already handled, so it's a single bucket lookup, no differentiation.
+//`change` series (recorder-period buckets): resets + unit conversion already handled, so it's a single bucket lookup, no differentiation.
 //Returns null when no bucket covers the instant (future scrub or recorder gap), hiding the chip. Watts floored at zero so a
 //net-meter quirk never surfaces as negative production.
 export function pvRateAtTime(host: PvHost, time: Date): PvRate | null

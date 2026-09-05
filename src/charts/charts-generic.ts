@@ -734,8 +734,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
             {
                 continue;
             }
-            //Plot the dot at the real value so it rides the curve. yOf already clamps to the axis, so the old
-            //Math.max(0, v) only detached the dot from the curve on signed targets (temperature below 0, cost when earning).
+            //Plot the dot at the real value so it rides the curve. yOf clamps to the axis; flooring at 0 would detach
+            //the dot on signed targets (temperature below 0, cost when earning).
             hoverDots.push({ y: yOf(v), color: s.color });
             showHover = true;
         }
@@ -811,9 +811,9 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
                 `)}
             </g>
             <!--  Dashed lines (per-bank battery SoC + the forecast silhouette) render OUTSIDE the grow group. A
-                  dashed stroke under the group's animated CSS transform intermittently fails to repaint (it drew only
-                  up to "now" until a re-render); the day separators prove the point (dashed, outside grow, always
-                  fine). SoC is also a level, not a flow, so not growing it from the baseline is correct anyway.  -->
+                  dashed stroke under the group's animated CSS transform intermittently fails to repaint its future half
+                  until a re-render (the day separators, dashed and outside grow, never do). SoC is a level, not a
+                  flow, so it is not grown from the baseline anyway.  -->
             ${drawn.map(d => (d.line && d.dashed) ? svg`
                 <path class="hc-chart-line" d="${d.line}" stroke="${d.color}" stroke-dasharray="4 3"></path>
             ` : nothing)}
@@ -980,8 +980,7 @@ function computeDailyKwhTotalsUncached(host: ChartHost): Map<number, number>
     }
 
     //Pass 2: future + today-remainder from the store's corrected forecast (same series the dotted curve draws), so
-    //per-day chips agree with the curve. Only buckets at/after "now" contribute (past is Pass 1's real production);
-    //the forecast is already cap-clipped and correction-applied.
+    //per-day chips agree with the curve. Only buckets at/after "now" contribute (past is Pass 1's real production).
     const store = host._unifiedStore;
     if (store)
     {

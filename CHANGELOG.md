@@ -67,17 +67,17 @@ instead of projecting it again; neither changes a coordinate.
 
 ## 2026.9.4-b1
 
-### Changed: the "Forecast" period is now "J - J+2"
+### Changed: the "Forecast" period is now "D - D+2"
 
 The first tab of the period selector read "Forecast", which said what the data
 was rather than what the window is: today plus the two days ahead. It is now
-named for the window itself, "J - J+2" (with the local letter for "day" in each
-language). Nothing else changes: the YAML value and the remembered selection are
+named for the window itself, "D - D+2" (with the local letter for "day" in each
+language, "J - J+2" in French). Nothing else changes: the YAML value and the remembered selection are
 untouched.
 
 ### Added: a scene zoom
 
-A `scene-zoom` option (visual editor, "UI and map" section) at 1x, 1.5x or 2x
+A `scene-zoom` option (visual editor, "UI" section) at 1x, 1.5x or 2x
 magnifies the map, the buildings and the shadows around your home, for a wide
 card where the neighbourhood read too small. The sun, its arcs, the moon and the
 chips keep their size, so the card stays as legible as before, just with a bigger

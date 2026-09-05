@@ -13,7 +13,6 @@ export const fi: Translations = {
     today: "Tänään",
     week: "Viikko",
     month: "Kuukausi",
-    year: "Vuosi",
   },
 
   compass: "P,KO,I,KA,E,LO,L,LU",
@@ -82,7 +81,7 @@ export const fi: Translations = {
     uiAndMapSection: "Käyttöliittymä",
     autoRotate: "Kameran automaattinen kierto",
     autoRotateHint:
-      "Kun on oltu käyttämättömänä muutaman sekunnin, kamera kiertää hitaasti kodin ympäri (noin 1,5°/s, vastakkaiseen suuntaan kuin auringon näennäinen liike). Yhden sormen veto keskeyttää sen heti, ja se jatkuu, kun päästät irti. Vältä sitä hyvin vanhoilla laitteilla: automaattinen kierto pakottaa renderöinnin joka sekunti.",
+      "Kun on oltu käyttämättömänä muutaman sekunnin, kamera kiertää hitaasti kodin ympäri (noin 4°/s, vastakkaiseen suuntaan kuin auringon näennäinen liike). Yhden sormen veto keskeyttää sen heti, ja se jatkuu, kun päästät irti. Vältä sitä hyvin vanhoilla laitteilla: automaattinen kierto pakottaa renderöinnin joka sekunti.",
     autoRotateOn: "Päällä",
     autoRotateOff: "Pois",
     degradedRender: "Yhteensopivuustila",

@@ -13,7 +13,6 @@ export const ro: Translations = {
     today: "Astazi",
     week: "Saptamana",
     month: "Luna",
-    year: "An",
   },
 
   compass: "N,NE,E,SE,S,SV,V,NV",
@@ -82,7 +81,7 @@ export const ro: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Rotire automata a camerei",
     autoRotateHint:
-      "Dupa cateva secunde de inactivitate, camera se roteste lent in jurul casei (aproximativ 1.5°/s, in sens opus miscarii aparente a soarelui). O glisare cu un deget o opreste instantaneu, iar rotirea reia indata ce ridici degetul. Evit-o pe dispozitive foarte vechi: rotirea automata forteaza o redare in fiecare secunda.",
+      "Dupa cateva secunde de inactivitate, camera se roteste lent in jurul casei (aproximativ 4°/s, in sens opus miscarii aparente a soarelui). O glisare cu un deget o opreste instantaneu, iar rotirea reia indata ce ridici degetul. Evit-o pe dispozitive foarte vechi: rotirea automata forteaza o redare in fiecare secunda.",
     autoRotateOn: "Pornit",
     autoRotateOff: "Oprit",
     degradedRender: "Randare de compatibilitate",

@@ -1,4 +1,4 @@
-//Screen-space HUD subsystem: pulls fresh projections from the engine (sun arc, cloud dome, home silhouettes, label
+//Screen-space HUD subsystem: pulls fresh projections from the engine (sun + moon arcs, day curve, array tiles, label
 //anchors), maps sun arc samples into stroke segments, gates SMIL play-state on card visibility, and exposes the
 //"flow duration" easing that ramps animation speed with the live production rate.
 
@@ -349,12 +349,12 @@ function dayCurveSceneEq(a: DayCurveScene | null, b: DayCurveScene | null): bool
 }
 
 //Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per
-//projection). Called on every map transform, once at first weather update (projection matrix ready only after style
-//load), and on every periodic tick in live mode (sun position depends on time).
+//projection). Called on every map transform, once at first weather update (the camera has its viewport by then), and
+//on every periodic tick in live mode (sun position depends on time).
 //
 //Each assignment is gated by an equality check: Lit dirty-checks @state by identity, so a fresh-identity assignment
 //with identical content still triggers a full re-render. During manual rotation the engine fires transform events at
-//pointer rate (up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields;
+//pointer rate (up to 120 Hz), and the template's SMIL <animateMotion> paths are rebuilt from these fields;
 //Safari re-arms the SMIL clock on every path mutation, so without these guards the clock state grows over a drag and
 //frame budget collapses.
 export function refreshHud(host: HudHost): void

@@ -4,7 +4,7 @@
 // the irradiance pipeline. Fetches history, keeps the live sample fresh each refresh cycle, and pushes the merged set into the
 // engine via setSolarIrradianceSamples().
 //
-// Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_irradiance*` fields; functions here read/write
+// Same host-driven pattern as pv.ts and battery.ts: the card owns the `_irradiance*` fields; functions here read/write
 // them through the structural IrradianceHost interface.
 
 import type { HassLike } from '../../core/ha-types';
@@ -16,7 +16,7 @@ import { parseStatBoundaryLoose, parseRawHistorySeries, fetchStatsOrRawHistory }
 import { IRRADIANCE_CACHE_TTL_MS, HOUR_MS } from '../../core/config/constants';
 
 
-// Module-level history cache (mirrors PV/battery) so a navigation away and back does not re-trigger the WS round-trip;
+// Module-level history cache (mirrors battery) so a navigation away and back does not re-trigger the WS round-trip;
 // in-flight de-dup collapses concurrent mounts to one WS hit.
 const _irradianceCache = new RequestCache<IrradianceHistory | null>(IRRADIANCE_CACHE_TTL_MS);
 

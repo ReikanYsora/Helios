@@ -13,7 +13,6 @@ export const pl: Translations = {
     today: "Dzisiaj",
     week: "Tydzień",
     month: "Miesiąc",
-    year: "Rok",
   },
 
   compass: "N,NE,E,SE,S,SW,W,NW",
@@ -82,7 +81,7 @@ export const pl: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatyczny obrót kamery",
     autoRotateHint:
-      "Po kilku sekundach bezczynności kamera powoli obraca się wokół domu (około 1,5°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją wstrzymuje, a wznawia się, gdy puścisz. Unikaj na bardzo starych urządzeniach: automatyczny obrót wymusza renderowanie co sekundę.",
+      "Po kilku sekundach bezczynności kamera powoli obraca się wokół domu (około 4°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją wstrzymuje, a wznawia się, gdy puścisz. Unikaj na bardzo starych urządzeniach: automatyczny obrót wymusza renderowanie co sekundę.",
     autoRotateOn: "Włączony",
     autoRotateOff: "Wyłączony",
     degradedRender: "Renderowanie zgodności",

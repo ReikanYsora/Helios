@@ -151,7 +151,7 @@ export interface ChartHost
     readonly _energyDefaults: EnergyDefaults;
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
-    //Recorder `change` series (5-min buckets) for the solar meter(s). sumChangeForDay sums exact per-day kWh so
+    //Recorder `change` series (recorder-period buckets) for the solar meter(s). sumChangeForDay sums exact per-day kWh so
     //totals match HA Energy to the watt-hour, not the gap-interpolated curve.
     readonly _pvChangeSeries: ChangeBucket[] | null;
     //Per-source recorder `change` series keyed by energy meter (`stat_energy_from`), for the period aggregation's
@@ -164,7 +164,7 @@ export interface ChartHost
     readonly _haSolarTodayKwh?: number | null;
     //Mutable hover-cursor position as a percent of the visible range (0..100), null when inactive.
     _chartHoverPct:         number | null;
-    //Unified 5-day data source, single point of truth for the production + forecast curves. Null only between mount
+    //Unified rolling-window data source, single point of truth for the production + forecast curves. Null only between mount
     //and first build, when the chart degrades to an empty curve.
     readonly _unifiedStore: UnifiedDataStore | null;
     //Cost + compensation `change` series (net money per bucket), for the cost target's curve (any tariff). Null

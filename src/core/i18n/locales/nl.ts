@@ -13,7 +13,6 @@ export const nl: Translations = {
     today: "Vandaag",
     week: "Week",
     month: "Maand",
-    year: "Jaar",
   },
 
   compass: "N,NO,O,ZO,Z,ZW,W,NW",
@@ -82,7 +81,7 @@ export const nl: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatische camerarotatie",
     autoRotateHint:
-      "Na een paar seconden inactiviteit draait de camera langzaam om het huis (ongeveer 1.5°/s, tegengesteld aan de schijnbare beweging van de zon). Een sleepbeweging met één vinger pauzeert het meteen en het hervat zodra je loslaat. Vermijd het op heel oude apparaten: de automatische rotatie forceert elke seconde een render.",
+      "Na een paar seconden inactiviteit draait de camera langzaam om het huis (ongeveer 4°/s, tegengesteld aan de schijnbare beweging van de zon). Een sleepbeweging met één vinger pauzeert het meteen en het hervat zodra je loslaat. Vermijd het op heel oude apparaten: de automatische rotatie forceert elke seconde een render.",
     autoRotateOn: "Aan",
     autoRotateOff: "Uit",
     degradedRender: "Compatibiliteitsweergave",

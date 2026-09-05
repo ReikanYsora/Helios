@@ -51,8 +51,8 @@ export function getSunPosition(date: Date, lat: number, lon: number):
 
 //Ground-horizontal irradiance as a percentage of STC (1000 W/m²), clamped [0, 100]; 0 below the horizon.
 //This is the simple analytical indicator (Haurwitz GHI x Kasten-Czeplak cloud, via computeIrradianceWm2) that
-//drives the scene arc and the timeline irradiance fallback - NOT the integration's tilted per-panel PV model
-//(compute_pv_power there); the name is deliberately distinct to avoid conflating the two.
+//drives the scene arc and the timeline irradiance fallback, not a tilted per-panel PV model; the name is
+//deliberately distinct.
 export function computePvPercent(
     date:          Date,
     lat:           number,

@@ -13,7 +13,6 @@ export const et: Translations = {
     today: "Täna",
     week: "Nädal",
     month: "Kuu",
-    year: "Aasta",
   },
 
   compass: "P,KI,I,KA,L,EL,LÄ,LO",
@@ -82,7 +81,7 @@ export const et: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Kaamera automaatne pööramine",
     autoRotateHint:
-      "Kui ollakse paar sekundit tegevusetu, tiirleb kaamera aeglaselt kodu ümber (umbes 1,5°/s, vastupidi päikese näivale liikumisele). Ühe sõrmega lohistamine peatab selle koheselt ja see jätkub, kui lahti lased. Väldi seda väga vanadel seadmetel: automaatne pööramine sunnib renderdamise iga sekund.",
+      "Kui ollakse paar sekundit tegevusetu, tiirleb kaamera aeglaselt kodu ümber (umbes 4°/s, vastupidi päikese näivale liikumisele). Ühe sõrmega lohistamine peatab selle koheselt ja see jätkub, kui lahti lased. Väldi seda väga vanadel seadmetel: automaatne pööramine sunnib renderdamise iga sekund.",
     autoRotateOn: "Sees",
     autoRotateOff: "Väljas",
     degradedRender: "Ühilduvusrežiim",

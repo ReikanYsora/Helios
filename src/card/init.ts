@@ -52,7 +52,7 @@ const STATIC_VISUAL_CONFIG_KEYS = [
     'building-opacity',
     'auto-rotate-enabled',
     //Lock toggle: a change triggers updateConfig, which freezes/frees the camera at its current (drag-set) pose and
-    //resyncs the stored pose. The buildings re-interpret updateConfig also runs is cheap (cached footprints, no refetch).
+    //resyncs the stored pose. The buildings re-interpret that updateConfig also triggers is cheap (cached footprints, no refetch).
     'camera-locked',
     //Basemap style: the theme mode and the surrounding-building tint. A change re-resolves the scene palette and
     //repaints the vector ground from its cached features (no re-fetch), so an edit previews live instead of waiting
@@ -249,9 +249,9 @@ export interface InitHost extends HudHost
 }
 
 
-//IntersectionObserver hook: when the card scrolls off-screen, pause CSS/SVG-SMIL animations plus the engine's shadow timer and
-//dome re-projection. The rotation rAF is left running (the browser auto-throttles rAF on hidden tabs, and the card looks alive on
-//scroll-back). Page Visibility API is layered on top so a card in a hidden HA tab also goes quiet, not just one scrolled out of view.
+//IntersectionObserver hook: when the card scrolls off-screen, pause CSS/SVG-SMIL animations plus the engine's timers and
+//auto-rotate loop (an off-screen card is not rAF-throttled, so the loop would keep forcing repaints). Page Visibility API is
+//layered on top so a card in a hidden HA tab also goes quiet, not just one scrolled out of view.
 export function initVisibilityObserver(host: InitHost): void
 {
     if (host._visibilityObserver || typeof IntersectionObserver === 'undefined')
@@ -355,7 +355,7 @@ function scheduleEngineInit(host: InitHost): void
         }
         const { lat, lon } = coords;
         //User-defined home altitude (m ASL) from HA General settings; may be undefined on unconfigured installs, in
-        //which case the engine and aux fetch omit elevation and let the weather model fall back to its own terrain data.
+        //which case the weather request omits the elevation and Open-Meteo falls back to its own terrain model.
         const elevation = host.hass.config.elevation;
 
         host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation, host.preview === true, host.effectiveCacheId?.() ?? '');
@@ -390,8 +390,8 @@ function wireEngineCallbacks(host: InitHost): void
 
     host._engine.onWeatherUpdate = data =>
     {
-        //Per-layer cloud breakdown is owned by the engine (it stashes low/mid/high and projectCloudScene reads them back to size the
-        //three bands); the card only needs the aggregate for the cloud chip label.
+        //Per-layer cloud breakdown stays engine-side (the timeline series carries low/mid/high for the chart's cloud bands); the
+        //card only needs the aggregate for the cloud chip label.
         host._cloudCover         = data.cloudCover;
         host._precip             = data.precip;
         host._snowfall           = data.snowfall;
@@ -401,13 +401,12 @@ function wireEngineCallbacks(host: InitHost): void
         host._timeRange          = data.timeRange;
         host._isLiveMode         = data.isLiveTime;
         host._chartSeries        = host._engine?.getTimelineSeries() ?? null; //hourly series the chart canvas plots
-        //First weather update is also our cue for the initial label layout: by now the map style has loaded and the projection
-        //matrix is available. Subsequent transforms refresh via onMapTransform.
+        //First weather update is also the cue for the initial label layout: the camera has its viewport by then. Subsequent
+        //transforms refresh via onMapTransform.
         refreshHud(host);
     };
-    //rAF-coalesced overlay refresh: the engine fires transform events in bursts during inertial pan; without coalescing, refreshHud
-    //+ dome re-projection ran several times per frame (heavy: sun arc, home silhouettes, dome cells + ribbon). The gate caps it at
-    //one full pass per frame.
+    //rAF-coalesced overlay refresh: the renderer fires onAfterDraw per paint and a drag or auto-rotate can paint more than once
+    //per frame; the gate caps refreshHud (sun + moon arcs, day curve, array tiles, label anchors) at one pass per frame.
     let overlayRaf: number | null = null;
     //On top of the single-flight gate above: during a sustained burst (auto-rotate, a long drag) refreshHud's own
     //cost is still heavy enough that every other frame reads just as smooth, so skip every second one. Starts
@@ -416,8 +415,8 @@ function wireEngineCallbacks(host: InitHost): void
     let overlaySkip = true;
     host._engine.onMapTransform = () =>
     {
-        //If paused (off-screen or hidden tab) the browser still fires move events for tile-load completions, but nothing's
-        //visible, so skip the per-frame work. Resumes on the next render once the IntersectionObserver re-enables the engine.
+        //If paused (off-screen or hidden tab) the renderer can still paint (a late ground build completing), but nothing is
+        //visible, so skip the per-frame work; the next render after un-pause catches up.
         if (host._engine?.isPaused())
         {
             return;

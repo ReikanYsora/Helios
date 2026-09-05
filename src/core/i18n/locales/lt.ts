@@ -13,7 +13,6 @@ export const lt: Translations = {
     today: "Šiandien",
     week: "Savaitė",
     month: "Mėnuo",
-    year: "Metai",
   },
 
   compass: "Š,ŠR,R,PR,P,PV,V,ŠV",
@@ -82,7 +81,7 @@ export const lt: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatinis kameros sukimasis",
     autoRotateHint:
-      "Kai kelias sekundes neaktyvi, kamera lėtai sukasi aplink namus (apie 1,5°/s, priešingai matomam saulės judėjimui). Vilkimas vienu pirštu ją iškart pristabdo, ir ji atsinaujina, kai atleidi. Venk to labai senuose įrenginiuose: automatinis sukimasis priverčia atvaizduoti kas sekundę.",
+      "Kai kelias sekundes neaktyvi, kamera lėtai sukasi aplink namus (apie 4°/s, priešingai matomam saulės judėjimui). Vilkimas vienu pirštu ją iškart pristabdo, ir ji atsinaujina, kai atleidi. Venk to labai senuose įrenginiuose: automatinis sukimasis priverčia atvaizduoti kas sekundę.",
     autoRotateOn: "Įjungta",
     autoRotateOff: "Išjungta",
     degradedRender: "Suderinamumo atvaizdavimas",

@@ -69,10 +69,9 @@ function findSunCrossing(
 //{ startPct, endPct } for `renderTimelineNightZones`. The walk pads one day each side so leading/trailing night
 //chunks still resolve when the window doesn't start/end on a solar boundary.
 //Memoised: night zones depend only on the window + home coords, stable across the frequent scrub + auto-rotate
-//renders (those move _selectedTime / the camera, not _timeRange). Without it the ~700 getSunPosition calls below
-//ran on every such render. One slot per host (WeakMap), not a single global slot: two cards showing the same
-//home at different time windows (e.g. one "Now", one "Week") would otherwise evict each other's entry on every
-//render.
+//renders (those move _selectedTime / the camera, not _timeRange), so the ~700 getSunPosition calls below don't run
+//on every such render. One slot per host (WeakMap), not a single global slot: two cards showing the same home at
+//different time windows (e.g. one "Today", one "Week") would otherwise evict each other's entry on every render.
 const _nightMemo = new WeakMap<ChartHost, { key: string; out: { startPct: number; endPct: number }[] }>();
 
 function computeNightIntervals(host: ChartHost): { startPct: number; endPct: number }[]
