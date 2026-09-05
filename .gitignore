@@ -15,6 +15,7 @@ yarn-error.log*
 .vscode/
 .idea/
 .claude/
+CLAUDE.md
 
 # TypeScript build info
 *.tsbuildinfo
@@ -26,6 +27,3 @@ __pycache__/
 # Exclude any working files created for the project
 data/**
 !data/README.md
-
-# Agent guide, local only
-CLAUDE.md

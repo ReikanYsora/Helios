@@ -7,7 +7,18 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
-## 2026.9.4-b2
+## 2026.9.4
+
+The performance release. A full audit of the rendering pipeline, every fix
+re-measured under simulated weak-hardware CPU throttling before it shipped, then
+a second pass that measured where a rotation actually spends its time: the scene
+layer now keeps its buildings and shadows between frames, timeline scrubbing
+tracks your drag, chip movement is lighter, and the card does less work while it
+sits on a dashboard. Editing the card in the visual editor no longer boots it from
+nothing at every change, which was the mechanism behind the reloads reported on
+phones and the odd frame between two settings. In the sky, the moon on its own arc
+with its real phase; around your home, a scene zoom, and, with Helios-Forecast,
+your arrays marked in the scene. Plus the fixes that reached 2026.9.3.
 
 ### Added: your arrays in the scene, when Helios-Forecast is installed
 
@@ -23,58 +34,6 @@ panel would. A tracker, which has no fixed orientation, lies flat. Nothing is sh
 without the integration, and no name or value is ever written next to a tile: the
 scene keeps its graphic language. Asked for by @caswal.
 
-### Fixed: editing the card no longer boots it from nothing at every change
-
-In the visual editor, Home Assistant destroys the card and creates a fresh one
-on every setting you change. Each fresh card used to start from nothing: a
-frame or more with no map, no buildings, empty chips and an empty timeline
-while it re-fetched and repainted everything, and every rebuild left the
-previous basemap canvas (2816 px square, about 32 MB) waiting for the garbage
-collector. On a phone or a tablet, a run of quick changes could stack enough of
-them for the browser to give up: the WebView reloaded, or the card stayed stuck
-in that half-drawn state until a page refresh. A leaving card now parks its
-painted map for the one that replaces it, and hands over its fetched data (live
-readings, series, forecast, preferences), so the next card shows a complete
-scene from its first frames and refreshes behind it; the parked map is reclaimed
-on the spot, and any map nobody claims within a minute has its canvas emptied at
-once. Under a six-times CPU throttle, a rebuilt card now shows its map one frame
-in instead of three, and is complete in about 140 ms instead of 260 ms; on a real
-Home Assistant, where the recorder fetches take far longer than in the harness,
-the difference is the whole loading phase. This is the mechanism behind #414's
-"change settings, rotate, repeat until it crashes" and the odd frame you could see
-between two settings in the editor.
-
-### Changed: the scene keeps its buildings and shadows between frames
-
-Rotating the scene rebuilt the whole buildings-and-shadows layer from scratch
-every frame: one long piece of markup regenerated, handed to the browser, which
-threw the previous layer away, parsed the new one, recreated every shape and
-restyled it. That rebuild was the single heaviest thing the card did while the
-camera moved. The layer now keeps its shapes alive and, each frame, rewrites
-only what actually moved (the geometry of each wall, roof and shade), adding or
-dropping shapes at the tail as buildings enter or leave the view. The picture
-is the same one to the pixel: the painters emit the exact same shapes in the
-exact same order, a snapshot test pins that, and a screenshot comparison of
-the scene against 2026.9.4-b1 across five camera poses and three times of day
-(noon, low sun, night) found zero differing pixels. On a CPU throttled six
-times, a continuous rotation drops from about 76% to 65% of the main thread
-busy, and its worst frame from 50 ms to 27 ms; interaction (drag, scrub,
-hover, period switch) and idle are unchanged or slightly lighter. Along the
-way, the shade projector no longer projects each footprint three times over
-(the sweep, the edge quads and the stencil now share one projection) and the
-wall painter reads each vertex's depth from the projection it already made
-instead of projecting it again; neither changes a coordinate.
-
-## 2026.9.4-b1
-
-### Changed: the "Forecast" period is now "D - D+2"
-
-The first tab of the period selector read "Forecast", which said what the data
-was rather than what the window is: today plus the two days ahead. It is now
-named for the window itself, "D - D+2" (with the local letter for "day" in each
-language, "J - J+2" in French). Nothing else changes: the YAML value and the remembered selection are
-untouched.
-
 ### Added: a scene zoom
 
 A `scene-zoom` option (visual editor, "UI" section) at 1x, 1.5x or 2x
@@ -82,19 +41,6 @@ magnifies the map, the buildings and the shadows around your home, for a wide
 card where the neighbourhood read too small. The sun, its arcs, the moon and the
 chips keep their size, so the card stays as legible as before, just with a bigger
 home in the middle. 1x is the default rendering, unchanged. Asked for by @10tribu.
-
-## 2026.9.4-b0
-
-First beta, feature-complete. The release is mostly dedicated to performance: a
-full audit of the rendering pipeline, with every fix independently re-measured
-under simulated weak-hardware CPU throttling before it shipped, then re-audited
-a second time after landing to verify what actually held up. Timeline scrubbing
-tracks your drag far more closely, chip and marker movement is lighter on every
-device, and the card does less work in the background while it just sits on a
-dashboard.
-
-On top of that, one new thing in the sky (the moon) and four fixes, two of them
-for bugs that reached 2026.9.3.
 
 ### Added: the moon, on its own arc, with its real phase
 
@@ -109,6 +55,35 @@ nearer body, and it carries no chip and no value: it is purely cosmetic. A new
 `moon-display` option (visual editor, "Moon configuration" section) picks Night (the
 default: while the sun is below the horizon), Always, or Disabled. Asked for by
 @Sniper435 (#408).
+
+### Changed: the scene keeps its buildings and shadows between frames
+
+Rotating the scene rebuilt the whole buildings-and-shadows layer from scratch
+every frame: one long piece of markup regenerated, handed to the browser, which
+threw the previous layer away, parsed the new one, recreated every shape and
+restyled it. That rebuild was the single heaviest thing the card did while the
+camera moved. The layer now keeps its shapes alive and, each frame, rewrites
+only what actually moved (the geometry of each wall, roof and shade), adding or
+dropping shapes at the tail as buildings enter or leave the view. The picture
+is the same one to the pixel: the painters emit the exact same shapes in the
+exact same order, a snapshot test pins that, and a screenshot comparison of
+the scene against the previous build across five camera poses and three times of day
+(noon, low sun, night) found zero differing pixels. On a CPU throttled six
+times, a continuous rotation drops from about 76% to 65% of the main thread
+busy, and its worst frame from 50 ms to 27 ms; interaction (drag, scrub,
+hover, period switch) and idle are unchanged or slightly lighter. Along the
+way, the shade projector no longer projects each footprint three times over
+(the sweep, the edge quads and the stencil now share one projection) and the
+wall painter reads each vertex's depth from the projection it already made
+instead of projecting it again; neither changes a coordinate.
+
+### Changed: the "Forecast" period is now "D - D+2"
+
+The first tab of the period selector read "Forecast", which said what the data
+was rather than what the window is: today plus the two days ahead. It is now
+named for the window itself, "D - D+2" (with the local letter for "day" in each
+language, "J - J+2" in French). Nothing else changes: the YAML value and the remembered selection are
+untouched.
 
 ### Changed: timeline scrubbing tracks your drag much more closely
 
@@ -158,6 +133,27 @@ they actually change; the timeline's date/time labels reuse their formatter
 instead of building a new one for every label; and a few leftover style
 writes that never did anything (their values never actually change) were
 removed from the per-frame render path.
+
+### Fixed: editing the card no longer boots it from nothing at every change
+
+In the visual editor, Home Assistant destroys the card and creates a fresh one
+on every setting you change. Each fresh card used to start from nothing: a
+frame or more with no map, no buildings, empty chips and an empty timeline
+while it re-fetched and repainted everything, and every rebuild left the
+previous basemap canvas (2816 px square, about 32 MB) waiting for the garbage
+collector. On a phone or a tablet, a run of quick changes could stack enough of
+them for the browser to give up: the WebView reloaded, or the card stayed stuck
+in that half-drawn state until a page refresh. A leaving card now parks its
+painted map for the one that replaces it, and hands over its fetched data (live
+readings, series, forecast, preferences), so the next card shows a complete
+scene from its first frames and refreshes behind it; the parked map is reclaimed
+on the spot, and any map nobody claims within a minute has its canvas emptied at
+once. Under a six-times CPU throttle, a rebuilt card now shows its map one frame
+in instead of three, and is complete in about 140 ms instead of 260 ms; on a real
+Home Assistant, where the recorder fetches take far longer than in the harness,
+the difference is the whole loading phase. This is the mechanism behind #414's
+"change settings, rotate, repeat until it crashes" and the odd frame you could see
+between two settings in the editor.
 
 ### Fixed: the battery sign guard now covers installs with several batteries
 
@@ -219,8 +215,6 @@ instead of kept separately per card. With only one card this was invisible,
 but with two or more, each card's render could silently evict and rebuild
 the other's cached data instead of reusing its own. Each card now keeps its
 own cache.
-
----
 
 ---
 
