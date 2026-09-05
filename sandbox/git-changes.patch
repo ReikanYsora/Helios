@@ -1,0 +1,515 @@
+diff --git a/src/card/init.ts b/src/card/init.ts
+index 8b402fb..5c3ec90 100644
+--- a/src/card/init.ts
++++ b/src/card/init.ts
+@@ -45,11 +45,17 @@ const STATIC_VISUAL_CONFIG_KEYS = [
+     'display-radius',
+     //Scene zoom: updateConfig rescales the renderer's camera and drops the arc caches (helios-engine).
+     'scene-zoom',
++    //Arc zoom: scales the sun and moon arc radius up or down.
++    'arc-zoom',
++    //Battery z-index elevation above the solar arc.
++    'battery-above-arc',
+     'building-cluster-radius',
+     'building-count',
+     'building-real-size',
+     'building-height',
+     'building-opacity',
++    'shadows-enabled',
++    'shadow-opacity',
+     'auto-rotate-enabled',
+     //Lock toggle: a change triggers updateConfig, which freezes/frees the camera at its current (drag-set) pose and
+     //resyncs the stored pose. The buildings re-interpret that updateConfig also triggers is cheap (cached footprints, no refetch).
+diff --git a/src/core/config/constants.ts b/src/core/config/constants.ts
+index 285daad..dbfda17 100644
+--- a/src/core/config/constants.ts
++++ b/src/core/config/constants.ts
+@@ -23,6 +23,12 @@ export const MAX_DISPLAY_RADIUS_M     = 250;
+ //and the shadows grow around the home while the HUD (arc, discs, chips) keeps its card-fitted size. 1 = as-is.
+ export const SCENE_ZOOM_LEVELS = [1, 1.5, 2] as const;
+ export const DEFAULT_SCENE_ZOOM = 1;
++export const MIN_SCENE_ZOOM     = 0.25;
++export const MAX_SCENE_ZOOM     = 2;
++//Sun/moon arc magnification (`arc-zoom`): multiplier on the target on-screen radius of the sun/moon arc. 1 = as-is.
++export const DEFAULT_ARC_ZOOM   = 1;
++export const MIN_ARC_ZOOM       = 0.25;
++export const MAX_ARC_ZOOM       = 2;
+ export const DEFAULT_BUILDING_OPACITY          = 0.5;   //ghost surround; home stays 1.0
+ export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = single-polygon home detection
+ 
+diff --git a/src/core/config/helios-config.ts b/src/core/config/helios-config.ts
+index 2795fe2..6b8f08c 100644
+--- a/src/core/config/helios-config.ts
++++ b/src/core/config/helios-config.ts
+@@ -10,14 +10,16 @@ import {
+     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
+     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
+     DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
+-    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM,
++    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM, MIN_SCENE_ZOOM, MAX_SCENE_ZOOM,
++    DEFAULT_ARC_ZOOM, MIN_ARC_ZOOM, MAX_ARC_ZOOM,
+ } from './constants';
+ import { clamp } from '../render-kit/math';
+ 
+ export {
+     DEFAULT_BUILDING_OPACITY,
+     DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
+-    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM,
++    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM, MIN_SCENE_ZOOM, MAX_SCENE_ZOOM,
++    DEFAULT_ARC_ZOOM, MIN_ARC_ZOOM, MAX_ARC_ZOOM,
+     MAX_DISPLAY_RADIUS_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
+     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
+     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
+@@ -127,6 +129,10 @@ export interface HeliosConfig
+     'moon-display'?:            unknown;
+     //Scene magnification, one of SCENE_ZOOM_LEVELS (1 = as-is). See sceneZoom().
+     'scene-zoom'?:              unknown;
++    //Sun/moon arc magnification (0.25 to 2, default 1). See arcZoom().
++    'arc-zoom'?:                unknown;
++    //When true, elevates the battery chip and its leader above the solar arc and sun disc. Default false.
++    'battery-above-arc'?:       unknown;
+     'sun-chip-mode'?:           unknown;
+     'battery-chip-mode'?:       unknown;
+     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
+@@ -329,16 +335,31 @@ export function moonDisplay(config: HeliosConfig | undefined): MoonDisplay
+     const v = config?.['moon-display'];
+     return v === 'always' || v === 'hidden' ? v : 'night';
+ }
+-//Scene magnification: 1 (the default, no magnification), 1.5 or 2. Multiplies the camera's px-per-metre, so the
++//Scene magnification: default 1. Multiplies the camera's px-per-metre, so the
+ //basemap, buildings and shadows grow around the home; the sun/moon arcs, discs and chips stay card-sized (the arc
+-//scale probe measures projected px per metre and compensates). Accepts a number or a numeric string (the editor's
+-//select emits strings); anything else falls back to 1.
+-export type SceneZoom = (typeof SCENE_ZOOM_LEVELS)[number];
+-export function sceneZoom(config: HeliosConfig | undefined): SceneZoom
++//scale probe measures projected px per metre and compensates). Accepts a number or a numeric string (between 0.25 and 2);
++//anything else falls back to 1.
++export type SceneZoom = number;
++export function sceneZoom(config: HeliosConfig | undefined): number
+ {
+     const raw = config?.['scene-zoom'];
+     const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+-    return (SCENE_ZOOM_LEVELS as readonly number[]).includes(n) ? (n as SceneZoom) : DEFAULT_SCENE_ZOOM;
++    return Number.isFinite(n) && n >= MIN_SCENE_ZOOM && n <= MAX_SCENE_ZOOM ? n : DEFAULT_SCENE_ZOOM;
++}
++
++//Sun/moon arc magnification: default 1. Scales the arc radius and related celestial elements.
++//Accepts a number or a numeric string (between 0.25 and 2); anything else falls back to 1.
++export function arcZoom(config: HeliosConfig | undefined): number
++{
++    const raw = config?.['arc-zoom'];
++    const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
++    return Number.isFinite(n) && n >= MIN_ARC_ZOOM && n <= MAX_ARC_ZOOM ? n : DEFAULT_ARC_ZOOM;
++}
++
++//Whether the battery chip (and its leader) should be elevated in z-index over the solar arc and sun disc.
++export function batteryAboveArc(config: HeliosConfig | undefined): boolean
++{
++    return config?.['battery-above-arc'] === true;
+ }
+ 
+ //Configured colour for the horizon ridge line, as a ui_color token or hex. Undefined falls back to the card CSS.
+diff --git a/src/css/helios-card-scene-css.ts b/src/css/helios-card-scene-css.ts
+index cd82504..da6a16c 100644
+--- a/src/css/helios-card-scene-css.ts
++++ b/src/css/helios-card-scene-css.ts
+@@ -198,6 +198,29 @@ export const heliosCardStyles = css`
+         color: var(--primary-text-color, #212121);
+     }
+ 
++    /*  When battery-above-arc is enabled on ha-card, elevate all energy chips/pills (PV, battery, grid, home, groups, corner chips)
++        and their connection leaders above the solar arc (z 11) and sun disc (z 12). */
++    ha-card.battery-above-arc .pv-pct-label,
++    ha-card.battery-above-arc .battery-pct-label,
++    ha-card.battery-above-arc .grid-label,
++    ha-card.battery-above-arc .group-label,
++    ha-card.battery-above-arc .home-pill,
++    ha-card.battery-above-arc .home-ring
++    {
++        z-index: 13;
++    }
++    ha-card.battery-above-arc .helios-corner-chips
++    {
++        z-index: 13;
++    }
++    ha-card.battery-above-arc .pv-home-leader-svg,
++    ha-card.battery-above-arc .battery-leader-svg,
++    ha-card.battery-above-arc .grid-leader-svg,
++    ha-card.battery-above-arc .group-leader-svg
++    {
++        z-index: 12;
++    }
++
+     /*  PV production chip: pill tinted in the production colour (--pv-leader-color, set inline). Shares the
+         fixed width so the leader gap stays identical however wide the value reads. */
+     .pv-pct-label
+diff --git a/src/data/sources/weather-override.ts b/src/data/sources/weather-override.ts
+index 3378c6c..9021ee7 100644
+--- a/src/data/sources/weather-override.ts
++++ b/src/data/sources/weather-override.ts
+@@ -35,8 +35,8 @@ const OVERRIDES: readonly OverrideDef[] = [
+ ];
+ 
+ //The config keys above, for callers that need to know which entities feed this subsystem without depending on
+-//OverrideDef itself (e.g. the card's hass-churn reactivity gate).
+-export const WEATHER_OVERRIDE_CONFIG_KEYS: readonly string[] = OVERRIDES.map((o) => o.configKey);
++//OverrideDef itself (e.g. the card's hass-churn reactivity gate). Includes 'weather-entity' for the WMO code override.
++export const WEATHER_OVERRIDE_CONFIG_KEYS: readonly string[] = [...OVERRIDES.map((o) => o.configKey), 'weather-entity'];
+ 
+ //HA `weather` entity condition -> WMO weather code, so a weather entity can drive the condition (rain / snow /
+ //thunderstorm) the same way Open-Meteo's weather_code does. Unlisted conditions push no sample (model kept).
+diff --git a/src/helios-card.ts b/src/helios-card.ts
+index 3518db7..4395395 100644
+--- a/src/helios-card.ts
++++ b/src/helios-card.ts
+@@ -18,6 +18,7 @@ import
+     showCost,
+     showHorizonLine,
+     horizonLineColor,
++    batteryAboveArc,
+ } from './core/config/helios-config';
+ import { chipSlotColor, chipSlotIcon } from './core/config/chip-appearance';
+ import { buildDayProfile, daySlots, type ProfileStrand } from './data/period-totals/day-profile';
+@@ -1662,8 +1663,9 @@ export class HeliosCard extends LitElement
+         const activeChipColor = this._activeChipColor();
+         const cardClasses = [
+             cardThemeClass,
+-            cameraLocked      ? 'camera-locked'  : '',
+-            this.preview      ? 'helios-edit'    : '',
++            cameraLocked                 ? 'camera-locked'     : '',
++            this.preview                 ? 'helios-edit'       : '',
++            batteryAboveArc(this.config) ? 'battery-above-arc' : '',
+         ].filter(Boolean).join(' ');
+         //Selected-chip accent for the timeline + period-selector top borders (always), plus the detail-panel
+         //accent (same colour) only when the panel is open.
+diff --git a/src/scene/helios-engine.ts b/src/scene/helios-engine.ts
+index 41452a6..eb55d01 100644
+--- a/src/scene/helios-engine.ts
++++ b/src/scene/helios-engine.ts
+@@ -27,6 +27,7 @@ import
+     type HeliosConfig,
+     displayRadiusM,
+     sceneZoom,
++    arcZoom,
+     DEFAULT_BUILDING_OPACITY,
+     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
+     DEFAULT_SHADOW_OPACITY,
+@@ -98,6 +99,106 @@ export type IrradianceSource = 'haurwitz' | 'shortwave' | 'sensor';
+ //sensor has no future data (the nearest-neighbour window below returns null past its reach).
+ export type WeatherOverrideVar = 'cloudCover' | 'precip' | 'snowfall' | 'temperature' | 'humidity' | 'code';
+ 
++//When the HA weather entity overrides the WMO code but no dedicated sensor overrides precip, snowfall or cloud
++//cover, the visual layers (rain/snow particles, cloud veil, grey filter) would still read the Open-Meteo model's
++//values — which may be zero (sunny day in the forecast). This helper fills in reasonable implied values from the
++//code so the layers match the declared condition. Each variable is only touched when it has no sensor override
++//(cloudOverride / precipOverride / snowOverride are null if no sensor override was resolved for that time).
++export function applyCodeImpliedWeather(
++    w:              { cloudCover: number; precip: number; snowfall: number },
++    code:           number,
++    cloudOverride:  number | null,
++    precipOverride: number | null,
++    snowOverride:   number | null,
++): void
++{
++    //WMO code → implied cloud cover (%), precipitation (mm/h) and snowfall (cm/h).
++    //Values are "representative moderate" so the condition reads visually without being over-the-top.
++    //Groups follow https://open-meteo.com/en/docs; codes not explicitly listed keep the model value.
++    let impliedCloud:    number | undefined;
++    let impliedPrecip:   number | undefined;
++    let impliedSnowfall: number | undefined;
++
++    if (code === 0)                                        //Clear sky
++    {
++        impliedCloud = 5;   impliedPrecip = 0;  impliedSnowfall = 0;
++    }
++    else if (code === 1)                                   //Mainly clear
++    {
++        impliedCloud = 20;  impliedPrecip = 0;  impliedSnowfall = 0;
++    }
++    else if (code === 2)                                   //Partly cloudy
++    {
++        impliedCloud = 50;  impliedPrecip = 0;  impliedSnowfall = 0;
++    }
++    else if (code === 3)                                   //Overcast
++    {
++        impliedCloud = 90;  impliedPrecip = 0;  impliedSnowfall = 0;
++    }
++    else if (code >= 45 && code <= 48)                     //Fog / depositing rime fog
++    {
++        impliedCloud = 95;  impliedPrecip = 0;  impliedSnowfall = 0;
++    }
++    else if (code >= 51 && code <= 55)                     //Drizzle (light → dense)
++    {
++        impliedCloud = 85;  impliedPrecip = 0.3 + (code - 51) * 0.2;  impliedSnowfall = 0;
++    }
++    else if (code >= 56 && code <= 57)                     //Freezing drizzle
++    {
++        impliedCloud = 90;  impliedPrecip = 0.4;  impliedSnowfall = 0;
++    }
++    else if (code >= 61 && code <= 65)                     //Rain (slight 61, moderate 63, heavy 65)
++    {
++        impliedCloud = 90;
++        impliedPrecip   = code === 61 ? 1.0 : code === 63 ? 4.0 : 12.0;
++        impliedSnowfall = 0;
++    }
++    else if (code >= 66 && code <= 67)                     //Freezing rain
++    {
++        impliedCloud = 95;  impliedPrecip = 3.0;  impliedSnowfall = 0;
++    }
++    else if (code >= 71 && code <= 77)                     //Snowfall (slight 71, moderate 73, heavy 75; snow grains 77)
++    {
++        impliedCloud = 90;
++        impliedPrecip   = 0;
++        impliedSnowfall = code === 71 ? 0.5 : code === 73 ? 2.0 : code === 75 ? 5.0 : 0.3;
++    }
++    else if (code >= 80 && code <= 82)                     //Rain showers (slight → violent)
++    {
++        impliedCloud = 80;
++        impliedPrecip   = code === 80 ? 2.0 : code === 81 ? 6.0 : 20.0;
++        impliedSnowfall = 0;
++    }
++    else if (code === 85 || code === 86)                   //Snow showers (slight / heavy)
++    {
++        impliedCloud    = 80;
++        impliedPrecip   = 0;
++        impliedSnowfall = code === 85 ? 1.0 : 4.0;
++    }
++    else if (code === 95)                                  //Thunderstorm (slight / moderate)
++    {
++        impliedCloud = 95;  impliedPrecip = 8.0;  impliedSnowfall = 0;
++    }
++    else if (code === 96 || code === 99)                   //Thunderstorm with hail
++    {
++        impliedCloud = 95;  impliedPrecip = 15.0; impliedSnowfall = 0;
++    }
++
++    //Apply implied values only where no sensor override already set them.
++    if (cloudOverride === null && impliedCloud !== undefined)
++    {
++        w.cloudCover = Math.max(w.cloudCover, impliedCloud);
++    }
++    if (precipOverride === null && impliedPrecip !== undefined)
++    {
++        w.precip = Math.max(w.precip, impliedPrecip);
++    }
++    if (snowOverride === null && impliedSnowfall !== undefined)
++    {
++        w.snowfall = Math.max(w.snowfall, impliedSnowfall);
++    }
++}
++
+ export interface WeatherData
+ {
+     cloudCover:     number;
+@@ -571,9 +672,9 @@ export class HeliosEngine
+             azimuthDeg: number;
+         } | null)[];
+     };
+-    //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
++    //Per-(canvas, zoom, arcZoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
+     //change, not per arc sample per frame. Bearing/pitch invariant, so auto-rotation never refreshes it.
+-    private _arcScaleMemo?: { w: number; h: number; zoom: number; scale: number };
++    private _arcScaleMemo?: { w: number; h: number; zoom: number; arcZoom: number; scale: number };
+     //Memo for getTimelineSeries, keyed on the object references it actually reads: the hourly forecast, the
+     //irradiance-sensor samples and the temperature/humidity override samples. Every scrub tick calls this via
+     //onWeatherUpdate/setSelectedTime, but those references only change on a real fetch/override update (the
+@@ -1107,6 +1208,12 @@ export class HeliosEngine
+             const code  = this._weatherOverrideAt('code',        t); if (code  !== null)
+             {
+                 w.weatherCode = Math.round(code);
++                //When the weather entity overrides the WMO code but no dedicated sensor overrides the
++                //corresponding numeric variables, synthesize implied values so the visual layers (rain
++                //particles, snow flakes, cloud veil) match the declared condition. Without this the
++                //layers read the model's precip/snowfall/cloud which may be 0 (clear day in the forecast)
++                //while the code says "rainy", leaving the map visually unchanged.
++                applyCodeImpliedWeather(w, Math.round(code), cloud, prec, snow);
+             }
+         }
+         return w;
+@@ -1814,9 +1921,9 @@ export class HeliosEngine
+     }
+ 
+     //Dynamic sun-arc radius scale: size the arc so its widest on-screen reach is a fixed fraction of the
+-    //card's smaller side at any size/zoom/home. Measure ground px-per-metre at the home via an 8-direction
+-    //probe circle, taking the max home->point distance (the projected ellipse's semi-major axis, invariant
+-    //to bearing/pitch) so the arc holds steady through auto-rotation. Memoised per (canvas, zoom).
++    //card's smaller side at any size/zoom/home, modulated by user arc-zoom. Measure ground px-per-metre at the
++    //home via an 8-direction probe circle, taking the max home->point distance (the projected ellipse's semi-major axis,
++    //invariant to bearing/pitch) so the arc holds steady through auto-rotation. Memoised per (canvas, zoom, arcZoom).
+     private _sunArcScale(): number
+     {
+         const w = this._cachedCanvasCssW;
+@@ -1824,14 +1931,15 @@ export class HeliosEngine
+         const minDim = Math.min(w || Infinity, h || Infinity);
+         //The scene zoom changes the projected px per metre the probe below measures, so it keys the memo.
+         const zoom = this._renderer ? this._renderer.camera.zoom : -1;
++        const az = arcZoom(this.cfg);
+ 
+         const memo = this._arcScaleMemo;
+-        if (memo && memo.w === w && memo.h === h && memo.zoom === zoom)
++        if (memo && memo.w === w && memo.h === h && memo.zoom === zoom && memo.arcZoom === az)
+         {
+             return memo.scale;
+         }
+ 
+-        let scale = steppedArcScale(minDim);
++        let scale = steppedArcScale(minDim) * az;
+         if (this._renderer && Number.isFinite(minDim) && minDim > 0)
+         {
+             const D          = Math.PI / 180;
+@@ -1868,17 +1976,17 @@ export class HeliosEngine
+                     //Target arc radius as a fraction of the card's smaller side; clamp keeps the disc/halo
+                     //sane and leaves headroom above the apex for the chips on the sun.
+                     const TARGET_FRAC = 0.41;
+-                    const desiredR    = (TARGET_FRAC * minDim) / pxPerM;
++                    const desiredR    = (TARGET_FRAC * az * minDim) / pxPerM;
+                     //Floor and cap are on-screen bounds expressed in metre scale: under a scene zoom the same
+                     //screen reach takes 1/zoom the metres, so both move with it (else a small card on the floor
+                     //would see its arc leave the card at 2x).
+                     const z = zoom > 0 ? zoom : 1;
+-                    scale = Math.max(0.72 / z, Math.min(desiredR / SUN_ARC_RADIUS_M, 6 / z));
++                    scale = Math.max((0.72 * az) / z, Math.min(desiredR / SUN_ARC_RADIUS_M, (6 * az) / z));
+                 }
+             }
+         }
+ 
+-        this._arcScaleMemo = { w, h, zoom, scale };
++        this._arcScaleMemo = { w, h, zoom, arcZoom: az, scale };
+         return scale;
+     }
+     //Public accessor so the card scales the sun disc + halo (and the moon's) with the arc radius (else the disc
+@@ -2524,6 +2632,7 @@ export class HeliosEngine
+         const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
+         const prevCameraLocked = this.isCameraLocked();
+         const prevZoom         = sceneZoom(this.cfg);
++        const prevArcZoom      = arcZoom(this.cfg);
+         this.cfg = { ...cfg };
+ 
+         //Re-arm the auto-rotate rAF loop when the flags transition back to rotation-permitting (the loop
+@@ -2565,6 +2674,15 @@ export class HeliosEngine
+             this._moonArcInputsCache = undefined;
+         }
+ 
++        //Arc zoom: scales the sun and moon arc radius up or down; drops arc caches so projection passes update.
++        const nextArcZoom = arcZoom(this.cfg);
++        if (nextArcZoom !== prevArcZoom)
++        {
++            this._arcScaleMemo       = undefined;
++            this._arcInputsCache     = undefined;
++            this._moonArcInputsCache = undefined;
++        }
++
+         //Building option updates (radius/count/real-size/height/cluster): re-interpret the cached raw
+         //footprints in memory via _ensureBuildings -> _applyBuildings. The location key is unchanged, so this
+         //never re-fetches the tiles; the renderer re-extrudes from the freshly interpreted Building[]. We always
+diff --git a/test/scene-zoom.test.ts b/test/scene-zoom.test.ts
+index a95b021..8e7e23c 100644
+--- a/test/scene-zoom.test.ts
++++ b/test/scene-zoom.test.ts
+@@ -4,25 +4,56 @@ import { SceneCamera } from '../src/scene/projection';
+ 
+ describe('sceneZoom', () =>
+ {
+-    it('defaults to 1 with no config, an unknown value, or a bad type', () =>
++    it('defaults to 1 with no config, an unknown value, or an out-of-range number', () =>
+     {
+         expect(sceneZoom(undefined)).toBe(1);
+         expect(sceneZoom({} as any)).toBe(1);
+         expect(sceneZoom({ 'scene-zoom': 3 } as any)).toBe(1);
++        expect(sceneZoom({ 'scene-zoom': 0.1 } as any)).toBe(1);
+         expect(sceneZoom({ 'scene-zoom': 'big' } as any)).toBe(1);
+         expect(sceneZoom({ 'scene-zoom': null } as any)).toBe(1);
+     });
+ 
+-    it('accepts the three levels as numbers or as the editor\'s strings', () =>
++    it('accepts numbers or strings within the [0.25, 2] range', () =>
+     {
++        expect(sceneZoom({ 'scene-zoom': 0.25 } as any)).toBe(0.25);
++        expect(sceneZoom({ 'scene-zoom': 0.75 } as any)).toBe(0.75);
+         expect(sceneZoom({ 'scene-zoom': 1.5 } as any)).toBe(1.5);
+         expect(sceneZoom({ 'scene-zoom': 2 } as any)).toBe(2);
++        expect(sceneZoom({ 'scene-zoom': '0.5' } as any)).toBe(0.5);
+         expect(sceneZoom({ 'scene-zoom': '1.5' } as any)).toBe(1.5);
+         expect(sceneZoom({ 'scene-zoom': '2' } as any)).toBe(2);
+         expect(sceneZoom({ 'scene-zoom': '1' } as any)).toBe(1);
+     });
+ });
+ 
++describe('arcZoom', () =>
++{
++    it('defaults to 1 with no config, an unknown value, or an out-of-range number', async () =>
++    {
++        const { arcZoom } = await import('../src/core/config/helios-config');
++        expect(arcZoom(undefined)).toBe(1);
++        expect(arcZoom({} as any)).toBe(1);
++        expect(arcZoom({ 'arc-zoom': 3 } as any)).toBe(1);
++        expect(arcZoom({ 'arc-zoom': 0.1 } as any)).toBe(1);
++        expect(arcZoom({ 'arc-zoom': 'big' } as any)).toBe(1);
++        expect(arcZoom({ 'arc-zoom': null } as any)).toBe(1);
++    });
++
++    it('accepts numbers or strings within the [0.25, 2] range', async () =>
++    {
++        const { arcZoom } = await import('../src/core/config/helios-config');
++        expect(arcZoom({ 'arc-zoom': 0.25 } as any)).toBe(0.25);
++        expect(arcZoom({ 'arc-zoom': 0.75 } as any)).toBe(0.75);
++        expect(arcZoom({ 'arc-zoom': 1.5 } as any)).toBe(1.5);
++        expect(arcZoom({ 'arc-zoom': 2 } as any)).toBe(2);
++        expect(arcZoom({ 'arc-zoom': '0.5' } as any)).toBe(0.5);
++        expect(arcZoom({ 'arc-zoom': '1.5' } as any)).toBe(1.5);
++        expect(arcZoom({ 'arc-zoom': '2' } as any)).toBe(2);
++        expect(arcZoom({ 'arc-zoom': '1' } as any)).toBe(1);
++    });
++});
++
+ describe('SceneCamera under a zoom', () =>
+ {
+     function cam(zoom: number): SceneCamera
+@@ -54,3 +85,47 @@ describe('SceneCamera under a zoom', () =>
+         expect(cam(2).groundTransform(100, 100).transform.endsWith(' scale(2)')).toBe(true);
+     });
+ });
++
++describe('VISUAL_CONFIG_KEYS', () =>
++{
++    it('includes shadow-opacity and shadows-enabled so changes trigger engine updateConfig', async () =>
++    {
++        const { VISUAL_CONFIG_KEYS, computeConfigSig } = await import('../src/card/init');
++        expect(VISUAL_CONFIG_KEYS).toContain('shadow-opacity');
++        expect(VISUAL_CONFIG_KEYS).toContain('shadows-enabled');
++        expect(VISUAL_CONFIG_KEYS).toContain('scene-zoom');
++        expect(VISUAL_CONFIG_KEYS).toContain('arc-zoom');
++        expect(VISUAL_CONFIG_KEYS).toContain('battery-above-arc');
++
++        const sig1 = computeConfigSig({ 'shadow-opacity': 0.32 } as any);
++        const sig2 = computeConfigSig({ 'shadow-opacity': 0.8 } as any);
++        expect(sig1).not.toBe(sig2);
++
++        const sig3 = computeConfigSig({ 'shadows-enabled': true } as any);
++        const sig4 = computeConfigSig({ 'shadows-enabled': false } as any);
++        expect(sig3).not.toBe(sig4);
++
++        const sig5 = computeConfigSig({ 'arc-zoom': 1 } as any);
++        const sig6 = computeConfigSig({ 'arc-zoom': 1.5 } as any);
++        expect(sig5).not.toBe(sig6);
++
++        const sig7 = computeConfigSig({ 'battery-above-arc': false } as any);
++        const sig8 = computeConfigSig({ 'battery-above-arc': true } as any);
++        expect(sig7).not.toBe(sig8);
++    });
++});
++
++describe('batteryAboveArc', () =>
++{
++    it('returns true only when battery-above-arc is strictly true', async () =>
++    {
++        const { batteryAboveArc } = await import('../src/core/config/helios-config');
++        expect(batteryAboveArc(undefined)).toBe(false);
++        expect(batteryAboveArc({} as any)).toBe(false);
++        expect(batteryAboveArc({ 'battery-above-arc': false } as any)).toBe(false);
++        expect(batteryAboveArc({ 'battery-above-arc': 'true' } as any)).toBe(false);
++        expect(batteryAboveArc({ 'battery-above-arc': 1 } as any)).toBe(false);
++        expect(batteryAboveArc({ 'battery-above-arc': true } as any)).toBe(true);
++    });
++});
++
