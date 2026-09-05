@@ -8,12 +8,11 @@ export const ro: Translations = {
 
   period: {
     rangeLabel: "Interval de timp",
-    forecast: "Prognoza",
+    forecast: "Z - Z+2",
     yesterday: "Ieri",
     today: "Astazi",
     week: "Saptamana",
     month: "Luna",
-    year: "An",
   },
 
   compass: "N,NE,E,SE,S,SV,V,NV",
@@ -82,7 +81,7 @@ export const ro: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Rotire automata a camerei",
     autoRotateHint:
-      "Dupa cateva secunde de inactivitate, camera se roteste lent in jurul casei (aproximativ 1.5°/s, in sens opus miscarii aparente a soarelui). O glisare cu un deget o opreste instantaneu, iar rotirea reia indata ce ridici degetul. Evit-o pe dispozitive foarte vechi: rotirea automata forteaza o redare in fiecare secunda.",
+      "Dupa cateva secunde de inactivitate, camera se roteste lent in jurul casei (aproximativ 4°/s, in sens opus miscarii aparente a soarelui). O glisare cu un deget o opreste instantaneu, iar rotirea reia indata ce ridici degetul. Evit-o pe dispozitive foarte vechi: rotirea automata forteaza o redare in fiecare secunda.",
     autoRotateOn: "Pornit",
     autoRotateOff: "Oprit",
     degradedRender: "Randare de compatibilitate",
@@ -142,6 +141,13 @@ export const ro: Translations = {
     showHorizonLineHint: "Desenează linia orizontului reliefului în jurul casei, calculată din terenul local. Orizontul estompează întotdeauna soarele în mod realist în spatele dealurilor; aceasta doar afișează sau ascunde linia desenată.",
     horizonLineColor: "Culoarea orizontului terenului",
     horizonLineColorHint: "Culoarea liniei orizontului terenului.",
+    moonDisplay: "Modul de afișare a lunii",
+    moonDisplayHint: "Desenează luna pe propriul arc cu o seceră fidelă fazei, mereu în fața soarelui. Pur estetic: fără etichetă, fără valoare.",
+    moonDisplayAlways: "Întotdeauna",
+    moonDisplayNight: "Noapte",
+    moonDisplayHidden: "Dezactivat",
+    sceneZoom: "Zoom scenă",
+    sceneZoomHint: "Mărește harta, clădirile și umbrele din jurul casei: 1x este redarea implicită, 1,5x și 2x le afișează mai mari. Soarele, arcele și etichetele își păstrează dimensiunea.",
     lockRotation: "Blocheaza rotirea",
     lockRotationHint:
       "Trageți de previzualizare pentru a roti și înclina scena la vederea dorită, apoi activați această opțiune. Blocarea îngheață acea vedere (rotirea prin tragere și rotația automată în repaus sunt dezactivate) și salvează unghiul în card, astfel încât exact aceeași vedere apare pe fiecare dispozitiv și browser. Dezactivați-o pentru a roti din nou liber.",
@@ -213,6 +219,7 @@ export const ro: Translations = {
     buildingColor: "Culoarea cladirilor",
     buildingColorHelp: "Nuanta de baza aplicata cladirilor din jur in scena.",
     shadowsSection: "Umbre",
+    moonSection: "Configurarea lunii",
     shadowsEnabled: "Arata umbrele",
     shadowsEnabledOn: "Afisate",
     shadowsEnabledOff: "Ascunse",

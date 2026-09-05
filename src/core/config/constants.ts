@@ -19,6 +19,10 @@ export const DEG = Math.PI / 180;
 export const DEFAULT_DISPLAY_RADIUS_M = 200;
 export const MIN_DISPLAY_RADIUS_M     = 0;
 export const MAX_DISPLAY_RADIUS_M     = 250;
+//Scene magnification (`scene-zoom`): the camera's px-per-metre is multiplied by it, so the ground, the buildings
+//and the shadows grow around the home while the HUD (arc, discs, chips) keeps its card-fitted size. 1 = as-is.
+export const SCENE_ZOOM_LEVELS = [1, 1.5, 2] as const;
+export const DEFAULT_SCENE_ZOOM = 1;
 export const DEFAULT_BUILDING_OPACITY          = 0.5;   //ghost surround; home stays 1.0
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;     //0 = single-polygon home detection
 
@@ -61,6 +65,19 @@ export const SUN_ARC_NIGHT_OPACITY = 0.25;  //below-horizon segment opacity
 //sun's geometric centre sits 0.833° below it (0.567° atmospheric refraction + 0.267° solar semi-diameter).
 //The arc + detail-panel mark rise/set at this altitude, not the geometric-centre 0° crossing.
 export const SUNRISE_SUNSET_ALTITUDE_DEG = -0.833;
+
+//=== Array markers (Helios-Forecast lines) ===
+//Tile footprint on screen at scene zoom 1 (px; it scales with the zoom like the buildings), across and up the slope.
+export const ARRAY_TILE_W_PX          = 26;
+export const ARRAY_TILE_L_PX          = 16;
+//A ground-standing line floats this much above the basemap so its tile clears the ground; a line on the home sits
+//this much above the roof.
+export const ARRAY_TILE_LIFT_M        = 0.4;
+//Marker colour: a spring green no other element of the card wears (sun amber, production orange, grid blue and
+//violet, battery pink and teal, consumption green are all taken), so the arrays and their rays read at a glance.
+export const ARRAY_MARKER_COLOR      = '#69f0ae';
+//The forecast layout changes with the integration's options only: re-read it this often at most.
+export const ARRAY_LAYOUT_THROTTLE_MS = 60 * 60 * 1000;
 
 
 
@@ -134,7 +151,7 @@ export const GUARD_CONTRADICTION_HOURS = 3;
 export const GUARD_CLEAN_EVALS        = 3;
 
 //Battery-sign guard: the live battery `stat_rate` is assumed discharge-positive and flipped to the card's
-//charge-positive convention, but some sensors report the opposite, so the flow ran backwards. The guard cross-checks
+//charge-positive convention, but some sensors report the opposite, which would run the flow backwards. The guard cross-checks
 //the raw rate's dominant sign each hour against the structural direction from the directional charge/discharge meters
 //(reusing GUARD_REFRESH_MS + GUARD_WINDOW_MS). An hour counts only when its net battery energy clears MIN_KWH; the
 //sensor is judged inverted after INVERT_HOURS such hours contradict the assumption, and self-clears after CLEAN_EVALS
@@ -192,16 +209,14 @@ export const LAB_T2 = 0.12841855;
 export const LAB_T3 = 0.008856452;
 
 
-//Tunables for the 2.5D scene engine, a card-agnostic unit: nothing below depends on the card, and the
-//engine modules reach up here via ../constants.
+//Tunables for the 2.5D scene engine, a card-agnostic unit: nothing below depends on the card.
 
 //=== Camera + projection ===
-//Pitch bounds shared by the editor, drag-rotate and the initial-pose clamp. MIN = nearly top-down,
-//MAX = nearly horizontal. Default pose faces the sun's side so it sits at the top of the frame at noon.
+//Default pose faces the sun's side so it sits at the top of the frame at noon.
 //NEAR_PLANE is the near-plane margin as a fraction of PERSPECTIVE (clamps/culls points at the camera);
 //PERSPECTIVE is the projection + CSS depth in px shared by the ground transform and project3.
-//The low-level SceneCamera pose clamp reuses the single pitch-bound source of truth (CAMERA_PITCH_MIN/MAX_DEG
-//in the Camera block above), so the render ceiling can never sit below what the engine, drag-rotate and editor accept.
+//The SceneCamera pose clamp reuses CAMERA_PITCH_MIN/MAX_DEG above, so the render ceiling never sits below what the
+//editor and drag-rotate accept.
 export const DEFAULT_BEARING = 180;
 export const DEFAULT_TILT    = 50;
 export const NEAR_PLANE      = 0.15;

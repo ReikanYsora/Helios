@@ -2,15 +2,18 @@ import type { TemplateResult } from 'lit';
 import { html, svg, nothing } from 'lit';
 import { guard } from 'lit/directives/guard.js';
 import type { HeliosCard } from '../helios-card';
-import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode } from '../core/config/helios-config';
+import { valueDecimals, powerUnit, irradianceUnit, batterySign, maxExpectedPowerW, monitoringGroupColor, monitoringGroupIcon, chipVisible, groupChipVisible, showSunTimes, sunChipMode, batteryChipMode, moonDisplay } from '../core/config/helios-config';
+import { moonCrescentPath } from '../scene/moon-crescent';
 import { chipSlotColor, chipSlotIcon } from '../core/config/chip-appearance';
 import { pickTranslations } from '../core/i18n';
 import { darkenHex, ENERGY_COLOR, cloudCoverIcon, formatHaTime, formatIrradiance, batteryLevelIcon } from '../core/format/format';
+import { mixHex } from '../core/render-kit/hex';
+import { ARRAY_MARKER_COLOR } from '../core/config/constants';
 import { currentPvRate, pvRateAtTime, pvNormalizeToWatts, formatPvValue, resolvePvLiveEntity } from '../data/sources/pv';
 import { batterySampleAtTime, formatBatteryPower, resolveBatteryEntities } from '../data/sources/battery';
-import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene } from './hud';
+import { buildArcSegments, flowDuration, type LabelLayout, type ArcSegment, type SunScene, type MoonScene } from './hud';
 import { nudgeToHomePill } from './hud-geometry';
-import { clipSegment, cardClipRect, pointOutside, type ClipRect } from '../core/render-kit/geometry';
+import { clipSegment, clipPolygon, cardClipRect, pointOutside, pointsAttr, type ClipRect } from '../core/render-kit/geometry';
 import { formatGridValue } from '../data/sources/grid';
 import { activeGroups, groupLivePowerW, groupPowerWAt } from '../data/sources/device-consumption';
 import { groupTarget } from '../charts/charts';
@@ -40,6 +43,16 @@ const SEGMENT_NEAR = 4.0;
 const SUN_R_FAR    = 10.0;
 const SUN_R_NEAR   = 20.0;
 const SUN_RIM_WIDTH = 1.5;
+//Moon: a pale, fixed colour (no time-of-day ramp, no irradiance fill), and a disc a touch smaller than the sun's so
+//the two never read as the same body. Overridable via --helios-moon-color in the card CSS.
+const MOON_COLOR    = '#dfe6ee';
+//The unlit side: a solid dark slate rather than a faint tint, so the disc reads as one body (its own arc passes
+//behind it instead of showing through the dark half as a stray straight edge).
+const MOON_DARK     = '#3a4250';
+const MOON_R_FAR    = 8.0;
+const MOON_R_NEAR   = 16.0;
+//Fraction of the disc radius the crescent is inset by, so the lit shape sits inside the rim rather than on it.
+const MOON_CRESCENT_INSET = 0.86;
 //Home pill is a horizontal stadium (like the other chips), not a circle. Half-extents of its outline;
 //leaders dock against this stadium so they all meet the same focal energy node.
 const HOME_PILL_HALF_WIDTH_PX  = 38;
@@ -55,7 +68,7 @@ const NIGHT_STROKE_FACTOR = 0.5;
 
 //Scene HUD subsystem: the home-anchored energy chip cluster (PV / battery SoC + power / grid / custom /
 //home consumption), their animated leader paths, the solar arc depth-split passes, the sun disc/halo/ray
-//geometry and the sunrise/sunset markers. Extracted from HeliosCard.render(); every card member it reads
+//geometry and the sunrise/sunset markers. Every card member it reads
 //(hass, config, the scrub/live state, the label layout, the sun scene, the arc scratch buffers, ...) is
 //reached through `this.host`. The reactive @state it renders from stays on the card.
 export class SceneHudController
@@ -87,6 +100,34 @@ export class SceneHudController
             this._arcSegmentsCache    = buildArcSegments(sunScene.arc, sunColor);
         }
         return this._arcSegmentsCache;
+    }
+
+    private _moonSegmentsScene: MoonScene | null = null;
+    private _moonSegmentsCache: ArcSegment[] = [];
+
+    //Moon arc segments, identity-cached on the scene like the sun's. Built inline rather than through
+    //buildArcSegments: that one paints the sun's time-of-day colour ramp (grey under the horizon, amber high),
+    //while the moon keeps one fixed pale colour whatever its altitude.
+    private _buildMoonArcSegmentsCached(moonScene: MoonScene, color: string): ArcSegment[]
+    {
+        if (this._moonSegmentsScene !== moonScene)
+        {
+            this._moonSegmentsScene = moonScene;
+            const out: ArcSegment[] = [];
+            const arc = moonScene.arc;
+            for (let i = 0; i < arc.length - 1; i++)
+            {
+                const p = arc[i]; const n = arc[i + 1];
+                out.push({
+                    x1: p.x, y1: p.y, x2: n.x, y2: n.y,
+                    color,
+                    nearness:     0.5 * (p.nearness + n.nearness),
+                    belowHorizon: p.belowHorizon || n.belowHorizon,
+                });
+            }
+            this._moonSegmentsCache = out;
+        }
+        return this._moonSegmentsCache;
     }
 
     private _buildRidgeLineCached(sunScene: SunScene): string
@@ -145,7 +186,8 @@ export class SceneHudController
     }
 
     //Rounded L between two arbitrary points. verticalFirst=true draws the vertical leg first, then the
-    //horizontal into the end (used PV -> Power, dropping down then right). Same fillet as _buildLPathToHome.
+    //horizontal into the end (the four-group fan-out: down from the home pill's bottom edge, then across to the
+    //chip). Same fillet as _buildLPathToHome.
     private _buildLPath(
         sx: number, sy: number, ex: number, ey: number, verticalFirst: boolean
     ): string
@@ -195,7 +237,7 @@ export class SceneHudController
         return html`
             <div
                 class="sun-cross-marker"
-                style="left:${lx.toFixed(1)}px; top:${ly.toFixed(1)}px; --sun-cross-color:${color}"
+                style="transform:translate(${lx.toFixed(1)}px,${ly.toFixed(1)}px) translate(-50%,-50%); --sun-cross-color:${color}"
             >
                 <ha-icon icon=${icon}></ha-icon>
                 <span>${t}</span>
@@ -319,12 +361,10 @@ export class SceneHudController
         const pvPeakRefW  = flowRefW;
         const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
         const pvIdle         = !(pvWattsNow > 0);
-        //Battery overlay: two chips flanking the PV chip (SoC % left, signed Power right), each wired to it
-        //by a static dotted hairline; the power sign is the only charging-vs-discharging encoding. Scrub
-        //mirrors PV: live reads hass.states, past-scrub reads the WS history series, future-scrub hides both.
-        //Chip eligibility from the HA Energy defaults: a stat_soc source lights the SoC chip; a power
-        //source (stat_rate, or stat_energy_from/to without a power_config block) lights the Power chip.
-        //They render independently, so a SoC-only install still paints the vessel.
+        //Battery: SoC + power resolved separately (each eligible from its own HA Energy source: stat_soc for the
+        //SoC, stat_rate or stat_energy_from/to without a power_config block for the power), then fused into one
+        //chip below. Scrub mirrors PV: live reads hass.states, past-scrub reads the history series, future-scrub
+        //hides it.
         const batteryEntities    = resolveBatteryEntities(this.host._energyDefaults);
         const hasAnyBankSoc      = batteryEntities.socEntity   !== null;
         const hasAnyBankPower    = batteryEntities.powerEntity !== null;
@@ -426,10 +466,9 @@ export class SceneHudController
             ? formatGridValue(this.host.hass, homeUsageWatts, 'W', valueDec, powerU)
             : '';
 
-        //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the PV<->Power leader
-        //arrow: charging flows PV -> Power (into the battery) at a speed proportional to |P| saturating at
-        //~5 kW. The dual-tone leader colour tracks the physical direction, independent of the chip's HA-sign
-        //flip above.
+        //Charge/discharge direction (PHYSICAL sign, positive = charging) drives the battery <-> home bead
+        //direction and the lead colour, at a speed proportional to |P| saturating at the shared flow reference,
+        //independent of the chip's HA-sign flip above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
         const batteryChargeColor    = chipSlotColor(this.host, cfg, 'batteryCharge');
         const batteryDischargeColor = chipSlotColor(this.host, cfg, 'batteryDischarge');
@@ -479,7 +518,7 @@ export class SceneHudController
         //  1 group  -> centred below the home on the lower row, vertical lead;
         //  2 groups -> left + right, grid/battery-style horizontal lead off each chip's mid-height;
         //  3 groups -> two on top (left/right) + one centred on the lower row, vertical lead;
-        //  4 groups -> the original four-corner fan-out.
+        //  4 groups -> four-corner fan-out.
         //Live value = the sum of the group's device stat_rate; colour = the group's graph colour; a number badge
         //carries the group id. Every lead's bead runs home -> chip (power leaving to the group's devices).
         const HOME_PILL_WIDTH_PX  = 96;
@@ -527,7 +566,7 @@ export class SceneHudController
                 }
                 else if (groupCount === 4)
                 {
-                    //Original four-corner arrangement: slots [top-left, bottom-left, top-right, bottom-right].
+                    //Four-corner arrangement: slots [top-left, bottom-left, top-right, bottom-right].
                     const isLeft  = i < 2;
                     anchor        = { x: isLeft ? groupLeftX : groupRightX, y: i % 2 === 0 ? groupRow1Y : groupRow2Y };
                     const innerX  = isLeft ? anchor.x + GROUP_CHIP_HALF_W : anchor.x - GROUP_CHIP_HALF_W;
@@ -603,7 +642,6 @@ export class SceneHudController
         const clipRect: ClipRect | null = cam?.hasViewport ? cardClipRect(cam.width, cam.height) : null;
 
         //Fixed colour design system. The sun colour paints the arc, the disc rim and the irradiance fill.
-        //The on-ground cloud disc is painted engine-side, so no cloud hex is needed here.
         const sunColor      = ENERGY_COLOR.sun(this.host);
         const sunRimColor   = darkenHex(sunColor, 0.20);
         const arcSegments   = showSun ? this._buildArcSegmentsCached(sunScene!, sunColor) : [];
@@ -649,7 +687,11 @@ export class SceneHudController
 
         //The incidence ray only renders when the sun is above the horizon (a ray from below ground would be
         //visually nonsensical).
-        const showRay = showSun && sunScene!.sun.altitude > 0;
+        //With Helios-Forecast lines in the scene, each array carries its own ray to the sun (below) and the single
+        //sun-to-production ray steps aside.
+        const arrayScene = this.host._arrayScene;
+        const hasArrays  = arrayScene !== null && arrayScene.tiles.length > 0;
+        const showRay = showSun && sunScene!.sun.altitude > 0 && !hasArrays;
 
         //Live irradiance for the W/m² label above the sun disc, also driving the inner-disc fill ratio: at
         //STC (1000 W/m²) the fill reaches the rim, at zero it vanishes. The sqrt mapping linearises AREA
@@ -820,7 +862,7 @@ export class SceneHudController
                 ${showPvLabel ? html`
                     <div
                         class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''} ${interactive && this.host._chartTarget === 'production' ? 'is-chart-active' : ''} ${this.host._dayCurveOpen ? 'is-curve-on' : ''}"
-                        style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}; --chip-color:${pvColor}"
+                        style="transform:translate(${layout!.pvLabel.x}px,${layout!.pvLabel.y}px) translate(-50%,-50%); --pv-leader-color:${pvColor}; --chip-color:${pvColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="production"
@@ -861,7 +903,7 @@ export class SceneHudController
                     </svg>
                     <div
                         class="battery-pct-label ${interactive && this.host._chartTarget === 'battery' ? 'is-chart-active' : ''} ${curveOn && active === 'battery' ? 'is-curve-on' : ''}"
-                        style="left:${batteryChipX}px; top:${batteryChipY}px; --battery-leader-color:${batteryLeaderColor}"
+                        style="transform:translate(${batteryChipX}px,${batteryChipY}px) translate(-50%,-50%); --battery-leader-color:${batteryLeaderColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="battery"
@@ -898,7 +940,7 @@ export class SceneHudController
                     </svg>
                     <div
                         class="grid-label ${interactive && this.host._chartTarget === 'grid' ? 'is-chart-active' : ''} ${curveOn && active === 'grid' ? 'is-curve-on' : ''}"
-                        style="left:${layout!.gridLabel.x}px; top:${layout!.gridLabel.y}px; --grid-leader-color:${gridLeaderColor}"
+                        style="transform:translate(${layout!.gridLabel.x}px,${layout!.gridLabel.y}px) translate(-50%,-50%); --grid-leader-color:${gridLeaderColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="grid"
@@ -930,7 +972,7 @@ export class SceneHudController
                     </svg>
                     <div
                         class="group-label ${interactive && this.host._chartTarget === groupTarget(gc.g) ? 'is-chart-active' : ''} ${curveOn && active === groupTarget(gc.g) ? 'is-curve-on' : ''}"
-                        style="left:${gc.anchor.x}px; top:${gc.anchor.y}px; --group-color:${gc.color}"
+                        style="transform:translate(${gc.anchor.x}px,${gc.anchor.y}px) translate(-50%,-50%); --group-color:${gc.color}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target=${groupTarget(gc.g)}
@@ -1036,6 +1078,36 @@ export class SceneHudController
                     </svg>
                 ` : nothing}
 
+                <!--  Array markers: one tile per Helios-Forecast line, turned and tilted as the line is, glowing
+                      by how squarely it faces the sun, with a hairline of dots from the tile to the sun while it
+                      is up. Same tier as the incidence ray they replace.  -->
+                ${showSun && hasArrays ? html`
+                    <svg class="solar-svg solar-array-svg"
+                         style="--solar-daylight:${sunScene!.daylight}">
+                        ${arrayScene!.tiles.map((tile) =>
+    {
+        const quad = clipRect ? clipPolygon(tile.points, clipRect) : tile.points;
+        const sunAt = arrayScene!.sun;
+        //The ray is clipped to the card box like the sun ray, so an off-card array still shows its line coming in
+        //from the edge: the line is what says where the sun is for that line, tile in view or not.
+        const ray = sunAt
+            ? (clipRect ? clipSegment([tile.cx, tile.cy], [sunAt.x, sunAt.y], clipRect) : [[tile.cx, tile.cy], [sunAt.x, sunAt.y]])
+            : null;
+        //Dark glass at rest, brightening toward the marker colour as the line turns square to the light.
+        const fill = mixHex('#1c2a3f', ARRAY_MARKER_COLOR, 0.12 + 0.6 * tile.glow);
+        return svg`
+                            ${ray ? svg`
+                            <line class="solar-array-ray"
+                                x1="${ray[0][0]}" y1="${ray[0][1]}" x2="${ray[1][0]}" y2="${ray[1][1]}"
+                                stroke="${ARRAY_MARKER_COLOR}"></line>` : nothing}
+                            ${quad.length >= 3 ? svg`
+                            <polygon class="solar-array-tile"
+                                points="${pointsAttr(quad)}"
+                                fill="${fill}" stroke="${ARRAY_MARKER_COLOR}"></polygon>` : nothing}`;
+    })}
+                    </svg>
+                ` : nothing}
+
                 ${showSun && sunDiscVisible ? html`
                     <svg
                         class="solar-svg solar-svg-sun ${sunScene!.sun.nearness >= 0.50 ? 'solar-svg-sun-near' : 'solar-svg-sun-far'}"
@@ -1070,6 +1142,11 @@ export class SceneHudController
         //wave emanating from the disc), fading in with irradiance so a low / hazy sun stays
         //calm. `--heat` (0..1) is the gate the CSS pulse multiplies.
         const heat = Math.max(0, Math.min(1, (sunFillRatio - 0.15) / 0.55));
+        //mix-blend-mode disqualifies this element from compositor-only animation, so Blink keeps running the
+        //pulse on the main thread every frame even fully invisible (heat 0, opacity 0 - a weak/hazy/night
+        //sun). Pausing it on the same per-frame write that already gates opacity costs nothing extra and the
+        //pulse resumes exactly where CSS would have left it once heat rises again.
+        const heatPlayState = heat > 0.02 ? 'running' : 'paused';
         return svg`
                                 <defs>
                                     <radialGradient id="solar-halo-grad-${this.host._instanceId}">
@@ -1093,7 +1170,7 @@ export class SceneHudController
                                     cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
                                     r="${r * 2.6}"
                                     fill="url(#solar-heat-grad-${this.host._instanceId})"
-                                    style="--heat:${heat}"
+                                    style="--heat:${heat};animation-play-state:${heatPlayState}"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"
@@ -1123,6 +1200,82 @@ export class SceneHudController
                     </svg>
                 ` : nothing}
 
+                <!--  Moon: its own arc (dotted under the horizon, solid above) and a phase-correct crescent disc,
+                      in ONE layer that always paints over the sun's (z 13 > sun near-disc z 12): the moon is
+                      nearer to us than the sun, so it never passes behind it. Cosmetic only, no chip. Lit side
+                      faces the sun's projected position in this same scene, so the crescent reads right against
+                      the sun wherever the camera turns; that direction only degenerates at new moon, when there is
+                      no crescent to orient anyway.  -->
+                ${(() =>
+    {
+        const mode      = moonDisplay(cfg);
+        const moonScene = this.host._moonScene;
+        if (mode === 'hidden' || !hasHomeCoords || !moonScene || moonScene.arc.length < 2)
+        {
+            return nothing;
+        }
+        //'night': only while the sun is below the geometric horizon (its own scene, same instant).
+        if (mode === 'night' && sunScene && sunScene.sun.altitude > 0)
+        {
+            return nothing;
+        }
+        const moonColor = MOON_COLOR;
+        const moonRim   = darkenHex(moonColor, 0.30);
+        const segs      = this._buildMoonArcSegmentsCached(moonScene, moonColor);
+        const m         = moonScene.moon;
+
+        //Disc + crescent, culled off-card like the sun's (60 px clears the largest rim).
+        const discVisible = m.altitude > 0 && (clipRect === null
+            || !pointOutside([m.x, m.y],
+                { minX: clipRect.minX - 60, minY: clipRect.minY - 60, maxX: clipRect.maxX + 60, maxY: clipRect.maxY + 60 }));
+        const arcScale = this.host._engine?.getSunArcScale() ?? 1;
+        const r  = Math.min((MOON_R_FAR + (MOON_R_NEAR - MOON_R_FAR) * m.nearness) * arcScale, 18);
+        const litDx = (sunScene?.sun.x ?? m.x + 1) - m.x;
+        const litDy = (sunScene?.sun.y ?? m.y) - m.y;
+        const crescent = moonCrescentPath(m.x, m.y, r * MOON_CRESCENT_INSET, m.fraction, litDx, litDy);
+
+        //Clip to the card box, then split solid (above horizon) from dotted (below): each half gets its own
+        //translucent <g>, see the CSS note on why the opacity cannot sit on the segments themselves.
+        const solid: ArcSegment[] = [];
+        const dotted: ArcSegment[] = [];
+        for (const s of segs)
+        {
+            if (clipRect)
+            {
+                const c = clipSegment([s.x1, s.y1], [s.x2, s.y2], clipRect);
+                if (!c)
+                {
+                    continue;
+                }
+                s.x1 = c[0][0]; s.y1 = c[0][1]; s.x2 = c[1][0]; s.y2 = c[1][1];
+            }
+            (s.belowHorizon ? dotted : solid).push(s);
+        }
+        const moonLine = (s: ArcSegment) =>
+        {
+            const w = (SEGMENT_FAR + (SEGMENT_NEAR - SEGMENT_FAR) * s.nearness) * 0.75;
+            return svg`
+                            <line
+                                class="moon-arc-segment ${s.belowHorizon ? 'moon-arc-night' : ''}"
+                                x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}"
+                                stroke="${s.color}"
+                                stroke-width="${s.belowHorizon ? w * NIGHT_STROKE_FACTOR : w}"
+                            ></line>`;
+        };
+
+        return html`
+                    <svg class="moon-svg">
+                        <g class="moon-arc-nightg">${dotted.map(moonLine)}</g>
+                        <g class="moon-arc-solid">${solid.map(moonLine)}</g>
+                        ${discVisible ? svg`
+                            <circle class="moon-disc-bg" cx="${m.x}" cy="${m.y}" r="${r}" fill="${MOON_DARK}" fill-opacity="0.9"></circle>
+                            <path class="moon-crescent" d="${crescent}" fill="${moonColor}"></path>
+                            <circle class="moon-disc-rim" cx="${m.x}" cy="${m.y}" r="${r}" fill="none" stroke="${moonRim}" stroke-width="1"></circle>
+                        ` : nothing}
+                    </svg>
+                `;
+    })()}
+
                 <!--  Weather chip, pinned above the sun disc: the cloud-cover glyph (clear / partly / overcast)
                       next to the live irradiance value. One chip carries both stories, the icon for the sky
                       condition and the number for the W/m²; clicking it targets the timeline's irradiance
@@ -1130,7 +1283,7 @@ export class SceneHudController
                 ${showSunLabel ? html`
                     <div
                         class="solar-pct-label ${interactive && this.host._chartTarget === 'irradiance' ? 'is-chart-active' : ''} ${curveOn && active === 'irradiance' ? 'is-curve-on' : ''}"
-                        style="left:${sunScene!.sun.x}px; top:${sunScene!.sun.y - 22}px; --solar-color:${irradChipColor}"
+                        style="transform:translate(${sunScene!.sun.x}px,${sunScene!.sun.y - 22}px) translate(-50%,-100%); --solar-color:${irradChipColor}"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="irradiance"
@@ -1156,11 +1309,11 @@ export class SceneHudController
                       ring: a bare contact point the leads converge on, the scene still visible through it.  -->
                 ${hasHomeCoords && layout !== null && showHomeElement
         ? (homeHidden
-            ? html`<div class="home-ring" style="left:${layout!.home.x}px; top:${layout!.home.y}px; --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
+            ? html`<div class="home-ring" style="transform:translate(${layout!.home.x}px,${layout!.home.y}px) translate(-50%,-50%); --home-ring-color:${chipSlotColor(this.host, cfg, 'home')}"></div>`
             : html`
                     <div
                         class="home-pill ${this.host._homeHover ? 'is-hovered' : ''} ${interactive && this.host._chartTarget === 'consumption' ? 'is-chart-active' : ''} ${curveOn && active === 'consumption' ? 'is-curve-on' : ''}"
-                        style="left:${layout!.home.x}px; top:${layout!.home.y}px"
+                        style="transform:translate(${layout!.home.x}px,${layout!.home.y}px) translate(-50%,-50%)"
                         role=${interactive ? 'button' : nothing}
                         tabindex=${interactive ? '0' : nothing}
                         data-target="consumption"

@@ -18,12 +18,11 @@ export const en: Translations = {
 
   period: {
     rangeLabel: "Time range",
-    forecast: "Forecast",
+    forecast: "D - D+2",
     yesterday: "Yesterday",
     today: "Today",
     week: "Week",
     month: "Month",
-    year: "Year",
   },
 
   compass: "N,NE,E,SE,S,SW,W,NW",
@@ -68,7 +67,7 @@ export const en: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Camera auto-rotation",
     autoRotateHint:
-      "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go. Avoid it on very old devices: auto-rotation forces a render every second.",
+      "When idle for a few seconds, the camera slowly orbits the home (about 4°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go. Avoid it on very old devices: auto-rotation forces a render every second.",
     autoRotateOn: "On",
     autoRotateOff: "Off",
     degradedRender: "Compatibility rendering",
@@ -131,6 +130,13 @@ export const en: Translations = {
     showHorizonLineHint: "Draw the terrain skyline around the home, computed from the local relief. The horizon always dims the sun realistically behind hills; this only toggles the drawn line.",
     horizonLineColor: "Terrain horizon colour",
     horizonLineColorHint: "Colour of the terrain horizon line.",
+    moonDisplay: "Moon display mode",
+    moonDisplayHint: "Draw the moon on its own arc with a phase-correct crescent, always in front of the sun. Cosmetic only: no chip, no value.",
+    moonDisplayAlways: "Always",
+    moonDisplayNight: "Night",
+    moonDisplayHidden: "Disabled",
+    sceneZoom: "Scene zoom",
+    sceneZoomHint: "Magnifies the map, buildings and shadows around your home: 1x is the default rendering, 1.5x and 2x make them larger on screen. The sun, the arcs and the chips keep their size.",
     lockRotation: "Lock rotation",
     lockRotationHint:
       "Drag the preview to rotate and tilt the scene to the view you want, then turn this on. Locking freezes that view (drag-to-rotate and the idle auto-orbit stop) and saves the angle to the card, so the exact same view appears on every device and browser. Turn it off to rotate freely again.",
@@ -225,6 +231,7 @@ export const en: Translations = {
     buildingColorHelp:
       "Base tint applied to the surrounding buildings in the scene.",
     shadowsSection: "Shadows",
+    moonSection: "Moon configuration",
     shadowsEnabled: "Show shadows",
     shadowsEnabledOn: "Shown",
     shadowsEnabledOff: "Hidden",

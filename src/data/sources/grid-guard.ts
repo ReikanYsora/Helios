@@ -11,8 +11,7 @@
 //explains the fix; it self-clears the same way, once enough later windows agree the sensor reports real
 //export correctly, so a user who fixes their wiring in place needs to touch nothing else.
 //
-//Only single-net-sensor installs are evaluated (the flattened prefs of every modern core produce exactly one
-//stat_rate per source; multi-source wirings keep the current behavior untouched).
+//Only single-net-sensor installs are evaluated (one stat_rate per source; multi-source wirings are not evaluated).
 
 import type { HassLike } from '../../core/ha-types';
 import type { EnergyDefaults } from './energy-prefs';

@@ -90,7 +90,7 @@ function offsetMs(ms: number): number
 
 //Integer millisecond-of-day [0, DAY_MS) of an instant, in the home zone (browser zone until one is set).
 //
-//Anything binning a day into slots must come through here rather than through the fractional hour below. Dividing
+//Anything binning a day into slots must come through here rather than via a fractional hour. Dividing
 //a whole day into an EXACT number of slots is integer arithmetic; going via hours makes it floating point, and a
 //slot that is not a binary-friendly fraction of an hour (20 min, 12 min, 10 min) then lands its boundaries just
 //under the integer they should be. floor() drops to the previous slot, which swallows two samples while its

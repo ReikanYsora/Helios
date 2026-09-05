@@ -6,9 +6,9 @@ import { parseNumericState, pvNormalizeToWatts } from '../core/format/format';
 
 
 //Gate for a keyed, de-duplicated fetch: runs its task at most once per distinct key, and never while a run
-//is already in flight. Consolidates the hand-rolled `_xxxFetchKey` + `_xxxFetching` field pairs sources carry
-//(pv/grid/device use this gate; battery/irradiance still hold their own pair); the source keeps its series
-//data on the host and just drives this gate.
+//is already in flight. pv/grid/device/cost and the battery change fetch drive this gate; the battery SoC and
+//irradiance raw-window fetches keep their own key + flag pair on the host. The source keeps its series data on
+//the host and just drives this gate.
 export class KeyedFetch
 {
     private _key = '';

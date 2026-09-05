@@ -9,8 +9,7 @@
 import { WS_DEFAULT_TIMEOUT_MS as DEFAULT_TIMEOUT_MS, WS_MAX_CONCURRENT_FETCHES as MAX_CONCURRENT_FETCHES } from '../core/config/constants';
 
 
-//Minimal shape of hass the gateway needs. Widened toward the full HomeAssistant type as the data layer
-//migrates off `any`.
+//Minimal shape of hass the gateway needs.
 export interface HassCallWS
 {
     callWS: <T>(payload: object) => Promise<T>;

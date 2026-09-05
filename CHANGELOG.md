@@ -7,6 +7,217 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.4
+
+The performance release. A full audit of the rendering pipeline, every fix
+re-measured under simulated weak-hardware CPU throttling before it shipped, then
+a second pass that measured where a rotation actually spends its time: the scene
+layer now keeps its buildings and shadows between frames, timeline scrubbing
+tracks your drag, chip movement is lighter, and the card does less work while it
+sits on a dashboard. Editing the card in the visual editor no longer boots it from
+nothing at every change, which was the mechanism behind the reloads reported on
+phones and the odd frame between two settings. In the sky, the moon on its own arc
+with its real phase; around your home, a scene zoom, and, with Helios-Forecast,
+your arrays marked in the scene. Plus the fixes that reached 2026.9.3.
+
+### Added: your arrays in the scene, when Helios-Forecast is installed
+
+With Helios-Forecast (2026.9.1 or later) providing the solar forecast, the card now
+reads the lines you configured there and marks each one in the scene: a small
+spring-green tile at the line's own position (or on the roof of your home, on the
+side it faces, when the line has no coordinates of its own), turned to its azimuth
+and raised to its tilt, so it shows which way the array looks; it brightens as the
+sun comes square to it. While the sun is up, a hairline of dots runs from each tile
+to the sun, and the single sun-to-production ray steps aside. The tile is drawn in
+true perspective, so seen from behind at a low angle it thins to an edge, as a real
+panel would. A tracker, which has no fixed orientation, lies flat. Nothing is shown
+without the integration, and no name or value is ever written next to a tile: the
+scene keeps its graphic language. Asked for by @caswal.
+
+### Added: a scene zoom
+
+A `scene-zoom` option (visual editor, "UI" section) at 1x, 1.5x or 2x
+magnifies the map, the buildings and the shadows around your home, for a wide
+card where the neighbourhood read too small. The sun, its arcs, the moon and the
+chips keep their size, so the card stays as legible as before, just with a bigger
+home in the middle. 1x is the default rendering, unchanged. Asked for by @10tribu.
+
+### Added: the moon, on its own arc, with its real phase
+
+The scene now draws the moon: its own arc across the same sky dome as the sun's
+(dotted while it is below the horizon, solid above), and a disc showing the actual
+crescent for the current phase, lit toward the sun's position in the scene so it
+reads right whichever way the camera turns. Its position and illuminated fraction
+come from a compact lunar-position model in the same spirit as the sun's, no
+ephemeris library; the phase checks out against documented full and new moons to
+well under a percent. The moon always paints in front of the sun, since it is the
+nearer body, and it carries no chip and no value: it is purely cosmetic. A new
+`moon-display` option (visual editor, "Moon configuration" section) picks Night (the
+default: while the sun is below the horizon), Always, or Disabled. Asked for by
+@Sniper435 (#408).
+
+### Changed: the scene keeps its buildings and shadows between frames
+
+Rotating the scene rebuilt the whole buildings-and-shadows layer from scratch
+every frame: one long piece of markup regenerated, handed to the browser, which
+threw the previous layer away, parsed the new one, recreated every shape and
+restyled it. That rebuild was the single heaviest thing the card did while the
+camera moved. The layer now keeps its shapes alive and, each frame, rewrites
+only what actually moved (the geometry of each wall, roof and shade), adding or
+dropping shapes at the tail as buildings enter or leave the view. The picture
+is the same one to the pixel: the painters emit the exact same shapes in the
+exact same order, a snapshot test pins that, and a screenshot comparison of
+the scene against the previous build across five camera poses and three times of day
+(noon, low sun, night) found zero differing pixels. On a CPU throttled six
+times, a continuous rotation drops from about 76% to 65% of the main thread
+busy, and its worst frame from 50 ms to 27 ms; interaction (drag, scrub,
+hover, period switch) and idle are unchanged or slightly lighter. Along the
+way, the shade projector no longer projects each footprint three times over
+(the sweep, the edge quads and the stencil now share one projection) and the
+wall painter reads each vertex's depth from the projection it already made
+instead of projecting it again; neither changes a coordinate.
+
+### Changed: the "Forecast" period is now "D - D+2"
+
+The first tab of the period selector read "Forecast", which said what the data
+was rather than what the window is: today plus the two days ahead. It is now
+named for the window itself, "D - D+2" (with the local letter for "day" in each
+language, "J - J+2" in French). Nothing else changes: the YAML value and the remembered selection are
+untouched.
+
+### Changed: timeline scrubbing tracks your drag much more closely
+
+Dragging the timeline could feel stepped rather than smooth, especially on
+slower hardware. The scene's ground map was repainting on almost every tiny
+step of the drag, even when the sky barely changed, because the repaint check
+only skipped an *exactly* unchanged reading, and a live drag practically never
+lands on the same value twice. That check now tolerates an imperceptibly small
+change instead of demanding an exact match, so the map only actually repaints
+when the sky genuinely does. Thanks to @mifritscher2 for the detailed report
+that pointed at this (#417).
+
+### Changed: lighter chip movement, and a leaner ground map on the normal renderer
+
+Chips and markers on the scene (production, battery, grid, group and
+irradiance labels, the home marker) now move using a technique the browser can
+animate without re-checking the page layout each frame, and the overlay that
+keeps them aligned during rotation skips every second frame during a fast
+spin, both imperceptible changes that free up real headroom on every device.
+On the normal renderer, the ground map's shapes are also now reused between
+redraws instead of rebuilt from scratch every time nothing but the colour
+actually changed. On the compatibility renderer (older Android GPUs, some
+browsers, the Home Assistant app on certain devices), the ground map now draws
+roads, paths, railways and borders in batched strokes instead of one at a
+time, which measurably lightens the background cleanup work the browser has
+to do, even though it did not turn out to speed up that renderer's own redraw.
+
+### Changed: the card does less work while sitting idle in a busy house
+
+Home Assistant hands the card a fresh state snapshot on *any* entity change
+anywhere in the house, not just the ones this card actually shows. The card
+used to re-render on every single one of those, even a light bulb three rooms
+over. It now recognizes when nothing it actually reads has changed and skips
+that render entirely, which matters most for a card that is visible on a
+dashboard but not being actively watched, in a home with a lot of other
+activity.
+
+### Changed: cheaper colour lookups and less avoidable repainting
+
+A handful of smaller savings from the same audit: chip and chart colours
+(pulled from your Home Assistant theme) are now resolved once and reused
+instead of being recalculated on every redraw, correctly refreshing the
+moment you actually switch theme; the sun's radiant-heat glow around the sun
+disc no longer keeps animating in the background when it is fully invisible
+(a weak or hazy sun); the weather overlay's variables are only rewritten when
+they actually change; the timeline's date/time labels reuse their formatter
+instead of building a new one for every label; and a few leftover style
+writes that never did anything (their values never actually change) were
+removed from the per-frame render path.
+
+### Fixed: editing the card no longer boots it from nothing at every change
+
+In the visual editor, Home Assistant destroys the card and creates a fresh one
+on every setting you change. Each fresh card used to start from nothing: a
+frame or more with no map, no buildings, empty chips and an empty timeline
+while it re-fetched and repainted everything, and every rebuild left the
+previous basemap canvas (2816 px square, about 32 MB) waiting for the garbage
+collector. On a phone or a tablet, a run of quick changes could stack enough of
+them for the browser to give up: the WebView reloaded, or the card stayed stuck
+in that half-drawn state until a page refresh. A leaving card now parks its
+painted map for the one that replaces it, and hands over its fetched data (live
+readings, series, forecast, preferences), so the next card shows a complete
+scene from its first frames and refreshes behind it; the parked map is reclaimed
+on the spot, and any map nobody claims within a minute has its canvas emptied at
+once. Under a six-times CPU throttle, a rebuilt card now shows its map one frame
+in instead of three, and is complete in about 140 ms instead of 260 ms; on a real
+Home Assistant, where the recorder fetches take far longer than in the harness,
+the difference is the whole loading phase. This is the mechanism behind #414's
+"change settings, rotate, repeat until it crashes" and the odd frame you could see
+between two settings in the editor.
+
+### Fixed: the battery sign guard now covers installs with several batteries
+
+Helios cross-checks a battery's live power sensor against its charge and
+discharge meters and corrects a sensor whose sign convention contradicts the
+slot it was wired into (a charge-positive sensor set to "Standard", say). That
+check only ever ran for a single battery: with two or more, it switched itself
+off, so a backwards sensor stayed backwards on the live chip and in the flow
+while the history, built from the meters, stayed right. It now judges each
+battery against its own meters and flips exactly the sensor(s) that need it,
+inside the sum, so a correct second battery is never turned around with a wrong
+first one. Single-battery installs behave exactly as before. Thanks to
+@bernhard2901 for the screenshots that pinned this down (#422).
+
+### Fixed: a fetch-per-render loop for every non-admin viewer (since 2026.9.3)
+
+The 2026.9.3 fix that stopped retrying the rejected Energy-preferences event
+subscription for non-admin users (#415) skipped the subscription but forgot to
+leave its guard set. The card re-checks that guard on every render, and the
+one-shot preferences fetch that still runs for non-admin users rewrites the
+Energy snapshot each time it lands, which re-renders, which re-checks the
+guard, which fetches again: one `energy/get_prefs` + `energy/info` round-trip
+per render, indefinitely, on every dashboard viewed by a non-admin user (a
+steady websocket drip on a real core; a hard main-thread lock against a
+synchronous mock, which is how it was caught). The guard now holds after the
+first fetch, exactly like the rejected-subscription path already did.
+
+### Fixed: the forecast curve could stay frozen on a stale snapshot
+
+The unified data store's rebuild check tracked the fetched HA Energy solar
+forecast by its point COUNT only. A forecast provider that revises its
+past-hour values in place, without the count changing, is a case that check
+was structurally blind to: the store kept whatever forecast content it had
+from the last rebuild-triggering event (boot, or a period switch), silently
+discarding every later background refetch. On a dashboard left open, this
+showed up as the past-hour curve looking correct on first paint, then stuck,
+then briefly correct again right after switching the timeline period and
+back, then stuck again after switching to another Home Assistant dashboard
+view and back and none of it actually tracking when the underlying forecast
+data changed. The store now also tracks the last fetch's timestamp, so an
+in-place revision invalidates it like every other source already does.
+Thanks to @ruteclrp for the detailed reports on Helios-Forecast#52, which is
+where this was traced to, before turning out to be a card-side bug, not one
+in the integration itself.
+
+### Fixed: the sunrise and sunset markers no longer paint over the chips
+
+The two horizon-crossing markers (glyph + local time) shared the chips' own
+layer and came later in the paint order, so one landing under a chip covered
+its value. They now sit just below the chips and still above the weather, so a
+downpour never dims the times either.
+
+### Fixed: charts and the timeline no longer share cached data between
+multiple Helios cards on the same dashboard
+
+A few internal caches (chart series, daily totals, night-time shading, the
+timeline's own tick model) were shared across every Helios card on a page
+instead of kept separately per card. With only one card this was invisible,
+but with two or more, each card's render could silently evict and rebuild
+the other's cached data instead of reusing its own. Each card now keeps its
+own cache.
+
+---
+
 ## 2026.9.3
 
 A fast follow-up, mostly fixes reported by the wave of new users right after

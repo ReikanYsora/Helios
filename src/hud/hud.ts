@@ -1,4 +1,4 @@
-//Screen-space HUD subsystem: pulls fresh projections from the engine (sun arc, cloud dome, home silhouettes, label
+//Screen-space HUD subsystem: pulls fresh projections from the engine (sun + moon arcs, day curve, array tiles, label
 //anchors), maps sun arc samples into stroke segments, gates SMIL play-state on card visibility, and exposes the
 //"flow duration" easing that ramps animation speed with the live production rate.
 
@@ -29,6 +29,33 @@ export interface SunScene
     ridge:    { x: number; y: number }[];
     sunrise:  { x: number; y: number; angleRad: number; time: Date } | null;
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
+}
+
+//Moon-scene projection (engine.projectMoonScene): its own arc on the same dome as the sun's, plus the disc's
+//position and phase. Cosmetic only, so no irradiance, ray anchor, ridge or rise/set markers.
+export interface MoonScene
+{
+    arc:  SunArcSample[];
+    moon: {
+        x: number; y: number; altitude: number; azimuth: number; nearness: number;
+        fraction: number; waxing: boolean;
+    };
+}
+
+//Array markers (engine.projectArrayScene): one tile per Helios-Forecast line, as its projected quad, its centre
+//(the ray's foot) and how squarely it faces the sun (0..1, the tile's glow); `sun` is the ray target, null while
+//the sun is below the horizon (no rays). null when the install has no Helios-Forecast lines.
+export interface ArrayTile
+{
+    points: [number, number][];
+    cx:     number;
+    cy:     number;
+    glow:   number;
+}
+export interface ArrayScene
+{
+    tiles: ArrayTile[];
+    sun:   { x: number; y: number } | null;
 }
 
 //Screen-space anchors for the always-visible chips plus ring edge / home point used by leader lines.
@@ -66,8 +93,12 @@ export interface HudHost
 
     _labelLayout:     LabelLayout | null;
     _sunScene:        SunScene | null;
+    //The moon's own arc + disc, projected alongside the sun's. null until the engine is ready.
+    _moonScene:       MoonScene | null;
     //The day curve, already projected, as the two depth passes the card layers around its chips. null when off.
     _dayCurveScene:   DayCurveScene | null;
+    //The Helios-Forecast array tiles + rays, projected with the rest. null without the integration.
+    _arrayScene:      ArrayScene | null;
 
     readonly shadowRoot: ShadowRoot | null;
     readonly classList:  DOMTokenList;
@@ -182,6 +213,73 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     return true;
 }
 
+//Same identity-preserving guard as sunSceneEq: the moon is re-projected on every transform tick, and a content-equal
+//result must keep its identity or Lit rebuilds the moon SVG for nothing. Phase (fraction/waxing) is gated too: a
+//fixed scrub time at a stationary moon still changes the crescent as the day is scrubbed.
+function moonSceneEq(a: MoonScene | null, b: MoonScene | null): boolean
+{
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b)
+    {
+        return false;
+    }
+    if (!nearlyEq(a.moon.x, b.moon.x) || !nearlyEq(a.moon.y, b.moon.y)
+        || !nearlyEq(a.moon.altitude, b.moon.altitude)
+        || !nearlyEq(a.moon.nearness, b.moon.nearness)
+        || Math.abs(a.moon.fraction - b.moon.fraction) > 0.002
+        || a.moon.waxing !== b.moon.waxing)
+    {
+        return false;
+    }
+    if (a.arc.length !== b.arc.length)
+    {
+        return false;
+    }
+    for (let i = 0; i < a.arc.length; i++)
+    {
+        const sa = a.arc[i]; const sb = b.arc[i];
+        if (sa.belowHorizon !== sb.belowHorizon || !nearlyEq(sa.x, sb.x) || !nearlyEq(sa.y, sb.y))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+//Same gate for the array tiles: a few quads, compared corner by corner, plus the glow (sun-driven, so a fixed
+//scrub time at a still camera can change it alone).
+function arraySceneEq(a: ArrayScene | null, b: ArrayScene | null): boolean
+{
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b || a.tiles.length !== b.tiles.length || !pointEq(a.sun, b.sun))
+    {
+        return false;
+    }
+    for (let i = 0; i < a.tiles.length; i++)
+    {
+        const ta = a.tiles[i]; const tb = b.tiles[i];
+        if (Math.abs(ta.glow - tb.glow) > 0.01 || !nearlyEq(ta.cx, tb.cx) || !nearlyEq(ta.cy, tb.cy)
+            || ta.points.length !== tb.points.length)
+        {
+            return false;
+        }
+        for (let k = 0; k < ta.points.length; k++)
+        {
+            if (!nearlyEq(ta.points[k][0], tb.points[k][0]) || !nearlyEq(ta.points[k][1], tb.points[k][1]))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 function dayCurvePassEq(a: DayCurvePass, b: DayCurvePass): boolean
 {
     if (a.foot !== b.foot || a.risers !== b.risers)
@@ -251,12 +349,12 @@ function dayCurveSceneEq(a: DayCurveScene | null, b: DayCurveScene | null): bool
 }
 
 //Pull fresh screen-space layouts from the engine and stash on the host. Cheap (a few matrix multiplies per
-//projection). Called on every map transform, once at first weather update (projection matrix ready only after style
-//load), and on every periodic tick in live mode (sun position depends on time).
+//projection). Called on every map transform, once at first weather update (the camera has its viewport by then), and
+//on every periodic tick in live mode (sun position depends on time).
 //
 //Each assignment is gated by an equality check: Lit dirty-checks @state by identity, so a fresh-identity assignment
 //with identical content still triggers a full re-render. During manual rotation the engine fires transform events at
-//pointer rate (up to 120 Hz), and the template's three SMIL <animateMotion> paths are rebuilt from these fields;
+//pointer rate (up to 120 Hz), and the template's SMIL <animateMotion> paths are rebuilt from these fields;
 //Safari re-arms the SMIL clock on every path mutation, so without these guards the clock state grows over a drag and
 //frame budget collapses.
 export function refreshHud(host: HudHost): void
@@ -280,12 +378,26 @@ export function refreshHud(host: HudHost): void
         host._sunScene = nextSun;
     }
 
+    //The moon rides the same refresh as the sun: same dome, same camera, same reasons to re-project.
+    const nextMoon  = host._engine ? host._engine.projectMoonScene(t) : null;
+    if (!moonSceneEq(host._moonScene, nextMoon))
+    {
+        host._moonScene = nextMoon;
+    }
+
     //The day curve rides the same refresh as the rest of the HUD, for the same reason: it is projected through the
     //camera, so it has to be redrawn on every map transform or it slides off the scene under it. Gated like the others.
     const nextCurve = host._engine?.projectDayCurve(t) ?? null;
     if (!dayCurveSceneEq(host._dayCurveScene, nextCurve))
     {
         host._dayCurveScene = nextCurve;
+    }
+
+    //The array tiles stand in the scene like the buildings and their rays reach for the sun: same refresh.
+    const nextArrays = host._engine?.projectArrayScene(t) ?? null;
+    if (!arraySceneEq(host._arrayScene, nextArrays))
+    {
+        host._arrayScene = nextArrays;
     }
 }
 

@@ -1,4 +1,4 @@
-//"Your real sky": the on-card weather overlay, driven by the real weather resolved at the current
+//The on-card weather overlay, driven by the real weather resolved at the current
 //live/scrub time (cloud cover, precipitation, snowfall, WMO weather code). Independent layers stack: the cloud
 //cover sets the sun/grey grade, and rain, snow and thunderstorm add on top of it.
 //
@@ -38,11 +38,10 @@ const isStormCode = (c: number): boolean => c === 95 || c === 96 || c === 99;
 const RAIN_MIN_MM = 0.1;
 const SNOW_MIN_CM = 0.1;
 
-//Precipitation rate -> particle density [0,1], as a piecewise-linear curve through the meteorological intensity
-//classes (WMO / DWD / Met Office) rather than a single sqrt. A sqrt both over-drew a trace (0.1 mm/h read as 16 %
-//of full density) and saturated at 4 mm/h, so a downpour and a violent storm looked identical. The breakpoints are
-//the class ceilings, so a drizzle, moderate rain, a downpour and a storm each read as a distinct density. Piecewise
-//linear is a couple of comparisons plus one interpolation, cheap enough for the per-frame call.
+//Precipitation rate -> particle density [0,1], piecewise-linear through the meteorological intensity classes
+//(WMO / DWD / Met Office): the breakpoints are the class ceilings, so drizzle, moderate rain, a downpour and a
+//storm each read as a distinct density (a single sqrt would draw a 0.1 mm/h trace at 16 % and saturate at 4 mm/h).
+//A couple of comparisons plus one interpolation, cheap enough per frame.
 type IntensityCurve = readonly (readonly [number, number])[];
 
 function intensityDensity(x: number, curve: IntensityCurve): number

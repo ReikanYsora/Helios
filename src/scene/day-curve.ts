@@ -31,8 +31,8 @@ export interface SunTrackPoint
     n: number;
 }
 
-//Stroke width at the track's far and near extremes. With no fill left, width IS the depth: the same ribbon the sun
-//arc draws itself with, and the same range, so the two read as one scene rather than two conventions.
+//Stroke width at the track's far and near extremes: width is the depth cue, the same ribbon and range the sun arc
+//draws with, so the two read as one scene.
 const CURVE_WIDTH_FAR  = 1.0;
 const CURVE_WIDTH_NEAR = 4.0;
 
@@ -255,8 +255,8 @@ function splitByDepth(ground: GroundPoint[]): { idx: number[]; near: boolean }[]
 }
 
 //Nearness of every point, 0 (furthest of this track) .. 1 (nearest), normalised over the track's OWN depth range,
-//exactly as the sun arc normalises its own. It drives stroke width, which is the whole depth cue now that there is
-//no fill to carry one. Off the shared ground depths, so every strand reads the same near/far ramp.
+//exactly as the sun arc normalises its own. It drives stroke width, the depth cue. Off the shared ground depths, so
+//every strand reads the same near/far ramp.
 function nearnessOf(depths: number[]): number[]
 {
     let dMin = Infinity;
@@ -421,9 +421,8 @@ export function renderDayCurve(camera: SceneCamera, curve: DayCurveData, sun: Cu
         return { far: emptyPass(), near: emptyPass() };
     }
 
-    //The curve is a ring around the home; at low zoom its far side runs well past the card. On old iOS that
-    //off-card ink oversizes the day-curve SVG layer past the compositor cap and drops its lower half.
-    //A span whose chord misses the card box is dropped whole, so on-card spans keep their exact shape.
+    //The curve is a ring around the home; at low zoom its far side runs well past the card, and off-card ink must
+    //not enlarge the SVG layer (see .scene-svg).
     const rect = cardClipRect(camera.width, camera.height);
     const slots = curve.base.length;
     //Each pass carries one strand-pass per strand, aligned by index, so a strand keeps its slot in both halves.

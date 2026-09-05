@@ -7,12 +7,11 @@ export const fr: Translations = {
 
   period: {
     rangeLabel: "Période",
-    forecast: "Prévision",
+    forecast: "J - J+2",
     yesterday: "Hier",
     today: "Aujourd'hui",
     week: "Semaine",
     month: "Mois",
-    year: "Année",
   },
 
   compass: "N,NE,E,SE,S,SO,O,NO",
@@ -81,7 +80,7 @@ export const fr: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Rotation auto de la caméra",
     autoRotateHint:
-      "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que vous lâchez. À éviter sur les appareils très anciens : la rotation auto force un rendu chaque seconde.",
+      "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 4°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que vous lâchez. À éviter sur les appareils très anciens : la rotation auto force un rendu chaque seconde.",
     autoRotateOn: "Activée",
     autoRotateOff: "Désactivée",
     degradedRender: "Rendu de compatibilité",
@@ -141,6 +140,13 @@ export const fr: Translations = {
     showHorizonLineHint: "Dessine la ligne d'horizon du relief autour de la maison, calculée à partir du terrain local. L'horizon atténue toujours le soleil de façon réaliste derrière les collines ; ceci ne fait qu'afficher ou masquer la ligne.",
     horizonLineColor: "Couleur de l'horizon du terrain",
     horizonLineColorHint: "Couleur de la ligne d'horizon du terrain.",
+    moonDisplay: "Mode d'affichage de la lune",
+    moonDisplayHint: "Dessine la lune sur son propre arc avec un croissant fidèle à sa phase, toujours devant le soleil. Purement cosmétique : ni badge, ni valeur.",
+    moonDisplayAlways: "Toujours",
+    moonDisplayNight: "Nuit",
+    moonDisplayHidden: "Désactivée",
+    sceneZoom: "Zoom de la scène",
+    sceneZoomHint: "Agrandit la carte, les bâtiments et les ombres autour de votre domicile : 1x est le rendu par défaut, 1,5x et 2x les affichent plus gros à l'écran. Le soleil, les arcs et les badges gardent leur taille.",
     lockRotation: "Verrouiller la rotation",
     lockRotationHint:
       "Faites glisser l'aperçu pour pivoter et incliner la scène jusqu'à la vue souhaitée, puis activez ceci. Le verrou fige cette vue (le glisser-pour-pivoter et l'auto-rotation au repos sont désactivés) et enregistre l'angle dans la carte, pour un rendu identique sur chaque appareil et navigateur. Désactivez-le pour pivoter à nouveau librement.",
@@ -215,6 +221,7 @@ export const fr: Translations = {
     buildingColorHelp:
       "Teinte de base appliquée aux bâtiments environnants dans la scène.",
     shadowsSection: "Ombres",
+    moonSection: "Configuration de la lune",
     shadowsEnabled: "Afficher les ombres",
     shadowsEnabledOn: "Affichées",
     shadowsEnabledOff: "Masquées",

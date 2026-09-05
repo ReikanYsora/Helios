@@ -8,12 +8,11 @@ export const lt: Translations = {
 
   period: {
     rangeLabel: "Laiko intervalas",
-    forecast: "Prognozė",
+    forecast: "D - D+2",
     yesterday: "Vakar",
     today: "Šiandien",
     week: "Savaitė",
     month: "Mėnuo",
-    year: "Metai",
   },
 
   compass: "Š,ŠR,R,PR,P,PV,V,ŠV",
@@ -82,7 +81,7 @@ export const lt: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatinis kameros sukimasis",
     autoRotateHint:
-      "Kai kelias sekundes neaktyvi, kamera lėtai sukasi aplink namus (apie 1,5°/s, priešingai matomam saulės judėjimui). Vilkimas vienu pirštu ją iškart pristabdo, ir ji atsinaujina, kai atleidi. Venk to labai senuose įrenginiuose: automatinis sukimasis priverčia atvaizduoti kas sekundę.",
+      "Kai kelias sekundes neaktyvi, kamera lėtai sukasi aplink namus (apie 4°/s, priešingai matomam saulės judėjimui). Vilkimas vienu pirštu ją iškart pristabdo, ir ji atsinaujina, kai atleidi. Venk to labai senuose įrenginiuose: automatinis sukimasis priverčia atvaizduoti kas sekundę.",
     autoRotateOn: "Įjungta",
     autoRotateOff: "Išjungta",
     degradedRender: "Suderinamumo atvaizdavimas",
@@ -142,6 +141,13 @@ export const lt: Translations = {
     showHorizonLineHint: "Nubrėžia reljefo horizonto liniją aplink namus, apskaičiuotą pagal vietovės reljefą. Horizontas visada realistiškai pritemdo saulę už kalvų; tai tik parodo arba paslepia nubrėžtą liniją.",
     horizonLineColor: "Reljefo horizonto spalva",
     horizonLineColorHint: "Reljefo horizonto linijos spalva.",
+    moonDisplay: "Mėnulio rodymo režimas",
+    moonDisplayHint: "Piešia mėnulį ant jo paties lanko su fazę atitinkančiu pjautuvu, visada priešais saulę. Tik dekoratyvu: be žymos, be vertės.",
+    moonDisplayAlways: "Visada",
+    moonDisplayNight: "Naktis",
+    moonDisplayHidden: "Išjungta",
+    sceneZoom: "Scenos mastelis",
+    sceneZoomHint: "Padidina žemėlapį, pastatus ir šešėlius aplink jūsų namus: 1x yra numatytasis vaizdas, 1,5x ir 2x rodo juos didesnius. Saulė, lankai ir žymos išlaiko savo dydį.",
     lockRotation: "Užrakinti kampą",
     lockRotationHint:
       "Vilkite peržiūrą, kad pasuktumėte ir pakreiptumėte sceną iki norimo vaizdo, tada įjunkite tai. Užraktas užfiksuoja tą vaizdą (sukimas velkant ir automatinis sukimasis ramybės būsenoje išjungiami) ir įrašo kampą į kortelę, todėl tiksliai tas pats vaizdas rodomas kiekviename įrenginyje ir naršyklėje. Išjunkite jį, kad vėl galėtumėte laisvai sukti.",
@@ -216,6 +222,7 @@ export const lt: Translations = {
     buildingColorHelp:
       "Bazinis atspalvis, taikomas aplinkiniams pastatams scenoje.",
     shadowsSection: "Šešėliai",
+    moonSection: "Mėnulio konfigūracija",
     shadowsEnabled: "Rodyti šešėlius",
     shadowsEnabledOn: "Rodomi",
     shadowsEnabledOff: "Paslėpti",

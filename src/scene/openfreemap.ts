@@ -192,15 +192,12 @@ export async function fetchOfmBuildingRings(
                             {
                                 continue;
                             }
-                            //Tile ownership. Every tile repeats its neighbours' geometry inside a ~37 m buffer, so
-                            //one building is delivered by up to four tiles: WHOLE by the tile it sits in, and CLIPPED
-                            //by the others (a straight cut along the buffer bound). Taking them all stacked a phantom
-                            //prism on top of the real building, which put a false wall across roofs at tile borders
-                            //and made faces flicker while the camera turned, since two coincident prisms have no
-                            //valid painter order. Keeping a ring only from the tile whose cell contains its centroid
-                            //delivers every building exactly once and whole, by construction. Measured on the real
-                            //tiles around the demo home: clipped footprints entering the scene 24 -> 0, overlapping
-                            //phantoms 40 -> 4. This is what tile renderers do; a buffer is for joins, not for drawing.
+                            //Tile ownership: every tile repeats its neighbours' geometry inside a ~37 m buffer, so
+                            //one building arrives from up to four tiles, whole from the one it sits in and clipped by
+                            //the others. Keeping them all stacks coincident prisms (no valid painter order: flicker,
+                            //a false wall across roofs at tile borders); keeping a ring only from the tile whose cell
+                            //contains its centroid delivers every building once and whole. A buffer is for joins,
+                            //not for drawing.
                             if (!tileOwnsRing(ring, layer.extent))
                             {
                                 continue;

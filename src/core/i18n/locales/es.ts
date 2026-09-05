@@ -8,12 +8,11 @@ export const es: Translations = {
 
   period: {
     rangeLabel: "Periodo",
-    forecast: "Previsión",
+    forecast: "D - D+2",
     yesterday: "Ayer",
     today: "Hoy",
     week: "Semana",
     month: "Mes",
-    year: "Año",
   },
 
   compass: "N,NE,E,SE,S,SO,O,NO",
@@ -82,7 +81,7 @@ export const es: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Rotación automática de la cámara",
     autoRotateHint:
-      "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (unos 1.5°/s, en sentido contrario al movimiento aparente del sol). Un arrastre con un dedo la pausa al instante y se reanuda en cuanto sueltas. Evítala en dispositivos muy antiguos: la rotación automática fuerza un renderizado cada segundo.",
+      "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (unos 4°/s, en sentido contrario al movimiento aparente del sol). Un arrastre con un dedo la pausa al instante y se reanuda en cuanto sueltas. Evítala en dispositivos muy antiguos: la rotación automática fuerza un renderizado cada segundo.",
     autoRotateOn: "Activada",
     autoRotateOff: "Desactivada",
     degradedRender: "Renderizado de compatibilidad",
@@ -142,6 +141,13 @@ export const es: Translations = {
     showHorizonLineHint: "Dibuja la línea del horizonte del relieve alrededor de la casa, calculada a partir del terreno local. El horizonte siempre atenúa el sol de forma realista tras las colinas; esto solo muestra u oculta la línea.",
     horizonLineColor: "Color del horizonte del terreno",
     horizonLineColorHint: "Color de la línea del horizonte del terreno.",
+    moonDisplay: "Modo de visualización de la luna",
+    moonDisplayHint: "Dibuja la luna en su propio arco con un creciente fiel a su fase, siempre delante del sol. Solo estético: sin indicador ni valor.",
+    moonDisplayAlways: "Siempre",
+    moonDisplayNight: "Noche",
+    moonDisplayHidden: "Desactivada",
+    sceneZoom: "Zoom de la escena",
+    sceneZoomHint: "Amplía el mapa, los edificios y las sombras alrededor de su casa: 1x es el renderizado por defecto, 1,5x y 2x los muestran más grandes. El sol, los arcos y los indicadores conservan su tamaño.",
     lockRotation: "Bloquear rotación",
     lockRotationHint:
       "Arrastra la vista previa para girar e inclinar la escena hasta la vista que quieras y luego activa esto. El bloqueo congela esa vista (se desactivan el giro con arrastre y la rotación automática en reposo) y guarda el ángulo en la tarjeta, de modo que la misma vista aparece en todos los dispositivos y navegadores. Desactívalo para volver a girar libremente.",
@@ -216,6 +222,7 @@ export const es: Translations = {
     buildingColorHelp:
       "Tinte base aplicado a los edificios del entorno en la escena.",
     shadowsSection: "Sombras",
+    moonSection: "Configuración de la luna",
     shadowsEnabled: "Mostrar sombras",
     shadowsEnabledOn: "Mostradas",
     shadowsEnabledOff: "Ocultas",

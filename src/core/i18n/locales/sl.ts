@@ -8,12 +8,11 @@ export const sl: Translations = {
 
   period: {
     rangeLabel: "Časovni razpon",
-    forecast: "Napoved",
+    forecast: "D - D+2",
     yesterday: "Včeraj",
     today: "Danes",
     week: "Teden",
     month: "Mesec",
-    year: "Leto",
   },
 
   compass: "S,SV,V,JV,J,JZ,Z,SZ",
@@ -82,7 +81,7 @@ export const sl: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Samodejno vrtenje kamere",
     autoRotateHint:
-      "Po nekaj sekundah nedejavnosti kamera počasi kroži okoli doma (približno 1,5°/s, nasprotno navideznemu gibanju sonca). Poteg z enim prstom jo takoj zaustavi in se nadaljuje, ko spustiš. Izogibaj se mu na zelo starih napravah: samodejno vrtenje vsako sekundo prisili izris.",
+      "Po nekaj sekundah nedejavnosti kamera počasi kroži okoli doma (približno 4°/s, nasprotno navideznemu gibanju sonca). Poteg z enim prstom jo takoj zaustavi in se nadaljuje, ko spustiš. Izogibaj se mu na zelo starih napravah: samodejno vrtenje vsako sekundo prisili izris.",
     autoRotateOn: "Vklopljeno",
     autoRotateOff: "Izklopljeno",
     degradedRender: "Izris v načinu združljivosti",
@@ -142,6 +141,13 @@ export const sl: Translations = {
     showHorizonLineHint: "Nariše črto obzorja reliefa okoli doma, izračunano iz lokalnega terena. Obzorje vedno realistično zatemni sonce za griči; to samo prikaže ali skrije narisano črto.",
     horizonLineColor: "Barva obzorja terena",
     horizonLineColorHint: "Barva črte obzorja terena.",
+    moonDisplay: "Način prikaza lune",
+    moonDisplayHint: "Nariše luno na lastnem loku s srpom, zvestim fazi, vedno pred soncem. Zgolj okrasno: brez oznake, brez vrednosti.",
+    moonDisplayAlways: "Vedno",
+    moonDisplayNight: "Noč",
+    moonDisplayHidden: "Onemogočeno",
+    sceneZoom: "Povečava prizora",
+    sceneZoomHint: "Poveča zemljevid, stavbe in sence okoli vašega doma: 1x je privzeti prikaz, 1,5x in 2x jih prikažeta večje. Sonce, loki in ploščice ohranijo svojo velikost.",
     lockRotation: "Zakleni vrtenje",
     lockRotationHint:
       "Povlecite predogled, da zavrtite in nagnete prizor na želeni pogled, nato pa to vklopite. Zaklep zamrzne ta pogled (vrtenje z vlečenjem in samodejno vrtenje v mirovanju se izklopita) in shrani kot v kartico, tako da se popolnoma enak pogled prikaže na vsaki napravi in brskalniku. Izklopite ga za ponovno prosto vrtenje.",
@@ -214,6 +220,7 @@ export const sl: Translations = {
     buildingColorHelp:
       "Osnovni odtenek, uporabljen za okoliške stavbe v prizoru.",
     shadowsSection: "Sence",
+    moonSection: "Nastavitve lune",
     shadowsEnabled: "Pokaži sence",
     shadowsEnabledOn: "Prikazano",
     shadowsEnabledOff: "Skrito",

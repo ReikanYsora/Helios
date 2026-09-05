@@ -33,7 +33,7 @@ function lerp(a: number, b: number, f: number): number
 }
 
 //Irradiance interpolation guarding the -1 "no model value this hour" sentinel: a missing bound is dropped so
-//a real value is never blended toward -1 (mirrors the forecast's lerp_rad).
+//a real value is never blended toward -1.
 function lerpRad(a: number, b: number, f: number): number
 {
     const aBad = !isFinite(a) || a < 0;
@@ -53,7 +53,7 @@ function lerpRad(a: number, b: number, f: number): number
     return a + (b - a) * f;
 }
 
-//Temperature / humidity interpolation guarding the NaN "no value this hour" sentinel (mirrors lerp_finite).
+//Temperature / humidity interpolation guarding the NaN "no value this hour" sentinel.
 function lerpFinite(a: number, b: number, f: number): number
 {
     const aBad = !isFinite(a);
@@ -80,7 +80,7 @@ interface WeatherAtTime
     cloudMid:       number;
     cloudHigh:      number;
     shortwave:      number;
-    //"Your real sky" layers: precipitation (mm), snowfall (cm) and the WMO weather code at this hour.
+    //Weather layers: precipitation (mm), snowfall (cm) and the WMO weather code at this hour.
     precip:         number;
     snowfall:       number;
     weatherCode:    number;
@@ -120,7 +120,7 @@ export function resolveWeatherAtTime(home: SampleHourly | null, t: Date): Weathe
     //Interpolate the raw layers, then recompute the effective cover from them at this instant (via the shared
     //cloudEffective), rather than interpolating the precomputed effective: the min(100) clamp makes effective a
     //non-linear function of the layers, so a separately-interpolated value drifts once the clamp bites. This keeps
-    //the effective cover a function of the layers at any instant, matching the parity golden vectors.
+    //the effective cover a function of the layers at any instant.
     const cloudLow  = lerp(home.cloudLow[i0]  ?? 0, home.cloudLow[i1]  ?? 0, f);
     const cloudMid  = lerp(home.cloudMid[i0]  ?? 0, home.cloudMid[i1]  ?? 0, f);
     const cloudHigh = lerp(home.cloudHigh[i0] ?? 0, home.cloudHigh[i1] ?? 0, f);

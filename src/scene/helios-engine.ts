@@ -2,17 +2,23 @@ import { SceneRenderer } from './renderer';
 import { renderDayCurve, type DayCurveInput as CurveInput, type DayCurveScene } from './day-curve';
 import type { Building, RawBuilding } from './buildings';
 import { getSunPosition, computePvPercent, computeIrradianceWm2 } from '../core/time/sun';
+import { getMoonPosition, getMoonPhase } from '../core/time/moon';
 import { fetchHomePointData, clearWeatherCache, type SampleHourly } from '../data/weather';
 import { fetchRawBuildings, interpretBuildings, clearBuildingsLocationCache } from './buildings';
+import { arrayTileCorners, arrayIncidence, type ArrayLine } from './array-markers';
+import { PERSPECTIVE, NEAR_PLANE } from './projection';
+import type { Point } from '../core/render-kit/geometry';
+import type { ArrayScene } from '../hud/hud';
 import { defaultGroundPalette, GROUND_LAYER_KEYS, type GroundStyle, type GroundLayerKey } from './ground-render';
 import { resolveWeatherAtTime } from '../data/weather-resolve';
 import { clusterScaleRamp, steppedArcScale } from './hud-layout';
-import { sunSpherePoint, daylightRamp, horizonSpherePoint } from './sun-arc';
+import { sunSpherePoint, moonSpherePoint, daylightRamp, horizonSpherePoint } from './sun-arc';
 import { buildTimeSamples, timeSamplesEqual, nearestSampleAt, type TimeSample } from '../core/nearest-series';
 import { fetchHorizonProfile, horizonAltAt, horizonPeak, HORIZON_MIN_PEAK_DEG, type HorizonProfile } from '../data/sources/horizon';
 import {
     CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG,
     SUN_ARC_RADIUS_M, SUN_ARC_SAMPLES, SUN_ARC_NIGHT_OPACITY, SUNRISE_SUNSET_ALTITUDE_DEG,
+    ARRAY_TILE_W_PX, ARRAY_TILE_L_PX, ARRAY_TILE_LIFT_M, DEG,
     SHARED_FETCH_CACHE_TTL_MS, AUTO_ROTATE_DEG_PER_SEC, AUTO_ROTATE_INACTIVITY_MS,
     BUILDINGS_REFETCH_DELAY_MS, METRES_PER_DEGREE, DAY_MS,
     RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS} from '../core/config/constants';
@@ -20,6 +26,7 @@ import
 {
     type HeliosConfig,
     displayRadiusM,
+    sceneZoom,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_SHADOW_OPACITY,
@@ -97,7 +104,7 @@ export interface WeatherData
     cloudLow:       number;        //%, low-level clouds (<= 3 km)
     cloudMid:       number;        //%, mid-level clouds (3 to 8 km)
     cloudHigh:      number;        //%, high-level clouds (>= 8 km)
-    precip:         number;        //mm of precipitation this hour ("Your real sky" rain layer)
+    precip:         number;        //mm of precipitation this hour (rain layer)
     snowfall:       number;        //cm of snowfall this hour (snow layer)
     weatherCode:    number;        //WMO weather code (thunderstorm 95/96/99 drives the storm layer)
     temperature:    number;        //°C outdoor temperature (temperature chip); NaN when unavailable
@@ -106,11 +113,9 @@ export interface WeatherData
     isLiveTime:     boolean;
     pvPower:        number;        //primary value, normalised 0..100 (~ GHI/10 W/m²)
     pvPowerHaurwitz:  number;      //always populated (analytical fallback)
-    pvPowerShortwave: number;      //-1 if shortwave_radiation is unavailable
+    pvPowerShortwave: number;      //-1 when the model shortwave irradiance is unavailable
     irradianceSource: IrradianceSource;
 }
-
-//Cloud disc, chip cluster, camera target and sun-arc tunables live in constants.ts.
 
 
 //Engine
@@ -138,8 +143,8 @@ export class HeliosEngine
 
     //Skip atmosphere repaint when the sun moved less than 1.5° since last call (~6 min).
     private _lastAtmosphereAlt = -999;
-    //Sun altitude at the last ground re-tint. Coarser step than the wash (the vector ground re-raster is heavier
-    //than the cheap full-frame wash), so the day/night grade on the map updates every few degrees.
+    //Sun altitude at the last ground re-tint. Re-rasterising the vector ground is heavy, so its day/night grade
+    //steps every few degrees, coarser than the 1.5° sun/shadow step.
     private _lastGroundAlt = -999;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
@@ -247,7 +252,7 @@ export class HeliosEngine
         this._renderForCurrentSelection();
     }
 
-    //"Your real sky" scene grade (saturate/brightness from the resolved weather). Baked into the ground + building
+    //Weather scene grade (saturate/brightness from the resolved weather). Baked into the ground + building
     //paint by the renderer, not a CSS filter on the map layer - the card computes it, the renderer carries it.
     public setWeatherGrade(sat: number, bright: number): void
     {
@@ -263,6 +268,8 @@ export class HeliosEngine
 
     //Map transform changed: card recomputes screen-space projections (arc, chips, leaders) from this hook.
     public onMapTransform?:  () => void;
+    //The Helios-Forecast lines to mark in the scene, read on every projection pass (the host owns the fetch).
+    public arrayLines: () => readonly ArrayLine[] = () => [];
 
     //Camera pose persists via localStorage: Lovelace doesn't persist config-changed from a live card (only
     //the editor preview), so a YAML round-trip isn't an option. cacheKey is the per-card storage
@@ -397,8 +404,7 @@ export class HeliosEngine
     //Screen-space curve for one instant, as the two depth passes the card layers around its chips. Projected here
     //rather than in the renderer because the curve is a READING, not scene geometry: like the sun arc it has to
     //reach above the chips, and nothing the renderer draws can - #map-container is its own stacking context, so its
-    //whole subtree is pinned below the HUD. Being a HUD layer also puts it clear of the buildings, which it used to
-    //cut straight through.
+    //whole subtree is pinned below the HUD. Being a HUD layer also keeps it clear of the buildings.
     public projectDayCurve(t: Date): DayCurveScene | null
     {
         if (!this._curveInput || !this._renderer)
@@ -427,13 +433,6 @@ export class HeliosEngine
         {
             this._renderer.setHome(color);
         }
-    }
-
-    //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
-    //sun-arc-scale memo key keeps a stable value.
-    public getCameraZoom():    number
-    {
-        return 18;
     }
 
 
@@ -559,6 +558,19 @@ export class HeliosEngine
             belowHorizon: boolean;
         } | null)[];
     };
+    //Same idea as _arcInputsCache, for the moon's own 96 per-day samples. No cloud/sensor/weather dependence
+    //(nothing about the moon's position or phase reads them), so the key is only day + arc scale.
+    private _moonArcInputsCache?: {
+        dayStartMs: number;
+        scaleKey: number;
+        samples: ({
+            lon: number;
+            lat: number;
+            altitudeM: number;
+            altitudeDeg: number;
+            azimuthDeg: number;
+        } | null)[];
+    };
     //Per-(canvas, zoom) memo for _sunArcScale so the 8-direction projection probe runs once per size/zoom
     //change, not per arc sample per frame. Bearing/pitch invariant, so auto-rotation never refreshes it.
     private _arcScaleMemo?: { w: number; h: number; zoom: number; scale: number };
@@ -623,6 +635,7 @@ export class HeliosEngine
         });
         this._renderer.setCameraBearing(this._initialBearing());
         this._renderer.setCameraPitch(this._initialPitch());
+        this._renderer.setZoom(sceneZoom(this.cfg));
         this._resolvePalette();
 
         //Re-project the card's HUD (arc, chips, leaders) on every renderer paint so the overlays stay glued
@@ -912,6 +925,9 @@ export class HeliosEngine
         {
             return;
         }
+        //The renderer can draw (ResizeObserver) before setLocation resolved, while the camera still carried its
+        //seed scale; the arc-scale probe would have memoised that. Drop it so the first real projection re-probes.
+        this._arcScaleMemo = undefined;
         this._onRendererReady();
     }
 
@@ -953,8 +969,8 @@ export class HeliosEngine
 
         //Paint the scene as soon as the renderer is ready, weather or not: the sun arc, home, buildings and the day
         //curve need none of it, and _renderForCurrentSelection already falls back to Haurwitz when the forecast is
-        //absent. Waiting on _homeHourlyData left the whole scene blank through a slow / rate-limited weather fetch
-        //whenever auto-rotate was off (nothing else repaints). Weather repaints on arrival, gated by sunSceneEq.
+        //absent. With auto-rotate off nothing else repaints, so waiting on _homeHourlyData would leave the scene
+        //blank through a slow or rate-limited weather fetch. Weather repaints on arrival, gated by sunSceneEq.
         this._renderForCurrentSelection();
 
         //Deferred horizon kick: a beat past the first paint so its elevation requests never burst into the
@@ -1047,7 +1063,7 @@ export class HeliosEngine
 
 
     //Resolve weather variables at a given time from the home location. Source: _homeHourlyData; the pure
-    //lookup lives in engine/weather-resolve (null returns the empty sentinel so timeline ramps render flat,
+    //lookup lives in data/weather-resolve (null returns the empty sentinel so timeline ramps render flat,
     //shortwave = -1 means no model value this hour and the caller falls back to Haurwitz).
     private _getWeatherAtTime(t: Date): {
         cloudCover:     number;
@@ -1264,7 +1280,7 @@ export class HeliosEngine
         }
 
         //Shared-cache short-circuit: a fresh engine after an editor commit reuses the raw footprints another
-        //engine already fetched for this location (the localStorage cache lives in engine/buildings.ts).
+        //engine already fetched for this location (the localStorage cache lives in scene/buildings.ts).
         const sharedRaw = sharedBuildingsCacheGet(locKey);
         if (sharedRaw)
         {
@@ -1436,8 +1452,8 @@ export class HeliosEngine
         });
         this._renderer.setSun(azimuth, altitude);
 
-        //Day/night colour grade on the vector ground, in coarser altitude steps than the wash above: re-tinting
-        //the whole basemap re-rasterises it, so it updates every few degrees while the cheap wash stays smooth.
+        //Day/night colour grade on the vector ground, in coarser altitude steps than the sun/shadow update above:
+        //re-tinting the whole basemap re-rasterises it.
         if (Math.abs(altitude - this._lastGroundAlt) >= 4)
         {
             this._lastGroundAlt = altitude;
@@ -1566,17 +1582,9 @@ export class HeliosEngine
     }
 
 
-    //IntersectionObserver gate: an off-screen/hidden-tab card calls setPaused(true) to stop the periodic
-    //refresh and dome re-projection. Un-pause does one immediate refresh so the sun matches now, not where
-    //it was when the card scrolled away.
-    //Repaint the vector ground from its cached features. No network, no re-tiling: the geometry is already in
-    //memory, this only re-runs the painter.
-    //
-    //Needed because the ground is a CANVAS painted ONCE, then only moved about by a CSS transform; the draw loop
-    //never touches its pixels. Browsers are free to drop a canvas's backing store while a tab sits in the
-    //background, and nothing here would ever put it back: the map came back blank while the SVG buildings, being
-    //DOM, survived untouched. That is the exact shape of the "left it on a wall tablet and the basemap vanished"
-    //report, and a wall tablet is precisely where a card sits idle for hours.
+    //Repaint the vector ground from its cached features (no network). The ground is a canvas painted once and only
+    //CSS-transformed afterwards, so a backing store the browser drops while the tab sits in the background would
+    //stay blank under the DOM buildings; the card calls this on visibilitychange.
     public repaintGround(): void
     {
         this._renderer?.setGroundStyle(this._groundStyle());
@@ -1591,8 +1599,8 @@ export class HeliosEngine
         this._paused = paused;
         if (paused)
         {
-            //Drop the 60 s sky timer entirely while paused: the callback already early-returns, but the
-            //timer itself woke the page every minute for no work. Re-armed on un-pause.
+            //Drop the 60 s sky timer entirely while paused: its callback would early-return, but the timer itself
+            //would still wake the page every minute. Re-armed on un-pause.
             if (this._skyTimer !== undefined)
             {
                 window.clearInterval(this._skyTimer);
@@ -1643,8 +1651,9 @@ export class HeliosEngine
         this._fetchLon = lon;
         //Both arc caches bake the projection around the home: the scale probe and the per-sample sun points.
         //Drop them so the arc rebuilds at the new position instead of reusing the old location's geometry.
-        this._arcScaleMemo   = undefined;
-        this._arcInputsCache = undefined;
+        this._arcScaleMemo       = undefined;
+        this._arcInputsCache     = undefined;
+        this._moonArcInputsCache = undefined;
         void this._renderer?.setLocation(lat, lon, this._groundStyle());
         this._ensureBuildings();
         this._lastAtmosphereAlt = -999;
@@ -1709,11 +1718,8 @@ export class HeliosEngine
         return horizonAltAt(this._horizonProfile, azimuthDeg);
     }
 
-    //Screen-space layout of the on-map readout chips and their leader lines. Returns positions (CSS px
-    //relative to the canvas) for the cloud chip (outside the ring), PV chip, battery SoC/Power chips, the
-    //grid chip, the ring edge (hemisphere-aware anchor direction for the cloud fill interp), and
-    //the projected home point (chip-leader anchor / disc centre). Null when the map isn't ready (card skips
-    //the overlay that frame).
+    //Screen-space layout of the on-map chips: the PV, battery and grid chip anchors, the four group-chip candidate
+    //anchors, and the projected home hub. Null when the map isn't ready (the card skips the overlay that frame).
     public projectHomeLabelLayout(): {
         pvLabel:      { x: number; y: number };
         //Battery chip anchor, top of the right column.
@@ -1741,10 +1747,10 @@ export class HeliosEngine
         //Chip cluster, organised into columns: PV anchored above the home, battery (SoC/Power) stacked on
         //the right, the grid chip on the left, so "what's in" and "what's stored/consumed" split.
         //All offsets scale by _heliosScale() so the cluster spreads on a kiosk layout (= 1.0 at standard
-        //Lovelace sizes, unchanged).
+        //Lovelace sizes).
         const scale = this._heliosScale();
         //Steeper vertical-lift ramp than the horizontal one: leaders down to the home need more height on a
-        //fullscreen canvas. 1.0 at <= 600 px (no change); larger on kiosk so chips float higher.
+        //fullscreen canvas. 1.0 at <= 600 px; larger on kiosk so chips float higher.
         const liftScale = this._clusterLiftScale();
         //Side chips sit this far off the home's x (a touch wide so they don't crowd the home pill/leaders).
         const CHIP_SIDE_X_OFFSET_PX = 84 * scale;
@@ -1753,7 +1759,8 @@ export class HeliosEngine
 
         //The cluster centres on the home pill (the chips' orbit hub), lifted modestly off the ground point
         //so it sits over the building body; liftScale lets a kiosk canvas breathe.
-        const CLUSTER_LIFT_PX = 28 * liftScale;
+        //Lifted with the scene zoom too: the home prism grows with the zoom, so the pill keeps clearing its roof.
+        const CLUSTER_LIFT_PX = 28 * liftScale * (this._renderer?.camera.zoom ?? 1);
         const clusterY = home.y - CLUSTER_LIFT_PX;
         const pvX = home.x;
         //PV sits at exactly twice the home->battery vertical gap (battery is at CHIP_STACK_GAP_PX / 2 above the
@@ -1792,7 +1799,7 @@ export class HeliosEngine
     private _cachedCanvasCssH = 0;
 
 
-    //Horizontal chip-cluster spread ramp (MAX 1.6); the pure ramp math lives in engine/hud-layout.
+    //Horizontal chip-cluster spread ramp (MAX 1.6); the pure ramp math lives in scene/hud-layout.
     private _heliosScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
@@ -1815,8 +1822,8 @@ export class HeliosEngine
         const w = this._cachedCanvasCssW;
         const h = this._cachedCanvasCssH;
         const minDim = Math.min(w || Infinity, h || Infinity);
-        //No zoom under the 2.5D renderer; the constant getCameraZoom() keeps the memo key stable.
-        const zoom = this._renderer ? this.getCameraZoom() : -1;
+        //The scene zoom changes the projected px per metre the probe below measures, so it keys the memo.
+        const zoom = this._renderer ? this._renderer.camera.zoom : -1;
 
         const memo = this._arcScaleMemo;
         if (memo && memo.w === w && memo.h === h && memo.zoom === zoom)
@@ -1862,7 +1869,11 @@ export class HeliosEngine
                     //sane and leaves headroom above the apex for the chips on the sun.
                     const TARGET_FRAC = 0.41;
                     const desiredR    = (TARGET_FRAC * minDim) / pxPerM;
-                    scale = Math.max(0.72, Math.min(desiredR / SUN_ARC_RADIUS_M, 6));
+                    //Floor and cap are on-screen bounds expressed in metre scale: under a scene zoom the same
+                    //screen reach takes 1/zoom the metres, so both move with it (else a small card on the floor
+                    //would see its arc leave the card at 2x).
+                    const z = zoom > 0 ? zoom : 1;
+                    scale = Math.max(0.72 / z, Math.min(desiredR / SUN_ARC_RADIUS_M, 6 / z));
                 }
             }
         }
@@ -1870,11 +1881,14 @@ export class HeliosEngine
         this._arcScaleMemo = { w, h, zoom, scale };
         return scale;
     }
-    //Public accessor so the card scales the sun disc + halo with the arc radius (else the disc stays its
-    //grid-tuned pixel size and reads as a tiny dot on a giant curve on a fullscreen canvas).
+    //Public accessor so the card scales the sun disc + halo (and the moon's) with the arc radius (else the disc
+    //stays its grid-tuned pixel size and reads as a tiny dot on a giant curve on a fullscreen canvas). This is
+    //the ON-SCREEN scale: the internal _sunArcScale() is a metre scale that the probe shrinks by the scene zoom
+    //to keep the arc card-fitted, so it is multiplied back by the zoom here, otherwise the discs would shrink
+    //with every step of zoom while the arc they ride stays put.
     public getSunArcScale(): number
     {
-        return this._sunArcScale();
+        return this._sunArcScale() * (this._renderer?.camera.zoom ?? 1);
     }
 
     //Keystone projection: lon/lat/altitude -> screen px via the SceneCamera. Every card-facing projection
@@ -2186,13 +2200,214 @@ export class HeliosEngine
         };
     }
 
+    //Screen-space array markers: one tile per Helios-Forecast line at its own position (or on the home's roof
+    //when it has none), turned to its azimuth and raised to its tilt, plus the sun the rays point at. The tile
+    //keeps a fixed size on screen at zoom 1 and grows with the scene zoom, like a building would.
+    public projectArrayScene(now: Date): ArrayScene | null
+    {
+        const lines = this.arrayLines();
+        if (!this._renderer || lines.length === 0)
+        {
+            return null;
+        }
+        const cam = this._renderer.camera;
+        const halfW = ARRAY_TILE_W_PX * cam.zoom / (2 * cam.pxPerMetre);
+        const halfL = ARRAY_TILE_L_PX * cam.zoom / (2 * cam.pxPerMetre);
+        const perLat = METRES_PER_DEGREE;
+        const perLon = METRES_PER_DEGREE * Math.cos(this.homeLat * Math.PI / 180);
+        //A line on the home stands on the roof of the tallest home prism, riding its rise animation, and out on the
+        //slope it faces: a south array sits on the south side of the roof, which also keeps the tile from hiding
+        //under the home chips pinned over the centre. The roof's reach in that direction comes from the footprint.
+        let roofM = 0;
+        let homeFp: Point[] = [];
+        for (const b of this._buildingsData ?? [])
+        {
+            if (b.isHome && b.height > roofM)
+            {
+                roofM  = b.height;
+                homeFp = b.footprint;
+            }
+        }
+        roofM = roofM * this._renderer.homeHeightScale + ARRAY_TILE_LIFT_M;
+        const roofReach = (fe: number, fn: number): number =>
+        {
+            let reach = 0;
+            for (const [x, y] of homeFp)
+            {
+                const d = x * fe + y * fn;
+                if (d > reach)
+                {
+                    reach = d;
+                }
+            }
+            return reach > 0 ? reach * 0.55 : 3;
+        };
+        const sunPos = getSunPosition(now, this.homeLat, this.homeLon);
+        const tiles: ArrayScene['tiles'] = [];
+        for (const line of lines)
+        {
+            const onHome = line.lat === null || line.lon === null;
+            const fe = Math.sin(line.azimuth * DEG);
+            const fn = Math.cos(line.azimuth * DEG);
+            const east   = onHome ? fe * roofReach(fe, fn) : (line.lon! - this.homeLon) * perLon;
+            const north  = onHome ? fn * roofReach(fe, fn) : (line.lat! - this.homeLat) * perLat;
+            const base   = onHome ? roofM : ARRAY_TILE_LIFT_M;
+            const tracker = line.tracker !== null;
+            const corners = arrayTileCorners(line.azimuth, line.tilt, halfW, halfL, tracker);
+            const points: [number, number][] = [];
+            let behind = false;
+            for (const [e, n, u] of corners)
+            {
+                const p = cam.project3(east + e, north + n, base + u);
+                if (p.depth >= PERSPECTIVE * (1 - NEAR_PLANE))
+                {
+                    behind = true;
+                    break;
+                }
+                points.push([p.x, p.y]);
+            }
+            if (behind)
+            {
+                continue;
+            }
+            const c = cam.project3(east, north, base);
+            tiles.push({
+                points,
+                cx:   c.x,
+                cy:   c.y,
+                glow: arrayIncidence(line.azimuth, line.tilt, sunPos.azimuth, sunPos.altitude, tracker),
+            });
+        }
+        let sun: ArrayScene['sun'] = null;
+        if (sunPos.altitude > 0)
+        {
+            const sun3D = this._sunSpherePoint(now);
+            const px = sun3D ? this._projectScenePoint(sun3D.lon, sun3D.lat, sun3D.altitudeM) : null;
+            if (px)
+            {
+                sun = { x: px.x, y: px.y };
+            }
+        }
+        return { tiles, sun };
+    }
+
     //date -> 3D point on the celestial hemisphere (centred on home) for _projectScenePoint; the pure
-    //geometry lives in engine/sun-arc, fed the current kiosk arc scale.
+    //geometry lives in scene/sun-arc, fed the current arc scale.
     private _sunSpherePoint(date: Date): {
         lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number
     } | null
     {
         return sunSpherePoint(date, this.homeLat, this.homeLon, this._sunArcScale());
+    }
+
+    //Screen-space layout of the moon's own arc and its current position + phase. Same shape/sampling as
+    //projectSunScene, deliberately leaner: no irradiance, weather, sensor reading or terrain-horizon ridge, none
+    //of which the moon reads. Cosmetic only, so there is no home-anchored incidence ray either (see hud
+    //scene-hud-controller: the moon carries no chip).
+    public projectMoonScene(now: Date): {
+        arc:  { x: number; y: number; altitude: number; nearness: number; belowHorizon: boolean }[];
+        moon: {
+            x: number; y: number; altitude: number; azimuth: number; nearness: number;
+            fraction: number; waxing: boolean;
+        };
+    } | null
+    {
+        if (!this._renderer)
+        {
+            return null;
+        }
+
+        const dayStart = new Date(now);
+        dayStart.setHours(0, 0, 0, 0);
+        const stepMs = DAY_MS / SUN_ARC_SAMPLES;
+
+        const dayStartMs  = dayStart.getTime();
+        const arcScaleKey = Math.round(this._sunArcScale() * 100);
+        let cache = this._moonArcInputsCache;
+        if (!cache || cache.dayStartMs !== dayStartMs || cache.scaleKey !== arcScaleKey)
+        {
+            const samples: ({
+                lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number;
+            } | null)[] = [];
+            for (let i = 0; i < SUN_ARC_SAMPLES; i++)
+            {
+                const t = new Date(dayStartMs + i * stepMs);
+                samples.push(this._moonSpherePoint(t));
+            }
+            cache = { dayStartMs, scaleKey: arcScaleKey, samples };
+            this._moonArcInputsCache = cache;
+        }
+
+        interface RawArcPoint { x: number; y: number; depth: number; altitude: number; belowHorizon: boolean; }
+        const raw: RawArcPoint[] = [];
+        for (let i = 0; i < SUN_ARC_SAMPLES; i++)
+        {
+            const s = cache.samples[i];
+            if (!s)
+            {
+                continue;
+            }
+            const px = this._projectScenePoint(s.lon, s.lat, s.altitudeM);
+            if (!px)
+            {
+                continue;
+            }
+            //No terrain-horizon test for the moon (the profile only gates the sun): plain geometric altitude.
+            raw.push({ x: px.x, y: px.y, depth: px.depth, altitude: s.altitudeDeg, belowHorizon: s.altitudeDeg <= 0 });
+        }
+
+        const moonNow3D = this._moonSpherePoint(now);
+        const moonNowPos = getMoonPosition(now, this.homeLat, this.homeLon);
+        const moonNowPhase = getMoonPhase(now);
+
+        let moonScreen: { x: number; y: number; depth: number } | null = null;
+        if (moonNow3D)
+        {
+            moonScreen = this._projectScenePoint(moonNow3D.lon, moonNow3D.lat, moonNow3D.altitudeM);
+        }
+        if (!moonScreen)
+        {
+            const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+            if (!homeScreen)
+            {
+                return null;
+            }
+            moonScreen = { ...homeScreen };
+        }
+
+        let dMin = Infinity;
+        let dMax = -Infinity;
+        for (const p of raw)
+        {
+            if (p.depth < dMin) { dMin = p.depth; }
+            if (p.depth > dMax) { dMax = p.depth; }
+        }
+        if (moonScreen.depth < dMin) { dMin = moonScreen.depth; }
+        if (moonScreen.depth > dMax) { dMax = moonScreen.depth; }
+        const dRange = (dMax - dMin) || 1;
+        const nearnessOf = (d: number) => (d - dMin) / dRange;
+
+        const arc = raw.map(p => ({
+            x: p.x, y: p.y, altitude: p.altitude, nearness: nearnessOf(p.depth), belowHorizon: p.belowHorizon
+        }));
+
+        return {
+            arc,
+            moon: {
+                x: moonScreen.x, y: moonScreen.y,
+                altitude: moonNowPos.altitude, azimuth: moonNowPos.azimuth,
+                nearness: nearnessOf(moonScreen.depth),
+                fraction: moonNowPhase.fraction, waxing: moonNowPhase.waxing
+            }
+        };
+    }
+
+    //date -> 3D point on the celestial hemisphere (centred on home) for the moon, same dome/scale as the sun.
+    private _moonSpherePoint(date: Date): {
+        lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number
+    } | null
+    {
+        return moonSpherePoint(date, this.homeLat, this.homeLon, this._sunArcScale());
     }
 
     //Set the scrub time (null = live). Swaps the weather refresh cadence and re-renders.
@@ -2223,9 +2438,8 @@ export class HeliosEngine
             //Force atmosphere refresh: the user just scrubbed, so the "moved enough" guard would short-circuit.
             this._lastAtmosphereAlt = -999;
             this._renderForCurrentSelection();
-            //Update shadows + atmosphere in lockstep with the scrub. setSun/setPalette schedule an rAF-coalesced
-            //redraw, so the costly shadow raster still runs at most once per frame, but the sky and shadows now
-            //follow the scrub continuously instead of snapping after a debounce.
+            //Shadows + atmosphere follow the scrub in lockstep: setSun/setPalette schedule an rAF-coalesced redraw,
+            //so the costly shadow raster still runs at most once per frame.
             this._refreshShadowsAndAtmosphere();
         }
     }
@@ -2309,6 +2523,7 @@ export class HeliosEngine
         const prevShadowsOn   = this._shadowsEnabled();
         const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
         const prevCameraLocked = this.isCameraLocked();
+        const prevZoom         = sceneZoom(this.cfg);
         this.cfg = { ...cfg };
 
         //Re-arm the auto-rotate rAF loop when the flags transition back to rotation-permitting (the loop
@@ -2337,6 +2552,17 @@ export class HeliosEngine
         if (!this._renderer)
         {
             return;
+        }
+
+        //Scene zoom: the renderer rescales its camera; the arc caches baked the old px-per-metre into their
+        //samples and the scale memo, so they are dropped for the next projection pass.
+        const nextZoom = sceneZoom(this.cfg);
+        if (nextZoom !== prevZoom)
+        {
+            this._renderer.setZoom(nextZoom);
+            this._arcScaleMemo       = undefined;
+            this._arcInputsCache     = undefined;
+            this._moonArcInputsCache = undefined;
         }
 
         //Building option updates (radius/count/real-size/height/cluster): re-interpret the cached raw
@@ -2371,6 +2597,19 @@ export class HeliosEngine
     }
 
 
+    //The card left the document: park the painted ground for whoever comes next (a returning self included),
+    //keep everything else running until the teardown decision falls.
+    public parkGround(): void
+    {
+        this._renderer?.parkGround();
+    }
+
+    //The card is back before its teardown fired: reclaim the parked ground (or rebuild from the tile cache).
+    public reloadGround(): void
+    {
+        void this._renderer?.setLocation(this.homeLat, this.homeLon, this._groundStyle());
+    }
+
     public cleanup(): void
     {
         this._clearWeatherTimer();
@@ -2381,6 +2620,7 @@ export class HeliosEngine
         window.clearTimeout(this._horizonTimer);
         this._clearBuildingsRetry();
         this._arcInputsCache         = undefined;
+        this._moonArcInputsCache     = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {

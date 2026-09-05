@@ -2,7 +2,7 @@ import { css } from 'lit';
 
 //Styles for the config editor, separate from the runtime card's sheet so editor and card never share
 //selectors. Single export: `editorStyles`, applied to <helios-card-editor>. Sizes/radii/weights/danger
-//colour route through HA tokens (with the prior literal as fallback) so the editor tracks the active theme.
+//colour route through HA tokens (with a literal fallback) so the editor tracks the active theme.
 
 export const editorStyles = css`
     .editor
@@ -425,7 +425,7 @@ export const editorStyles = css`
         padding-top: 14px;
         border-top: var(--ha-border-width-sm, 1px) solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    /*  Device icon tinted in the entity's dashboard colour (set inline), standing in for the old colour dot. */
+    /*  Device icon tinted in the entity's dashboard colour (set inline). */
     .device-icon
     {
         flex: none;
@@ -524,7 +524,7 @@ export const editorStyles = css`
         justify-content: center;
     }
     /*  Group ASSIGNMENT (drag-and-drop): the four groups sit in a grid of drop zones, with a "No group" pool below.
-        A device is assigned by dragging its chip into a zone, replacing the old per-row cycle pill. */
+        A device is assigned by dragging its chip into a zone. */
     .group-zones
     {
         display: grid;

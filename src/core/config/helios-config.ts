@@ -10,12 +10,14 @@ import {
     DEFAULT_BUILDING_COUNT, MIN_BUILDING_COUNT, MAX_BUILDING_COUNT,
     FIXED_BUILDING_HEIGHT_M, MIN_BUILDING_HEIGHT_M, MAX_BUILDING_HEIGHT_M,
     DEFAULT_NO_UI_DELAY_S, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S,
+    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM,
 } from './constants';
 import { clamp } from '../render-kit/math';
 
 export {
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M, MIN_DISPLAY_RADIUS_M,
+    SCENE_ZOOM_LEVELS, DEFAULT_SCENE_ZOOM,
     MAX_DISPLAY_RADIUS_M, DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
     MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR, DEFAULT_VALUE_DECIMALS,
     MIN_VALUE_DECIMALS, MAX_VALUE_DECIMALS,
@@ -69,8 +71,8 @@ export interface HeliosConfig
     //to hass.config. The window.__heliosLocationOverride debug hook still wins over this.
     'home-latitude'?:          unknown;
     'home-longitude'?:         unknown;
-    //Live irradiance sensor (W/m²) at the home, preferred over the model for the live "now" reading. Past +
-    //forecast still come from the model.
+    //Live irradiance sensor (W/m²) at the home, preferred over the model for the live + past window (the forecast
+    //keeps the model).
     'solar-irradiance-entity'?: unknown;
     //HA ui_color token for the base tint of surrounding buildings. Default 'grey'.
     'building-color'?:          unknown;
@@ -121,6 +123,10 @@ export interface HeliosConfig
     'show-sun-times'?:          unknown;
     'show-horizon-line'?:       unknown;
     'horizon-line-color'?:      unknown;
+    //Moon arc + crescent disc: 'always' | 'night' (only while the sun is down) | 'hidden'. Cosmetic, no chip.
+    'moon-display'?:            unknown;
+    //Scene magnification, one of SCENE_ZOOM_LEVELS (1 = as-is). See sceneZoom().
+    'scene-zoom'?:              unknown;
     'sun-chip-mode'?:           unknown;
     'battery-chip-mode'?:       unknown;
     //Per-card cache id. When set, the saved view (mode, filters, camera pose, lock) keys on it instead of the
@@ -136,7 +142,7 @@ export interface HeliosConfig
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
-    //"Your real sky" weather effects (cloud grade + rain / snow / thunderstorm), driven by the real weather at the
+    //Weather effects (cloud grade + rain / snow / thunderstorm), driven by the real weather at the
     //live/scrub time. Default true.
     'weather-enabled'?:        unknown;
     //Local-sensor overrides for the weather variables: a configured entity beats Open-Meteo for the live + past
@@ -224,8 +230,7 @@ export function maxExpectedPowerW(config: HeliosConfig | undefined): number
 }
 
 
-//Resolved power readout unit ('W' or 'kW') for every power value on the card. Default 'kW' so existing cards
-//are unchanged.
+//Resolved power readout unit ('W' or 'kW') for every power value on the card. Default 'kW'.
 export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 {
     return config?.['power-unit'] === 'W' ? 'W' : 'kW';
@@ -233,8 +238,7 @@ export function powerUnit(config: HeliosConfig | undefined): 'W' | 'kW'
 
 
 //Resolved energy total unit ('Wh' or 'kWh'). Explicit 'energy-unit' wins; absent or 'auto' mirrors powerUnit
-//(kW -> kWh, W -> Wh), exactly today's behaviour, so an existing card is unchanged until the user picks one on
-//its own.
+//(kW -> kWh, W -> Wh).
 export function energyUnit(config: HeliosConfig | undefined): 'Wh' | 'kWh'
 {
     const raw = config?.['energy-unit'];
@@ -281,7 +285,7 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 }
 
 
-//"Your real sky" weather effects. Default on (explicit false disables).
+//Weather effects. Default on (explicit false disables).
 export function weatherEnabled(config: HeliosConfig | undefined): boolean
 {
     return config?.['weather-enabled'] !== false;
@@ -316,6 +320,27 @@ export function showHorizonLine(config: HeliosConfig | undefined): boolean
 {
     return config?.['show-horizon-line'] !== false;
 }
+export type MoonDisplay = 'always' | 'night' | 'hidden';
+//Moon arc + phase disc visibility. Default 'night' (only while the sun is below the horizon, when a moon is
+//expected and the sun's own layers have dimmed); 'always' keeps it up in daylight too; 'hidden' drops it entirely.
+//Purely cosmetic: it drives no chip, no value, no calculation.
+export function moonDisplay(config: HeliosConfig | undefined): MoonDisplay
+{
+    const v = config?.['moon-display'];
+    return v === 'always' || v === 'hidden' ? v : 'night';
+}
+//Scene magnification: 1 (the default, no magnification), 1.5 or 2. Multiplies the camera's px-per-metre, so the
+//basemap, buildings and shadows grow around the home; the sun/moon arcs, discs and chips stay card-sized (the arc
+//scale probe measures projected px per metre and compensates). Accepts a number or a numeric string (the editor's
+//select emits strings); anything else falls back to 1.
+export type SceneZoom = (typeof SCENE_ZOOM_LEVELS)[number];
+export function sceneZoom(config: HeliosConfig | undefined): SceneZoom
+{
+    const raw = config?.['scene-zoom'];
+    const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+    return (SCENE_ZOOM_LEVELS as readonly number[]).includes(n) ? (n as SceneZoom) : DEFAULT_SCENE_ZOOM;
+}
+
 //Configured colour for the horizon ridge line, as a ui_color token or hex. Undefined falls back to the card CSS.
 export function horizonLineColor(config: HeliosConfig | undefined): string | undefined
 {

@@ -85,20 +85,22 @@ function startOfMonth(d: Date): Date
 
 //Build the adaptive tick/label model for a visible window. Memoised on the window (+ tick budget): the PV chart,
 //the target chart and the day-label renderer each ask for the same model every render, and it is a pure function
-//of start/end/maxTicks, so one build per range serves them all until the range changes.
-let _tmKey: string | null = null;
-let _tmVal: TimelineModel | null = null;
+//of start/end/maxTicks, so one build per range serves them all until the range changes. One slot per host
+//(WeakMap) rather than a single global slot: with two cards mounted (possibly showing different windows), a
+//single slot evicts on every render that alternates between them. `host` is a pure cache key here - the model
+//never reads anything off it - so any stable per-card object identity works; callers pass their own host.
+const _tmCache = new WeakMap<object, { key: string; val: TimelineModel }>();
 
-export function buildTimelineModel(start: Date, end: Date, maxTicks: number = TIMELINE_MAX_TICKS): TimelineModel
+export function buildTimelineModel(host: object, start: Date, end: Date, maxTicks: number = TIMELINE_MAX_TICKS): TimelineModel
 {
-    const key = `${start.getTime()}|${end.getTime()}|${maxTicks}`;
-    if (key === _tmKey && _tmVal)
+    const key    = `${start.getTime()}|${end.getTime()}|${maxTicks}`;
+    const cached = _tmCache.get(host);
+    if (cached && cached.key === key)
     {
-        return _tmVal;
+        return cached.val;
     }
     const model = buildTimelineModelUncached(start, end, maxTicks);
-    _tmKey = key;
-    _tmVal = model;
+    _tmCache.set(host, { key, val: model });
     return model;
 }
 
@@ -199,7 +201,7 @@ function buildTimelineModelUncached(start: Date, end: Date, maxTicks: number): T
     }
 
     //Months: align the gridlines with the named months (one separator at the start of each shown label) instead of
-    //thinning boundaries independently (which dropped lines onto the unlabelled months).
+    //thinning boundaries independently (independent thinning leaves gridlines on unlabelled months).
     if (kind === 'months')
     {
         separators = labels
@@ -207,8 +209,8 @@ function buildTimelineModelUncached(start: Date, end: Date, maxTicks: number): T
             .filter(s => s.frac > 0 && s.frac < 1);
     }
 
-    //Midnight gridlines, only up to a week span (Forecast and Week); Month and Year drop them so the graph stays
-    //clean when the days are too dense to read individually.
+    //Midnight gridlines, only up to a week span; Month drops them so the graph stays clean when the days are too
+    //dense to read individually.
     const dayBoundaries: number[] = [];
     if (spanDays > 1.05 && spanDays <= 8)
     {
@@ -228,6 +230,30 @@ function buildTimelineModelUncached(start: Date, end: Date, maxTicks: number): T
 }
 
 
+//Constructing an Intl.DateTimeFormat is expensive and formatTimelineLabel runs per rendered label; the key space is
+//tiny and stable (4 kinds x the HA language), so every formatter is cached with no eviction, the try/catch fallback
+//included so a throwing language isn't re-attempted.
+const timelineFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function timelineFormatterFor(kind: TimelineKind, lang: string | undefined, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat
+{
+    const key = `${lang ?? ''}|${kind}`;
+    let f = timelineFormatterCache.get(key);
+    if (!f)
+    {
+        try
+        {
+            f = new Intl.DateTimeFormat(lang, opts);
+        }
+        catch (_)
+        {
+            f = new Intl.DateTimeFormat(undefined, opts);
+        }
+        timelineFormatterCache.set(key, f);
+    }
+    return f;
+}
+
 //Kind-aware label for the timeline footer, honouring the HA language: intraday -> hour:minute, days -> short
 //weekday, weeks -> day + short month, months -> full month name.
 export function formatTimelineLabel(kind: TimelineKind, d: Date, hass?: { language?: string }): string
@@ -238,12 +264,5 @@ export function formatTimelineLabel(kind: TimelineKind, d: Date, hass?: { langua
               : kind === 'days'     ? { weekday: 'short' }
                   : kind === 'weeks'    ? { day: 'numeric', month: 'short' }
                       :                       { month: 'short' };
-    try
-    {
-        return new Intl.DateTimeFormat(lang, opts).format(d);
-    }
-    catch (_)
-    {
-        return new Intl.DateTimeFormat(undefined, opts).format(d);
-    }
+    return timelineFormatterFor(kind, lang, opts).format(d);
 }

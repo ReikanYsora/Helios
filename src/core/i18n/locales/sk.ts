@@ -8,12 +8,11 @@ export const sk: Translations = {
 
   period: {
     rangeLabel: "Časový rozsah",
-    forecast: "Predpoveď",
+    forecast: "D - D+2",
     yesterday: "Včera",
     today: "Dnes",
     week: "Týždeň",
     month: "Mesiac",
-    year: "Rok",
   },
 
   compass: "S,SV,V,JV,J,JZ,Z,SZ",
@@ -82,7 +81,7 @@ export const sk: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatické otáčanie kamery",
     autoRotateHint:
-      "Po niekoľkých sekundách nečinnosti kamera pomaly obieha okolo domova (približne 1.5°/s, opačne k zdanlivému pohybu slnka). Ťahanie jedným prstom ju okamžite pozastaví a obnoví sa, len čo prst zdvihneš. Na veľmi starých zariadeniach sa tomu vyhni: automatické otáčanie vynúti vykreslenie každú sekundu.",
+      "Po niekoľkých sekundách nečinnosti kamera pomaly obieha okolo domova (približne 4°/s, opačne k zdanlivému pohybu slnka). Ťahanie jedným prstom ju okamžite pozastaví a obnoví sa, len čo prst zdvihneš. Na veľmi starých zariadeniach sa tomu vyhni: automatické otáčanie vynúti vykreslenie každú sekundu.",
     autoRotateOn: "Zapnuté",
     autoRotateOff: "Vypnuté",
     degradedRender: "Vykresľovanie v režime kompatibility",
@@ -142,6 +141,13 @@ export const sk: Translations = {
     showHorizonLineHint: "Vykreslí líniu horizontu terénu okolo domu, vypočítanú z miestneho reliéfu. Horizont vždy realisticky stlmí slnko za kopcami; toto iba zobrazí alebo skryje vykreslenú líniu.",
     horizonLineColor: "Farba horizontu terénu",
     horizonLineColorHint: "Farba línie horizontu terénu.",
+    moonDisplay: "Režim zobrazenia mesiaca",
+    moonDisplayHint: "Vykreslí mesiac na vlastnom oblúku s kosákom zodpovedajúcim fáze, vždy pred slnkom. Len dekoratívne: bez štítku, bez hodnoty.",
+    moonDisplayAlways: "Vždy",
+    moonDisplayNight: "Noc",
+    moonDisplayHidden: "Vypnuté",
+    sceneZoom: "Priblíženie scény",
+    sceneZoomHint: "Zväčší mapu, budovy a tiene okolo vášho domova: 1x je predvolené vykreslenie, 1,5x a 2x ich zobrazia väčšie. Slnko, oblúky a štítky si zachovajú veľkosť.",
     lockRotation: "Uzamknúť natočenie",
     lockRotationHint:
       "Potiahnutím v náhľade otočte a nakloňte scénu do požadovaného pohľadu a potom toto zapnite. Zámok tento pohľad zmrazí (otáčanie ťahaním a automatické otáčanie v pokoji sa vypnú) a uloží uhol do karty, takže úplne rovnaký pohľad sa zobrazí na každom zariadení a prehliadači. Vypnite ho pre opätovné voľné otáčanie.",
@@ -215,6 +221,7 @@ export const sk: Translations = {
     buildingColor: "Farba budov",
     buildingColorHelp: "Základný odtieň použitý na okolité budovy v scéne.",
     shadowsSection: "Tiene",
+    moonSection: "Nastavenie mesiaca",
     shadowsEnabled: "Zobraziť tiene",
     shadowsEnabledOn: "Zobrazené",
     shadowsEnabledOff: "Skryté",

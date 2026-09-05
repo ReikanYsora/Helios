@@ -169,7 +169,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     //Multi-source breakdown rows for grid / battery, mirroring the solar perEntity rows: one row per configured meter,
     //but only once 2+ sources each carry their own recorder series (the shared hasMultiSourceBreakdown guard
-    //stackedLines also uses), so a single-source install stays exactly as before. Index and colour follow the
+    //stackedLines also uses), so a single-source install shows no breakdown rows. Index and colour follow the
     //source order the bands are painted in, so each row lines up with its own stacked band.
     const dark = chartIsDark(host);
     const ed   = host._energyDefaults;
@@ -219,7 +219,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
     const atDate     = new Date(atMs);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
     //Header granularity follows the window: intraday shows the time, a multi-day span adds the weekday, and a
-    //month/year span shows the calendar day (the scrub steps day by day), so you always know when you are.
+    //month span shows the calendar day, so you always know when you are.
     const spanDays  = rangeMs / DAY_MS;
     const timeOpts: Intl.DateTimeFormatOptions =
           spanDays <= 2.05  ? { hour: '2-digit', minute: '2-digit' }

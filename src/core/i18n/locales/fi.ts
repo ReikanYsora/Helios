@@ -8,12 +8,11 @@ export const fi: Translations = {
 
   period: {
     rangeLabel: "Aikaväli",
-    forecast: "Ennuste",
+    forecast: "P - P+2",
     yesterday: "Eilen",
     today: "Tänään",
     week: "Viikko",
     month: "Kuukausi",
-    year: "Vuosi",
   },
 
   compass: "P,KO,I,KA,E,LO,L,LU",
@@ -82,7 +81,7 @@ export const fi: Translations = {
     uiAndMapSection: "Käyttöliittymä",
     autoRotate: "Kameran automaattinen kierto",
     autoRotateHint:
-      "Kun on oltu käyttämättömänä muutaman sekunnin, kamera kiertää hitaasti kodin ympäri (noin 1,5°/s, vastakkaiseen suuntaan kuin auringon näennäinen liike). Yhden sormen veto keskeyttää sen heti, ja se jatkuu, kun päästät irti. Vältä sitä hyvin vanhoilla laitteilla: automaattinen kierto pakottaa renderöinnin joka sekunti.",
+      "Kun on oltu käyttämättömänä muutaman sekunnin, kamera kiertää hitaasti kodin ympäri (noin 4°/s, vastakkaiseen suuntaan kuin auringon näennäinen liike). Yhden sormen veto keskeyttää sen heti, ja se jatkuu, kun päästät irti. Vältä sitä hyvin vanhoilla laitteilla: automaattinen kierto pakottaa renderöinnin joka sekunti.",
     autoRotateOn: "Päällä",
     autoRotateOff: "Pois",
     degradedRender: "Yhteensopivuustila",
@@ -142,6 +141,13 @@ export const fi: Translations = {
     showHorizonLineHint: "Piirtää maaston horisonttiviivan kodin ympärille paikallisesta maastosta laskettuna. Horisontti himmentää auringon aina realistisesti kukkuloiden taakse; tämä vain näyttää tai piilottaa piirretyn viivan.",
     horizonLineColor: "Maaston horisontin väri",
     horizonLineColorHint: "Maaston horisonttiviivan väri.",
+    moonDisplay: "Kuun näyttötila",
+    moonDisplayHint: "Piirtää kuun omalle kaarelleen vaiheen mukaisena sirppinä, aina auringon edessä. Vain koristeellinen: ei merkkiä, ei arvoa.",
+    moonDisplayAlways: "Aina",
+    moonDisplayNight: "Yö",
+    moonDisplayHidden: "Pois käytöstä",
+    sceneZoom: "Näkymän zoomaus",
+    sceneZoomHint: "Suurentaa karttaa, rakennuksia ja varjoja kotisi ympärillä: 1x on oletusnäkymä, 1,5x ja 2x näyttävät ne suurempina. Aurinko, kaaret ja merkit säilyttävät kokonsa.",
     lockRotation: "Lukitse kierto",
     lockRotationHint:
       "Vedä esikatselua kääntääksesi ja kallistaaksesi näkymää haluamaasi kulmaan ja ota tämä sitten käyttöön. Lukitus jäädyttää näkymän (vetämällä kääntäminen ja lepotilan automaattinen kierto poistetaan käytöstä) ja tallentaa kulman korttiin, joten täsmälleen sama näkymä näkyy jokaisella laitteella ja selaimella. Poista se käytöstä kääntääksesi taas vapaasti.",
@@ -215,6 +221,7 @@ export const fi: Translations = {
     buildingColorHelp:
       "Ympäröiviin rakennuksiin näkymässä sovellettu perussävy.",
     shadowsSection: "Varjot",
+    moonSection: "Kuun asetukset",
     shadowsEnabled: "Näytä varjot",
     shadowsEnabledOn: "Näytetään",
     shadowsEnabledOff: "Piilotettu",

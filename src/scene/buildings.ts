@@ -16,7 +16,7 @@
 //screen-space back-face culled); shadows are each footprint's cast envelope flattened by one group-opacity.
 
 import * as polygonClipping from 'polygon-clipping';
-import type { SceneCamera} from './projection';
+import type { SceneCamera, ProjectedPoint } from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { tintedRgba, buildingColor } from '../core/render-kit/colors';
 import { mixHex, hexByte, rgbaHex } from '../core/render-kit/hex';
@@ -245,8 +245,8 @@ export function parseOfmBuildings(
         centerY /= footprint.length;
 
         const distanceM = distanceToHome(footprint);
-        //Exact radius test on the footprint edge (0 when it contains the home): keeps buildings only partly inside
-        //the radius, like the old query, but drops the rest of the ~2.4 km tile.
+        //Exact radius test on the footprint edge (0 when it contains the home): a building only partly inside the
+        //radius is kept, the rest of the ~2.4 km tile dropped.
         if (distanceM > radiusM)
         {
             continue;
@@ -374,8 +374,7 @@ export interface InterpretBuildingsOptions
 //internal face surfaces or vanishes with the camera angle. Merging deletes the face instead of trying to order it,
 //and it deletes the whole class of them at once: a merged block has no inside.
 //
-//The detail is not lost, which is what sank the first attempt at this: every original outline is kept and drawn
-//flat ON the roof, where it cannot conflict with anything. Home and neighbours merge separately, so the home keeps
+//The detail is kept: every original outline is drawn flat ON the roof, where it cannot conflict with anything. Home and neighbours merge separately, so the home keeps
 //its own prism, and only equal heights merge, so nothing ever loses its height.
 function mergeSameHeight(list: Building[]): Building[]
 {
@@ -521,18 +520,15 @@ export function interpretBuildings(
 //Painters: extrude + shade the footprints into SVG.
 //---------------------------------------------------------------------------------------------------------
 
-//Every footprint casts a shadow; one group-opacity flattens overlaps into a single even shade. `sun` is
-//{azimuth (deg from N, CW), altitude (deg)}. shadowOpacity is the peak alpha.
 //A closed sub-path through projected points, always wound the same way.
 //
 //Non-zero fill ADDS sub-paths wound alike and CANCELS ones wound against each other. The sweep's pieces overlap on
-//purpose, so a single stray winding punches holes straight through it: projection flips the winding (screen y runs
-//down), so the translated outline came out clockwise while the edge quads were counter-clockwise, they cancelled
-//where they met, and only the scraps that overlapped nothing survived. Normalising here means no caller can forget.
+//purpose, and projection flips winding (screen y runs down), so an unnormalised outline and its edge quads would
+//cancel where they meet and leave only the scraps that overlap nothing. Normalising here means no caller can forget.
 function pathOf(pts: [number, number][], hole = false): string
 {
     const ccw  = signedArea(pts) < 0 ? [...pts].reverse() : pts;
-    //`hole` turns the cancelling that bit us into the tool: a ring wound AGAINST the rest subtracts instead of adding.
+    //`hole` uses that cancelling on purpose: a ring wound AGAINST the rest subtracts instead of adding.
     const ring = hole ? [...ccw].reverse() : ccw;
     return ring.map((q, k) => `${k === 0 ? 'M' : 'L'}${q[0].toFixed(1)},${q[1].toFixed(1)}`).join('') + 'Z';
 }
@@ -554,28 +550,102 @@ function ringsPath(rings: Point[][], r: ClipRect): string
     return d;
 }
 
+//What the painters hand the renderer: shapes, not markup. The scene SVG keeps its nodes from frame to frame and
+//only rewrites the attributes that moved (see scene-dom.ts), so the painters describe each face by its attribute
+//text. shapesSvg/shadowLayerSvg serialise them as markup, one attribute per field in order, for the
+//characterisation snapshots.
+export interface SceneShape
+{
+    tag:         'polygon' | 'path';
+    //`points` of a polygon, `d` of a path.
+    geom:        string;
+    fill:        string;
+    fillRule?:   'evenodd';
+    stroke:      string;
+    strokeWidth: string;
+}
+
+//One frame of cast shade: the stencil that cuts the buildings out of it, the group alpha, and per caster the swept
+//envelope plus its along-axis fade gradient (all casts share the shade colour).
+export interface ShadowLayer
+{
+    opacity: string;
+    color:   string;
+    clip:    string;
+    casts:   { d: string; x1: string; y1: string; x2: string; y2: string }[];
+}
+
+export function shapesSvg(shapes: SceneShape[]): string
+{
+    let out = '';
+    for (const s of shapes)
+    {
+        out += s.tag === 'polygon'
+            ? `<polygon points="${s.geom}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}"/>`
+            : `<path d="${s.geom}" fill="${s.fill}"${s.fillRule ? ` fill-rule="${s.fillRule}"` : ''}`
+              + ` stroke="${s.stroke}" stroke-width="${s.strokeWidth}"/>`;
+    }
+    return out;
+}
+
+export function shadowLayerSvg(layer: ShadowLayer | null): string
+{
+    if (!layer)
+    {
+        return '';
+    }
+    let defs   = '';
+    let shapes = '';
+    layer.casts.forEach((c, k) =>
+    {
+        const id = `hsh${k}`;
+        defs += `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" `
+              + `x1="${c.x1}" y1="${c.y1}" x2="${c.x2}" y2="${c.y2}">`
+              + `<stop offset="0" stop-color="${layer.color}" stop-opacity="1"/>`
+              + `<stop offset="1" stop-color="${layer.color}" stop-opacity="0"/></linearGradient>`;
+        shapes += `<path d="${c.d}" fill="url(#${id})" fill-rule="nonzero"/>`;
+    });
+    defs += `<clipPath id="hsh-clip" clipPathUnits="userSpaceOnUse">`
+          + `<path d="${layer.clip}" clip-rule="evenodd"/></clipPath>`;
+    return `<defs>${defs}</defs>`
+         + `<g opacity="${layer.opacity}" clip-path="url(#hsh-clip)">${shapes}</g>`;
+}
+
+//Every footprint casts a shadow; one group-opacity flattens overlaps into a single even shade. `sun` is
+//{azimuth (deg from N, CW), altitude (deg)}. shadowOpacity is the peak alpha.
 export function renderShadows(
     cam:          SceneCamera,
     casters:      ShadowCaster[],
     sun:          { azimuth: number; altitude: number },
     shadowColor:  string,
     shadowOpacity: number
-): string
+): ShadowLayer | null
 {
     const fade = Math.min(1, sun.altitude / SHADOW_FADE_DEG);
     if (fade <= 0)
     {
-        return '';
+        return null;
     }
     const away     = (sun.azimuth + 180) * DEG;
     const nearCull = PERSPECTIVE * (1 - NEAR_PLANE);
     const rect     = cardClipRect(cam.width, cam.height);
-    let defs   = '';
-    let shapes = '';
-    let idx    = 0;
+    const casts: ShadowLayer['casts'] = [];
+    //The stencil that cuts every building out of the shade layer (see the clipPath below). Built here, in the same
+    //pass, from the same projected rings the sweep uses, so a footprint is projected once per frame rather than once
+    //each for the sweep, the edge quads and the stencil.
+    let clip = 'M-9999,-9999L9999,-9999L9999,9999L-9999,9999Z';
     for (const b of casters)
     {
-        //Skip casters at/behind the camera (same near-plane cull as the buildings).
+        const holes     = b.holes ?? [];
+        const base      = b.footprint.map((p) => cam.project(p[0], p[1], 0));
+        const holesBase = holes.map((ring) => ring.map((p) => cam.project(p[0], p[1], 0)));
+        clip += pathOf(base);
+        for (const hb of holesBase)
+        {
+            clip += pathOf(hb);
+        }
+        //Skip casters at/behind the camera (same near-plane cull as the buildings). They still stencil: their
+        //footprint clamps to the near plane like any other point, and the cut stays wherever it lands.
         if (cam.project3(b.centerX, b.centerY, 0).depth >= nearCull)
         {
             continue;
@@ -583,7 +653,6 @@ export function renderShadows(
         const length = Math.min(b.height / Math.tan(sun.altitude * DEG), MAX_SHADOW_M);
         const oe = Math.sin(away) * length;
         const on = Math.cos(away) * length;
-        const base = b.footprint.map((p) => cam.project(p[0], p[1], 0));
         const cast = b.footprint.map((p) => cam.project(p[0] + oe, p[1] + on, 0));
 
         //Distance fade, but anchored OUTSIDE the building. The screen-space shadow direction is base-centroid ->
@@ -604,11 +673,10 @@ export function renderShadows(
         const alen = Math.hypot(ax, ay) || 1;
         ax /= alen; ay /= alen;
 
-        //Anchor the gradient ON the axis, at the FAR extent of each ring, never on a vertex. Taking the winning
-        //vertex made the gradient run from one corner to another, so its direction was `end - start` and depended
-        //on WHICH corners won: a tenth of a degree of rotation flipped the argmax to a neighbouring corner and the
-        //fade swung sideways. The max value itself is continuous even where the argmax jumps, so projecting it back
-        //onto the axis keeps the gradient parallel to the shadow and steady through any rotation.
+        //Anchor the gradient ON the axis, at the FAR extent of each ring, never on a vertex: a vertex anchor makes
+        //the direction depend on which corner wins the argmax, which flips to a neighbour under a tenth of a degree
+        //of rotation and swings the fade sideways. The max projection is continuous even where the argmax jumps,
+        //so the gradient stays parallel to the shadow through any rotation.
         const ox = bcx / n;
         const oy = bcy / n;
         let sMax = -Infinity;
@@ -630,26 +698,23 @@ export function renderShadows(
         const start: [number, number] = [ox + ax * sMax, oy + ay * sMax];
         const end:   [number, number] = [ox + ax * eMax, oy + ay * eMax];
 
-        //The EXACT swept envelope, not its convex hull. A hull was close enough while buildings were small and
-        //roughly convex, but a merged terrace is a big L, and the hull of an L FILLS its notch: the shade turned
-        //into shapeless blobs spilling across courtyards and neighbours. The true sweep is the outline translated
-        //to the shadow's tip, plus the quad every edge sweeps on its way there. Those pieces overlap, and that is
-        //the point: the group's single opacity already flattens overlaps, so they read as their union with no
-        //boolean work. One path per caster, exactly as before, so the shape count does not move.
-        //Each piece is clipped to the card box first: the sweep runs the length of the shadow across the whole
-        //neighbourhood, and on old iOS the compositor sizes this layer to that painted ink, overflowing the layer
-        //cap and dropping its lower half. Clipping only removes ink the card already hid, and the
-        //non-zero union still reads the same within the card (a clip cannot change an interior point's winding).
+        //The EXACT swept envelope, not its convex hull: a hull fills the notch of an L (a merged terrace), spilling
+        //shade across courtyards and neighbours. The true sweep is the outline translated to the shadow's tip plus
+        //the quad every edge sweeps on its way; the pieces overlap on purpose, the group's single opacity flattens
+        //them into their union with no boolean work. One path per caster.
+        //Each piece is clipped to the card box first, so off-card ink never enlarges the scene layer (see
+        //.scene-svg); the non-zero union still reads the same within the card (a clip cannot change an interior
+        //point's winding).
         let d = '';
         const cc = clipPolygon(cast, rect);
         if (cc.length >= 3)
         {
             d += pathOf(cc);
         }
-        for (const ring of [b.footprint, ...(b.holes ?? [])])
+        for (let r = -1; r < holes.length; r++)
         {
-            const rb = ring.map((p) => cam.project(p[0], p[1], 0));
-            const rc = ring.map((p) => cam.project(p[0] + oe, p[1] + on, 0));
+            const rb = r < 0 ? base : holesBase[r];
+            const rc = r < 0 ? cast : holes[r].map((p) => cam.project(p[0] + oe, p[1] + on, 0));
             for (let i = 0; i < rb.length; i++)
             {
                 const j = (i + 1) % rb.length;
@@ -660,47 +725,28 @@ export function renderShadows(
                 }
             }
         }
-        //Whole shadow off-card: emit neither the sweep nor its gradient def, and do not burn an id.
+        //Whole shadow off-card: emit neither the sweep nor its gradient, and do not burn a slot.
         if (!d)
         {
             continue;
         }
-        const id = `hsh${idx}`;
-        idx += 1;
-        defs += `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" `
-              + `x1="${start[0].toFixed(1)}" y1="${start[1].toFixed(1)}" x2="${end[0].toFixed(1)}" y2="${end[1].toFixed(1)}">`
-              + `<stop offset="0" stop-color="${shadowColor}" stop-opacity="1"/>`
-              + `<stop offset="1" stop-color="${shadowColor}" stop-opacity="0"/></linearGradient>`;
-        shapes += `<path d="${d}" fill="url(#${id})" fill-rule="nonzero"/>`;
+        casts.push({ d, x1: start[0].toFixed(1), y1: start[1].toFixed(1), x2: end[0].toFixed(1), y2: end[1].toFixed(1) });
     }
-    if (!shapes)
+    if (casts.length === 0)
     {
-        return '';
+        return null;
     }
     //Cut every building out of the whole shade layer at once.
     //
-    //Shade cannot lie on ground a building stands on. It used to be left in and covered by the prisms drawn over
-    //it, which only held while blocks were convex AND opaque: turn building opacity down and the shade shows
-    //straight through them. Subtracting it per shape with a reversed ring does NOT work, and that was a real
-    //mistake: non-zero fill counts a WINDING NUMBER, not a boolean. The sweep's pieces overlap, most of all over
-    //the footprint (translated roof plus several edge quads), so the count there is +2 or +3 and a single -1 leaves
-    //it filled. Subtracting a constant from a varying sum cannot reach zero.
+    //Shade cannot lie on ground a building stands on, and the prisms cannot be relied on to cover it (a translucent
+    //building shows it straight through). A reversed ring per shape cannot subtract it either: non-zero fill counts
+    //a WINDING NUMBER, and the sweep's pieces overlap most over the footprint (translated roof plus several edge
+    //quads), so the count there is +2 or +3 and a single -1 leaves it filled.
     //
     //A clip settles it in one operation for the layer: a binary stencil, unlike a mask, which blends alpha over the
-    //whole layer and was far too slow here. Even-odd does the rest for free: rect (1), a footprint makes 2 (even ->
+    //whole layer and is far too slow here. Even-odd does the rest for free: rect (1), a footprint makes 2 (even ->
     //cut), a courtyard ring makes 3 (odd -> kept), so yards still catch the shade of the walls around them.
-    let clip = 'M-9999,-9999L9999,-9999L9999,9999L-9999,9999Z';
-    for (const b of casters)
-    {
-        for (const ring of [b.footprint, ...(b.holes ?? [])])
-        {
-            clip += pathOf(ring.map((p) => cam.project(p[0], p[1], 0)));
-        }
-    }
-    defs += `<clipPath id="hsh-clip" clipPathUnits="userSpaceOnUse">`
-          + `<path d="${clip}" clip-rule="evenodd"/></clipPath>`;
-    return `<defs>${defs}</defs>`
-         + `<g opacity="${(shadowOpacity * fade).toFixed(3)}" clip-path="url(#hsh-clip)">${shapes}</g>`;
+    return { opacity: (shadowOpacity * fade).toFixed(3), color: shadowColor, clip, casts };
 }
 
 //A vertical plane separating two prisms, as `n . p = c`, with prism i on the low side and j on the high side.
@@ -832,7 +878,7 @@ function eyeGroundPoint(cam: SceneCamera): { e: number; n: number }
 
 //Order the visible prisms far-to-near: a topological sort of "who must be painted before whom", seeded by the
 //separating planes and falling back to the depth key wherever they say nothing (or contradict each other, which a
-//ring of three prisms can still do). Order only: no geometry is touched, so the worst case is the old behaviour.
+//ring of three prisms can still do). Order only: no geometry is touched, so the worst case is the plain depth-key order.
 export function paintOrder(cam: SceneCamera, buildings: Building[], visible: { index: number; depth: number }[]): { index: number }[]
 {
     if (visible.length < 2)
@@ -921,10 +967,9 @@ export function renderBuildings(
     growth:          number,
     neighborOpacity = 0.25,
     home:            HomeAppearance = {},
-    //Degrees from north, clockwise. Without it a wall cannot know whether it faces the light, which is why every
-    //wall used to take one flat tint whatever way it pointed.
+    //Degrees from north, clockwise. Without it a wall cannot know whether it faces the light.
     sunAzimuth       = 180
-): string
+): SceneShape[]
 {
     //Horizontal direction TOWARDS the sun, and how much sun there is to give. The fade tracks the shadows' own, so
     //facades stop catching light exactly as the shade stops being cast: at dawn and dusk everything falls to
@@ -957,14 +1002,13 @@ export function renderBuildings(
     const order = paintOrder(cam, buildings, visible);
 
     //Neighbours are altitude-tinted like the home + the ground, so the whole scene grades through the day/night
-    //cycle together (there is no full-frame wash any more). They paint a touch darker on the walls than the roof
-    //for shading, at the user-set neighborOpacity baked into each face's own fill/stroke as rgba (see faces below):
-    //not a wrapping <g opacity>, because the home now paints in true depth order interleaved with neighbours, so
-    //no single contiguous group can promise every neighbour face still sits together in the paint order.
+    //cycle together. They paint a touch darker on the walls than the roof for shading, at the user-set
+    //neighborOpacity baked into each face's own fill/stroke as rgba (see faces below): not a wrapping <g opacity>,
+    //because the home paints in true depth order interleaved with neighbours, so no single contiguous group can
+    //hold every neighbour face.
     const nb       = buildingColor(palette.neighbor, altitude);
-    //A wall is no longer one tint: it reads between AMBIENT (turned away from the sun, lit only by the sky) and LIT
-    //(square on to it). Every wall took the ambient-ish middle before, so a block looked the same from every side
-    //and the scene had no direction to it, even with the sun sitting right there in the sky.
+    //A wall reads between AMBIENT (turned away from the sun, lit only by the sky) and LIT (square on to it): one
+    //flat tint would make a block look the same from every side, with no direction to the scene.
     const nbAmbient = mixHex(nb, '#000000', 0.34);
     const nbLit     = mixHex(nb, '#000000', 0.04);
     const nbStroke  = mixHex(nb, '#000000', 0.30);
@@ -975,7 +1019,7 @@ export function renderBuildings(
     //sits behind. `order` (paintOrder, already a global far-to-near topological sort) decides insertion order;
     //the stable sort below only re-settles it by the finer per-face depth, so a tie between two faces (touching
     //buildings sharing a wall depth exactly) keeps the topological order's answer instead of an arbitrary one.
-    const faces: { depth: number; svg: string }[] = [];
+    const faces: { depth: number; shape: SceneShape; detail?: SceneShape }[] = [];
     for (const { index } of order)
     {
         const b  = buildings[index];
@@ -1001,14 +1045,40 @@ export function renderBuildings(
             const eg = mixHex(home.color ?? palette.home, '#ffffff', 0.5);
             stroke   = `rgba(${hexByte(eg, 1)},${hexByte(eg, 3)},${hexByte(eg, 5)},0.1)`;
         }
-        const strokeW = b.isHome ? 1 : 0.4;
+        const strokeW   = b.isHome ? '1' : '0.4';
+        const roofStrokeW = b.isHome ? '1' : '0.6';
 
         //Emit each visible wall into the shared face list (sorted globally below), for every ring of the block.
+        //Every vertex is projected ONCE per frame, base and roof, and the depth comes along with the pixel: the
+        //wall sort key and the roof (ring, depth) read the same projections rather than running them again.
+        const roofRings: Point[][] = [];
+        let roofDepth = -Infinity;
         for (const ring of rings)
         {
-            const rBase = ring.map((p) => cam.project(p[0], p[1], 0));
-            const rRoof = ring.map((p) => cam.project(p[0], p[1], h));
-            for (let i = 0; i < rBase.length; i++)
+            const n     = ring.length;
+            const pBase: ProjectedPoint[] = new Array(n);
+            const pRoof: ProjectedPoint[] = new Array(n);
+            const rBase: Point[] = new Array(n);
+            const rRoof: Point[] = new Array(n);
+            for (let i = 0; i < n; i++)
+            {
+                const pb = cam.project3(ring[i][0], ring[i][1], 0);
+                const pr = cam.project3(ring[i][0], ring[i][1], h);
+                pBase[i] = pb; rBase[i] = [pb.x, pb.y];
+                pRoof[i] = pr; rRoof[i] = [pr.x, pr.y];
+            }
+            roofRings.push(rRoof);
+            if (ring === fp)
+            {
+                for (const pr of pRoof)
+                {
+                    if (pr.depth > roofDepth)
+                    {
+                        roofDepth = pr.depth;
+                    }
+                }
+            }
+            for (let i = 0; i < n; i++)
             {
                 const next = (i + 1) % rBase.length;
                 const p0 = rBase[i];
@@ -1038,57 +1108,58 @@ export function renderBuildings(
                 const shade = mixHex(wallAmbient, wallLit, lit);
                 const wallFill = b.isHome ? tintedRgba(shade, altitude, 0.9) : rgbaHex(shade, neighborOp);
                 //One full-height wall quad per edge, clipped to the card box so an off-card wall never enlarges the
-                //scene layer past the old-iOS compositor cap. The back-face cull above reads the true quad.
+                //scene layer (see .scene-svg). The back-face cull above reads the true quad.
                 const wq = clipPolygon([p0, p1, p2, p3], rect);
                 if (wq.length < 3)
                 {
                     continue;
                 }
-                const wall = `<polygon points="${pointsAttr(wq)}" fill="${wallFill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+                const wall: SceneShape = { tag: 'polygon', geom: pointsAttr(wq), fill: wallFill, stroke, strokeWidth: strokeW };
                 //Sort key = the wall's NEAREST corner (max cameraZ, larger = nearer). On a concave footprint an
                 //edge-midpoint depth mis-orders two facing walls; the nearest-point does not.
-                const wallDepth = Math.max(
-                    cam.project3(ring[i][0], ring[i][1], 0).depth,
-                    cam.project3(ring[next][0], ring[next][1], 0).depth,
-                    cam.project3(ring[i][0], ring[i][1], h).depth,
-                    cam.project3(ring[next][0], ring[next][1], h).depth,
-                );
-                faces.push({ depth: wallDepth, svg: wall });
+                const wallDepth = Math.max(pBase[i].depth, pBase[next].depth, pRoof[i].depth, pRoof[next].depth);
+                faces.push({ depth: wallDepth, shape: wall });
             }
         }
-        //Flat roof at its own nearest-corner depth. It sits at the top so in any above-horizon view it never
-        //overlaps a wall in screen space, so its order against walls is cosmetic; depth-placing it just keeps a
-        //nearer building's roof correctly over a farther one.
-        let roofDepth = -Infinity;
-        for (const p of fp)
-        {
-            const d = cam.project3(p[0], p[1], h).depth; if (d > roofDepth)
-            {
-                roofDepth = d;
-            }
-        }
+        //Flat roof at its own nearest-corner depth (the outer ring's, gathered above). It sits at the top so in any
+        //above-horizon view it never overlaps a wall in screen space, so its order against walls is cosmetic;
+        //depth-placing it just keeps a nearer building's roof correctly over a farther one.
         //Roof as ONE path over every ring, even-odd, so a courtyard stays a hole instead of being filled in.
         //Rings are clipped to the card box; even-odd keeps the same parity for any point within it.
-        const roofPath = ringsPath(rings.map((ring) => ring.map((p) => cam.project(p[0], p[1], h))), rect);
+        const roofPath = ringsPath(roofRings, rect);
         //The outlines of the buildings this block merged, laid flat ON the roof. They sit on the roof plane, so
         //they can never fight it for depth: the terrace reads as separate houses at no cost.
         const detailPath = ringsPath((b.detail ?? []).map((ring) => ring.map((p) => cam.project(p[0], p[1], h))), rect);
-        const roofSvg = roofPath
-            ? `<path d="${roofPath}" fill="${roofFill}" fill-rule="evenodd" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`
-            : '';
-        const detailSvg = detailPath
-            ? `<path d="${detailPath}" fill="none" stroke="${stroke}" stroke-width="${b.isHome ? 1 : 0.6}"/>`
-            : '';
-        if (roofSvg || detailSvg)
+        const roof: SceneShape | undefined = roofPath
+            ? { tag: 'path', geom: roofPath, fill: roofFill, fillRule: 'evenodd', stroke, strokeWidth: roofStrokeW }
+            : undefined;
+        const detail: SceneShape | undefined = detailPath
+            ? { tag: 'path', geom: detailPath, fill: 'none', stroke, strokeWidth: roofStrokeW }
+            : undefined;
+        //The detail rides the roof's depth slot (right after it); a roofless block off the card can still
+        //keep an on-card outline.
+        if (roof)
         {
-            faces.push({ depth: roofDepth, svg: roofSvg + detailSvg });
+            faces.push({ depth: roofDepth, shape: roof, detail });
+        }
+        else if (detail)
+        {
+            faces.push({ depth: roofDepth, shape: detail });
         }
     }
-    //One stable sort, far-to-near, over every face from every building: this is what actually lets a nearer
-    //neighbour occlude the home (or a farther one stay behind it) instead of the whole neighbour set always
-    //painting as a block before the home. Stable, so exact ties fall back to `order`'s insertion sequence.
+    //One stable sort, far-to-near, over every face from every building, so a nearer neighbour occludes the home
+    //and a farther one stays behind it. Stable, so exact ties fall back to `order`'s insertion sequence.
     faces.sort((a, c) => a.depth - c.depth);
-    return faces.map((f) => f.svg).join('');
+    const out: SceneShape[] = [];
+    for (const f of faces)
+    {
+        out.push(f.shape);
+        if (f.detail)
+        {
+            out.push(f.detail);
+        }
+    }
+    return out;
 }
 
 //---------------------------------------------------------------------------------------------------------

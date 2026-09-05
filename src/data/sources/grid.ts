@@ -25,7 +25,7 @@ import { localMidnightMinusDays } from '../../core/time/timezone';
 export interface GridHost
 {
     readonly hass:   HassLike;
-    //HA Energy dashboard defaults (populated by card/energy-prefs.ts), the sole source of grid wiring:
+    //HA Energy dashboard defaults (energy-prefs.ts), the sole source of grid wiring:
     //import/export meters, live power sensors, and the sign-inversion set.
     readonly _energyDefaults?: EnergyDefaults;
     //Rolling-window past days (period selector), so the change-series fetch spans the whole store window.
@@ -40,7 +40,7 @@ export interface GridHost
     _gridExportValue: number | null;
     _gridExportUnit:  string;
 
-    //Recorder `change` series (5-minute buckets) for the import / export meters over the store's past window.
+    //Recorder `change` series (recorder-period buckets) for the import / export meters over the store's past window.
     //Consumer converts to average watts (kWh * 1000 / bucket-hours). Null until first fetch lands.
     _gridImportChangeSeries: ChangeBucket[] | null;
     _gridExportChangeSeries: ChangeBucket[] | null;

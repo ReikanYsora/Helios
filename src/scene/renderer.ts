@@ -9,8 +9,10 @@
 
 import { SceneCamera } from './projection';
 import { pxPerMetreFor, type Ground } from './tiles';
-import { buildVectorGround, GROUND_LAYER_KEYS, type GroundStyle, type GroundPalette } from './ground-render';
+import { buildVectorGround, GROUND_LAYER_KEYS, type GroundStyle, type GroundPalette, type VectorGround } from './ground-render';
+import { groundPoolKey, offerGround, takeGround } from './ground-pool';
 import { renderBuildings, renderShadows, type Building, type ScenePalette, type HomeAppearance } from './buildings';
+import { SceneSvgLayers, type SceneDocument, type SceneNode } from './scene-dom';
 import { gradeColor } from '../core/render-kit/colors';
 import {
     SVG_NS,
@@ -24,6 +26,10 @@ import {
 //Edge of the square basemap canvas (px): (2*radius+1) tiles across. On the normal path this canvas is CSS
 //3D-transformed, so the compositor backs it as one layer of this size.
 const GROUND_CANVAS_EDGE_PX = (2 * GROUND_RADIUS + 1) * TILE_PX;
+
+//Weather-grade change threshold below which setWeatherGrade() is a no-op. sat spans ~[0.50, 1.10], bright
+//~[0.72, 1.05]; this is a few percent of either range, well under what a repaint would make visible.
+const WX_GRADE_EPS = 0.02;
 
 //The GPU's max texture edge (px) and its renderer string, from a throwaway WebGL context. Both 0 / '' when they
 //can't be read. The renderer is the GPU's own identity: the standard RENDERER when the browser fills it (Firefox),
@@ -69,8 +75,8 @@ function probeGpu(): GpuProbe
 }
 
 //Entry / mid embedded GPUs that mis-composite the 3D basemap tilt (whole-view flicker, black kiosk screenshots).
-//There is no numeric WebGL cap that separates them — the composited-layer behaviour is deliberately not exposed to
-//JS (the same opacity that blacks out a kiosk screenshot of the layer) — so we key on the GPU string, exactly like
+//There is no numeric WebGL cap that separates them: the composited-layer behaviour is deliberately not exposed to
+//JS (the same opacity that blacks out a kiosk screenshot of the layer), so we key on the GPU string, exactly like
 //Chromium's own gpu_driver_bug_list.json (matched against GL_RENDERER). Chromium blocklists whole families for
 //severe bugs ("Mali.*", "Adreno.*", "PowerVR .*"); there is no per-model list, and a false positive is cheap (the
 //projected path is near-equivalent), so we match by family and only carve out the current flagships:
@@ -100,12 +106,6 @@ function isEntryAndroidGpu(renderer: string): boolean
     return false;
 }
 
-//Old iOS/iPadOS WebKit half-composites a flat layer over a CSS 3D-transformed one, clipping the whole scene to
-//its top half. Those devices render the ground on the projected compat path instead of a 3D
-//transform. It cannot be feature-detected (no API reads composited pixels), so we sniff: an Apple touch device
-//(including iPadOS masquerading as macOS Safari) on Safari <= 16, the WebKit generation that carries the bug and
-//the ceiling for the old hardware it runs on. A miss on a newer device keeps the (perfect) normal path; a false
-//positive only swaps in the near-equivalent compat render, so erring is cheap.
 //How the basemap is drawn, decided once per device.
 //  'normal'    : GPU-rasterized canvas + CSS 3D transform (fast, correct) - capable devices.
 //  'transform' : CPU-rasterized canvas (willReadFrequently) STILL under the CSS 3D transform. Entry Android GPUs
@@ -206,6 +206,26 @@ export interface ScenePaletteFull extends ScenePalette
     neighborOpacity: number;
 }
 
+//A canvas the browser emptied under memory pressure while it waited in the pool reads transparent where the
+//ground paints an opaque backdrop. One pixel at the home, read once on adoption.
+function groundPurged(built: VectorGround): boolean
+{
+    try
+    {
+        const { el, homeX, homeY } = built.ground;
+        const ctx = el.getContext('2d');
+        if (!ctx || el.width === 0)
+        {
+            return true;
+        }
+        return ctx.getImageData(Math.min(el.width - 1, Math.max(0, Math.round(homeX))), Math.min(el.height - 1, Math.max(0, Math.round(homeY))), 1, 1).data[3] === 0;
+    }
+    catch (_)
+    {
+        return true;
+    }
+}
+
 export class SceneRenderer
 {
     public readonly camera = new SceneCamera();
@@ -213,8 +233,15 @@ export class SceneRenderer
     private readonly _container:    HTMLElement;
     private readonly _groundHolder: HTMLDivElement;
     private readonly _sceneSvg:     SVGSVGElement;
+    //The scene SVG's persistent nodes (shadows + buildings), updated in place each frame.
+    private readonly _sceneLayers:  SceneSvgLayers;
 
     private _ground?:     Ground;
+    //The ground as built (canvas + repaint closures over its cached features), what the pool parks and hands back.
+    private _groundBuilt?: VectorGround;
+    private _groundKey = '';
+    //The canvas's contextrestored handler, removed before the ground leaves this renderer.
+    private _groundRestore?: () => void;
     //Repaints the current ground canvas from its cached vector features with a new style + sun altitude (theme
     //flip / colour config / day-night grade), so it never re-fetches tiles.
     private _groundRepaint?: (style: GroundStyle, altitude: number) => void;
@@ -224,8 +251,10 @@ export class SceneRenderer
         camera: SceneCamera, w: number, h: number, style: GroundStyle, altitude: number,
     ) => void;
     private _projectedPose = '';
-    //Pose signature of the last buildings+shadows SVG rebuild, so an unchanged scene skips the reparse (see _draw).
+    //Pose signature of the last buildings+shadows repaint, so an unchanged scene skips it (see _draw).
     private _lastScenePose = '';
+    //Home latitude of the current ground, so setZoom can rebuild pxPerMetre without a setLocation.
+    private _lat = 0;
     //Bumped by setBuildings/setPalette so the pose guard rebuilds when the scene DATA (not just the pose) changes.
     private _sceneRev = 0;
     //Ground render path, decided once per device (see groundMode): 'normal' / 'transform' both use the CSS 3D
@@ -234,7 +263,7 @@ export class SceneRenderer
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;
     private _groundAltitude  = 45;
-    //"Your real sky" weather grade, baked into the ground + building colours instead of a CSS filter on the whole
+    //Weather grade, baked into the ground + building colours instead of a CSS filter on the whole
     //map layer (which re-flattens the 3D-transformed scene every frame -> flicker on Android WebViews). saturate
     //then brightness, 1/1 = neutral. Only the paint carries it, so rotation stays a pure GPU transform.
     private _wxSat    = 1;
@@ -288,6 +317,9 @@ export class SceneRenderer
         this._groundHolder.className = 'scene-ground-holder';
         this._sceneSvg = document.createElementNS(SVG_NS, 'svg');
         this._sceneSvg.setAttribute('class', 'scene-svg');
+        //The layers see a structural subset of the DOM (so a test can drive them with a fake); the DOM's generic
+        //appendChild signatures do not unify with it, hence the cast.
+        this._sceneLayers = new SceneSvgLayers(document as unknown as SceneDocument, this._sceneSvg as unknown as SceneNode);
         container.appendChild(this._groundHolder);
         container.appendChild(this._sceneSvg);
 
@@ -335,21 +367,60 @@ export class SceneRenderer
         }
     }
 
-    //Build the ground basemap for a home position. One style serves both themes; dark mode is a CSS
-    //filter on the canvas, so a theme flip never re-tiles.
-    public async setLocation(lat: number, lon: number, style: GroundStyle): Promise<void>
+    //Scene magnification (`scene-zoom`): scales the camera and re-keys the pose guards so the next frame repaints
+    //the buildings/shadows and, on the compat path, the projected ground. The basemap canvas itself is untouched:
+    //the normal path scales it in groundTransform, the projected path re-projects through the camera.
+    public setZoom(zoom: number): void
     {
-        this.camera.pxPerMetre = pxPerMetreFor(lat);
-        const token = ++this._groundToken;
-        //Any compat mode ('transform' or 'projected') backs the ground canvas on the CPU (willReadFrequently) to
-        //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas.
-        const built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, this._groundMode !== 'normal');
-        if (!this._alive || token !== this._groundToken)
+        if (zoom === this.camera.zoom)
         {
             return;
         }
+        this.camera.zoom       = zoom;
+        this.camera.pxPerMetre = pxPerMetreFor(this._lat) * zoom;
+        this._projectedPose    = '';
+        this._lastScenePose    = '';
+        this.scheduleRedraw();
+    }
+
+    public async setLocation(lat: number, lon: number, style: GroundStyle): Promise<void>
+    {
+        this._lat = lat;
+        this.camera.pxPerMetre = pxPerMetreFor(lat) * this.camera.zoom;
+        const token = ++this._groundToken;
+        //Any compat mode ('transform' or 'projected') backs the ground canvas on the CPU (willReadFrequently) to
+        //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas.
+        const cpuRaster = this._groundMode !== 'normal';
+        const key       = groundPoolKey(lat, lon, cpuRaster);
+        //A ground released moments ago by the renderer this one replaces (see parkGround) is adopted as is: no
+        //fetch, no decode, no paint, the map is there for the first frame. Repainted from its cached features
+        //only when it was painted for another style or grade, or when the browser purged its pixels meanwhile.
+        this._releaseGround();
+        const styleKey = this._groundStyleKey(style);
+        let built: VectorGround;
+        const parked = takeGround(key);
+        if (parked)
+        {
+            built = parked.built;
+            if (parked.styleKey !== styleKey || groundPurged(built))
+            {
+                built.repaint(style, this._groundAltitude);
+            }
+        }
+        else
+        {
+            built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, cpuRaster);
+            if (!this._alive || token !== this._groundToken)
+            {
+                //Superseded while the tiles loaded: park the fresh ground rather than drop it.
+                offerGround(key, styleKey, built);
+                return;
+            }
+        }
         this._groundStyleCur = style;
         this._ground         = built.ground;
+        this._groundBuilt    = built;
+        this._groundKey      = key;
         //Layer-promotion hint for the CPU-raster transform path: stabilizes the tilted canvas's compositing layer on
         //the entry GPUs that would otherwise be prone to mis-compositing it.
         if (this._groundMode === 'transform')
@@ -365,21 +436,58 @@ export class SceneRenderer
             this._repaintGroundFromCache();
         }
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
-        //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
-        //pixels. A browser may drop a canvas's backing store while the page sits idle, and nothing here would put
-        //it back, so the basemap came back blank with the SVG buildings (being DOM) floating over nothing. The
-        //visibility hook covers a tab going away; this covers the case that has no visibility change at all, which
-        //is the wall-tablet one: the card stays "visible" while the screen sleeps. `contextrestored` is the
-        //browser saying exactly "I dropped your pixels, here is a fresh surface" -- repaint on the spot, from the
-        //cached features, no network.
-        built.ground.el.addEventListener('contextrestored', () =>
+        //The ground canvas is painted once and thereafter only CSS-transformed, so a backing store the browser
+        //drops while the page idles would leave the basemap blank under the DOM buildings. The visibility hook
+        //covers a tab going away; this covers the wall-tablet case with no visibility change (the card stays
+        //"visible" while the screen sleeps). `contextrestored` announces the fresh surface: repaint from the cached
+        //features, no network.
+        this._groundRestore = () =>
         {
             if (this._alive && this._groundStyleCur)
             {
                 this.setGroundStyle(this._groundStyleCur);
             }
-        });
+        };
+        built.ground.el.addEventListener('contextrestored', this._groundRestore);
         this.scheduleRedraw();
+    }
+
+    //Paint identity of the current ground: style, sun altitude step and weather grade, so an adopted ground is
+    //repainted only when it would look different.
+    private _groundStyleKey(style: GroundStyle): string
+    {
+        return `${JSON.stringify(style)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
+    }
+
+    //Let go of the current ground: its canvas goes to the pool for the next renderer at this home (the pool
+    //disposes it if none comes). Nothing here repaints or refetches.
+    private _releaseGround(): void
+    {
+        const built = this._groundBuilt;
+        if (!built)
+        {
+            return;
+        }
+        if (this._groundRestore)
+        {
+            built.ground.el.removeEventListener('contextrestored', this._groundRestore);
+            this._groundRestore = undefined;
+        }
+        const styleKey = this._groundStyleCur ? this._groundStyleKey(this._groundStyleCur) : '';
+        offerGround(this._groundKey, styleKey, built);
+        this._ground                 = undefined;
+        this._groundBuilt            = undefined;
+        this._groundRepaint          = undefined;
+        this._groundRepaintProjected = undefined;
+        this._projectedPose          = '';
+    }
+
+    //Park the ground without tearing the renderer down (the card lost its place in the document, maybe for a
+    //tick, maybe for good): a quick return reclaims it through setLocation, a real removal lets the pool hand it
+    //to the next card or dispose it.
+    public parkGround(): void
+    {
+        this._releaseGround();
     }
 
     //Repaint the ground with a new style (theme flip / colour config) from the cached vector features, no fetch.
@@ -398,12 +506,15 @@ export class SceneRenderer
         this.scheduleRedraw();
     }
 
-    //Set the "your real sky" weather grade (saturate/brightness). Baked into the ground + building colours, not a
-    //CSS filter, so a static scene rotates as a pure GPU transform. A no-op when unchanged; a change repaints the
-    //ground from its cache and rebuilds the scene SVG (both pose-guarded on the grade below).
+    //Set the weather grade (saturate/brightness). Baked into the ground + building colours, not a
+    //CSS filter, so a static scene rotates as a pure GPU transform. A no-op within WX_GRADE_EPS of the current
+    //grade (cloud cover is resolved continuously while scrubbing the timeline, so an exact-equality gate repaints
+    //the whole ground canvas on almost every tick; this tolerance is imperceptible but skips that churn, the same
+    //spirit as setGroundAltitude's caller-side degree step). A real change repaints the ground from its cache and
+    //rebuilds the scene SVG (both pose-guarded on the grade below).
     public setWeatherGrade(sat: number, bright: number): void
     {
-        if (sat === this._wxSat && bright === this._wxBright)
+        if (Math.abs(sat - this._wxSat) < WX_GRADE_EPS && Math.abs(bright - this._wxBright) < WX_GRADE_EPS)
         {
             return;
         }
@@ -443,6 +554,13 @@ export class SceneRenderer
         {
             this._groundRepaint(style, this._groundAltitude);
         }
+    }
+
+    //Current multiplier on the home prism's height (rise animation x squash), so a marker standing on the roof
+    //rides it up and down with the prism.
+    public get homeHeightScale(): number
+    {
+        return this._growth * (this._home.growth ?? 1);
     }
 
     public setBuildings(buildings: Building[]): void
@@ -599,7 +717,7 @@ export class SceneRenderer
         {
             return;
         }
-        const pose = `${w}x${h}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
+        const pose = `${w}x${h}|${this.camera.zoom}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}|${this._groundAltitude.toFixed(1)}|${this._wxSat}|${this._wxBright}`;
         if (pose === this._projectedPose)
         {
             return;
@@ -645,23 +763,23 @@ export class SceneRenderer
             }
             else
             {
+                //fade's width/height are set once by buildVectorGround() and 'display' is never touched off this
+                //path (only the projected compat path hides it) - both fixed for the ground's whole lifetime, so
+                //only the two properties that genuinely move every frame are written here.
                 const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
                 this._ground.el.style.transformOrigin = transformOrigin;
                 this._ground.el.style.transform = transform;
-                this._ground.fade.style.display = '';
-                this._ground.fade.style.width  = `${this._ground.size}px`;
-                this._ground.fade.style.height = `${this._ground.size}px`;
                 this._ground.fade.style.transformOrigin = transformOrigin;
                 this._ground.fade.style.transform = transform;
             }
         }
 
         this._sceneSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-        //The buildings + shadows layer is a full innerHTML rebuild + reparse, the heaviest per-frame cost. Skip it
-        //when nothing it reads changed since the last draw (camera pose, sun, growth, home, and a revision bumped by
-        //setBuildings/setPalette), mirroring the ground compat path's own pose guard above. Anything below the SVG
-        //that must run every frame (onAfterDraw) stays outside this gate.
-        const scenePose = `${width}x${height}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}`
+        //The buildings + shadows repaint (project, order, then write the scene SVG's nodes in place) is the heaviest
+        //per-frame cost. Skip it when nothing it reads changed since the last draw (camera pose, sun, growth, home,
+        //and a revision bumped by setBuildings/setPalette), mirroring the ground compat path's own pose guard above.
+        //Anything below the SVG that must run every frame (onAfterDraw) stays outside this gate.
+        const scenePose = `${width}x${height}|${this.camera.zoom}|${this.camera.bearingDeg.toFixed(2)}|${this.camera.tiltDeg.toFixed(2)}`
             + `|${this._sun.azimuth.toFixed(2)}|${this._sun.altitude.toFixed(2)}|${this._growth.toFixed(3)}`
             + `|${this._home.color ?? ''}|${(this._home.growth ?? 1).toFixed(3)}|${this._sceneRev}`
             + `|${this._wxSat}|${this._wxBright}`;
@@ -670,9 +788,9 @@ export class SceneRenderer
             this._lastScenePose = scenePose;
             const alt = this._sun.altitude;
             const drawn = this._buildings;
-            //Bake the weather grade into the building + shadow colours (identity at 1/1, so the neutral path is
-            //byte-identical to before). Opacities are untouched - the grade is a colour transform, like the CSS
-            //filter it replaces, but without wrapping the 3D-transformed layer in a per-frame re-flatten.
+            //Bake the weather grade into the building + shadow colours (identity at 1/1). Opacities are untouched:
+            //the grade is a colour transform, and carrying it in the paint rather than a CSS filter keeps the
+            //3D-transformed layer from re-flattening every frame.
             const s = this._wxSat;
             const br = this._wxBright;
             const gradedPalette: ScenePalette = {
@@ -683,17 +801,11 @@ export class SceneRenderer
             const gradedHome: HomeAppearance = this._home.color
                 ? { ...this._home, color: gradeColor(this._home.color, s, br) }
                 : this._home;
-            //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
-            //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
-            //Each pass in its own group. A <g> changes nothing about the picture, and it makes the two passes
-            //addressable from a stylesheet - which is the only way to hold one of them off, since this innerHTML is
-            //rebuilt whole and anything done to the nodes themselves is gone by the next rebuild.
-            this._sceneSvg.innerHTML =
-                `<g class="scene-shadows">`
-                + renderShadows(this.camera, drawn, this._sun, gradedShadow, this._palette.shadowOpacity)
-                + `</g><g class="scene-buildings">`
-                + renderBuildings(this.camera, drawn, alt, gradedPalette, this._growth, this._palette.neighborOpacity, gradedHome, this._sun.azimuth)
-                + `</g>`;
+            //The day/night atmosphere is the graded ground palette + the altitude-tinted buildings.
+            this._sceneLayers.commit(
+                renderShadows(this.camera, drawn, this._sun, gradedShadow, this._palette.shadowOpacity),
+                renderBuildings(this.camera, drawn, alt, gradedPalette, this._growth, this._palette.neighborOpacity, gradedHome, this._sun.azimuth),
+            );
         }
 
         this.onAfterDraw?.();
@@ -716,6 +828,8 @@ export class SceneRenderer
         {
             cancelAnimationFrame(this._homeRaf); this._homeRaf = 0;
         }
+        this._releaseGround();
+        this._buildings = [];
         this._groundHolder.remove();
         this._sceneSvg.remove();
     }

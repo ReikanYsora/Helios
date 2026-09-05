@@ -11,10 +11,9 @@ import { loadDurable, saveDurable } from '../durable-cache';
 export interface EnergyDefaults
 {
     //Solar live signed power sensors (`stat_rate`). Preferred over cumulative `stat_energy_from` for the live
-    //chip/chart: the instantaneous read matches the HA tile to the watt and avoids trapezoidal slope artefacts on
-    //sparse inverters.
+    //chip: the instantaneous read matches the HA tile to the watt.
     solarStatRates:         string[];
-    //Cumulative kWh meters per solar source. Drives chart backfill, forecast calibration, and `produced today`.
+    //Cumulative kWh meters per solar source. Drives the past production series and `produced today`.
     solarStatEnergyFroms:   string[];
     //Grid live signed power sensors (`stat_rate`). Positive -> IMPORT chip, negative -> EXPORT, like HA's live grid tile.
     gridStatRates:          string[];
@@ -37,9 +36,13 @@ export interface EnergyDefaults
     batteryStatEnergyTos:   string[]; //Battery charge kWh meters (`stat_energy_to`). Drives `charged today`.
     //Battery state-of-charge sensors (`stat_soc`), uniform-averaged across sources (HA Energy has no per-source capacity).
     batteryStatSocs:        string[];
+    //The same battery wiring, kept PER SOURCE: each bank's own live power sensor(s) with its own charge / discharge
+    //meters. The flat lists above lose that pairing, and the sign guard needs it: a bank's rate is only ever judged
+    //against that bank's meters, never against another battery's flow (battery-guard.ts).
+    batteryBanks:           { rates: string[]; tos: string[]; froms: string[] }[];
     //Count of battery SOURCES that expose no live-power sensor (`power_config`). >0 means a mixed/energy-only wiring:
-    //the live readout must then net the directional energy meters (which cover every bank) instead of summing the
-    //partial set of power sensors, otherwise a battery without a power sensor drops out of the live power.
+    //the live readout then shows nothing rather than a partial sum that silently drops a bank; scrub and curves
+    //still net the directional meters.
     batterySourcesWithoutRate: number;
     //Entity ids whose raw value reads opposite to the card's canonical sign (battery: positive = charging, grid:
     //positive = import). HA's conventions: battery `stat_rate` is discharge-positive (flips), grid `stat_rate`
@@ -116,6 +119,7 @@ export function freshEnergyDefaults(): EnergyDefaults
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
         batteryStatSocs:        [],
+        batteryBanks:           [],
         batterySourcesWithoutRate: 0,
         invertedRateEntities:   [],
         solarForecastEntryIds:  [],
@@ -190,12 +194,14 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         return;
     }
     fetchEnergyPrefs(host);
-    //A non-admin user can never subscribe to this event (core rejects it outright, always, every time - it is
-    //not a transient failure), so skip the doomed round-trip entirely rather than firing it once per connect.
-    //`is_admin` is read defensively: only an explicit `false` skips, since an absent/unknown value (an older core,
-    //a test harness) must not silently disable a subscription that could otherwise work.
+    //A non-admin user can never subscribe to this event (core rejects it outright, not transiently), so skip the
+    //round-trip. Only an explicit `false` skips: an absent `is_admin` (older core) must not disable a subscription
+    //that could work. The guard is set as a no-op canceller BEFORE bailing: updated() re-calls this whenever the
+    //guard is empty and the one-shot fetch above re-renders on landing, so an empty guard means a fetch per render.
+    //One fetch per connect is the ceiling.
     if (host.hass.user?.is_admin === false)
     {
+        host._energyPrefsUnsub = () => { /* nothing to cancel: no subscription was ever attempted */ };
         return;
     }
     //`subscribeEvents` resolves its UnsubscribeFunc asynchronously. Install a synchronous canceller now so the
@@ -222,13 +228,11 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
         })
         .catch(() =>
         {
-            //Event unsupported on this core, or a non-admin viewer the is_admin check above missed (an unknown
-            //hass.user shape): the one-shot fetch above already populated the cache. The guard is DELIBERATELY
-            //LEFT SET (as a no-op canceller) rather than cleared: every hass state change re-renders the card and
-            //re-checks this guard, so clearing it here retried the doomed subscription on every single render,
-            //hundreds of times a second on a live install - millions of rejected-event log lines a day on a non-
-            //admin viewer's Home Assistant instance. One rejected attempt per real connect is the ceiling;
-            //a genuine reconnect (unsubscribeEnergyPrefs on disconnect) is what re-arms a fresh attempt.
+            //Event unsupported on this core, or a non-admin viewer the is_admin check missed: the one-shot fetch
+            //already populated the cache. The guard stays SET as a no-op canceller: every hass change re-renders
+            //and re-checks it, so a cleared guard would retry the doomed subscription on every render, one
+            //rejected-event log line each. One attempt per connect; a real reconnect (unsubscribeEnergyPrefs)
+            //re-arms it.
             if (live)
             {
                 host._energyPrefsUnsub = () =>
@@ -302,8 +306,8 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
                 start_time:    midnight.toISOString(),
                 end_time:      now.toISOString(),
                 statistic_ids: statisticIds,
-                //Day period yields one bucket per statistic; `types: ['change']` is the net delta from the same
-                //Riemann sum HA Energy consumes, so the result matches the dashboard tile to the watt-hour.
+                //Day period yields one bucket per statistic; `types: ['change']` is the same recorder delta HA
+                //Energy consumes, so the result matches the dashboard tile to the watt-hour.
                 period:        'day',
                 types:         ['change'],
                 //Normalise to kWh (installs may report Wh/MWh); chip + dashboard formatters assume kWh downstream.
@@ -364,7 +368,7 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
 //multi-source installs (split tariffs, separate import/export meters, multi-bank batteries) aggregate by sum at the
 //consumer.
 //
-//Source shapes (HA core 2024+):
+//Source shapes:
 //  - solar:   { type: 'solar', stat_energy_from, stat_rate?, config_entry_solar_forecast? }
 //  - grid:    { type: 'grid', stat_energy_from, stat_energy_to?, stat_rate?, power_config? }
 //  - battery: { type: 'battery', stat_energy_from, stat_energy_to, stat_soc?, power_config? }
@@ -378,8 +382,6 @@ export function parseEnergyPrefs(prefs: {
 //core too old for the command, or when that fetch failed: the `${meter}_cost` guess below is the fallback.
 }, costSensors?: Record<string, string>): EnergyDefaults
 {
-    //Fresh literal (not `{ ...EMPTY_ENERGY_DEFAULTS }`) so array fields aren't aliased onto the shared empty default,
-    //avoiding cross-call contamination when the subscription path parses while a previous parse is still settling.
     const out: EnergyDefaults = freshEnergyDefaults();
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -450,7 +452,7 @@ export function parseEnergyPrefs(prefs: {
                 const n = Number(f['number_energy_price']);
                 const hasPrice = !!p || Number.isFinite(n);
                 //Deduped: a dual-tariff grid's flows commonly share the SAME price entity (one live rate covering
-                //every tariff), which is not a multi-tariff price set at all - singlePrice() below only bails to
+                //every tariff), which is not a multi-tariff price set at all: singlePrice (cost.ts) only bails to
                 //the cost-statistic path on a genuine multiple, so a repeat here must not count as one.
                 if (p)
                 {
@@ -524,6 +526,9 @@ export function parseEnergyPrefs(prefs: {
             }
             pushStrings(src['stat_energy_from'], out.batteryStatEnergyFroms);
             pushStrings(src['stat_energy_to'], out.batteryStatEnergyTos);
+            const bank: { rates: string[]; tos: string[]; froms: string[] } = { rates: [], tos: [], froms: [] };
+            pushStrings(src['stat_energy_to'], bank.tos);
+            pushStrings(src['stat_energy_from'], bank.froms);
             const soc = pickFirstString(src['stat_soc']);
             if (soc)
             {
@@ -531,13 +536,14 @@ export function parseEnergyPrefs(prefs: {
             }
             //Battery live power: prefer the `power_config` rate slots; a source with none falls back to its
             //top-level `stat_rate` (the common HA battery config, a net-power sensor). Only a source with NEITHER
-            //is truly bucket-sourced, where live power must be netted from the directional energy meters instead.
+            //counts as rate-less, which hides the live power readout (batterySourcesWithoutRate).
             const batteryRates = collectPowerConfigRates(src['power_config'], 'battery');
             if (batteryRates.length > 0)
             {
                 for (const slot of batteryRates)
                 {
                     out.batteryStatRates.push(slot.entity);
+                    bank.rates.push(slot.entity);
                     if (slot.inverted)
                     {
                         out.invertedRateEntities.push(slot.entity);
@@ -551,6 +557,7 @@ export function parseEnergyPrefs(prefs: {
                 {
                     //HA's battery stat_rate is discharge-positive; flip it to the card's charge-positive convention.
                     out.batteryStatRates.push(topRate);
+                    bank.rates.push(topRate);
                     out.invertedRateEntities.push(topRate);
                 }
                 else
@@ -558,6 +565,7 @@ export function parseEnergyPrefs(prefs: {
                     out.batterySourcesWithoutRate += 1;
                 }
             }
+            out.batteryBanks.push(bank);
         }
     }
 

@@ -1,6 +1,6 @@
-//Walking store buckets across the slots of a day. Four places used to do this, each with its own copy of the same
-//maths, and they had drifted apart: two cut their slot boundaries from the HOME's midnight and two from the epoch,
-//which is not the same thing in a zone offset by a fraction of an hour. One walker, one answer.
+//Walking store buckets across the slots of a day, in ONE place: slot boundaries cut from the home's midnight and
+//from the epoch are not the same thing in a zone offset by a fraction of an hour, so every consumer walks the same
+//way.
 //
 //The shape of the work: a store bucket is a span of time, a slot is a span of the day, and the two grids do not
 //line up. So a bucket is not DROPPED into a slot; it is walked segment by segment across every slot it straddles,
@@ -49,8 +49,8 @@ export function forEachBucketSlot(
 ): void
 {
     const slotMs = DAY_MS / slots;
-    //Only the buckets the slice can reach. A month's store holds ~744 of them and one day needs 24, so walking all
-    //of them to throw away 97% was the cost of asking a simple question. `inWindow` still decides the two edges.
+    //Only the buckets the slice can reach (a month's store holds ~744, one day needs 24); `inWindow` still decides
+    //the two edges.
     const first = win ? Math.max(0, Math.floor((win.fromMs - store.storeStartMs) / store.stepMs) - 1) : 0;
     const last  = win
         ? Math.min(store.bucketsTotal, Math.ceil((win.toMs - store.storeStartMs) / store.stepMs) + 1)

@@ -69,9 +69,10 @@ function findSunCrossing(
 //{ startPct, endPct } for `renderTimelineNightZones`. The walk pads one day each side so leading/trailing night
 //chunks still resolve when the window doesn't start/end on a solar boundary.
 //Memoised: night zones depend only on the window + home coords, stable across the frequent scrub + auto-rotate
-//renders (those move _selectedTime / the camera, not _timeRange). Without it the ~700 getSunPosition calls below
-//ran on every such render.
-let _nightMemo: { key: string; out: { startPct: number; endPct: number }[] } | null = null;
+//renders (those move _selectedTime / the camera, not _timeRange), so the ~700 getSunPosition calls below don't run
+//on every such render. One slot per host (WeakMap), not a single global slot: two cards showing the same home at
+//different time windows (e.g. one "Today", one "Week") would otherwise evict each other's entry on every render.
+const _nightMemo = new WeakMap<ChartHost, { key: string; out: { startPct: number; endPct: number }[] }>();
 
 function computeNightIntervals(host: ChartHost): { startPct: number; endPct: number }[]
 {
@@ -87,9 +88,10 @@ function computeNightIntervals(host: ChartHost): { startPct: number; endPct: num
     }
     const { startMs, endMs, rangeMs } = r;
     const memoKey = `${startMs}|${endMs}|${coords.lat.toFixed(4)}|${coords.lon.toFixed(4)}`;
-    if (_nightMemo && _nightMemo.key === memoKey)
+    const cached  = _nightMemo.get(host);
+    if (cached && cached.key === memoKey)
     {
-        return _nightMemo.out;
+        return cached.out;
     }
 
     interface Crossing { ms: number; kind: 'sunrise' | 'sunset' }
@@ -160,7 +162,7 @@ function computeNightIntervals(host: ChartHost): { startPct: number; endPct: num
             });
         }
     }
-    _nightMemo = { key: memoKey, out };
+    _nightMemo.set(host, { key: memoKey, out });
     return out;
 }
 

@@ -8,12 +8,11 @@ export const lv: Translations = {
 
   period: {
     rangeLabel: "Laika diapazons",
-    forecast: "Prognoze",
+    forecast: "D - D+2",
     yesterday: "Vakar",
     today: "Šodien",
     week: "Nedēļa",
     month: "Mēnesis",
-    year: "Gads",
   },
 
   compass: "Z,ZA,A,DA,D,DR,R,ZR",
@@ -82,7 +81,7 @@ export const lv: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Kameras automātiskā rotācija",
     autoRotateHint:
-      "Kad dažas sekundes esi neaktīvs, kamera lēni riņķo ap māju (apmēram 1.5°/s, pretēji saules šķietamajai kustībai). Vilkšana ar vienu pirkstu to nekavējoties aptur, un tā atsākas, tiklīdz atlaid. Izvairies no tā ļoti vecās ierīcēs: automātiskā rotācija piespiež renderēšanu katru sekundi.",
+      "Kad dažas sekundes esi neaktīvs, kamera lēni riņķo ap māju (apmēram 4°/s, pretēji saules šķietamajai kustībai). Vilkšana ar vienu pirkstu to nekavējoties aptur, un tā atsākas, tiklīdz atlaid. Izvairies no tā ļoti vecās ierīcēs: automātiskā rotācija piespiež renderēšanu katru sekundi.",
     autoRotateOn: "Ieslēgts",
     autoRotateOff: "Izslēgts",
     degradedRender: "Saderības renderēšana",
@@ -142,6 +141,13 @@ export const lv: Translations = {
     showHorizonLineHint: "Zīmē reljefa horizonta līniju ap māju, aprēķinātu no vietējā reljefa. Horizonts vienmēr reālistiski pieklusina sauli aiz pakalniem; tas tikai parāda vai paslēpj zīmēto līniju.",
     horizonLineColor: "Reljefa horizonta krāsa",
     horizonLineColorHint: "Reljefa horizonta līnijas krāsa.",
+    moonDisplay: "Mēness attēlošanas režīms",
+    moonDisplayHint: "Zīmē mēnesi uz sava loka ar fāzei atbilstošu sirpi, vienmēr saules priekšā. Tikai dekoratīvi: bez etiķetes, bez vērtības.",
+    moonDisplayAlways: "Vienmēr",
+    moonDisplayNight: "Nakts",
+    moonDisplayHidden: "Atspējots",
+    sceneZoom: "Ainas tālummaiņa",
+    sceneZoomHint: "Palielina karti, ēkas un ēnas ap jūsu māju: 1x ir noklusējuma attēlojums, 1,5x un 2x tos rāda lielākus. Saule, loki un zīmes saglabā savu izmēru.",
     lockRotation: "Fiksēt rotāciju",
     lockRotationHint:
       "Velciet priekšskatījumu, lai pagrieztu un sasvērtu ainu vēlamajā skatā, pēc tam ieslēdziet šo. Bloķēšana iesaldē šo skatu (pagriešana ar vilkšanu un automātiskā griešanās miera stāvoklī tiek atspējota) un saglabā leņķi kartē, tāpēc tieši tas pats skats parādās katrā ierīcē un pārlūkā. Izslēdziet to, lai atkal brīvi grieztu.",
@@ -215,6 +221,7 @@ export const lv: Translations = {
     buildingColor: "Ēkas krāsa",
     buildingColorHelp: "Pamattonis, kas tiek piemērots apkārtējām ēkām ainā.",
     shadowsSection: "Ēnas",
+    moonSection: "Mēness konfigurācija",
     shadowsEnabled: "Rādīt ēnas",
     shadowsEnabledOn: "Rādītas",
     shadowsEnabledOff: "Paslēptas",

@@ -46,9 +46,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //Day-boundary X positions from the shared timeline model (same source as the weather chart so separators line
     //up); empty on wide spans.
     const endMsAbs = range.end.getTime();
-    const dayXs = buildTimelineModel(range.start, range.end).dayBoundaries.map(frac => frac * W);
+    const dayXs = buildTimelineModel(host, range.start, range.end).dayBoundaries.map(frac => frac * W);
 
-    //unifiedStore carries the production series over the full J-1..J+2 window in watts (linearly interpolated, never
+    //unifiedStore carries the production series over the full store window in watts (linearly interpolated, never
     //mixed with forecast). sliceForRange returns one sample per display bucket in view; empty before the first build
     //gives an empty frame. Both curves live in watts (the store is the single source), so they share the Y axis with
     //no unit conversion.
@@ -72,8 +72,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
     }
 
-    //Forecast curve: same store, same unit. Already cap-clipped, calibration-applied and shading-aware at every
-    //display bucket, no local model loop here.
+    //Forecast curve: same store, same unit, one value per display bucket.
     const predictedSamples: { t: Date; v: number }[] = [];
     if (rangeSlice)
     {
@@ -121,7 +120,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
     }
 
     //Per-source stacked areas (multi-source installs): each source's share of the aggregate at every bucket, stacked
-    //so the filled areas sum to the aggregate and never overlap. Per-source colour ramp (energySolarColor by sorted
+    //so the filled areas sum to the aggregate and never overlap. Per-source colour ramp (energySolarColor by source
     //index). Single-source installs keep the plain aggregate area.
     //Keyed by solar meter in HA Energy source order (matches solarSourceName + the tooltip).
     const perEntityIdsForCurves = host._pvChangeSeriesPerEntity.size > 1
@@ -155,7 +154,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
             }
             raw.push(arr);
         }
-        //Column totals once (O(S*N)); re-summing them inside the per-source loop made the stack O(S^2*N).
+        //Column totals once (O(S*N)) rather than re-summed per source (O(S^2*N)).
         const colTotal = new Array<number>(N).fill(0);
         for (let j = 0; j < N; j++)
         {

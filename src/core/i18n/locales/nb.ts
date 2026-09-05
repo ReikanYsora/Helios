@@ -8,12 +8,11 @@ export const nb: Translations = {
 
   period: {
     rangeLabel: "Tidsrom",
-    forecast: "Prognose",
+    forecast: "D - D+2",
     yesterday: "I går",
     today: "I dag",
     week: "Uke",
     month: "Måned",
-    year: "År",
   },
 
   compass: "N,NØ,Ø,SØ,S,SV,V,NV",
@@ -82,7 +81,7 @@ export const nb: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatisk kamerarotasjon",
     autoRotateHint:
-      "Når det er inaktivt i noen sekunder, sirkler kameraet sakte rundt hjemmet (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). Et dra med én finger setter den umiddelbart på pause, og den fortsetter når du slipper. Unngå det på svært gamle enheter: automatisk rotasjon tvinger frem en gjengivelse hvert sekund.",
+      "Når det er inaktivt i noen sekunder, sirkler kameraet sakte rundt hjemmet (omtrent 4°/s, motsatt av solens tilsynelatende bevegelse). Et dra med én finger setter den umiddelbart på pause, og den fortsetter når du slipper. Unngå det på svært gamle enheter: automatisk rotasjon tvinger frem en gjengivelse hvert sekund.",
     autoRotateOn: "På",
     autoRotateOff: "Av",
     degradedRender: "Kompatibilitetsgjengivelse",
@@ -142,6 +141,13 @@ export const nb: Translations = {
     showHorizonLineHint: "Tegner terrengets horisontlinje rundt hjemmet, beregnet fra det lokale terrenget. Horisonten demper alltid solen realistisk bak åser; dette viser eller skjuler bare den tegnede linjen.",
     horizonLineColor: "Farge på terrenghorisonten",
     horizonLineColorHint: "Farge på terrenghorisontlinjen.",
+    moonDisplay: "Visningsmodus for månen",
+    moonDisplayHint: "Tegner månen på sin egen bue med en fasekorrekt sigd, alltid foran solen. Kun kosmetisk: ingen brikke, ingen verdi.",
+    moonDisplayAlways: "Alltid",
+    moonDisplayNight: "Natt",
+    moonDisplayHidden: "Deaktivert",
+    sceneZoom: "Scenezoom",
+    sceneZoomHint: "Forstørrer kartet, bygningene og skyggene rundt hjemmet ditt: 1x er standardvisningen, 1,5x og 2x viser dem større. Solen, buene og brikkene beholder størrelsen.",
     lockRotation: "Lås rotasjon",
     lockRotationHint:
       "Dra i forhåndsvisningen for å rotere og vippe scenen til ønsket visning, og slå så på dette. Låsen fryser den visningen (dra-for-å-rotere og den automatiske rotasjonen i hvile slås av) og lagrer vinkelen i kortet, slik at nøyaktig samme visning vises på alle enheter og nettlesere. Slå det av for å rotere fritt igjen.",
@@ -214,6 +220,7 @@ export const nb: Translations = {
     buildingColorHelp:
       "Grunntone brukt på de omkringliggende bygningene i scenen.",
     shadowsSection: "Skygger",
+    moonSection: "Månekonfigurasjon",
     shadowsEnabled: "Vis skygger",
     shadowsEnabledOn: "Vist",
     shadowsEnabledOff: "Skjult",

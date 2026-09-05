@@ -8,12 +8,11 @@ export const hu: Translations = {
 
   period: {
     rangeLabel: "Időtartomány",
-    forecast: "Előrejelzés",
+    forecast: "N - N+2",
     yesterday: "Tegnap",
     today: "Ma",
     week: "Hét",
     month: "Hónap",
-    year: "Év",
   },
 
   compass: "É,ÉK,K,DK,D,DNy,Ny,ÉNy",
@@ -82,7 +81,7 @@ export const hu: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Kamera automatikus forgatása",
     autoRotateHint:
-      "Néhány másodperc tétlenség után a kamera lassan az otthon körül kering (körülbelül 1,5°/s, a nap látszólagos mozgásával ellentétesen). Egyujjas húzás azonnal megállítja, és folytatódik, amint elengeded. Kerüld nagyon régi eszközökön: az automatikus forgatás másodpercenként újrarajzolásra kényszerít.",
+      "Néhány másodperc tétlenség után a kamera lassan az otthon körül kering (körülbelül 4°/s, a nap látszólagos mozgásával ellentétesen). Egyujjas húzás azonnal megállítja, és folytatódik, amint elengeded. Kerüld nagyon régi eszközökön: az automatikus forgatás másodpercenként újrarajzolásra kényszerít.",
     autoRotateOn: "Be",
     autoRotateOff: "Ki",
     degradedRender: "Kompatibilitási megjelenítés",
@@ -142,6 +141,13 @@ export const hu: Translations = {
     showHorizonLineHint: "Kirajzolja a domborzat horizontvonalát az otthon körül, a helyi terep alapján számítva. A horizont mindig valósághűen tompítja a napot a dombok mögött; ez csak megjeleníti vagy elrejti a kirajzolt vonalat.",
     horizonLineColor: "Domborzati horizont színe",
     horizonLineColorHint: "A domborzati horizontvonal színe.",
+    moonDisplay: "A hold megjelenítési módja",
+    moonDisplayHint: "A holdat saját ívén rajzolja, a fázisnak megfelelő sarlóval, mindig a nap előtt. Csak díszítés: nincs címke, nincs érték.",
+    moonDisplayAlways: "Mindig",
+    moonDisplayNight: "Éjszaka",
+    moonDisplayHidden: "Kikapcsolva",
+    sceneZoom: "Jelenet nagyítása",
+    sceneZoomHint: "Felnagyítja a térképet, az épületeket és az árnyékokat az otthona körül: az 1x az alapértelmezett megjelenítés, az 1,5x és a 2x nagyobbnak mutatja őket. A nap, az ívek és a címkék megtartják a méretüket.",
     lockRotation: "Forgatás zárolása",
     lockRotationHint:
       "Húzza az előnézetet a jelenet elforgatásához és megdöntéséhez a kívánt nézetig, majd kapcsolja be ezt. A zár rögzíti ezt a nézetet (a húzással forgatás és a nyugalmi automatikus forgatás kikapcsol), és elmenti a szöget a kártyába, így pontosan ugyanaz a nézet jelenik meg minden eszközön és böngészőben. Kapcsolja ki, hogy újra szabadon forgathasson.",
@@ -216,6 +222,7 @@ export const hu: Translations = {
     buildingColorHelp:
       "A jelenetben a környező épületekre alkalmazott alapszínezet.",
     shadowsSection: "Árnyékok",
+    moonSection: "A hold beállításai",
     shadowsEnabled: "Árnyékok megjelenítése",
     shadowsEnabledOn: "Megjelenítve",
     shadowsEnabledOff: "Elrejtve",

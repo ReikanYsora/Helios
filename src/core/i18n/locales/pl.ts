@@ -8,12 +8,11 @@ export const pl: Translations = {
 
   period: {
     rangeLabel: "Zakres czasu",
-    forecast: "Prognoza",
+    forecast: "D - D+2",
     yesterday: "Wczoraj",
     today: "Dzisiaj",
     week: "Tydzień",
     month: "Miesiąc",
-    year: "Rok",
   },
 
   compass: "N,NE,E,SE,S,SW,W,NW",
@@ -82,7 +81,7 @@ export const pl: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatyczny obrót kamery",
     autoRotateHint:
-      "Po kilku sekundach bezczynności kamera powoli obraca się wokół domu (około 1,5°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją wstrzymuje, a wznawia się, gdy puścisz. Unikaj na bardzo starych urządzeniach: automatyczny obrót wymusza renderowanie co sekundę.",
+      "Po kilku sekundach bezczynności kamera powoli obraca się wokół domu (około 4°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją wstrzymuje, a wznawia się, gdy puścisz. Unikaj na bardzo starych urządzeniach: automatyczny obrót wymusza renderowanie co sekundę.",
     autoRotateOn: "Włączony",
     autoRotateOff: "Wyłączony",
     degradedRender: "Renderowanie zgodności",
@@ -142,6 +141,13 @@ export const pl: Translations = {
     showHorizonLineHint: "Rysuje linię horyzontu terenu wokół domu, obliczoną na podstawie lokalnego ukształtowania. Horyzont zawsze realistycznie przygasza słońce za wzniesieniami; to tylko włącza lub wyłącza rysowaną linię.",
     horizonLineColor: "Kolor horyzontu terenu",
     horizonLineColorHint: "Kolor linii horyzontu terenu.",
+    moonDisplay: "Tryb wyświetlania księżyca",
+    moonDisplayHint: "Rysuje księżyc na własnym łuku z sierpem zgodnym z fazą, zawsze przed słońcem. Wyłącznie ozdobne: bez plakietki, bez wartości.",
+    moonDisplayAlways: "Zawsze",
+    moonDisplayNight: "Noc",
+    moonDisplayHidden: "Wyłączony",
+    sceneZoom: "Zoom sceny",
+    sceneZoomHint: "Powiększa mapę, budynki i cienie wokół domu: 1x to widok domyślny, 1,5x i 2x pokazują je większe. Słońce, łuki i plakietki zachowują swój rozmiar.",
     lockRotation: "Zablokuj obrót",
     lockRotationHint:
       "Przeciągnij podgląd, aby obrócić i pochylić scenę do żądanego widoku, a następnie włącz tę opcję. Blokada zamraża ten widok (obracanie przeciąganiem i automatyczne obracanie w spoczynku zostają wyłączone) i zapisuje kąt w karcie, dzięki czemu dokładnie ten sam widok pojawia się na każdym urządzeniu i w każdej przeglądarce. Wyłącz ją, aby ponownie swobodnie obracać.",
@@ -215,6 +221,7 @@ export const pl: Translations = {
     buildingColorHelp:
       "Bazowy odcień stosowany do okolicznych budynków w scenie.",
     shadowsSection: "Cienie",
+    moonSection: "Konfiguracja księżyca",
     shadowsEnabled: "Pokaż cienie",
     shadowsEnabledOn: "Pokazane",
     shadowsEnabledOff: "Ukryte",

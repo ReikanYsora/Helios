@@ -8,12 +8,11 @@ export const pt: Translations = {
 
   period: {
     rangeLabel: "Período",
-    forecast: "Previsão",
+    forecast: "D - D+2",
     yesterday: "Ontem",
     today: "Hoje",
     week: "Semana",
     month: "Mês",
-    year: "Ano",
   },
 
   compass: "N,NE,E,SE,S,SO,O,NO",
@@ -82,7 +81,7 @@ export const pt: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Rotação automática da câmara",
     autoRotateHint:
-      "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1.5°/s, no sentido oposto ao movimento aparente do sol). Um arrasto com um dedo pausa-a de imediato e retoma assim que largares. Evita em dispositivos muito antigos: a rotação automática força um render a cada segundo.",
+      "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 4°/s, no sentido oposto ao movimento aparente do sol). Um arrasto com um dedo pausa-a de imediato e retoma assim que largares. Evita em dispositivos muito antigos: a rotação automática força um render a cada segundo.",
     autoRotateOn: "Ativada",
     autoRotateOff: "Desativada",
     degradedRender: "Renderização de compatibilidade",
@@ -142,6 +141,13 @@ export const pt: Translations = {
     showHorizonLineHint: "Desenha a linha do horizonte do relevo à volta da casa, calculada a partir do terreno local. O horizonte atenua sempre o sol de forma realista atrás das colinas; isto apenas mostra ou oculta a linha.",
     horizonLineColor: "Cor do horizonte do terreno",
     horizonLineColorHint: "Cor da linha do horizonte do terreno.",
+    moonDisplay: "Modo de exibição da lua",
+    moonDisplayHint: "Desenha a lua no seu próprio arco com um crescente fiel à fase, sempre à frente do sol. Apenas estético: sem chip nem valor.",
+    moonDisplayAlways: "Sempre",
+    moonDisplayNight: "Noite",
+    moonDisplayHidden: "Desativada",
+    sceneZoom: "Zoom da cena",
+    sceneZoomHint: "Amplia o mapa, os edifícios e as sombras à volta da sua casa: 1x é a renderização predefinida, 1,5x e 2x mostram-nos maiores. O sol, os arcos e os mostradores mantêm o tamanho.",
     lockRotation: "Bloquear rotação",
     lockRotationHint:
       "Arraste a pré-visualização para girar e inclinar a cena até à vista que quer e depois ative isto. O bloqueio congela essa vista (a rotação por arrasto e a rotação automática em repouso são desativadas) e guarda o ângulo no cartão, para que exatamente a mesma vista apareça em todos os dispositivos e navegadores. Desative-o para voltar a girar livremente.",
@@ -216,6 +222,7 @@ export const pt: Translations = {
     buildingColorHelp:
       "Tom de base aplicado aos edifícios envolventes na cena.",
     shadowsSection: "Sombras",
+    moonSection: "Configuração da lua",
     shadowsEnabled: "Mostrar sombras",
     shadowsEnabledOn: "Mostradas",
     shadowsEnabledOff: "Ocultas",

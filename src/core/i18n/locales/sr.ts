@@ -8,12 +8,11 @@ export const sr: Translations = {
 
   period: {
     rangeLabel: "Временски опсег",
-    forecast: "Прогноза",
+    forecast: "D - D+2",
     yesterday: "Јуче",
     today: "Данас",
     week: "Недеља",
     month: "Месец",
-    year: "Година",
   },
 
   compass: "С,СИ,И,ЈИ,Ј,ЈЗ,З,СЗ",
@@ -82,7 +81,7 @@ export const sr: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Аутоматска ротација камере",
     autoRotateHint:
-      "После неколико секунди мировања камера полако кружи око дома (око 1.5°/s, супротно привидном кретању сунца). Превлачење једним прстом је одмах зауставља, а наставља се чим пустиш. Избегавај на веома старим уређајима: аутоматска ротација сваке секунде приморава исцртавање.",
+      "После неколико секунди мировања камера полако кружи око дома (око 4°/s, супротно привидном кретању сунца). Превлачење једним прстом је одмах зауставља, а наставља се чим пустиш. Избегавај на веома старим уређајима: аутоматска ротација сваке секунде приморава исцртавање.",
     autoRotateOn: "Укључено",
     autoRotateOff: "Искључено",
     degradedRender: "Приказ у режиму компатибилности",
@@ -142,6 +141,13 @@ export const sr: Translations = {
     showHorizonLineHint: "Црта линију хоризонта рељефа око дома, израчунату из локалног терена. Хоризонт увек реалистично пригушује сунце иза брда; ово само приказује или сакрива нацртану линију.",
     horizonLineColor: "Боја хоризонта терена",
     horizonLineColorHint: "Боја линије хоризонта терена.",
+    moonDisplay: "Režim prikaza meseca",
+    moonDisplayHint: "Crta mesec na sopstvenom luku sa srpom vernim fazi, uvek ispred sunca. Samo dekorativno: bez oznake, bez vrednosti.",
+    moonDisplayAlways: "Uvek",
+    moonDisplayNight: "Noć",
+    moonDisplayHidden: "Isključeno",
+    sceneZoom: "Zum scene",
+    sceneZoomHint: "Uvećava mapu, zgrade i senke oko vašeg doma: 1x je podrazumevani prikaz, 1,5x i 2x ih prikazuju veće. Sunce, lukovi i pločice zadržavaju svoju veličinu.",
     lockRotation: "Закључај ротацију",
     lockRotationHint:
       "Превуците преглед да бисте ротирали и нагнули сцену до жељеног приказа, а затим укључите ово. Закључавање замрзава тај приказ (ротација превлачењем и аутоматска ротација у мировању се искључују) и чува угао у картици, тако да се потпуно исти приказ појављује на сваком уређају и прегледачу. Искључите га да бисте поново слободно ротирали.",
@@ -214,6 +220,7 @@ export const sr: Translations = {
     buildingColor: "Боја зграда",
     buildingColorHelp: "Основни тон примењен на околне зграде у сцени.",
     shadowsSection: "Сенке",
+    moonSection: "Podešavanja meseca",
     shadowsEnabled: "Прикажи сенке",
     shadowsEnabledOn: "Приказано",
     shadowsEnabledOff: "Сакривено",

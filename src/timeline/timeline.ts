@@ -25,7 +25,7 @@ export interface TimelineHost extends HudHost
     _isLiveMode:        boolean;
     _now:               Date;
     _chartSeries:       ChartSeries | null;
-    //Active timeline mode: drives the scrub snapping (free for Now, hourly for a week, day-at-noon for month/year).
+    //Active timeline mode (window span + weather availability).
     readonly _timelineMode: TimelineMode;
 
     //Hover cursor position on the timeline charts. The scrub handler writes it in lock-step with _selectedTime so the
@@ -103,13 +103,43 @@ export function onTimelinePointerDown(host: TimelineHost, e: PointerEvent): void
 }
 
 
+//rAF-coalesced scrub position, mirroring flushPendingHover's pattern (timeline-tooltip.ts): a raw pointermove
+//stream during a drag can fire many times per frame, and applyTimelinePosition's downstream cost (selected-time
+//resolution, weather/ground repaint) is worth coalescing to one update per frame. track + clientX are captured
+//synchronously (currentTarget resets to null once the event finishes dispatching, so it can't be read back
+//inside the deferred rAF callback) - only the position write itself is deferred.
+let _scrubRafId:   number | null = null;
+let _scrubHost:    TimelineHost | null = null;
+let _scrubTrack:   HTMLElement | null = null;
+let _scrubClientX = 0;
+
+function flushPendingScrub(): void
+{
+    _scrubRafId = null;
+    const host  = _scrubHost;
+    const track = _scrubTrack;
+    _scrubHost  = null;
+    _scrubTrack = null;
+    if (host && track)
+    {
+        applyTimelinePosition(host, track, _scrubClientX);
+    }
+}
+
 export function onTimelinePointerMove(host: TimelineHost, e: PointerEvent): void
 {
     if (e.pointerId !== host._trackPointerId)
     {
         return;
     }
-    applyTimelinePointer(host, e);
+    _scrubHost    = host;
+    _scrubTrack   = e.currentTarget as HTMLElement;
+    _scrubClientX = e.clientX;
+    if (_scrubRafId !== null)
+    {
+        cancelAnimationFrame(_scrubRafId);
+    }
+    _scrubRafId = requestAnimationFrame(flushPendingScrub);
 }
 
 
@@ -118,6 +148,13 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
     if (e.pointerId !== host._trackPointerId)
     {
         return;
+    }
+    //A scrub position is a committed value on release, not a transient hover indicator like flushPendingHover's -
+    //flush any still-queued frame synchronously rather than leave up to one frame of drag dropped on the floor.
+    if (_scrubRafId !== null)
+    {
+        cancelAnimationFrame(_scrubRafId);
+        flushPendingScrub();
     }
     const track = host._trackElement;
     if (track)
@@ -140,10 +177,6 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
 }
 
 
-//Translate the pointer's clientX into a timestamp inside the active range and pin the card into scrubbed mode. No
-//hour-snap on the selected time: snapping to the nearest hour made the sun arc and cloud dome jerk forward in 1 h
-//jumps while dragging. Sub-hour timestamps still resolve to the right hourly weather bucket via nearest-hour lookup
-//in the engine, so accuracy is kept where it matters and the sun animates smoothly where it doesn't.
 //Snap the timeline back to live: drop the scrub selection, re-enter live mode, and let the scene engine follow "now"
 //again. Shared by the magnet snap and the explicit Live button.
 export function returnTimelineToLive(host: TimelineHost): void
@@ -157,13 +190,17 @@ export function returnTimelineToLive(host: TimelineHost): void
 
 export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
 {
+    applyTimelinePosition(host, e.currentTarget as HTMLElement, e.clientX);
+}
+
+function applyTimelinePosition(host: TimelineHost, track: HTMLElement, clientX: number): void
+{
     if (!host._timeRange)
     {
         return;
     }
-    const track   = e.currentTarget as HTMLElement;
     const rect    = track.getBoundingClientRect();
-    const frac    = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const frac    = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
     const tMs     = host._timeRange.start.getTime() + frac * rangeMs;
 
@@ -178,7 +215,7 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
     {
         const nowFrac    = (nowMs - rangeStart) / rangeMs;
         const nowXPx     = rect.left + nowFrac * rect.width;
-        const pointerXPx = e.clientX;
+        const pointerXPx = clientX;
         if (Math.abs(pointerXPx - nowXPx) <= MAGNET_PX)
         {
             if (!host._isLiveMode || host._selectedTime !== null)

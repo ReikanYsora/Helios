@@ -8,12 +8,11 @@ export const et: Translations = {
 
   period: {
     rangeLabel: "Ajavahemik",
-    forecast: "Prognoos",
+    forecast: "P - P+2",
     yesterday: "Eile",
     today: "Täna",
     week: "Nädal",
     month: "Kuu",
-    year: "Aasta",
   },
 
   compass: "P,KI,I,KA,L,EL,LÄ,LO",
@@ -82,7 +81,7 @@ export const et: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Kaamera automaatne pööramine",
     autoRotateHint:
-      "Kui ollakse paar sekundit tegevusetu, tiirleb kaamera aeglaselt kodu ümber (umbes 1,5°/s, vastupidi päikese näivale liikumisele). Ühe sõrmega lohistamine peatab selle koheselt ja see jätkub, kui lahti lased. Väldi seda väga vanadel seadmetel: automaatne pööramine sunnib renderdamise iga sekund.",
+      "Kui ollakse paar sekundit tegevusetu, tiirleb kaamera aeglaselt kodu ümber (umbes 4°/s, vastupidi päikese näivale liikumisele). Ühe sõrmega lohistamine peatab selle koheselt ja see jätkub, kui lahti lased. Väldi seda väga vanadel seadmetel: automaatne pööramine sunnib renderdamise iga sekund.",
     autoRotateOn: "Sees",
     autoRotateOff: "Väljas",
     degradedRender: "Ühilduvusrežiim",
@@ -142,6 +141,13 @@ export const et: Translations = {
     showHorizonLineHint: "Joonistab maastiku horisondijoone kodu ümber, arvutatuna kohalikust reljeefist. Horisont summutab päikest alati realistlikult küngaste taga; see üksnes näitab või peidab joonistatud joone.",
     horizonLineColor: "Maastiku horisondi värv",
     horizonLineColorHint: "Maastiku horisondijoone värv.",
+    moonDisplay: "Kuu kuvarežiim",
+    moonDisplayHint: "Joonistab kuu omaenda kaarele faasile vastava sirbiga, alati päikese ees. Ainult kaunistus: ilma sildita, ilma väärtuseta.",
+    moonDisplayAlways: "Alati",
+    moonDisplayNight: "Öö",
+    moonDisplayHidden: "Keelatud",
+    sceneZoom: "Stseeni suum",
+    sceneZoomHint: "Suurendab kaarti, hooneid ja varje teie kodu ümber: 1x on vaikekuva, 1,5x ja 2x näitavad neid suuremana. Päike, kaared ja sildid säilitavad oma suuruse.",
     lockRotation: "Lukusta pööramine",
     lockRotationHint:
       "Lohistage eelvaadet, et pöörata ja kallutada stseeni soovitud vaateni, seejärel lülitage see sisse. Lukk külmutab selle vaate (lohistamisega pööramine ja jõudeoleku automaatne pööramine lülitatakse välja) ja salvestab nurga kaardile, nii et täpselt sama vaade kuvatakse igas seadmes ja brauseris. Lülitage see välja, et taas vabalt pöörata.",
@@ -214,6 +220,7 @@ export const et: Translations = {
     buildingColor: "Hoone värv",
     buildingColorHelp: "Stseenis ümbritsevatele hoonetele rakendatav põhitoon.",
     shadowsSection: "Varjud",
+    moonSection: "Kuu seadistus",
     shadowsEnabled: "Näita varje",
     shadowsEnabledOn: "Näidatud",
     shadowsEnabledOff: "Peidetud",

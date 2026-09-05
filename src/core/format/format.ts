@@ -140,7 +140,7 @@ export function formatHaTime(hass: HassLike, date: Date): string
 
 
 //Date + time like the HA frontend (day, short month, hour:minute, honouring 12/24h), for the timeline scrub readout
-//where the coarse axis labels (months on a year window) don't pin the exact instant.
+//where the coarse axis labels of a week/month window don't pin the exact instant.
 export function formatHaDateTime(hass: HassLike, date: Date): string
 {
     return formatWithHaLocale(hass, date, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
@@ -173,13 +173,13 @@ export function formatPowerKw(hass: HassLike, watts: number, decimals: number, s
     return formatPower(hass, watts, decimals, unit, signed);
 }
 
-//Irradiance (solar constant) readout unit for the whole card, resolved from config (see irradianceUnit()).
+//Irradiance readout unit for the whole card, resolved from config (see irradianceUnit()).
 export type IrradianceUnit = 'W/m²' | 'kW/m²' | 'W/ft²';
 
 //One square foot in square metres, so a per-m2 irradiance spreads onto the imperial area unit.
 const M2_PER_FT2 = 0.09290304;
 
-//Irradiance (solar constant) readout in the configured unit. Input is W/m². 'W/m²' prints whole units; 'kW/m²'
+//Irradiance readout in the configured unit. Input is W/m². 'W/m²' prints whole units; 'kW/m²'
 //divides by 1000 at the caller's decimal count (a typical peak reads ~1 kW/m²); 'W/ft²' rescales onto square feet
 //and prints whole units like 'W/m²' does (a typical peak reads ~93 W/ft²).
 export function formatIrradiance(hass: HassLike, wPerM2: number, decimals: number, unit: IrradianceUnit): string
@@ -428,10 +428,9 @@ export function uiColorVar(token: string | undefined, fallbackToken: string): st
 //Resolve a user-set colour to something paintable: a literal (#hex / rgb()) passes straight through, anything else
 //is an HA ui_color token read off the live theme, and an unset one falls back.
 //
-//ONE resolver on purpose. This test used to be copy-pasted at each call site, and the copies drifted: chips, map
-//layers and monitoring groups took a #hex, while the building tint and the home colour did not. Those two wrapped
-//the value in a var() name whatever it was, so a hex became `var(--#ff0000-color)` -- meaningless, silently
-//discarded, and the building just stayed grey. Same config, same look to a user, different answer.
+//ONE resolver on purpose: every colour input (chips, ground layers, groups, building tint, home colour) must answer
+//a #hex, rgb() or token identically; a per-call-site copy that wraps a literal into `var(--#ff0000-color)` is
+//silently discarded and the element keeps its default.
 export function resolveUiColor(
     el:            Element | null | undefined,
     token:         string | undefined,
@@ -458,14 +457,25 @@ export function resolveUiColor(
 //attributes) rather than a CSS var(), we resolve the live HA theme token off a host element's computed style, so a
 //user's custom theme flows through and we don't hardcode hex. A literal fallback covers an unset token.
 
-//Resolve a CSS custom property to #rrggbb off the host's computed style. Accepts #rgb / #rrggbb /
-//rgb()/rgba(); falls back when the token is empty or unparseable.
-export function cssHex(host: Element | null | undefined, token: string, fallback: string): string
+//Per-host cache of resolved colours: every chip/chart/panel re-render re-resolves the same handful of tokens
+//(chip accents, horizon line, home consumption...), and each resolution forces a synchronous style recalc.
+//WeakMap so a removed card/editor instance's entry is GC'd with it. Keyed on (token, fallback) together, not
+//just token, since the fallback IS part of a call's identity - and deliberately caches the FALLBACK result
+//too, not only a successfully-parsed hex: a config with no matching theme var hits that branch on every call,
+//and a cache that only memoised on success would measure zero benefit there.
+const uiColorCache = new WeakMap<Element, Map<string, string>>();
+
+//Drop a host's cached colour resolutions. Call when its underlying CSS custom properties may actually have
+//changed (a live HA theme swap) - see helios-card.ts's willUpdate, which tracks hass.themes' object identity
+//and calls this on a real change. Safe to call speculatively; a cleared cache just costs one fresh read per
+//token on the next call.
+export function clearUiColorCache(host: Element): void
 {
-    if (!host)
-    {
-        return fallback;
-    }
+    uiColorCache.delete(host);
+}
+
+function resolveCssHex(host: Element, token: string, fallback: string): string
+{
     const raw = getComputedStyle(host).getPropertyValue(token).trim();
     if (/^#[0-9a-f]{6}$/i.test(raw))
     {
@@ -482,6 +492,32 @@ export function cssHex(host: Element | null | undefined, token: string, fallback
         return '#' + h(m[1]) + h(m[2]) + h(m[3]);
     }
     return fallback;
+}
+
+//Resolve a CSS custom property to #rrggbb off the host's computed style, cached per host until a real theme
+//change drops it (clearUiColorCache). Accepts #rgb / #rrggbb / rgb()/rgba(); falls back when the token is
+//empty or unparseable.
+export function cssHex(host: Element | null | undefined, token: string, fallback: string): string
+{
+    if (!host)
+    {
+        return fallback;
+    }
+    let hostCache = uiColorCache.get(host);
+    const key = `${token}|${fallback}`;
+    const cached = hostCache?.get(key);
+    if (cached !== undefined)
+    {
+        return cached;
+    }
+    if (!hostCache)
+    {
+        hostCache = new Map();
+        uiColorCache.set(host, hostCache);
+    }
+    const resolved = resolveCssHex(host, token, fallback);
+    hostCache.set(key, resolved);
+    return resolved;
 }
 
 //Fallback luminance probe: reads --primary-background-color and decides dark vs light by relative luminance. Costly
@@ -546,10 +582,6 @@ function labToHex([l, a, b]: [number, number, number]): string
     return '#' + h(r) + h(g) + h(b2);
 }
 
-//Per-energy-source colour, matching the HA Energy palette: source `idx` 0 is the base solar token; higher indices
-//brighten it (dark theme) or darken it (light theme) by 18 LAB-lightness units per step, unless the theme defines an
-//explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for the per-source chart curves so they
-//always match the energy dashboard.
 //Memo for the deterministic LAB ramp step, keyed by base+dark+idx: per-source colours are recomputed every
 //chart/tooltip render, but the conversion only depends on those three.
 const _energyRampMemo = new Map<string, string>();

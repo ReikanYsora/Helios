@@ -42,7 +42,7 @@ const _inflight = new Map<string, Promise<HorizonProfile | null>>();
 
 //Durable sub-key with horizon's own CACHE_VERSION embedded, so a profile-shape bump orphans old entries
 //independently of the shared durable schema version. durable-cache adds its prefix, TTL, skip-identical write and
-//quota eviction (which the previous bespoke read/write here lacked).
+//quota eviction.
 function cacheKey(lat: number, lon: number): string
 {
     return `horizon:v${CACHE_VERSION}:${lat.toFixed(KEY_DECIMALS)},${lon.toFixed(KEY_DECIMALS)}`;

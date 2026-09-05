@@ -86,8 +86,7 @@ export function pvValueAtTime(
     }
 
     //Forecast for future hours: read the store's corrected forecast at the cursor instant (same series
-    //the dotted curve draws), so the tooltip never disagrees with its line. Already cap-clipped and
-    //correction-applied.
+    //the dotted curve draws), so the tooltip never disagrees with its line.
     const store = host._unifiedStore;
     if (store)
     {

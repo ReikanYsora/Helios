@@ -8,12 +8,11 @@ export const isLocale: Translations = {
 
   period: {
     rangeLabel: "Tímabil",
-    forecast: "Spá",
+    forecast: "D - D+2",
     yesterday: "Í gær",
     today: "Í dag",
     week: "Vika",
     month: "Mánuður",
-    year: "Ár",
   },
 
   compass: "N,NA,A,SA,S,SV,V,NV",
@@ -82,7 +81,7 @@ export const isLocale: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Sjálfvirkur snúningur myndavélar",
     autoRotateHint:
-      "Þegar ekkert hefur gerst í nokkrar sekúndur, snýst myndavélin hægt um heimilið (um það bil 1.5°/s, andstætt sýnilegri hreyfingu sólarinnar). Að draga með einum fingri stöðvar hann samstundis og hann heldur áfram þegar þú sleppir. Forðastu hann á mjög gömlum tækjum: sjálfvirkur snúningur þvingar fram myndgerð á hverri sekúndu.",
+      "Þegar ekkert hefur gerst í nokkrar sekúndur, snýst myndavélin hægt um heimilið (um það bil 4°/s, andstætt sýnilegri hreyfingu sólarinnar). Að draga með einum fingri stöðvar hann samstundis og hann heldur áfram þegar þú sleppir. Forðastu hann á mjög gömlum tækjum: sjálfvirkur snúningur þvingar fram myndgerð á hverri sekúndu.",
     autoRotateOn: "Kveikt",
     autoRotateOff: "Slökkt",
     degradedRender: "Samhæfnisútlit",
@@ -142,6 +141,13 @@ export const isLocale: Translations = {
     showHorizonLineHint: "Teiknar sjóndeildarlínu landslagsins í kringum heimilið, reiknaða út frá staðbundnu landslagi. Sjóndeildarhringurinn deyfir alltaf sólina raunsætt á bak við hæðir; þetta sýnir eða felur aðeins teiknuðu línuna.",
     horizonLineColor: "Litur sjóndeildarhrings lands",
     horizonLineColorHint: "Litur sjóndeildarlínu landslagsins.",
+    moonDisplay: "Birtingarhamur tunglsins",
+    moonDisplayHint: "Teiknar tunglið á eigin boga með sigð sem fylgir tunglstöðunni, alltaf fyrir framan sólina. Aðeins til skrauts: engin flís, ekkert gildi.",
+    moonDisplayAlways: "Alltaf",
+    moonDisplayNight: "Nótt",
+    moonDisplayHidden: "Óvirkt",
+    sceneZoom: "Aðdráttur sviðs",
+    sceneZoomHint: "Stækkar kortið, byggingar og skugga í kringum heimilið: 1x er sjálfgefin birting, 1,5x og 2x sýna þau stærri. Sólin, bogarnir og merkin halda stærð sinni.",
     lockRotation: "Læsa snúningi",
     lockRotationHint:
       "Dragðu forskoðunina til að snúa og halla senunni að þeirri sýn sem þú vilt og kveiktu svo á þessu. Læsingin frystir þá sýn (snúningur með drætti og sjálfvirkur snúningur í hvíld eru gerð óvirk) og vistar hornið á spjaldið, þannig að nákvæmlega sama sýn birtist á öllum tækjum og vöfrum. Slökktu á henni til að snúa frjálst aftur.",
@@ -215,6 +221,7 @@ export const isLocale: Translations = {
     buildingColorHelp:
       "Grunntónn sem beitt er á byggingarnar í kring í senunni.",
     shadowsSection: "Skuggar",
+    moonSection: "Stillingar tunglsins",
     shadowsEnabled: "Sýna skugga",
     shadowsEnabledOn: "Sýndir",
     shadowsEnabledOff: "Faldir",

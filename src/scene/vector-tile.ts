@@ -1,6 +1,6 @@
-//Minimal Mapbox Vector Tile (MVT 2.1) decoder, zero-dependency. Decodes only what the buildings pipeline needs:
-//named layers, their polygon features, each feature's rings (in tile-local integer coordinates 0..extent) and its
-//resolved string/number tags. Point/line geometry types are decoded structurally but the caller only reads polygons.
+//Minimal Mapbox Vector Tile (MVT 2.1) decoder, zero-dependency. Decodes only what the buildings and ground
+//pipelines need: named layers, each feature's type, rings (tile-local integer coordinates 0..extent) and resolved
+//string/number tags.
 //
 //Wire format (protobuf proto2): each field is a varint tag = fieldNumber * 8 + wireType, followed by the payload.
 //wireType 0 = varint, 1 = 64-bit, 2 = length-delimited (string/bytes/embedded message), 5 = 32-bit. We hand-roll the
@@ -19,7 +19,7 @@ const textDecoder = new TextDecoder();
 
 export interface MvtFeature
 {
-    //1 = point, 2 = linestring, 3 = polygon (only polygons are used downstream).
+    //1 = point, 2 = linestring, 3 = polygon.
     type:     number;
     //Rings in tile-local integer units [0, extent]. For polygons, each entry is one ring (outer or inner); winding
     //(shoelace sign) distinguishes them per the MVT spec but the caller re-derives its own winding anyway.

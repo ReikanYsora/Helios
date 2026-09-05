@@ -1,7 +1,7 @@
 //Vector ground data source: fetches the OpenFreeMap vector tiles covering the ground area around the home and
 //decodes the paintable ground layers (water, greenery, land use, roads, boundaries, building footprints) into
-//lon/lat geometry, tagged by layer + class. The painter (ground-render.ts) turns these into the basemap canvas,
-//replacing the CARTO raster tiles. Reuses the tile plumbing already built for the 3D buildings.
+//lon/lat geometry, tagged by layer + class. The painter (ground-render.ts) turns these into the basemap canvas.
+//Shares the tile plumbing with the 3D buildings.
 //
 //OpenFreeMap tops out at z14; the geometry is resolution-independent, so z14 detail (the same the buildings use)
 //is painted at the ground canvas's own scale. Pure aside from the fetch.

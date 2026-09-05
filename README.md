@@ -69,10 +69,13 @@ home and your consumption; the production layers simply do not appear.
 * **Your real horizon**, worked out from the terrain around your home, so the sun
   dims the moment it drops behind a hill and not only at the flat horizon, with
   the skyline drawn as a discreet ridge around the scene.
+* **The moon**, on its own arc across the same sky, with the actual crescent for
+  tonight's phase lit toward the sun. At night by default, always or never if
+  you prefer; purely for the eye, it carries no reading.
 * **Live flows**, production, grid and battery, each with a bead that travels to
   the home at the speed of the power it carries.
-* **A timeline you can scrub**, two days back and two days forward. The whole
-  scene follows: sun, shadows, weather, every value.
+* **A timeline you can scrub**, from yesterday to two days ahead, or back across
+  the week and the month. The whole scene follows: sun, shadows, weather, every value.
 * **Your real sky**, the local weather painted over the scene: clear-sky
   sunshine that dims as the clouds build, then rain, snow or a thunderstorm,
   each following the timeline as you scrub.
@@ -145,7 +148,9 @@ solar production forecast that learns from your own panels and runs entirely on
 your Home Assistant. It feeds the official Energy dashboard, corrects itself
 against what your installation really produces, and exposes a clean set of
 sensors. Helios draws its prediction as the dashed curve your production tracks
-against.
+against, and marks each array you configured there in the scene: a small tile at
+its position, turned and tilted the way the panels look, with its own ray to the
+sun.
 
 ---
 
@@ -160,7 +165,7 @@ against.
 
 <img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.jpg" alt="Helios: the week's consumption curve standing on the sun's own path around the house, over a golden-hour scene.">
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_04.jpg" alt="Helios at dusk: the day ring in blue with sunrise and sunset marked on the sun's path, and the buildings under a low sky.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_04.jpg" alt="Helios at dusk: the day curve in blue with sunrise and sunset marked on the sun's path, and the buildings under a low sky.">
 
 An interactive live demo is at [helios-ha.org](https://helios-ha.org/helios/).
 

@@ -9,8 +9,8 @@ import { localMidnightMinusDays } from '../core/time/timezone';
 import { callWS } from './ha-gateway';
 
 
-//The Forecast period shows +2 days. The fetch always reaches at least this far ahead, whatever the active period,
-//so a re-fetch while on a no-future period (Today/Week/Month/Year all have futureDays 0) can't overwrite the
+//The J - J+2 period shows +2 days. The fetch always reaches at least this far ahead, whatever the active period,
+//so a re-fetch while on a no-future period (Yesterday/Today/Week/Month have no future days) can't overwrite the
 //cached future days the Forecast view needs. The forecast is period-independent, so caching extra is harmless.
 const FORECAST_HORIZON_DAYS = 2;
 
@@ -284,8 +284,8 @@ export function forecastWattsAt(forecast: readonly SolarForecastPoint[], ms: num
 
 
 //Average forecast watts across a whole bucket span [startMs, endMs). Production stores each bucket as the MEAN watts
-//over its span (energy / bucket-hours), so on coarse (daily) buckets the forecast must be averaged the same way: a
-//single midpoint sample would read noon's peak watts, not the day's mean, towering the year curve over the actuals.
+//over its span (energy / bucket-hours), so on a bucket coarser than an hour the forecast must be averaged the same
+//way: a single midpoint sample would read its peak watts, not its mean, towering the curve over the actuals.
 //Hours with no forecast coverage count as 0 (night contributes 0 energy but still spans the denominator), matching
 //production which averages the day's energy over the full 24 h. Null only when the span holds no samples at all.
 export function forecastAverageWatts(forecast: readonly SolarForecastPoint[], startMs: number, endMs: number): number | null

@@ -8,12 +8,11 @@ export const nl: Translations = {
 
   period: {
     rangeLabel: "Periode",
-    forecast: "Voorspelling",
+    forecast: "D - D+2",
     yesterday: "Gisteren",
     today: "Vandaag",
     week: "Week",
     month: "Maand",
-    year: "Jaar",
   },
 
   compass: "N,NO,O,ZO,Z,ZW,W,NW",
@@ -82,7 +81,7 @@ export const nl: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatische camerarotatie",
     autoRotateHint:
-      "Na een paar seconden inactiviteit draait de camera langzaam om het huis (ongeveer 1.5°/s, tegengesteld aan de schijnbare beweging van de zon). Een sleepbeweging met één vinger pauzeert het meteen en het hervat zodra je loslaat. Vermijd het op heel oude apparaten: de automatische rotatie forceert elke seconde een render.",
+      "Na een paar seconden inactiviteit draait de camera langzaam om het huis (ongeveer 4°/s, tegengesteld aan de schijnbare beweging van de zon). Een sleepbeweging met één vinger pauzeert het meteen en het hervat zodra je loslaat. Vermijd het op heel oude apparaten: de automatische rotatie forceert elke seconde een render.",
     autoRotateOn: "Aan",
     autoRotateOff: "Uit",
     degradedRender: "Compatibiliteitsweergave",
@@ -142,6 +141,13 @@ export const nl: Translations = {
     showHorizonLineHint: "Tekent de horizonlijn van het reliëf rond het huis, berekend op basis van het lokale terrein. De horizon dempt de zon altijd realistisch achter heuvels; dit toont of verbergt alleen de getekende lijn.",
     horizonLineColor: "Kleur van de terreinhorizon",
     horizonLineColorHint: "Kleur van de terreinhorizonlijn.",
+    moonDisplay: "Weergavemodus van de maan",
+    moonDisplayHint: "Tekent de maan op haar eigen boog met een fase-getrouwe sikkel, altijd vóór de zon. Puur cosmetisch: geen chip, geen waarde.",
+    moonDisplayAlways: "Altijd",
+    moonDisplayNight: "Nacht",
+    moonDisplayHidden: "Uitgeschakeld",
+    sceneZoom: "Scènezoom",
+    sceneZoomHint: "Vergroot de kaart, gebouwen en schaduwen rond uw huis: 1x is de standaardweergave, 1,5x en 2x tonen ze groter. De zon, de bogen en de chips behouden hun grootte.",
     lockRotation: "Rotatie vergrendelen",
     lockRotationHint:
       "Sleep in het voorbeeld om de scène te draaien en te kantelen naar de gewenste weergave en zet dit vervolgens aan. De vergrendeling zet die weergave vast (draaien via slepen en de automatische rotatie in rust worden uitgeschakeld) en slaat de hoek op in de kaart, zodat exact dezelfde weergave op elk apparaat en in elke browser verschijnt. Zet het uit om weer vrij te draaien.",
@@ -215,6 +221,7 @@ export const nl: Translations = {
     buildingColorHelp:
       "Basistint die op de omliggende gebouwen in de scène wordt toegepast.",
     shadowsSection: "Schaduwen",
+    moonSection: "Maanconfiguratie",
     shadowsEnabled: "Schaduwen tonen",
     shadowsEnabledOn: "Getoond",
     shadowsEnabledOff: "Verborgen",

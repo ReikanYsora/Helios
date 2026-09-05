@@ -8,12 +8,11 @@ export const de: Translations = {
 
   period: {
     rangeLabel: "Zeitraum",
-    forecast: "Prognose",
+    forecast: "T - T+2",
     yesterday: "Gestern",
     today: "Heute",
     week: "Woche",
     month: "Monat",
-    year: "Jahr",
   },
 
   compass: "N,NO,O,SO,S,SW,W,NW",
@@ -82,7 +81,7 @@ export const de: Translations = {
     uiAndMapSection: "UI",
     autoRotate: "Automatische Kameradrehung",
     autoRotateHint:
-      "Nach ein paar Sekunden Inaktivität dreht sich die Kamera langsam um das Zuhause (etwa 1.5°/s, entgegen der scheinbaren Sonnenbewegung). Ein Wischen mit einem Finger pausiert sie sofort und sie läuft weiter, sobald du loslässt. Auf sehr alten Geräten besser vermeiden: die Autodrehung erzwingt jede Sekunde ein Rendern.",
+      "Nach ein paar Sekunden Inaktivität dreht sich die Kamera langsam um das Zuhause (etwa 4°/s, entgegen der scheinbaren Sonnenbewegung). Ein Wischen mit einem Finger pausiert sie sofort und sie läuft weiter, sobald du loslässt. Auf sehr alten Geräten besser vermeiden: die Autodrehung erzwingt jede Sekunde ein Rendern.",
     autoRotateOn: "An",
     autoRotateOff: "Aus",
     degradedRender: "Kompatibilitätsmodus",
@@ -142,6 +141,13 @@ export const de: Translations = {
     showHorizonLineHint: "Zeichnet die Horizontlinie des Geländes rund um das Zuhause, aus dem lokalen Relief berechnet. Der Horizont dämpft die Sonne immer realistisch hinter Hügeln; dies blendet nur die gezeichnete Linie ein oder aus.",
     horizonLineColor: "Farbe des Geländehorizonts",
     horizonLineColorHint: "Farbe der Geländehorizontlinie.",
+    moonDisplay: "Anzeigemodus des Mondes",
+    moonDisplayHint: "Zeichnet den Mond auf seinem eigenen Bogen mit phasengetreuer Sichel, immer vor der Sonne. Rein kosmetisch: keine Plakette, kein Wert.",
+    moonDisplayAlways: "Immer",
+    moonDisplayNight: "Nacht",
+    moonDisplayHidden: "Deaktiviert",
+    sceneZoom: "Szenen-Zoom",
+    sceneZoomHint: "Vergrößert Karte, Gebäude und Schatten rund um Ihr Zuhause: 1x ist die Standarddarstellung, 1,5x und 2x zeigen sie größer. Sonne, Bögen und Plaketten behalten ihre Größe.",
     lockRotation: "Drehung sperren",
     lockRotationHint:
       "Ziehen Sie in der Vorschau, um die Szene zu drehen und zu neigen, bis Sie die gewünschte Ansicht haben, und schalten Sie dies dann ein. Die Sperre friert diese Ansicht ein (Drehen per Ziehen und die automatische Rotation im Leerlauf werden deaktiviert) und speichert den Winkel in der Karte, sodass genau dieselbe Ansicht auf jedem Gerät und in jedem Browser erscheint. Schalten Sie sie aus, um wieder frei zu drehen.",
@@ -215,6 +221,7 @@ export const de: Translations = {
     buildingColorHelp:
       "Grundton, der auf die umliegenden Gebäude in der Szene angewendet wird.",
     shadowsSection: "Schatten",
+    moonSection: "Mond-Konfiguration",
     shadowsEnabled: "Schatten anzeigen",
     shadowsEnabledOn: "Angezeigt",
     shadowsEnabledOff: "Ausgeblendet",

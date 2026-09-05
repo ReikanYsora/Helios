@@ -3,7 +3,8 @@
 This document describes how the Helios card is put together: the layering (card,
 the scene HUD controller, typed data layer, scene engine), the 2.5D rendering
 pipeline, the data flow, and the conventions every subsystem follows. For
-the user-facing feature list and configuration, see [README.md](./README.md); for
+the user-facing feature list see [README.md](./README.md), for every option
+[docs/CONFIGURATION.md](./docs/CONFIGURATION.md); for
 per-release notes, see [CHANGELOG.md](./CHANGELOG.md).
 
 `src/` is organised **by feature**, not by class: `core/` (shared, pure), `data/`
@@ -31,7 +32,7 @@ The code is organised in layers:
   constructed with the card as its `host`. It owns the HUD's projection / paint /
   render logic and its scratch state, while the reactive data stays on the card; it
   reaches it through `this.host`. This is what keeps the card small: the scene HUD
-  is ~1000 lines that live in the controller, not in the card.
+  is ~1300 lines that live in the controller, not in the card.
 * **The data layer** (`src/data/*`), a typed boundary over the HA WebSocket. Every
   recorder read flows through one gateway, one request cache, one durable last-good
   store, and the shared per-source fetch plumbing (`src/data/sources/*`).
@@ -90,7 +91,15 @@ loop would ever put those pixels back.
 Features are grouped by layer once, right after the fetch, not re-filtered from
 the flat array on every paint: a repaint (theme change, or every camera move on
 the projected fallback) walks each layer's own slice instead of scanning the
-whole tile set once per layer.
+whole tile set once per layer. Same-style line features (roads, rail, paths,
+casings, boundaries) draw as one batched `Path2D` + stroke per style bucket
+instead of one call per feature, cutting draw-call count and allocation on
+every repaint regardless of path. On the non-projected path, where the tile-space
+mapping never changes for a ground build's whole lifetime, every feature's (and
+stroke bucket's) `Path2D` is additionally cached and replayed across repeated
+repaints, so only the fill/stroke colour is reapplied on a theme or altitude
+change; the projected path always rebuilds fresh, since its geometry genuinely
+moves every frame under the camera.
 
 That CSS 3D transform is the fast path, but some hardware can't composite it: entry
 Android GPUs corrupt a GPU-drawn canvas into colored noise, and a few old WebViews
@@ -112,6 +121,19 @@ transform, which is what keeps the SVG overlays welded to the basemap as the
 camera turns. `project3()` additionally returns the camera-space depth for
 painter's-algorithm sorting and label fading.
 
+### Scene zoom
+
+`scene-zoom` (1 / 1.5 / 2) multiplies the camera's px-per-metre (`SceneCamera.pxPerMetre`,
+`renderer.setZoom`). Everything projected through the camera grows with it: the
+buildings, the shadows, the horizon ridge, and the basemap canvas, which is painted
+once at the base scale and gets a matching `scale()` in its CSS transform (the
+compat `projected` path re-projects through the same camera). The HUD does not:
+`_sunArcScale()` probes the projected px per metre and sizes the sun/moon arcs in
+metres to fit the card, so the arcs, discs and chip cluster keep their on-screen
+size while the neighbourhood zooms in under them. Default 1 applies no
+magnification: the transform string and every projection are those of the unzoomed
+scene.
+
 ### Scene SVG, `scene/renderer.ts`
 
 `SceneRenderer` owns the DOM inside the card's map container: the ground canvas
@@ -119,7 +141,16 @@ plus a screen-space `<svg>` it repaints each frame with the occluding geometry
 (the cast shadows and the extruded buildings). It
 coalesces redraws into one `requestAnimationFrame` pass, owns its own
 `ResizeObserver`, and fires `onAfterDraw` so the card can re-project its HUD in
-lock-step. The `<svg>` is bound to the card box (`contain: paint`): its building
+lock-step. The painters in `scene/buildings.ts` describe a frame as shapes
+(tag + attribute text per face, per cast shade), and `scene/scene-dom.ts` keeps
+the `<svg>`'s nodes alive between frames: one node per shape slot, only the
+attributes whose text changed are written, nodes are appended or dropped at the
+tail as the count moves, and a slot swaps its node in place when its tag changes.
+A camera move therefore rewrites geometry on existing, already-styled nodes
+instead of the whole subtree being thrown away and reparsed from one markup
+string. `shapesSvg` / `shadowLayerSvg` serialise the same shapes as markup, pinned
+by the characterisation snapshots (`test/buildings-render.characterization.test.ts`);
+`test/scene-dom.test.ts` checks the committed tree against it frame after frame. The `<svg>` is bound to the card box (`contain: paint`): its building
 paths reach a whole neighbourhood past the card, and without that bound an old iOS
 compositor sized the layer's backing store to that content, capped it and painted
 only the top half; binding it also trims the off-card raster on every frame.
@@ -172,6 +203,28 @@ clear-sky irradiance (Haurwitz 1945 + Kasten-Czeplak 1980 cloud attenuation);
 drive the sun arc, the disc, and the shadow direction. They fade as the sun nears
 the horizon.
 
+`core/time/moon.ts` is the moon's counterpart: a low-precision lunar position
+(ecliptic -> equatorial -> horizontal) and the illuminated fraction from the
+sun-earth-moon angle, no ephemeris library. `scene/sun-arc.ts` projects it onto the
+same dome as the sun (`moonSpherePoint`), the engine samples its own 96-point arc
+(`projectMoonScene`, cached per day + arc scale, nothing weather-related), and
+`scene/moon-crescent.ts` turns the fraction into a point-sampled SVG crescent lit
+toward the sun's projected position. One HUD layer, always over the sun's (the moon
+is the nearer body); the `moon-display` option picks always / night-only / hidden.
+Cosmetic only: no chip, no value, no calculation reads it.
+
+`scene/array-markers.ts` marks the Helios-Forecast lines in the scene. The card
+reads each forecast entry's layout once over `helios_forecast/layout`
+(`data/forecast-layout.ts`, memory-cached, hourly throttle, entries that are not the
+Helios provider answer nothing) and hands the lines to the engine through a
+callback. `projectArrayScene` projects, per frame, one tile per line: a quad in
+local metres about the line's own position (or the home's roof, on the slope it
+faces, when the line has none), across its azimuth and up its tilt, sized in pixels
+at zoom 1 and growing with the scene zoom, plus the sun's screen point while it is
+up. The HUD paints the tiles and a dot-only hairline from each to the sun, in the
+incidence ray's tier, and drops the single sun-to-production ray while tiles show.
+A tracker lies flat. Cosmetic only: no name, no value, no calculation reads it.
+
 A cast shadow is the **exact swept envelope** of the footprint: the outline
 translated along the sun vector, plus one quad per edge (outer rings and courtyard
 rings alike), emitted as a single path per caster. Sweeping the real outline rather
@@ -210,14 +263,20 @@ reactive data it reads and inserts its render output.
 The full live 2.5D view: tilted vector basemap, extruded buildings, cast shadows,
 the whole scene graded through the day/night cycle, the sun arc (a back pass of
 below-horizon dots and a front pass of the daylight arc + disc + ray + irradiance
-readout), the home pill and its orbiting chip cluster (PV, battery SoC + power,
+readout), the home pill and its orbiting chip cluster (PV, battery (power or SoC, per `battery-chip-mode`),
 grid, and one chip per active monitoring group), and the timeline below.
 
 The HUD is **projected, not laid out**: `hud/scene-hud-controller.ts`
 (`SceneHudController`, with `hud/hud.ts` / `hud/hud-geometry.ts`) asks the engine
 for the screen-space anchors of the home, the chip cluster and the sun scene every
 frame (`onMapTransform`), resolves each chip's scrub-aware value, and returns the
-absolutely-positioned chips + SVG leaders at those coordinates. Each chip has a
+absolutely-positioned chips + SVG leaders at those coordinates. Each chip/marker
+positions itself via one inline `transform: translate()` (the projected coordinates
+composed with its own centring offset), not `left`/`top`, so moving it every frame
+is compositor-only work, never a forced layout pass. `onMapTransform`'s own
+single-flight `requestAnimationFrame` gate additionally skips every second call
+during a sustained burst (auto-rotate, a long drag) - a real one-off transform is
+never the call that gets skipped. Each chip has a
 leader to the home with an animated **bead** whose direction and speed encode the
 live flow: a native SVG SMIL `<animateMotion>`, not a JS/CSS animation. Its
 `dur`/`path`/`keyPoints` are wrapped in Lit's `guard()`, keyed on the handful of
@@ -283,9 +342,10 @@ but that.
 
 ## 4. The data layer (`src/data/`)
 
-Every number on the card comes from one of three places: the **HA Energy
-dashboard** (solar / grid / battery), **Open-Meteo** (irradiance, cloud), or an
-optional **irradiance sensor**. They converge into a single rolling-window store
+Every number on the card comes from the **HA Energy dashboard** (solar / grid /
+battery, cost prices), **Open-Meteo** (weather and terrain), **Helios-Forecast**
+when installed (the detail series and the array layout), or the optional **local
+sensors** (irradiance, weather overrides). They converge into a single rolling-window store
 that every graph reads. All recorder reads share the typed plumbing described last
 in this section.
 
@@ -320,6 +380,14 @@ an hour of metered export while the "signed net" sensor never went meaningfully
 negative is physically impossible) and, once proven mis-scoped, reroutes the live
 split to the meters, self-clearing if the sensor is later fixed.
 
+The battery live readout has the same kind of guard, `data/sources/battery-guard.ts`:
+each battery's live power sensor is judged against that battery's own charge and
+discharge meters (`batteryBanks` in `energy-prefs.ts` keeps the pairing the flat
+lists lose) over a rolling 24 h of hourly stats, and a sensor proven backwards for
+its slot is flipped per rate inside the live sum, never by negating the total, so a
+correct second battery is never turned around with a wrong first one. Display-only
+`battery-sign` sits on top of this and is untouched by it.
+
 ### Weather, `data/weather.ts`, `data/weather-resolve.ts`
 
 One fetch per home point against Open-Meteo, fusing a global model with the best
@@ -329,7 +397,7 @@ single-model outliers. It returns the hourly series the scene needs: irradiance
 *effective* cover of `low + 0.6*mid + 0.2*high`), precipitation, snowfall, the WMO
 weather code, temperature and humidity. Cached in `localStorage` with a short TTL,
 a schema version in the key (so a payload from an older field-set is refetched),
-and exponential back-off on HTTP 429.
+and a stepped back-off (5, 15, then 60 min) on HTTP 429, a separate ladder for other errors.
 
 ### "Your real sky" layers, `scene/weather-fx.ts`
 
@@ -347,6 +415,10 @@ cloud cover) is **baked into the ground and building paint** by the renderer
 (`SceneRenderer.setWeatherGrade`), not applied as a CSS `filter` on the map layer:
 a filter there wraps the CSS 3D-transformed basemap and forces the whole scene to
 re-flatten every frame while rotating, which flickers hard on Android WebViews.
+`setWeatherGrade` is a no-op within a small tolerance of the current grade, not
+exact equality: cloud cover resolves continuously while scrubbing the timeline, so
+an exact-equality gate repainted the ground canvas on almost every tick even though
+the sky barely changed.
 
 ### Weather overrides, `data/sources/irradiance.ts`, `data/sources/weather-override.ts`
 
@@ -373,8 +445,8 @@ charts and the timeline a consistent view regardless of cadence.
 ### Periods, `timeline/timeline-modes.ts`
 
 One spec per period drives the whole pipeline (store window, whether weather is
-available, the bucket cadence cap). The five periods are **Forecast** (today to two
-days ahead), **Yesterday**, **Today**, **Week** and **Month**. Yesterday is exactly
+available, the bucket cadence cap). The five periods are **D - D+2** (id `forecast`;
+today and the two days ahead), **Yesterday**, **Today**, **Week** and **Month**. Yesterday is exactly
 the previous day; Today / Week / Month end on today; Month resolves its length from
 the previous calendar month. The store cadence and the recorder fetch period derive
 from the user's data-detail setting, capped per period, with Month capped at hourly
@@ -382,11 +454,7 @@ so a 31-day window never pulls a month of 5-minute rows.
 
 Month is the longest view, and the last one the **scene** can still speak for: its
 store stays hourly, so any day of it can be scrubbed to and read under that day's own
-sun. A Year period sat past it on a daily store, which carried no shape of a day at
-all: nothing the arc, the shadows or the curve could illustrate, 365 bars two pixels
-wide for the eye, and a second data path of its own to fetch an hourly profile the
-store could not provide. It said less than the Energy dashboard already says better,
-so it is gone and that path with it.
+sun.
 
 ### Charts, `src/charts/`
 
@@ -398,7 +466,10 @@ group (the generic path, and the grid/battery per-source stacking, live in
 `charts/charts-generic.ts`). It draws day separators, night-zone hatching
 (`timeline/timeline-overlays.ts`), a future mask, the live + the scrub cursors, and a
 hover tooltip (`timeline/timeline-tooltip.ts`) whose icons take each series'
-colour.
+colour. The series build, the daily totals, the night intervals and the shared
+tick model are each memoised per card (`WeakMap` keyed on the host), not in one
+global slot, so a multi-card dashboard's cards don't evict each other's cache on
+every interleaved render.
 
 ### The recorder plumbing, `data/*`
 
@@ -420,7 +491,7 @@ citizen and a stalled fetch never blanks the card:
 * **`data/source-fetch.ts`**: the per-source plumbing: `KeyedFetch` (a keyed,
   de-duplicated fetch gate that replaces the hand-rolled fetch-key / fetching
   field pairs), `sumLiveWatts` (the live multi-source power aggregation), and
-  `minuteAnchorMs` (the minute-quantised refresh anchor).
+  `quantizedAnchorMs` (the minute-quantised refresh anchor).
 * **One recorder call per refresh**: `data/sources/energy-stats.ts` exposes
   `fetchChangeById`, which returns the recorder `change` buckets **per statistic
   id** in a single WS call. pv, grid and battery all request the same **union** of
@@ -467,9 +538,10 @@ two cards on one home stay independent):
 * **The saved view**, the selected period and the selected chip, written to
   `localStorage` by the card on change and on teardown, restored once coordinates
   resolve.
-* **The camera pose**, bearing, pitch and the lock flag, written by the engine on
-  drag-end and on teardown (capturing an auto-rotated bearing too), and read back
-  at boot so the scene reopens exactly as it was left.
+* **The camera pose**, bearing and pitch, written by the engine on drag-end and on
+  teardown (capturing an auto-rotated bearing too), and read back at boot so the
+  scene reopens exactly as it was left; a locked card with a configured angle takes
+  the config pose over the stored one.
 
 Separately, the data layer keeps a **durable last-good copy** of every recorder
 series (see §4) so the *content* survives a failed fetch or a cold reload, not
@@ -486,7 +558,7 @@ configured, and a runtime registry (`card/registry.ts`) gives a pasted duplicate
 `src/` is grouped **by feature**: `core/` (shared, pure), `data/` (the typed data
 layer + `data/sources/`), `scene/`, `timeline/`, `charts/`, `hud/`,
 `editor/`, plus the root `helios-card.ts` and a small `card/` for bootstrap
-(`init`, `registry`, `diagnostics`).
+(`init`, `registry`, `diagnostics`, `warm-start`).
 
 The card is a thin composition root. One **view controller** (`SceneHudController`
 in `hud/`) owns the scene HUD: a plain class holding its own scratch state,
@@ -534,7 +606,22 @@ fallback.
 4. The card subscribes to the Energy dashboard and, through the data layer,
    fetches the per-source live + history in one shared recorder call, builds the
    unified store, and renders the HUD / charts from it via the controller.
-   A short tick advances the live cursor and refreshes daily totals.
-5. On disconnect the engine teardown is deferred briefly (HA edit-mode churn fires
-   disconnect + reconnect in one tick); a real removal tears down the renderer,
-   timers, controllers and observers, after persisting the view + pose.
+   A short tick advances the live cursor and refreshes daily totals. A
+   `shouldUpdate()` override skips the render pass outright when `hass` was
+   the only property that changed and a fingerprint over every entity Helios
+   actually reads (plus theme, language, home location) is unchanged - HA
+   replaces the whole `hass` object on any entity's state change anywhere in
+   the house, not just the ones this card shows.
+5. On disconnect the card parks its painted ground in `scene/ground-pool.ts` at
+   once and leaves its fetched data in `card/warm-start.ts` under its cache id
+   (or home), in memory only and for five minutes at most; the engine teardown itself is deferred briefly (HA edit-mode churn
+   fires disconnect + reconnect in one tick, and a returning card reclaims its
+   ground). A real removal tears down the renderer, timers, controllers and
+   observers, after persisting the view + pose. The Home Assistant editor
+   creates a NEW card element on every setting it changes (preview mode), so
+   the card that comes next boots from that parked ground and warm data: its
+   first frames already carry the map, the buildings, the chips and the chart,
+   while its own fetches run behind. The pool keeps one spare ground for a
+   minute and empties the canvas of anything it lets go (2816 px square, some
+   32 MB each), so a burst of rebuilds never stacks basemaps waiting for the
+   garbage collector.

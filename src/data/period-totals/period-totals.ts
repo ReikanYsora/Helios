@@ -181,7 +181,7 @@ export function buildPeriodData(host: PeriodHost, target: ChartTarget, win?: Per
     //Remaining metrics (grid, battery, consumption), binned by hour-of-day as energy totals. Grid and battery split
     //into direction layers, EACH further split per source when 2+ sources carry their own recorder series (for the
     //stacked breakdown); consumption is one layer. Every grid/battery layer carries its `dir` so the arc, panel and
-    //timeline group + colour it identically. Single-source falls back to the aggregate store series, exactly as before.
+    //timeline group + colour it identically. Single-source falls back to the aggregate store series.
     if (!store)
     {
         return data('energy', []);

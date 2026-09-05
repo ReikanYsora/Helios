@@ -60,14 +60,11 @@ export const heliosCardStyles = css`
             ground holder + scene SVG. No CSS perspective property here: the ground carries its own perspective() in
             its transform (see SceneCamera.groundTransform), so it projects EXACTLY like the overlays' project3, and
             the flat scene SVG stays out of any 3D context (keeps the buildings aligned with the basemap).
-            No overflow:hidden: ha-card already clips, to its rounded box, a pixel tighter than this one. It also
-            sat over a preserve-3d subtree, which old WebKit clips badly, the suspected cause of the top-half-only
-            render on some old iPads (unverified). */
+            No overflow:hidden: ha-card already clips, to its rounded box, a pixel tighter than this one. */
         position: absolute;
         /*  Bleed 1 px under the border to cover the anti-alias seam at the corners; ha-card clips it back. */
         inset: -1px;
-        /*  z-index 1 keeps the container (and home prism) above the ground guide layer (z 0) yet below every
-            HUD overlay (z 4+). */
+        /*  z-index 1 keeps the container (and home prism) below every HUD overlay (z 4+). */
         z-index: 1;
     }
 
@@ -109,11 +106,10 @@ export const heliosCardStyles = css`
     }
     /*  Screen-space scene SVG: cast shadows + extruded buildings repainted every frame.
         Full-size overlay above the ground, click-transparent (the HUD SVGs own their pointer events).
-        The building/shadow paths extend far past the card (a whole neighbourhood projected), so this element's
-        painted content is much larger than its box. On old iOS the compositor then sized this
-        layer's backing store to that content, blew the OS layer-size cap and painted only its top half. contain:
-        paint + overflow:hidden bound the layer to the card box (what we actually see), so the backing store stays
-        card-sized and the whole scene paints. No visible change elsewhere: off-card paint was already clipped. */
+        The building/shadow paths extend far past the card (a whole neighbourhood projected), so the painted
+        content is much larger than the box; a compositor that sizes the backing store to painted content (old iOS
+        WebKit) overflows its layer cap and paints only the top half. contain: paint + overflow: hidden bound the
+        layer to the card box, which is all that is visible anyway. */
     .scene-svg
     {
         position: absolute;
@@ -150,9 +146,12 @@ export const heliosCardStyles = css`
     {
         /*  The scene pills are anchored to a projected point and centred on it; the corner chips instead
             flow in their own row (.helios-corner-chip keeps position: relative), so this stays split out
-            from the shared box recipe below. */
+            from the shared box recipe below. left/top pin the anchor at the container's origin; the actual
+            projected position + centering both come from the single inline transform (see scene-hud-controller),
+            so a chip moving every frame during rotation only ever writes a compositor-only property. */
         position: absolute;
-        transform: translate(-50%, -50%);
+        left: 0;
+        top:  0;
     }
     .pv-pct-label,
     .battery-pct-label,
@@ -326,8 +325,7 @@ export const heliosCardStyles = css`
 
     /*  Day curve. The scaffolding (the sun's ground track, and a riser under each hour) is dashed and in the text
         colour: it is the frame the curve is read against, not data, so it must never compete with it for the eye.
-        With no fill under the curve any more, these are the only things saying how high a point stands and how far
-        away it is. */
+        They are the only things saying how high a point stands and how far away it is. */
     .helios-day-curve-foot,
     .helios-day-curve-riser
     {
@@ -402,7 +400,7 @@ export const heliosCardStyles = css`
         border: 2px solid var(--detail-accent, var(--primary-color, #03a9f4));
         /*  A floating readout, not a card: the generic radius token, not --ha-card-border-radius. A "single card"
             panel view squares every card it holds (--ha-card-border-radius: 0) to make it full-bleed, and that
-            cascades into here, which squared the panel too. --ha-border-radius-lg is the same 12px and no view
+            cascades into here and would square the panel too. --ha-border-radius-lg is the same 12px and no view
             overrides it. */
         border-radius: var(--ha-border-radius-lg, 12px);
         background: var(--card-background-color, #ffffff);
@@ -645,7 +643,8 @@ export const heliosCardStyles = css`
     .home-ring
     {
         position: absolute;
-        transform: translate(-50%, -50%);
+        left: 0;
+        top:  0;
         box-sizing: border-box;
         width: 50px;
         height: 28px;
@@ -684,6 +683,29 @@ export const heliosCardStyles = css`
     .solar-svg-front-near { z-index: 11; }
     .solar-svg-sun-far    { z-index: 5;  }
     .solar-svg-sun-near   { z-index: 12; }
+    /*  Moon layer: arc + crescent disc together, always over every sun layer (z 13 > sun near-disc z 12) since the
+        moon is the nearer body. That also puts it over the chips (z 8) and home pill (z 9), the same trade the sun's
+        own near disc already makes; the disc is small and carries no data, so nothing it can cover is a reading.
+        No --solar-daylight fade: the moon is most wanted exactly when the sun's layers dim to night. */
+    .moon-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 13;
+        overflow: visible;
+        color: var(--helios-moon-color, #dfe6ee);
+    }
+    /*  Translucency lives on the two <g> wrappers (group opacity composites the whole arc once), never on the
+        segments: per-segment stroke-opacity double-counts where two round caps overlap at every joint, which
+        reads as a bead at each vertex along the arc. */
+    .moon-svg .moon-arc-solid   { opacity: 0.7; }
+    .moon-svg .moon-arc-nightg  { opacity: 0.45; }
+    .moon-svg .moon-arc-segment { stroke-linecap: round; }
+    .moon-svg .moon-arc-night   { stroke-dasharray: 0 7; }
+    .moon-svg .moon-crescent    { opacity: 0.95; }
     /*  Radiant-heat aura around the sun disc: a warm halo that slowly breathes so a strong sun visibly
         shimmers with heat. Only the scale animates; the inline opacity gates it on irradiance (0 when the sun
         is weak). transform-box + centre origin so it pulses around its own centre wherever the sun sits;
@@ -711,6 +733,23 @@ export const heliosCardStyles = css`
     /*  Sun to PV ray + bead on their own SVG below the chips (z 8) so the chip background occludes the ray
         endpoint at the chip border. */
     .solar-ray-svg        { z-index: 7;  }
+    /*  Array markers (Helios-Forecast lines): tiles + their dotted rays to the sun, same tier as the ray. */
+    .solar-array-svg      { z-index: 7;  }
+    .solar-array-tile
+    {
+        stroke-width: 1;
+        stroke-linejoin: round;
+        fill-opacity: 0.85;
+    }
+    /*  A ray of dots only (zero-length dashes + round caps), hairline, one per line toward the sun. Opacity
+        follows daylight through the parent like the arc. */
+    .solar-array-ray
+    {
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-dasharray: 0 5;
+        stroke-opacity: 0.7;
+    }
 
     /*  Arc: first pass a dark outline for legibility on light basemaps, second pass the sun colour on top.
         Stroke widths set inline per segment. */
@@ -759,17 +798,19 @@ export const heliosCardStyles = css`
     .sun-cross-marker
     {
         position: absolute;
-        transform: translate(-50%, -50%);
+        left: 0;
+        top:  0;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 4px;
         color: var(--sun-cross-color, #ffc107);
         pointer-events: none;
-        /*  z 5 (the far arc's own layer) used to leave this UNDER the weather overlay (z 6) and the rain/snow
-            canvases (z 7), so the time read as barely legible under real precipitation - weather is meant to
-            tint the map, never the data, exactly like the chips it now shares a tier with. */
-        z-index: 8;
+        /*  z 7: above the weather overlay (z 6, whose rain/snow/flash canvases stack inside its own context),
+            so the time stays legible under real precipitation - weather tints the map, never the data - yet
+            below the chips (z 8): a marker landing under a chip must pass behind it, not over its value. Same
+            tier as the leaders and the sun ray, drawn after them in the DOM. */
+        z-index: 7;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
     }
     .sun-cross-marker ha-icon
@@ -787,10 +828,9 @@ export const heliosCardStyles = css`
     }
 
     /*  Solar irradiance label pinned above the live sun. Anchors above the sun via a -100% vertical
-        translate (not the shared -50%) and sits higher in the stack. */
+        translate (not the shared -50%, supplied inline - see scene-hud-controller) and sits higher in the stack. */
     .solar-pct-label
     {
-        transform: translate(-50%, -100%);
         pointer-events: none;
         /*  Above the arc-front lines (z 11) so a segment never crosses the W/m² readout; the sun disc
             (z 12) still paints on top. */
@@ -803,7 +843,7 @@ export const heliosCardStyles = css`
 
 
     /*  ============================================================
-        Dark theme, opt-in via \`card-theme: dark\`. Affects only the chrome
+        Dark theme (the theme-dark class, set from the HA theme polarity). Affects only the chrome
         (chips, charts, cursors, labels, leaders, tooltips); the basemap
         keeps its own colours. Chip plates flip white to near-black, text/
         borders go light-grey, chart hairlines flip to white-on-dark at the
@@ -855,7 +895,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  "Your real sky" weather overlay. The scene grade (saturate/brightness) is baked into the ground + building
+    /*  Weather overlay. The scene grade (saturate/brightness) is baked into the ground + building
         PAINT by the renderer (SceneRenderer.setWeatherGrade), not a CSS filter here: a filter on #map-container wraps
         the CSS 3D-transformed basemap, forcing the whole scene to re-flatten every frame while rotating - heavy
         flicker on Android WebViews. The overlay layers still fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain /
@@ -902,8 +942,8 @@ export const heliosCardStyles = css`
         background: radial-gradient(circle, rgba(30, 35, 42, 0.45), rgba(30, 35, 42, 0) 68%);
     }
     /*  Sized in cqw (share of the card's WIDTH, via ha-card's container-type: inline-size) for BOTH axes, so the
-        shadows stay round at any card shape. Percent height made them tall ovals on a narrow card: 55% of a small
-        width vs 70% of a tall height. left/top keep % for placement; the sweep is element-relative. */
+        shadows stay round at any card shape: a percent height would make them tall ovals on a narrow card (55% of
+        a small width vs 70% of a tall height). left/top keep % for placement; the sweep is element-relative. */
     .helios-wx-cloud.k1 { width: 55cqw; height: 55cqw; left: -30%; top: -10%; animation: helios-wx-sweep 22s linear infinite; }
     .helios-wx-cloud.k2 { width: 42cqw; height: 42cqw; left: -30%; top: 20%; animation: helios-wx-sweep 30s linear infinite; animation-delay: -8s; }
     .helios-wx-cloud.k3 { width: 66cqw; height: 66cqw; left: -45%; top: -20%; animation: helios-wx-sweep 40s linear infinite; animation-delay: -16s; }

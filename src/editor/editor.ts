@@ -68,7 +68,7 @@ export class HeliosCardEditor extends LitElement
     //Bumped whenever a colour picker is cleared with its X, to force that picker to be re-created (via keyed) so
     //it re-reads its fallback default value even when the config key was already unset (a no-op edit).
     @state()                        private _colorNonce = 0;
-    // Accordion: at most one top-level section open at a time (a stack of expanded blocks got too tall to scan). Id
+    // Accordion: at most one top-level section open at a time (a stack of expanded blocks is too tall to scan). Id
     // of the open section, or null when all collapsed. Defaults to null so a fresh card opens fully collapsed, keeping
     // the top-pinned "Configuration status" panel in view.
     @state()                        private _openSection: string | null = null;
@@ -1276,6 +1276,11 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderToggle('show-sun-times', t.editor.showSunTimes, t.editor.showSunTimesHint, undefined, undefined, true)}
                 ${this._renderToggle('show-horizon-line', t.editor.showHorizonLine, t.editor.showHorizonLineHint, undefined, undefined, true)}
                 ${this._renderColorPicker('horizon-line-color', t.editor.horizonLineColor, t.editor.horizonLineColorHint, 'blue-grey', c['show-horizon-line'] === false)}
+                ${this._renderSelect('scene-zoom', t.editor.sceneZoom,
+        [{ value: '1',   label: '1x' },
+            { value: '1.5', label: '1.5x' },
+            { value: '2',   label: '2x' }], '1',
+        t.editor.sceneZoomHint)}
                 ${this._renderToggle('weather-enabled', t.editor.weatherEnabled, t.editor.weatherEnabledHint, undefined, undefined, true)}
                 ${this._renderToggle('auto-hide-ui', t.editor.noUiMode, t.editor.noUiModeHint)}
                 ${this._renderSlider('no-ui-delay', t.editor.noUiDelay, MIN_NO_UI_DELAY_S, MAX_NO_UI_DELAY_S, 1, DEFAULT_NO_UI_DELAY_S, ' s', c['auto-hide-ui'] !== true)}
@@ -1377,6 +1382,16 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
+                <details class="advanced-section" data-section="moon" ?open=${this._openSection === 'moon'} @toggle=${this._onSectionToggleEvt}>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:moon-waning-crescent"></ha-icon>${t.editor.moonSection}</summary>
+                ${this._renderSelect('moon-display', t.editor.moonDisplay,
+        [{ value: 'always', label: t.editor.moonDisplayAlways },
+            { value: 'night',  label: t.editor.moonDisplayNight },
+            { value: 'hidden', label: t.editor.moonDisplayHidden }], 'night',
+        t.editor.moonDisplayHint)}
+
+                </details>
+
                 <details class="advanced-section" data-section="shadows" ?open=${this._openSection === 'shadows'} @toggle=${this._onSectionToggleEvt}>
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:gradient-vertical"></ha-icon>${t.editor.shadowsSection}</summary>
                 ${this._renderToggle('shadows-enabled', t.editor.shadowsEnabled, t.editor.shadowsEnabledHint, t.editor.shadowsEnabledOn, t.editor.shadowsEnabledOff, true)}
@@ -1441,8 +1456,8 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    // Fires the window-level reset bus so every live card drops its cached Open-Meteo payload + in-memory PV history
-    // and re-fetches. Flashes a brief confirmation on the button so the user sees the click landed without a toast.
+    // Fires the window-level reset bus so every live card drops everything it has cached (energy series, weather,
+    // building footprints) and re-fetches. Flashes a brief confirmation on the button so the user sees the click landed without a toast.
     private _resetFeedbackTimer?: number;
     @state() private _resetFeedback: string | null = null;
 

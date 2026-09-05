@@ -1,7 +1,7 @@
 //Minimal structural type of the Home Assistant `hass` object, covering exactly the fields the card reads. Helios has
-//no dependency on a full HomeAssistant type, so the data + format + editor layers used `any`; that is what let a
-//Promise be stored as an unsubscribe function (the energy-prefs leak). Typing the boundary here keeps those reads
-//honest. Widen only when a new field is genuinely read - every member below is backed by a real access site.
+//no dependency on a full HomeAssistant type; typing the boundary keeps those reads honest (an untyped hass lets a
+//Promise pass as an unsubscribe function). Widen only when a new field is genuinely read: every member below is
+//backed by a real access site.
 
 //Called to tear down a subscription. Async subscribeEvents resolves to one of these.
 export type UnsubscribeFunc = () => void;
