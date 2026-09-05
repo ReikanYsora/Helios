@@ -26,3 +26,6 @@ __pycache__/
 # Exclude any working files created for the project
 data/**
 !data/README.md
+
+# Agent guide, local only
+CLAUDE.md
