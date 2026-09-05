@@ -114,9 +114,12 @@ export class SceneCamera
     //the function reproduces project3 exactly for a ground point: rx*p and ry*cosT*p about the home,
     //p = P/(P - ry*sinT). No element then carries a `perspective` property, so the flat scene SVG never joins a
     //3D layer.
-    public groundTransform(homeX: number, homeY: number): GroundTransform
+    //`levelScale` is the level's base px per canvas px (see GroundLevel): a coarser level is magnified by it so
+    //its pixels land where the finest level's do, and every level shares this one chain otherwise.
+    public groundTransform(homeX: number, homeY: number, levelScale = 1): GroundTransform
     {
         const origin = `${homeX}px ${homeY}px`;
+        const scale  = this.zoom * levelScale;
         return {
             transformOrigin: origin,
             transform:
@@ -125,7 +128,7 @@ export class SceneCamera
                 `rotateX(${this.tiltDeg}deg) rotateZ(${this.bearingDeg}deg)` +
                 //Innermost (applied first, about the home origin): canvas px -> zoomed px, exactly what pxPerMetre
                 //does for the projected layers. Omitted at 1 so the default pose carries no redundant scale().
-                (this.zoom !== 1 ? ` scale(${this.zoom})` : ''),
+                (scale !== 1 ? ` scale(${scale})` : ''),
         };
     }
 }

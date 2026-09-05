@@ -1,11 +1,18 @@
-//Paints the decoded OpenFreeMap ground features (ground-vector.ts) onto the basemap canvas the renderer tilts.
+//Paints the decoded OpenFreeMap ground features (ground-vector.ts) onto the basemap canvases the renderer tilts.
 //Colours come from a palette, any layer can be hidden, and the sun altitude grades the whole map, so a theme /
 //config / time change repaints from the cached features with no re-fetch. Features are [lon, lat], mapped via
 //Web Mercator at GROUND_ZOOM so the home anchor + camera scale match the overlays. Road widths are metric.
+//
+//The ground is several concentric canvases, not one (GROUND_LOD_LEVELS): every level paints the same features in
+//the same base-px space through a scaled context, so a coarser canvas holds the same tracés on a coarser grid and
+//its CSS transform magnifies it back into place under the finer one. A finer level dissolves into the one beneath
+//through an alpha ramp baked into its own pixels, so the blend costs no compositing mask. The result is the look of
+//one full-resolution canvas at a third of its memory, the far field being painted no finer than the perspective
+//can show.
 
-import { pxPerMetreFor, lonLatToTile, type Ground } from './tiles';
+import { pxPerMetreFor, lonLatToTile, type Ground, type GroundLevel } from './tiles';
 import type { SceneCamera } from './projection';
-import { GROUND_FADE_START, GROUND_RADIUS, GROUND_ZOOM, TILE_PX } from '../core/config/constants';
+import { GROUND_FADE_START, GROUND_LOD_LEVELS, GROUND_ZOOM, TILE_PX, type GroundLodLevel } from '../core/config/constants';
 import { fetchGroundVector, type GroundFeature } from './ground-vector';
 import { mixHex } from '../core/render-kit/hex';
 
@@ -200,10 +207,12 @@ interface PaintCache
     strokeBuckets: Map<string, Map<number, Path2D>>;
 }
 
+//The rectangle a paint covers, in the context's CURRENT user space: the whole canvas, however it is transformed.
+interface PaintArea { x: number; y: number; w: number; h: number; }
+
 function paint(
     ctx:        CanvasRenderingContext2D,
-    cw:         number,
-    ch:         number,
+    area:       PaintArea,
     featuresByLayer: GroundFeaturesByLayer,
     toPx:       (lon: number, lat: number) => [number, number],
     pxPerMetre: number,
@@ -219,7 +228,7 @@ function paint(
     const hide = (key: GroundLayerKey): boolean => style.hidden.has(key);
     const layerFeatures = (layer: string): GroundFeature[] => featuresByLayer.get(layer) ?? [];
 
-    ctx.clearRect(0, 0, cw, ch);
+    ctx.clearRect(area.x, area.y, area.w, area.h);
     if (!hide('land'))
     {
         ctx.fillStyle = p.land;
@@ -229,7 +238,7 @@ function paint(
         }
         else
         {
-            ctx.fillRect(0, 0, cw, ch);
+            ctx.fillRect(area.x, area.y, area.w, area.h);
         }
     }
     ctx.lineJoin = 'round';
@@ -426,7 +435,7 @@ function paint(
     }
 }
 
-//The built ground canvas plus a repaint closure so a theme/config change redraws from the cached features.
+//The built ground canvases plus a repaint closure so a theme/config change redraws from the cached features.
 export interface VectorGround
 {
     ground:  Ground;
@@ -435,7 +444,8 @@ export interface VectorGround
     //element carries no CSS 3D transform at all. Old iOS WebKit gives any flat layer composited over a
     //3D-transformed one a half-height backing store, dropping the bottom half of everything drawn above the
     //basemap; with the transform gone the whole scene composites correctly. Costs a repaint per camera move,
-    //which is why it is not the default path.
+    //which is why it is not the default path. Built with a single level (GROUND_LOD_FLAT): one canvas is
+    //repainted, the others would never be looked at.
     repaintProjected: (
         camera: SceneCamera,
         w: number,
@@ -445,8 +455,39 @@ export interface VectorGround
     ) => void;
 }
 
-//Build the basemap canvas for a home position. Never rejects: a tile outage yields a blank themed fill (the home
-//+ buildings still show). The caller's abort (a location change) propagates out of the fetch.
+//Geometry of one level's canvas at a home latitude: side and home in canvas px, reach and fade start in base px.
+export interface GroundLevelGeometry
+{
+    size:       number;
+    homeX:      number;
+    homeY:      number;
+    scale:      number;
+    //Base px from the home to the canvas edge (half the side, magnified): never short of the level's reach.
+    reachPx:    number;
+    //Base px where the level's alpha starts dissolving into the level beneath; 0 = no baked fade.
+    fadeFromPx: number;
+}
+
+//Pure, so the ladder can be checked without a canvas. The half side is rounded UP in canvas px so a level never
+//falls short of its reach, and kept whole so the home sits on a pixel corner of every level: under its scale each
+//level's grid then nests exactly in the finest one, and the blend between two levels is of the same tracés at two
+//sharpnesses, never of two slightly shifted pictures.
+export function groundLevelGeometry(lat: number, level: GroundLodLevel): GroundLevelGeometry
+{
+    const pxPerMetre = pxPerMetreFor(lat, GROUND_ZOOM);
+    const half = Math.ceil(level.reachM * pxPerMetre / level.scale);
+    return {
+        size:       2 * half,
+        homeX:      half,
+        homeY:      half,
+        scale:      level.scale,
+        reachPx:    half * level.scale,
+        fadeFromPx: level.fadeFromM > 0 ? level.fadeFromM * pxPerMetre : 0,
+    };
+}
+
+//Build the basemap canvases for a home position. Never rejects: a tile outage yields a blank themed fill (the
+//home + buildings still show). The caller's abort (a location change) propagates out of the fetch.
 export async function buildVectorGround(
     lat:      number,
     lng:      number,
@@ -458,51 +499,82 @@ export async function buildVectorGround(
     //corrupted memory (bands of RGB noise), and a CPU-backed canvas sidesteps that driver bug while keeping the
     //full map. No cost worth caring about here: the ground repaints only on a camera move or a theme change.
     cpuRaster = false,
+    //The levels to paint, coarsest first. The renderer passes GROUND_LOD_FLAT on the projected path.
+    levels:   readonly GroundLodLevel[] = GROUND_LOD_LEVELS,
 ): Promise<VectorGround>
 {
-    const zoom   = GROUND_ZOOM;
+    const zoom = GROUND_ZOOM;
     const [tileX, tileY] = lonLatToTile(lng, lat, zoom);
-    const radius = GROUND_RADIUS;
-    const firstX = Math.floor(tileX) - radius;
-    const firstY = Math.floor(tileY) - radius;
-    const across = 2 * radius + 1;
-    const size   = across * TILE_PX;
-    const homeX  = (tileX - firstX) * TILE_PX;
-    const homeY  = (tileY - firstY) * TILE_PX;
-    const pxPerMetre    = pxPerMetreFor(lat, zoom);
-    const groundRadiusM = (size / 2) / pxPerMetre * 1.15;
-
-    const features = (await fetchGroundVector(lat, lng, groundRadiusM, signal)) ?? [];
+    const pxPerMetre = pxPerMetreFor(lat, zoom);
+    const reachM     = Math.max(...levels.map((l) => l.reachM));
+    //A little past the farthest level, so nothing painted near the rim is cut by the fetch radius.
+    const features = (await fetchGroundVector(lat, lng, reachM * 1.15, signal)) ?? [];
     //Grouped once for this fetch's lifetime, reused by every repaint (theme change, or every camera move on
     //the projected compat path) below.
     const featuresByLayer = groupByLayer(features);
 
-    const el = document.createElement('canvas');
-    el.width     = size;
-    el.height    = size;
-    el.className = 'ground';
-    const ctx = el.getContext('2d', cpuRaster ? { willReadFrequently: true } : undefined);
-
+    //Base px relative to the home, +x east and +y south (canvas orientation). Every level paints in this one space
+    //through a context transform, so one Path2D cache serves them all (see PaintCache).
     const toPx = (lon: number, la: number): [number, number] =>
     {
         const [wx, wy] = lonLatToTile(lon, la, zoom);
-        return [(wx - firstX) * TILE_PX, (wy - firstY) * TILE_PX];
+        return [(wx - tileX) * TILE_PX, (wy - tileY) * TILE_PX];
     };
-    //toPx is fixed for this build, so its Path2D cache holds (see PaintCache).
     const paintCache: PaintCache = { fills: new Map(), strokes: new Map(), strokeBuckets: new Map() };
+
+    interface BuiltLevel { level: GroundLevel; ctx: CanvasRenderingContext2D | null; geo: GroundLevelGeometry; }
+    const built: BuiltLevel[] = levels.map((spec) =>
+    {
+        const geo = groundLevelGeometry(lat, spec);
+        const el  = document.createElement('canvas');
+        el.width     = geo.size;
+        el.height    = geo.size;
+        el.className = 'ground';
+        const ctx = el.getContext('2d', cpuRaster ? { willReadFrequently: true } : undefined);
+        return { level: { el, homeX: geo.homeX, homeY: geo.homeY, size: geo.size, scale: geo.scale }, ctx, geo };
+    });
+
+    //Paint one level: the context maps base px about the home onto this canvas's coarser grid, so widths, dashes
+    //and geometry all land where the finest level puts them. Then, on a level that has one beneath, the alpha ramp:
+    //opaque out to fadeFromPx, gone by the canvas edge (its corners with it), so the coarser level shows through
+    //progressively and the square never reads as a square.
+    const paintLevel = ({ ctx, geo }: BuiltLevel, st: GroundStyle, alt: number): void =>
+    {
+        if (!ctx)
+        {
+            return;
+        }
+        const inv = 1 / geo.scale;
+        ctx.setTransform(inv, 0, 0, inv, geo.homeX, geo.homeY);
+        const area: PaintArea = { x: -geo.reachPx, y: -geo.reachPx, w: 2 * geo.reachPx, h: 2 * geo.reachPx };
+        paint(ctx, area, featuresByLayer, toPx, pxPerMetre, st, alt, undefined, paintCache);
+        if (geo.fadeFromPx > 0)
+        {
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-in';
+            const g = ctx.createRadialGradient(0, 0, geo.fadeFromPx, 0, 0, geo.reachPx);
+            g.addColorStop(0, 'rgba(0,0,0,1)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(area.x, area.y, area.w, area.h);
+            ctx.restore();
+        }
+    };
     const repaint = (st: GroundStyle, alt: number): void =>
     {
-        if (ctx)
+        for (const b of built)
         {
-            paint(ctx, size, size, featuresByLayer, toPx, pxPerMetre, st, alt, undefined, paintCache);
+            paintLevel(b, st, alt);
         }
     };
     repaint(style, altitude);
 
     //Compat path: same features, but every vertex goes through the camera's own projection (the one the
-    //buildings use), so the canvas is already in screen space and needs no transform to sit under them.
+    //buildings use), so the canvas is already in screen space and needs no transform to sit under them. Paints
+    //the finest level's canvas, the only one on that path.
     const toMetres = (tx: number, ty: number): [number, number] =>
         [(tx - tileX) * TILE_PX / pxPerMetre, -(ty - tileY) * TILE_PX / pxPerMetre];
+    const flat = built[built.length - 1];
 
     const repaintProjected = (
         camera: SceneCamera,
@@ -512,14 +584,17 @@ export async function buildVectorGround(
         alt: number,
     ): void =>
     {
+        const { ctx, level } = flat;
         if (!ctx)
         {
             return;
         }
+        const el = level.el;
         if (el.width !== w || el.height !== h)
         {
             el.width = w; el.height = h;
         }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         const toScreen = (lon: number, la: number): [number, number] =>
         {
@@ -531,20 +606,19 @@ export async function buildVectorGround(
         //The ground's own outline, so the land colour stops at the horizon instead of flooding the sky.
         //Edges are walked in steps: the projection clamps at the near plane, so a far edge is not reliably
         //straight once it approaches the horizon.
+        const rM = flat.geo.reachPx / pxPerMetre;
         const landPath = new Path2D();
-        const x0 = firstX; const y0 = firstY; const x1 = firstX + across; const y1 = firstY + across;
-        const corners: [number, number][] = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+        const corners: [number, number][] = [[-rM, rM], [rM, rM], [rM, -rM], [-rM, -rM]];
         const STEPS = 24;
         for (let c = 0; c < 4; c++)
         {
-            const [ax, ay] = corners[c];
-            const [bx, by] = corners[(c + 1) % 4];
-            for (let s = 0; s < STEPS; s++)
+            const [ae, an] = corners[c];
+            const [be, bn] = corners[(c + 1) % 4];
+            for (let sIdx = 0; sIdx < STEPS; sIdx++)
             {
-                const t = s / STEPS;
-                const [e, n] = toMetres(ax + (bx - ax) * t, ay + (by - ay) * t);
-                const q = camera.project(e, n, 0);
-                if (c === 0 && s === 0)
+                const t = sIdx / STEPS;
+                const q = camera.project(ae + (be - ae) * t, an + (bn - an) * t, 0);
+                if (c === 0 && sIdx === 0)
                 {
                     landPath.moveTo(q[0], q[1]);
                 }
@@ -557,7 +631,7 @@ export async function buildVectorGround(
         landPath.closePath();
 
         //Stroke widths follow the camera's (zoomed) scale, like every projected point above does.
-        paint(ctx, w, h, featuresByLayer, toScreen, camera.pxPerMetre, st, alt, landPath);
+        paint(ctx, { x: 0, y: 0, w, h }, featuresByLayer, toScreen, camera.pxPerMetre, st, alt, landPath);
 
         //Edge fade, baked into the projected canvas instead of the face-on .ground-fade disc. The
         //ground-space fade circle (radius = the basemap's closest-side, transparent until GROUND_FADE_START%,
@@ -565,7 +639,6 @@ export async function buildVectorGround(
         //tilted AND turned with it, rather than a disc facing the camera. We map the unit circle onto the ellipse
         //via the projected +east / +north basis vectors, and erase to transparent (destination-out) so the real
         //card background shows through in either theme, nothing to plumb.
-        const rM    = (size / 2) / pxPerMetre;
         const home  = camera.project(0, 0, 0);
         const east  = camera.project(rM, 0, 0);
         const north = camera.project(0, rM, 0);
@@ -597,10 +670,16 @@ export async function buildVectorGround(
         }
     };
 
+    //The fade disc rides the outermost level's reach, in base px (its transform carries no level scale).
+    const reachPx = Math.max(...built.map((b) => b.geo.reachPx));
     const fade = document.createElement('div');
     fade.className    = 'ground-fade';
-    fade.style.width  = `${size}px`;
-    fade.style.height = `${size}px`;
+    fade.style.width  = `${2 * reachPx}px`;
+    fade.style.height = `${2 * reachPx}px`;
 
-    return { ground: { el, fade, homeX, homeY, size }, repaint, repaintProjected };
+    return {
+        ground: { levels: built.map((b) => b.level), fade, reachPx },
+        repaint,
+        repaintProjected,
+    };
 }

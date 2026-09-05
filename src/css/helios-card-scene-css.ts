@@ -78,18 +78,20 @@ export const heliosCardStyles = css`
         transform-style: preserve-3d;
         pointer-events: none;
     }
-    /*  Basemap canvas, painted from OpenFreeMap vector tiles (ground-render.ts). Positioned by the renderer's
-        transform-origin + transform; sized in JS. Light/dark is two painted palettes, so there is no CSS
-        filter: a theme flip repaints the canvas from its cached vector features. */
+    /*  Basemap canvases, painted from OpenFreeMap vector tiles (ground-render.ts): one per level of detail,
+        coarsest first in the DOM so the finest sits on top, each positioned by the renderer's transform-origin +
+        transform (which magnifies a coarser level back to the finest's scale); sized in JS. Light/dark is two
+        painted palettes, so there is no CSS filter: a theme flip repaints the canvases from their cached vector
+        features. */
     .ground
     {
         position: absolute;
         top: 0;
         left: 0;
     }
-    /*  Edge fade: same size + transform as the ground, a radial gradient transparent out to GROUND_FADE_START
-        (88%) then dissolving to the card background, turning the square canvas into a soft disc. How FAR the
-        ground reaches is set by GROUND_RADIUS (the canvas size); this only softens the rim. */
+    /*  Edge fade: the size + transform of the outermost level, a radial gradient transparent out to
+        GROUND_FADE_START (88%) then dissolving to the card background, turning the square canvas into a soft disc.
+        How FAR the ground reaches is set by GROUND_REACH_M; this only softens the rim. */
     .ground-fade
     {
         position: absolute;

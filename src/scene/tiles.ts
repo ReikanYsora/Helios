@@ -23,15 +23,26 @@ export function lonLatToTile(lon: number, lat: number, zoom: number): [number, n
     return [((lon + 180) / 360) * world, y * world];
 }
 
-export interface Ground
+//One level of the painted ground: a square canvas centred on the home, covering `scale` base px per canvas px.
+export interface GroundLevel
 {
-    //The basemap tile canvas to transform.
     el:    HTMLCanvasElement;
-    //Edge-fade overlay, transformed identically so the disc dissolves into the scene background.
-    fade:  HTMLDivElement;
-    //Home position in canvas px (the transform-origin the renderer pins the home to).
+    //Home position in canvas px (the transform-origin the renderer pins the home to): the canvas centre.
     homeX: number;
     homeY: number;
-    //Canvas side length in px.
+    //Canvas side length in canvas px.
     size:  number;
+    //Base px per canvas px; the renderer's transform magnifies the canvas by this, innermost.
+    scale: number;
+}
+
+export interface Ground
+{
+    //The levels of detail, coarsest first, so appended in order the finest sits on top (see GROUND_LOD_LEVELS).
+    //The compat projected path builds exactly one.
+    levels:  GroundLevel[];
+    //Edge-fade overlay, transformed like a level at scale 1 so the disc dissolves into the scene background.
+    fade:    HTMLDivElement;
+    //How far the ground reaches from the home, in base px: the fade disc's half side.
+    reachPx: number;
 }

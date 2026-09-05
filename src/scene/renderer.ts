@@ -19,13 +19,16 @@ import {
     GROWTH_RISE_MS,
     HOME_SQUASH_MS,
     HOME_GROW_MS,
-    GROUND_RADIUS,
-    TILE_PX,
+    GROUND_LOD_FLAT,
+    GROUND_LOD_LEVELS,
 } from '../core/config/constants';
+import { groundLevelGeometry } from './ground-render';
 
-//Edge of the square basemap canvas (px): (2*radius+1) tiles across. On the normal path this canvas is CSS
-//3D-transformed, so the compositor backs it as one layer of this size.
-const GROUND_CANVAS_EDGE_PX = (2 * GROUND_RADIUS + 1) * TILE_PX;
+//Edge of the largest basemap canvas the normal path may allocate (px). On that path every level is CSS
+//3D-transformed, so the compositor backs each as one layer of its own size, and a GPU whose texture cap is below
+//the largest one cannot back it. Sized at 70° of latitude, where a metre spans the most pixels short of the
+//Arctic, so the check errs toward the cheaper path only beyond it.
+const GROUND_CANVAS_EDGE_PX = Math.max(...GROUND_LOD_LEVELS.map((l) => groundLevelGeometry(70, l).size));
 
 //Weather-grade change threshold below which setWeatherGrade() is a no-op. sat spans ~[0.50, 1.10], bright
 //~[0.72, 1.05]; this is a few percent of either range, well under what a repaint would make visible.
@@ -207,18 +210,27 @@ export interface ScenePaletteFull extends ScenePalette
 }
 
 //A canvas the browser emptied under memory pressure while it waited in the pool reads transparent where the
-//ground paints an opaque backdrop. One pixel at the home, read once on adoption.
+//ground paints an opaque backdrop. One pixel at the home of every level (each is opaque there: a level only
+//dissolves toward its rim), read once on adoption.
 function groundPurged(built: VectorGround): boolean
 {
     try
     {
-        const { el, homeX, homeY } = built.ground;
-        const ctx = el.getContext('2d');
-        if (!ctx || el.width === 0)
+        for (const { el, homeX, homeY } of built.ground.levels)
         {
-            return true;
+            const ctx = el.getContext('2d');
+            if (!ctx || el.width === 0)
+            {
+                return true;
+            }
+            const x = Math.min(el.width - 1, Math.max(0, Math.round(homeX)));
+            const y = Math.min(el.height - 1, Math.max(0, Math.round(homeY)));
+            if (ctx.getImageData(x, y, 1, 1).data[3] === 0)
+            {
+                return true;
+            }
         }
-        return ctx.getImageData(Math.min(el.width - 1, Math.max(0, Math.round(homeX))), Math.min(el.height - 1, Math.max(0, Math.round(homeY))), 1, 1).data[3] === 0;
+        return false;
     }
     catch (_)
     {
@@ -388,10 +400,12 @@ export class SceneRenderer
         this._lat = lat;
         this.camera.pxPerMetre = pxPerMetreFor(lat) * this.camera.zoom;
         const token = ++this._groundToken;
-        //Any compat mode ('transform' or 'projected') backs the ground canvas on the CPU (willReadFrequently) to
-        //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas.
+        //Any compat mode ('transform' or 'projected') backs the ground canvases on the CPU (willReadFrequently) to
+        //dodge the entry-GPU driver's GPU-canvas corruption; only 'normal' uses the GPU-rasterized canvas. The
+        //projected path repaints one card-sized canvas per camera move, so it builds the single flat level.
         const cpuRaster = this._groundMode !== 'normal';
-        const key       = groundPoolKey(lat, lon, cpuRaster);
+        const flat      = this._groundMode === 'projected';
+        const key       = groundPoolKey(lat, lon, cpuRaster, flat);
         //A ground released moments ago by the renderer this one replaces (see parkGround) is adopted as is: no
         //fetch, no decode, no paint, the map is there for the first frame. Repainted from its cached features
         //only when it was painted for another style or grade, or when the browser purged its pixels meanwhile.
@@ -409,7 +423,7 @@ export class SceneRenderer
         }
         else
         {
-            built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, cpuRaster);
+            built = await buildVectorGround(lat, lon, style, this._groundAltitude, undefined, cpuRaster, flat ? GROUND_LOD_FLAT : GROUND_LOD_LEVELS);
             if (!this._alive || token !== this._groundToken)
             {
                 //Superseded while the tiles loaded: park the fresh ground rather than drop it.
@@ -421,11 +435,14 @@ export class SceneRenderer
         this._ground         = built.ground;
         this._groundBuilt    = built;
         this._groundKey      = key;
-        //Layer-promotion hint for the CPU-raster transform path: stabilizes the tilted canvas's compositing layer on
-        //the entry GPUs that would otherwise be prone to mis-compositing it.
+        //Layer-promotion hint for the CPU-raster transform path: stabilizes the tilted canvases' compositing layers
+        //on the entry GPUs that would otherwise be prone to mis-compositing them.
         if (this._groundMode === 'transform')
         {
-            built.ground.el.style.backfaceVisibility = 'hidden';
+            for (const { el } of built.ground.levels)
+            {
+                el.style.backfaceVisibility = 'hidden';
+            }
         }
         this._groundRepaint  = built.repaint;
         this._groundRepaintProjected = built.repaintProjected;
@@ -435,12 +452,13 @@ export class SceneRenderer
         {
             this._repaintGroundFromCache();
         }
-        this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
-        //The ground canvas is painted once and thereafter only CSS-transformed, so a backing store the browser
+        //Levels coarsest first, so each finer canvas paints over the one beneath; the fade disc last, on top.
+        this._groundHolder.replaceChildren(...built.ground.levels.map((l) => l.el), built.ground.fade);
+        //The ground canvases are painted once and thereafter only CSS-transformed, so a backing store the browser
         //drops while the page idles would leave the basemap blank under the DOM buildings. The visibility hook
         //covers a tab going away; this covers the wall-tablet case with no visibility change (the card stays
         //"visible" while the screen sleeps). `contextrestored` announces the fresh surface: repaint from the cached
-        //features, no network.
+        //features, no network. One handler on every level, since any of them may be the one purged.
         this._groundRestore = () =>
         {
             if (this._alive && this._groundStyleCur)
@@ -448,7 +466,10 @@ export class SceneRenderer
                 this.setGroundStyle(this._groundStyleCur);
             }
         };
-        built.ground.el.addEventListener('contextrestored', this._groundRestore);
+        for (const { el } of built.ground.levels)
+        {
+            el.addEventListener('contextrestored', this._groundRestore);
+        }
         this.scheduleRedraw();
     }
 
@@ -470,7 +491,10 @@ export class SceneRenderer
         }
         if (this._groundRestore)
         {
-            built.ground.el.removeEventListener('contextrestored', this._groundRestore);
+            for (const { el } of built.ground.levels)
+            {
+                el.removeEventListener('contextrestored', this._groundRestore);
+            }
             this._groundRestore = undefined;
         }
         const styleKey = this._groundStyleCur ? this._groundStyleKey(this._groundStyleCur) : '';
@@ -726,8 +750,11 @@ export class SceneRenderer
         const style = this._gradedGroundStyle() ?? this._groundStyleCur;
         this._groundRepaintProjected(this.camera, w, h, style, this._groundAltitude);
         //Compat path carries no CSS transform; clear any left over from the normal path (matters when toggling).
-        this._ground.el.style.transform = '';
-        this._ground.el.style.transformOrigin = '';
+        for (const { el } of this._ground.levels)
+        {
+            el.style.transform = '';
+            el.style.transformOrigin = '';
+        }
         //The edge fade is baked into the projected canvas (in the plane), so the face-on .ground-fade disc that
         //would otherwise sit flat against the camera stays hidden on this path.
         this._ground.fade.style.display = 'none';
@@ -763,12 +790,18 @@ export class SceneRenderer
             }
             else
             {
-                //fade's width/height are set once by buildVectorGround() and 'display' is never touched off this
-                //path (only the projected compat path hides it) - both fixed for the ground's whole lifetime, so
-                //only the two properties that genuinely move every frame are written here.
-                const { transform, transformOrigin } = this.camera.groundTransform(this._ground.homeX, this._ground.homeY);
-                this._ground.el.style.transformOrigin = transformOrigin;
-                this._ground.el.style.transform = transform;
+                //Every level rides the same chain about its own home, magnified by its scale so its pixels land
+                //where the finest level's do; the fade disc is a level at scale 1 with the outermost reach. fade's
+                //width/height are set once by buildVectorGround() and 'display' is never touched off this path
+                //(only the projected compat path hides it), so only what genuinely moves every frame is written.
+                for (const level of this._ground.levels)
+                {
+                    const { transform, transformOrigin } = this.camera.groundTransform(level.homeX, level.homeY, level.scale);
+                    level.el.style.transformOrigin = transformOrigin;
+                    level.el.style.transform = transform;
+                }
+                const { reachPx } = this._ground;
+                const { transform, transformOrigin } = this.camera.groundTransform(reachPx, reachPx);
                 this._ground.fade.style.transformOrigin = transformOrigin;
                 this._ground.fade.style.transform = transform;
             }

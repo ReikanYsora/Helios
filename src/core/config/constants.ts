@@ -222,13 +222,32 @@ export const DEFAULT_TILT    = 50;
 export const NEAR_PLANE      = 0.15;
 export const PERSPECTIVE     = 1200;
 
-//=== Basemap tiles ===
-//Tile pixel size, ground-canvas radius/zoom, the edge-fade start (% of the closest side, consumed by the
-//card CSS), and the WGS84 Earth circumference used for the local-metre math.
+//=== Basemap ===
+//Tile pixel size and zoom (the scene's base scale: one canvas px per CSS px at GROUND_ZOOM), how far the painted
+//ground reaches, the edge-fade start (% of the closest side, consumed by the card CSS), and the WGS84 Earth
+//circumference used for the local-metre math.
 export const TILE_PX             = 256;
-export const GROUND_RADIUS       = 5;
 export const GROUND_ZOOM         = 19;
+//How far the ground is painted from the home, in metres, the same at every latitude (the fade disc softens the
+//rim). At mid latitudes this is what the former 11-tile canvas covered; nearer the poles that canvas fell short
+//of the 250 m display radius, this does not.
+export const GROUND_REACH_M      = 300;
 export const GROUND_FADE_START   = 88;
+//The ground is painted as concentric levels of detail, coarsest first, each a full square canvas centred on the
+//home: `reachM` is how far it extends, `scale` how many base px one of its canvas px covers (its CSS transform
+//magnifies it back), `fadeFromM` where its alpha starts dissolving into the coarser level beneath (0 = none,
+//the outermost level keeps the hard rim the fade disc softens). Where two levels overlap, the screen blends the
+//same tracés at two sharpnesses, so no seam exists to see; and the perspective compresses the far field harder
+//than these scales coarsen it, so the loss at the horizon stays below one screen pixel on any tilt above 40°.
+//The whole ladder allocates about a third of the single full-resolution canvas it replaces.
+export interface GroundLodLevel { reachM: number; fadeFromM: number; scale: number; }
+export const GROUND_LOD_LEVELS: readonly GroundLodLevel[] = [
+    { reachM: GROUND_REACH_M, fadeFromM: 0,   scale: 4 },
+    { reachM: 210,            fadeFromM: 160, scale: 2 },
+    { reachM: 100,            fadeFromM: 70,  scale: 1 },
+];
+//The compat `projected` path repaints one card-sized canvas per camera move, so it paints a single level.
+export const GROUND_LOD_FLAT: readonly GroundLodLevel[] = [{ reachM: GROUND_REACH_M, fadeFromM: 0, scale: 1 }];
 export const EARTH_CIRCUMFERENCE_M = 40075016.686;
 //Metres per degree of latitude (mean). Longitude scales this by cos(latitude). Used by every lon/lat<->metres
 //projection (engine chip cluster, sun arc, building footprints) instead of re-deriving the literal each time.

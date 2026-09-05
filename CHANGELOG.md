@@ -7,6 +7,27 @@ and the project follows a date-based versioning scheme (`YEAR.MONTH.PATCH`).
 
 ---
 
+## 2026.9.5
+
+### Changed: the basemap is painted in levels of detail
+
+The ground under your home was one canvas, 2816 pixels square, about 30 MB of
+memory whatever the size of the card or the display radius you chose, and on an
+iPhone that single allocation, held twice over by the compositor, was enough to
+push the Home Assistant app past the memory the system allows a page before it
+reloads it (reported in #414). The ground is now three concentric canvases
+painted from the same vector features: the finest covers a hundred metres at
+full resolution, the next reaches 210 m at half, the outermost 300 m at a
+quarter, and each finer level dissolves into the one beneath through its own
+alpha, so where two overlap the eye blends the same roads and parcels at two
+sharpnesses rather than seeing a seam. The perspective compresses the far field
+harder than the coarser levels lose, so the scene looks as it did while the
+ground allocates about a third of what it did. Its reach is now metric as well,
+300 m at every latitude: the old tile square shrank toward the poles and near
+Oslo fell short of the 250 m display radius the card allows.
+
+---
+
 ## 2026.9.4
 
 The performance release. A full audit of the rendering pipeline, every fix

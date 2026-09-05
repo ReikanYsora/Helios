@@ -134,6 +134,28 @@ size while the neighbourhood zooms in under them. Default 1 applies no
 magnification: the transform string and every projection are those of the unzoomed
 scene.
 
+### Basemap levels of detail, `scene/ground-render.ts`
+
+The ground is not one canvas but three concentric ones (`GROUND_LOD_LEVELS`),
+each a full square centred on the home and painted from the same vector
+features: the finest reaches 100 m at one canvas px per base px, the next 210 m
+at one per two, the outermost 300 m at one per four. Every level paints in the
+same base-px space through a scaled context, so widths, dashes and geometry land
+where the finest level puts them and one `Path2D` cache serves all three; the
+renderer then hands each canvas the shared `groundTransform` with its own
+`scale()` innermost, magnifying it back into place. A level that has one beneath
+carries an alpha ramp baked into its own pixels (`destination-in` on a radial
+gradient, opaque to `fadeFromM`, gone at its edge), so where two levels overlap
+the screen blends the same tracés at two sharpnesses and there is no seam to see,
+without any compositing mask. The perspective compresses the far field harder
+than the ladder coarsens it, so at any tilt above about 40° the loss at the
+horizon stays under a screen pixel. The whole ladder allocates about 9 MB at mid
+latitudes against the 30 MB of the single 11-tile canvas it replaces, and its
+reach is metric: 300 m at every latitude, where the tile square fell to 210 m
+near Oslo, short of the 250 m display radius the card allows. The compat
+`projected` path, which repaints one card-sized canvas per camera move, builds
+the single flat level (`GROUND_LOD_FLAT`).
+
 ### Scene SVG, `scene/renderer.ts`
 
 `SceneRenderer` owns the DOM inside the card's map container: the ground canvas
@@ -622,6 +644,5 @@ fallback.
    the card that comes next boots from that parked ground and warm data: its
    first frames already carry the map, the buildings, the chips and the chart,
    while its own fetches run behind. The pool keeps one spare ground for a
-   minute and empties the canvas of anything it lets go (2816 px square, some
-   32 MB each), so a burst of rebuilds never stacks basemaps waiting for the
-   garbage collector.
+   minute and empties the canvases of anything it lets go, so a burst of
+   rebuilds never stacks basemaps waiting for the garbage collector.
