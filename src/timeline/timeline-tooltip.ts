@@ -169,7 +169,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult | ty
 
     //Multi-source breakdown rows for grid / battery, mirroring the solar perEntity rows: one row per configured meter,
     //but only once 2+ sources each carry their own recorder series (the shared hasMultiSourceBreakdown guard
-    //stackedLines also uses), so a single-source install stays exactly as before. Index and colour follow the
+    //stackedLines also uses), so a single-source install shows no breakdown rows. Index and colour follow the
     //source order the bands are painted in, so each row lines up with its own stacked band.
     const dark = chartIsDark(host);
     const ed   = host._energyDefaults;

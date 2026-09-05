@@ -1,7 +1,7 @@
 //A parking place for one painted ground between two renderers. The Home Assistant editor destroys the card and
-//creates a fresh one on every setting it changes, and a dashboard reconnects cards on edit-mode wrapping; each
-//fresh renderer used to fetch, decode and paint its own basemap canvas (2816 px square, some 32 MB of backing
-//store) while the previous one waited for the garbage collector. The pool holds the last released ground for a
+//creates a fresh one on every setting it changes, and a dashboard reconnects cards on edit-mode wrapping; without
+//it each fresh renderer fetches, decodes and paints its own basemap canvas (2816 px square, some 32 MB of backing
+//store) while the previous one waits for the garbage collector. The pool holds the last released ground for a
 //short while, keyed on what it was built from, so the next renderer at the same home adopts it on the spot:
 //the scene shows its map from its first frame, and at most one spare canvas is ever alive. A ground nobody
 //claims in time is disposed, its canvas emptied so the memory goes back at once rather than at the next sweep.

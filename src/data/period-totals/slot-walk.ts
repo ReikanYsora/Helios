@@ -1,6 +1,6 @@
-//Walking store buckets across the slots of a day. Four places used to do this, each with its own copy of the same
-//maths, and they had drifted apart: two cut their slot boundaries from the HOME's midnight and two from the epoch,
-//which is not the same thing in a zone offset by a fraction of an hour. One walker, one answer.
+//Walking store buckets across the slots of a day, in ONE place: slot boundaries cut from the home's midnight and
+//from the epoch are not the same thing in a zone offset by a fraction of an hour, so every consumer walks the same
+//way.
 //
 //The shape of the work: a store bucket is a span of time, a slot is a span of the day, and the two grids do not
 //line up. So a bucket is not DROPPED into a slot; it is walked segment by segment across every slot it straddles,

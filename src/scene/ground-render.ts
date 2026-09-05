@@ -62,14 +62,14 @@ export function defaultGroundPalette(isDark: boolean): GroundPalette
         };
 }
 
-//Metric road widths (m) by transportation class; casing adds a rim under the fill. Tunable.
+//Metric road widths (m) by transportation class; casing adds a rim under the fill.
 const ROAD_WIDTH_M: Record<string, number> = {
     motorway: 16, trunk: 14, primary: 12, secondary: 10, tertiary: 8,
     minor: 6, residential: 6, unclassified: 6, living_street: 5, pedestrian: 5,
     service: 4, track: 3, path: 2, footway: 2, cycleway: 2, steps: 2,
 };
 const ROAD_CASING_M = 1.4;
-//Global multiplier on every road width, so the whole network thins/thickens in one knob while we tune the look.
+//Global multiplier on every road width, so the whole network thins/thickens with one knob.
 const ROAD_SCALE = 0.4;
 
 function landcoverKey(cls: string): GroundLayerKey
@@ -125,7 +125,7 @@ function addPath(path: Path2D, f: GroundFeature, toPx: (lon: number, lat: number
     }
 }
 
-//Grade one colour by sun altitude - the scene's whole day/night atmosphere (there is no wash): cool +
+//Grade one colour by sun altitude, the scene's whole day/night atmosphere: cool +
 //dark-but-readable at night, violet twilight, warm golden hour, sunlit lift at midday. Milder than the buildings.
 function groundTint(base: string, altitude: number): string
 {
@@ -163,10 +163,9 @@ function tintPalette(palette: GroundPalette, altitude: number): GroundPalette
     return out;
 }
 
-//Bucket the fetched features by their source layer, once per fetch: paint() runs on every repaint (a theme
-//change, or every camera move on the projected compat path), and re-scanning the full array per layer/class
-//on each of those calls was the actual repeated cost. Grouped once here, each layer lookup below is a Map hit
-//over just that layer's own features instead of a full-array filter.
+//Bucket the fetched features by source layer once per fetch: paint() runs on every repaint (a theme change, or
+//every camera move on the projected compat path), and each layer lookup is then a Map hit over that layer's own
+//features instead of a full-array filter.
 export type GroundFeaturesByLayer = Map<string, GroundFeature[]>;
 
 function groupByLayer(features: GroundFeature[]): GroundFeaturesByLayer
@@ -236,9 +235,7 @@ function paint(
     ctx.lineJoin = 'round';
     ctx.lineCap  = 'round';
 
-    //A feature's own Path2D never changes shape across repeated repaint() calls (see PaintCache above), so
-    //when a cache is given, build it once and replay it - only fillStyle (the one thing style/altitude can
-    //change) is reapplied per call.
+    //Replay the cached Path2D when given (see PaintCache); only fillStyle changes per call.
     const fillFeature = (f: GroundFeature, colour: string): void =>
     {
         let path = cache?.fills.get(f);
@@ -251,15 +248,11 @@ function paint(
         ctx.fillStyle = colour;
         ctx.fill(path, 'evenodd');
     };
-    //Strokes carry no winding/hole semantics, so unlike a fill, disjoint line features sharing one width can
-    //merge into a single Path2D and a single stroke() call with no visual difference. Cuts Path2D allocation
-    //and canvas draw-call count on the projected ground mode, which repaints every rotation frame with no
-    //camera-driven change to skip - measured to meaningfully reduce GC pressure there, though NOT to move
-    //observed repaint throughput or main-thread busy time, since canvas stroke() rasterization cost (pixels
-    //painted, not call count) dominates that mode's per-frame cost. `features` order is preserved into the
-    //merged path, so stacking (e.g. minor road under major) only depends on the CALLER already grouping by
-    //width the same way the un-batched code drew them. `cacheKey` (only meaningful together with a cache) lets
-    //repeated calls for the same named group reuse one merged path.
+    //Strokes carry no winding/hole semantics, so disjoint line features sharing one width merge into a single
+    //Path2D and one stroke() call with no visual difference: fewer Path2D allocations and draw calls on the
+    //projected ground mode, which repaints every rotation frame. `features` order is preserved into the merged
+    //path, so stacking (minor under major) depends on the caller grouping by width. `cacheKey` (with a cache)
+    //lets repeated calls for the same group reuse one merged path.
     const strokeBatch = (features: GroundFeature[], colour: string, widthPx: number, cacheKey?: string): void =>
     {
         if (!features.length)
@@ -386,9 +379,8 @@ function paint(
     {
         strokeBatchByWidth(roads, p.roadCasing, (f) => roadWidth(f.cls) + ROAD_CASING_M * pxPerMetre * ROAD_SCALE, 'roadCasing');
     }
-    //roads is already rank-sorted ascending; minor's widest class (6) is still below major's narrowest (8), so
-    //splitting into these two filtered passes (instead of one interleaved loop) draws the exact same
-    //minor-under-major stacking, just batched to one stroke() call per distinct width instead of one per road.
+    //roads is rank-sorted ascending and minor's widest class (6) sits below major's narrowest (8), so two filtered
+    //passes keep minor under major while batching to one stroke() per distinct width.
     if (!hide('roadMinor'))
     {
         strokeBatchByWidth(roads.filter((f) => rank(f.cls) < 8), p.roadMinor, (f) => roadWidth(f.cls), 'roadMinor');
@@ -496,9 +488,7 @@ export async function buildVectorGround(
         const [wx, wy] = lonLatToTile(lon, la, zoom);
         return [(wx - firstX) * TILE_PX, (wy - firstY) * TILE_PX];
     };
-    //toPx above is fixed for this ground build's whole lifetime, so every feature's Path2D geometry through it
-    //is too - only the paint cache created below actually reuses that fact. NEVER passed to repaintProjected,
-    //whose own toScreen (via the camera) changes every frame.
+    //toPx is fixed for this build, so its Path2D cache holds (see PaintCache).
     const paintCache: PaintCache = { fills: new Map(), strokes: new Map(), strokeBuckets: new Map() };
     const repaint = (st: GroundStyle, alt: number): void =>
     {

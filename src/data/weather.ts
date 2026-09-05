@@ -25,8 +25,8 @@ export interface SampleHourly
     cloudMid:    number[];
     cloudHigh:   number[];
     shortwave:   number[];
-    //Precipitation total (mm) and snowfall (cm) per hour, plus the WMO weather code, for the "Your real sky"
-    //weather layers (rain / snow / thunderstorm). All gap-fill to 0 (missing = dry / clear).
+    //Precipitation total (mm) and snowfall (cm) per hour, plus the WMO weather code, for the weather layers
+    //(rain / snow / thunderstorm). All gap-fill to 0 (missing = dry / clear).
     precip:      number[];
     snowfall:    number[];
     weatherCode: number[];
@@ -260,7 +260,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //over the preceding one), matching the visual time cursor; it powers the live irradiance chip and sun-arc colouring.
 //The low/mid/high cloud layers are combined client-side into cloudEffective for rendering (and let us detect the
 //low-layer "fog spike" failure mode); the API's raw total cloud_cover is not used. precipitation (mm), snowfall
-//(cm) and weather_code (WMO) drive the "Your real sky" weather layers (rain / snow / thunderstorm). The PV
+//(cm) and weather_code (WMO) drive the weather layers (rain / snow / thunderstorm). The PV
 //forecast is read natively from Home Assistant.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',

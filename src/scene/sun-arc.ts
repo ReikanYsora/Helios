@@ -6,9 +6,7 @@ import { getSunPosition } from '../core/time/sun';
 import { getMoonPosition } from '../core/time/moon';
 import { SUN_ARC_RADIUS_M, METRES_PER_DEGREE, DEG } from '../core/config/constants';
 
-//date -> 3D point on the celestial hemisphere (radius SUN_ARC_RADIUS_M x scale, centred on home) as
-//(lon, lat, altitude_m) for the scene projection. Azimuth clockwise from North; ENU offsets
-//east=R·cosα·sinφ, north=R·cosα·cosφ, up=R·sinα, converted to lon/lat via local metres-per-degree.
+//date -> the sun's point on the celestial hemisphere (see spherePoint), plus its altitude/azimuth in degrees.
 export function sunSpherePoint(
     date: Date, homeLat: number, homeLon: number, scale: number
 ): { lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number }

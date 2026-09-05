@@ -589,8 +589,8 @@ function renderTargetChart(host: ChartHost, target: Exclude<ChartTarget, 'produc
     //Area fill closes at the screen Y of value 0, not unconditionally at the chart's bottom edge: a signed metric
     //(cost, temperature) that dips below zero should shade the gap BETWEEN the curve and zero, not keep growing
     //toward the floor as if the value stayed positive. Clamped into the drawable band so an all-positive or
-    //all-negative series still closes at its own edge exactly as before (every other target has fixedMin 0, where
-    //this clamps to H regardless, so this is a no-op change for them).
+    //all-negative series still closes at its own edge (every other target has fixedMin 0, where this clamps to H
+    //regardless).
     const zeroY = Math.max(0, Math.min(H, yOf(0)));
 
     const drawn = series.map(s =>

@@ -43,10 +43,9 @@ export const TIMELINE_MODES: Record<TimelineMode, TimelineModeSpec> = {
     today:     { pastDays: 0,                           futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     week:     { pastDays: 6,                            futureDays: 0, weather: true,  maxBucketsPerHour: 12   },
     //Month is the long view, and the last one the SCENE can still speak for: its store stays hourly, so any day of
-    //it can be scrubbed to and read under that day's own sun. A year mode used to sit past it on a DAILY store,
-    //which carried no shape of a day at all - nothing the arc, the shadows or the curve could illustrate, and 365
-    //bars two pixels wide for the eye. It needed a whole second data path of its own to say less than the Energy
-    //dashboard already says better, so it is gone and the path with it.
+    //it can be scrubbed to and read under that day's own sun. A year mode on a DAILY store would carry no shape of
+    //a day at all, nothing the arc, the shadows or the curve could illustrate, and 365 bars two pixels wide for the
+    //eye, a whole second data path to say less than the Energy dashboard already says better.
     month:    { pastDays: () => daysInPrevMonth() - 1,  futureDays: 0, weather: false, maxBucketsPerHour: 1    },
 };
 

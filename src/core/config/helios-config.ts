@@ -142,7 +142,7 @@ export interface HeliosConfig
     //Battery chip sign convention: 'default' (- charging, + discharging), 'inverted' (+ charging,
     //- discharging), or 'hidden' (magnitude only). Display-only; flow direction and history are unchanged.
     'battery-sign'?:           unknown;
-    //"Your real sky" weather effects (cloud grade + rain / snow / thunderstorm), driven by the real weather at the
+    //Weather effects (cloud grade + rain / snow / thunderstorm), driven by the real weather at the
     //live/scrub time. Default true.
     'weather-enabled'?:        unknown;
     //Local-sensor overrides for the weather variables: a configured entity beats Open-Meteo for the live + past
@@ -287,7 +287,7 @@ export function autoHideUi(config: HeliosConfig | undefined): boolean
 }
 
 
-//"Your real sky" weather effects. Default on (explicit false disables).
+//Weather effects. Default on (explicit false disables).
 export function weatherEnabled(config: HeliosConfig | undefined): boolean
 {
     return config?.['weather-enabled'] !== false;
@@ -331,7 +331,7 @@ export function moonDisplay(config: HeliosConfig | undefined): MoonDisplay
     const v = config?.['moon-display'];
     return v === 'always' || v === 'hidden' ? v : 'night';
 }
-//Scene magnification: 1 (the default, rendering unchanged), 1.5 or 2. Multiplies the camera's px-per-metre, so the
+//Scene magnification: 1 (the default, no magnification), 1.5 or 2. Multiplies the camera's px-per-metre, so the
 //basemap, buildings and shadows grow around the home; the sun/moon arcs, discs and chips stay card-sized (the arc
 //scale probe measures projected px per metre and compensates). Accepts a number or a numeric string (the editor's
 //select emits strings); anything else falls back to 1.

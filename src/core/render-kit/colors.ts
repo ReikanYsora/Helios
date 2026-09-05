@@ -35,10 +35,9 @@ export function tintedRgba(base: string, altitude: number, opacity: number): str
     return `rgba(${hexByte(hex, 1)},${hexByte(hex, 3)},${hexByte(hex, 5)},${opacity})`;
 }
 
-//CSS `saturate(s) brightness(b)` baked into a hex colour. The weather grade used to be a CSS `filter` on
-//#map-container, but a filter on an element wrapping the CSS 3D-transformed basemap forces the whole scene to
-//re-flatten every frame while rotating - heavy flicker on Android WebViews. Painting the grade into the colours
-//instead keeps rotation a pure GPU transform. `saturate` uses the SVG feColorMatrix coefficients (the exact CSS
+//CSS `saturate(s) brightness(b)` baked into a hex colour: a CSS `filter` on the element wrapping the 3D-transformed
+//basemap would force the whole scene to re-flatten every frame while rotating (heavy flicker on Android WebViews),
+//so the weather grade is painted into the colours and rotation stays a pure GPU transform. `saturate` uses the SVG feColorMatrix coefficients (the exact CSS
 //definition); `brightness` is a per-channel multiply. Identity (1,1) returns the colour untouched.
 export function gradeColor(hex: string, sat: number, bright: number): string
 {

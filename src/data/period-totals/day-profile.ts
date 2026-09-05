@@ -3,10 +3,9 @@
 //chip with a period aggregation is drawn the same way whatever it measures: PV draws one strand (+ forecast), grid
 //two (import / export), battery two (power + SoC), a monitoring group one per device.
 //
-//The day is the one being scrubbed, whatever the period. It used to be the period AVERAGED - seven days of a week
-//folded onto one - and that was incoherent with its own base: the curve stands on the sun's ground track for a
-//SINGLE day, so laying a seven-day average on it made one piece of geometry describe two different things. One
-//scrubbed day, one sun track, one set of strands.
+//The day is the one being scrubbed, whatever the period: the curve stands on the sun's ground track for a SINGLE
+//day, so a period average laid on it would make one piece of geometry describe two different things. One scrubbed
+//day, one sun track, one set of strands.
 //
 //Each slot divides by the hours of data that actually landed IN IT (kWh / h = kW), so a partial day, a DST fold or
 //a store grid that does not line up with midnight need no special case. And coverage says where a strand STOPS: a
@@ -315,8 +314,8 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
 
     const dayStartMs = dayMs - serverMsOfDay(dayMs);
     const win: PeriodWindow = { fromMs: dayStartMs, toMs: dayStartMs + DAY_MS };
-    //Binned straight onto this curve's own grid (see the notes in period-totals: at 5 or 6 points an hour a second
-    //re-grid would interpolate a 15-minute quantisation instead of resolving anything).
+    //Binned straight onto this curve's own grid: a second re-grid at 5 or 6 points an hour would interpolate a
+    //coarser quantisation instead of resolving anything.
     const cov    = coverageHours(host, nowMs, slots, win);
     //kWh over the hours that really landed in the slot: kW, the metric's own unit. null where nothing covered it.
     const toKw   = (energy: number[]): (number | null)[] => energy.map((e, s) => (cov[s] > 0 ? e / cov[s] : null));
@@ -337,7 +336,7 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
 
         if (!perSource)
         {
-            //Single source: the aggregate strand, its future carried on by the forecast, exactly as before. It fills
+            //Single source: the aggregate strand, its future carried on by the forecast. It fills
             //only what the meters left null, so a recorded slot is never overwritten by a prediction of itself.
             const values    = toKw(data.layers[0].values);
             const predicted = noPred();
@@ -494,13 +493,11 @@ export function buildDayProfile(host: PeriodHost, target: ChartTarget, dayMs: nu
             pushBatt(disStacked, dis, 'discharge');
             pushBatt(chgStacked, chg, 'charge');
         }
-        //SoC on its own 0..100 scale, dashed, so its 100 % reaches the same top the power peak does (that is what
-        //"leans on the power curve's max for its 100 %" means once both fill their own height at their own peak). One
-        //strand PER BANK, like the timeline: the banks are told apart by their level, not their colour, so every SoC
-        //line takes the SAME tint - the store's signed net flow over the WHOLE day (socFlow). That whole-day flow,
-        //not the power strand's own dir, because the SoC line is continuous where the power one is cut into short
-        //runs, and the power dir would leave those stretches uncoloured, dropping them onto the discharge fallback.
-        //Falls back to the merged SoC when the install has a single bank (perBank is empty there).
+        //SoC on its own 0..100 scale, dashed, so 100 % reaches the same top as the power peak. One strand PER BANK,
+        //like the timeline; banks are told apart by level, not colour, so every SoC line takes the same tint: the
+        //store's signed net flow over the WHOLE day (socFlow), not the power strand's dir, which is cut into short
+        //runs and would leave stretches on the discharge fallback. Single bank falls back to the merged SoC (perBank
+        //empty).
         const socDir = socFlow(host, slots, win);
         const banks  = host._batterySocPerBankHistory.length > 0
             ? host._batterySocPerBankHistory

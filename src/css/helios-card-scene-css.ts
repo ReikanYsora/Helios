@@ -60,14 +60,11 @@ export const heliosCardStyles = css`
             ground holder + scene SVG. No CSS perspective property here: the ground carries its own perspective() in
             its transform (see SceneCamera.groundTransform), so it projects EXACTLY like the overlays' project3, and
             the flat scene SVG stays out of any 3D context (keeps the buildings aligned with the basemap).
-            No overflow:hidden: ha-card already clips, to its rounded box, a pixel tighter than this one. It also
-            sat over a preserve-3d subtree, which old WebKit clips badly, the suspected cause of the top-half-only
-            render on some old iPads (unverified). */
+            No overflow:hidden: ha-card already clips, to its rounded box, a pixel tighter than this one. */
         position: absolute;
         /*  Bleed 1 px under the border to cover the anti-alias seam at the corners; ha-card clips it back. */
         inset: -1px;
-        /*  z-index 1 keeps the container (and home prism) above the ground guide layer (z 0) yet below every
-            HUD overlay (z 4+). */
+        /*  z-index 1 keeps the container (and home prism) below every HUD overlay (z 4+). */
         z-index: 1;
     }
 
@@ -109,11 +106,10 @@ export const heliosCardStyles = css`
     }
     /*  Screen-space scene SVG: cast shadows + extruded buildings repainted every frame.
         Full-size overlay above the ground, click-transparent (the HUD SVGs own their pointer events).
-        The building/shadow paths extend far past the card (a whole neighbourhood projected), so this element's
-        painted content is much larger than its box. On old iOS the compositor then sized this
-        layer's backing store to that content, blew the OS layer-size cap and painted only its top half. contain:
-        paint + overflow:hidden bound the layer to the card box (what we actually see), so the backing store stays
-        card-sized and the whole scene paints. No visible change elsewhere: off-card paint was already clipped. */
+        The building/shadow paths extend far past the card (a whole neighbourhood projected), so the painted
+        content is much larger than the box; a compositor that sizes the backing store to painted content (old iOS
+        WebKit) overflows its layer cap and paints only the top half. contain: paint + overflow: hidden bound the
+        layer to the card box, which is all that is visible anyway. */
     .scene-svg
     {
         position: absolute;
@@ -329,8 +325,7 @@ export const heliosCardStyles = css`
 
     /*  Day curve. The scaffolding (the sun's ground track, and a riser under each hour) is dashed and in the text
         colour: it is the frame the curve is read against, not data, so it must never compete with it for the eye.
-        With no fill under the curve any more, these are the only things saying how high a point stands and how far
-        away it is. */
+        They are the only things saying how high a point stands and how far away it is. */
     .helios-day-curve-foot,
     .helios-day-curve-riser
     {
@@ -405,7 +400,7 @@ export const heliosCardStyles = css`
         border: 2px solid var(--detail-accent, var(--primary-color, #03a9f4));
         /*  A floating readout, not a card: the generic radius token, not --ha-card-border-radius. A "single card"
             panel view squares every card it holds (--ha-card-border-radius: 0) to make it full-bleed, and that
-            cascades into here, which squared the panel too. --ha-border-radius-lg is the same 12px and no view
+            cascades into here and would square the panel too. --ha-border-radius-lg is the same 12px and no view
             overrides it. */
         border-radius: var(--ha-border-radius-lg, 12px);
         background: var(--card-background-color, #ffffff);
@@ -848,7 +843,7 @@ export const heliosCardStyles = css`
 
 
     /*  ============================================================
-        Dark theme, opt-in via \`card-theme: dark\`. Affects only the chrome
+        Dark theme (the theme-dark class, set from the HA theme polarity). Affects only the chrome
         (chips, charts, cursors, labels, leaders, tooltips); the basemap
         keeps its own colours. Chip plates flip white to near-black, text/
         borders go light-grey, chart hairlines flip to white-on-dark at the
@@ -900,7 +895,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  "Your real sky" weather overlay. The scene grade (saturate/brightness) is baked into the ground + building
+    /*  Weather overlay. The scene grade (saturate/brightness) is baked into the ground + building
         PAINT by the renderer (SceneRenderer.setWeatherGrade), not a CSS filter here: a filter on #map-container wraps
         the CSS 3D-transformed basemap, forcing the whole scene to re-flatten every frame while rotating - heavy
         flicker on Android WebViews. The overlay layers still fade by --wx-sun / --wx-grey / --wx-cloud / --wx-rain /
@@ -947,8 +942,8 @@ export const heliosCardStyles = css`
         background: radial-gradient(circle, rgba(30, 35, 42, 0.45), rgba(30, 35, 42, 0) 68%);
     }
     /*  Sized in cqw (share of the card's WIDTH, via ha-card's container-type: inline-size) for BOTH axes, so the
-        shadows stay round at any card shape. Percent height made them tall ovals on a narrow card: 55% of a small
-        width vs 70% of a tall height. left/top keep % for placement; the sweep is element-relative. */
+        shadows stay round at any card shape: a percent height would make them tall ovals on a narrow card (55% of
+        a small width vs 70% of a tall height). left/top keep % for placement; the sweep is element-relative. */
     .helios-wx-cloud.k1 { width: 55cqw; height: 55cqw; left: -30%; top: -10%; animation: helios-wx-sweep 22s linear infinite; }
     .helios-wx-cloud.k2 { width: 42cqw; height: 42cqw; left: -30%; top: 20%; animation: helios-wx-sweep 30s linear infinite; animation-delay: -8s; }
     .helios-wx-cloud.k3 { width: 66cqw; height: 66cqw; left: -45%; top: -20%; animation: helios-wx-sweep 40s linear infinite; animation-delay: -16s; }

@@ -1,7 +1,11 @@
 {
     "$schema": "https://unpkg.com/knip@5/schema.json",
-    "entry": ["src/helios-card.ts", "test/**/*.test.ts"],
-    "project": ["src/**/*.ts", "test/**/*.ts"],
-    "ignore": ["dist/**"],
+    "entry": [
+        "test/**/*.test.ts"
+    ],
+    "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+    ],
     "ignoreExportsUsedInFile": true
 }

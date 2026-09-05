@@ -113,7 +113,7 @@ export interface Translations
         batterySignDefault:          string;
         batterySignInverted:         string;
         batterySignHidden:           string;
-        //"Your real sky" weather-effects toggle.
+        //Weather-effects toggle.
         weatherEnabled:              string;
         weatherEnabledHint:          string;
         //"No UI" mode toggle (auto-hide the timeline + controls).

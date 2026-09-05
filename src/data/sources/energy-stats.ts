@@ -15,10 +15,6 @@ import { loadDurable, saveDurable, loadDurableSeries, saveDurableSeries } from '
 import { warnOnce } from '../log';
 
 
-//Re-fetch cadence for the change-series fetch gates (pv/grid/battery). Recorder commits a 5-min bucket every 5 min;
-//re-arming once a minute keeps the past curves and scrub within ~1 min of the freshest bucket without WS spam.
-//Callers fold changeRefreshAnchorMs() into their fetch key so the gate re-arms on this boundary.
-
 //"Now" rounded down to the refresh boundary: the single anchor every fetch gate folds into its key (battery/grid also
 //pass it as fetch end). One helper so call sites can't drift and every card shares one cache entry per interval.
 export function changeRefreshAnchorMs(): number
@@ -36,8 +32,8 @@ export interface ChangeBucket
 }
 
 
-//Recorder statistics period. `5minute` (kept ~10 days, covers the 2-day past window) for fine series, `hour` for
-//coarse. 5 min is the finest period HA offers, hence the data-interval control caps at 12 buckets/hour.
+//Recorder statistics period, derived per timeline mode from the store cadence (modeFetchPeriod) so every store
+//bucket holds whole recorder buckets. 5 min is the finest period HA offers.
 export type StatPeriod = '5minute' | 'hour' | 'day';
 
 
@@ -332,7 +328,7 @@ export function changeSeriesToWatts(
 
 
 //Scrub-time reads must cope with two meter types:
-//  - Fine: counter advances every few seconds, so every 5-min bucket carries energy and the bucket containing the
+//  - Fine: counter advances every few seconds, so every bucket carries energy and the bucket containing the
 //    instant is the correct read.
 //  - Coarse (reports every 15 min): counter only advances on report, so the recorder lands the whole delta in one
 //    bucket and zeroes the ones between; the probe window average spreads it back over its real interval.

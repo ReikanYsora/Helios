@@ -23,8 +23,8 @@ export const heliosTimelineStyles = css`
             cross over it during auto-rotate. */
         z-index: 1000;
         /*  Height as a share of the CARD, not of its width. Being position:absolute inside ha-card makes the
-            card this element's containing block, so a percentage here resolves against the card's own height
-            rather than tracking width the way the old approach did. */
+            card this element's containing block, so a percentage here resolves against the card's own height,
+            not its width. */
         height: clamp(54px, 18%, 90px);
         display: flex;
         flex-direction: column;
@@ -52,7 +52,7 @@ export const heliosTimelineStyles = css`
     }
 
     /*  Chart + day-label footer composite read as one instrument with a hairline divider between them;
-        overflow:hidden clips both children to the rounded corners. */
+        overflow:hidden clips both children to the stack. */
     .tb-chart-stack
     {
         position: relative;
@@ -61,9 +61,8 @@ export const heliosTimelineStyles = css`
         display: flex;
         flex-direction: column;
         min-height: 0;
-        /*  border-box like .tb-band below: the border draws INSIDE so the chart stack and the period
-            band keep the exact same outer width (both span card - 16px). Without it the border adds outside
-            and the stack reads wider than the band. */
+        /*  border-box like .tb-band below: the border draws INSIDE so the chart stack and the period band keep
+            the same outer width. */
         box-sizing: border-box;
         /*  Top divider tinted with the selected chip's accent (--tb-accent, set on the card), so the timeline
             reads as an extension of the active metric; falls back to the neutral divider. Same 1 px weight as the
@@ -127,8 +126,7 @@ export const heliosTimelineStyles = css`
         pointer-events: none;
     }
 
-    /*  PV prediction line: overlays the observed chart past "now" from pv-peak-kwp scaled by the
-        clear-sky model. Stroke colour computed theme-aware in charts.ts. */
+    /*  PV prediction line: overlays the observed chart past "now"; stroke colour set inline by the chart. */
     .hc-chart-predicted
     {
         stroke-dasharray: 4 3;
@@ -564,8 +562,7 @@ export const heliosTimelineStyles = css`
         font-weight: var(--ha-font-weight-medium, 500);
     }
 
-    /*  Period-mode band: a separate strip below the timeline with its own card frame (same 8 px gutters,
-        radius and themed border as the timeline card). Pinned to the bottom; the timeline sits above it.
+    /*  Period-mode band: a separate strip below the timeline, pinned to the bottom, the timeline flush above it.
         pointer-events: auto, but the band stays transparent to map rotation. */
     .tb-band
     {
@@ -652,7 +649,7 @@ export const heliosTimelineStyles = css`
         );
     }
 
-    /*  Dark theme (opt-in via \`card-theme: dark\`): flip the chart day separators to
+    /*  Dark theme (theme-dark class from the HA theme polarity): flip the chart day separators to
         white-on-dark at the same opacity. The chart card, cursors and tooltip plate
         flip via their --card-background-color / --rgb-primary-text-color recipes. */
     ha-card.theme-dark .hc-day-sep

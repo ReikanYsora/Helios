@@ -1,12 +1,12 @@
 //The scene SVG's DOM, kept alive between frames. The painters (buildings.ts) describe each frame as shapes; this
 //layer owns one node per shape slot and, per frame, only writes the attributes whose text changed, appends or drops
-//nodes at the tail as the shape count moves, and swaps a node in place when its slot changes tag. Rebuilding the
-//layer as one innerHTML string was the heaviest per-frame cost of a camera move: the browser threw the whole
-//subtree away, reparsed the markup, recreated every node and restyled it. A slot's node keeps its computed style
-//when only its geometry moved, which is every wall and shade during a rotation.
+//nodes at the tail as the shape count moves, and swaps a node in place when its slot changes tag. An innerHTML
+//rebuild would be the heaviest per-frame cost of a camera move (the whole subtree thrown away, reparsed, recreated,
+//restyled); a slot's node keeps its computed style when only its geometry moves, which is every wall and shade
+//during a rotation.
 //
-//The picture is the one the markup produced (shapesSvg / shadowLayerSvg serialise it for the tests): the same
-//elements in the same order with the same attributes, so paint order, occlusion and clipping cannot differ.
+//shapesSvg / shadowLayerSvg serialise the same elements in the same order with the same attributes, so the tests
+//pin paint order, occlusion and clipping.
 
 import { SVG_NS } from '../core/config/constants';
 import type { SceneShape, ShadowLayer } from './buildings';

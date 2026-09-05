@@ -1,7 +1,5 @@
-//Moon crescent shape: a point-sampled SVG path for the illuminated region of the disc, built from explicit
-//trigonometry rather than elliptical-arc sweep flags (SVG's `A` command needs a sweep/large-arc flag pair to
-//disambiguate which of two ellipses fits a given start/end/radius, easy to get backwards from memory; sampling
-//points sidesteps that entirely and is just as cheap to draw).
+//Moon crescent shape: the illuminated region of the disc as a point-sampled SVG path. Sampling sidesteps the `A`
+//command's sweep/large-arc flag ambiguity at no drawing cost.
 //
 //Local frame: origin at the disc centre, "lit" direction is +X. moonCrescentPath rotates the sampled local points
 //so +X faces the given lit direction, then translates to the disc's actual centre.

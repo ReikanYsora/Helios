@@ -104,7 +104,7 @@ export interface WeatherData
     cloudLow:       number;        //%, low-level clouds (<= 3 km)
     cloudMid:       number;        //%, mid-level clouds (3 to 8 km)
     cloudHigh:      number;        //%, high-level clouds (>= 8 km)
-    precip:         number;        //mm of precipitation this hour ("Your real sky" rain layer)
+    precip:         number;        //mm of precipitation this hour (rain layer)
     snowfall:       number;        //cm of snowfall this hour (snow layer)
     weatherCode:    number;        //WMO weather code (thunderstorm 95/96/99 drives the storm layer)
     temperature:    number;        //°C outdoor temperature (temperature chip); NaN when unavailable
@@ -113,11 +113,9 @@ export interface WeatherData
     isLiveTime:     boolean;
     pvPower:        number;        //primary value, normalised 0..100 (~ GHI/10 W/m²)
     pvPowerHaurwitz:  number;      //always populated (analytical fallback)
-    pvPowerShortwave: number;      //-1 if shortwave_radiation is unavailable
+    pvPowerShortwave: number;      //-1 when the model shortwave irradiance is unavailable
     irradianceSource: IrradianceSource;
 }
-
-//Cloud disc, chip cluster, camera target and sun-arc tunables live in constants.ts.
 
 
 //Engine
@@ -145,8 +143,8 @@ export class HeliosEngine
 
     //Skip atmosphere repaint when the sun moved less than 1.5° since last call (~6 min).
     private _lastAtmosphereAlt = -999;
-    //Sun altitude at the last ground re-tint. Coarser step than the wash (the vector ground re-raster is heavier
-    //than the cheap full-frame wash), so the day/night grade on the map updates every few degrees.
+    //Sun altitude at the last ground re-tint. Re-rasterising the vector ground is heavy, so its day/night grade
+    //steps every few degrees, coarser than the 1.5° sun/shadow step.
     private _lastGroundAlt = -999;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
@@ -254,7 +252,7 @@ export class HeliosEngine
         this._renderForCurrentSelection();
     }
 
-    //"Your real sky" scene grade (saturate/brightness from the resolved weather). Baked into the ground + building
+    //Weather scene grade (saturate/brightness from the resolved weather). Baked into the ground + building
     //paint by the renderer, not a CSS filter on the map layer - the card computes it, the renderer carries it.
     public setWeatherGrade(sat: number, bright: number): void
     {
@@ -406,8 +404,7 @@ export class HeliosEngine
     //Screen-space curve for one instant, as the two depth passes the card layers around its chips. Projected here
     //rather than in the renderer because the curve is a READING, not scene geometry: like the sun arc it has to
     //reach above the chips, and nothing the renderer draws can - #map-container is its own stacking context, so its
-    //whole subtree is pinned below the HUD. Being a HUD layer also puts it clear of the buildings, which it used to
-    //cut straight through.
+    //whole subtree is pinned below the HUD. Being a HUD layer also keeps it clear of the buildings.
     public projectDayCurve(t: Date): DayCurveScene | null
     {
         if (!this._curveInput || !this._renderer)
@@ -437,9 +434,6 @@ export class HeliosEngine
             this._renderer.setHome(color);
         }
     }
-
-    //No zoom in the 2.5D renderer (the camera sits at one fixed altitude); return a fixed constant so the
-    //sun-arc-scale memo key keeps a stable value.
 
 
     _autoRotateRaf?:           number;
@@ -975,8 +969,8 @@ export class HeliosEngine
 
         //Paint the scene as soon as the renderer is ready, weather or not: the sun arc, home, buildings and the day
         //curve need none of it, and _renderForCurrentSelection already falls back to Haurwitz when the forecast is
-        //absent. Waiting on _homeHourlyData left the whole scene blank through a slow / rate-limited weather fetch
-        //whenever auto-rotate was off (nothing else repaints). Weather repaints on arrival, gated by sunSceneEq.
+        //absent. With auto-rotate off nothing else repaints, so waiting on _homeHourlyData would leave the scene
+        //blank through a slow or rate-limited weather fetch. Weather repaints on arrival, gated by sunSceneEq.
         this._renderForCurrentSelection();
 
         //Deferred horizon kick: a beat past the first paint so its elevation requests never burst into the
@@ -1069,7 +1063,7 @@ export class HeliosEngine
 
 
     //Resolve weather variables at a given time from the home location. Source: _homeHourlyData; the pure
-    //lookup lives in engine/weather-resolve (null returns the empty sentinel so timeline ramps render flat,
+    //lookup lives in data/weather-resolve (null returns the empty sentinel so timeline ramps render flat,
     //shortwave = -1 means no model value this hour and the caller falls back to Haurwitz).
     private _getWeatherAtTime(t: Date): {
         cloudCover:     number;
@@ -1286,7 +1280,7 @@ export class HeliosEngine
         }
 
         //Shared-cache short-circuit: a fresh engine after an editor commit reuses the raw footprints another
-        //engine already fetched for this location (the localStorage cache lives in engine/buildings.ts).
+        //engine already fetched for this location (the localStorage cache lives in scene/buildings.ts).
         const sharedRaw = sharedBuildingsCacheGet(locKey);
         if (sharedRaw)
         {
@@ -1458,8 +1452,8 @@ export class HeliosEngine
         });
         this._renderer.setSun(azimuth, altitude);
 
-        //Day/night colour grade on the vector ground, in coarser altitude steps than the wash above: re-tinting
-        //the whole basemap re-rasterises it, so it updates every few degrees while the cheap wash stays smooth.
+        //Day/night colour grade on the vector ground, in coarser altitude steps than the sun/shadow update above:
+        //re-tinting the whole basemap re-rasterises it.
         if (Math.abs(altitude - this._lastGroundAlt) >= 4)
         {
             this._lastGroundAlt = altitude;
@@ -1588,17 +1582,9 @@ export class HeliosEngine
     }
 
 
-    //IntersectionObserver gate: an off-screen/hidden-tab card calls setPaused(true) to stop the periodic
-    //refresh and dome re-projection. Un-pause does one immediate refresh so the sun matches now, not where
-    //it was when the card scrolled away.
-    //Repaint the vector ground from its cached features. No network, no re-tiling: the geometry is already in
-    //memory, this only re-runs the painter.
-    //
-    //Needed because the ground is a CANVAS painted ONCE, then only moved about by a CSS transform; the draw loop
-    //never touches its pixels. Browsers are free to drop a canvas's backing store while a tab sits in the
-    //background, and nothing here would ever put it back: the map came back blank while the SVG buildings, being
-    //DOM, survived untouched. That is the exact shape of the "left it on a wall tablet and the basemap vanished"
-    //report, and a wall tablet is precisely where a card sits idle for hours.
+    //Repaint the vector ground from its cached features (no network). The ground is a canvas painted once and only
+    //CSS-transformed afterwards, so a backing store the browser drops while the tab sits in the background would
+    //stay blank under the DOM buildings; the card calls this on visibilitychange.
     public repaintGround(): void
     {
         this._renderer?.setGroundStyle(this._groundStyle());
@@ -1613,8 +1599,8 @@ export class HeliosEngine
         this._paused = paused;
         if (paused)
         {
-            //Drop the 60 s sky timer entirely while paused: the callback already early-returns, but the
-            //timer itself woke the page every minute for no work. Re-armed on un-pause.
+            //Drop the 60 s sky timer entirely while paused: its callback would early-return, but the timer itself
+            //would still wake the page every minute. Re-armed on un-pause.
             if (this._skyTimer !== undefined)
             {
                 window.clearInterval(this._skyTimer);
@@ -1732,11 +1718,8 @@ export class HeliosEngine
         return horizonAltAt(this._horizonProfile, azimuthDeg);
     }
 
-    //Screen-space layout of the on-map readout chips and their leader lines. Returns positions (CSS px
-    //relative to the canvas) for the cloud chip (outside the ring), PV chip, battery SoC/Power chips, the
-    //grid chip, the ring edge (hemisphere-aware anchor direction for the cloud fill interp), and
-    //the projected home point (chip-leader anchor / disc centre). Null when the map isn't ready (card skips
-    //the overlay that frame).
+    //Screen-space layout of the on-map chips: the PV, battery and grid chip anchors, the four group-chip candidate
+    //anchors, and the projected home hub. Null when the map isn't ready (the card skips the overlay that frame).
     public projectHomeLabelLayout(): {
         pvLabel:      { x: number; y: number };
         //Battery chip anchor, top of the right column.
@@ -1764,10 +1747,10 @@ export class HeliosEngine
         //Chip cluster, organised into columns: PV anchored above the home, battery (SoC/Power) stacked on
         //the right, the grid chip on the left, so "what's in" and "what's stored/consumed" split.
         //All offsets scale by _heliosScale() so the cluster spreads on a kiosk layout (= 1.0 at standard
-        //Lovelace sizes, unchanged).
+        //Lovelace sizes).
         const scale = this._heliosScale();
         //Steeper vertical-lift ramp than the horizontal one: leaders down to the home need more height on a
-        //fullscreen canvas. 1.0 at <= 600 px (no change); larger on kiosk so chips float higher.
+        //fullscreen canvas. 1.0 at <= 600 px; larger on kiosk so chips float higher.
         const liftScale = this._clusterLiftScale();
         //Side chips sit this far off the home's x (a touch wide so they don't crowd the home pill/leaders).
         const CHIP_SIDE_X_OFFSET_PX = 84 * scale;
@@ -1816,7 +1799,7 @@ export class HeliosEngine
     private _cachedCanvasCssH = 0;
 
 
-    //Horizontal chip-cluster spread ramp (MAX 1.6); the pure ramp math lives in engine/hud-layout.
+    //Horizontal chip-cluster spread ramp (MAX 1.6); the pure ramp math lives in scene/hud-layout.
     private _heliosScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
@@ -2309,7 +2292,7 @@ export class HeliosEngine
     }
 
     //date -> 3D point on the celestial hemisphere (centred on home) for _projectScenePoint; the pure
-    //geometry lives in engine/sun-arc, fed the current kiosk arc scale.
+    //geometry lives in scene/sun-arc, fed the current arc scale.
     private _sunSpherePoint(date: Date): {
         lon: number; lat: number; altitudeM: number; altitudeDeg: number; azimuthDeg: number
     } | null
@@ -2369,9 +2352,7 @@ export class HeliosEngine
             {
                 continue;
             }
-            //No terrain-horizon test for the moon (that profile is built and gated for the sun's own visual
-            //gate): plain geometric altitude, same as the sun arc's own render-mode split before its terrain
-            //refinement.
+            //No terrain-horizon test for the moon (the profile only gates the sun): plain geometric altitude.
             raw.push({ x: px.x, y: px.y, depth: px.depth, altitude: s.altitudeDeg, belowHorizon: s.altitudeDeg <= 0 });
         }
 
@@ -2457,9 +2438,8 @@ export class HeliosEngine
             //Force atmosphere refresh: the user just scrubbed, so the "moved enough" guard would short-circuit.
             this._lastAtmosphereAlt = -999;
             this._renderForCurrentSelection();
-            //Update shadows + atmosphere in lockstep with the scrub. setSun/setPalette schedule an rAF-coalesced
-            //redraw, so the costly shadow raster still runs at most once per frame, but the sky and shadows now
-            //follow the scrub continuously instead of snapping after a debounce.
+            //Shadows + atmosphere follow the scrub in lockstep: setSun/setPalette schedule an rAF-coalesced redraw,
+            //so the costly shadow raster still runs at most once per frame.
             this._refreshShadowsAndAtmosphere();
         }
     }

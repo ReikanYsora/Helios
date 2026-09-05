@@ -1,10 +1,9 @@
 //Warm start: the data a card had when it left the document, kept for the card that takes its place. The Home
-//Assistant editor destroys the card and creates a fresh one on every setting it changes, so without this a
-//fresh card showed empty chips and an empty timeline until its own fetches came back, and the editor preview
-//flashed through that state on every keystroke. A leaving card parks its fetched series, live readings and
-//preferences under its cache id (or its home); a card booting under the same key seeds itself from them before
-//its first render and then refreshes normally, so every fetch still runs, it just no longer paints a blank
-//first. Short-lived and in memory only: a genuinely new visit still starts cold.
+//Assistant editor destroys the card and creates a fresh one on every setting it changes, and a fresh card shows
+//empty chips and an empty timeline until its own fetches come back. A leaving card parks its fetched series, live
+//readings and preferences under its cache id (or its home); a card booting under the same key seeds itself from
+//them before its first render and then refreshes normally, so every fetch still runs behind a complete first
+//paint. Short-lived and in memory only: a genuinely new visit still starts cold.
 
 //Kept as it is: the leaving card's own arrays and maps, never copied. It stops writing them at disconnect.
 export const WARM_START_FIELDS = [

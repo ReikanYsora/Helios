@@ -140,7 +140,7 @@ export function formatHaTime(hass: HassLike, date: Date): string
 
 
 //Date + time like the HA frontend (day, short month, hour:minute, honouring 12/24h), for the timeline scrub readout
-//where the coarse axis labels (months on a year window) don't pin the exact instant.
+//where the coarse axis labels of a week/month window don't pin the exact instant.
 export function formatHaDateTime(hass: HassLike, date: Date): string
 {
     return formatWithHaLocale(hass, date, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
@@ -173,13 +173,13 @@ export function formatPowerKw(hass: HassLike, watts: number, decimals: number, s
     return formatPower(hass, watts, decimals, unit, signed);
 }
 
-//Irradiance (solar constant) readout unit for the whole card, resolved from config (see irradianceUnit()).
+//Irradiance readout unit for the whole card, resolved from config (see irradianceUnit()).
 export type IrradianceUnit = 'W/m²' | 'kW/m²' | 'W/ft²';
 
 //One square foot in square metres, so a per-m2 irradiance spreads onto the imperial area unit.
 const M2_PER_FT2 = 0.09290304;
 
-//Irradiance (solar constant) readout in the configured unit. Input is W/m². 'W/m²' prints whole units; 'kW/m²'
+//Irradiance readout in the configured unit. Input is W/m². 'W/m²' prints whole units; 'kW/m²'
 //divides by 1000 at the caller's decimal count (a typical peak reads ~1 kW/m²); 'W/ft²' rescales onto square feet
 //and prints whole units like 'W/m²' does (a typical peak reads ~93 W/ft²).
 export function formatIrradiance(hass: HassLike, wPerM2: number, decimals: number, unit: IrradianceUnit): string
@@ -428,10 +428,9 @@ export function uiColorVar(token: string | undefined, fallbackToken: string): st
 //Resolve a user-set colour to something paintable: a literal (#hex / rgb()) passes straight through, anything else
 //is an HA ui_color token read off the live theme, and an unset one falls back.
 //
-//ONE resolver on purpose. This test used to be copy-pasted at each call site, and the copies drifted: chips, map
-//layers and monitoring groups took a #hex, while the building tint and the home colour did not. Those two wrapped
-//the value in a var() name whatever it was, so a hex became `var(--#ff0000-color)` -- meaningless, silently
-//discarded, and the building just stayed grey. Same config, same look to a user, different answer.
+//ONE resolver on purpose: every colour input (chips, ground layers, groups, building tint, home colour) must answer
+//a #hex, rgb() or token identically; a per-call-site copy that wraps a literal into `var(--#ff0000-color)` is
+//silently discarded and the element keeps its default.
 export function resolveUiColor(
     el:            Element | null | undefined,
     token:         string | undefined,
@@ -583,10 +582,6 @@ function labToHex([l, a, b]: [number, number, number]): string
     return '#' + h(r) + h(g) + h(b2);
 }
 
-//Per-energy-source colour, matching the HA Energy palette: source `idx` 0 is the base solar token; higher indices
-//brighten it (dark theme) or darken it (light theme) by 18 LAB-lightness units per step, unless the theme defines an
-//explicit `--energy-solar-color-<idx>` override. Returns #rrggbb. Used for the per-source chart curves so they
-//always match the energy dashboard.
 //Memo for the deterministic LAB ramp step, keyed by base+dark+idx: per-source colours are recomputed every
 //chart/tooltip render, but the conversion only depends on those three.
 const _energyRampMemo = new Map<string, string>();

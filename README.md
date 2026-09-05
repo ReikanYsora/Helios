@@ -165,7 +165,7 @@ sun.
 
 <img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.jpg" alt="Helios: the week's consumption curve standing on the sun's own path around the house, over a golden-hour scene.">
 
-<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_04.jpg" alt="Helios at dusk: the day ring in blue with sunrise and sunset marked on the sun's path, and the buildings under a low sky.">
+<img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_04.jpg" alt="Helios at dusk: the day curve in blue with sunrise and sunset marked on the sun's path, and the buildings under a low sky.">
 
 An interactive live demo is at [helios-ha.org](https://helios-ha.org/helios/).
 

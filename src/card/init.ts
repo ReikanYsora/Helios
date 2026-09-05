@@ -216,7 +216,7 @@ export interface InitHost extends HudHost
 
     readonly _forecastLayout: ArrayLine[] | null;
     _cloudCover:         number;
-    //"Your real sky" weather layers, resolved at the current live/scrub time (precip mm, snowfall cm, WMO code).
+    //Weather layers, resolved at the current live/scrub time (precip mm, snowfall cm, WMO code).
     _precip:             number;
     _snowfall:           number;
     _weatherCode:        number;

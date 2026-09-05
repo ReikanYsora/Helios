@@ -75,8 +75,8 @@ function probeGpu(): GpuProbe
 }
 
 //Entry / mid embedded GPUs that mis-composite the 3D basemap tilt (whole-view flicker, black kiosk screenshots).
-//There is no numeric WebGL cap that separates them — the composited-layer behaviour is deliberately not exposed to
-//JS (the same opacity that blacks out a kiosk screenshot of the layer) — so we key on the GPU string, exactly like
+//There is no numeric WebGL cap that separates them: the composited-layer behaviour is deliberately not exposed to
+//JS (the same opacity that blacks out a kiosk screenshot of the layer), so we key on the GPU string, exactly like
 //Chromium's own gpu_driver_bug_list.json (matched against GL_RENDERER). Chromium blocklists whole families for
 //severe bugs ("Mali.*", "Adreno.*", "PowerVR .*"); there is no per-model list, and a false positive is cheap (the
 //projected path is near-equivalent), so we match by family and only carve out the current flagships:
@@ -106,12 +106,6 @@ function isEntryAndroidGpu(renderer: string): boolean
     return false;
 }
 
-//Old iOS/iPadOS WebKit half-composites a flat layer over a CSS 3D-transformed one, clipping the whole scene to
-//its top half. Those devices render the ground on the projected compat path instead of a 3D
-//transform. It cannot be feature-detected (no API reads composited pixels), so we sniff: an Apple touch device
-//(including iPadOS masquerading as macOS Safari) on Safari <= 16, the WebKit generation that carries the bug and
-//the ceiling for the old hardware it runs on. A miss on a newer device keeps the (perfect) normal path; a false
-//positive only swaps in the near-equivalent compat render, so erring is cheap.
 //How the basemap is drawn, decided once per device.
 //  'normal'    : GPU-rasterized canvas + CSS 3D transform (fast, correct) - capable devices.
 //  'transform' : CPU-rasterized canvas (willReadFrequently) STILL under the CSS 3D transform. Entry Android GPUs
@@ -269,7 +263,7 @@ export class SceneRenderer
     //Current ground style + sun altitude, kept so an altitude step or style change can repaint from the cache.
     private _groundStyleCur?: GroundStyle;
     private _groundAltitude  = 45;
-    //"Your real sky" weather grade, baked into the ground + building colours instead of a CSS filter on the whole
+    //Weather grade, baked into the ground + building colours instead of a CSS filter on the whole
     //map layer (which re-flattens the 3D-transformed scene every frame -> flicker on Android WebViews). saturate
     //then brightness, 1/1 = neutral. Only the paint carries it, so rotation stays a pure GPU transform.
     private _wxSat    = 1;
@@ -373,8 +367,6 @@ export class SceneRenderer
         }
     }
 
-    //Build the ground basemap for a home position. One style serves both themes; dark mode is a CSS
-    //filter on the canvas, so a theme flip never re-tiles.
     //Scene magnification (`scene-zoom`): scales the camera and re-keys the pose guards so the next frame repaints
     //the buildings/shadows and, on the compat path, the projected ground. The basemap canvas itself is untouched:
     //the normal path scales it in groundTransform, the projected path re-projects through the camera.
@@ -444,13 +436,11 @@ export class SceneRenderer
             this._repaintGroundFromCache();
         }
         this._groundHolder.replaceChildren(built.ground.el, built.ground.fade);
-        //The ground is a canvas painted ONCE and thereafter only CSS-transformed: the draw loop never touches its
-        //pixels. A browser may drop a canvas's backing store while the page sits idle, and nothing here would put
-        //it back, so the basemap came back blank with the SVG buildings (being DOM) floating over nothing. The
-        //visibility hook covers a tab going away; this covers the case that has no visibility change at all, which
-        //is the wall-tablet one: the card stays "visible" while the screen sleeps. `contextrestored` is the
-        //browser saying exactly "I dropped your pixels, here is a fresh surface" -- repaint on the spot, from the
-        //cached features, no network.
+        //The ground canvas is painted once and thereafter only CSS-transformed, so a backing store the browser
+        //drops while the page idles would leave the basemap blank under the DOM buildings. The visibility hook
+        //covers a tab going away; this covers the wall-tablet case with no visibility change (the card stays
+        //"visible" while the screen sleeps). `contextrestored` announces the fresh surface: repaint from the cached
+        //features, no network.
         this._groundRestore = () =>
         {
             if (this._alive && this._groundStyleCur)
@@ -516,7 +506,7 @@ export class SceneRenderer
         this.scheduleRedraw();
     }
 
-    //Set the "your real sky" weather grade (saturate/brightness). Baked into the ground + building colours, not a
+    //Set the weather grade (saturate/brightness). Baked into the ground + building colours, not a
     //CSS filter, so a static scene rotates as a pure GPU transform. A no-op within WX_GRADE_EPS of the current
     //grade (cloud cover is resolved continuously while scrubbing the timeline, so an exact-equality gate repaints
     //the whole ground canvas on almost every tick; this tolerance is imperceptible but skips that churn, the same
@@ -798,9 +788,9 @@ export class SceneRenderer
             this._lastScenePose = scenePose;
             const alt = this._sun.altitude;
             const drawn = this._buildings;
-            //Bake the weather grade into the building + shadow colours (identity at 1/1, so the neutral path is
-            //byte-identical to before). Opacities are untouched - the grade is a colour transform, like the CSS
-            //filter it replaces, but without wrapping the 3D-transformed layer in a per-frame re-flatten.
+            //Bake the weather grade into the building + shadow colours (identity at 1/1). Opacities are untouched:
+            //the grade is a colour transform, and carrying it in the paint rather than a CSS filter keeps the
+            //3D-transformed layer from re-flattening every frame.
             const s = this._wxSat;
             const br = this._wxBright;
             const gradedPalette: ScenePalette = {
@@ -811,8 +801,7 @@ export class SceneRenderer
             const gradedHome: HomeAppearance = this._home.color
                 ? { ...this._home, color: gradeColor(this._home.color, s, br) }
                 : this._home;
-            //No full-frame night/twilight wash: the day/night atmosphere comes from the graded ground palette + the
-            //altitude-tinted buildings, so there is no flat translucent veil fogging the map.
+            //The day/night atmosphere is the graded ground palette + the altitude-tinted buildings.
             this._sceneLayers.commit(
                 renderShadows(this.camera, drawn, this._sun, gradedShadow, this._palette.shadowOpacity),
                 renderBuildings(this.camera, drawn, alt, gradedPalette, this._growth, this._palette.neighborOpacity, gradedHome, this._sun.azimuth),

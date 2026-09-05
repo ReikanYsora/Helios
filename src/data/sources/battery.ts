@@ -94,7 +94,7 @@ export interface BatteryHost
     _batterySocPerBankHistory: BatteryHistory[];
     _batteryFetchKey:     string;
     _batteryFetching:     boolean;
-    //Recorder `change` series for charge (`stat_energy_to`) and discharge (`stat_energy_from`) meters, 5-min buckets. SEPARATE
+    //Recorder `change` series for charge (`stat_energy_to`) and discharge (`stat_energy_from`) meters at `_storeFetchPeriod`. SEPARATE
     //directional meters, so the net power sign is structural (charge +, discharge -) not inferred from one signed sensor, which
     //keeps charging from reading as 0 W. Null until first fetch.
     _batteryChargeChangeSeries:    ChangeBucket[] | null;
@@ -285,8 +285,8 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
         return;
     }
 
-    //Span the full configured past window (period selector), not a fixed 2 days, else the older days of a
-    //wide window (e.g. 7 d) come back empty.
+    //Span the full configured past window (period selector), else the older days of a wide window (e.g. 7 d)
+    //come back empty.
     const startMs = localMidnightMinusDays(host._periodPastDays);
     //Rounded end anchor so the past curve + scrub keep tracking new buckets. One call for the union of every
     //source's meters; RequestCache collapses pv/grid/battery to a single recorder round-trip. Charge and
@@ -334,9 +334,8 @@ function fetchBatteryChangeSeries(host: BatteryHost): void
 }
 
 
-//Parse a raw-history payload (`history/history_during_period`) into a `BatteryHistory` via the shared per-entity
-//parser (energy-stats.ts): compact/verbose state + timestamp shapes, epoch ms/seconds magnitude check, and
-//carry-forward onto the previous sample's timestamp when a repeat omits its own.
+//Raw-history payload -> BatteryHistory; only the numeric read is battery-specific, the shape handling is the shared
+//parser's (energy-stats.ts).
 function parseRawBatteryHistory(arr: any[]): BatteryHistory
 {
     return parseRawHistorySeries(arr, (s) =>
@@ -347,9 +346,8 @@ function parseRawBatteryHistory(arr: any[]): BatteryHistory
 }
 
 
-//Parse a statistics payload (`recorder/statistics_during_period`) into a `BatteryHistory`. SoC/power sensors usually expose
-//`state_class: measurement` so the column is `mean`. Some setups wire a cumulative kWh counter (`total_increasing`) where `mean` is
-//null and `state` carries the bucket-end reading; prefer `mean`, fall back to `state` so the slot lands populated either way.
+//Parse a statistics payload (`recorder/statistics_during_period`) into a `BatteryHistory`. A SoC sensor exposes `mean`; a
+//bucket with `mean: null` (non-measurement state_class) still lands via its bucket-end `state`.
 function parseBatteryStats(arr: any[]): BatteryHistory
 {
     const times:  Date[]   = [];
@@ -389,11 +387,6 @@ function parseBatteryStats(arr: any[]): BatteryHistory
 }
 
 
-//History fetch for the battery overlay. Tries `recorder/statistics_during_period` first: the only path that scales on a
-//high-frequency feed (5-min buckets, ~576 rows per 2-day window vs ~150-200k raw). When the entity has no LTS tracking (no
-//`state_class`) the stats array is empty and we fall back to raw `history/history_during_period` with `significant_changes_only`
-//for custom/non-measurement entities. SoC + power entities are bundled into one WS roundtrip when both are configured.
-//
 //Multi-bank SoC aggregator: last-known-carry-forward mean across N banks, each value clamped to [0, 100]. Walks the
 //union of all timestamps in O(entities * union), sub-ms even at high cadence. Single-bank collapses to the one series.
 function aggregateBatterySocLkcf(perEntity: BatteryHistory[]): BatteryHistory
@@ -492,10 +485,9 @@ export async function fetchBatterySoc(
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  ids,
             period,
-            //Both fields: a cumulative-kWh-as-power wiring has `mean: null` per bucket, so asking for `state` too lets the parser
-            //cover both wirings in one round-trip.
+            //Both fields so a `mean: null` bucket still lands via `state`.
             types:          ['mean', 'state'],
-            //Normalise units so the parser doesn't handle Wh/MWh/mW scaling at sample time (SoC %, power W, energy kWh).
+            //Normalise units so the parser doesn't handle scaling at sample time.
             units:          { energy: 'kWh', power: 'W' },
         });
         const statsUsable = ids.some(id => Array.isArray(statsResult?.[id]) && statsResult[id].length > 0);

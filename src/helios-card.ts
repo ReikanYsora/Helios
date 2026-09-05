@@ -128,9 +128,9 @@ export class HeliosCard extends LitElement
 
     @state() _engine?:        HeliosEngine;
     @state() _now             = new Date();
-    //Cloud-cover values shown in the on-ground disc hover popup.
+    //Cloud cover (%) at the current live/scrub time, -1 until data. Drives the cloud chip icon + the weather layers.
     @state() _cloudCover      = -1;
-    //"Your real sky" weather layers, resolved at the current live/scrub time and pushed by the engine:
+    //Weather layers, resolved at the current live/scrub time and pushed by the engine:
     //precipitation (mm), snowfall (cm) and the WMO weather code (drives rain / snow / thunderstorm).
     @state() _precip          = 0;
     @state() _snowfall        = 0;
@@ -152,16 +152,16 @@ export class HeliosCard extends LitElement
     //engine.projectHomeLabelLayout() on every map transform. null while the map is loading.
     @state() _labelLayout: LabelLayout | null = null;
     //PV production state, set when the HA Energy dashboard exposes a solar source: live value from
-    //hass.states + historical series from HA's history API for the dedicated chart.
+    //hass.states; the past series is the recorder change series below.
     @state() _pvCurrent: number | null = null;
     @state() _pvUnit        = '';
     //Recorder change series for the solar meter(s): canonical past-production source for the unified
-    //store + chip scrub. Reset-corrected, unit-normalised kWh per 5-min bucket, same as the HA Energy
-    //dashboard.
+    //store + chip scrub. Reset-corrected, unit-normalised kWh per recorder bucket (period per timeline mode),
+    //as the HA Energy dashboard computes it.
     @state() _pvChangeSeries: ChangeBucket[] | null = null;
     _pvChangeFetch = new KeyedFetch();
     @state() _pvChangeSeriesPerEntity = new Map<string, ChangeBucket[]>();
-    //HA Energy dashboard solar forecast (src/card/energy-forecast.ts), merged across config entries.
+    //HA Energy dashboard solar forecast (src/data/energy-forecast.ts), merged across config entries.
     //The unified store reads this into its forecast series. Empty when no forecast source is configured.
     @state() _haSolarForecast: SolarForecastPoint[] = [];
     _haSolarForecastLoaded    = false;
@@ -190,7 +190,7 @@ export class HeliosCard extends LitElement
     @state() _gridExportValue:   number | null = null;
     @state() _gridExportUnit        = '';
     //Recorder change series for the grid import/export meters: canonical past-power source for the
-    //unified store + scrub. Reset-corrected kWh per 5-min bucket, same as the HA Energy dashboard.
+    //unified store + scrub. Reset-corrected kWh per recorder bucket (period per timeline mode).
     @state() _gridImportChangeSeries: ChangeBucket[] | null = null;
     @state() _gridExportChangeSeries: ChangeBucket[] | null = null;
     //Per-source split of the same change fetch, for the multi-source stacked breakdown (arc + timeline). Empty on a
@@ -205,8 +205,8 @@ export class HeliosCard extends LitElement
     //Sign guard for the live battery rate sensor (battery-guard.ts): corrects an inverted convention so the flow
     //direction matches the meters. Same plain-field pattern as the grid guard.
     _batteryGuard: BatteryGuardState = createBatteryGuard();
-    //Historical series for the active timeline range. Both battery entities fetched in one
-    //history/history_during_period WS call when both are set.
+    //Historical series for the active timeline range, from one recorder call (statistics first, raw history
+    //fallback).
     @state() _batterySocHistory: {
         times:  Date[];
         values: number[];
@@ -270,8 +270,7 @@ export class HeliosCard extends LitElement
     //Hover position on the timeline chart cards, as a percent of the visible range. Null when the pointer
     //is outside; drives the hover guide line, per-curve dots and the tooltip chip.
     @state() _chartHoverPct: number | null = null;
-    //Active bottom-chart target: the single re-targetable chart draws this series-set; chips re-point it
-    //(production by default, then grid/battery/irradiance/cloud as chips re-point it).
+    //Active bottom-chart target: the single re-targetable chart draws this series-set; a chip tap re-points it.
     @state() _chartTarget: ChartTarget = 'production';
     //True once the user has picked a chip or a saved pick was restored. Until then the target tracks the first
     //available chip as the Energy config resolves (see updated()), so a card with no solar never sits on an empty
@@ -319,7 +318,7 @@ export class HeliosCard extends LitElement
     private _uiHideTimer: number | undefined;
     @query('ha-card') _haCard?: HTMLElement;
 
-    //"Your real sky": on-card weather driven by the real weather resolved at the live/scrub time. Independent
+    //on-card weather driven by the real weather resolved at the live/scrub time. Independent
     //layers stack (cloud grade + rain / snow / thunderstorm), each fed by weatherLayers() and rendered by the
     //CSS overlay + the rain/snow canvases + the lightning controller.
     @state() private _wxOn = true;
@@ -328,10 +327,9 @@ export class HeliosCard extends LitElement
     private readonly _wxRainCtl  = new WeatherRain((): HTMLCanvasElement | undefined => this._wxRainCanvas);
     private readonly _wxSnowCtl  = new WeatherSnow((): HTMLCanvasElement | undefined => this._wxSnowCanvas);
     private readonly _wxStormCtl = new WeatherStorm((v: number): void => this.style.setProperty('--wx-flash', v.toFixed(3)));
-    //Last value written per --wx-* var (see _applyWeather), so a repeat write of an unchanged value skips the
-    //setProperty call - the same guard WeatherStorm._emit already applies to --wx-flash, extended to every var
-    //_applyWeather owns. Per-var rather than one combined check: --wx-sun-x/-y move every rotation frame while
-    //the rest only change with the weather data itself, so a combined guard would rarely skip anything.
+    //Last value written per --wx-* var (see _applyWeather), so an unchanged value skips setProperty. Per-var rather
+    //than one combined check: --wx-sun-x/-y move every rotation frame while the rest only change with the weather
+    //data, so a combined guard would rarely skip anything.
     private _lastWxVars: Record<string, string> = {};
     private _setWxVar(name: string, value: string): void
     {
@@ -369,7 +367,7 @@ export class HeliosCard extends LitElement
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
     //Active timeline mode (Forecast / Yesterday / Today / Week / Month). Drives the window + store cadence +
-    //fetch period + scrub snapping (see card/timeline-modes.ts). Persisted per card; the toggle lives in the
+    //fetch period + scrub snapping (see timeline/timeline-modes.ts). Persisted per card; the toggle lives in the
     //bottom band.
     @state() _timelineMode: TimelineMode = 'forecast';
     //Active rolling-window span (days of history/forecast around today), derived from the mode. Pushed to the
@@ -385,10 +383,9 @@ export class HeliosCard extends LitElement
     //Fingerprint from the last hass-only update pass shouldUpdate() let through (see below); undefined until
     //the first one, which is never skipped.
     private _lastHassFingerprint: string | undefined = undefined;
-    //Unified 5-day data store. Built after the initial weather + PV + battery + grid fetches, rebuilt when
-    //any refresh, sliced/interpolated by the graph view and main timeline. Live numeric chips
-    //stay on the direct hass.states path: the store carries bucketed curves, the chips need sample-accurate
-    //values a 15 min bucket would lose.
+    //Unified data store over the active mode's window. Rebuilt when any source refreshes, sliced/interpolated by
+    //the chart and timeline. Live numeric chips stay on the direct hass.states path: the store carries bucketed
+    //curves, the chips need sample-accurate values a bucket would lose.
     @state() _unifiedStore: UnifiedDataStore | null = null;
 
 
@@ -442,9 +439,9 @@ export class HeliosCard extends LitElement
             throw new Error('Invalid HELIOS configuration');
         }
         this.config = { ...config };
-        //The rolling window is driven by the timeline mode (card/timeline-modes.ts) + the persisted choice, so
+        //The rolling window is driven by the timeline mode (timeline/timeline-modes.ts) + the persisted choice, so
         //setConfig doesn't seed it.
-        //"Your real sky" master switch follows the config (default on); the layers re-apply via updated().
+        //The weather master switch follows the config (default on); the layers re-apply via updated().
         this._wxOn = weatherEnabled(this.config);
         //Re-arm (or stop) the "No UI" idle fade when the option changes.
         this._scheduleUiHide();
@@ -517,8 +514,8 @@ export class HeliosCard extends LitElement
         }
     };
 
-    //Recorder period for the energy change-series, per the active mode (5-min for forecast, hourly for a week,
-    //daily for month), so a long window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
+    //Recorder period for the energy change-series: the user's display cadence capped per mode, so the month
+    //window never pulls 5-min rows. Read by the fetch hosts (pv/grid/battery).
     get _storeFetchPeriod(): StatPeriod
     {
         return modeFetchPeriod(this._timelineMode, this.config);
@@ -546,10 +543,9 @@ export class HeliosCard extends LitElement
     //Chip click delegate: the clicked element carries its metric in data-target. A tap points the chart at the
     //chip AND opens its detail panel.
     //
-    //Re-tapping the ALREADY ACTIVE chip is the day curve's toggle, for EVERY chip now, not just PV. That gesture was
-    //doing nothing at all, so it costs no pixel, no new control and no reduced hit target - the whole chip stays the
-    //target, which matters on a phone, where a knob inside a 22 px pill would be a coin toss. It reads as what it is:
-    //"I am on this metric... now show me its day".
+    //Re-tapping the ALREADY ACTIVE chip toggles the day curve. An otherwise idle gesture, so it costs no pixel, no
+    //new control and no reduced hit target: the whole chip stays the target, which matters on a phone, where a knob
+    //inside a 22 px pill would be a coin toss. It reads as what it is: "I am on this metric... now show me its day".
     //
     //Switching to a DIFFERENT chip while the curve is up re-points it and leaves it up: the curve follows the active
     //target (see _buildDayCurve), so tapping across the chips walks the same day through each metric. Closing is the
@@ -577,8 +573,6 @@ export class HeliosCard extends LitElement
     //from a same-chip scrub/tick (instant recolour). Undefined until the first paint (no squash on load).
     private _lastHomeTarget?: ChartTarget;
 
-    //Push the home prism's appearance to the renderer (via the engine): a solid block in the active chip's accent
-    //colour. `animate` plays the squash/grow on a chip change.
     //The active chip's LIVE colour, the single source every "active chip" accent reads (home prism, timeline
     //border, detail panel). The directional chips (grid, battery) flip tint with the INSTANTANEOUS flow, so this
     //reuses the HUD's live/scrub-aware leader colours rather than chartAccentColor, whose window-dominant direction
@@ -591,6 +585,8 @@ export class HeliosCard extends LitElement
                 : chartAccentColor(this);
     }
 
+    //Push the home prism's appearance to the renderer (via the engine): a solid block in the active chip's accent
+    //colour. `animate` plays the squash/grow on a chip change.
     updateHomeAppearance(animate: boolean): void
     {
         if (!this._engine)
@@ -658,9 +654,8 @@ export class HeliosCard extends LitElement
         }
         //Clamped INTO the window, because the curve reads the store and can only speak for a day the store holds.
         //Every period but Yesterday ends on today, so "now" is inside one and is the right default. Yesterday ends
-        //at this morning's midnight, which puts now OUTSIDE its own window: the curve was then built for today
-        //against a store that only has yesterday, found nothing, and drew nothing until a scrub landed a selection
-        //back inside.
+        //at this morning's midnight, which puts now OUTSIDE its own window: unclamped, the curve would be built for
+        //today against a store that only holds yesterday and draw nothing.
         const range = this._timeRange;
         const live  = (this._selectedTime ?? new Date()).getTime();
         const shownMs = range
@@ -671,19 +666,15 @@ export class HeliosCard extends LitElement
         //position along it. A scrub into another day rebuilds all three together, so they can never describe
         //different days.
         //
-        //But NOT on every frame of that scrub. The profile walks the whole store and the track works out a sun
-        //position per slot, and dragging across an afternoon was rebuilding both sixty times a second to answer a
-        //question whose answer had not changed. Only the sun's own place along the track moves, so only that is
+        //But NOT on every frame of that scrub: the profile walks the whole store and the track works out a sun
+        //position per slot, while only the sun's own place along the track moves within a day, so only that is
         //recomputed below.
         //
-        //The key is everything the two of them READ, and nothing less. `_now` is in it because today's profile is
-        //cut at the present moment (coverage stops there, the forecast starts there), so the boundary is not a
-        //property of the day alone. `_energyDefaults` is in it because the meters it names decide the layer split.
-        //`_timeRange` is in it because its absence makes the profile come back empty, and a memo of that emptiness
-        //would outlive the range's arrival.
-        //The key is everything the strands READ. `_deviceChangeSeries` feeds the group curves, `_batterySocHistory`
-        //and `_batterySocPerBankHistory` the battery SoC, so a scrub to those targets or a late data arrival has to
-        //miss the memo.
+        //The key is everything the strands and the track READ: `_now` because today's profile is cut at the present
+        //moment (coverage stops there, the forecast starts there); `_energyDefaults` because its meters decide the
+        //layer split; `_timeRange` because its absence makes the profile come back empty and a memo of that
+        //emptiness would outlive the range's arrival; `_deviceChangeSeries`, `_batterySocHistory` and
+        //`_batterySocPerBankHistory` because the group and battery curves read them.
         const slots = daySlots(this.config);
         const m = this._dayCurveMemo;
         const fresh = m !== undefined
@@ -761,12 +752,9 @@ export class HeliosCard extends LitElement
 
 
 
-    //One depth pass of the day curve, all its strands. Lit builds every element and sets every attribute, so a
-    //colour lands in an attribute slot where it is a string and nothing else - and Lit diffs `d` and `stroke-width`
-    //against the DOM it already made, instead of an SVG string being re-parsed from scratch every camera frame.
-    //
-    //One depth pass's strands, drawn line by line. Each span carries its own width (its depth) and colour (a flow
-    //strand changes hue along its length).
+    //One depth pass of the day curve, span by span (each span carries its own width for depth and colour, a flow
+    //strand changes hue along its length). Lit templates rather than an SVG string so `d` / `stroke-width` are
+    //diffed against the existing DOM instead of re-parsed every camera frame.
     private _renderDayCurvePass(pass: DayCurvePass): unknown
     {
         return svg`
@@ -804,8 +792,7 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Timeline mode selector: Forecast / Yesterday / Today / Week / Month. The active mode is highlighted. Every
-    //mode is available (the detail panel aggregates a multi-day period by hour-of-day).
+    //Timeline mode selector: J - J+2 / Yesterday / Today / Week / Month. The active mode is highlighted.
     //Pointer-down is swallowed so tapping never starts a scrub on the parent band.
     private _renderPeriodSelector(): TemplateResult
     {
@@ -848,7 +835,7 @@ export class HeliosCard extends LitElement
     //  - 'By entity' tab: HA passes the clicked entity. For a zone entity we lift its lat/lon into
     //    home-latitude / home-longitude so the catalog offers Helios pre-filled for that zone (the card
     //    already supports the override keys, so no schema change).
-    //hass is loosely typed because the codebase types it as any (HA has no public types for this surface).
+    //Structural parameter type: the picker passes its own hass shape and only states is read.
     static getStubConfig(hass?: { states?: Record<string, { attributes?: Record<string, unknown> }> }, entities?: string[]): HeliosConfig
     {
         if (hass && Array.isArray(entities) && entities.length > 0)
@@ -888,7 +875,7 @@ export class HeliosCard extends LitElement
 
 
     //Wipe all card-side cached production/forecast data and refetch from HA + Open-Meteo. Used by the
-    //editor's "reset data cache" button to recover from a stuck calibration or stale weather payload.
+    //editor's "reset data cache" button to recover from a stale weather or energy payload.
     public resetDataCache(): void
     {
         //Drop in-memory PV state so the next refreshPv() refetches from scratch, not the cached fetch key.
@@ -1043,8 +1030,8 @@ export class HeliosCard extends LitElement
         //defaults snapshot lands again.
         this._dailyTotalsKicked = false;
         tick(this);
-        //30 s tick: the header shows HH:MM, the sun moves ~0.13°/refresh (smooth) and the 5-day live cursor
-        //advances ~6 px per 30 s. PV/battery live readings update on hass state changes, not this tick, so
+        //30 s tick: the header shows HH:MM, the sun moves ~0.13°/refresh (smooth) and the live cursor advances
+        //a few px per 30 s. PV/battery live readings update on hass state changes, not this tick, so
         //they stay real-time.
         this._timer = window.setInterval(() =>
         {
@@ -1128,9 +1115,9 @@ export class HeliosCard extends LitElement
                 this._engine = undefined;
             }, 400);
         }
-        //NOTE: _lastHomeKey is intentionally NOT reset here. The home always resolves to a value (HA config
-        //or the user override), and a genuine coordinate change is caught naturally by getHomeCoords on the
-        //next updated(); clearing it forced identityChanged=true on every reconnect and re-spawned the engine.
+        //_lastHomeKey is intentionally NOT reset here: the home always resolves and a genuine coordinate change is
+        //caught by getHomeCoords on the next updated(); clearing it would force identityChanged on every reconnect
+        //and re-spawn the engine.
         this._initInflight  = false;
     }
 
@@ -1208,7 +1195,7 @@ export class HeliosCard extends LitElement
     protected willUpdate(_changedProperties: PropertyValues): void
     {
         super.willUpdate(_changedProperties);
-        //Bind the period aggregation's hour-of-day binning to the HOME time zone (see ./card/tz) before any frame
+        //Bind the period aggregation's hour-of-day binning to the HOME time zone (core/time/timezone.ts) before any frame
         //projects or the store rebuilds this cycle, so the "now" marker and the day/night wedges all group by the
         //home's real hour rather than the browser's. Idempotent, so it is cheap to run on every hass update.
         if (_changedProperties.has('hass'))
@@ -1226,7 +1213,7 @@ export class HeliosCard extends LitElement
         }
     }
 
-    //Corner weather chips (top-left column): outdoor temperature + humidity, resolved at the current live/scrub
+    //Corner weather chips (bottom row): outdoor temperature + humidity, resolved at the current live/scrub
     //time (Open-Meteo or the matching local sensor override). Each is hidden when turned off or without a reading.
     private _renderTempChip(): TemplateResult | typeof nothing
     {
@@ -1343,7 +1330,7 @@ export class HeliosCard extends LitElement
         //"No UI" mode: reflect the faded state onto the host so the CSS fades the timeline + controls.
         this.toggleAttribute('data-ui-hidden', this._uiHidden);
 
-        //"Your real sky": recompute the weather layers whenever the resolved weather, the master switch or the sun
+        //recompute the weather layers whenever the resolved weather, the master switch or the sun
         //(glow anchor + day/night) changes.
         if (_changedProperties.has('_cloudCover') || _changedProperties.has('_precip')
             || _changedProperties.has('_snowfall') || _changedProperties.has('_weatherCode')
@@ -1392,7 +1379,7 @@ export class HeliosCard extends LitElement
 
         //Unified data store refresh. Rebuilds when any underlying source changed since the last build, so
         //every consumer reads the latest data without per-consumer invalidation. Cheap when nothing changed
-        //(one hash compare), ~50 ms for a full 480 x 7 bucketization + forecast pass on a real refresh.
+        //(one hash compare).
         this._maybeRebuildUnifiedStore();
 
         //Drive the home prism's colour from the active chip. The squash/grow plays only when the chip
@@ -1428,10 +1415,8 @@ export class HeliosCard extends LitElement
                 || _changedProperties.has('_energyDefaults')
                 || _changedProperties.has('_timeRange')
                 //The sweep is CARRIED to the engine in the curve's data, so every step of it has to come back
-                //through here. Left out, the engine kept whichever sweep happened to be current the last time
-                //something else in this list moved - which was 0 the instant the animation started, so the curve
-                //never appeared, and 1 by the time it was switched off, so it appeared then instead. The states
-                //were not inverted: the sweep was one gate behind, permanently.
+                //through here; otherwise the engine keeps the sweep current at the last unrelated wake and the
+                //curve is one gate behind.
                 || _changedProperties.has('_dayCurveT')
                 || _changedProperties.has('_chartTarget')
                 || _changedProperties.has('_unifiedStore')
@@ -1657,18 +1642,13 @@ export class HeliosCard extends LitElement
     protected render(): TemplateResult
     {
         //Precondition for the live card chrome: home coordinates resolved (HA config or card-level lat/lon
-        //override). The basemap needs no API key, so this is purely "can we project the home".
+        //override).
         const hasHomeCoords = getHomeCoords(this.config, this.hass) !== null;
 
 
-        //Scene HUD: the home-anchored energy chip cluster (PV / battery / grid / home consumption),
-        //their animated leaders, the solar arc depth passes and the sun disc/ray geometry. It resolves its own
-        //chip/leader/sun model from the card's scrub/live + layout + sun @state and returns the HUD fragment,
-        //also exposing the two directional leader colours (read back for the detail-panel accent below).
+        //HUD fragment; the controller also exposes the two directional leader colours read by _activeChipColor.
         const hud = this._hud.render();
 
-        //Detect the active HA theme. Authoritative: hass.themes.darkMode (HA flips it on every theme swap).
-        //A getComputedStyle luminance probe is the fallback for older HA builds that lack it.
         const isDark = this._computeIsDark(this._themesObj());
         const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
@@ -1700,7 +1680,7 @@ export class HeliosCard extends LitElement
                     @pointerup=${this._onSceneTapEnd}
                 ></div>
 
-                <!--  "Your real sky": weather overlay layers, then the weather chips (temperature, humidity),
+                <!--  weather overlay layers, then the weather chips (temperature, humidity),
                       grouped along the bottom with the scene pill family (lifted above the timeline when shown).  -->
                 ${weatherOverlay()}
                 <div class="helios-corner-chips ${timelineShown ? 'has-timeline' : ''}">
@@ -1872,8 +1852,8 @@ export class HeliosCard extends LitElement
             this._isLiveMode = true;
         }
     };
-    //Camera lock state for the top-left lock button. Delegates to the engine (which prefers localStorage
-    //over the YAML flag), so the icon always matches the engine's lock state.
+    //Camera lock state for the `camera-locked` host class (cursor swap), delegated to the engine so the class
+    //follows the same authority as the pose.
     private _isCameraLocked(): boolean
     {
         if (this._engine)

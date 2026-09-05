@@ -80,7 +80,7 @@ interface WeatherAtTime
     cloudMid:       number;
     cloudHigh:      number;
     shortwave:      number;
-    //"Your real sky" layers: precipitation (mm), snowfall (cm) and the WMO weather code at this hour.
+    //Weather layers: precipitation (mm), snowfall (cm) and the WMO weather code at this hour.
     precip:         number;
     snowfall:       number;
     weatherCode:    number;
