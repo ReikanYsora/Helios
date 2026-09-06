@@ -200,3 +200,19 @@ export function clipSegment(a: Point, b: Point, r: ClipRect): [Point, Point] | n
         [a[0] + t1 * dx, a[1] + t1 * dy],
     ];
 }
+
+//Ray-casting point-in-polygon on a ring in local metres: whether a position falls inside a footprint.
+export function pointInPolygon(x: number, y: number, polygon: Point[]): boolean
+{
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++)
+    {
+        const [ax, ay] = polygon[i];
+        const [bx, by] = polygon[j];
+        if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax)
+        {
+            inside = !inside;
+        }
+    }
+    return inside;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { arrayTileCorners, arrayIncidence, parseForecastLayout } from '../src/scene/array-markers';
+import { arrayTileCorners, arrayIncidence, arrayStandHeight, parseForecastLayout } from '../src/scene/array-markers';
 
 const close = (a: number, b: number, eps = 1e-9): boolean => Math.abs(a - b) <= eps;
 
@@ -83,5 +83,33 @@ describe('parseForecastLayout', () =>
         expect(parseForecastLayout('e1', null)).toEqual([]);
         expect(parseForecastLayout('e1', {})).toEqual([]);
         expect(parseForecastLayout('e1', { lines: 'no' })).toEqual([]);
+    });
+});
+
+describe('arrayStandHeight', () =>
+{
+    const square = (cx: number, cy: number, half: number): [number, number][] =>
+        [[cx - half, cy - half], [cx + half, cy - half], [cx + half, cy + half], [cx - half, cy + half]];
+    const home   = { footprint: square(0, 0, 6),  height: 7, isHome: true };
+    const garage = { footprint: square(12, 0, 3), height: 3, isHome: false };
+
+    it('a line inside the home footprint stands on the home roof, at the height it is drawn', () =>
+    {
+        expect(arrayStandHeight(2, -3, [home, garage], 1, 0.4)).toBeCloseTo(7.4);
+        //The home rises with its animation; the tile rides it.
+        expect(arrayStandHeight(2, -3, [home, garage], 0.5, 0.4)).toBeCloseTo(3.9);
+    });
+
+    it('a line on an outbuilding stands on that roof, and one in the open stays on the ground', () =>
+    {
+        expect(arrayStandHeight(12, 1, [home, garage], 1, 0.4)).toBeCloseTo(3.4);
+        expect(arrayStandHeight(40, 40, [home, garage], 1, 0.4)).toBeCloseTo(0.4);
+        expect(arrayStandHeight(0, 0, [], 1, 0.4)).toBeCloseTo(0.4);
+    });
+
+    it('two overlapping prisms: the taller one wins', () =>
+    {
+        const annex = { footprint: square(0, 0, 4), height: 10, isHome: false };
+        expect(arrayStandHeight(1, 1, [home, annex], 1, 0)).toBeCloseTo(10);
     });
 });

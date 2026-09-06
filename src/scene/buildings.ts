@@ -20,7 +20,7 @@ import type { SceneCamera, ProjectedPoint } from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { tintedRgba, buildingColor } from '../core/render-kit/colors';
 import { mixHex, hexByte, rgbaHex } from '../core/render-kit/hex';
-import { pointsAttr, clipPolygon, cardClipRect, type Point, type ClipRect } from '../core/render-kit/geometry';
+import { pointsAttr, clipPolygon, cardClipRect, pointInPolygon, type Point, type ClipRect } from '../core/render-kit/geometry';
 import { fetchOfmBuildingRings, type OfmRing } from './openfreemap';
 import { DEG, SHADOW_FADE_DEG, MAX_SHADOW_M,
     FIXED_BUILDING_HEIGHT_M,
@@ -93,22 +93,6 @@ export interface RawBuilding
     centerY:    number;         //centroid north
     distanceM:  number;         //distance from the home to the footprint (0 if it contains the home)
     osmHeightM: number | null;  //raw uncapped OSM render height (m), null when untagged
-}
-
-//Ray-casting point-in-polygon (local metres).
-function pointInPolygon(x: number, y: number, polygon: Point[]): boolean
-{
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++)
-    {
-        const [ax, ay] = polygon[i];
-        const [bx, by] = polygon[j];
-        if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax)
-        {
-            inside = !inside;
-        }
-    }
-    return inside;
 }
 
 //Shoelace signed area: positive for a counter-clockwise ring. Shared by every winding-normalisation pass below,

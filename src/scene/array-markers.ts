@@ -4,6 +4,15 @@
 //paints them. Lines without coordinates sit on the home's roof.
 
 import { DEG } from '../core/config/constants';
+import { pointInPolygon, type Point } from '../core/render-kit/geometry';
+
+//What the stand test reads of a drawn building: its footprint in local metres and the height it is drawn at.
+export interface ArrayStand
+{
+    footprint: Point[];
+    height:    number;
+    isHome:    boolean;
+}
 
 //One line of a Helios-Forecast entry as the layout websocket hands it: orientation in degrees (azimuth clockwise
 //from north, tilt from horizontal), and the line's own coordinates when it carries some (null: on the home).
@@ -45,6 +54,24 @@ export function arrayTileCorners(
         corner( halfW,  halfL),
         corner(-halfW,  halfL),
     ];
+}
+
+//Height a positioned line stands at: on the roof of the tallest drawn building whose footprint holds its point,
+//at the height that building is drawn (the home rides its rise animation), else on the ground. A roof array
+//entered with its own coordinates thus lands on the roof rather than inside the prism, and a ground array in
+//a field stays where it is, without anyone declaring a mounting height.
+export function arrayStandHeight(east: number, north: number, buildings: readonly ArrayStand[], homeHeightScale: number, lift: number): number
+{
+    let roof = 0;
+    for (const b of buildings)
+    {
+        const drawn = b.height * (b.isHome ? homeHeightScale : 1);
+        if (drawn > roof && pointInPolygon(east, north, b.footprint))
+        {
+            roof = drawn;
+        }
+    }
+    return roof + lift;
 }
 
 //Cosine of the sun's incidence on the panel (0 when the sun is behind it or below the horizon): how squarely the

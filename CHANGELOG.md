@@ -26,6 +26,15 @@ ground allocates about a third of what it did. Its reach is now metric as well,
 300 m at every latitude: the old tile square shrank toward the poles and near
 Oslo fell short of the 250 m display radius the card allows.
 
+### Fixed: an array with its own coordinates no longer stands inside the house
+
+A Helios-Forecast line that carries its own latitude and longitude was drawn at
+ground level wherever it fell, so panels entered on the house appeared inside its
+prism (reported in #432). The tile now stands on the roof of the building whose
+footprint holds its point, at the height that building is drawn, and on the ground
+only when no building does: roof arrays climb onto the house or the garage, ground
+arrays in a field stay put, and nobody has to declare a mounting height.
+
 ---
 
 ## 2026.9.4
