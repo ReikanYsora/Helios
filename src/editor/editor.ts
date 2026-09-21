@@ -55,7 +55,14 @@ import { pickTranslations, type Translations } from '../core/i18n';
 import { subscribeEnergyPrefs, unsubscribeEnergyPrefs, EMPTY_ENERGY_DEFAULTS, type EnergyDefaults, type DeviceConsumption, type EnergyPrefsHost } from '../data/sources/energy-prefs';
 import { createGridGuard, refreshGridGuard, type GridGuardState, type GridGuardHost } from '../data/sources/grid-guard';
 import { batteryLiveIsBucketSourced } from '../data/sources/battery';
+import type { HeliosEngine } from '../scene/helios-engine';
 
+
+type CameraPreviewElement = HTMLElement & {
+    preview?: boolean;
+    config?: HeliosConfig;
+    _engine?: HeliosEngine;
+};
 
 
 // Visual editor exposing every config option through native HA form controls.
@@ -85,6 +92,7 @@ export class HeliosCardEditor extends LitElement
     //Latest camera pose published by the live preview (helios-camera-pose event). Captured into the config when
     //the user turns on the camera lock. Null until the preview has published a pose (fires on init + every move).
     private _livePose: { bearing: number; pitch: number } | null = null;
+    private _activeCameraPreview: CameraPreviewElement | null = null;
     //Whether the map had a footprint at the home point, as the live preview last reported it. Undefined until
     //it has settled, so the status line appears only once there is an answer to give.
     @state() private _homeMissing?: boolean;
@@ -107,11 +115,32 @@ export class HeliosCardEditor extends LitElement
         }
         this._livePose = { bearing: d.bearing, pitch: d.pitch };
     };
+    private readonly _onPreviewPointerDown = (e: PointerEvent): void =>
+    {
+        const card = e.composedPath().find((node): node is CameraPreviewElement =>
+            node instanceof HTMLElement && node.localName === 'helios-card');
+        if (card && card.preview === true
+            && (!this._cfg['cache-id'] || card.config?.['cache-id'] === this._cfg['cache-id']))
+        {
+            this._activeCameraPreview = card;
+        }
+    };
+    private _activeCameraPose(): { bearing: number; pitch: number } | null
+    {
+        const card = this._activeCameraPreview;
+        if (!card || !card.isConnected || card.preview !== true
+            || (this._cfg['cache-id'] && card.config?.['cache-id'] !== this._cfg['cache-id'])
+            || !card._engine?.getCameraPose)
+        {
+            return null;
+        }
+        return card._engine.getCameraPose();
+    }
     //Turning the lock on freezes AND saves the current framed angle into the config, so the exact view propagates
     //to every device/browser (the drag-set pose otherwise lives only in per-device localStorage). One write.
     private _lockCameraToCurrentView(): void
     {
-        const pose = this._livePose;
+        const pose = this._activeCameraPose() ?? this._livePose;
         const next = { ...this._cfg } as Record<string, unknown>;
         next['camera-locked'] = true;
         if (pose)
@@ -127,6 +156,8 @@ export class HeliosCardEditor extends LitElement
         super.disconnectedCallback();
         window.removeEventListener('helios-camera-pose', this._onCameraPose);
         window.removeEventListener('helios-home-building', this._onHomeBuilding);
+        window.removeEventListener('pointerdown', this._onPreviewPointerDown, true);
+        this._activeCameraPreview = null;
         unsubscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
         for (const t of this._sliderDebounce.values())
         {
@@ -213,6 +244,7 @@ export class HeliosCardEditor extends LitElement
         super.connectedCallback();
         window.addEventListener('helios-camera-pose', this._onCameraPose);
         window.addEventListener('helios-home-building', this._onHomeBuilding);
+        window.addEventListener('pointerdown', this._onPreviewPointerDown, true);
         this._ensureEntityPicker();
         subscribeEnergyPrefs(this as unknown as EnergyPrefsHost);
     }
