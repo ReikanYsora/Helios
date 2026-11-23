@@ -16,6 +16,8 @@
 //screen-space back-face culled); shadows are each footprint's cast envelope flattened by one group-opacity.
 
 import * as polygonClipping from 'polygon-clipping';
+import type { HouseMesh } from './house-model';
+import { renderHouseMesh } from './house-model-render';
 import type { SceneCamera, ProjectedPoint } from './projection';
 import { PERSPECTIVE, NEAR_PLANE } from './projection';
 import { tintedRgba, buildingColor } from '../core/render-kit/colors';
@@ -53,6 +55,9 @@ export interface Building
     //Set on the generic box stood in when the map has no footprint at the home point. The scene draws it like
     //any other building; the editor says so, because a plain box is a weaker signal than a wrong house.
     placeholder?: boolean;
+    //When set, draw the custom house triangles instead of extruding this footprint.
+    //The footprint/height still serve building ordering, shadows and array-marker anchoring.
+    mesh?: HouseMesh;
 }
 
 //Subset renderShadows reads from a caster: footprint, height, and centroid (for the near-plane cull).
@@ -1024,6 +1029,12 @@ export function renderBuildings(
     for (const { index } of order)
     {
         const b  = buildings[index];
+        if (b.mesh)
+        {
+            faces.push(...renderHouseMesh(cam, b.mesh, altitude, home.color ?? palette.home,
+                growth * (home.growth ?? 1), sunAzimuth));
+            continue;
+        }
         //Every ring of the block: the outline plus any courtyard. A hole's walls face into the yard, and the cull
         //below reads the PROJECTED quad, so their opposite winding sorts itself out.
         const rings = simplifiedRings(b);
