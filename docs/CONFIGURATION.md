@@ -87,6 +87,83 @@ The visual editor exposes every option below. Direct YAML editing also works.
 | `shadows-enabled` | boolean | `true` | Master toggle for the cast ground shadows (projected from the building footprints). |
 | `shadow-opacity` | 0-1 | `0.32` | Opacity of the cast shadows. |
 
+## Custom house OBJ
+
+This modified build supports a low-poly house model using the **existing SVG renderer**,
+without Three.js or WebGL. The visual editor's **Buildings** section includes the new
+controls (English labels in this initial implementation).
+
+Place an OBJ in `/config/www/models/house.obj` and configure:
+
+```yaml
+type: custom:helios-card
+house-model-url: /local/models/house.obj
+house-model-size-m: 12
+house-model-up-axis: y
+house-model-rotation-deg: 0
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `house-model-url` | unset | Geometry-only OBJ URL. Unset/empty uses the ordinary mapped/fallback house. HTTP(S) only; `/local/` is recommended. Remote hosts must allow browser CORS. |
+| `house-model-size-m` | `12` | Fit the longest **unrotated horizontal bounding-box span** to this many metres, preserving proportions. Range 0.1-100. Set this to the house's real width/depth, whichever is larger. |
+| `house-model-scale` | `1` | Additional uniform multiplier after fitting. Range 0.01-10. |
+| `house-model-rotation-deg` | `0` | Clockwise rotation around the vertical axis. Independent of camera bearing; negative YAML angles are accepted and wrapped. |
+| `house-model-up-axis` | `y` | `y`: X east, Y up, Z south. `z`: X east, Y north, Z up. Match your export. |
+| `house-model-offset-east-m` | `0` | Position relative to the HA home, positive east; -100 to 100 metres. |
+| `house-model-offset-north-m` | `0` | Position relative to the HA home, positive north; -100 to 100 metres. |
+
+The lowest vertex is grounded at zero altitude and the horizontal bounding-box center
+is aligned to the home plus the configured offsets. No independent X/Y/Z stretching is
+applied. The resulting house height is capped at 100 m; taller models are rejected with
+a warning rather than silently distorted.
+
+### Export recommendations
+
+- Export a **closed static low-poly mesh**, with outward-facing polygon winding.
+  Recalculate normals outward in your modeling application and apply object transforms.
+- Prefer triangles, or simple planar quads/n-gons. Concave planar faces are ear-clipped;
+  non-planar/self-intersecting faces are not an appropriate export.
+- Aim for roughly **100-500 triangles**, especially for a wall-mounted tablet.
+  Hard limits: 2 MiB, 10,000 declared vertices, 2,000 generated triangles,
+  and 128 corners per face.
+- Multiple objects/groups are treated as one house. Include attached garages/outbuildings
+  in the model: a loaded OBJ replaces **all buildings marked as the home cluster**.
+- OBJ face forms `v`, `v/vt`, `v//vn`, and `v/vt/vn`, including negative relative
+  indices, are supported. Vertex records must precede faces referring to them.
+- `.mtl`, textures, UVs, imported normals, smoothing groups and vertex colors are ignored.
+  The model follows Helios's selected home color, lighting, weather grade and growth/squash.
+  No requests are made for referenced `.mtl` or image files.
+
+### Rendering and fallback
+
+The mesh enters the same face list and clipping pipeline as nearby buildings; the
+camera, neighboring buildings, home energy chip/leaders, sun ray, and animations remain.
+Energy data and calculations are unchanged. Model offsets move the home chip hub and
+incidence-ray target but do not change geographic sun/weather calculations.
+
+Forecast-array marker heights are sampled from the mesh's highest surface under their
+position, so a pitched roof is not treated simply as a full-height flat box. Marker
+orientation is still controlled by the forecast array's configured tilt/azimuth, not
+automatically derived from the OBJ.
+
+**Shadow limitation:** the custom house uses a conservative convex ground hull and maximum
+height with Helios's existing prism-shadow system. The shadow is not an exact mesh
+silhouette; roof overhangs, courtyards, notches, and stepped roofs can be overestimated.
+Likewise the SVG painter has no depth buffer: unusually complex, intersecting geometry
+may show paint-order artifacts. Keep the house simple and avoid overlapping neighboring
+buildings; no guarantee of general-purpose 3D occlusion is made.
+
+The ordinary mapped/generic house remains while loading. HTTP errors, invalid geometry,
+exceeded limits or a 15-second timeout keep/restore it and log a browser-console warning.
+A stale request cannot overwrite a newer URL and requests are aborted on teardown.
+Size/rotation/offset edits re-use the parsed mesh without a network request. The editor's
+cache-reset action reloads the OBJ; if your browser still caches a replaced asset, use
+a versioned URL, e.g. `/local/models/house.obj?v=2`.
+
+See [BUILD_CUSTOM_HOUSE.md](../BUILD_CUSTOM_HOUSE.md) for compiling and installing
+this source modification.
+
 ## Data display
 
 | Key | Type | Default | Description |
