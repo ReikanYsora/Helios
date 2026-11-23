@@ -66,6 +66,15 @@ export interface HeliosConfig
     'building-real-size'?:     unknown;
     //Fixed prism height (m) per building when `building-real-size` is false. Clamped [3,10], default 6.
     'building-height'?:        unknown;
+    //Optional low-poly Wavefront OBJ, projected by the existing SVG scene renderer.
+    //Resolver and defaults live in house-model-config.ts.
+    'house-model-url'?: unknown;
+    'house-model-size-m'?: unknown;
+    'house-model-scale'?: unknown;
+    'house-model-rotation-deg'?: unknown;
+    'house-model-up-axis'?: unknown;
+    'house-model-offset-east-m'?: unknown;
+    'house-model-offset-north-m'?: unknown;
     //Cast-shadow master toggle. Default true.
     'shadows-enabled'?:        unknown;
     //Opacity 0..1 of the cast ground shadow layer. Default 0.32.
