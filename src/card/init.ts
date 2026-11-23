@@ -4,6 +4,7 @@
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
 import type { ArrayLine } from '../scene/array-markers';
+import { HOUSE_MODEL_CONFIG_KEYS } from '../core/config/house-model-config';
 import type { HassLike } from '../core/ha-types';
 import { homeColor, mapColorKey, mapShowKey, type HeliosConfig } from '../core/config/helios-config';
 import { resolveUiColor } from '../core/format/format';
