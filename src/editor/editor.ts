@@ -806,6 +806,44 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${help}</div>`;
     }
 
+
+    //Custom-house labels are English in this first implementation; all existing translations are unchanged.
+    private _renderHouseModel(): TemplateResult
+    {
+        const raw = this._cfg['house-model-url'];
+        const url = typeof raw === 'string' ? raw : '';
+        return html`
+            <label class="field">
+                <span class="label">Custom house OBJ URL</span>
+                <input type="text" placeholder="/local/models/house.obj"
+                    .value=${url} @change=${this._onHouseModelUrlChange} />
+            </label>
+            <div class="field-help">
+                Optional geometry-only OBJ. Use a closed, low-poly model with outward faces.
+                Empty URL uses the normal mapped house. Materials and textures are ignored.
+                The custom model replaces the entire home cluster.
+            </div>
+            ${url.trim() ? html`
+                ${this._renderSlider('house-model-size-m', 'Model footprint size', 0.1, 100, 0.1, 12, ' m')}
+                ${this._renderSlider('house-model-scale', 'Additional model scale', 0.01, 10, 0.01, 1, 'x')}
+                ${this._renderSlider('house-model-rotation-deg', 'Model rotation (clockwise)', 0, 359, 1, 0, '°')}
+                ${this._renderSelect('house-model-up-axis', 'OBJ up axis',
+                    [{ value: 'y', label: 'Y up' }, { value: 'z', label: 'Z up' }], 'y',
+                    'Match the export orientation. Y-up: X east, Z south. Z-up: X east, Y north.')}
+                ${this._renderSlider('house-model-offset-east-m', 'Model offset east', -100, 100, 0.1, 0, ' m')}
+                ${this._renderSlider('house-model-offset-north-m', 'Model offset north', -100, 100, 0.1, 0, ' m')}
+            ` : nothing}
+        `;
+    }
+
+    private _onHouseModelUrlChange = (e: Event): void =>
+    {
+        const value = (e.currentTarget as HTMLInputElement).value.trim();
+        this._update('house-model-url', value || undefined);
+    };
+
+    
+
     //One range-slider field (label + range input + live value). Same markup for every numeric config key; the hint
     //stays at the call site since some are per-field and some are shared. `suffix` is appended to the live value.
     //`disabled` greys the whole row and blocks input (used to keep a dependent slider visible but inert).
@@ -1415,7 +1453,7 @@ export class HeliosCardEditor extends LitElement
                 ${this._renderSlider('building-opacity', t.editor.buildingOpacity, 0, 1, 0.05, DEFAULT_BUILDING_OPACITY)}
                 <div class="hint">${t.editor.buildingsHint}</div>
                 ${this._renderColorPicker('building-color', t.editor.buildingColor, t.editor.buildingColorHelp, 'grey')}
-
+                ${this._renderHouseModel()}
                 </details>
 
                 <details class="advanced-section" data-section="moon" ?open=${this._openSection === 'moon'} @toggle=${this._onSectionToggleEvt}>

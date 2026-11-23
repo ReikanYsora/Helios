@@ -4,6 +4,8 @@
 //paints them. Lines without coordinates sit on the home's roof.
 
 import { DEG } from '../core/config/constants';
+import { houseRoofHeightAt } from './house-model';
+import type { HouseMesh } from './house-model';
 import { pointInPolygon, type Point } from '../core/render-kit/geometry';
 
 //What the stand test reads of a drawn building: its footprint in local metres and the height it is drawn at.
@@ -12,6 +14,7 @@ export interface ArrayStand
     footprint: Point[];
     height:    number;
     isHome:    boolean;
+    mesh?: HouseMesh;
 }
 
 //One line of a Helios-Forecast entry as the layout websocket hands it: orientation in degrees (azimuth clockwise
@@ -65,8 +68,9 @@ export function arrayStandHeight(east: number, north: number, buildings: readonl
     let roof = 0;
     for (const b of buildings)
     {
-        const drawn = b.height * (b.isHome ? homeHeightScale : 1);
-        if (drawn > roof && pointInPolygon(east, north, b.footprint))
+        const surface = b.mesh ? houseRoofHeightAt(b.mesh, east, north) : b.height;
+        const drawn = (surface ?? 0) * (b.isHome ? homeHeightScale : 1);
+        if (drawn > roof && (b.mesh ? surface !== null : pointInPolygon(east, north, b.footprint)))
         {
             roof = drawn;
         }

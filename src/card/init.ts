@@ -4,6 +4,7 @@
 //LitElement lifecycle hooks stay on the card class (HA + Lit invoke them directly on the element); they delegate the work here.
 
 import type { ArrayLine } from '../scene/array-markers';
+import { HOUSE_MODEL_CONFIG_KEYS } from '../core/config/house-model-config';
 import type { HassLike } from '../core/ha-types';
 import { homeColor, mapColorKey, mapShowKey, type HeliosConfig } from '../core/config/helios-config';
 import { resolveUiColor } from '../core/format/format';
@@ -68,7 +69,7 @@ const MAP_LAYER_CONFIG_KEYS = GROUND_LAYER_KEYS.flatMap((layer) => [mapColorKey(
 //Visual config keys the engine reacts to via updateConfig(): editor/YAML edits to these push into the live engine in
 //place. Exhaustive on purpose: a missing key would leave a slider-dragged value stale until the next engine creation.
 //Card-only state and identity inputs (home coords) are out.
-export const VISUAL_CONFIG_KEYS: readonly string[] = [...STATIC_VISUAL_CONFIG_KEYS, ...MAP_LAYER_CONFIG_KEYS];
+export const VISUAL_CONFIG_KEYS: readonly string[] = [...STATIC_VISUAL_CONFIG_KEYS, ...MAP_LAYER_CONFIG_KEYS, ...HOUSE_MODEL_CONFIG_KEYS];
 
 
 //Defensive parser for `home-latitude`/`home-longitude` raw config values (typed `unknown`). Bare Number() is unsafe: Number(''),

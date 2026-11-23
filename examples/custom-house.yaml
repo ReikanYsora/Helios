@@ -1,0 +1,8 @@
+type: custom:helios-card
+house-model-url: /local/models/low-poly-house.obj
+house-model-size-m: 12
+house-model-scale: 1
+house-model-up-axis: y
+house-model-rotation-deg: 0
+house-model-offset-east-m: 0
+house-model-offset-north-m: 0
