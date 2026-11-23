@@ -1,4 +1,8 @@
 import { SceneRenderer } from './renderer';
+import { houseModelOptions } from '../core/config/house-model-config';
+import { HouseModelLoader } from './house-model-loader';
+import { replaceHomeWithModel, houseRoofHeightAt } from './house-model';
+import type { HouseMesh } from './house-model';
 import { renderDayCurve, type DayCurveInput as CurveInput, type DayCurveScene } from './day-curve';
 import type { Building, RawBuilding } from './buildings';
 import { getSunPosition, computePvPercent, computeIrradianceWm2 } from '../core/time/sun';
@@ -133,6 +137,41 @@ export class HeliosEngine
     private homeElevation?: number;
     cfg:      HeliosConfig;
 
+    private _houseModelLoader?: HouseModelLoader;
+    //A configured model never removes the built-in home until it has loaded and validated.
+    private _houseModelWarning: string | null = null;
+
+    private _ensureHouseModel(): void
+    {
+        if (!this._renderer)
+        {
+            return;
+        }
+        if (!this._houseModelLoader)
+        {
+            this._houseModelLoader = new HouseModelLoader(() =>
+            {
+                const error = this._houseModelLoader?.error ?? null;
+                if (error && error !== this._houseModelWarning)
+                {
+                    // eslint-disable-next-line no-console -- report user-supplied asset failures once
+                    console.warn(`[Helios] Custom house: ${error} Using the built-in house.`);
+                }
+                this._houseModelWarning = error;
+                this._applyBuildings();
+            });
+        }
+        this._houseModelLoader.setOptions(houseModelOptions(this.cfg));
+    }
+
+    public getHouseModelStatus(): { configured: boolean; loaded: boolean; error: string | null }
+    {
+        return {
+            configured: houseModelOptions(this.cfg) !== null,
+            loaded: this._houseModelLoader?.model != null,
+            error: this._houseModelLoader?.error ?? null,
+        };
+    }
     private _fetchLat = 0;
     private _fetchLon = 0;
 
@@ -649,6 +688,7 @@ export class HeliosEngine
         this._renderer.setCameraPitch(this._initialPitch());
         this._renderer.setZoom(sceneZoom(this.cfg));
         this._resolvePalette();
+        this._ensureHouseModel();
 
         //Re-project the card's HUD (arc, chips, leaders) on every renderer paint so the overlays stay glued
         //to the rotating basemap. The renderer fires onAfterDraw after each frame's paint.
@@ -1350,6 +1390,7 @@ export class HeliosEngine
     //shared module cache, in-memory raw) and re-fetch right away, bypassing any pending outage retry.
     public forceBuildingsRefetch(): void
     {
+        this._houseModelLoader?.reload();
         clearBuildingsLocationCache(this.homeLat, this.homeLon);
         _sharedBuildingsCache.delete(this._buildingsLocationKey());
         this._buildingsRaw       = null;
@@ -1400,17 +1441,24 @@ export class HeliosEngine
         //genuinely is no data.
         if (this._buildingsRaw === null && !this._buildingsFetchDone)
         {
-            this._buildingsData = [];
+            //A configured custom home needs no map footprint. Keep the generic home while its OBJ loads,
+            //even if map data is also pending. With no custom URL, the original loading behavior is unchanged.
+            const pendingHome = houseModelOptions(this.cfg) ? interpretBuildings([], {
+                radiusM: this._buildingRadiusMeters(), count: buildingCount(this.cfg),
+                realSize: buildingRealSize(this.cfg), fixedHeightM: buildingFixedHeightM(this.cfg),
+                clusterRadiusM: this._buildingClusterRadiusMeters(),
+            }) : [];
+            this._buildingsData = replaceHomeWithModel(pendingHome, this._houseModelLoader?.model ?? null);
             this._pushRenderableSources();
             return;
         }
-        this._buildingsData = interpretBuildings(this._buildingsRaw ?? [], {
+        this._buildingsData = replaceHomeWithModel(interpretBuildings(this._buildingsRaw ?? [], {
             radiusM:        this._buildingRadiusMeters(),
             count:          buildingCount(this.cfg),
             realSize:       buildingRealSize(this.cfg),
             fixedHeightM:   buildingFixedHeightM(this.cfg),
             clusterRadiusM: this._buildingClusterRadiusMeters(),
-        });
+        }), this._houseModelLoader?.model ?? null);
         this._pushRenderableSources();
     }
 
@@ -1750,7 +1798,7 @@ export class HeliosEngine
             return null;
         }
 
-        const home = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+        const home = this._projectHomePoint();
         if (!home)
         {
             return null;
@@ -1903,10 +1951,16 @@ export class HeliosEngine
         return this._sunArcScale() * (this._renderer?.camera.zoom ?? 1);
     }
 
-    //Keystone projection: lon/lat/altitude -> screen px via the SceneCamera. Every card-facing projection
-    //method (projectSunScene, projectHomeLabelLayout, getSunArcScale) routes through here. Coordinates are converted to local metres relative to
-    //the home, then the camera's project3() returns {x, y, depth}. The camera basis is refreshed each frame
-    //by the renderer's _draw (setViewport), so this is a cheap per-point transform with no per-frame cache.
+    //The model's ground anchor for chips/leaders; zero offset preserves the ordinary home's projection.
+    private _projectHomePoint(): { x: number; y: number; depth: number } | null
+    {
+        const mesh = this._houseModelLoader?.model;
+        return this._renderer?.camera.project3(mesh?.centerX ?? 0, mesh?.centerY ?? 0, 0) ?? null;
+    }
+
+    //Keystone geographic projection: lon/lat/altitude -> screen px via the SceneCamera. Coordinates become
+    //local metres relative to the geographic home, then project3 returns {x, y, depth}. The camera basis is
+    //refreshed each frame by the renderer's _draw (setViewport); no per-point cache is needed.
     private _projectScenePoint(
         lon: number, lat: number, altitudeM: number
     ): { x: number; y: number; depth: number } | null
@@ -1949,7 +2003,7 @@ export class HeliosEngine
         }
 
         //Ground-level home projection: the SVG anchor for the incidence ray.
-        const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+        const homeScreen = this._projectHomePoint();
         if (!homeScreen)
         {
             return null;
@@ -2235,12 +2289,14 @@ export class HeliosEngine
         const heightScale = this._renderer.homeHeightScale;
         let roofM = 0;
         let homeFp: Point[] = [];
+        let homeMesh: HouseMesh | undefined;
         for (const b of buildings)
         {
             if (b.isHome && b.height > roofM)
             {
                 roofM  = b.height;
                 homeFp = b.footprint;
+                homeMesh = b.mesh;
             }
         }
         roofM = roofM * heightScale + ARRAY_TILE_LIFT_M;
@@ -2249,7 +2305,7 @@ export class HeliosEngine
             let reach = 0;
             for (const [x, y] of homeFp)
             {
-                const d = x * fe + y * fn;
+                const d = (x - (homeMesh?.centerX ?? 0)) * fe + (y - (homeMesh?.centerY ?? 0)) * fn;
                 if (d > reach)
                 {
                     reach = d;
@@ -2264,9 +2320,12 @@ export class HeliosEngine
             const onHome = line.lat === null || line.lon === null;
             const fe = Math.sin(line.azimuth * DEG);
             const fn = Math.cos(line.azimuth * DEG);
-            const east   = onHome ? fe * roofReach(fe, fn) : (line.lon! - this.homeLon) * perLon;
-            const north  = onHome ? fn * roofReach(fe, fn) : (line.lat! - this.homeLat) * perLat;
-            const base   = onHome ? roofM : arrayStandHeight(east, north, buildings, heightScale, ARRAY_TILE_LIFT_M);
+            const east   = onHome ? (homeMesh?.centerX ?? 0) + fe * roofReach(fe, fn) : (line.lon! - this.homeLon) * perLon;
+            const north  = onHome ? (homeMesh?.centerY ?? 0) + fn * roofReach(fe, fn) : (line.lat! - this.homeLat) * perLat;
+            const modelRoof = onHome && homeMesh ? houseRoofHeightAt(homeMesh, east, north) : null;
+            const base = onHome
+                ? modelRoof !== null ? modelRoof * heightScale + ARRAY_TILE_LIFT_M : roofM
+                : arrayStandHeight(east, north, buildings, heightScale, ARRAY_TILE_LIFT_M);
             const tracker = line.tracker !== null;
             const corners = arrayTileCorners(line.azimuth, line.tilt, halfW, halfL, tracker);
             const points: [number, number][] = [];
@@ -2568,7 +2627,7 @@ export class HeliosEngine
         {
             return;
         }
-
+        this._ensureHouseModel();
         //Scene zoom: the renderer rescales its camera; the arc caches baked the old px-per-metre into their
         //samples and the scale memo, so they are dropped for the next projection pass.
         const nextZoom = sceneZoom(this.cfg);
@@ -2627,6 +2686,8 @@ export class HeliosEngine
 
     public cleanup(): void
     {
+        this._houseModelLoader?.dispose();
+        this._houseModelLoader = undefined;
         this._clearWeatherTimer();
         window.clearInterval(this._skyTimer);
         this._fetchAbortController?.abort();
